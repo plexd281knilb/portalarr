@@ -1,0 +1,102 @@
+name: Weblate merge
+
+# Weblate opens a pull request for every batch of translations. Once a code
+# owner approves one, the bots do the rest: wait for the required checks, then
+# merge as the automation account.
+#
+# Nothing here self-approves. A human still reads the translations; the
+# automation only handles the merge, and always as a merge commit. Squash and
+# rebase rewrite commit SHAs, after which Weblate stops recognising its own
+# commits upstream and every later sync conflicts.
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weblate-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  # pull_request_review fires for anyone who can leave a review, so the
+  # approving actor is checked against CODEOWNERS the same way the release
+  # flow does it. Eligibility is the author's full login and nothing else: a
+  # branch name is chosen by whoever opens the pull request, and a prefix would
+  # match `hosted-weblate-anything`, which anyone can register. Only an app can
+  # post as `hosted-weblate[bot]`.
+  guard_review_actor:
+    name: Guard approving actor
+    if: >-
+      github.event.review.state == 'approved' &&
+      github.event.pull_request.base.ref == 'development' &&
+      github.event.pull_request.user.login == 'hosted-weblate[bot]'
+    uses: ./.github/workflows/guard-manual.yml
+    permissions:
+      contents: read
+    with:
+      enabled: true
+      actor: ${{ github.event.review.user.login }}
+      source: Weblate translation merge
+
+  merge:
+    name: Merge after approval
+    needs: guard_review_actor
+    if: ${{ needs.guard_review_actor.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.MERGE_APP_ID }}
+          private-key: ${{ secrets.MERGE_APP_KEY }}
+
+      - name: Wait for required checks, then merge
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # The exact commit the code owner approved. --admin is required for
+          # the bot to merge past branch protection, so the reviewed SHA is
+          # what stops a commit pushed after approval from riding in on that
+          # approval: the merge fails if the head has moved.
+          REVIEWED_SHA: ${{ github.event.review.commit_id }}
+        run: |
+          set -euo pipefail
+
+          # This workflow runs from the base branch's definition (it is
+          # pull_request_review triggered), so unlike the PR-side catalog check
+          # a pull request cannot edit it away. This is the authoritative scope
+          # boundary: an auto-merged translation PR may touch nothing but the
+          # catalogs, or the reviewer's approval could carry code changes in.
+          #
+          # Enumerate with --paginate: a plain files query stops at 100 entries,
+          # so a large PR could hide an out-of-scope payload past the first page.
+          # Allow only flat .po catalogs, and require at least one changed file.
+          echo "Verifying the pull request only changes translation catalogs..."
+          files="$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename')"
+          if [ -z "$files" ]; then
+            echo "Refusing to merge: no changed files reported."
+            exit 1
+          fi
+          outside="$(printf '%s\n' "$files" \
+            | grep -vE '^apps/ui/src/locales/[^/]+\.po$' || true)"
+          if [ -n "$outside" ]; then
+            echo "Refusing to merge: a Weblate pull request may only change apps/ui/src/locales/*.po."
+            echo "Out-of-scope files:"
+            echo "$outside"
+            exit 1
+          fi
+
+          echo "Waiting for required checks to complete successfully..."
+          gh pr checks "$PR_URL" --required --watch
+
+          echo "Required checks passed. Merging the reviewed commit ${REVIEWED_SHA}..."
+          gh pr merge --admin --merge --match-head-commit "$REVIEWED_SHA" "$PR_URL"

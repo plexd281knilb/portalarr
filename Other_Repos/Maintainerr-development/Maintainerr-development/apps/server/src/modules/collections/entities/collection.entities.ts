@@ -1,0 +1,178 @@
+import {
+  MediaItemType,
+  MediaServerCollectionSort,
+  MediaServerType,
+} from '@maintainerr/contracts';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  OneToOne,
+  PrimaryGeneratedColumn,
+  type Relation,
+} from 'typeorm';
+import { CollectionLog } from '../../collections/entities/collection_log.entities';
+import { OverlayTemplateEntity } from '../../overlays/entities/overlay-template.entities';
+import { RuleGroup } from '../../rules/entities/rule-group.entities';
+import { RadarrSettings } from '../../settings/entities/radarr_settings.entities';
+import { SonarrSettings } from '../../settings/entities/sonarr_settings.entities';
+import { SportarrSettings } from '../../settings/entities/sportarr_settings.entities';
+import { CollectionMedia } from './collection_media.entities';
+
+@Entity()
+export class Collection {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ nullable: true })
+  mediaServerId: string;
+
+  @Column({ type: 'varchar', default: MediaServerType.PLEX })
+  mediaServerType: MediaServerType;
+
+  @Column({ type: 'varchar' })
+  libraryId: string;
+
+  @Column()
+  title: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({ default: true })
+  isActive: boolean;
+
+  @Column({ default: 0 })
+  arrAction: number;
+
+  @Column({ default: false })
+  visibleOnRecommended: boolean;
+
+  @Column({ default: false })
+  visibleOnHome: boolean;
+
+  @Column({ nullable: true, default: null })
+  deleteAfterDays: number;
+
+  @Column({ nullable: false, default: false })
+  manualCollection: boolean;
+
+  @Column({ nullable: true, default: '' })
+  manualCollectionName: string;
+
+  @Column({ nullable: false, default: false })
+  listExclusions: boolean;
+
+  // Opt-in: run this collection inside Maintainerr only, without creating or
+  // syncing a collection on the media server. Rules, membership, actions,
+  // overlays and *arr tags are unaffected - only the media-server collection is
+  // left out. Off by default, so existing collections keep syncing.
+  @Column({ nullable: false, default: false })
+  keepInMaintainerrOnly: boolean;
+
+  // Opt-in: after this collection's action deletes the item's files one at a
+  // time, remove the folder the *arr strands and the sidecars left in it.
+  // Off by default - it deletes from disk, and only the actions that strand a
+  // folder offer it (see leftoverCleanupScope in @maintainerr/contracts).
+  @Column({ nullable: false, default: false })
+  cleanupLeftoverFolders: boolean;
+
+  @Column({ nullable: false, default: false })
+  forceSeerr: boolean;
+
+  @Column({ type: 'varchar', nullable: false, default: 'movie' })
+  type: MediaItemType;
+
+  @Column({ nullable: false, default: 6 })
+  keepLogsForMonths: number;
+
+  @OneToOne(() => RuleGroup, (rg) => rg.collection)
+  ruleGroup: Relation<RuleGroup>;
+
+  @Column({ type: 'date', nullable: true, default: () => 'CURRENT_TIMESTAMP' }) // nullable = true for old collections
+  addDate: Date;
+
+  @Column({ nullable: false, default: 0 })
+  handledMediaAmount: number;
+
+  @Column({ nullable: false, default: 0 })
+  lastDurationInSeconds: number;
+
+  @Column({ nullable: true, default: null })
+  tautulliWatchedPercentOverride: number;
+
+  @Column({ nullable: true })
+  radarrSettingsId: number;
+
+  @ManyToOne(() => RadarrSettings, { nullable: true })
+  @JoinColumn({ name: 'radarrSettingsId', referencedColumnName: 'id' })
+  radarrSettings: Relation<RadarrSettings>;
+
+  @Column({ nullable: true })
+  sonarrSettingsId: number;
+
+  @ManyToOne(() => SonarrSettings, { nullable: true })
+  @JoinColumn({ name: 'sonarrSettingsId', referencedColumnName: 'id' })
+  sonarrSettings: Relation<SonarrSettings>;
+
+  @Column({ nullable: true })
+  sportarrSettingsId: number;
+
+  @ManyToOne(() => SportarrSettings, { nullable: true })
+  @JoinColumn({ name: 'sportarrSettingsId', referencedColumnName: 'id' })
+  sportarrSettings: Relation<SportarrSettings>;
+
+  @Column({ nullable: true })
+  sortTitle: string;
+
+  @Column({ type: 'varchar', nullable: true, default: null })
+  mediaServerSort: MediaServerCollectionSort | null;
+
+  @Column({ type: 'bigint', nullable: true, default: null })
+  totalSizeBytes: number | null;
+
+  @Column({ type: 'bigint', nullable: false, default: 0 })
+  handledMediaSizeBytes: number;
+
+  @Column({ nullable: false, default: false })
+  overlayEnabled: boolean;
+
+  @Column({ nullable: true, default: null })
+  overlayTemplateId: number | null;
+
+  @ManyToOne(() => OverlayTemplateEntity, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'overlayTemplateId' })
+  overlayTemplate: Relation<OverlayTemplateEntity> | null;
+
+  @Column({ nullable: true })
+  radarrQualityProfileId: number;
+
+  @Column({ nullable: true })
+  sonarrQualityProfileId: number;
+
+  @Column({ nullable: true })
+  sportarrQualityProfileId: number;
+
+  // When true, Maintainerr keeps a Radarr/Sonarr tag (label = this collection's
+  // title / rule group name) on the *arr entity for as long as the item is a
+  // member of this collection - applied on entry, removed on exit.
+  @Column({ nullable: false, default: false })
+  tagInArr: boolean;
+
+  @OneToMany(
+    () => CollectionMedia,
+    (collectionMedia) => collectionMedia.collectionId,
+    { onDelete: 'CASCADE' },
+  )
+  collectionMedia: CollectionMedia[];
+
+  @OneToMany(() => CollectionLog, (collectionLog) => collectionLog.collection, {
+    onDelete: 'CASCADE',
+  })
+  collectionLog: CollectionLog[];
+}

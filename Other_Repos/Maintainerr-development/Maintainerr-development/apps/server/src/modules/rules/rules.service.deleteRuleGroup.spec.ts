@@ -1,0 +1,431 @@
+import { MaintainerrEvent } from '@maintainerr/contracts';
+import {
+  createMockLogger,
+  createMockServarrTagService,
+} from '../../../test/utils/data';
+import { RulesService } from './rules.service';
+
+describe('RulesService.deleteRuleGroup', () => {
+  const logger = createMockLogger();
+
+  const createRulesService = (options?: {
+    group?: any;
+    collectionService?: any;
+    servarrTagService?: any;
+  }) => {
+    const { group = undefined } = options ?? {};
+
+    const ruleGroupRepository = {
+      findOne: jest.fn().mockResolvedValue(group),
+      delete: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const exclusionRepo = {
+      delete: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const collectionService = options?.collectionService ?? {
+      deleteCollection: jest
+        .fn()
+        .mockResolvedValue({ status: 'OK', code: 1, message: 'Success' }),
+    };
+
+    const servarrTagService =
+      options?.servarrTagService ?? createMockServarrTagService();
+
+    const eventEmitter = {
+      emit: jest.fn(),
+    };
+
+    // RulesService has many deps; we only need the ones used by deleteRuleGroup
+    const service = new RulesService(
+      {} as any, // rulesRepository
+      ruleGroupRepository as any,
+      {} as any, // collectionMediaRepository
+      {} as any, // communityRuleKarmaRepository
+      exclusionRepo as any,
+      {} as any, // settingsRepo
+      {} as any, // radarrSettingsRepo
+      {} as any, // sonarrSettingsRepo
+      {} as any, // sportarrSettingsRepo
+      collectionService as any,
+      {} as any, // mediaServerFactory
+      {} as any, // connection
+      {} as any, // ruleYamlService
+      {} as any, // ruleComparatorServiceFactory
+      {} as any, // ruleMigrationService
+      eventEmitter as any,
+      servarrTagService as any,
+      logger as any,
+      {} as any, // tracearrApi,
+      { getUsernames: jest.fn().mockResolvedValue([]) } as any,
+    );
+
+    return {
+      service,
+      ruleGroupRepository,
+      exclusionRepo,
+      collectionService,
+      eventEmitter,
+      servarrTagService,
+    };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('Bug #2358 regression: TypeError on collection deletion', () => {
+    /**
+     * Reproduces the TypeError from GitHub issue #2358.
+     *
+     * When deleteRuleGroup is called and findOne returns null (e.g., the
+     * rule group was already deleted), the original code accessed
+     * `group.collectionId` without a null check, causing:
+     *   TypeError: Cannot read properties of null (reading 'collectionId')
+     *
+     * The fix wraps the event emission and collectionId access in a
+     * null guard: `if (group) { ... }`.
+     */
+    it('does not throw TypeError when findOne returns null', async () => {
+      const { service } = createRulesService({ group: null });
+
+      // Before the fix, this would throw:
+      // TypeError: Cannot read properties of null (reading 'collectionId')
+      const result = await service.deleteRuleGroup(999);
+
+      expect(result).toEqual({
+        code: 1,
+        result: 'Success',
+        message: 'Success',
+      });
+    });
+
+    it('still performs exclusion and ruleGroup deletes when group is null', async () => {
+      const { service, exclusionRepo, ruleGroupRepository } =
+        createRulesService({
+          group: null,
+        });
+
+      await service.deleteRuleGroup(999);
+
+      expect(exclusionRepo.delete).toHaveBeenCalledWith({ ruleGroupId: 999 });
+      expect(ruleGroupRepository.delete).toHaveBeenCalledWith(999);
+    });
+
+    it('does not emit event or delete collection when group is null', async () => {
+      const { service, eventEmitter, collectionService } = createRulesService({
+        group: null,
+      });
+
+      await service.deleteRuleGroup(999);
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(collectionService.deleteCollection).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('normal deletion flow', () => {
+    it('emits RuleGroup_Deleted event when group exists', async () => {
+      const group = { id: 42, collectionId: 100 };
+      const { service, eventEmitter } = createRulesService({ group });
+
+      await service.deleteRuleGroup(42);
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        MaintainerrEvent.RuleGroup_Deleted,
+        { ruleGroup: group },
+      );
+    });
+
+    it('deletes associated collection when group has collectionId', async () => {
+      const group = { id: 42, collectionId: 100 };
+      const { service, collectionService } = createRulesService({ group });
+
+      await service.deleteRuleGroup(42);
+
+      expect(collectionService.deleteCollection).toHaveBeenCalledWith(100);
+    });
+
+    it('does not delete rule group rows when collection cleanup fails', async () => {
+      const group = { id: 42, collectionId: 100 };
+      const { service, collectionService, exclusionRepo, ruleGroupRepository } =
+        createRulesService({ group });
+
+      collectionService.deleteCollection.mockResolvedValue({
+        status: 'NOK',
+        code: 0,
+        message: 'Failed to delete collection from media server',
+      });
+
+      const result = await service.deleteRuleGroup(42);
+
+      // The reason has to reach the user: an opaque "Delete Failed" leaves
+      // the group undeletable with no clue why.
+      expect(result).toEqual({
+        code: 0,
+        result: 'Failed to delete collection from media server',
+        message: 'Failed to delete collection from media server',
+      });
+      expect(exclusionRepo.delete).not.toHaveBeenCalled();
+      expect(ruleGroupRepository.delete).not.toHaveBeenCalled();
+    });
+
+    it('falls back to a generic message when the collection delete gives no reason', async () => {
+      const group = { id: 42, collectionId: 100 };
+      const { service, collectionService } = createRulesService({ group });
+
+      collectionService.deleteCollection.mockResolvedValue({
+        status: 'NOK',
+        code: 0,
+      } as never);
+
+      expect(await service.deleteRuleGroup(42)).toEqual({
+        code: 0,
+        result: 'Delete Failed',
+        message: 'Delete Failed',
+      });
+    });
+
+    it('does not delete collection when group has no collectionId', async () => {
+      const group = { id: 42, collectionId: null };
+      const { service, collectionService } = createRulesService({ group });
+
+      await service.deleteRuleGroup(42);
+
+      expect(collectionService.deleteCollection).not.toHaveBeenCalled();
+    });
+
+    it('cleans up exclusions and ruleGroup rows', async () => {
+      const group = { id: 42, collectionId: null };
+      const { service, exclusionRepo, ruleGroupRepository } =
+        createRulesService({
+          group,
+        });
+
+      await service.deleteRuleGroup(42);
+
+      expect(exclusionRepo.delete).toHaveBeenCalledWith({ ruleGroupId: 42 });
+      expect(ruleGroupRepository.delete).toHaveBeenCalledWith(42);
+    });
+  });
+
+  describe('Behavior A - membership tag cleanup on delete', () => {
+    it("strips members' *arr membership tags before deleting a tagging-enabled group", async () => {
+      const group = { id: 42, collectionId: 100 };
+      const collection = {
+        id: 100,
+        type: 'movie',
+        radarrSettingsId: 1,
+        tagInArr: true,
+      };
+      const members = [{ mediaServerId: 'm1', tmdbId: 1, tvdbId: null }];
+      const servarrTagService = createMockServarrTagService();
+      const collectionService = {
+        deleteCollection: jest
+          .fn()
+          .mockResolvedValue({ status: 'OK', code: 1, message: 'Success' }),
+        getCollection: jest.fn().mockResolvedValue(collection),
+        getCollectionMedia: jest.fn().mockResolvedValue(members),
+      };
+
+      const { service } = createRulesService({
+        group,
+        collectionService,
+        servarrTagService,
+      });
+
+      await service.deleteRuleGroup(42);
+
+      // all members "leave" → untag delta, before the collection rows are deleted
+      expect(servarrTagService.syncMembershipTags).toHaveBeenCalledWith(
+        collection,
+        [],
+        [{ mediaServerId: 'm1', tmdbId: 1, tvdbId: null }],
+      );
+      expect(collectionService.deleteCollection).toHaveBeenCalledWith(100);
+    });
+
+    it('does not attempt tag cleanup when the group is not tagging-enabled', async () => {
+      const group = { id: 42, collectionId: 100 };
+      const servarrTagService = createMockServarrTagService();
+      const collectionService = {
+        deleteCollection: jest
+          .fn()
+          .mockResolvedValue({ status: 'OK', code: 1, message: 'Success' }),
+        getCollection: jest
+          .fn()
+          .mockResolvedValue({ id: 100, type: 'movie', tagInArr: false }),
+        getCollectionMedia: jest.fn(),
+      };
+
+      const { service } = createRulesService({
+        group,
+        collectionService,
+        servarrTagService,
+      });
+
+      await service.deleteRuleGroup(42);
+
+      expect(servarrTagService.syncMembershipTags).not.toHaveBeenCalled();
+      expect(collectionService.getCollectionMedia).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('RulesService.removeExclusion', () => {
+  const logger = createMockLogger();
+
+  const createServiceForRemoveExclusion = (options?: {
+    exclusion?: any;
+    ruleGroup?: any;
+  }) => {
+    const { exclusion = undefined, ruleGroup = undefined } = options ?? {};
+
+    const exclusionRepo = {
+      findOne: jest.fn().mockResolvedValue(exclusion),
+      delete: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const ruleGroupRepository = {
+      findOne: jest.fn().mockResolvedValue(ruleGroup),
+    };
+
+    const collectionService = {
+      CollectionLogRecordForChild: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new RulesService(
+      {} as any, // rulesRepository
+      ruleGroupRepository as any,
+      {} as any, // collectionMediaRepository
+      {} as any, // communityRuleKarmaRepository
+      exclusionRepo as any,
+      {} as any, // settingsRepo
+      {} as any, // radarrSettingsRepo
+      {} as any, // sonarrSettingsRepo
+      {} as any, // sportarrSettingsRepo
+      collectionService as any,
+      {} as any, // mediaServerFactory
+      {} as any, // connection
+      {} as any, // ruleYamlService
+      {} as any, // ruleComparatorServiceFactory
+      {} as any, // ruleMigrationService
+      {} as any, // eventEmitter
+      createMockServarrTagService() as any,
+      logger as any,
+      {} as any, // tracearrApi,
+      { getUsernames: jest.fn().mockResolvedValue([]) } as any,
+    );
+
+    return {
+      service,
+      exclusionRepo,
+      ruleGroupRepository,
+      collectionService,
+    };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns success without crashing when exclusion is already deleted', async () => {
+    const { service, exclusionRepo } = createServiceForRemoveExclusion({
+      exclusion: null,
+    });
+
+    // Before the fix, this would throw:
+    // TypeError: Cannot read properties of null (reading 'ruleGroupId')
+    const result = await service.removeExclusion(99);
+
+    expect(result).toEqual({
+      code: 1,
+      result: 'Success',
+      message: 'Success',
+    });
+    expect(exclusionRepo.delete).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('not found, already removed'),
+    );
+  });
+
+  it('deletes exclusion and logs collection record when rulegroup exists', async () => {
+    const exclusion = {
+      id: 10,
+      mediaServerId: 'abc123',
+      ruleGroupId: 5,
+    };
+    const ruleGroup = { id: 5, collectionId: 42 };
+
+    const { service, exclusionRepo, collectionService } =
+      createServiceForRemoveExclusion({
+        exclusion,
+        ruleGroup,
+      });
+
+    const result = await service.removeExclusion(10);
+
+    expect(result).toEqual({
+      code: 1,
+      result: 'Success',
+      message: 'Success',
+    });
+    expect(exclusionRepo.delete).toHaveBeenCalledWith(10);
+    expect(collectionService.CollectionLogRecordForChild).toHaveBeenCalledWith(
+      'abc123',
+      42,
+      'include',
+    );
+  });
+
+  it('skips collection log when rulegroup is already deleted', async () => {
+    const exclusion = {
+      id: 10,
+      mediaServerId: 'abc123',
+      ruleGroupId: 5,
+    };
+
+    const { service, exclusionRepo, collectionService } =
+      createServiceForRemoveExclusion({
+        exclusion,
+        ruleGroup: null,
+      });
+
+    const result = await service.removeExclusion(10);
+
+    expect(result).toEqual({
+      code: 1,
+      result: 'Success',
+      message: 'Success',
+    });
+    expect(exclusionRepo.delete).toHaveBeenCalledWith(10);
+    expect(
+      collectionService.CollectionLogRecordForChild,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('deletes exclusion without logging when it is a global exclusion', async () => {
+    const exclusion = {
+      id: 10,
+      mediaServerId: 'abc123',
+      ruleGroupId: undefined,
+    };
+
+    const { service, exclusionRepo, ruleGroupRepository, collectionService } =
+      createServiceForRemoveExclusion({ exclusion });
+
+    const result = await service.removeExclusion(10);
+
+    expect(result).toEqual({
+      code: 1,
+      result: 'Success',
+      message: 'Success',
+    });
+    expect(exclusionRepo.delete).toHaveBeenCalledWith(10);
+    expect(ruleGroupRepository.findOne).not.toHaveBeenCalled();
+    expect(
+      collectionService.CollectionLogRecordForChild,
+    ).not.toHaveBeenCalled();
+  });
+});

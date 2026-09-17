@@ -1,0 +1,132 @@
+import React from 'react'
+import { Link } from 'react-router-dom'
+
+interface BadgeProps {
+  badgeType?:
+    | 'default'
+    | 'primary'
+    | 'danger'
+    | 'warning'
+    | 'success'
+    | 'dark'
+    | 'light'
+    | 'maintainerr'
+    | 'maintainerrdark'
+  className?: string
+  href?: string
+  children: React.ReactNode
+  ref?: React.Ref<HTMLElement>
+}
+
+const Badge = ({
+  badgeType = 'default',
+  className,
+  href,
+  children,
+  ref,
+}: BadgeProps) => {
+  const badgeStyle = [
+    'px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap',
+  ]
+
+  if (href) {
+    badgeStyle.push('transition cursor-pointer no-underline!')
+  } else {
+    badgeStyle.push('cursor-default')
+  }
+
+  switch (badgeType) {
+    case 'danger':
+      badgeStyle.push('bg-error-600/80 border-error-500 border text-error-100!')
+      if (href) {
+        badgeStyle.push('hover:bg-error-500')
+      }
+      break
+    case 'warning':
+      badgeStyle.push(
+        'bg-yellow-500/80 border-yellow-500 border text-yellow-100!',
+      )
+      if (href) {
+        badgeStyle.push('hover:bg-yellow-500')
+      }
+      break
+    case 'success':
+      badgeStyle.push(
+        'bg-success-500/80 border border-success-500 text-success-100!',
+      )
+      if (href) {
+        badgeStyle.push('hover:bg-success-500')
+      }
+      break
+    case 'dark':
+      badgeStyle.push('bg-gray-900 text-gray-400!')
+      if (href) {
+        badgeStyle.push('hover:bg-gray-800')
+      }
+      break
+    case 'light':
+      badgeStyle.push('bg-gray-700 text-gray-300!')
+      if (href) {
+        badgeStyle.push('hover:bg-gray-600')
+      }
+      break
+    case 'maintainerr':
+      badgeStyle.push('bg-maintainerr-600 text-white!')
+      if (href) {
+        badgeStyle.push('hover:bg-maintainerr')
+      }
+      break
+    case 'maintainerrdark':
+      badgeStyle.push('bg-maintainerrdark text-white!')
+      if (href) {
+        badgeStyle.push('hover:bg-maintainerrdark-800')
+      }
+      break
+    default:
+      badgeStyle.push(
+        'bg-indigo-500/80 border border-indigo-500 text-indigo-100!',
+      )
+      if (href) {
+        badgeStyle.push('hover:bg-indigo-500')
+      }
+  }
+
+  if (className) {
+    badgeStyle.push(className)
+  }
+
+  if (href?.includes('://')) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={badgeStyle.join(' ')}
+        ref={ref as React.Ref<HTMLAnchorElement>}
+      >
+        {children}
+      </a>
+    )
+  } else if (href) {
+    return (
+      <Link
+        to={href}
+        className={badgeStyle.join(' ')}
+        ref={ref as React.Ref<HTMLAnchorElement>}
+      >
+        {children}
+      </Link>
+    )
+  } else {
+    return (
+      <span
+        className={badgeStyle.join(' ')}
+        ref={ref as React.Ref<HTMLSpanElement>}
+      >
+        {children}
+      </span>
+    )
+  }
+}
+
+export default Badge

@@ -1,0 +1,513 @@
+import {
+  BULK_MEDIA_ACTION_MAX_ITEMS,
+  bulkExclusionRequestSchema,
+  type BulkExclusionRequest,
+  type BulkMediaResponse,
+  MediaItemType,
+  RuleExecuteStatusDto,
+} from '@maintainerr/contracts';
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Res,
+} from '@nestjs/common';
+import { ApiResponse } from '@nestjs/swagger';
+import { Response } from 'express';
+import { omit } from 'lodash';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { MaintainerrLogger } from '../logging/logs.service';
+import {
+  ExecutionLockService,
+  RULES_COLLECTIONS_EXECUTION_LOCK_KEY,
+} from '../tasks/execution-lock.service';
+import { CommunityRule } from './dtos/communityRule.dto';
+import { ExclusionAction, ExclusionContextDto } from './dtos/exclusion.dto';
+import { RuleGroupDto } from './dtos/ruleGroup.dto';
+import { RuleUsersService } from './rule-users.service';
+import { ReturnStatus, RulesService } from './rules.service';
+import { RuleExecutorJobManagerService } from './tasks/rule-executor-job-manager.service';
+import { RuleExecutorSchedulerService } from './tasks/rule-executor-scheduler.service';
+
+/** Matches the postpone endpoint: wait out a short run rather than 409 at once. */
+const EXCLUSION_LOCK_WAIT_MS = 30000;
+
+@Controller('api/rules')
+export class RulesController {
+  constructor(
+    private readonly rulesService: RulesService,
+    private readonly ruleExecutorSchedulerService: RuleExecutorSchedulerService,
+    private readonly ruleExecutorJobManagerService: RuleExecutorJobManagerService,
+    private readonly ruleUsersService: RuleUsersService,
+    private readonly executionLock: ExecutionLockService,
+    private readonly logger: MaintainerrLogger,
+  ) {
+    this.logger.setContext(RulesController.name);
+  }
+
+  @Get('/constants')
+  async getRuleConstants() {
+    return await this.rulesService.getRuleConstants();
+  }
+
+  @Get('/users')
+  async getRuleUsernames(): Promise<string[]> {
+    return await this.ruleUsersService.getUsernames();
+  }
+
+  @Get('/community')
+  async getCommunityRules() {
+    return await this.rulesService.getCommunityRules();
+  }
+
+  @Get('/community/count')
+  async getCommunityRuleCount() {
+    return this.rulesService.getCommunityRuleCount();
+  }
+
+  @Get('/community/karma/history')
+  async getCommunityRuleKarmaHistory() {
+    return await this.rulesService.getCommunityRuleKarmaHistory();
+  }
+
+  @Get('/exclusion')
+  getExclusion(
+    @Query('rulegroupId', new ParseIntPipe({ optional: true }))
+    rulegroupId?: number,
+    @Query('mediaServerId') mediaServerId?: string,
+  ) {
+    return this.rulesService.getExclusions(rulegroupId, mediaServerId);
+  }
+
+  @Get('/count')
+  async getRuleGroupCount() {
+    return this.rulesService.getRuleGroupCount();
+  }
+
+  @Get('/:id/rules')
+  getRules(@Param('id', ParseIntPipe) id: number) {
+    return this.rulesService.getRules(id);
+  }
+
+  @Get('/collection/:id')
+  getRuleGroupByCollectionId(@Param('id', ParseIntPipe) id: number) {
+    return this.rulesService.getRuleGroupByCollectionId(id);
+  }
+
+  @Get()
+  getRuleGroups(
+    @Query('activeOnly') activeOnly?: string,
+    @Query('libraryId') libraryId?: string,
+    @Query('typeId', new ParseIntPipe({ optional: true })) typeId?: number,
+  ) {
+    return this.rulesService.getRuleGroups(
+      activeOnly !== undefined ? activeOnly === 'true' : false,
+      libraryId ? libraryId : undefined,
+      typeId ? typeId : undefined,
+    );
+  }
+
+  @Get('/:id')
+  getRuleGroup(@Param('id', ParseIntPipe) id: number): Promise<RuleGroupDto> {
+    return this.rulesService.getRuleGroup(id);
+  }
+
+  @Delete('/:id')
+  deleteRuleGroup(@Param('id', ParseIntPipe) id: number) {
+    return this.rulesService.deleteRuleGroup(id);
+  }
+
+  @Post('/execute')
+  async executeRules() {
+    if (this.ruleExecutorJobManagerService.isProcessing()) {
+      throw new ConflictException('The rule executor is already running');
+    }
+
+    const allGroups = await this.rulesService.getRuleGroups();
+
+    if (!allGroups || allGroups.length === 0) {
+      throw new ConflictException(
+        'No rule groups found. Create a rule group first.',
+      );
+    }
+
+    const activeGroups = allGroups.filter((rg) => rg.isActive);
+    const anyLibrarySet = allGroups.some(
+      (rg) => rg.libraryId && rg.libraryId !== '',
+    );
+
+    if (activeGroups.length === 0) {
+      const msg = anyLibrarySet
+        ? 'No active rule groups. Activate at least one rule group before running.'
+        : 'No active rule groups and no libraries are set. Please activate your rule groups and assign libraries before running.';
+      throw new ConflictException(msg);
+    }
+
+    const groupsWithLibrary = activeGroups.filter(
+      (rg) => rg.libraryId && rg.libraryId !== '',
+    );
+    if (groupsWithLibrary.length === 0) {
+      throw new ConflictException(
+        'All active rule groups are missing a library. Please edit your rules and assign libraries before running.',
+      );
+    }
+
+    this.ruleExecutorSchedulerService
+      .enqueueAllActiveRuleGroups()
+      .catch((error) => {
+        this.logger.error('Failed to enqueue all active rule groups');
+        this.logger.debug(error);
+      });
+  }
+
+  @Post('/:id/execute')
+  async executeRule(@Param('id', ParseIntPipe) id: number) {
+    const ruleGroup = await this.rulesService.getRuleGroup(id);
+    if (!ruleGroup) {
+      throw new NotFoundException('Rule group not found');
+    }
+
+    if (!ruleGroup.isActive) {
+      throw new ConflictException('Rule group is not active');
+    }
+
+    if (!ruleGroup.libraryId || ruleGroup.libraryId === '') {
+      throw new ConflictException(
+        'Rule group has no library assigned. Please edit the rule and select a library before running.',
+      );
+    }
+
+    if (this.ruleExecutorJobManagerService.isRuleGroupProcessingOrQueued(id)) {
+      throw new ConflictException(
+        'The rule is already being executed or is queued for execution',
+      );
+    }
+
+    const result = this.ruleExecutorJobManagerService.enqueue({
+      ruleGroupId: id,
+    });
+
+    if (!result) {
+      throw new ConflictException(
+        'Failed to enqueue the rule group for execution',
+      );
+    }
+  }
+
+  @Get('/execute/status')
+  getExecutionStatus(): RuleExecuteStatusDto {
+    const status = this.ruleExecutorJobManagerService.getStatus();
+    return status;
+  }
+
+  @Post('/execute/stop')
+  @HttpCode(200)
+  @ApiResponse({
+    status: 200,
+    description: 'The rules handler is already stopped.',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'The rules handler has been requested to stop.',
+  })
+  async stopExecutingRules(@Res() res: Response) {
+    if (!this.ruleExecutorJobManagerService.isProcessing()) {
+      res.status(HttpStatus.OK).send();
+      return;
+    }
+
+    this.ruleExecutorJobManagerService.stopProcessing().catch((error) => {
+      this.logger.error('Failed to stop rule execution processing');
+      this.logger.debug(error);
+    });
+    res.status(HttpStatus.ACCEPTED).send();
+  }
+
+  @Post('/:id/execute/stop')
+  @HttpCode(200)
+  @ApiResponse({
+    status: 200,
+    description: 'The rules handler is already stopped.',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'The rules handler has been requested to stop.',
+  })
+  async stopExecutingRule(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    if (!this.ruleExecutorJobManagerService.isRuleGroupProcessingOrQueued(id)) {
+      res.status(HttpStatus.OK).send();
+      return;
+    }
+
+    this.ruleExecutorJobManagerService.stopProcessingRuleGroup(id);
+    res.status(HttpStatus.ACCEPTED).send();
+  }
+
+  // A rule group that failed validation used to answer 201 with the reason
+  // buried in the body, so a caller could not tell it apart from a save.
+  private orFail(status: ReturnStatus): ReturnStatus {
+    if (status.code !== 1) {
+      throw new BadRequestException(status.message ?? status.result);
+    }
+    return status;
+  }
+
+  @Post()
+  @ApiResponse({ status: 201, description: 'The rule group was created.' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'The rule group was rejected. The message names what was wrong.',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'The rule group could not be written. The cause is logged.',
+  })
+  @ApiResponse({
+    status: 502,
+    description: 'The media server could not be read to resolve the library.',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'The configured media server adapter could not initialize.',
+  })
+  async setRules(@Body() body: RuleGroupDto): Promise<ReturnStatus> {
+    return this.orFail(await this.rulesService.setRules(body));
+  }
+
+  /**
+   * Excluding shares the execution lock, as postpone does: a run picks its media
+   * up front, so an exclusion landing mid-run would answer success while that
+   * run still acts on the item. Un-excluding frees media, so it stays lock-free.
+   */
+  private async whileNotHandling<T>(run: () => Promise<T>): Promise<T> {
+    const release = await this.executionLock.acquireWithin(
+      RULES_COLLECTIONS_EXECUTION_LOCK_KEY,
+      EXCLUSION_LOCK_WAIT_MS,
+    );
+
+    if (!release) {
+      throw new ConflictException(
+        'Collection handling is already running. Try again when the current collection or rule execution finishes.',
+      );
+    }
+
+    try {
+      return await run();
+    } finally {
+      release();
+    }
+  }
+
+  @Post('/exclusion')
+  @ApiResponse({
+    status: 409,
+    description:
+      'A collection or rule run held the execution lock for too long.',
+  })
+  async setExclusion(@Body() body: ExclusionContextDto): Promise<ReturnStatus> {
+    if (body.action === undefined || body.action === ExclusionAction.ADD) {
+      // handledIds serves the bulk path's collection pairing; it is not part of
+      // this endpoint's response.
+      return await this.whileNotHandling(async () =>
+        omit(await this.rulesService.setExclusion(body), 'handledIds'),
+      );
+    } else {
+      return await this.rulesService.removeExclusionWitData(body);
+    }
+  }
+
+  @Post('/exclusions/bulk')
+  @ApiResponse({
+    status: 201,
+    description: 'Per-item results; failures are reported per media id.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: `Rejected without processing: empty, or more than ${BULK_MEDIA_ACTION_MAX_ITEMS} media ids.`,
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'A collection or rule run held the execution lock for too long.',
+  })
+  async setBulkExclusions(
+    @Body(new ZodValidationPipe(bulkExclusionRequestSchema))
+    body: BulkExclusionRequest,
+  ): Promise<BulkMediaResponse> {
+    if (body.action === ExclusionAction.REMOVE) {
+      return await this.rulesService.removeBulkExclusions(
+        body.mediaIds,
+        body.collectionId,
+        body.context,
+      );
+    }
+
+    return await this.whileNotHandling(() =>
+      this.rulesService.setBulkExclusions(
+        body.mediaIds,
+        body.collectionId,
+        body.context,
+      ),
+    );
+  }
+
+  @Delete('/exclusion/:id')
+  async removeExclusion(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ReturnStatus> {
+    return await this.rulesService.removeExclusion(id);
+  }
+
+  @Delete('/exclusions/:mediaServerId')
+  async removeAllExclusion(
+    @Param('mediaServerId') mediaServerId: string,
+  ): Promise<ReturnStatus> {
+    return await this.rulesService.removeAllExclusion(mediaServerId);
+  }
+
+  @Put()
+  @ApiResponse({ status: 200, description: 'The rule group was updated.' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'The rule group was rejected. The message names what was wrong.',
+  })
+  @ApiResponse({ status: 404, description: 'The rule group does not exist.' })
+  @ApiResponse({
+    status: 500,
+    description: 'The rule group could not be written. The cause is logged.',
+  })
+  @ApiResponse({
+    status: 502,
+    description: 'The media server could not be read to resolve the library.',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'The configured media server adapter could not initialize.',
+  })
+  async updateRule(@Body() body: RuleGroupDto): Promise<ReturnStatus> {
+    return this.orFail(await this.rulesService.updateRules(body));
+  }
+
+  @Post('/community')
+  async updateCommunityRules(
+    @Body() body: CommunityRule,
+  ): Promise<ReturnStatus> {
+    if (body.name && body.description && body.JsonRules) {
+      return await this.rulesService.addToCommunityRules(body);
+    } else {
+      return {
+        code: 0,
+        result: 'Invalid input',
+      };
+    }
+  }
+
+  @Post('/community/karma')
+  async updateCommunityRuleKarma(
+    @Body() body: { id: number; karma: number },
+  ): Promise<ReturnStatus> {
+    if (body.id !== undefined && body.karma !== undefined) {
+      return await this.rulesService.updateCommunityRuleKarma(
+        body.id,
+        body.karma,
+      );
+    } else {
+      return {
+        code: 0,
+        result: 'Invalid input',
+      };
+    }
+  }
+
+  /**
+   * Encodes an array of RuleDto objects to YAML format.
+   *
+   * @param {RuleDto[]} rules - The array of RuleDto objects to be encoded.
+   * @return {Promise<ReturnStatus>} A Promise that resolves to a ReturnStatus object.
+   */
+  @Post('/yaml/encode')
+  async yamlEncode(
+    @Body() body: { rules: string; mediaType: MediaItemType },
+  ): Promise<ReturnStatus> {
+    try {
+      return this.rulesService.encodeToYaml(
+        JSON.parse(body.rules),
+        body.mediaType,
+      );
+    } catch (error) {
+      return {
+        code: 0,
+        result: 'Invalid input',
+      };
+    }
+  }
+
+  /**
+   * Decodes a YAML-encoded string and returns an array of RuleDto objects.
+   *
+   * @param {string} body - The YAML-encoded string to decode.
+   * @return {Promise<ReturnStatus>} - A Promise that resolves to the decoded ReturnStatus object.
+   */
+  @Post('/yaml/decode')
+  async yamlDecode(
+    @Body() body: { yaml: string; mediaType: MediaItemType },
+  ): Promise<ReturnStatus> {
+    try {
+      return await this.rulesService.decodeFromYaml(body.yaml, body.mediaType);
+    } catch (error) {
+      // A genuine YAML syntax/structure error is already handled inside the
+      // service (it returns a clear message). Reaching here means a later
+      // failure (e.g. rule migration) threw, which is not a YAML problem - log
+      // the real fault and surface a plain, accurate message instead.
+      this.logger.error('Failed to import rules from YAML');
+      this.logger.debug(error);
+      const message = 'Failed to import rules';
+      return {
+        code: 0,
+        result: message,
+        message,
+      };
+    }
+  }
+
+  @Post('/test')
+  async testRuleGroup(@Body() body: { mediaId: string; rulegroupId: number }) {
+    return this.rulesService.testRuleGroupWithData(
+      body.rulegroupId,
+      body.mediaId,
+    );
+  }
+
+  /**
+   * Migrates rules to match the configured media server type.
+   * Used for community rule imports to convert Plex ↔ Jellyfin rules.
+   */
+  @Post('/migrate')
+  async migrateRules(@Body() body: { rules: string }): Promise<ReturnStatus> {
+    try {
+      const rules = JSON.parse(body.rules);
+      return await this.rulesService.migrateRules(rules);
+    } catch (error) {
+      return {
+        code: 0,
+        result: 'Invalid input',
+      };
+    }
+  }
+}

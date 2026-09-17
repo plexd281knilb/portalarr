@@ -1,0 +1,67 @@
+{
+  "eslint.enable": true,
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  // Bound the language server. VS Code defaults each tsserver to a 3 GB heap
+  // and spawns a pair per window, so a few open windows can reserve more than
+  // the devbox has. 1.5 GB sits well above the ~1.2 GB a full load of this
+  // monorepo actually uses. Raise it if the server starts recycling.
+  //
+  // experimental.enableProjectDiagnostics is deliberately left unset: it keeps
+  // diagnostics for the whole monorepo resident in every server, and CI already
+  // covers project-wide errors via `yarn check-types`.
+  "typescript.tsserver.maxTsServerMemory": 1536,
+  "typescript.tsserver.experimental.useVsCodeWatcher": false,
+  "sqltools.connections": [
+    {
+      "previewLimit": 50,
+      "driver": "SQLite",
+      "name": "Local SQLite",
+      "database": "./data/maintainerr.sqlite"
+    }
+  ],
+  "editor.formatOnSave": true,
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "files.associations": {
+    "globals.css": "tailwindcss"
+  },
+  "search.exclude": {
+    "**/.yarn": true
+  },
+  "jest.jestCommandLine": "yarn test",
+  "jest.virtualFolders": [
+    {
+      "name": "server",
+      "rootPath": "apps/server"
+    }
+  ],
+  "sqltools.useNodeRuntime": true
+}

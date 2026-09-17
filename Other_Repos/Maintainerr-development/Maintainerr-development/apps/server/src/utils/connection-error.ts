@@ -1,0 +1,133 @@
+// isAxiosError, not `instanceof AxiosError`: errors raised inside ESM-only
+// SDKs (e.g. @jellyfin/sdk) come from a second axios module instance, so an
+// instanceof check against this CommonJS build never matches them.
+import { isAxiosError } from 'axios';
+import { CONNECTION_TEST_TIMEOUT_MS } from '../modules/api/lib/httpTimeouts';
+import type { MaintainerrLogger } from '../modules/logging/logs.service';
+
+const normalizeMessageText = (message?: string): string | undefined => {
+  if (!message) {
+    return undefined;
+  }
+
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes('eproto') ||
+    lower.includes('ssl routines') ||
+    lower.includes('wrong version number') ||
+    lower.includes('packet length too long') ||
+    lower.includes('tlsv1 alert')
+  ) {
+    return 'SSL/TLS handshake failed. Verify the URL protocol (http vs https) and SSL configuration.';
+  }
+
+  if (lower.includes('econnrefused') || lower.includes('connection refused')) {
+    return 'Connection refused. Verify host, port, and that the service is running.';
+  }
+
+  if (
+    lower.includes('enotfound') ||
+    lower.includes('eai_again') ||
+    lower.includes('name does not resolve')
+  ) {
+    return 'Unable to resolve host. Verify hostname or IP address.';
+  }
+
+  if (
+    lower.includes('timeout') ||
+    lower.includes('aborted') ||
+    lower.includes('econnaborted') ||
+    lower.includes('etimedout')
+  ) {
+    return `Connection timed out after ${CONNECTION_TEST_TIMEOUT_MS / 1000} seconds. Verify URL and network reachability.`;
+  }
+
+  return undefined;
+};
+
+export const formatConnectionFailureMessage = (
+  error: unknown,
+  fallbackMessage: string,
+): string => {
+  if (isAxiosError(error)) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return 'Invalid API key';
+    }
+
+    if (error.response?.status) {
+      return `Connection failed: received response ${error.response.status} ${error.response.statusText}.`;
+    }
+
+    // Network-level failure (no HTTP response). Classify from the error code as
+    // well as the message: Node surfaces ECONNREFUSED/ENOTFOUND for a dual-stack
+    // host (e.g. localhost) as an AggregateError whose `message` is empty, so
+    // the message alone would miss them and fall through to the generic text.
+    const normalizedAxiosMessage = normalizeMessageText(
+      error.code === 'ECONNABORTED'
+        ? 'timeout'
+        : [error.code, error.message].filter(Boolean).join(' '),
+    );
+    if (normalizedAxiosMessage) {
+      return normalizedAxiosMessage;
+    }
+  }
+
+  const genericMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : undefined;
+
+  const normalizedGenericMessage = normalizeMessageText(genericMessage);
+  if (normalizedGenericMessage) {
+    return normalizedGenericMessage;
+  }
+
+  if (genericMessage) {
+    return genericMessage;
+  }
+
+  return fallbackMessage;
+};
+
+export const getErrorMessage = (
+  error: unknown,
+  fallbackMessage = 'Unknown error',
+): string => {
+  if (error instanceof Error && error.message.trim() !== '') {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim() !== '') {
+    return error;
+  }
+
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    error.message.trim() !== ''
+  ) {
+    return error.message;
+  }
+
+  if (
+    typeof error === 'number' ||
+    typeof error === 'boolean' ||
+    typeof error === 'bigint'
+  ) {
+    return String(error);
+  }
+
+  return fallbackMessage;
+};
+
+export const logConnectionTestError = (
+  logger: MaintainerrLogger,
+  serviceName: string,
+) => {
+  logger.error(`${serviceName} connection test failed`);
+};

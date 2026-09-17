@@ -1,0 +1,208 @@
+import { Logger } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import * as openpgp from 'openpgp';
+import type { TransformCallback } from 'stream';
+import { Transform } from 'stream';
+
+interface EncryptorOptions {
+  signingKey?: string;
+  password?: string;
+  encryptionKeys: string[];
+}
+
+class PGPEncryptor extends Transform {
+  private readonly logger = new Logger(PGPEncryptor.name);
+
+  private messageChunks: Uint8Array[] = [];
+  private messageLength = 0;
+  private signingKey?: string;
+  private password?: string;
+
+  private encryptionKeys: string[];
+
+  constructor(options: EncryptorOptions) {
+    super();
+    this.signingKey = options.signingKey;
+    this.password = options.password;
+    this.encryptionKeys = options.encryptionKeys;
+  }
+
+  // `_transform` and `_flush` are Node's Transform contract, not a private
+  // naming choice: the stream machinery calls them by these exact names.
+
+  // just save the whole message
+  _transform = (
+    chunk: Uint8Array,
+    encoding: BufferEncoding,
+    callback: TransformCallback,
+  ): void => {
+    this.messageChunks.push(chunk);
+    this.messageLength += chunk.length;
+    callback();
+  };
+
+  // Actually do stuff
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  _flush = async (callback: TransformCallback): Promise<void> => {
+    const message = Buffer.concat(this.messageChunks, this.messageLength);
+
+    try {
+      // Reconstruct message as buffer
+      const validPublicKeys = await Promise.all(
+        this.encryptionKeys.map((armoredKey) =>
+          openpgp.readKey({ armoredKey }),
+        ),
+      );
+      let privateKey: openpgp.PrivateKey | undefined;
+
+      // Just return the message if there is no one to encrypt for
+      if (!validPublicKeys.length) {
+        this.push(message);
+        return callback();
+      }
+
+      // Only sign the message if private key and password exist
+      if (this.signingKey && this.password) {
+        privateKey = await openpgp.decryptKey({
+          privateKey: await openpgp.readPrivateKey({
+            armoredKey: this.signingKey,
+          }),
+          passphrase: this.password,
+        });
+      }
+
+      const emailPartDelimiter = '\r\n\r\n';
+      const messageParts = message.toString().split(emailPartDelimiter);
+
+      /**
+       * In this loop original headers are split up into two parts,
+       * one for the email that is sent
+       * and one for the encrypted content
+       */
+      const header = messageParts.shift() as string;
+      const emailHeaders: string[][] = [];
+      const contentHeaders: string[][] = [];
+      const linesInHeader = header.split('\r\n');
+      let previousHeader: string[] = [];
+      for (let i = 0; i < linesInHeader.length; i++) {
+        const line = linesInHeader[i];
+        /**
+         * If it is a multi-line header (current line starts with whitespace)
+         * or it's the first line in the iteration
+         * add the current line with previous header and move on
+         */
+        if (/^\s/.test(line) || i === 0) {
+          previousHeader.push(line);
+          continue;
+        }
+
+        /**
+         * This is done to prevent the last header
+         * from being missed
+         */
+        if (i === linesInHeader.length - 1) {
+          previousHeader.push(line);
+        }
+
+        /**
+         * We need to seperate the actual content headers
+         * so that we can add it as a header for the encrypted content
+         * So that the content will be displayed properly after decryption
+         */
+        if (
+          /^(content-type|content-transfer-encoding):/i.test(previousHeader[0])
+        ) {
+          contentHeaders.push(previousHeader);
+        } else {
+          emailHeaders.push(previousHeader);
+        }
+        previousHeader = [line];
+      }
+
+      // Generate a new boundary for the email content
+      const boundary = 'nm_' + randomBytes(14).toString('hex');
+      /**
+       * Concatenate everything into single strings
+       * and add pgp headers to the email headers
+       */
+      const emailHeadersRaw =
+        emailHeaders.map((line) => line.join('\r\n')).join('\r\n') +
+        '\r\n' +
+        'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";' +
+        '\r\n' +
+        ' boundary="' +
+        boundary +
+        '"' +
+        '\r\n' +
+        'Content-Description: OpenPGP encrypted message' +
+        '\r\n' +
+        'Content-Transfer-Encoding: 7bit';
+      const contentHeadersRaw = contentHeaders
+        .map((line) => line.join('\r\n'))
+        .join('\r\n');
+
+      const encryptedMessage = await openpgp.encrypt({
+        message: await openpgp.createMessage({
+          text:
+            contentHeadersRaw +
+            emailPartDelimiter +
+            messageParts.join(emailPartDelimiter),
+        }),
+        encryptionKeys: validPublicKeys,
+        signingKeys: privateKey,
+      });
+
+      const body =
+        '--' +
+        boundary +
+        '\r\n' +
+        'Content-Type: application/pgp-encrypted\r\n' +
+        'Content-Transfer-Encoding: 7bit\r\n' +
+        '\r\n' +
+        'Version: 1\r\n' +
+        '\r\n' +
+        '--' +
+        boundary +
+        '\r\n' +
+        'Content-Type: application/octet-stream; name=encrypted.asc\r\n' +
+        'Content-Disposition: inline; filename=encrypted.asc\r\n' +
+        'Content-Transfer-Encoding: 7bit\r\n' +
+        '\r\n' +
+        encryptedMessage +
+        '\r\n--' +
+        boundary +
+        '--\r\n';
+
+      this.push(Buffer.from(emailHeadersRaw + emailPartDelimiter + body));
+      callback();
+    } catch (error) {
+      this.logger.error(
+        `Something went wrong while encrypting email message with OpenPGP. Sending email without encryption.`,
+        error,
+      );
+
+      this.push(message);
+      callback();
+    }
+  };
+}
+
+export const openpgpEncrypt = (options: EncryptorOptions) => {
+  // Disabling this line because I don't want to fix it but I am tired
+  // of seeing the lint warning
+
+  return function (mail: any, callback: () => unknown): void {
+    if (!options.encryptionKeys.length) {
+      setImmediate(callback);
+    }
+    mail.message.transform(
+      () =>
+        new PGPEncryptor({
+          signingKey: options.signingKey,
+          password: options.password,
+          encryptionKeys: options.encryptionKeys,
+        }),
+    );
+    setImmediate(callback);
+  };
+};

@@ -1,0 +1,2369 @@
+import { BasicResponseDto, PlexSetting } from '@maintainerr/contracts';
+import { Injectable } from '@nestjs/common';
+import axios from 'axios';
+import { isIP } from 'net';
+import { getErrorMessage } from '../../../utils/connection-error';
+import { createPrefetchProgressReporter } from '../../../utils/prefetch-progress';
+import cacheManager from '../../api/lib/cache';
+import { retryingHttp } from '../../api/lib/httpRetry';
+import {
+  CONNECTION_TEST_TIMEOUT_MS,
+  MEDIA_SERVER_REQUEST_TIMEOUT_MS,
+  NO_TIMEOUT,
+} from '../../api/lib/httpTimeouts';
+import PlexCommunityApi, {
+  PlexCommunityErrorResponse,
+  PlexCommunityWatchList,
+  PlexCommunityWatchListResponse,
+} from '../../api/lib/plexCommunityApi';
+import { PlexTvUser } from '../../api/lib/plextvApi';
+import {
+  MaintainerrLogger,
+  MaintainerrLoggerFactory,
+} from '../../logging/logs.service';
+import { Settings } from '../../settings/entities/settings.entities';
+import { SettingsDataService } from '../../settings/settings-data.service';
+import PlexApi from '../lib/plexApi';
+import PlexTvApi, { PlexTokenValidation, PlexUser } from '../lib/plextvApi';
+import { CollectionHubSettingsDto } from './dto/collection-hub-settings.dto';
+import { EPlexDataType } from './enums/plex-data-type-enum';
+import {
+  CreateUpdateCollection,
+  PlexCollection,
+  PlexPlaylist,
+} from './interfaces/collection.interface';
+import {
+  PlexHub,
+  PlexHubResponse,
+  PlexLibrariesResponse,
+  PlexLibrary,
+  PlexLibraryItem,
+  PlexLibraryResponse,
+  PlexSeenBy,
+  PlexUserAccount,
+  SimplePlexUser,
+} from './interfaces/library.interfaces';
+import {
+  PlexMetadata,
+  PlexMetadataResponse,
+} from './interfaces/media.interface';
+import {
+  PlexAccountsResponse,
+  PlexConnection,
+  PlexDevice,
+  PlexStatusResponse,
+} from './interfaces/server.interface';
+import {
+  PLEX_COMMUNITY_UNRESOLVED_USER_ERROR,
+  PLEX_PAGE_SIZE,
+  WATCH_HISTORY_EXCLUDE_FIELDS,
+  WATCH_HISTORY_MAX_ENTRIES,
+  watchHistoryCacheKey,
+} from './plex-api.constants';
+
+/**
+ * One library's swept watch history. `leaf` holds every row keyed by its own
+ * ratingKey (movies and episodes).
+ *
+ * `rollup` groups episode rows by show and season so container queries skip the
+ * per-item round trip. It is only ever present once proven: `grandparentKey`/
+ * `parentKey` are undocumented on this endpoint and were observed absent over
+ * some Plex connections (#3082), where a missing key would read as "nobody
+ * watched this" and delete a watched show. It is therefore built all-or-nothing
+ * and then checked against Plex's own server-side rollup before being kept -
+ * see buildWatchHistorySnapshot and verifyRollup. Absent, container queries fall
+ * back to the per-item metadataItemID query exactly as they did before.
+ */
+interface PlexWatchHistorySnapshot {
+  leaf: Map<string, PlexSeenBy[]>;
+  rollup?: {
+    show: Map<string, PlexSeenBy[]>;
+    season: Map<string, PlexSeenBy[]>;
+  };
+}
+
+/** `/library/metadata/1234` -> `1234`. Undefined for an absent or empty key. */
+const ratingKeyFromPath = (path?: string): string | undefined => {
+  if (!path) return undefined;
+  const key = path.slice(path.lastIndexOf('/') + 1);
+  return key.length > 0 ? key : undefined;
+};
+
+/** Identity of a history row, for comparing two sources of the same history. */
+const historyFingerprint = (records: PlexSeenBy[]): string =>
+  records
+    .map((record) => `${record.ratingKey}:${record.viewedAt}`)
+    .sort()
+    .join('|');
+
+@Injectable()
+export class PlexApiService {
+  private plexClient: PlexApi;
+  private plexTvClient: PlexTvApi;
+  private plexCommunityClient: PlexCommunityApi;
+  private machineId: string;
+  private watchHistoryPrefetches = new Map<string, Promise<void>>();
+
+  constructor(
+    private readonly settings: SettingsDataService,
+    private readonly logger: MaintainerrLogger,
+    private readonly loggerFactory: MaintainerrLoggerFactory,
+  ) {
+    this.logger.setContext(PlexApiService.name);
+  }
+
+  private getDbSettings(): PlexSetting {
+    return {
+      name: this.settings.plex_name,
+      machineId: this.machineId,
+      ip: this.settings.plex_hostname,
+      port: this.settings.plex_port,
+      auth_token: this.settings.plex_auth_token,
+      useSsl: this.settings.plex_ssl === 1 ? true : false,
+      webAppUrl: this.settings.plex_hostname,
+      manualMode: this.settings.plex_manual_mode === 1,
+    };
+  }
+
+  public isPlexSetup(): boolean {
+    return this.plexClient != null;
+  }
+
+  /**
+   * Rank discovered Plex connections by preference.
+   * Prefers local direct-IP connections (no DNS needed) over plex.direct
+   * hostnames, which avoids DNS resolution issues common in Docker.
+   *
+   * Priority: reachable > local + direct IP > local + plex.direct > remote
+   */
+  public static rankConnections(
+    connections: PlexConnection[],
+  ): PlexConnection[] {
+    const isDirectIp = (address: string) => isIP(address) !== 0;
+
+    return [...connections].sort((a, b) => {
+      // 1. Reachable first (status 200)
+      const aReachable = a.status === 200 ? 1 : 0;
+      const bReachable = b.status === 200 ? 1 : 0;
+      if (bReachable !== aReachable) return bReachable - aReachable;
+
+      // 2. Local over remote
+      const aLocal = a.local ? 1 : 0;
+      const bLocal = b.local ? 1 : 0;
+      if (bLocal !== aLocal) return bLocal - aLocal;
+
+      // 3. Direct IP over DNS-dependent hostnames (e.g., *.plex.direct)
+      const aDirectIp = isDirectIp(a.address) ? 1 : 0;
+      const bDirectIp = isDirectIp(b.address) ? 1 : 0;
+      if (bDirectIp !== aDirectIp) return bDirectIp - aDirectIp;
+
+      // 4. Lower latency preferred
+      return (a.latency ?? Infinity) - (b.latency ?? Infinity);
+    });
+  }
+
+  private buildCollectionItemsUri(itemIds: string[]): string {
+    // Canonical Plex URI for `PUT /library/collections/{id}/items?uri=…`, aligned
+    // with python-plexapi's Collection.addItems: a single `/library/metadata/`
+    // prefix followed by comma-joined ratingKeys. The previous `library://.../item/`
+    // form did not match that upstream shape and is the most likely cause of the
+    // observed 400 responses on multi-item batches.
+    return encodeURIComponent(
+      `server://${this.machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`,
+    );
+  }
+
+  private extractPlexAvatarUuid(thumb?: string): string | undefined {
+    if (!thumb) {
+      return undefined;
+    }
+
+    try {
+      const url = new URL(thumb);
+
+      if (url.protocol !== 'https:' || url.hostname !== 'plex.tv') {
+        return undefined;
+      }
+
+      const prefix = '/users/';
+      const suffix = '/avatar';
+      const path = url.pathname;
+
+      if (!path.startsWith(prefix) || !path.endsWith(suffix)) {
+        return undefined;
+      }
+
+      const uuid = path.slice(prefix.length, -suffix.length);
+      if (!uuid || uuid.includes('/')) {
+        return undefined;
+      }
+
+      for (const character of uuid) {
+        const isDigit = character >= '0' && character <= '9';
+        const isLowercaseLetter = character >= 'a' && character <= 'z';
+
+        if (!isDigit && !isLowercaseLetter) {
+          return undefined;
+        }
+      }
+
+      const cacheBuster = url.searchParams.get('c');
+      if (!cacheBuster) {
+        return undefined;
+      }
+
+      for (const character of cacheBuster) {
+        if (character < '0' || character > '9') {
+          return undefined;
+        }
+      }
+
+      return uuid;
+    } catch {
+      return undefined;
+    }
+  }
+
+  public uninitialize() {
+    this.plexClient = undefined;
+    this.plexCommunityClient = undefined;
+    this.plexTvClient = undefined;
+    // Drop the watch-history snapshots too - on a server/token switch they
+    // would otherwise serve the previous server's history for up to their TTL.
+    this.watchHistoryPrefetches.clear();
+    cacheManager.getCache('plexguid').data.flushAll();
+    cacheManager.getCache('plextv').data.flushAll();
+    cacheManager.getCache('plexcommunity').data.flushAll();
+    cacheManager.getCache('plexwatchhistory').data.flushAll();
+  }
+
+  public async initialize() {
+    try {
+      this.uninitialize();
+      const settingsPlex = this.getDbSettings();
+      const plexToken = settingsPlex.auth_token;
+
+      if (!settingsPlex.ip || !plexToken) {
+        this.logger.warn(
+          "Plex API isn't fully initialized, required settings aren't set",
+        );
+        return;
+      }
+
+      this.plexTvClient = new PlexTvApi(
+        plexToken,
+        this.loggerFactory.createLogger(),
+      );
+      this.plexCommunityClient = new PlexCommunityApi(
+        plexToken,
+        this.loggerFactory.createLogger(),
+      );
+
+      // Try stored primary connection
+      this.plexClient = new PlexApi({
+        hostname: settingsPlex.ip,
+        port: settingsPlex.port,
+        https: settingsPlex.useSsl,
+        token: plexToken,
+        timeout: MEDIA_SERVER_REQUEST_TIMEOUT_MS,
+      });
+
+      const machineId = await this.setMachineId();
+
+      if (machineId) {
+        return; // Primary connection works
+      }
+
+      // Manual mode: don't attempt re-discovery, user owns the connection
+      if (settingsPlex.manualMode) {
+        this.plexClient = undefined;
+        this.logger.warn(
+          'Plex connection failed (manual mode active - skipping re-discovery)',
+        );
+        return;
+      }
+
+      // Re-discover from plex.tv
+      const recovered = await this.rediscoverConnection(plexToken);
+      if (!recovered) {
+        // Clear the dead client so isSetup() reflects reality
+        this.plexClient = undefined;
+        this.logger.warn(
+          'Plex connection failed after re-discovery attempt. Please check your settings',
+        );
+      }
+    } catch (error) {
+      this.plexClient = undefined;
+      this.logger.error(
+        `Couldn't connect to Plex.. Please check your settings`,
+      );
+      this.logger.debug(error);
+    }
+  }
+
+  /**
+   * Attempt to re-discover a working Plex connection from plex.tv.
+   * Matches the stored machineId to find the right server, ranks connections
+   * to prefer local direct-IP, and promotes the first working one to primary.
+   */
+  private async rediscoverConnection(plexToken: string): Promise<boolean> {
+    const storedMachineId = this.settings.plex_machine_id;
+
+    if (!storedMachineId) {
+      this.logger.debug(
+        'No stored machine ID - cannot identify server for re-discovery',
+      );
+      return false;
+    }
+
+    this.logger.log(
+      'Primary Plex connection failed, attempting re-discovery from plex.tv...',
+    );
+
+    try {
+      const devices = await this.getAvailableServers();
+      const matchingDevice = devices?.find(
+        (d) => d.clientIdentifier === storedMachineId,
+      );
+
+      if (!matchingDevice?.connection?.length) {
+        this.logger.debug(
+          'Re-discovery: server not found or no reachable connections',
+        );
+        return false;
+      }
+
+      const ranked = PlexApiService.rankConnections(matchingDevice.connection);
+
+      for (const conn of ranked) {
+        const testClient = new PlexApi({
+          hostname: conn.address,
+          port: conn.port,
+          https: conn.protocol === 'https',
+          timeout: CONNECTION_TEST_TIMEOUT_MS,
+          token: plexToken,
+        });
+
+        const ok = await testClient.getStatus();
+        if (!ok) continue;
+
+        // Found a working connection - promote it
+        this.plexClient = new PlexApi({
+          hostname: conn.address,
+          port: conn.port,
+          https: conn.protocol === 'https',
+          token: plexToken,
+          timeout: MEDIA_SERVER_REQUEST_TIMEOUT_MS,
+        });
+
+        await this.settings.updatePlexConnectionDetails({
+          plex_hostname: conn.address,
+          plex_port: conn.port,
+          plex_ssl: conn.protocol === 'https' ? 1 : 0,
+        });
+
+        await this.setMachineId();
+
+        this.logger.log(
+          `Re-discovery: switched to ${conn.protocol}://${conn.address}:${conn.port} (local=${conn.local})`,
+        );
+        return true;
+      }
+
+      this.logger.debug('Re-discovery: all discovered connections failed');
+      return false;
+    } catch (error) {
+      this.logger.debug('Re-discovery from plex.tv failed');
+      this.logger.debug(error);
+      return false;
+    }
+  }
+
+  public async getStatus() {
+    try {
+      if (!this.isPlexSetup()) {
+        this.logger.debug('Plex client not initialized, skipping getStatus');
+        return undefined;
+      }
+      // Probe `/identity`, not `/`: it returns machineIdentifier + version
+      // without auth quirks. Bare `/` returns 401 behind reverse proxies (it
+      // redirects to the web UI), which would break connection/machine-id
+      // detection for proxied servers.
+      const response: PlexStatusResponse = await this.plexClient.query(
+        '/identity',
+        false,
+      );
+      return response.MediaContainer;
+    } catch (error) {
+      this.logger.debug('Plex status probe failed');
+      return undefined;
+    }
+  }
+
+  public async validateAuthToken(token?: string): Promise<PlexTokenValidation> {
+    const authToken = token ?? this.settings.plex_auth_token;
+
+    if (!authToken) {
+      throw new Error('Plex auth token is required for validation');
+    }
+
+    const plexTvClient = new PlexTvApi(
+      authToken,
+      this.loggerFactory.createLogger(),
+    );
+
+    return plexTvClient.validateToken();
+  }
+
+  public async searchContent(input: string) {
+    try {
+      const response: PlexMetadataResponse = await this.plexClient.query(
+        `/search?query=${encodeURIComponent(input)}&includeGuids=1`,
+      );
+      const results = response.MediaContainer.Metadata
+        ? Promise.all(
+            response.MediaContainer.Metadata.filter(
+              (x) => x.type === 'movie' || x.type === 'show',
+            ).map(async (el: PlexMetadata) => {
+              return el.grandparentRatingKey
+                ? await this.getMetadata(el.grandparentRatingKey.toString())
+                : el;
+            }),
+          )
+        : [];
+      const filteredResults: PlexMetadata[] = [];
+      (await results).forEach((el: PlexMetadata) => {
+        if (
+          filteredResults.find(
+            (e: PlexMetadata) => e.ratingKey === el.ratingKey,
+          ) === undefined
+        ) {
+          filteredResults.push(el);
+        }
+      });
+      return filteredResults;
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async getUsers(): Promise<PlexUserAccount[]> {
+    try {
+      const response: PlexAccountsResponse = await this.plexClient.queryAll({
+        uri: '/accounts',
+      });
+      return response.MediaContainer.Account;
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async getUser(id: number): Promise<PlexUserAccount> {
+    try {
+      const response: PlexAccountsResponse = await this.plexClient.queryAll({
+        uri: `/accounts/${id}`,
+      });
+      return response?.MediaContainer?.Account[0];
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async getLibraries(): Promise<PlexLibrary[]> {
+    if (!this.isPlexSetup()) {
+      this.logger.debug('Plex client not initialized, skipping getLibraries');
+      return [];
+    }
+
+    try {
+      const response = await this.plexClient.queryAll<PlexLibrariesResponse>({
+        uri: '/library/sections',
+      });
+
+      return response.MediaContainer.Directory ?? [];
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Plex does not expose a documented native per-library storage total in the
+   * official API. Callers that need accurate sizes must enumerate items.
+   */
+  public async getLibrariesStorage(): Promise<Map<string, number>> {
+    return new Map<string, number>();
+  }
+
+  public async getLibraryContentCount(
+    id: string | number,
+    datatype?: EPlexDataType,
+  ): Promise<number | undefined> {
+    try {
+      const type = datatype ? '?type=' + datatype : '';
+      const response = await this.plexClient.query<PlexLibrariesResponse>({
+        uri: `/library/sections/${id}/all${type}`,
+        extraHeaders: {
+          'X-Plex-Container-Start': '0',
+          'X-Plex-Container-Size': '0',
+        },
+      });
+
+      if (!response?.MediaContainer) {
+        throw new Error(
+          `Plex library section ${id} returned no MediaContainer`,
+        );
+      }
+
+      return response.MediaContainer.totalSize;
+    } catch (error) {
+      this.logLibrarySectionError(id, error);
+      // Same contract as getLibraryContents: a fabricated count masks a
+      // failed read from callers that gate work on it.
+      throw error;
+    }
+  }
+
+  public async getLibraryContents(
+    id: string,
+    {
+      offset = 0,
+      size = PLEX_PAGE_SIZE.DEFAULT,
+      sort,
+    }: { offset?: number; size?: number; sort?: string } = {},
+    datatype?: EPlexDataType,
+    useCache: boolean = true,
+  ): Promise<{ totalSize: number; items: PlexLibraryItem[] }> {
+    try {
+      const type = datatype ? '&type=' + datatype : '';
+      const sortQuery = sort ? `&sort=${encodeURIComponent(sort)}` : '';
+      const response = await this.plexClient.query<PlexLibraryResponse>(
+        {
+          uri: `/library/sections/${id}/all?includeGuids=1${type}${sortQuery}`,
+          extraHeaders: {
+            'X-Plex-Container-Start': `${offset}`,
+            'X-Plex-Container-Size': `${size}`,
+          },
+        },
+        useCache,
+      );
+
+      if (!response?.MediaContainer) {
+        throw new Error(
+          `Plex library section ${id} returned no MediaContainer`,
+        );
+      }
+
+      return {
+        totalSize: response.MediaContainer.totalSize,
+        items: (response.MediaContainer.Metadata as PlexLibraryItem[]) ?? [],
+      };
+    } catch (error) {
+      this.logLibrarySectionError(id, error);
+      // A swallowed page read looks like the end of the library downstream,
+      // which truncates rule evaluation and mass-removes the unevaluated
+      // tail from collections (#3307). Same contract as getCollectionChildren.
+      throw error;
+    }
+  }
+
+  public async getLibraryLeaves(
+    id: string,
+    useCache: boolean = true,
+  ): Promise<PlexLibraryItem[]> {
+    try {
+      const response = await this.plexClient.queryAll<PlexLibraryResponse>(
+        {
+          uri: `/library/sections/${id}/allLeaves?includeGuids=1`,
+        },
+        useCache,
+      );
+
+      if (!response?.MediaContainer) {
+        this.logLibrarySectionError(id);
+        return undefined;
+      }
+
+      return (response.MediaContainer.Metadata as PlexLibraryItem[]) ?? [];
+    } catch (error) {
+      this.logLibrarySectionError(id, error);
+      return undefined;
+    }
+  }
+
+  public async searchLibraryContents(
+    id: string,
+    query: string,
+    datatype?: EPlexDataType,
+  ): Promise<PlexLibraryItem[]> {
+    try {
+      const params = new URLSearchParams({
+        includeGuids: '1',
+        title: query,
+        ...(datatype ? { type: datatype.toString() } : {}),
+      });
+
+      const response = await this.plexClient.query<PlexLibraryResponse>({
+        uri: `/library/sections/${id}/all?${params.toString()}`,
+      });
+
+      if (!response?.MediaContainer) {
+        this.logLibrarySectionError(id);
+        return undefined;
+      }
+
+      return response.MediaContainer.Metadata as PlexLibraryItem[];
+    } catch (error) {
+      this.logLibrarySectionError(id, error);
+      return undefined;
+    }
+  }
+
+  public async getMetadata(
+    key: string,
+    options: { includeChildren?: boolean; includeExternalMedia?: boolean } = {},
+    useCache: boolean = true,
+  ): Promise<PlexMetadata> {
+    try {
+      const queryParams = new URLSearchParams();
+
+      if (options.includeChildren) {
+        queryParams.set('includeChildren', '1');
+      }
+
+      if (options.includeChildren || options.includeExternalMedia) {
+        queryParams.set('includeExternalMedia', '1');
+        queryParams.set('asyncAugmentMetadata', '1');
+      }
+
+      const queryString = queryParams.toString();
+
+      const response = await this.plexClient.query<PlexMetadataResponse>(
+        `/library/metadata/${key}${queryString.length > 0 ? `?${queryString}` : ''}`,
+        useCache,
+      );
+      if (response) {
+        return response.MediaContainer.Metadata[0];
+      } else {
+        return undefined;
+      }
+    } catch (error) {
+      // 404 is Plex answering that the item is gone, not that it is
+      // unreachable. Blaming the connection logged one ERROR per gone item.
+      if (this.responseStatus(error) === 404) {
+        this.logger.debug(`Plex has no item with id ${key}`);
+        return undefined;
+      }
+
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Guid arrays for many items in one request. Verified on PMS 1.43.3: 240 ids
+   * answer in one response, and an unresolvable id is left out of it rather
+   * than failing the batch.
+   */
+  public async getMetadataBatch(keys: string[]): Promise<PlexMetadata[]> {
+    if (keys.length === 0) {
+      return [];
+    }
+
+    try {
+      const response = await this.plexClient.query<PlexMetadataResponse>(
+        `/library/metadata/${keys.join(',')}?includeGuids=1`,
+      );
+      return response?.MediaContainer?.Metadata ?? [];
+    } catch (error) {
+      // Plex 404s only when it holds none of the requested ids; a mixed batch
+      // is a 200 listing just the live ones (verified on PMS 1.43.3).
+      if (this.responseStatus(error) === 404) {
+        this.logger.debug(
+          `Plex has none of the ${keys.length} requested items`,
+        );
+        return [];
+      }
+
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return [];
+    }
+  }
+
+  public resetMetadataCache(mediaId: string) {
+    // getMetadata appends the caller's options to the uri, and the rule getter
+    // always passes includeExternalMedia - so its entries are cached under
+    // `?includeExternalMedia=1&asyncAugmentMetadata=1`, which the bare-uri
+    // delete this used to do never matched. Rules testing flushed nothing on
+    // the one path that caches, and served pre-change metadata for the TTL.
+    // Drop every option variant for this id instead.
+    const cache = cacheManager.getCache('plexguid').data;
+    const metadataUriPrefix = '/library/metadata/';
+    // Watch state goes too, like the Jellyfin and Emby resets already do.
+    // History entries are keyed by leaf ratingKey - a show or season test
+    // reads its episodes' entries, not the id passed here - so the whole
+    // history namespace is dropped rather than one id's key.
+    const historyUri = '/status/sessions/history/all';
+
+    // Matched against the id list a uri reads, not the uri: a batch entry
+    // holding this id would otherwise keep serving its old copy. Comparing list
+    // members also keeps id 12 from matching id 123.
+    const readsMediaId = (cachedUri: string): boolean =>
+      cachedUri.startsWith(metadataUriPrefix) &&
+      cachedUri
+        .slice(metadataUriPrefix.length)
+        .split('?', 1)[0]
+        .split(',')
+        .includes(mediaId);
+
+    for (const key of cache.keys()) {
+      // Keys are the serialized request options, so read the uri back out
+      // rather than matching on the raw key - options other than the uri end up
+      // in there too.
+      let cachedUri: string | undefined;
+      try {
+        cachedUri = (JSON.parse(key) as { uri?: string }).uri;
+      } catch {
+        continue;
+      }
+
+      if (
+        cachedUri !== undefined &&
+        (readsMediaId(cachedUri) || cachedUri.startsWith(historyUri))
+      ) {
+        cache.del(key);
+      }
+    }
+
+    // The prefetched snapshot is a point-in-time copy of every item's watch
+    // state, so a just-watched change would stay invisible to a rules test
+    // for up to its TTL.
+    cacheManager.getCache('plexwatchhistory').data.flushAll();
+  }
+
+  public async getUserDataFromPlexTv(): Promise<PlexTvUser[] | undefined> {
+    try {
+      const response = await this.plexTvClient.getUsers();
+      // xml2js leaves `User` undefined when the account simply has no shared
+      // users - that is a confirmed empty list, not a failure. Reserve
+      // `undefined` for a failed fetch so callers can tell them apart.
+      return response.MediaContainer.User ?? [];
+    } catch (error) {
+      this.logger.error(
+        "Outbound call to plex.tv failed. Couldn't fetch users",
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async getOwnerDataFromPlexTv(): Promise<PlexUser | undefined> {
+    try {
+      return await this.plexTvClient.getUser();
+    } catch (error) {
+      this.logger.error(
+        "Outbound call to plex.tv failed. Couldn't fetch owner",
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  /**
+   * @returns the children, or undefined when the read failed. A container with
+   * no children answers without a Metadata node, so an empty array is a
+   * confirmed "no children" rather than a swallowed failure.
+   */
+  public async getChildrenMetadata(key: string): Promise<PlexMetadata[]> {
+    try {
+      const response = await this.plexClient.queryAll<PlexMetadataResponse>({
+        uri: `/library/metadata/${key}/children`,
+      });
+
+      return response.MediaContainer.Metadata ?? [];
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async getRecentlyAdded(
+    id: string,
+    options: { addedAt: number } = {
+      addedAt: Date.now() - 1000 * 60 * 60,
+    },
+  ): Promise<PlexLibraryItem[]> {
+    try {
+      const response = await this.plexClient.queryAll<PlexLibraryResponse>({
+        uri: `/library/sections/${id}/all?sort=addedAt%3Adesc&addedAt>>=${Math.floor(
+          options.addedAt / 1000,
+        )}`,
+      });
+
+      if (!response?.MediaContainer) {
+        this.logLibrarySectionError(id);
+        return undefined;
+      }
+
+      return response.MediaContainer.Metadata as PlexLibraryItem[];
+    } catch (error) {
+      this.logLibrarySectionError(id, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Sweeps one library's watch history in a single paginated pass and stores a
+   * snapshot in the 'plexwatchhistory' cache (1 hour TTL). Subsequent
+   * getWatchHistory calls for items in that library are served from the
+   * snapshot instead of issuing one HTTP request per item. Returns immediately
+   * when the library is already cached, so it is safe to call at the start of
+   * every rule group.
+   *
+   * Scoped to one library via `librarySectionID`: a rule group only evaluates
+   * items from its own library, and the endpoint otherwise returns every view
+   * event on the server - every library, every user, every rewatch.
+   *
+   * On failure the error is logged and swallowed - getWatchHistory falls back
+   * to per-item queries automatically when the snapshot is absent.
+   */
+  public prefetchWatchHistory(
+    libraryId: string,
+    abortSignal?: AbortSignal,
+  ): Promise<void> {
+    const cache = cacheManager.getCache('plexwatchhistory').data;
+    if (cache.has(watchHistoryCacheKey(libraryId))) {
+      return Promise.resolve();
+    }
+
+    // Deduplicate concurrent callers onto one in-flight fetch per library.
+    const existing = this.watchHistoryPrefetches.get(libraryId);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const inFlight = this.fetchWatchHistorySnapshot(
+      libraryId,
+      abortSignal,
+    ).finally(() => {
+      this.watchHistoryPrefetches.delete(libraryId);
+    });
+    this.watchHistoryPrefetches.set(libraryId, inFlight);
+    return inFlight;
+  }
+
+  private async fetchWatchHistorySnapshot(
+    libraryId: string,
+    abortSignal?: AbortSignal,
+  ): Promise<void> {
+    // Spell out what the count means: one entry per view event across all
+    // users, so the total has no relation to how many items the library holds.
+    this.logger.log(
+      `Prefetching watch history for library ${libraryId} ` +
+        `(one entry per view event, across all users)...`,
+    );
+
+    // Plex reports totalSize on the first page, so an oversized history is
+    // abandoned one request in rather than paged through in full. queryAll
+    // materialises every row before returning, so unlike the Jellyfin sweep
+    // there is no way to fold pages in and stop partway.
+    let exceededCeiling = false;
+
+    try {
+      abortSignal?.throwIfAborted();
+      const historyQuery = {
+        uri:
+          `/status/sessions/history/all?sort=viewedAt:desc` +
+          `&librarySectionID=${libraryId}` +
+          `&excludeFields=${WATCH_HISTORY_EXCLUDE_FIELDS}`,
+      };
+
+      // The sweep is one sequential Plex request per page, so a big watch
+      // history can take minutes with no output - which reads as a hang (users
+      // reported the run "stuck" at the single start line). Log each 10% it
+      // crosses so progress is visible without flooding the log. The final page
+      // (fetched == totalSize) is skipped so it never prints a misleading
+      // partial percentage; the completion line below reports the total. A
+      // history that fits in one page stays silent here for the same reason.
+      const reportProgress = createPrefetchProgressReporter(
+        (message) => this.logger.log(message),
+        `Prefetching watch history for library ${libraryId}`,
+        'entries',
+      );
+      const onProgress = ({
+        fetched,
+        totalSize,
+      }: {
+        fetched: number;
+        totalSize: number;
+      }): void => {
+        if (totalSize > WATCH_HISTORY_MAX_ENTRIES) {
+          exceededCeiling = true;
+          throw new Error('watch history ceiling exceeded');
+        }
+        reportProgress(fetched, totalSize);
+      };
+
+      const response = await this.plexClient.queryAll<PlexLibraryResponse>(
+        historyQuery,
+        false,
+        abortSignal,
+        onProgress,
+        PLEX_PAGE_SIZE.MAX_PAGE_SIZE,
+      );
+
+      const container = response?.MediaContainer;
+      const records = (container?.Metadata as PlexSeenBy[]) ?? [];
+
+      // The snapshot is authoritative for "never watched": an item absent from
+      // it is read as empty history with NO per-item fallback. So only cache a
+      // sweep we can prove is complete. Plex reports totalSize on this endpoint;
+      // queryAll stops paging once totalSize is reached, but a missing/short
+      // totalSize would make it stop early and silently truncate. Treat that as
+      // a failed prefetch so callers fall back to per-item queries rather than
+      // trusting a partial snapshot.
+      const totalSize = container?.totalSize;
+      if (typeof totalSize !== 'number' || records.length < totalSize) {
+        this.logger.warn(
+          `Watch history prefetch for library ${libraryId} returned an ` +
+            `unverifiable result (received ${records.length}, totalSize ` +
+            `${totalSize ?? 'absent'}) - falling back to per-item reads.`,
+        );
+        return;
+      }
+
+      const snapshot = this.buildWatchHistorySnapshot(records);
+      if (snapshot.rollup && !(await this.verifyRollup(snapshot, libraryId))) {
+        snapshot.rollup = undefined;
+      }
+
+      cacheManager
+        .getCache('plexwatchhistory')
+        .data.set(watchHistoryCacheKey(libraryId), snapshot);
+
+      this.logger.log(
+        `Watch history prefetch for library ${libraryId} complete: ` +
+          `${records.length} entries - ${snapshot.leaf.size} items` +
+          `${snapshot.rollup ? ` across ${snapshot.rollup.show.size} shows` : ''}.`,
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+
+      if (exceededCeiling) {
+        this.logger.warn(
+          `Watch history for library ${libraryId} passed ` +
+            `${WATCH_HISTORY_MAX_ENTRIES} entries - falling back to per-item reads.`,
+        );
+        return;
+      }
+
+      this.logger.warn(
+        `Watch history prefetch for library ${libraryId} failed - falling back to per-item reads. Error: ${error}`,
+      );
+    }
+  }
+
+  /**
+   * One episode row missing its parent keys disables the rollup for the whole
+   * library: dropping just that row would under-report its show's history,
+   * which is the false "never watched" #3082 avoided by skipping the rollup
+   * altogether. Movies legitimately carry no parent keys and never gate it.
+   */
+  private buildWatchHistorySnapshot(
+    records: PlexSeenBy[],
+  ): PlexWatchHistorySnapshot {
+    const leaf = new Map<string, PlexSeenBy[]>();
+    const show = new Map<string, PlexSeenBy[]>();
+    const season = new Map<string, PlexSeenBy[]>();
+    let rollupComplete = true;
+
+    const add = (
+      map: Map<string, PlexSeenBy[]>,
+      key: string,
+      record: PlexSeenBy,
+    ): void => {
+      const existing = map.get(key);
+      if (existing) {
+        existing.push(record);
+      } else {
+        map.set(key, [record]);
+      }
+    };
+
+    for (const record of records) {
+      // Offset paging over a viewedAt:desc sort re-reads a row for every view
+      // that lands mid-sweep: the new row takes offset 0 and pushes each later
+      // page one slot older. Counting it twice inflates sw_amountOfViews.
+      const alreadyStored = leaf
+        .get(record.ratingKey)
+        ?.some(
+          (stored) =>
+            stored.viewedAt === record.viewedAt &&
+            stored.accountID === record.accountID,
+        );
+      if (alreadyStored) continue;
+
+      add(leaf, record.ratingKey, record);
+
+      if (record.type !== 'episode') continue;
+
+      const showKey = ratingKeyFromPath(record.grandparentKey);
+      const seasonKey = ratingKeyFromPath(record.parentKey);
+      if (!showKey || !seasonKey) {
+        rollupComplete = false;
+        continue;
+      }
+
+      add(show, showKey, record);
+      add(season, seasonKey, record);
+    }
+
+    return { leaf, rollup: rollupComplete ? { show, season } : undefined };
+  }
+
+  /**
+   * Proves the rollup against Plex before anything reads it: takes one show it
+   * claims history for and compares it with the same question asked of Plex's
+   * own server-side rollup. That turns a dependency on an undocumented field
+   * into a checked one - if this connection reports the parent keys in a shape
+   * `ratingKeyFromPath` mis-reads, the two answers disagree and the rollup is
+   * dropped rather than silently under-reporting a show.
+   *
+   * Costs one request per sweep, and only for libraries with episode history.
+   * A failed check drops the rollup, never the snapshot: the leaf map is what
+   * the expensive per-episode walks read and it is unaffected.
+   */
+  private async verifyRollup(
+    snapshot: PlexWatchHistorySnapshot,
+    libraryId: string,
+  ): Promise<boolean> {
+    const sample = snapshot.rollup?.show.entries().next();
+    if (!sample || sample.done) return false;
+
+    const [showKey, expected] = sample.value;
+    try {
+      const live = await this.getWatchHistory(showKey, false, 'show');
+      if (historyFingerprint(live) === historyFingerprint(expected)) {
+        return true;
+      }
+      this.logger.warn(
+        `Watch history rollup for library ${libraryId} disagreed with Plex on ` +
+          `show ${showKey} (${expected.length} entries vs ${live.length}) - ` +
+          `show and season reads stay per-item.`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not verify the watch history rollup for library ${libraryId} - ` +
+          `show and season reads stay per-item. Error: ${error}`,
+      );
+    }
+    return false;
+  }
+
+  private getWatchHistorySnapshot(
+    libraryId: string,
+  ): PlexWatchHistorySnapshot | undefined {
+    return cacheManager
+      .getCache('plexwatchhistory')
+      .data.get<PlexWatchHistorySnapshot>(watchHistoryCacheKey(libraryId));
+  }
+
+  // The 'plexwatchhistory' cache stores by reference (useClones: false), so
+  // always hand callers a copy - plex-getter sorts these arrays in place.
+  private copyRecords(
+    map: Map<string, PlexSeenBy[]>,
+    itemId: string,
+  ): PlexSeenBy[] {
+    const records = map.get(itemId);
+    return records ? [...records] : [];
+  }
+
+  public async getWatchHistory(
+    itemId: string,
+    useCache: boolean = true,
+    itemType?: PlexLibraryItem['type'],
+    libraryId?: string,
+  ): Promise<PlexSeenBy[]> {
+    // Serve from the library's snapshot when caching is allowed. The snapshot
+    // is a point-in-time picture taken at prefetch time; callers that pass
+    // useCache: false intentionally bypass it and read the per-item endpoint.
+    // Without a libraryId there is no snapshot we can safely attribute the item
+    // to, so the read falls through rather than risk another library's answer.
+    const snapshot =
+      useCache && libraryId
+        ? this.getWatchHistorySnapshot(libraryId)
+        : undefined;
+
+    if (snapshot) {
+      switch (itemType) {
+        case 'movie':
+        case 'episode':
+          return this.copyRecords(snapshot.leaf, itemId);
+        case 'show':
+          // Only from a rollup this sweep proved against Plex; otherwise fall
+          // through to the per-item metadataItemID query, which Plex rolls up
+          // server-side.
+          if (snapshot.rollup) {
+            return this.copyRecords(snapshot.rollup.show, itemId);
+          }
+          break;
+        case 'season':
+          if (snapshot.rollup) {
+            return this.copyRecords(snapshot.rollup.season, itemId);
+          }
+          break;
+        default: {
+          // Untyped callers may pass any kind of ratingKey, so only a non-empty
+          // leaf hit is trusted - a miss falls through to the per-item query.
+          const records = this.copyRecords(snapshot.leaf, itemId);
+          if (records.length > 0) return records;
+          break;
+        }
+      }
+    }
+
+    // Errors must propagate so callers can distinguish a real outage from a
+    // confirmed empty history. Returning [] (or undefined) here would
+    // misclassify failures as "never watched", which leaks into NOT_EXISTS
+    // checks and missing-value diagnostics in the rules layer. Mirrors the
+    // Jellyfin adapter's getWatchHistory contract.
+    const response: PlexLibraryResponse =
+      await this.plexClient.queryAll<PlexLibraryResponse>(
+        {
+          uri: `/status/sessions/history/all?sort=viewedAt:desc&metadataItemID=${itemId}`,
+        },
+        useCache,
+      );
+    return (response?.MediaContainer?.Metadata as PlexSeenBy[]) ?? [];
+  }
+
+  /**
+   * Returns the items in every active play session. Plex's
+   * `/status/sessions` returns only the `MediaContainer` (no `Metadata`) when
+   * nothing is playing, so an empty array is the normal "idle" result. Never
+   * cached - sessions are live state. Best-effort: the plexClient retries
+   * transient failures (axios-retry, exponential backoff), and a persistent
+   * failure returns [] so a session outage degrades to normal handling rather
+   * than blocking the run.
+   */
+  public async getActiveSessions(): Promise<PlexLibraryItem[]> {
+    try {
+      const response = await this.plexClient.query<PlexLibraryResponse>(
+        { uri: '/status/sessions' },
+        false,
+      );
+      return (response?.MediaContainer?.Metadata as PlexLibraryItem[]) ?? [];
+    } catch (error) {
+      this.logger.error('Failed to fetch active Plex sessions.');
+      this.logger.debug(error);
+      return [];
+    }
+  }
+
+  /**
+   * @param useCache - Rule getters read this per item, so the listing is cached
+   * by default. Callers that decide whether a collection exists must pass
+   * false: a listing up to the cache TTL old reports a just-created collection
+   * as missing, which reads as "manual collection doesn't exist" and makes the
+   * automatic link create a second collection beside the real one (#3344).
+   *
+   * @throws Error on any failure to enumerate. An empty array means the section
+   * genuinely holds no collections.
+   */
+  public async getCollections(
+    libraryId: string | number,
+    subType?: 'movie' | 'show' | 'season' | 'episode',
+    useCache = true,
+  ): Promise<PlexCollection[]> {
+    let response: PlexLibraryResponse;
+    try {
+      response = await this.plexClient.queryAll<PlexLibraryResponse>(
+        {
+          uri: `/library/sections/${libraryId}/collections?${subType ? `subtype=${subType}` : ''}`,
+        },
+        useCache,
+      );
+    } catch (error) {
+      this.logLibrarySectionError(libraryId, error);
+      // A swallowed enumeration failure reads as "this library has no
+      // collections" downstream, so the link lookup misses an existing
+      // collection and a duplicate is created beside it (#3344).
+      throw error;
+    }
+
+    // Validated outside the catch above so this throw isn't re-logged by it as
+    // a communication failure.
+    if (!response?.MediaContainer) {
+      this.logLibrarySectionError(libraryId);
+      throw new Error(
+        `Plex library section '${libraryId}' returned no MediaContainer`,
+      );
+    }
+
+    return (response.MediaContainer.Metadata ?? []) as PlexCollection[];
+  }
+
+  /**
+   * Retrieves all playlists from the Plex API the given ratingKey is part of.
+   *
+   * @return {Promise<PlexPlaylist[]>} A promise that resolves to an array of Plex playlists.
+   */
+  public async getPlaylists(libraryId: string): Promise<PlexPlaylist[]> {
+    try {
+      const filteredItems: PlexPlaylist[] = [];
+
+      const response = await this.plexClient.queryAll<PlexLibraryResponse>({
+        uri: `/playlists?playlistType=video&includeCollections=1&includeExternalMedia=1&includeAdvanced=1&includeMeta=1`,
+      });
+
+      const items = response.MediaContainer.Metadata
+        ? (response.MediaContainer.Metadata as PlexPlaylist[])
+        : [];
+
+      for (const item of items) {
+        const itemResp = await this.plexClient.query<PlexLibraryResponse>({
+          uri: item.key,
+        });
+
+        const filteredForRatingKey = (
+          itemResp?.MediaContainer?.Metadata as PlexLibraryItem[]
+        )?.filter((i) => i.ratingKey === libraryId);
+
+        if (filteredForRatingKey && filteredForRatingKey.length > 0) {
+          filteredItems.push(item);
+        }
+      }
+
+      return filteredItems;
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async deleteMediaFromDisk(plexId: number | string): Promise<void> {
+    await this.plexClient.deleteQuery({
+      uri: `/library/metadata/${plexId}`,
+      timeout: NO_TIMEOUT,
+    });
+    this.logger.log(
+      `[Plex] Removed media with ID ${plexId} from Plex library.`,
+    );
+  }
+
+  public async scanFolder(
+    libraryId: string,
+    folderPath: string,
+  ): Promise<void> {
+    // Without a path Plex scans the whole section, which is what this avoids.
+    if (!folderPath) {
+      throw new Error('scanFolder called without a folder path');
+    }
+    await this.plexClient.query(
+      {
+        uri: `/library/sections/${libraryId}/refresh?path=${encodeURIComponent(folderPath)}`,
+      },
+      false,
+    );
+  }
+
+  public async refreshMediaMetadata(ratingKey: string): Promise<void> {
+    try {
+      await this.plexClient.putQuery({
+        uri: `/library/metadata/${ratingKey}/refresh`,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to refresh Plex metadata for item ${ratingKey}`,
+      );
+      this.logger.debug(error);
+      throw error;
+    }
+  }
+
+  public async getCollection(
+    collectionId: string | number,
+  ): Promise<PlexCollection> {
+    try {
+      const response = await this.plexClient.query<PlexLibraryResponse>(
+        {
+          uri: `/library/collections/${+collectionId}?`,
+        },
+        false,
+      );
+      // Metadata can be a single object or an array - handle both
+      const metadata = response.MediaContainer.Metadata;
+      const collection = (
+        Array.isArray(metadata) ? metadata[0] : metadata
+      ) as PlexCollection;
+
+      return collection;
+    } catch (error) {
+      // Only a 404 proves the collection is gone. Every other failure
+      // (timeout, 5xx, auth) means "couldn't ask" and must propagate, or
+      // callers unlink a collection that still exists and create a duplicate
+      // beside it (#3344).
+      if (this.responseStatus(error) !== 404) {
+        throw error;
+      }
+
+      this.logger.debug(`Couldn't find collection with id ${+collectionId}`);
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async createCollection(params: CreateUpdateCollection) {
+    try {
+      // Created empty; items are added afterwards via the batched add path.
+      const response = await this.plexClient.postQuery<any>({
+        uri: `/library/collections?type=${
+          params.type
+        }&title=${encodeURIComponent(params.title)}&sectionId=${
+          params.libraryId
+        }`,
+      });
+      const collection: PlexCollection = response.MediaContainer
+        .Metadata[0] as PlexCollection;
+      if (params.summary || params.sortTitle) {
+        params.collectionId = collection.ratingKey;
+        return this.updateCollection(params);
+      }
+      return collection;
+    } catch (error) {
+      this.logLibrarySectionError(params.libraryId, error);
+      return undefined;
+    }
+  }
+
+  public async updateCollection(body: CreateUpdateCollection) {
+    try {
+      let uri = `/library/sections/${body.libraryId}/all?type=18&id=${body.collectionId}`;
+
+      if (body.title) {
+        uri += `&title.value=${encodeURIComponent(body.title)}`;
+      }
+      if (body.summary) {
+        uri += `&summary.value=${encodeURIComponent(body.summary)}`;
+      }
+      if (body.sortTitle) {
+        // Lock sort title so Plex keeps the custom value.
+        uri += `&titleSort.value=${encodeURIComponent(body.sortTitle)}&titleSort.locked=1`;
+      } else if (body.title) {
+        // Clear custom sort title and fall back to the regular title.
+        uri += `&titleSort.value=${encodeURIComponent(body.title)}&titleSort.locked=0`;
+      }
+      await this.plexClient.putQuery({ uri });
+      return await this.getCollection(+body.collectionId);
+    } catch (error) {
+      this.logLibrarySectionError(body.libraryId, error);
+      return undefined;
+    }
+  }
+
+  public async setCollectionCustomSort(collectionId: string): Promise<void> {
+    try {
+      await this.plexClient.putQuery({
+        uri: `/library/metadata/${collectionId}/prefs?collectionSort=2`,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to set custom sort for collection ${collectionId}`,
+      );
+      this.logger.debug(error);
+      throw error;
+    }
+  }
+
+  public async moveCollectionItem(
+    collectionId: string,
+    itemId: string,
+    afterId?: string,
+  ): Promise<void> {
+    try {
+      // Plex move is per-item. Omitting `after` puts the item at the front;
+      // otherwise it lands immediately after `afterId`. Reordering a full
+      // collection is therefore O(n) sequential PUTs - acceptable for the
+      // collection sizes Maintainerr manages.
+      const afterQuery = afterId ? `?after=${afterId}` : '';
+      await this.plexClient.putQuery({
+        uri: `/library/collections/${collectionId}/items/${itemId}/move${afterQuery}`,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to move item ${itemId} in collection ${collectionId}`,
+      );
+      this.logger.debug(error);
+      throw error;
+    }
+  }
+
+  public async deleteCollection(
+    collectionId: string,
+  ): Promise<BasicResponseDto> {
+    try {
+      await this.plexClient.deleteQuery({
+        uri: `/library/collections/${collectionId}`,
+      });
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return {
+        status: 'NOK',
+        code: 0,
+        message: getErrorMessage(
+          error,
+          'Something went wrong while deleting the collection from Plex',
+        ),
+      };
+    }
+    this.logger.log('Removed collection from Plex');
+    return {
+      status: 'OK',
+      code: 1,
+      message: 'Success',
+    };
+  }
+
+  public async getCollectionChildren(
+    collectionId: string,
+    useCache: boolean = true,
+  ): Promise<PlexLibraryItem[]> {
+    try {
+      const response: PlexLibraryResponse =
+        await this.plexClient.queryAll<PlexLibraryResponse>(
+          {
+            // Without it Plex sends only its own `plex://` guid, which carries
+            // no imdb/tmdb/tvdb id. Undocumented on this endpoint but honoured,
+            // verified on PMS 1.43.3.
+            uri: `/library/collections/${collectionId}/children?includeGuids=1`,
+          },
+          useCache,
+        );
+
+      // Empty collections return no Metadata node
+      if (response.MediaContainer.Metadata === undefined) {
+        return [];
+      }
+
+      return response.MediaContainer.Metadata as PlexLibraryItem[];
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      // A swallowed enumeration failure reads as "the collection is empty"
+      // downstream; [] is reserved for a confirmed empty collection.
+      throw error;
+    }
+  }
+
+  /**
+   * Drop the cached child pages for one collection.
+   *
+   * getCollectionChildren reads through the 5-minute `plexguid` cache, so
+   * without this a mutation is followed by a stale child list - and a membership
+   * decision made from one has already produced phantom manual members once
+   * (#1446). Jellyfin invalidates the same way after every collection mutation;
+   * Emby does not cache the read at all.
+   */
+  private invalidateCollectionChildrenCache(collectionId: string): void {
+    this.plexClient?.invalidateCachedUri(
+      `/library/collections/${collectionId}/children`,
+    );
+  }
+
+  public async addChildToCollection(
+    collectionId: string,
+    childId: string,
+  ): Promise<PlexCollection | BasicResponseDto> {
+    try {
+      await this.forceMachineId();
+      const response: PlexLibraryResponse = await this.plexClient.putQuery({
+        uri: `/library/collections/${collectionId}/items?uri=${this.buildCollectionItemsUri([childId])}`,
+      });
+      this.invalidateCollectionChildrenCache(collectionId);
+      return response.MediaContainer.Metadata[0] as PlexCollection;
+    } catch (error) {
+      // A write that failed may still have been applied, so the cached child
+      // list is no more trustworthy here than on the success path.
+      this.invalidateCollectionChildrenCache(collectionId);
+      const failure = this.buildCollectionMutationFailure(error);
+
+      if (failure.logLevel === 'warn') {
+        this.logger.warn(failure.message);
+      } else {
+        this.logger.error(failure.message);
+      }
+      this.logger.debug(error);
+      return {
+        status: 'NOK',
+        code: failure.code,
+        message: failure.message,
+      } as BasicResponseDto;
+    }
+  }
+
+  public async addChildrenToCollection(
+    collectionId: string,
+    childIds: string[],
+  ): Promise<PlexCollection | BasicResponseDto> {
+    if (childIds.length === 0) {
+      return {
+        status: 'OK',
+        code: 1,
+        message: 'No collection items to add',
+      } as BasicResponseDto;
+    }
+
+    try {
+      await this.forceMachineId();
+      const response: PlexLibraryResponse = await this.plexClient.putQuery({
+        uri: `/library/collections/${collectionId}/items?uri=${this.buildCollectionItemsUri(childIds)}`,
+      });
+      this.invalidateCollectionChildrenCache(collectionId);
+
+      return (
+        (response.MediaContainer.Metadata?.[0] as PlexCollection | undefined) ??
+        ({
+          status: 'OK',
+          code: 1,
+          message: `successfully added ${childIds.length} children to collection ${collectionId}`,
+        } as BasicResponseDto)
+      );
+    } catch (error) {
+      // A write that failed may still have been applied, so the cached child
+      // list is no more trustworthy here than on the success path.
+      this.invalidateCollectionChildrenCache(collectionId);
+      const failure = this.buildCollectionMutationFailure(error);
+
+      if (failure.logLevel === 'error') {
+        this.logger.error(failure.message);
+        this.logger.debug(error);
+      }
+
+      return {
+        status: 'NOK',
+        code: failure.code,
+        message: failure.message,
+      } as BasicResponseDto;
+    }
+  }
+
+  private buildCollectionMutationFailure(error: unknown): {
+    code: number;
+    logLevel: 'warn' | 'error';
+    message: string;
+  } {
+    // lib/plexApi wraps Axios failures in a plain Error with the original
+    // attached as `cause` - unwrap it, or the status and response body
+    // (Plex's actual rejection reason) never reach the logs.
+    const cause = error instanceof Error ? error.cause : undefined;
+    const axiosError = axios.isAxiosError(error)
+      ? error
+      : axios.isAxiosError(cause)
+        ? cause
+        : undefined;
+
+    if (axiosError && axiosError.response?.status) {
+      const responseBody = this.stringifyResponseBody(axiosError.response.data);
+      const statusMessage = `Plex request failed with ${axiosError.response.status}${axiosError.response.statusText ? ` ${axiosError.response.statusText}` : ''}`;
+
+      return {
+        code: axiosError.response.status,
+        logLevel:
+          axiosError.response.status >= 400 && axiosError.response.status < 500
+            ? 'warn'
+            : 'error',
+        message: responseBody
+          ? `${statusMessage}. Response body: ${responseBody}`
+          : `${statusMessage}.`,
+      };
+    }
+
+    return {
+      code: 0,
+      logLevel: 'error',
+      message: getErrorMessage(
+        error,
+        'Plex api communication failure.. Is the application running?',
+      ),
+    };
+  }
+
+  /**
+   * HTTP status behind a lib/plexApi failure, which wraps the Axios error as
+   * `cause`. Undefined when the request never got a response (timeout, DNS,
+   * connection refused) - i.e. when nothing about the server is known.
+   */
+  private responseStatus(error: unknown): number | undefined {
+    return error instanceof Error
+      ? (error.cause as { response?: { status?: number } } | undefined)
+          ?.response?.status
+      : undefined;
+  }
+
+  private logLibrarySectionError(id: string | number, error?: unknown): void {
+    // Only 404 indicates a missing/renamed section. 401 and 403 share the
+    // same wrapper in lib/plexApi.ts but mean auth/permission failures, so
+    // those must fall through to the generic communication-failure log.
+    const isInvalidSection =
+      error === undefined || this.responseStatus(error) === 404;
+
+    if (isInvalidSection) {
+      this.logger.warn(
+        `Plex library section '${id}' returned no data. The library may have been removed or its ID changed in Plex. Update any rules or collections that reference this library.`,
+      );
+    } else {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+    }
+
+    if (error !== undefined) {
+      this.logger.debug(error);
+    }
+  }
+
+  private stringifyResponseBody(body: unknown): string | undefined {
+    if (body == null) {
+      return undefined;
+    }
+
+    if (typeof body === 'string') {
+      return body;
+    }
+
+    try {
+      return JSON.stringify(body);
+    } catch {
+      return undefined;
+    }
+  }
+
+  public async deleteChildFromCollection(
+    collectionId: string,
+    childId: string,
+  ): Promise<BasicResponseDto> {
+    try {
+      await this.plexClient.deleteQuery({
+        uri: `/library/collections/${collectionId}/items/${childId}`,
+      });
+      this.invalidateCollectionChildrenCache(collectionId);
+      return {
+        status: 'OK',
+        code: 1,
+        message: `successfully deleted child with id ${childId}`,
+      } as BasicResponseDto;
+    } catch (error) {
+      // A write that failed may still have been applied, so the cached child
+      // list is no more trustworthy here than on the success path.
+      this.invalidateCollectionChildrenCache(collectionId);
+
+      // Same classification the add path uses: `code` carries the status Plex
+      // answered with, or 0 when nothing answered. Callers need that difference
+      // to tell a refusal from a write that may well have applied.
+      const failure = this.buildCollectionMutationFailure(error);
+
+      if (failure.logLevel === 'warn') {
+        this.logger.warn(failure.message);
+      } else {
+        this.logger.error(failure.message);
+      }
+      this.logger.debug(error);
+
+      return {
+        status: 'NOK',
+        code: failure.code,
+        message: failure.message,
+      } as BasicResponseDto;
+    }
+  }
+
+  public async UpdateCollectionSettings(
+    params: CollectionHubSettingsDto,
+  ): Promise<PlexHub> {
+    try {
+      const response: PlexHubResponse = await this.plexClient.postQuery({
+        uri: `/hubs/sections/${params.libraryId}/manage?metadataItemId=${
+          params.collectionId
+        }&promotedToRecommended=${+params.recommended}&promotedToOwnHome=${+params.ownHome}&promotedToSharedHome=${+params.sharedHome}`,
+      });
+      return response.MediaContainer.Hub[0] as PlexHub;
+    } catch (error) {
+      this.logger.error(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  public async getAvailableServers(): Promise<PlexDevice[]> {
+    try {
+      // reload requirements, auth token might have changed
+      const settings = (await this.settings.getSettings()) as Settings;
+      this.plexTvClient = new PlexTvApi(
+        settings.plex_auth_token,
+        this.loggerFactory.createLogger(),
+      );
+
+      const devices = (
+        await this.plexTvClient?.getDevices(settings.clientId)
+      )?.filter((device) => {
+        return device.provides.includes('server') && device.owned;
+      });
+
+      if (devices) {
+        await Promise.all(
+          devices.map(async (device) => {
+            device.connection.map((connection) => {
+              const url = new URL(connection.uri);
+              if (url.hostname !== connection.address) {
+                const plexDirectConnection = {
+                  ...connection,
+                  address: url.hostname,
+                };
+                device.connection.push(plexDirectConnection);
+                connection.protocol = 'http';
+              }
+            });
+
+            const filteredConnectionPromises = device.connection.map(
+              async (connection) => {
+                const newClient = new PlexApi({
+                  hostname: connection.address,
+                  port: connection.port,
+                  https: connection.protocol === 'https',
+                  timeout: CONNECTION_TEST_TIMEOUT_MS,
+                  token: settings.plex_auth_token,
+                });
+
+                const start = Date.now();
+                const ok = await newClient.getStatus();
+                if (!ok) return null;
+                return {
+                  ...connection,
+                  status: 200,
+                  latency: Date.now() - start,
+                };
+              },
+            );
+
+            device.connection = PlexApiService.rankConnections(
+              (await Promise.all(filteredConnectionPromises)).filter(Boolean),
+            );
+          }),
+        );
+      }
+      return devices;
+    } catch (error) {
+      this.logger.warn(
+        'Plex api communication failure.. Is the application running?',
+      );
+      this.logger.debug(error);
+      return [];
+    }
+  }
+
+  /**
+   * The watchlist of a single plex.tv user.
+   *
+   * `undefined` means the read failed and the watchlist is unknown, so callers
+   * must not read it as "empty" (#3307). `null` means plex.tv answered that it
+   * will not share this user's watchlist (private profile, or an account it
+   * does not know) - a permanent condition callers should skip past (#3395).
+   */
+  public async getWatchlistIdsForUser(
+    userId: string,
+    username: string,
+  ): Promise<PlexCommunityWatchList[] | null | undefined> {
+    try {
+      let result: PlexCommunityWatchList[] = [];
+      let next = true;
+      let page: string | null = null;
+      const size = PLEX_PAGE_SIZE.WATCHLIST;
+
+      while (next) {
+        const resp = await this.plexCommunityClient.query<
+          PlexCommunityWatchListResponse | PlexCommunityErrorResponse
+        >({
+          query: `
+          query GetWatchlistHub($uuid: ID = "", $first: PaginationInt!, $after: String) {
+            user(id: $uuid) {
+              watchlist(first: $first, after: $after) {
+                nodes {
+                  id
+                  key
+                  title
+                  type
+                }
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+              }
+            }
+          }
+        `,
+          variables: {
+            uuid: userId,
+            first: size,
+            skipUserState: true,
+            after: page,
+          },
+        });
+
+        if (!resp) {
+          this.logger.warn(
+            `Failure while fetching watchlist of user ${userId} (${username})`,
+          );
+          return undefined;
+        } else if (resp.errors) {
+          const reason = resp.errors.map((x) => x.message).join(', ');
+          // Every error has to be the definitive one - a mixed response could
+          // still be hiding a transient failure.
+          const unresolvedUser =
+            resp.errors.length > 0 &&
+            resp.errors.every((x) =>
+              x.message?.startsWith(PLEX_COMMUNITY_UNRESOLVED_USER_ERROR),
+            );
+
+          if (unresolvedUser) {
+            // Debug, not warn: a normal, permanent state of that account, which
+            // the admin cannot act on from Maintainerr.
+            this.logger.debug(
+              `Plex is not sharing the watchlist of user ${userId} (${username}), skipping them: ${reason}`,
+            );
+            return null;
+          }
+
+          this.logger.warn(
+            `Failure while fetching watchlist of user ${userId} (${username}): ${reason}`,
+          );
+          return undefined;
+        }
+
+        const watchlist = resp.data.user.watchlist;
+        result = [...result, ...watchlist.nodes];
+
+        if (!watchlist.pageInfo?.hasNextPage) {
+          next = false;
+        } else {
+          page = watchlist.pageInfo?.endCursor;
+        }
+      }
+      return result;
+    } catch (error) {
+      this.logger.warn(
+        `Failure while fetching watchlist of user ${userId} (${username})`,
+      );
+      this.logger.debug(error);
+    }
+  }
+
+  public async getCorrectedUsers(
+    realOwnerId: boolean = true,
+  ): Promise<SimplePlexUser[]> {
+    const plexTvUsers = await this.getUserDataFromPlexTv();
+    const owner = await this.getOwnerDataFromPlexTv();
+
+    // The whole point of this method is the plex.tv enrichment: usernames
+    // that match Seerr's (#1240, #1339) and the uuids the watchlist getters
+    // key on. When plex.tv is unreachable a silent fallback to local account
+    // names produced plausible-but-wrong lists that rules then acted on
+    // (#3307). Throw instead - rule getters catch this and return the
+    // transient `undefined`, pausing evaluation for the item. The per-user
+    // local fallback below stays for accounts plex.tv genuinely doesn't know.
+    if (plexTvUsers === undefined || owner === undefined) {
+      throw new Error(
+        'plex.tv user data unavailable; cannot resolve Plex usernames',
+      );
+    }
+
+    return (await this.getUsers()).map((el) => {
+      const plextv = plexTvUsers?.find((tvEl) => Number(tvEl.$?.id) === el.id);
+      const ownerUser = owner?.username === el.name ? owner : undefined;
+
+      // use the username from plex.tv if available, since Seerr also does this
+      if (ownerUser) {
+        const uuid = this.extractPlexAvatarUuid(ownerUser.thumb);
+        return {
+          plexId: realOwnerId ? +ownerUser.id : el.id,
+          username: ownerUser.username,
+          uuid: uuid,
+        } as SimplePlexUser;
+      } else if (plextv && plextv.$ && plextv.$.username) {
+        const uuid = this.extractPlexAvatarUuid(plextv.$.thumb);
+        return {
+          plexId: +plextv.$.id,
+          username: plextv.$.username,
+          uuid: uuid,
+        } as SimplePlexUser;
+      }
+      return { plexId: +el.id, username: el.name } as SimplePlexUser;
+    });
+  }
+
+  private async setMachineId(): Promise<string | null> {
+    try {
+      const response = await this.getStatus();
+      if (response?.machineIdentifier) {
+        this.machineId = response.machineIdentifier;
+
+        // Persist to DB so re-discovery can match the server when the
+        // primary connection is dead and we can't query the server directly.
+        if (this.settings.plex_machine_id !== response.machineIdentifier) {
+          await this.settings.updatePlexConnectionDetails({
+            plex_machine_id: response.machineIdentifier,
+          });
+        }
+
+        return response.machineIdentifier;
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async forceMachineId() {
+    if (!this.machineId) {
+      await this.setMachineId();
+    }
+  }
+
+  // ── Overlay poster helpers ────────────────────────────────────────────────
+
+  /**
+   * Returns the thumb path for a Plex item (e.g. /library/metadata/12345/thumb/67890).
+   * The caller uses this path with `downloadPoster()` to fetch the actual image.
+   */
+  public async getBestPosterUrl(plexId: string): Promise<string | null> {
+    try {
+      const response = await this.plexClient.query<PlexMetadataResponse>(
+        `/library/metadata/${plexId}`,
+        false,
+      );
+
+      const mc = response?.MediaContainer;
+      if (!mc) return null;
+
+      const candidates = [mc.Metadata].flat().filter(Boolean) as Array<{
+        thumb?: string;
+      }>;
+
+      for (const item of candidates) {
+        if (item.thumb) return item.thumb;
+      }
+      return null;
+    } catch (err) {
+      this.logger.debug(`getBestPosterUrl(${plexId}) failed: ${err}`);
+      return null;
+    }
+  }
+
+  /**
+   * Downloads a poster image from Plex given a thumb path.
+   * Returns the raw image Buffer.
+   */
+  public async downloadPoster(thumbPath: string): Promise<Buffer> {
+    const settings = this.getDbSettings();
+    const baseUrl =
+      (settings.useSsl ? 'https://' : 'http://') +
+      settings.ip +
+      ':' +
+      settings.port;
+    const url = thumbPath.startsWith('http')
+      ? thumbPath
+      : `${baseUrl}${thumbPath}`;
+
+    const { data } = await retryingHttp.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      headers: {
+        'X-Plex-Token': settings.auth_token,
+        Accept: '*/*',
+      },
+      timeout: 60000,
+    });
+
+    const buf = Buffer.from(data);
+    if (buf.length < 1024) {
+      throw new Error(`Downloaded poster too small (${buf.length} bytes)`);
+    }
+    return buf;
+  }
+
+  /**
+   * Lists all posters for a Plex item. Returns the raw Metadata/Photo array.
+   */
+  public async getPosters(
+    plexId: string,
+  ): Promise<Array<{ ratingKey?: string; key?: string; selected?: boolean }>> {
+    try {
+      const response = await this.plexClient.query<{
+        MediaContainer?: { Metadata?: unknown[]; Photo?: unknown[] };
+      }>(`/library/metadata/${plexId}/posters`, false);
+
+      const mc = response?.MediaContainer;
+      const photos = (mc?.Metadata ?? mc?.Photo) as
+        | Array<{ ratingKey?: string; key?: string; selected?: boolean }>
+        | undefined;
+
+      return photos ? (Array.isArray(photos) ? photos : [photos]) : [];
+    } catch (err) {
+      this.logger.debug(`getPosters(${plexId}) failed: ${err}`);
+      return [];
+    }
+  }
+
+  /**
+   * Uploads a poster image buffer for a Plex item.
+   */
+  public async uploadPoster(
+    plexId: string,
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<void> {
+    const settings = this.getDbSettings();
+    const baseUrl =
+      (settings.useSsl ? 'https://' : 'http://') +
+      settings.ip +
+      ':' +
+      settings.port;
+
+    // Deliberately not retryingHttp: a retried network error on a 120s binary
+    // upload can leave Plex holding two copies of the same poster.
+    // eslint-disable-next-line no-restricted-syntax
+    await axios.post(`${baseUrl}/library/metadata/${plexId}/posters`, buffer, {
+      headers: {
+        'X-Plex-Token': settings.auth_token,
+        'Content-Type': contentType,
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 120000,
+    });
+  }
+
+  /**
+   * Selects an uploaded poster as the active poster for a Plex item.
+   */
+  public async selectPoster(
+    plexId: string,
+    uploadId: string,
+  ): Promise<boolean> {
+    try {
+      const settings = this.getDbSettings();
+      const baseUrl =
+        (settings.useSsl ? 'https://' : 'http://') +
+        settings.ip +
+        ':' +
+        settings.port;
+
+      await retryingHttp.put(
+        `${baseUrl}/library/metadata/${plexId}/poster`,
+        null,
+        {
+          params: { url: `upload://posters/${uploadId}` },
+          headers: { 'X-Plex-Token': settings.auth_token },
+          timeout: 30000,
+        },
+      );
+      return true;
+    } catch (error) {
+      this.logger.warn(`Failed to select poster ${uploadId} for ${plexId}`);
+      this.logger.debug(error);
+      return false;
+    }
+  }
+
+  /**
+   * Extracts the upload poster ID from a poster entry's ratingKey or key field.
+   */
+  private extractUploadPosterId(p: {
+    ratingKey?: string;
+    key?: string;
+  }): string | null {
+    const rk = p.ratingKey ?? '';
+    if (rk.startsWith('upload://posters/'))
+      return rk.slice('upload://posters/'.length);
+
+    const k = p.key ?? '';
+    if (k.startsWith('upload://posters/'))
+      return k.slice('upload://posters/'.length);
+
+    if (k.includes('upload') && k.includes('posters')) {
+      const qIdx = k.indexOf('?');
+      if (qIdx >= 0) {
+        const urlParam = new URLSearchParams(k.slice(qIdx + 1)).get('url');
+        if (urlParam) {
+          const decoded = decodeURIComponent(urlParam);
+          if (decoded.startsWith('upload://posters/'))
+            return decoded.slice('upload://posters/'.length);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Uploads a poster buffer, finds the new upload ID via diff, and selects it.
+   * Handles Plex eventual consistency with retry logic.
+   */
+  public async setThumb(
+    plexId: string,
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<void> {
+    const beforePosters = await this.getPosters(plexId);
+    const beforeIds = new Set(
+      beforePosters
+        .map((p) => this.extractUploadPosterId(p))
+        .filter((id): id is string => id !== null),
+    );
+
+    await this.uploadPoster(plexId, buffer, contentType);
+
+    // Retry diff to handle Plex eventual consistency
+    let newId: string | null = null;
+    let afterPosters: typeof beforePosters = [];
+    for (let attempt = 0; attempt < 3 && newId === null; attempt++) {
+      if (attempt > 0)
+        await new Promise<void>((r) => setTimeout(r, 300 * attempt));
+
+      afterPosters = await this.getPosters(plexId);
+      newId =
+        afterPosters
+          .map((p) => this.extractUploadPosterId(p))
+          .filter((id): id is string => id !== null)
+          .find((id) => !beforeIds.has(id)) ?? null;
+    }
+
+    if (newId) {
+      await this.selectPoster(plexId, newId);
+    } else {
+      // Plex content-addressed the upload to an existing blob
+      const alreadySelected = afterPosters.find(
+        (p) => this.extractUploadPosterId(p) !== null && p.selected,
+      );
+      if (!alreadySelected) {
+        const allUploadIds = afterPosters
+          .map((p) => this.extractUploadPosterId(p))
+          .filter((id): id is string => id !== null);
+
+        if (allUploadIds.length > 0) {
+          await this.selectPoster(plexId, allUploadIds[0]);
+        } else {
+          this.logger.warn(
+            `setThumb: could not find or select upload poster for item ${plexId}`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Returns the Plex media type for an item ('movie', 'show', 'season', 'episode', etc.)
+   */
+  public async getItemType(plexId: string): Promise<string | null> {
+    try {
+      const response = await this.plexClient.query<PlexMetadataResponse>(
+        `/library/metadata/${plexId}`,
+        false,
+      );
+      const item = response?.MediaContainer?.Metadata?.[0];
+      return (item as { type?: string })?.type ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Confirm a Plex item is still present.
+   *
+   * `getItemType` swallows every error as `null`, which conflates "gone"
+   * with "I couldn't ask right now" - fine for type lookup, dangerous for
+   * cleanup decisions that delete the only restore-from-overlay backup.
+   * This variant returns `false` only when Plex explicitly reports 404
+   * and rethrows on auth / network / 5xx so callers preserve state.
+   */
+  public async itemExists(plexId: string): Promise<boolean> {
+    try {
+      const response = await this.plexClient.query<PlexMetadataResponse>(
+        `/library/metadata/${plexId}`,
+        false,
+      );
+      return Boolean(response?.MediaContainer?.Metadata?.[0]);
+    } catch (error) {
+      // plexApi._request wraps the AxiosError as Error with `cause`
+      // pointing at the original; the response status lives there.
+      const cause = (error as { cause?: { response?: { status?: number } } })
+        ?.cause;
+      if (cause?.response?.status === 404) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Returns all movie/show library sections (for overlay preview section picker).
+   */
+  public async getOverlayLibrarySections(): Promise<
+    Array<{ key: string; title: string; type: string }>
+  > {
+    try {
+      const libs = await this.getLibraries();
+      return libs
+        .filter((l) => l.type === 'movie' || l.type === 'show')
+        .map((l) => ({ key: String(l.key), title: l.title, type: l.type }));
+    } catch (err) {
+      this.logger.debug(`getOverlayLibrarySections failed: ${err}`);
+      return [];
+    }
+  }
+
+  /**
+   * Returns a random item from Plex library sections (for overlay preview).
+   */
+  public async getRandomLibraryItem(
+    sectionKeys?: string[],
+  ): Promise<{ plexId: string; title: string } | null> {
+    try {
+      const libs = await this.getLibraries();
+      const mediaSections = libs.filter(
+        (s) =>
+          (s.type === 'movie' || s.type === 'show') &&
+          (!sectionKeys?.length || sectionKeys.includes(String(s.key))),
+      );
+      if (!mediaSections.length) return null;
+
+      const section =
+        mediaSections[Math.floor(Math.random() * mediaSections.length)];
+      const response = await this.plexClient.query<PlexLibraryResponse>(
+        {
+          uri: `/library/sections/${section.key}/all`,
+          extraHeaders: {
+            'X-Plex-Container-Start': '0',
+            'X-Plex-Container-Size': '50',
+          },
+        },
+        false,
+      );
+
+      const items = (response?.MediaContainer?.Metadata ?? []) as Array<{
+        ratingKey?: string;
+        title?: string;
+        thumb?: string;
+      }>;
+      const withThumb = items.filter((i) => i.thumb);
+      if (!withThumb.length) return null;
+
+      const item = withThumb[Math.floor(Math.random() * withThumb.length)];
+      return {
+        plexId: String(item.ratingKey),
+        title: item.title ?? String(item.ratingKey),
+      };
+    } catch (err) {
+      this.logger.debug(`getRandomLibraryItem failed: ${err}`);
+      return null;
+    }
+  }
+
+  /**
+   * Returns a random episode item from Plex (for title card overlay preview).
+   */
+  public async getRandomEpisodeItem(
+    sectionKeys?: string[],
+  ): Promise<{ plexId: string; title: string } | null> {
+    try {
+      const libs = await this.getLibraries();
+      const showSections = libs.filter(
+        (s) =>
+          s.type === 'show' &&
+          (!sectionKeys?.length || sectionKeys.includes(String(s.key))),
+      );
+      if (!showSections.length) return null;
+
+      const section =
+        showSections[Math.floor(Math.random() * showSections.length)];
+
+      const settings = this.getDbSettings();
+      const baseUrl =
+        (settings.useSsl ? 'https://' : 'http://') +
+        settings.ip +
+        ':' +
+        settings.port;
+
+      // type=4 fetches episodes directly
+      const { data } = await retryingHttp.get(
+        `${baseUrl}/library/sections/${section.key}/all`,
+        {
+          params: {
+            type: 4,
+            'X-Plex-Container-Start': 0,
+            'X-Plex-Container-Size': 50,
+          },
+          headers: {
+            Accept: 'application/json',
+            'X-Plex-Token': settings.auth_token,
+          },
+          timeout: 30000,
+        },
+      );
+
+      const mc = data?.MediaContainer;
+      const episodes: Array<{
+        ratingKey: string;
+        title?: string;
+        thumb?: string;
+        grandparentTitle?: string;
+      }> = mc?.Metadata ?? mc?.Video ?? [];
+
+      const withThumb = episodes.filter((e) => e.thumb);
+      if (!withThumb.length) return null;
+
+      const episode = withThumb[Math.floor(Math.random() * withThumb.length)];
+      const displayTitle = episode.grandparentTitle
+        ? `${episode.grandparentTitle} - ${episode.title ?? episode.ratingKey}`
+        : (episode.title ?? String(episode.ratingKey));
+
+      return { plexId: String(episode.ratingKey), title: displayTitle };
+    } catch (err) {
+      this.logger.debug(`getRandomEpisodeItem failed: ${err}`);
+      return null;
+    }
+  }
+}

@@ -1,0 +1,270 @@
+import { Injectable } from '@nestjs/common';
+import { throttling } from '@octokit/plugin-throttling';
+import { existsSync, readFileSync, renameSync } from 'fs';
+import { writeFile } from 'fs/promises';
+import { Octokit } from 'octokit';
+import { join } from 'path';
+import { dataDir } from '../../../app/config/dataDir';
+import { MaintainerrLogger } from '../../logging/logs.service';
+import cacheManager from '../lib/cache';
+
+export interface GitHubRelease {
+  tag_name: string;
+  name: string;
+  body: string;
+  html_url: string;
+  created_at: string;
+  published_at: string;
+}
+
+export interface GitHubCommit {
+  sha: string;
+}
+
+type PersistedCacheEntry = { value: unknown; expiresAt: number };
+
+@Injectable()
+export class GitHubApiService {
+  private octokit: Octokit;
+  private cache = cacheManager.getCache('github');
+  private readonly cacheFilePath = join(dataDir, 'github-cache.json');
+  private persistedEntries: Record<string, PersistedCacheEntry> = {};
+  private persistQueue: Promise<void> = Promise.resolve();
+
+  constructor(private readonly logger: MaintainerrLogger) {
+    logger.setContext(GitHubApiService.name);
+    this.loadPersistedCache();
+
+    // Create Octokit instance with throttling plugin
+    const OctokitWithPlugins = Octokit.plugin(throttling);
+
+    const octokitOptions: ConstructorParameters<typeof OctokitWithPlugins>[0] =
+      {
+        throttle: {
+          onRateLimit: (retryAfter, options, octokit, retryCount) => {
+            logger.warn(
+              `Request quota exhausted for ${options.method} ${options.url}`,
+            );
+
+            // Deliberately tighter than MAX_RATE_LIMIT_WAIT_MS: getReleases is
+            // served synchronously from app.controller, and unauthenticated
+            // GitHub allows only 60 requests an hour, so the wait it names is
+            // routinely minutes rather than seconds.
+            if (retryAfter && retryAfter > 10) {
+              logger.error(
+                `Aborting retry for ${options.method} ${options.url} due to long wait time of ${retryAfter} seconds`,
+              );
+              return false;
+            }
+
+            // Retry the first time, then give up
+            if (retryCount < 1) {
+              logger.log(`Retrying after ${retryAfter} seconds`);
+              return true;
+            }
+
+            logger.warn(
+              `Rate limit retry exhausted for ${options.method} ${options.url}`,
+            );
+            return false;
+          },
+          onSecondaryRateLimit: (retryAfter, options) => {
+            logger.warn(
+              `Secondary rate limit detected for ${options.method} ${options.url}`,
+            );
+            // Don't retry on secondary rate limits
+            return false;
+          },
+        },
+      };
+
+    // Add GitHub PAT if provided via environment variable
+    if (process.env.GITHUB_TOKEN) {
+      octokitOptions.auth = process.env.GITHUB_TOKEN;
+      logger.log('GitHub API authentication configured with provided token');
+    }
+
+    this.octokit = new OctokitWithPlugins(octokitOptions);
+  }
+
+  private quarantineCorruptCacheFile(): void {
+    if (!existsSync(this.cacheFilePath)) return;
+
+    try {
+      renameSync(
+        this.cacheFilePath,
+        `${this.cacheFilePath}.corrupt-${Date.now()}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        'Failed to quarantine corrupt GitHub cache persistence file.',
+      );
+      this.logger.debug(error);
+    }
+  }
+
+  private loadPersistedCache(): void {
+    try {
+      if (!existsSync(this.cacheFilePath)) return;
+      const entries: Record<string, PersistedCacheEntry> = JSON.parse(
+        readFileSync(this.cacheFilePath, 'utf8'),
+      );
+      const now = Date.now();
+      for (const [key, { value, expiresAt }] of Object.entries(entries)) {
+        const remainingTtl = Math.floor((expiresAt - now) / 1000);
+        if (remainingTtl > 0) {
+          this.cache?.data.set(key, value, remainingTtl);
+          this.persistedEntries[key] = { value, expiresAt };
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        'GitHub cache persistence file is corrupt. Ignoring persisted entries.',
+      );
+      this.logger.debug(error);
+      this.persistedEntries = {};
+      this.quarantineCorruptCacheFile();
+    }
+  }
+
+  private queuePersistedCacheWrite(
+    entriesSnapshot: Record<string, PersistedCacheEntry>,
+  ): void {
+    this.persistQueue = this.persistQueue
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await writeFile(
+            this.cacheFilePath,
+            JSON.stringify(entriesSnapshot),
+            'utf8',
+          );
+        } catch {
+          // Silently ignore write errors (e.g. read-only filesystem)
+        }
+      });
+  }
+
+  private persistCacheEntry(key: string, value: unknown): void {
+    const now = Date.now();
+
+    for (const persistedKey of Object.keys(this.persistedEntries)) {
+      if (this.persistedEntries[persistedKey].expiresAt <= now) {
+        delete this.persistedEntries[persistedKey];
+      }
+    }
+
+    const ttlMs = (this.cache?.data.options.stdTTL ?? 86400) * 1000;
+    this.persistedEntries[key] = { value, expiresAt: now + ttlMs };
+
+    this.queuePersistedCacheWrite({ ...this.persistedEntries });
+  }
+
+  /**
+   * Get the latest release for a repository
+   * @param owner Repository owner
+   * @param repo Repository name
+   * @returns Latest release information or undefined if unavailable
+   */
+  public async getLatestRelease(
+    owner: string,
+    repo: string,
+  ): Promise<GitHubRelease | undefined> {
+    const cacheKey = `release:${owner}/${repo}:latest`;
+    const cached = this.cache?.data.get<GitHubRelease>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const response = await this.octokit.rest.repos.getLatestRelease({
+        owner,
+        repo,
+      });
+      const release = response.data as GitHubRelease;
+
+      this.cache?.data.set(cacheKey, release);
+      this.persistCacheEntry(cacheKey, release);
+
+      return release;
+    } catch (error) {
+      this.logger.debug(`Failed to fetch latest release for ${owner}/${repo}`);
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Get a specific commit from a repository
+   * @param owner Repository owner
+   * @param repo Repository name
+   * @param ref Commit SHA or branch name
+   * @returns Commit information or undefined if unavailable
+   */
+  public async getCommit(
+    owner: string,
+    repo: string,
+    ref: string,
+  ): Promise<GitHubCommit | undefined> {
+    const cacheKey = `commit:${owner}/${repo}:${ref}`;
+    const cached = this.cache?.data.get<GitHubCommit>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const response = await this.octokit.rest.repos.getCommit({
+        owner,
+        repo,
+        ref,
+      });
+      const commit = { sha: response.data.sha };
+
+      this.cache?.data.set(cacheKey, commit);
+      this.persistCacheEntry(cacheKey, commit);
+
+      return commit;
+    } catch (error) {
+      this.logger.debug(`Failed to fetch commit ${ref} for ${owner}/${repo}`);
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Get multiple releases for a repository
+   * @param owner Repository owner
+   * @param repo Repository name
+   * @param perPage Number of releases to fetch (default: 10)
+   * @returns Array of releases or undefined if unavailable
+   */
+  public async getReleases(
+    owner: string,
+    repo: string,
+    perPage: number = 10,
+  ): Promise<GitHubRelease[] | undefined> {
+    const cacheKey = `releases:${owner}/${repo}:${perPage}`;
+    const cached = this.cache?.data.get<GitHubRelease[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const response = await this.octokit.rest.repos.listReleases({
+        owner,
+        repo,
+        per_page: perPage,
+      });
+      const releases = response.data as GitHubRelease[];
+
+      this.cache?.data.set(cacheKey, releases);
+      this.persistCacheEntry(cacheKey, releases);
+
+      return releases;
+    } catch (error) {
+      this.logger.debug(`Failed to fetch releases for ${owner}/${repo}`);
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+}

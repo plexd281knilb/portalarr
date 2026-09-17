@@ -1,0 +1,112 @@
+{
+  "name": "maintainerr",
+  "version": "3.29.0",
+  "private": true,
+  "packageManager": "yarn@4.17.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maintainerr/Maintainerr.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "dev:fresh-setup": "VITE_BYPASS_MEDIA_SERVER_SETUP_GUARD=false turbo dev",
+    "lint": "turbo lint",
+    "format": "turbo format",
+    "format:changed": "node tools/format-changed.mjs",
+    "i18n:validate": "node tools/i18n/validate-catalogs.mjs",
+    "i18n:verify": "node tools/i18n/verify-locale-switch.mjs",
+    "i18n:back-translate": "node tools/i18n/back-translate.mjs",
+    "format:check": "turbo format:check",
+    "knip": "knip",
+    "check-types": "turbo check-types",
+    "check-node-version": "node tools/check-node-version.mjs",
+    "test": "turbo test --concurrency=1 --",
+    "test:watch": "turbo test:watch"
+  },
+  "workspaces": [
+    "apps/ui",
+    "apps/server",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^7.0.0",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^11.0.1",
+    "@types/node": "^26.5.1",
+    "knip": "^6.35.1",
+    "pofile-ts": "^4.0.3",
+    "semantic-release": "^25.0.9",
+    "turbo": "^2.10.12",
+    "typescript": "^6.0.3",
+    "yaml": "^2.9.1"
+  },
+  "release": {
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      [
+        "@semantic-release/changelog",
+        {
+          "changelogFile": "CHANGELOG.md"
+        }
+      ],
+      "@semantic-release/npm",
+      [
+        "@semantic-release/exec",
+        {
+          "generateNotesCmd": "NEXT_RELEASE_VERSION=\"${nextRelease.version}\" LAST_RELEASE_GITTAG=\"${lastRelease.gitTag}\" NEXT_RELEASE_GITHEAD=\"${nextRelease.gitHead}\" node tools/generate-release-notes.mjs",
+          "prepareCmd": "yarn --cwd apps/server version ${nextRelease.version} && yarn --cwd apps/ui version ${nextRelease.version}"
+        }
+      ],
+      [
+        "@semantic-release/git",
+        {
+          "assets": [
+            "package.json",
+            "apps/server/package.json",
+            "apps/ui/package.json",
+            "CHANGELOG.md"
+          ],
+          "message": "chore(release): ${nextRelease.version}"
+        }
+      ],
+      [
+        "@semantic-release/github",
+        {
+          "addReleases": "bottom"
+        }
+      ]
+    ],
+    "branches": [
+      "main"
+    ],
+    "npmPublish": false,
+    "publish": [
+      "@semantic-release/github"
+    ]
+  },
+  "resolutions": {
+    "dompurify": ">=3.4.13",
+    "picomatch": ">=4.0.4",
+    "postcss": ">=8.5.23",
+    "lodash": ">=4.18.0",
+    "lodash-es": ">=4.18.0",
+    "node-gyp": "11.2.0",
+    "minimatch@^9.0.4": "9.0.9",
+    "yaml@^1.10.0": "1.10.3",
+    "ajv@8.17.1": "8.20.0",
+    "undici@^6.19.5": "6.28.0",
+    "undici@^5.25.4": "6.28.0",
+    "uuid@^9.0.1": "11.1.1",
+    "multer": "2.2.0",
+    "linkify-it": "5.0.2",
+    "js-yaml@5.2.1": "5.2.3",
+    "nodemailer@npm:^7.0.12": "^9",
+    "nodemailer@npm:8.0.5": "^9"
+  }
+}

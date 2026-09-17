@@ -1,0 +1,3702 @@
+import ImdbRatingsAPI from '@server/api/imdbRatings';
+import type PlexAPI from '@server/api/plexapi';
+import { getRepository } from '@server/datasource';
+import { CollectionMetadata } from '@server/entity/CollectionMetadata';
+import { PosterTemplate } from '@server/entity/PosterTemplate';
+import cacheManager from '@server/lib/cache';
+import type { ServiceUserManager } from '@server/lib/collections/services/ServiceUserManager';
+import { serviceUserManager } from '@server/lib/collections/services/ServiceUserManager';
+import type { TemplateEngine } from '@server/lib/collections/utils/TemplateEngine';
+import { templateEngine } from '@server/lib/collections/utils/TemplateEngine';
+import { TimeRestrictionUtils } from '@server/lib/collections/utils/TimeRestrictionUtils';
+import type { CollectionItemWithPoster } from '@server/lib/posterGeneration';
+import { generatePoster } from '@server/lib/posterStorage';
+import type { CollectionConfig } from '@server/lib/settings';
+import { getSettings } from '@server/lib/settings';
+import logger from '@server/logger';
+import path from 'path';
+import {
+  applyCollectionExclusions,
+  createCollectionLabel,
+  createSyncError,
+  getCollectionMediaType,
+  handleRateLimit,
+  logCollectionProcessingResults,
+  sanitizeCollectionName,
+  updateConfigWithRatingKey,
+  validateAndSanitizeItems,
+  validateCollectionItems,
+  validateRequiredFields,
+  type LibraryItemsCache,
+} from './CollectionUtilities';
+import type {
+  AutoRequestConfig,
+  AutoRequestResult,
+  CollectionItem,
+  CollectionOperationResult,
+  CollectionSource,
+  CollectionSourceData,
+  CollectionSyncError,
+  CollectionSyncInterface,
+  CollectionSyncOptions,
+  CollectionVisibilityConfig,
+  FilteringStats,
+  MissingItem,
+  PlexCollection,
+  PlexLabel,
+  SourceTemplateContext,
+  SyncResult,
+  TimeRestrictionResult,
+} from './types';
+import { CollectionSyncErrorType } from './types';
+
+// Extended PlexCollection interface that includes smart collection properties
+interface PlexCollectionWithSmart extends PlexCollection {
+  smart?: string; // Plex returns string "1" for smart collections
+}
+
+// Simple result type - replaces over-engineered MediaTypeStrategies
+interface MediaProcessingResult {
+  created: number;
+  updated: number;
+  itemCount: number;
+  collectionKeys: string[];
+  error?: string;
+}
+// CollectionUpdateStrategy removed - logic moved inline below
+import type { PlexCollectionItem } from '@server/api/plexapi';
+
+// Types moved from CollectionUpdateStrategy.ts
+interface CollectionUpdateOptions {
+  collectionName: string;
+  mediaType: 'movie' | 'tv';
+  visibilityConfig: CollectionVisibilityConfig;
+  customLabel: string;
+  sortOrderLibrary?: number;
+  isLibraryPromoted?: boolean;
+  totalCollectionsInLibrary?: number;
+  customPoster?: string | Record<string, string>;
+  processedCollectionKeys?: Set<string>;
+  libraryKey: string;
+  config?: CollectionConfig;
+}
+
+interface CollectionUpdateResult {
+  created: number;
+  updated: number;
+  collectionRatingKey?: string;
+  itemCount: number;
+  updateStats?: {
+    added: number;
+    removed: number;
+    reordered: boolean;
+  };
+}
+
+/**
+ * Abstract base class for all collection sync implementations
+ *
+ * Provides common functionality and enforces a consistent pipeline across
+ * all collection sync sources (Overseerr, Tautulli, Trakt).
+ *
+ * @template TSource - The specific collection source type (e.g., 'trakt', 'imdb')
+ */
+export abstract class BaseCollectionSync<TSource extends CollectionSource>
+  implements CollectionSyncInterface
+{
+  protected templateEngine: TemplateEngine;
+  protected serviceUserManager: ServiceUserManager;
+  protected source: TSource;
+
+  constructor(source: TSource) {
+    this.templateEngine = templateEngine;
+    this.serviceUserManager = serviceUserManager;
+    this.source = source;
+  }
+
+  /**
+   * Extract items from a collection configuration without creating/updating collections
+   * Used by multi-source orchestrator to get items for combining
+   */
+  public async extractItemsForMultiSource(
+    config: CollectionConfig,
+    plexClient: PlexAPI,
+    libraryCache?: LibraryItemsCache,
+    options?: CollectionSyncOptions
+  ): Promise<CollectionItem[]> {
+    try {
+      // Validate source is properly configured
+      await this.validateConfiguration();
+
+      // Validate this config is for our source
+      const sourceConfigs = this.filterConfigsForSource([config]);
+      if (sourceConfigs.length === 0) {
+        logger.debug(`Config ${config.name} is not for source ${this.source}`, {
+          label: `${this.source} Multi-Source Extractor`,
+          configName: config.name,
+        });
+        return [];
+      }
+
+      const validatedConfig = sourceConfigs[0];
+
+      // Fetch data from the external source
+      const sourceData = await this.fetchSourceData(
+        validatedConfig,
+        options,
+        libraryCache
+      );
+
+      if (!sourceData || sourceData.length === 0) {
+        logger.debug(`No source data returned for ${validatedConfig.name}`, {
+          label: `${this.source} Multi-Source Extractor`,
+          configName: validatedConfig.name,
+        });
+        return [];
+      }
+
+      // Map to standardized CollectionItem format
+      const mappedResult = await this.mapSourceDataToItems(
+        sourceData,
+        validatedConfig,
+        plexClient,
+        libraryCache
+      );
+
+      logger.debug(
+        `Extracted ${mappedResult.items.length} items from ${this.source} for multi-source collection`,
+        {
+          label: `${this.source} Multi-Source Extractor`,
+          configName: validatedConfig.name,
+          itemCount: mappedResult.items.length,
+        }
+      );
+
+      return mappedResult.items;
+    } catch (error) {
+      logger.error(
+        `Failed to extract items from ${this.source} for multi-source collection: ${error}`,
+        {
+          label: `${this.source} Multi-Source Extractor`,
+          configName: config.name,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Main entry point for processing collections
+   * Implements the common pipeline that all sources follow
+   */
+  public async processCollections(
+    collectionConfigs: CollectionConfig[],
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    processedCollectionKeys?: Set<string>,
+    libraryCache?: LibraryItemsCache,
+    options?: CollectionSyncOptions
+  ): Promise<SyncResult> {
+    const startTime = Date.now();
+    let created = 0;
+    let updated = 0;
+    const errors: CollectionSyncError[] = [];
+
+    // Filter configs for this source
+    const sourceConfigs = this.filterConfigsForSource(collectionConfigs);
+
+    if (sourceConfigs.length === 0) {
+      return { created: 0, updated: 0 };
+    }
+
+    try {
+      // Validate source is properly configured
+      await this.validateConfiguration();
+
+      // Process each configuration
+      for (let i = 0; i < sourceConfigs.length; i++) {
+        const config = sourceConfigs[i];
+
+        try {
+          // Check time restrictions and determine effective visibility
+          const timeRestrictionResult = this.evaluateTimeRestriction(config);
+          const removeFromPlexWhenInactive =
+            config.timeRestriction?.removeFromPlexWhenInactive ?? false;
+
+          // Update isActive status in the config if it has changed
+          if (config.isActive !== timeRestrictionResult.isActive) {
+            this.updateConfigActiveStatus(
+              config.id,
+              timeRestrictionResult.isActive
+            );
+          }
+
+          // Determine the effective configuration to use
+          let effectiveConfig = config;
+
+          if (!timeRestrictionResult.isActive && !removeFromPlexWhenInactive) {
+            // Collection is inactive but should use inactive visibility settings
+            const inactiveVisibilityConfig = config.timeRestriction
+              ?.inactiveVisibilityConfig ?? {
+              usersHome: false,
+              serverOwnerHome: false,
+              libraryRecommended: true,
+            };
+
+            logger.debug(
+              `Processing collection ${config.name} with inactive visibility settings - time restriction not met (${timeRestrictionResult.reason})`,
+              {
+                label: `${this.source} Collections`,
+                configId: config.id,
+                reason: timeRestrictionResult.reason,
+                nextActivation: timeRestrictionResult.nextActivation,
+                inactiveVisibility: inactiveVisibilityConfig,
+              }
+            );
+
+            // Override visibility config for inactive collections
+            effectiveConfig = {
+              ...config,
+              visibilityConfig: inactiveVisibilityConfig,
+            };
+          } else if (
+            !timeRestrictionResult.isActive &&
+            removeFromPlexWhenInactive
+          ) {
+            // Collection is inactive and should be removed completely - skip processing
+            logger.debug(
+              `Skipping collection ${config.name} - time restriction not met and set to remove from Plex (${timeRestrictionResult.reason})`,
+              {
+                label: `${this.source} Collections`,
+                configId: config.id,
+                reason: timeRestrictionResult.reason,
+                nextActivation: timeRestrictionResult.nextActivation,
+              }
+            );
+
+            // If collection is time-restricted and inactive, try to remove it from Plex
+            await this.handleInactiveCollection(
+              config,
+              plexClient,
+              allCollections,
+              processedCollectionKeys
+            );
+            continue;
+          }
+
+          // Process individual configuration (using effective config with potentially overridden visibility)
+          const result = await this.processConfiguration(
+            effectiveConfig,
+            plexClient,
+            allCollections,
+            processedCollectionKeys,
+            libraryCache, // OPTIMIZATION: Pass library cache to eliminate repeated API calls
+            options
+          );
+
+          created += result.created;
+          updated += result.updated;
+
+          // Apply overlays if enabled for this collection
+          // Extract rating key from result (handles both MediaProcessingResult and custom result types)
+          const customResultRatingKey = (result as CollectionUpdateResult)
+            .collectionRatingKey;
+          const mediaResultRatingKey = (result as MediaProcessingResult)
+            .collectionKeys?.[0];
+          const configRatingKey = effectiveConfig.collectionRatingKey;
+
+          const collectionRatingKey =
+            customResultRatingKey || mediaResultRatingKey || configRatingKey;
+
+          logger.info('Checking overlay application for collection', {
+            label: `${this.source} Collections`,
+            collectionName: effectiveConfig.name,
+            configId: effectiveConfig.id,
+            applyOverlaysDuringSync: effectiveConfig.applyOverlaysDuringSync,
+            customResultRatingKey,
+            mediaResultRatingKey,
+            configRatingKey,
+            collectionRatingKey,
+            willApplyOverlays: !!(
+              effectiveConfig.applyOverlaysDuringSync && collectionRatingKey
+            ),
+          });
+
+          if (effectiveConfig.applyOverlaysDuringSync && collectionRatingKey) {
+            try {
+              const { overlayLibraryService } = await import(
+                '@server/lib/overlays/OverlayLibraryService'
+              );
+
+              // Get item rating keys from this specific collection
+              const itemRatingKeys = await plexClient.getCollectionItems(
+                collectionRatingKey
+              );
+
+              if (itemRatingKeys && itemRatingKeys.length > 0) {
+                logger.info(
+                  'Applying overlays to collection items after sync',
+                  {
+                    label: `${this.source} Collections`,
+                    collectionName: effectiveConfig.name,
+                    itemCount: itemRatingKeys.length,
+                  }
+                );
+
+                // Apply overlays only to collection items
+                await overlayLibraryService.applyOverlaysToCollectionItems(
+                  itemRatingKeys,
+                  effectiveConfig.libraryId
+                );
+              }
+            } catch (overlayError) {
+              logger.error('Failed to apply overlays after sync', {
+                label: `${this.source} Collections`,
+                collectionName: effectiveConfig.name,
+                error:
+                  overlayError instanceof Error
+                    ? overlayError.message
+                    : String(overlayError),
+              });
+              // Don't fail the sync if overlay application fails
+            }
+          }
+        } catch (error) {
+          const syncError = this.createSyncError(
+            CollectionSyncErrorType.COLLECTION_ERROR,
+            `Failed to process configuration ${config.name}`,
+            { configId: config.id, configName: config.name },
+            error instanceof Error ? error : new Error(String(error))
+          );
+
+          errors.push(syncError);
+
+          if (options?.onError) {
+            options.onError(syncError);
+          }
+
+          logger.error(syncError.message, {
+            label: `${this.source} Collections`,
+            ...syncError.details,
+          });
+        }
+      }
+
+      // Collection processing completed silently
+      if (created > 0 || updated > 0) {
+        // Processing completed with changes
+      }
+
+      return {
+        created,
+        updated,
+        details: {
+          processingTime: Date.now() - startTime,
+          errors: errors.length,
+        },
+      };
+    } catch (error) {
+      const syncError = this.createSyncError(
+        CollectionSyncErrorType.CONFIGURATION_ERROR,
+        `Failed to process ${this.source} collections`,
+        {},
+        error instanceof Error ? error : new Error(String(error))
+      );
+
+      logger.error(syncError.message, {
+        label: `${this.source} Collections`,
+        error: syncError.details,
+      });
+
+      return { created: 0, updated: 0, error: syncError.message };
+    }
+  }
+
+  /**
+   * Filter collection configurations for this specific source
+   */
+  protected filterConfigsForSource(
+    configs: CollectionConfig[]
+  ): CollectionConfig[] {
+    return configs.filter((config) => config.type === this.source);
+  }
+
+  /**
+   * Create a standardized sync error
+   */
+  protected createSyncError(
+    type: CollectionSyncErrorType,
+    message: string,
+    context: Record<string, unknown> = {},
+    originalError?: Error
+  ): CollectionSyncError {
+    return createSyncError(type, message, context, originalError, this.source);
+  }
+
+  /**
+   * Generate collection name using template engine
+   */
+  protected async generateCollectionName(
+    config: CollectionConfig,
+    mediaType: 'movie' | 'tv',
+    customTemplate?: string
+  ): Promise<string> {
+    let templateToUse = customTemplate || config.template || config.name;
+
+    // Handle custom template selection - use the config template or name
+    if (templateToUse === 'custom') {
+      templateToUse = config.template || config.name;
+    }
+
+    const context = await this.createTemplateContext(config, mediaType);
+
+    return this.templateEngine.processTemplate(templateToUse, context);
+  }
+
+  /**
+   * Generate collection names with custom templates for movies/TV
+   */
+  public async generateCollectionNameWithCustom(
+    config: CollectionConfig,
+    mediaType: 'movie' | 'tv',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    libraryCache?: LibraryItemsCache
+  ): Promise<string> {
+    const context = await this.createTemplateContext(config, mediaType);
+
+    // Handle special dynamic random title template
+    if (config.template === 'DYNAMIC_RANDOM_TITLE') {
+      // DYNAMIC_RANDOM_TITLE should be handled by each subclass in fetchSourceData
+      // Fall back to config.name if not handled
+      return config.name;
+    }
+
+    // Use custom templates only if template is set to 'custom', otherwise use main template
+    const template = (() => {
+      if (config.template === 'custom') {
+        return mediaType === 'movie'
+          ? config.customMovieTemplate || config.name
+          : config.customTVTemplate || config.name;
+      }
+      return config.template || config.name;
+    })();
+
+    return this.templateEngine.processTemplate(template, context);
+  }
+
+  /**
+   * Process missing items with auto-request functionality
+   */
+  protected async processAutoRequests(
+    missingItems: MissingItem[],
+    config: AutoRequestConfig & { id: number; name: string }
+  ): Promise<AutoRequestResult> {
+    if (!config.searchMissingMovies && !config.searchMissingTV) {
+      return {
+        autoApproved: 0,
+        manualApproval: 0,
+        alreadyRequested: 0,
+        skipped: 0,
+        total: 0,
+      };
+    }
+
+    try {
+      // This would be implemented by subclasses that support auto-requests
+      // For now, return empty result
+      return {
+        autoApproved: 0,
+        manualApproval: 0,
+        alreadyRequested: 0,
+        skipped: 0,
+        total: missingItems.length,
+      };
+    } catch (error) {
+      logger.error(
+        `Failed to process auto-requests for ${config.name}: ${error}`,
+        {
+          label: `${this.source} Collections`,
+        }
+      );
+
+      return {
+        autoApproved: 0,
+        manualApproval: 0,
+        alreadyRequested: 0,
+        skipped: 0,
+        total: 0,
+      };
+    }
+  }
+
+  /**
+   * Store missing items in database for Quick Sync feature
+   * Replaces any existing missing items for this collection
+   *
+   * @param missingItems - Items not found in Plex during sync
+   * @param collectionId - Collection configuration ID
+   * @param libraryId - Plex library key (can be array for multi-library configs)
+   */
+  protected async storeMissingItems(
+    missingItems: MissingItem[],
+    collectionRatingKey: string,
+    libraryId: string | string[],
+    configId: string
+  ): Promise<void> {
+    try {
+      const { getRepository } = await import('@server/datasource');
+      const { CollectionMissingItems } = await import(
+        '@server/entity/CollectionMissingItems'
+      );
+
+      const repository = getRepository(CollectionMissingItems);
+      const timestamp = new Date();
+
+      // Handle both single and multi-library configs (use first library for storage)
+      const targetLibraryId = Array.isArray(libraryId)
+        ? libraryId[0]
+        : libraryId;
+
+      // Delete existing entries for this collection (replace strategy)
+      await repository.delete({ collectionRatingKey });
+
+      // Insert new missing items
+      const entities = missingItems.map((item) => ({
+        collectionRatingKey,
+        configId,
+        libraryId: targetLibraryId,
+        tmdbId: item.tmdbId,
+        tvdbId: item.tvdbId,
+        mediaType: item.mediaType,
+        title: item.title,
+        year: item.year,
+        originalPosition: item.originalPosition,
+        source: item.source,
+        fullSyncTimestamp: timestamp,
+      }));
+
+      if (entities.length > 0) {
+        await repository.insert(entities);
+        logger.debug(`Stored ${entities.length} missing items for Quick Sync`, {
+          label: `${this.source} Collections`,
+          collectionRatingKey,
+          configId,
+          missingItemCount: entities.length,
+        });
+      }
+    } catch (error) {
+      // Don't fail the sync if storage fails - just log the error
+      logger.warn('Failed to store missing items for Quick Sync', {
+        label: `${this.source} Collections`,
+        collectionRatingKey,
+        configId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Helper to store missing items after collection creation (when rating key is available)
+   * Call this after creating/updating a collection to enable Quick Sync
+   */
+  protected async storeCollectionMissingItems(
+    missingItems: MissingItem[] | undefined,
+    collectionRatingKey: string,
+    libraryId: string | string[],
+    configId: string
+  ): Promise<void> {
+    if (!missingItems || missingItems.length === 0 || !collectionRatingKey) {
+      return;
+    }
+
+    await this.storeMissingItems(
+      missingItems,
+      collectionRatingKey,
+      libraryId,
+      configId
+    );
+  }
+
+  /**
+   * Tag existing items in Radarr/Sonarr with the collection's configured tags
+   * Only runs if tagExistingItems is enabled on the target Radarr/Sonarr server
+   *
+   * @param items - Collection items that exist in Plex
+   * @param config - Collection configuration
+   */
+  protected async tagExistingItemsInArr(
+    items: CollectionItem[],
+    config: CollectionConfig
+  ): Promise<void> {
+    // Only proceed if collection has tags configured
+    const downloadMode = config.downloadMode || 'overseerr';
+    const hasRadarrTags =
+      downloadMode === 'direct'
+        ? (config.directDownloadRadarrTags?.length ?? 0) > 0
+        : (config.overseerrRadarrTags?.length ?? 0) > 0;
+    const hasSonarrTags =
+      downloadMode === 'direct'
+        ? (config.directDownloadSonarrTags?.length ?? 0) > 0
+        : (config.overseerrSonarrTags?.length ?? 0) > 0;
+
+    if (!hasRadarrTags && !hasSonarrTags) {
+      return;
+    }
+
+    try {
+      const { existingItemTagService } = await import(
+        '../services/ExistingItemTagService'
+      );
+      await existingItemTagService.tagExistingItems(items, config, this.source);
+    } catch (error) {
+      // Log but don't fail the sync if tagging fails
+      logger.warn(
+        `Failed to tag existing items in Radarr/Sonarr for ${config.name}`,
+        {
+          label: `${this.source} Collections`,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+    }
+  }
+
+  /**
+   * Handle placeholder cleanup and process missing items in one step
+   * This combines the cleanup phase (remove old placeholders) with creation phase (add new ones)
+   *
+   * @param items - Items that exist in Plex
+   * @param missingItems - Items that don't exist in Plex
+   * @param config - Collection configuration
+   * @param plexClient - Plex API client
+   * @param libraryCache - Optional library cache for optimization
+   * @param autoRequestHandler - Optional function to call for auto-requests
+   * @returns Collection items created from placeholders
+   */
+  protected async handlePlaceholdersAndMissingItems(
+    items: CollectionItem[],
+    missingItems: MissingItem[] | undefined,
+    config: CollectionConfig,
+    plexClient: PlexAPI,
+    libraryCache?: LibraryItemsCache,
+    autoRequestHandler?: () => Promise<void>
+  ): Promise<CollectionItem[]> {
+    // Phase 1: Cleanup old placeholders (or delete all if setting disabled)
+    const sourceTmdbIds = new Set([
+      ...items
+        .map((item) => item.tmdbId)
+        .filter((id): id is number => typeof id === 'number'),
+      ...(missingItems
+        ?.map((item) => item.tmdbId)
+        .filter((id): id is number => typeof id === 'number') || []),
+    ]);
+
+    const { handlePlaceholderCleanup } = await import(
+      '@server/lib/placeholders/services/PlaceholderCleanup'
+    );
+
+    await handlePlaceholderCleanup(
+      config,
+      plexClient,
+      libraryCache,
+      sourceTmdbIds
+    );
+
+    // Phase 2: Create new placeholders for missing items
+    if (!missingItems || missingItems.length === 0) {
+      return [];
+    }
+
+    return this.processMissingItems(
+      missingItems,
+      config,
+      plexClient,
+      autoRequestHandler
+    );
+  }
+
+  /**
+   * Process missing items - create placeholders AND/OR send to auto-requests
+   * This is the main entry point for handling missing items in any collection type.
+   *
+   * Both features can be enabled simultaneously:
+   * - Placeholders show items in Plex immediately
+   * - Auto-requests download items when available
+   * - Cleanup removes placeholders when real files arrive
+   *
+   * @param missingItems - Items not found in Plex
+   * @param config - Collection configuration
+   * @param plexClient - Plex API client (required for placeholder creation)
+   * @param autoRequestHandler - Function to call for auto-requests
+   * @returns Collection items created from placeholders (empty array if not creating placeholders)
+   */
+  protected async processMissingItems(
+    missingItems: MissingItem[],
+    config: CollectionConfig,
+    plexClient: PlexAPI,
+    autoRequestHandler?: () => Promise<void>
+  ): Promise<CollectionItem[]> {
+    if (!missingItems || missingItems.length === 0) {
+      return [];
+    }
+
+    // NOTE: Missing items are now stored AFTER collection creation
+    // when we have the collectionRatingKey available.
+    // See storeCollectionMissingItems() calls after createOrUpdateCollection()
+
+    let placeholderItems: CollectionItem[] = [];
+
+    // Create placeholders if enabled
+    if (config.createPlaceholdersForMissing) {
+      // Apply missing item filters (rating, year, genre, etc.) before creating placeholders
+      const { missingItemFilterService, buildPlaceholderFilterConfig } =
+        await import('../services/MissingItemFilterService');
+      const placeholderFilterConfig = buildPlaceholderFilterConfig(config);
+      const { filteredItems } =
+        await missingItemFilterService.filterMissingItems(
+          missingItems,
+          placeholderFilterConfig,
+          `${this.source} Placeholder Filter`
+        );
+
+      // Import and use the PlaceholderCreation service
+      const { processPlaceholdersForMissingItems } = await import(
+        '@server/lib/placeholders/services/PlaceholderCreation'
+      );
+
+      logger.info('Creating placeholders for missing items', {
+        label: `${this.source} Collections`,
+        configName: config.name,
+        missingCount: filteredItems.length,
+        ...(filteredItems.length !== missingItems.length && {
+          filteredOut: missingItems.length - filteredItems.length,
+        }),
+      });
+
+      placeholderItems = await processPlaceholdersForMissingItems(
+        filteredItems,
+        config,
+        plexClient
+      );
+    }
+
+    // Also send to auto-requests if handler provided (works alongside placeholders)
+    if (autoRequestHandler) {
+      await autoRequestHandler();
+    }
+
+    return placeholderItems;
+  }
+
+  /**
+   * Create filtering statistics
+   */
+  protected createFilteringStats(
+    original: number,
+    filtered: number,
+    removalReasons?: Record<string, number>
+  ): FilteringStats {
+    return {
+      original,
+      filtered,
+      removed: original - filtered,
+      removalReasons,
+    };
+  }
+
+  /**
+   * Update collection config with Plex rating key after collection operation
+   */
+  protected updateConfigWithRatingKey(
+    config: CollectionConfig,
+    collectionRatingKey?: string
+  ): void {
+    if (collectionRatingKey && config.id) {
+      // Extract library ID from config for multi-library support
+      // Handle both single string and array formats
+      const libraryId = Array.isArray(config.libraryId)
+        ? config.libraryId[0]
+        : config.libraryId;
+      updateConfigWithRatingKey(config.id, collectionRatingKey, libraryId);
+    }
+  }
+
+  /**
+   * Validate and sanitize collection items before processing
+   */
+  protected validateAndSanitizeItems(items: CollectionItem[]): {
+    validItems: CollectionItem[];
+    invalidItems: unknown[];
+    validationErrors: string[];
+  } {
+    return validateAndSanitizeItems(items, this.source);
+  }
+
+  /**
+   * Apply common filtering safety net (validation, deduplication, maxItems safety check)
+   */
+  protected applyCommonFiltering(
+    items: CollectionItem[],
+    config: CollectionConfig
+  ): {
+    filteredItems: CollectionItem[];
+    stats: FilteringStats;
+  } {
+    const originalCount = items.length;
+    const removalReasons: Record<string, number> = {};
+
+    // Remove invalid items (simple validation)
+    const validItems = items.filter((item) => {
+      if (!item?.ratingKey || !item?.title) {
+        removalReasons.invalid = (removalReasons.invalid || 0) + 1;
+        return false;
+      }
+      return true;
+    });
+
+    // Remove duplicates based on ratingKey
+    const uniqueItems = validItems.reduce((acc, item) => {
+      const existing = acc.find(
+        (existing) => existing.ratingKey === item.ratingKey
+      );
+      if (existing) {
+        removalReasons.duplicates = (removalReasons.duplicates || 0) + 1;
+        return acc;
+      }
+      return [...acc, item];
+    }, [] as CollectionItem[]);
+
+    // Remove globally excluded items
+    const settings = getSettings();
+    const exclusions = settings.globalExclusions;
+    const nonExcludedItems = uniqueItems.filter((item) => {
+      // Check movies (TMDB only)
+      if (item.type === 'movie') {
+        const tmdbId = item.tmdbId || (item.metadata?.tmdbId as number);
+        if (tmdbId && exclusions.movies.includes(tmdbId)) {
+          removalReasons.globalExclusion =
+            (removalReasons.globalExclusion || 0) + 1;
+          return false;
+        }
+      }
+
+      // Check TV shows (TMDB or TVDB)
+      if (item.type === 'tv') {
+        const tmdbId = item.tmdbId || (item.metadata?.tmdbId as number);
+        const tvdbId = item.metadata?.tvdbId as number | undefined;
+
+        // Check TMDB exclusions
+        if (
+          tmdbId &&
+          exclusions.shows.some(
+            (excluded) => excluded.type === 'tmdb' && excluded.id === tmdbId
+          )
+        ) {
+          removalReasons.globalExclusion =
+            (removalReasons.globalExclusion || 0) + 1;
+          return false;
+        }
+
+        // Check TVDB exclusions
+        if (
+          tvdbId &&
+          exclusions.shows.some(
+            (excluded) => excluded.type === 'tvdb' && excluded.id === tvdbId
+          )
+        ) {
+          removalReasons.globalExclusion =
+            (removalReasons.globalExclusion || 0) + 1;
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Apply maxItems safety check (most collection types should already be limited efficiently)
+    let finalItems = nonExcludedItems;
+    if (
+      config.maxItems &&
+      config.maxItems > 0 &&
+      nonExcludedItems.length > config.maxItems
+    ) {
+      finalItems = nonExcludedItems.slice(0, config.maxItems);
+      removalReasons.safetyMaxItemsLimit =
+        nonExcludedItems.length - config.maxItems;
+    }
+
+    return {
+      filteredItems: finalItems,
+      stats: this.createFilteringStats(
+        originalCount,
+        finalItems.length,
+        removalReasons
+      ),
+    };
+  }
+
+  /**
+   * Log collection processing results with standardized format
+   */
+  protected logProcessingResults(
+    config: CollectionConfig,
+    result: CollectionOperationResult,
+    processingTime: number,
+    additionalContext?: Record<string, unknown>
+  ): void {
+    logCollectionProcessingResults(
+      config.name,
+      result,
+      processingTime,
+      this.source,
+      config.id,
+      additionalContext
+    );
+  }
+
+  /**
+   * Handle rate limiting with exponential backoff
+   */
+  protected async handleRateLimit(
+    attempt: number,
+    maxAttempts?: number
+  ): Promise<void> {
+    return handleRateLimit(attempt, this.source, maxAttempts);
+  }
+
+  /**
+   * Create collection name with fallbacks and sanitization
+   */
+  protected async createSanitizedCollectionName(
+    config: CollectionConfig,
+    mediaType: 'movie' | 'tv',
+    fallbackName?: string
+  ): Promise<string> {
+    try {
+      const rawName = await this.generateCollectionName(config, mediaType);
+      return sanitizeCollectionName(rawName);
+    } catch (error) {
+      logger.warn(
+        `Failed to generate collection name for ${config.name}, using fallback`,
+        {
+          label: `${this.source} Collections`,
+          configId: config.id,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+
+      const fallback =
+        fallbackName || config.name || `${this.source} Collection`;
+      return sanitizeCollectionName(fallback);
+    }
+  }
+
+  /**
+   * Validate configuration with detailed error reporting
+   */
+  protected validateConfigurationDetailed(
+    config: CollectionConfig,
+    requiredFields: string[]
+  ): void {
+    const missingFields = validateRequiredFields(
+      config as unknown as Record<string, unknown>,
+      requiredFields
+    );
+
+    if (missingFields.length > 0) {
+      throw this.createSyncError(
+        CollectionSyncErrorType.CONFIGURATION_ERROR,
+        `Configuration validation failed for ${config.name}`,
+        {
+          configId: config.id,
+          missingFields,
+          providedFields: Object.keys(config),
+        }
+      );
+    }
+  }
+
+  /**
+   * Standardized collection creation/update using incremental approach
+   * This is the ONLY method that should be used for collection updates
+   */
+  public async createOrUpdateCollectionStandardized(
+    items: CollectionItem[],
+    collectionName: string,
+    mediaType: 'movie' | 'tv',
+    config: CollectionConfig,
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    processedCollectionKeys?: Set<string>,
+    userInfo?: { userId?: number | string; customLabel?: string },
+    missingItems?: MissingItem[]
+  ): Promise<CollectionOperationResult> {
+    // Support user-specific collections for services like Overseerr
+    const customLabel =
+      userInfo?.customLabel ||
+      createCollectionLabel(
+        this.source,
+        config.id,
+        userInfo?.userId ? Number(userInfo.userId) : undefined
+      );
+
+    // Simplified collection update logic (moved from CollectionUpdateStrategy)
+    const updateResult = await this.createOrUpdateCollection(
+      plexClient,
+      allCollections,
+      items,
+      {
+        collectionName,
+        mediaType,
+        visibilityConfig: {
+          usersHome: config.visibilityConfig?.usersHome ?? false,
+          serverOwnerHome: config.visibilityConfig?.serverOwnerHome ?? false,
+          libraryRecommended:
+            config.visibilityConfig?.libraryRecommended ?? false,
+          isActive: config.isActive,
+        },
+        customLabel,
+        sortOrderLibrary: config.sortOrderLibrary,
+        isLibraryPromoted: config.isLibraryPromoted,
+        totalCollectionsInLibrary: (
+          config as CollectionConfig & { _totalCollectionsInLibrary?: number }
+        )._totalCollectionsInLibrary,
+        customPoster: config.customPoster,
+        processedCollectionKeys,
+        libraryKey: config.libraryId,
+        config,
+      }
+    );
+
+    // Update config with rating key if collection was created/updated
+    // Skip for multi-collection patterns (one config generates multiple collections)
+    const isMultiCollectionPattern =
+      (config.type === 'overseerr' && config.subtype === 'users') ||
+      (config.type === 'tmdb' && config.subtype === 'auto_franchise');
+    if (updateResult.collectionRatingKey && !isMultiCollectionPattern) {
+      this.updateConfigWithRatingKey(config, updateResult.collectionRatingKey);
+    }
+
+    // Store missing items for Quick Sync (now that we have collectionRatingKey)
+    if (updateResult.collectionRatingKey && missingItems) {
+      await this.storeCollectionMissingItems(
+        missingItems,
+        updateResult.collectionRatingKey,
+        config.libraryId,
+        config.id // Always store parent config ID, even for multi-collection patterns
+      );
+    }
+
+    // Auto-generate poster if enabled (available for all collection types)
+    // Default to true for existing collections that don't have this field set
+    const shouldGeneratePoster = config.autoPoster ?? true;
+    if (shouldGeneratePoster && updateResult.collectionRatingKey) {
+      await this.generateAutoPoster(
+        collectionName,
+        config,
+        updateResult.collectionRatingKey,
+        plexClient,
+        items,
+        userInfo
+      );
+    }
+
+    return {
+      created: updateResult.created,
+      updated: updateResult.updated,
+      collectionRatingKey: updateResult.collectionRatingKey,
+      itemCount: updateResult.itemCount,
+      stats: updateResult.updateStats,
+    };
+  }
+
+  /**
+   * Unified create or update collection method
+   * Simple, predictable pipeline for all collection operations
+   */
+  private async createOrUpdateCollection(
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    items: CollectionItem[],
+    options: CollectionUpdateOptions
+  ): Promise<CollectionUpdateResult> {
+    const { collectionName, mediaType, customLabel } = options;
+
+    // Validate items first
+    const validation = validateCollectionItems(items);
+    if (validation.valid.length === 0) {
+      logger.warn(`No valid items for collection ${collectionName}`, {
+        label: 'Collection Update',
+        totalItems: items.length,
+        errors: validation.errors.slice(0, 5),
+      });
+      return { created: 0, updated: 0, itemCount: 0 };
+    }
+
+    const validItems = validation.valid;
+    const libraryKey = options.libraryKey;
+
+    // Filter items to only include those from the target library
+    const libraryFilteredItems = this.filterItemsByLibrary(
+      validItems,
+      libraryKey
+    );
+
+    if (libraryFilteredItems.length === 0) {
+      logger.warn(
+        `No items found in target library ${libraryKey} for collection ${collectionName}`,
+        {
+          label: 'Collection Update',
+          totalItems: validItems.length,
+          targetLibrary: libraryKey,
+          mediaType,
+        }
+      );
+      return { created: 0, updated: 0, itemCount: 0 };
+    }
+
+    const plexItems = await this.getValidPlexItems(
+      plexClient,
+      libraryFilteredItems
+    );
+    if (plexItems.length === 0) {
+      return { created: 0, updated: 0, itemCount: 0 };
+    }
+
+    // Check if any items are episodes to determine collection type
+    const containsEpisodes = libraryFilteredItems.some(
+      (item) => item.episodeInfo
+    );
+
+    // Check for existing collection
+    let existingCollection = await this.findExistingCollection(
+      plexClient,
+      customLabel,
+      libraryKey,
+      options.config
+    );
+
+    // BRANCH: Create EITHER smart collection OR regular collection, never both
+    const isOverseerrUsersCollection =
+      options.config?.type === 'overseerr' &&
+      options.config?.subtype === 'users';
+
+    const shouldCreateSmartCollection =
+      options.config?.showUnwatchedOnly && !isOverseerrUsersCollection;
+
+    let collectionRatingKey: string | undefined;
+    let created = 0;
+    let updated = 0;
+
+    if (shouldCreateSmartCollection && options.config) {
+      // PATH A: Create label-based smart collection (unwatched items only)
+      const labelName = `agregarr-unwatched-${options.config.id}`;
+      const itemRatingKeys = plexItems.map((item) => item.ratingKey);
+
+      logger.info(
+        `Creating label-based smart collection with ${itemRatingKeys.length} labeled items`,
+        {
+          label: 'Collection Creation',
+          collectionName,
+          labelName,
+          itemCount: itemRatingKeys.length,
+        }
+      );
+
+      // Label all items (new and existing)
+      for (const itemKey of itemRatingKeys) {
+        await plexClient.addLabelToItem(itemKey, labelName);
+      }
+
+      // CLEANUP: Remove labels from items that are no longer in the collection
+      // This ensures items that fall off the list are properly removed from the smart collection
+      try {
+        const currentlyLabeledItems = await plexClient.getItemsWithLabel(
+          libraryKey,
+          labelName
+        );
+
+        // Find items that have the label but are no longer in the new item list
+        const itemsToUnlabel = currentlyLabeledItems.filter(
+          (labeledItemKey) => !itemRatingKeys.includes(labeledItemKey)
+        );
+
+        if (itemsToUnlabel.length > 0) {
+          logger.info(
+            `Removing label from ${itemsToUnlabel.length} items no longer in collection`,
+            {
+              label: 'Collection Sync',
+              collectionName,
+              labelName,
+              itemsToUnlabel: itemsToUnlabel.length,
+            }
+          );
+          for (const itemKey of itemsToUnlabel) {
+            await plexClient.removeLabelFromItem(itemKey, labelName);
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          `Failed to cleanup labels from removed items, smart collection may show stale items`,
+          {
+            label: 'Collection Sync',
+            collectionName,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+        // Don't fail the sync if label cleanup fails
+      }
+
+      // MIGRATION: Check for old dual-collection system (base + smart collection)
+      if (options.config.smartCollectionRatingKey) {
+        logger.info(
+          `Detected old dual-collection system - migrating to label-based system`,
+          {
+            label: 'Collection Migration',
+            collectionName,
+            oldSmartCollectionRatingKey:
+              options.config.smartCollectionRatingKey,
+            oldBaseCollectionRatingKey: options.config.collectionRatingKey,
+          }
+        );
+
+        // Step 1: Verify the old smart collection still exists
+        const oldSmartCollection = await plexClient.getCollectionMetadataSafe(
+          options.config.smartCollectionRatingKey
+        );
+
+        if (oldSmartCollection) {
+          // Step 2: Find and delete the old dash-prefixed base collection
+          if (options.config.collectionRatingKey) {
+            try {
+              const oldBaseCollection =
+                await plexClient.getCollectionMetadataSafe(
+                  options.config.collectionRatingKey
+                );
+              if (
+                oldBaseCollection &&
+                oldBaseCollection.title.startsWith('-')
+              ) {
+                logger.info(
+                  `Deleting old dash-prefixed base collection: ${oldBaseCollection.title}`,
+                  {
+                    label: 'Collection Migration',
+                    baseCollectionRatingKey: options.config.collectionRatingKey,
+                  }
+                );
+                await plexClient.deleteCollection(
+                  options.config.collectionRatingKey
+                );
+                // Clear existingCollection reference since we just deleted it
+                existingCollection = null;
+              }
+            } catch (error) {
+              logger.warn(
+                `Failed to delete old base collection, continuing migration`,
+                {
+                  label: 'Collection Migration',
+                  error: error instanceof Error ? error.message : String(error),
+                }
+              );
+            }
+          }
+
+          // Step 3: Update the old smart collection to use new label-based filters
+          collectionRatingKey = options.config.smartCollectionRatingKey;
+          logger.info(`Updating old smart collection to label-based filters`, {
+            label: 'Collection Migration',
+            smartCollectionRatingKey: collectionRatingKey,
+          });
+          await plexClient.updateLabelBasedSmartCollectionUri(
+            collectionRatingKey,
+            libraryKey,
+            labelName,
+            mediaType,
+            options.config.smartCollectionSort?.value,
+            options.config.maxItems
+          );
+
+          // Step 4: Migrate config - move smartCollectionRatingKey to collectionRatingKey
+          this.updateConfigWithRatingKey(options.config, collectionRatingKey);
+          this.clearSmartCollectionRatingKey(options.config);
+
+          logger.info(
+            `Successfully migrated dual-collection system to label-based system`,
+            {
+              label: 'Collection Migration',
+              collectionName,
+              migratedRatingKey: collectionRatingKey,
+            }
+          );
+
+          updated = 1;
+        } else {
+          logger.warn(
+            `Old smart collection not found, will create new label-based collection`,
+            {
+              label: 'Collection Migration',
+              oldSmartCollectionRatingKey:
+                options.config.smartCollectionRatingKey,
+            }
+          );
+          // Clear the invalid rating key and proceed to creation
+          this.clearSmartCollectionRatingKey(options.config);
+          collectionRatingKey = undefined;
+        }
+      }
+
+      // Check if smart collection already exists (skip if we just migrated)
+      if (!collectionRatingKey && existingCollection) {
+        // Check if it's actually a smart collection (smart=1 attribute)
+        const collectionMeta = await plexClient.getCollectionMetadata(
+          existingCollection.ratingKey
+        );
+        const isSmart =
+          collectionMeta &&
+          (collectionMeta as { smart?: string }).smart === '1';
+
+        if (isSmart) {
+          // Update existing smart collection
+          collectionRatingKey = existingCollection.ratingKey;
+          await plexClient.updateLabelBasedSmartCollectionUri(
+            collectionRatingKey,
+            libraryKey,
+            labelName,
+            mediaType,
+            options.config.smartCollectionSort?.value,
+            options.config.maxItems
+          );
+          updated = 1;
+        } else {
+          // MIGRATION: Old system had a regular collection, delete it and create smart
+          logger.info(
+            `Migrating from old system - deleting regular collection, will create smart collection`,
+            {
+              label: 'Collection Migration',
+              collectionName,
+              oldCollectionRatingKey: existingCollection.ratingKey,
+            }
+          );
+          await plexClient.deleteCollection(existingCollection.ratingKey);
+          collectionRatingKey = undefined; // Force creation below
+        }
+      }
+
+      if (!collectionRatingKey) {
+        // Create new smart collection
+        const newSmartCollectionRatingKey =
+          await plexClient.createLabelBasedSmartCollection(
+            collectionName,
+            libraryKey,
+            labelName,
+            mediaType,
+            options.config.smartCollectionSort?.value,
+            customLabel,
+            options.config.maxItems
+          );
+
+        if (!newSmartCollectionRatingKey) {
+          throw new Error(
+            `Failed to create smart collection ${collectionName}`
+          );
+        }
+
+        collectionRatingKey = newSmartCollectionRatingKey;
+        created = 1;
+      }
+    } else {
+      // PATH B: Create regular collection (normal flow)
+
+      // MIGRATION: If existing collection is a smart collection, delete it
+      // (user toggled showUnwatchedOnly from true to false)
+      if (existingCollection) {
+        const collectionMeta = await plexClient.getCollectionMetadata(
+          existingCollection.ratingKey
+        );
+        const isSmart =
+          collectionMeta &&
+          (collectionMeta as { smart?: string }).smart === '1';
+
+        if (isSmart) {
+          logger.info(
+            `User disabled showUnwatchedOnly - migrating from smart to regular collection`,
+            {
+              label: 'Collection Migration',
+              collectionName,
+              collectionRatingKey: existingCollection.ratingKey,
+            }
+          );
+
+          // Clean up: remove labels from items and delete smart collection
+          if (options.config) {
+            const labelName = `agregarr-unwatched-${options.config.id}`;
+            const labeledItems = await plexClient.getItemsWithLabel(
+              libraryKey,
+              labelName
+            );
+            if (labeledItems.length > 0) {
+              for (const itemKey of labeledItems) {
+                await plexClient.removeLabelFromItem(itemKey, labelName);
+              }
+            }
+          }
+          await plexClient.deleteCollection(existingCollection.ratingKey);
+
+          // Force creation of regular collection below
+          collectionRatingKey = undefined;
+        } else {
+          // UPDATE PATH: Collection exists (and is regular collection)
+          collectionRatingKey = existingCollection.ratingKey;
+
+          // Smart update: add new items, remove old ones
+          const updateResult = await plexClient.updateCollectionContents(
+            collectionRatingKey,
+            plexItems
+          );
+
+          // Label items that fell out of the collection as stale
+          if (updateResult.removedKeys.length > 0) {
+            for (const removedKey of updateResult.removedKeys) {
+              try {
+                await plexClient.addLabelToItem(removedKey, 'agregarr-stale');
+              } catch (error) {
+                logger.warn(
+                  `Failed to add agregarr-stale label to item ${removedKey}`,
+                  {
+                    label: 'Collection Update',
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  }
+                );
+              }
+            }
+            logger.info(
+              `Labeled ${updateResult.removedKeys.length} removed items as agregarr-stale in collection ${collectionName}`,
+              { label: 'Collection Update' }
+            );
+          }
+
+          // Clean up stale labels for items still in this collection
+          const currentPlexKeys = new Set(
+            plexItems.map((item) => item.ratingKey)
+          );
+          const staleItems = await plexClient.getItemsWithLabel(
+            libraryKey,
+            'agregarr-stale'
+          );
+          for (const staleKey of staleItems) {
+            if (currentPlexKeys.has(staleKey)) {
+              try {
+                await plexClient.removeLabelFromItem(
+                  staleKey,
+                  'agregarr-stale'
+                );
+              } catch (error) {
+                logger.warn(
+                  `Failed to remove agregarr-stale label from item ${staleKey}`,
+                  {
+                    label: 'Collection Update',
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  }
+                );
+              }
+            }
+          }
+
+          updated = 1;
+        }
+      }
+
+      if (!collectionRatingKey) {
+        // CREATE PATH: New collection
+        const newCollectionRatingKey = await plexClient.createEmptyCollection(
+          collectionName,
+          libraryKey,
+          mediaType,
+          containsEpisodes
+        );
+
+        if (!newCollectionRatingKey) {
+          throw new Error(`Failed to create collection ${collectionName}`);
+        }
+
+        collectionRatingKey = newCollectionRatingKey;
+
+        // Add all items to the new collection
+        await plexClient.addItemsToCollection(collectionRatingKey, plexItems);
+        created = 1;
+      }
+
+      // For regular collections: Set custom sort and arrange items
+      await plexClient.updateCollectionContentSort(
+        collectionRatingKey,
+        'custom'
+      );
+
+      if (plexItems.length > 1) {
+        try {
+          await plexClient.arrangeCollectionItemsInOrder(
+            collectionRatingKey,
+            plexItems
+          );
+        } catch (error) {
+          logger.warn(
+            `Failed to arrange items in collection ${collectionName}`,
+            {
+              label: 'Collection Update',
+              error: error instanceof Error ? error.message : String(error),
+            }
+          );
+        }
+      }
+    }
+
+    // Ensure we have a collection rating key
+    if (!collectionRatingKey) {
+      throw new Error(`Failed to create or find collection ${collectionName}`);
+    }
+
+    // Apply metadata to the collection
+    await this.updateCollectionMetadata(
+      plexClient,
+      collectionRatingKey,
+      options
+    );
+
+    // Track processed collection
+    if (options.processedCollectionKeys) {
+      options.processedCollectionKeys.add(collectionRatingKey);
+    }
+
+    return {
+      created,
+      updated,
+      collectionRatingKey,
+      itemCount: plexItems.length,
+    };
+  }
+
+  /**
+   * Filter items to only include those from the specified library
+   * This prevents cross-library collection issues in Plex
+   */
+  private filterItemsByLibrary(
+    items: CollectionItem[],
+    targetLibraryKey: string
+  ): CollectionItem[] {
+    return items.filter((item) => {
+      // Check if item has library information
+      if (
+        item.metadata &&
+        typeof item.metadata === 'object' &&
+        item.metadata.libraryKey
+      ) {
+        return item.metadata.libraryKey === targetLibraryKey;
+      }
+
+      // For items without library metadata, include them (they'll be filtered out later if invalid)
+      return true;
+    });
+  }
+
+  /**
+   * Helper methods for collection management
+   */
+  private async findTargetLibrary(
+    plexClient: PlexAPI,
+    mediaType: 'movie' | 'tv'
+  ): Promise<string> {
+    const libraries = await plexClient.getLibraries();
+    // Map mediaType to Plex library type: 'tv' -> 'show', 'movie' -> 'movie'
+    const plexLibraryType = mediaType === 'tv' ? 'show' : 'movie';
+    const targetLibrary = libraries.find((lib) => lib.type === plexLibraryType);
+
+    if (!targetLibrary) {
+      throw new Error(`No ${mediaType} library found`);
+    }
+
+    return targetLibrary.key;
+  }
+
+  private async findExistingCollection(
+    plexClient: PlexAPI,
+    customLabel: string,
+    libraryKey: string,
+    config?: CollectionConfig
+  ): Promise<PlexCollection | null> {
+    try {
+      // First, try to find collection by stored ratingKey if available
+      // This is more reliable than label matching for all single collections
+      // Skip for multi-collection patterns (one config generates multiple collections)
+      const isMultiCollectionPattern =
+        (config?.type === 'overseerr' && config?.subtype === 'users') ||
+        (config?.type === 'tmdb' && config?.subtype === 'auto_franchise');
+      if (config?.collectionRatingKey && !isMultiCollectionPattern) {
+        try {
+          const existingByRatingKey = await plexClient.getCollectionMetadata(
+            config.collectionRatingKey
+          );
+          if (existingByRatingKey) {
+            // CRITICAL: Validate that the found collection is in the correct library
+            // This prevents linked configs from stealing each other's rating keys
+            const collectionLibraryKey =
+              existingByRatingKey.librarySectionID ||
+              existingByRatingKey.libraryKey;
+            if (String(collectionLibraryKey) !== String(libraryKey)) {
+              logger.debug(
+                `Stored ratingKey ${config.collectionRatingKey} found but in wrong library - falling back to label search`,
+                {
+                  label: 'Base Collection Sync',
+                  storedRatingKey: config.collectionRatingKey,
+                  collectionTitle: existingByRatingKey.title,
+                  collectionLibraryKey,
+                  expectedLibraryKey: libraryKey,
+                  configId: config.id,
+                  configName: config.name,
+                }
+              );
+            } else {
+              logger.debug(
+                `Found existing collection by stored ratingKey: ${existingByRatingKey.title}`,
+                {
+                  label: 'Base Collection Sync',
+                  ratingKey: config.collectionRatingKey,
+                  collectionTitle: existingByRatingKey.title,
+                  collectionType: config.type,
+                  collectionSubtype: config.subtype,
+                  libraryKey: collectionLibraryKey,
+                }
+              );
+              return {
+                ratingKey: existingByRatingKey.ratingKey,
+                title: existingByRatingKey.title,
+                labels: existingByRatingKey.labels || [],
+                type: existingByRatingKey.type || 'collection',
+              };
+            }
+          }
+        } catch (error) {
+          logger.debug(
+            `Stored ratingKey ${config.collectionRatingKey} not found, falling back to label search`,
+            {
+              label: 'Base Collection Sync',
+              storedRatingKey: config.collectionRatingKey,
+              error: error instanceof Error ? error.message : String(error),
+            }
+          );
+        }
+      }
+
+      // Get collections only from the specific library where we would create new collections
+      interface PlexClientWithQuery {
+        plexClient: {
+          query<T>(options: {
+            uri: string;
+            extraHeaders?: Record<string, string>;
+          }): Promise<T>;
+          query<T>(path: string): Promise<T>;
+        };
+      }
+      const clientWithQuery = plexClient as unknown as PlexClientWithQuery;
+      const response = await clientWithQuery.plexClient.query<{
+        MediaContainer?: { Metadata?: PlexCollection[] };
+      }>({
+        uri: `/library/sections/${libraryKey}/collections`,
+        extraHeaders: {
+          'X-Plex-Container-Size': `0`,
+        },
+      });
+      const collections = response.MediaContainer?.Metadata || [];
+
+      // OPTIMIZATION: Fetch all collection metadata concurrently instead of sequentially
+      // This eliminates the N×API-call bottleneck when searching for existing collections
+      logger.debug(
+        `Searching for collection with label "${customLabel}" among ${collections.length} collections (concurrent fetch)`,
+        {
+          label: 'Base Collection Sync',
+          customLabel,
+          collectionsToSearch: collections.length,
+          libraryKey,
+        }
+      );
+
+      if (collections.length === 0) {
+        return null;
+      }
+
+      // Create concurrent metadata fetch promises for all collections
+      const metadataPromises = collections.map(async (collection) => {
+        try {
+          const detailedCollection = await plexClient.getCollectionMetadata(
+            collection.ratingKey
+          );
+          const labels = detailedCollection?.labels || [];
+
+          // Check if customLabel exists in labels array
+          // Labels can be strings or objects with 'tag' property
+          const found = labels.some((label: string | PlexLabel) => {
+            const labelText = typeof label === 'string' ? label : label.tag;
+            return labelText === customLabel;
+          });
+
+          return {
+            collection,
+            labels,
+            found,
+            error: null,
+          };
+        } catch (error) {
+          logger.debug(
+            `Failed to get metadata for collection ${collection.ratingKey}`,
+            {
+              label: 'Base Collection Sync',
+              collectionRatingKey: collection.ratingKey,
+              collectionTitle: collection.title,
+              error: error instanceof Error ? error.message : String(error),
+            }
+          );
+          return {
+            collection,
+            labels: [],
+            found: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      });
+
+      // Wait for all metadata fetches to complete
+      const metadataResults = await Promise.allSettled(metadataPromises);
+
+      // Find the first collection that matches the label
+      // CRITICAL: Skip smart collections - we need the base collection for content updates
+      for (let i = 0; i < metadataResults.length; i++) {
+        const result = metadataResults[i];
+
+        if (result.status === 'fulfilled' && result.value.found) {
+          const matchedCollection = result.value;
+
+          // Check if this is a smart collection
+          const isSmartCollection =
+            (matchedCollection.collection as PlexCollectionWithSmart).smart ===
+            '1';
+
+          // Skip smart collections - we need the base collection for updating contents
+          if (isSmartCollection) {
+            logger.debug(
+              `Skipping smart collection with label "${customLabel}": ${matchedCollection.collection.title}`,
+              {
+                label: 'Base Collection Sync',
+                ratingKey: matchedCollection.collection.ratingKey,
+                reason:
+                  'Smart collections cannot have contents updated, looking for base collection',
+              }
+            );
+            continue;
+          }
+
+          logger.debug(
+            `Found existing collection with label "${customLabel}": ${matchedCollection.collection.title}`,
+            {
+              label: 'Base Collection Sync',
+              foundCollection: matchedCollection.collection.title,
+              ratingKey: matchedCollection.collection.ratingKey,
+              labels: matchedCollection.labels,
+            }
+          );
+
+          return {
+            ratingKey: matchedCollection.collection.ratingKey,
+            title: matchedCollection.collection.title,
+            labels: matchedCollection.labels,
+            type: matchedCollection.collection.type || 'collection',
+          };
+        }
+      }
+
+      logger.debug(
+        `No existing collection found with label "${customLabel}" in library ${libraryKey}`,
+        {
+          label: 'Base Collection Sync',
+          customLabel,
+          libraryKey,
+          searchedCollections: collections.length,
+        }
+      );
+
+      // FALLBACK: Check for orphaned agregarr collection with matching title
+      if (config?.name) {
+        for (let i = 0; i < metadataResults.length; i++) {
+          const result = metadataResults[i];
+
+          if (result.status === 'fulfilled' && !result.value.found) {
+            const collection = result.value.collection;
+            const labels = result.value.labels;
+
+            // Check if this is an orphaned agregarr collection with matching title
+            const hasAgregarrLabel = labels.some((label: string) =>
+              label.toLowerCase().startsWith('agregarr')
+            );
+
+            if (collection.title === config.name && hasAgregarrLabel) {
+              // CRITICAL: Check if this is a smart collection vs base collection
+              const isSmartCollection =
+                (collection as PlexCollectionWithSmart).smart === '1';
+
+              logger.info(
+                `Found orphaned collection by title: "${collection.title}" - updating label`,
+                {
+                  label: 'Base Collection Sync',
+                  collectionTitle: collection.title,
+                  ratingKey: collection.ratingKey,
+                  collectionType: isSmartCollection ? 'smart' : 'regular',
+                  oldLabels: labels,
+                  newLabel: customLabel,
+                }
+              );
+
+              // Update the collection's label to match the new config ID
+              try {
+                await plexClient.addLabelToCollection(
+                  collection.ratingKey,
+                  customLabel
+                );
+                logger.info(`Updated collection label to match new config ID`);
+              } catch (labelError) {
+                logger.warn(`Failed to update collection label, continuing`, {
+                  error:
+                    labelError instanceof Error
+                      ? labelError.message
+                      : String(labelError),
+                });
+              }
+
+              return {
+                ratingKey: collection.ratingKey,
+                title: collection.title,
+                labels: [customLabel],
+                type: collection.type || 'collection',
+              };
+            }
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      logger.error(
+        `Error finding existing collection in library ${libraryKey}`,
+        {
+          label: 'Collection Search',
+          libraryKey,
+          customLabel,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+      return null;
+    }
+  }
+
+  private async getValidPlexItems(
+    plexClient: PlexAPI,
+    items: CollectionItem[]
+  ): Promise<PlexCollectionItem[]> {
+    return items.map((item) => ({
+      ratingKey: item.ratingKey,
+      title: item.title || 'Unknown Title',
+    }));
+  }
+
+  protected async updateCollectionMetadata(
+    plexClient: PlexAPI,
+    collectionRatingKey: string,
+    options: CollectionUpdateOptions
+  ): Promise<void> {
+    const {
+      customLabel,
+      visibilityConfig,
+      sortOrderLibrary,
+      isLibraryPromoted,
+      customPoster,
+      collectionName,
+      libraryKey,
+    } = options;
+
+    // Add collection label
+    await plexClient.addLabelToCollection(collectionRatingKey, customLabel);
+
+    // Update collection title to reflect any template changes
+    if (collectionName) {
+      await plexClient.updateCollectionTitle(
+        collectionRatingKey,
+        collectionName,
+        libraryKey
+      );
+    }
+
+    // Update sort title if needed - for Agregarr-created collections
+    // Find the config to check everLibraryPromoted status
+    const settings = getSettings();
+    const allConfigs = settings.plex.collectionConfigs || [];
+    const matchingConfig = allConfigs.find((config) => {
+      const configLibraryId = Array.isArray(config.libraryId)
+        ? config.libraryId[0]
+        : config.libraryId;
+      return (
+        configLibraryId === options.libraryKey &&
+        config.collectionRatingKey === collectionRatingKey
+      );
+    });
+
+    // Only update sortTitle if everLibraryPromoted is not explicitly false
+    if (
+      sortOrderLibrary !== undefined &&
+      matchingConfig?.everLibraryPromoted !== false
+    ) {
+      let sortTitle: string;
+      const updateConfig: Partial<CollectionConfig> = {};
+
+      if (isLibraryPromoted && sortOrderLibrary > 0) {
+        // Promoted: Set exclamation marks
+        const sameLibraryConfigs = allConfigs.filter((config) => {
+          const configLibraryId = Array.isArray(config.libraryId)
+            ? config.libraryId[0]
+            : config.libraryId;
+          return (
+            configLibraryId === options.libraryKey &&
+            config.sortOrderLibrary !== undefined &&
+            config.isLibraryPromoted === true
+          );
+        });
+
+        if (sameLibraryConfigs.length > 0) {
+          const sortOrders = sameLibraryConfigs
+            .map((c) => c.sortOrderLibrary)
+            .filter((order): order is number => order !== undefined);
+          const maxSortOrder = Math.max(...sortOrders);
+          const exclamationCount = maxSortOrder - sortOrderLibrary + 2;
+          const exclamationPrefix = '!'.repeat(exclamationCount);
+          sortTitle = `${exclamationPrefix}${collectionName}`;
+        } else {
+          sortTitle = `!!${collectionName}`;
+        }
+      } else {
+        // Demoted: Reset to natural title and mark as cleaned
+        sortTitle = collectionName;
+        // After reset, set everLibraryPromoted back to false
+        updateConfig.everLibraryPromoted = false;
+      }
+
+      await plexClient.updateCollectionSortTitle(
+        collectionRatingKey,
+        sortTitle
+      );
+
+      // Update config if everLibraryPromoted needs to be reset
+      if (updateConfig.everLibraryPromoted !== undefined && matchingConfig) {
+        this.updateCollectionConfigField(matchingConfig.id, updateConfig);
+      }
+    }
+
+    // Update visibility settings - but only promote to hub if collection has ANY visibility
+    if (visibilityConfig) {
+      const hasAnyVisibility =
+        visibilityConfig.usersHome ||
+        visibilityConfig.serverOwnerHome ||
+        visibilityConfig.libraryRecommended;
+
+      if (hasAnyVisibility) {
+        // Only call updateCollectionVisibility (which promotes to hub) if collection should be visible somewhere
+        await plexClient.updateCollectionVisibility(
+          collectionRatingKey,
+          visibilityConfig.libraryRecommended, // recommended (promotedToRecommended)
+          visibilityConfig.serverOwnerHome, // home (promotedToOwnHome)
+          visibilityConfig.usersHome // shared (promotedToSharedHome)
+        );
+      }
+      // Collections with false/false/false visibility remain as basic collections (not promoted to hubs)
+    }
+
+    // Update poster if provided
+    if (customPoster) {
+      let posterFilename: string | undefined;
+
+      if (typeof customPoster === 'string') {
+        // Legacy single poster
+        posterFilename = customPoster;
+      } else {
+        // Per-library poster mapping - get poster for current library
+        posterFilename = customPoster[options.libraryKey];
+      }
+
+      if (posterFilename) {
+        try {
+          // Get full path to poster file
+          const { getPosterPath } = await import('@server/lib/posterStorage');
+          const posterPath = getPosterPath(posterFilename);
+
+          // Check if poster needs reapplication using metadata tracking
+          const metadataService = (
+            await import('@server/lib/metadata/MetadataTrackingService')
+          ).default;
+
+          let shouldUploadPoster = true;
+
+          try {
+            const currentPosterUrl = await plexClient.getCurrentPosterUrl(
+              collectionRatingKey
+            );
+
+            // Check if same poster file and URL matches (using filename as "input hash" for custom posters)
+            const repo = getRepository(CollectionMetadata);
+            const metadata = await repo.findOne({
+              where: { plexCollectionRatingKey: collectionRatingKey },
+            });
+
+            if (
+              metadata?.lastPosterInputHash === posterFilename &&
+              metadata?.lastPosterUploadUrl === currentPosterUrl
+            ) {
+              logger.debug('Custom poster unchanged, skipping reupload', {
+                label: `${this.source} Collections`,
+                collectionName,
+                posterFilename,
+              });
+              shouldUploadPoster = false;
+            }
+          } catch (metaError) {
+            logger.warn('Metadata check failed, proceeding with upload', {
+              label: 'MetadataTracking',
+              error:
+                metaError instanceof Error
+                  ? metaError.message
+                  : String(metaError),
+            });
+            // Fall through to upload
+          }
+
+          if (shouldUploadPoster) {
+            await plexClient.updateCollectionPoster(
+              collectionRatingKey,
+              posterPath
+            );
+
+            // Get new Plex URL after upload and record metadata
+            try {
+              const newPlexPosterUrl = await plexClient.getCurrentPosterUrl(
+                collectionRatingKey
+              );
+
+              if (newPlexPosterUrl) {
+                await metadataService.recordPosterApplication(
+                  collectionRatingKey,
+                  posterFilename, // Use filename as "input hash" for custom posters
+                  newPlexPosterUrl,
+                  {
+                    configId: options.config?.id,
+                    libraryKey: options.libraryKey,
+                    posterLocalPath: posterFilename, // Track the local file path
+                  }
+                );
+              }
+            } catch (metaError) {
+              logger.error(
+                'Failed to record poster metadata, upload succeeded',
+                {
+                  label: 'MetadataTracking',
+                  error:
+                    metaError instanceof Error
+                      ? metaError.message
+                      : String(metaError),
+                }
+              );
+            }
+          }
+
+          logger.debug(
+            `Successfully uploaded poster for collection ${collectionName}`,
+            {
+              label: `${this.source} Collections`,
+              collectionRatingKey,
+              posterFilename,
+            }
+          );
+        } catch (error) {
+          logger.warn(
+            `Failed to upload poster for collection ${collectionName}`,
+            {
+              label: `${this.source} Collections`,
+              collectionRatingKey,
+              posterFilename,
+              error: error instanceof Error ? error.message : String(error),
+            }
+          );
+          // Don't fail the entire collection sync if poster upload fails
+        }
+      }
+    }
+
+    // Update wallpaper/art if enabled and provided
+    const customWallpaper = options.config?.customWallpaper;
+    const enableCustomWallpaper =
+      options.config?.enableCustomWallpaper ?? false;
+    if (enableCustomWallpaper && customWallpaper) {
+      let wallpaperFilename: string | undefined;
+
+      if (typeof customWallpaper === 'string') {
+        // Legacy single wallpaper
+        wallpaperFilename = customWallpaper;
+      } else {
+        // Per-library wallpaper mapping - get wallpaper for current library
+        wallpaperFilename = customWallpaper[options.libraryKey];
+      }
+
+      if (wallpaperFilename) {
+        try {
+          // Get full path to wallpaper file
+          const { getWallpaperPath } = await import(
+            '@server/lib/wallpaperStorage'
+          );
+          const wallpaperPath = getWallpaperPath(wallpaperFilename);
+
+          // Check if wallpaper needs reapplication using metadata tracking
+          const metadataService = (
+            await import('@server/lib/metadata/MetadataTrackingService')
+          ).default;
+
+          let shouldUploadWallpaper = true;
+
+          try {
+            const currentArtUrl = await plexClient.getCurrentArtUrl(
+              collectionRatingKey
+            );
+
+            const shouldReapply = await metadataService.shouldReapplyWallpaper(
+              collectionRatingKey,
+              wallpaperFilename,
+              currentArtUrl
+            );
+
+            if (!shouldReapply) {
+              logger.info('Wallpaper unchanged, skipping reupload', {
+                label: `${this.source} Collections`,
+                collectionName,
+                wallpaperFilename,
+              });
+              shouldUploadWallpaper = false;
+            }
+          } catch (metaError) {
+            logger.warn('Metadata check failed, proceeding with upload', {
+              label: 'MetadataTracking',
+              error:
+                metaError instanceof Error
+                  ? metaError.message
+                  : String(metaError),
+            });
+            // Fall through to upload
+          }
+
+          if (shouldUploadWallpaper) {
+            await plexClient.uploadArtFromFile(
+              collectionRatingKey,
+              wallpaperPath
+            );
+            await plexClient.lockArt(collectionRatingKey);
+
+            // Get new Plex art URL after upload and record metadata
+            try {
+              const newArtUrl = await plexClient.getCurrentArtUrl(
+                collectionRatingKey
+              );
+
+              if (newArtUrl) {
+                await metadataService.recordWallpaperApplication(
+                  collectionRatingKey,
+                  wallpaperFilename,
+                  newArtUrl,
+                  {
+                    configId: options.config?.id,
+                    libraryKey: options.libraryKey,
+                  }
+                );
+              }
+            } catch (metaError) {
+              logger.error(
+                'Failed to record wallpaper metadata, upload succeeded',
+                {
+                  label: 'MetadataTracking',
+                  error:
+                    metaError instanceof Error
+                      ? metaError.message
+                      : String(metaError),
+                }
+              );
+            }
+          }
+
+          logger.debug(
+            `Successfully uploaded wallpaper for collection ${collectionName}`,
+            {
+              label: `${this.source} Collections`,
+              collectionRatingKey,
+              wallpaperFilename,
+            }
+          );
+        } catch (error) {
+          logger.warn(
+            `Failed to upload wallpaper for collection ${collectionName}`,
+            {
+              label: `${this.source} Collections`,
+              collectionRatingKey,
+              wallpaperFilename,
+              error: error instanceof Error ? error.message : String(error),
+            }
+          );
+          // Don't fail the entire collection sync if wallpaper upload fails
+        }
+      }
+    }
+
+    // Update summary if enabled and provided
+    const customSummary = options.config?.customSummary;
+    const enableCustomSummary = options.config?.enableCustomSummary ?? false;
+    if (enableCustomSummary && customSummary) {
+      try {
+        await plexClient.updateSummary(collectionRatingKey, customSummary);
+        logger.debug(
+          `Successfully updated summary for collection ${collectionName}`,
+          {
+            label: `${this.source} Collections`,
+            collectionRatingKey,
+          }
+        );
+      } catch (error) {
+        logger.warn(
+          `Failed to update summary for collection ${collectionName}`,
+          {
+            label: `${this.source} Collections`,
+            collectionRatingKey,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+        // Don't fail the entire collection sync if summary update fails
+      }
+    }
+
+    // Update theme if enabled and provided
+    const customTheme = options.config?.customTheme;
+    const enableCustomTheme = options.config?.enableCustomTheme ?? false;
+    if (enableCustomTheme && customTheme) {
+      let themeFilename: string | undefined;
+
+      if (typeof customTheme === 'string') {
+        // Legacy single theme
+        themeFilename = customTheme;
+      } else {
+        // Per-library theme mapping - get theme for current library
+        themeFilename = customTheme[options.libraryKey];
+      }
+
+      if (themeFilename) {
+        try {
+          // Get full path to theme file
+          const { getThemePath } = await import('@server/lib/themeStorage');
+          const themePath = getThemePath(themeFilename);
+
+          // Check if theme needs reapplication using metadata tracking
+          const metadataService = (
+            await import('@server/lib/metadata/MetadataTrackingService')
+          ).default;
+
+          let shouldUploadTheme = true;
+
+          try {
+            const currentThemeUrl = await plexClient.getCurrentThemeUrl(
+              collectionRatingKey
+            );
+
+            const shouldReapply = await metadataService.shouldReapplyTheme(
+              collectionRatingKey,
+              themeFilename,
+              currentThemeUrl
+            );
+
+            if (!shouldReapply) {
+              logger.info('Theme unchanged, skipping reupload', {
+                label: `${this.source} Collections`,
+                collectionName,
+                themeFilename,
+              });
+              shouldUploadTheme = false;
+            }
+          } catch (metaError) {
+            logger.warn('Metadata check failed, proceeding with upload', {
+              label: 'MetadataTracking',
+              error:
+                metaError instanceof Error
+                  ? metaError.message
+                  : String(metaError),
+            });
+            // Fall through to upload
+          }
+
+          if (shouldUploadTheme) {
+            await plexClient.uploadThemeFromFile(
+              collectionRatingKey,
+              themePath
+            );
+            await plexClient.lockTheme(collectionRatingKey);
+
+            // Get new Plex theme URL after upload and record metadata
+            try {
+              const newThemeUrl = await plexClient.getCurrentThemeUrl(
+                collectionRatingKey
+              );
+
+              if (newThemeUrl) {
+                await metadataService.recordThemeApplication(
+                  collectionRatingKey,
+                  themeFilename,
+                  newThemeUrl,
+                  {
+                    configId: options.config?.id,
+                    libraryKey: options.libraryKey,
+                  }
+                );
+              }
+            } catch (metaError) {
+              logger.error(
+                'Failed to record theme metadata, upload succeeded',
+                {
+                  label: 'MetadataTracking',
+                  error:
+                    metaError instanceof Error
+                      ? metaError.message
+                      : String(metaError),
+                }
+              );
+            }
+          }
+
+          logger.debug(
+            `Successfully uploaded theme for collection ${collectionName}`,
+            {
+              label: `${this.source} Collections`,
+              collectionRatingKey,
+              themeFilename,
+            }
+          );
+        } catch (error) {
+          logger.warn(
+            `Failed to upload theme for collection ${collectionName}`,
+            {
+              label: `${this.source} Collections`,
+              collectionRatingKey,
+              themeFilename,
+              error: error instanceof Error ? error.message : String(error),
+            }
+          );
+          // Don't fail the entire collection sync if theme upload fails
+        }
+      }
+    }
+  }
+
+  /**
+   * Update the isActive status for a collection config
+   */
+  private updateConfigActiveStatus(configId: string, isActive: boolean): void {
+    try {
+      const settings = getSettings();
+      const collectionConfigs = settings.plex.collectionConfigs || [];
+
+      const configIndex = collectionConfigs.findIndex((c) => c.id === configId);
+      if (configIndex === -1) {
+        logger.warn(
+          `Config ${configId} not found when updating active status`,
+          {
+            label: `${this.source} Collections`,
+            configId,
+            isActive,
+          }
+        );
+        return;
+      }
+
+      // Update the config
+      const updatedConfig = { ...collectionConfigs[configIndex], isActive };
+      collectionConfigs[configIndex] = updatedConfig;
+
+      // Save the updated settings
+      settings.plex.collectionConfigs = collectionConfigs;
+      settings.save();
+
+      logger.debug(
+        `Updated collection ${configId} active status to ${isActive}`,
+        {
+          label: `${this.source} Collections`,
+          configId,
+          isActive,
+        }
+      );
+    } catch (error) {
+      logger.error(`Failed to update active status for config ${configId}`, {
+        label: `${this.source} Collections`,
+        configId,
+        isActive,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Update specific fields of a collection config
+   */
+  protected updateCollectionConfigField(
+    configId: string,
+    updateConfig: Partial<CollectionConfig>
+  ): void {
+    try {
+      const settings = getSettings();
+      const collectionConfigs = settings.plex.collectionConfigs || [];
+      const configIndex = collectionConfigs.findIndex((c) => c.id === configId);
+
+      if (configIndex !== -1) {
+        collectionConfigs[configIndex] = {
+          ...collectionConfigs[configIndex],
+          ...updateConfig,
+        };
+        settings.plex.collectionConfigs = collectionConfigs;
+        settings.save();
+
+        logger.debug(`Updated collection config fields: ${configId}`, {
+          label: `${this.source} Collections`,
+          configId,
+          updatedFields: Object.keys(updateConfig),
+        });
+      }
+    } catch (error) {
+      logger.error(
+        `Failed to update collection config fields for ${configId}`,
+        {
+          label: `${this.source} Collections`,
+          configId,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+    }
+  }
+
+  /**
+   * Clear the legacy smartCollectionRatingKey field from config (migration cleanup)
+   */
+  protected clearSmartCollectionRatingKey(config: CollectionConfig): void {
+    try {
+      const settings = getSettings();
+      const collectionConfigs = settings.plex.collectionConfigs || [];
+      const configIndex = collectionConfigs.findIndex(
+        (c) => c.id === config.id
+      );
+
+      if (configIndex !== -1) {
+        const updatedConfig = {
+          ...collectionConfigs[configIndex],
+        };
+
+        // Remove the legacy field
+        delete (updatedConfig as { smartCollectionRatingKey?: string })
+          .smartCollectionRatingKey;
+
+        collectionConfigs[configIndex] = updatedConfig;
+        settings.plex.collectionConfigs = collectionConfigs;
+        settings.save();
+
+        logger.debug(
+          `Cleared legacy smartCollectionRatingKey from config ${config.id}`,
+          {
+            label: `${this.source} Collections`,
+            configId: config.id,
+          }
+        );
+      }
+    } catch (error) {
+      logger.error(
+        `Failed to clear smartCollectionRatingKey from config ${config.id}`,
+        {
+          label: `${this.source} Collections`,
+          configId: config.id,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+    }
+  }
+
+  // Abstract methods that must be implemented by subclasses
+
+  /**
+   * Validate that the source is properly configured
+   * (e.g., API keys are present, services are reachable)
+   */
+  protected abstract validateConfiguration(): Promise<void>;
+
+  /**
+   * Process a single collection configuration
+   * @param config - Collection configuration
+   * @param plexClient - Plex API client
+   * @param allCollections - All existing Plex collections
+   * @param processedCollectionKeys - Set to track processed collection keys
+   * @param libraryCache - Pre-fetched library items cache for optimization
+   * @param options - Additional sync options
+   */
+  protected abstract processConfiguration(
+    config: CollectionConfig,
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    processedCollectionKeys?: Set<string>,
+    libraryCache?: LibraryItemsCache,
+    options?: CollectionSyncOptions
+  ): Promise<SyncResult>;
+
+  /**
+   * Create template context specific to this source
+   */
+  protected abstract createTemplateContext(
+    config: CollectionConfig,
+    mediaType: 'movie' | 'tv'
+  ): Promise<SourceTemplateContext>;
+
+  /**
+   * Generate a stable cache key for a collection configuration
+   * Used to cache list data between syncs for fast preview
+   */
+  protected generateCacheKey(config: CollectionConfig): string {
+    const parts: string[] = [
+      this.source,
+      config.type,
+      config.subtype || '',
+      config.libraryId || '',
+    ];
+
+    // Add type-specific identifiers for unique caching
+    if (config.traktCustomListUrl) parts.push(config.traktCustomListUrl);
+    if (config.imdbCustomListUrl) parts.push(config.imdbCustomListUrl);
+    if (config.letterboxdCustomListUrl)
+      parts.push(config.letterboxdCustomListUrl);
+    if (config.tmdbCustomCollectionUrl)
+      parts.push(config.tmdbCustomCollectionUrl);
+    if (config.mdblistCustomListUrl) parts.push(config.mdblistCustomListUrl);
+    if (config.anilistCustomListUrl) parts.push(config.anilistCustomListUrl);
+    if (config.timePeriod) parts.push(config.timePeriod);
+    if (config.customDays) parts.push(String(config.customDays));
+    if (config.minimumPlays) parts.push(String(config.minimumPlays));
+    if (config.networksCountry) parts.push(config.networksCountry);
+
+    return parts.join(':');
+  }
+
+  /**
+   * Get the appropriate cache ID for this source type
+   */
+  protected getCacheId():
+    | 'trakt-list'
+    | 'imdb-list'
+    | 'letterboxd-list'
+    | 'tmdb-list'
+    | 'mdblist-list'
+    | 'tautulli-list'
+    | 'overseerr-list'
+    | 'networks-list'
+    | 'originals-list'
+    | 'anilist-list'
+    | 'myanimelist-list' {
+    const cacheIdMap: Partial<Record<CollectionSource, string>> = {
+      trakt: 'trakt-list',
+      imdb: 'imdb-list',
+      letterboxd: 'letterboxd-list',
+      tmdb: 'tmdb-list',
+      mdblist: 'mdblist-list',
+      tautulli: 'tautulli-list',
+      overseerr: 'overseerr-list',
+      networks: 'networks-list',
+      originals: 'originals-list',
+      anilist: 'anilist-list',
+      myanimelist: 'myanimelist-list',
+      // Note: multi-source doesn't have its own cache, it uses individual source caches
+    };
+
+    return (cacheIdMap[this.source] || 'trakt-list') as
+      | 'trakt-list'
+      | 'imdb-list'
+      | 'letterboxd-list'
+      | 'tmdb-list'
+      | 'mdblist-list'
+      | 'tautulli-list'
+      | 'overseerr-list'
+      | 'networks-list'
+      | 'originals-list'
+      | 'anilist-list'
+      | 'myanimelist-list';
+  }
+
+  /**
+   * Wrapper around fetchSourceData that handles caching
+   * - During sync: Always fetches fresh data and caches it
+   * - During preview with useCache=true: Returns cached data if available
+   * - During preview refresh: Fetches fresh and updates cache
+   */
+  public async fetchSourceDataWithCache(
+    config: CollectionConfig,
+    options?: CollectionSyncOptions & { useCache?: boolean },
+    libraryCache?: LibraryItemsCache
+  ): Promise<CollectionSourceData[]> {
+    const cacheKey = this.generateCacheKey(config);
+    const cache = cacheManager.getCache(this.getCacheId());
+    const useCache = options?.useCache ?? false;
+
+    // Try to use cached data if requested
+    if (useCache) {
+      const cachedData = cache.data.get<CollectionSourceData[]>(cacheKey);
+      if (cachedData) {
+        logger.debug(
+          `Using cached list data for ${config.name} (${this.source})`,
+          {
+            label: `${this.source} Collections Cache`,
+            configId: config.id,
+            configName: config.name,
+            cacheKey,
+          }
+        );
+        return cachedData;
+      }
+
+      logger.debug(
+        `No cached data found for ${config.name}, fetching fresh data`,
+        {
+          label: `${this.source} Collections Cache`,
+          configId: config.id,
+          configName: config.name,
+          cacheKey,
+        }
+      );
+    }
+
+    // Fetch fresh data from external source
+    const freshData = await this.fetchSourceData(config, options, libraryCache);
+
+    // Cache the fresh data for future preview use
+    if (freshData && freshData.length > 0) {
+      cache.data.set(cacheKey, freshData);
+      logger.debug(`Cached list data for ${config.name} (${this.source})`, {
+        label: `${this.source} Collections Cache`,
+        configId: config.id,
+        configName: config.name,
+        cacheKey,
+        itemCount: freshData.length,
+      });
+    }
+
+    return freshData;
+  }
+
+  /**
+   * Fetch data from the external source (Trakt API, Tautulli API, etc.)
+   * This method should be implemented by each source to fetch fresh data
+   */
+  public abstract fetchSourceData(
+    config: CollectionConfig,
+    options?: CollectionSyncOptions,
+    libraryCache?: LibraryItemsCache
+  ): Promise<CollectionSourceData[]>;
+
+  /**
+   * Map source data to standardized CollectionItem format
+   * @param sourceData - Raw data from external source
+   * @param config - Collection configuration
+   * @param plexClient - Optional Plex API client for lookups
+   * @param libraryCache - Optional pre-fetched library items cache for performance optimization
+   */
+  public abstract mapSourceDataToItems(
+    sourceData: CollectionSourceData[],
+    config: CollectionConfig,
+    plexClient?: PlexAPI,
+    libraryCache?: LibraryItemsCache
+  ): Promise<{
+    items: CollectionItem[];
+    missingItems?: MissingItem[];
+    stats?: FilteringStats;
+  }>;
+
+  /**
+   * Create collection in Plex using the standardized pipeline
+   */
+  protected abstract createCollection(
+    items: CollectionItem[],
+    mediaType: 'movie' | 'tv',
+    collectionName: string,
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    config: CollectionConfig,
+    processedCollectionKeys?: Set<string>
+  ): Promise<CollectionOperationResult>;
+
+  /**
+   * Fetch IMDb ratings for collection items and enrich them
+   * For items without IMDb IDs, attempts to fetch them from TMDB first
+   *
+   * @param items - Collection items to enrich
+   * @returns Promise resolving to enriched collection items with IMDb ratings
+   */
+  protected async enrichItemsWithImdbRatings(
+    items: CollectionItem[]
+  ): Promise<CollectionItem[]> {
+    try {
+      const { default: TheMovieDb } = await import('@server/api/themoviedb');
+      const tmdb = new TheMovieDb();
+
+      // Step 1: Identify items that need IMDb ID resolution from TMDB
+      const itemsNeedingImdbIds = items.filter(
+        (item) => !item.imdbId && item.tmdbId
+      );
+
+      let enrichedItemsWithImdbIds = [...items];
+
+      if (itemsNeedingImdbIds.length > 0) {
+        logger.debug(
+          `Fetching IMDb IDs from TMDB for ${itemsNeedingImdbIds.length} items`,
+          {
+            label: `${this.source} Collections`,
+          }
+        );
+
+        // Fetch external IDs from TMDB in batches to avoid rate limiting
+        const batchSize = 10;
+        const tmdbIdToImdbIdMap = new Map<number, string>();
+
+        for (let i = 0; i < itemsNeedingImdbIds.length; i += batchSize) {
+          const batch = itemsNeedingImdbIds.slice(i, i + batchSize);
+
+          await Promise.all(
+            batch.map(async (item) => {
+              try {
+                if (!item.tmdbId) return;
+
+                const details =
+                  item.type === 'movie'
+                    ? await tmdb.getMovie({ movieId: item.tmdbId })
+                    : await tmdb.getTvShow({ tvId: item.tmdbId });
+
+                const imdbId = details.external_ids?.imdb_id;
+                if (imdbId) {
+                  tmdbIdToImdbIdMap.set(item.tmdbId, imdbId);
+                }
+              } catch (err) {
+                // Silently skip items that fail - don't block the entire operation
+                logger.debug(
+                  `Failed to fetch TMDB external IDs for ${item.title}`,
+                  {
+                    label: `${this.source} Collections`,
+                    tmdbId: item.tmdbId,
+                  }
+                );
+              }
+            })
+          );
+
+          // Small delay between batches to respect rate limits
+          if (i + batchSize < itemsNeedingImdbIds.length) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+        }
+
+        logger.debug(`Resolved ${tmdbIdToImdbIdMap.size} IMDb IDs from TMDB`, {
+          label: `${this.source} Collections`,
+          requested: itemsNeedingImdbIds.length,
+          resolved: tmdbIdToImdbIdMap.size,
+        });
+
+        // Enrich items with the fetched IMDb IDs
+        enrichedItemsWithImdbIds = items.map((item) => {
+          if (item.imdbId || !item.tmdbId) return item;
+
+          const imdbId = tmdbIdToImdbIdMap.get(item.tmdbId);
+          if (imdbId) {
+            return { ...item, imdbId };
+          }
+          return item;
+        });
+      }
+
+      // Step 2: Extract all IMDb IDs (original + newly resolved)
+      const imdbIds = enrichedItemsWithImdbIds
+        .map((item) => item.imdbId)
+        .filter((id): id is string => !!id);
+
+      if (imdbIds.length === 0) {
+        logger.debug(
+          'No IMDb IDs found after TMDB resolution, skipping rating fetch',
+          {
+            label: `${this.source} Collections`,
+            totalItems: items.length,
+          }
+        );
+        return items;
+      }
+
+      // Step 3: Fetch ratings via IMDb API (handles batching automatically)
+      const imdbApi = new ImdbRatingsAPI();
+      const ratings = await imdbApi.getRatings(imdbIds);
+
+      // Create lookup map for fast access
+      const ratingsMap = new Map(
+        ratings
+          .filter((r) => r.rating !== null)
+          .map((r) => [r.imdbId, r.rating as number])
+      );
+
+      // Step 4: Enrich items with ratings
+      const finalEnrichedItems = enrichedItemsWithImdbIds.map((item) => {
+        if (!item.imdbId) return item;
+
+        const rating = ratingsMap.get(item.imdbId);
+        return {
+          ...item,
+          imdbRating: rating,
+        };
+      });
+
+      const itemsEnriched = finalEnrichedItems.filter(
+        (i) => i.imdbRating !== undefined
+      ).length;
+
+      logger.debug(
+        `Enriched ${itemsEnriched}/${items.length} items with IMDb ratings`,
+        {
+          label: `${this.source} Collections`,
+          totalItems: items.length,
+          itemsWithImdbIds: imdbIds.length,
+          ratingsRetrieved: ratings.filter((r) => r.rating !== null).length,
+          itemsEnriched,
+        }
+      );
+
+      return finalEnrichedItems;
+    } catch (error) {
+      logger.error('Failed to enrich items with IMDb ratings:', {
+        label: `${this.source} Collections`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // Return original items on error - don't fail the entire sync
+      return items;
+    }
+  }
+
+  /**
+   * Apply item ordering options to collection items
+   * This is applied BEFORE filtering to ensure the desired order is preserved through the pipeline
+   *
+   * @param items - Collection items to order
+   * @param config - Collection configuration with ordering options
+   * @returns Ordered collection items
+   */
+  private applyItemOrdering(
+    items: CollectionItem[],
+    config: CollectionConfig
+  ): CollectionItem[] {
+    const sortOrder = config.sortOrder ?? 'default';
+
+    switch (sortOrder) {
+      case 'random': {
+        // Fisher-Yates shuffle algorithm for true randomization
+        const shuffled = [...items];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        logger.debug(`Applied randomization to ${shuffled.length} items`, {
+          label: `${this.source} Collections`,
+          collection: config.name,
+        });
+
+        return shuffled;
+      }
+
+      case 'reverse': {
+        const reversed = [...items].reverse();
+
+        logger.debug(`Applied reverse order to ${reversed.length} items`, {
+          label: `${this.source} Collections`,
+          collection: config.name,
+        });
+
+        return reversed;
+      }
+
+      case 'imdb_rating_desc':
+      case 'imdb_rating_asc': {
+        // Sort by IMDb rating
+        const sorted = [...items].sort((a, b) => {
+          const ratingA = a.imdbRating ?? -1; // Items without rating go to end
+          const ratingB = b.imdbRating ?? -1;
+
+          if (sortOrder === 'imdb_rating_desc') {
+            return ratingB - ratingA; // Highest to lowest
+          } else {
+            return ratingA - ratingB; // Lowest to highest
+          }
+        });
+
+        const itemsWithRatings = sorted.filter(
+          (i) => i.imdbRating !== undefined
+        ).length;
+
+        logger.debug(
+          `Applied IMDb rating sort (${sortOrder}) to ${sorted.length} items`,
+          {
+            label: `${this.source} Collections`,
+            collection: config.name,
+            itemsWithRatings,
+            itemsWithoutRatings: sorted.length - itemsWithRatings,
+          }
+        );
+
+        return sorted;
+      }
+
+      case 'release_date_desc':
+      case 'release_date_asc': {
+        // Sort by release date
+        const sorted = [...items].sort((a, b) => {
+          const dateA = a.releaseDate ?? 0; // Items without date go to end
+          const dateB = b.releaseDate ?? 0;
+
+          if (sortOrder === 'release_date_desc') {
+            return dateB - dateA; // Newest to oldest
+          } else {
+            return dateA - dateB; // Oldest to newest
+          }
+        });
+
+        const itemsWithDates = sorted.filter(
+          (i) => i.releaseDate !== undefined
+        ).length;
+
+        logger.debug(
+          `Applied release date sort (${sortOrder}) to ${sorted.length} items`,
+          {
+            label: `${this.source} Collections`,
+            collection: config.name,
+            itemsWithDates,
+            itemsWithoutDates: sorted.length - itemsWithDates,
+          }
+        );
+
+        return sorted;
+      }
+
+      case 'date_added_desc':
+      case 'date_added_asc': {
+        // Sort by date added to Plex
+        const sorted = [...items].sort((a, b) => {
+          const dateA = a.addedAt ?? 0; // Items without date go to end
+          const dateB = b.addedAt ?? 0;
+
+          if (sortOrder === 'date_added_desc') {
+            return dateB - dateA; // Most recently added first
+          } else {
+            return dateA - dateB; // Least recently added first
+          }
+        });
+
+        const itemsWithDates = sorted.filter(
+          (i) => i.addedAt !== undefined
+        ).length;
+
+        logger.debug(
+          `Applied date added sort (${sortOrder}) to ${sorted.length} items`,
+          {
+            label: `${this.source} Collections`,
+            collection: config.name,
+            itemsWithDates,
+            itemsWithoutDates: sorted.length - itemsWithDates,
+          }
+        );
+
+        return sorted;
+      }
+
+      case 'alphabetical_asc':
+      case 'alphabetical_desc': {
+        // Sort alphabetically by title
+        const sorted = [...items].sort((a, b) => {
+          const titleA = a.title.toLowerCase();
+          const titleB = b.title.toLowerCase();
+
+          if (sortOrder === 'alphabetical_asc') {
+            return titleA.localeCompare(titleB); // A-Z
+          } else {
+            return titleB.localeCompare(titleA); // Z-A
+          }
+        });
+
+        logger.debug(
+          `Applied alphabetical sort (${sortOrder}) to ${sorted.length} items`,
+          {
+            label: `${this.source} Collections`,
+            collection: config.name,
+          }
+        );
+
+        return sorted;
+      }
+
+      case 'default':
+      default:
+        // No ordering, return original
+        return items;
+    }
+  }
+
+  /**
+   * Apply filtering safety net to already-mapped items (validation, deduplication, maxItems safety check)
+   * Use this after calling your specific mapSourceDataToItems implementation.
+   */
+  public async applyFilteringToMappedItems(
+    mappedResult: {
+      items: CollectionItem[];
+      missingItems?: MissingItem[];
+      stats?: FilteringStats;
+    },
+    config: CollectionConfig
+  ): Promise<{
+    items: CollectionItem[];
+    missingItems?: MissingItem[];
+    mappingStats?: FilteringStats;
+    filteringStats?: FilteringStats;
+  }> {
+    let items = mappedResult.items;
+
+    // STEP 1: Enrich with IMDb ratings if needed for sorting
+    if (
+      config.sortOrder === 'imdb_rating_desc' ||
+      config.sortOrder === 'imdb_rating_asc'
+    ) {
+      items = await this.enrichItemsWithImdbRatings(items);
+    }
+
+    // STEP 2: Apply ordering (reverse/randomize/imdb rating) before filtering
+    // This ensures the desired order affects the full result before maxItems is applied
+    const orderedItems = this.applyItemOrdering(items, config);
+
+    // STEP 3: Apply common filtering (duplicates, maxItems limit, etc.)
+    const { filteredItems, stats: filteringStats } = this.applyCommonFiltering(
+      orderedItems,
+      config
+    );
+
+    // Filter missing items by global exclusions and maxItems limit
+    let filteredMissingItems = mappedResult.missingItems;
+    if (filteredMissingItems && filteredMissingItems.length > 0) {
+      const settings = getSettings();
+      const exclusions = settings.globalExclusions;
+
+      // Remove globally excluded items from missing items
+      filteredMissingItems = filteredMissingItems.filter((item) => {
+        // Check movies (TMDB only)
+        if (item.mediaType === 'movie') {
+          if (exclusions.movies.includes(item.tmdbId)) {
+            return false;
+          }
+        }
+
+        // Check TV shows (TMDB or TVDB)
+        if (item.mediaType === 'tv') {
+          // Check TMDB exclusions
+          if (
+            item.tmdbId &&
+            exclusions.shows.some(
+              (excluded) =>
+                excluded.type === 'tmdb' && excluded.id === item.tmdbId
+            )
+          ) {
+            return false;
+          }
+
+          // Check TVDB exclusions (if item has tvdbId)
+          const tvdbId = (item as { tvdbId?: number }).tvdbId;
+          if (
+            tvdbId &&
+            exclusions.shows.some(
+              (excluded) => excluded.type === 'tvdb' && excluded.id === tvdbId
+            )
+          ) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      // Filter by maxItems limit
+      // This ensures we only create requests for missing items from the first maxItems positions
+      if (config.maxItems && config.maxItems > 0) {
+        filteredMissingItems = filteredMissingItems.filter(
+          (item) => item.originalPosition <= config.maxItems
+        );
+      }
+    }
+
+    return {
+      items: filteredItems,
+      missingItems: filteredMissingItems,
+      mappingStats: mappedResult.stats,
+      filteringStats,
+    };
+  }
+
+  /**
+   * Evaluate time restrictions for a collection configuration
+   *
+   * @param config - Collection configuration to evaluate
+   * @returns TimeRestrictionResult indicating if collection should be active
+   */
+  protected evaluateTimeRestriction(
+    config: CollectionConfig
+  ): TimeRestrictionResult {
+    return TimeRestrictionUtils.evaluateTimeRestriction(config.timeRestriction);
+  }
+
+  /**
+   * Handle collections that are currently inactive due to time restrictions
+   * This removes the collection from Plex if it exists
+   *
+   * @param config - Collection configuration
+   * @param plexClient - Plex API client
+   * @param allCollections - All collections from Plex
+   * @param processedCollectionKeys - Set to track processed collection keys
+   */
+  protected async handleInactiveCollection(
+    config: CollectionConfig,
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    processedCollectionKeys?: Set<string>
+  ): Promise<void> {
+    try {
+      // Find the collection by stored rating key
+      const existingCollections = config.collectionRatingKey
+        ? allCollections.filter(
+            (collection) => collection.ratingKey === config.collectionRatingKey
+          )
+        : [];
+
+      // This method is only called when removeFromPlexWhenInactive is true
+      // So we only need the original deletion behavior
+      for (const collection of existingCollections) {
+        try {
+          logger.info(
+            `Removing time-restricted collection: ${collection.title}`,
+            {
+              label: `${this.source} Collections`,
+              configId: config.id,
+              configName: config.name,
+              collectionId: collection.ratingKey,
+            }
+          );
+
+          // Remove the collection from Plex
+          await plexClient.deleteCollection(collection.ratingKey);
+
+          // Also remove from hub management to prevent stale hub entries
+          if (collection.libraryKey) {
+            const hubIdentifier = `custom.collection.${collection.libraryKey}.${collection.ratingKey}`;
+
+            try {
+              await plexClient.deleteHubItem(
+                collection.libraryKey,
+                hubIdentifier
+              );
+              logger.debug(
+                `Removed collection from hub management: ${collection.title}`,
+                {
+                  label: `${this.source} Collections`,
+                  configId: config.id,
+                  hubIdentifier,
+                }
+              );
+            } catch (error) {
+              // Log as warning - hub item may already be deleted or never existed
+              logger.warn(
+                `Could not remove from hub management (may already be deleted): ${collection.title}`,
+                {
+                  label: `${this.source} Collections`,
+                  configId: config.id,
+                  hubIdentifier,
+                  error:
+                    error instanceof Error ? error.message : 'Unknown error',
+                }
+              );
+            }
+          } else {
+            logger.warn(
+              `Cannot remove from hub management - collection has no libraryKey: ${collection.title}`,
+              {
+                label: `${this.source} Collections`,
+                configId: config.id,
+                collectionRatingKey: collection.ratingKey,
+              }
+            );
+          }
+
+          // Note: We no longer clear the rating key here because the smart missing item detection
+          // in DiscoveryService now properly handles inactive collections with removeFromPlexWhenInactive
+
+          // Mark as processed to avoid conflicts
+          if (processedCollectionKeys) {
+            processedCollectionKeys.add(collection.ratingKey);
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to remove time-restricted collection ${collection.title}: ${error}`,
+            {
+              label: `${this.source} Collections`,
+              configId: config.id,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            }
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        `Failed to handle inactive collection for ${config.name}: ${error}`,
+        {
+          label: `${this.source} Collections`,
+          configId: config.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }
+      );
+    }
+  }
+
+  /**
+   * Process collections with simple media type handling
+   * Replaces over-engineered strategy pattern with straightforward if/else logic
+   */
+  protected async processWithMediaTypeStrategy(
+    items: CollectionItem[],
+    config: CollectionConfig,
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    processedCollectionKeys?: Set<string>,
+    userInfo?: { userId?: number | string; customLabel?: string },
+    libraryCache?: LibraryItemsCache,
+    missingItems?: MissingItem[]
+  ): Promise<MediaProcessingResult> {
+    const mediaType = getCollectionMediaType(config);
+
+    try {
+      // Simple single media type processing - 'both' was over-engineered
+      // Each collection is tied to a specific library (movie OR tv), not both
+      return await this.processSingleMediaType(
+        items,
+        config,
+        mediaType,
+        plexClient,
+        allCollections,
+        processedCollectionKeys,
+        userInfo,
+        libraryCache,
+        missingItems
+      );
+    } catch (error) {
+      logger.error(`Media type processing failed`, {
+        label: `${this.source} Collections`,
+        configName: config.name,
+        mediaType,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return {
+        created: 0,
+        updated: 0,
+        itemCount: 0,
+        collectionKeys: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Process single media type collections (movie OR tv)
+   */
+  private async processSingleMediaType(
+    items: CollectionItem[],
+    config: CollectionConfig,
+    mediaType: 'movie' | 'tv',
+    plexClient: PlexAPI,
+    allCollections: PlexCollection[],
+    processedCollectionKeys?: Set<string>,
+    userInfo?: { userId?: number | string; customLabel?: string },
+    libraryCache?: LibraryItemsCache,
+    missingItems?: MissingItem[]
+  ): Promise<MediaProcessingResult> {
+    // Filter items by the specified media type
+    let filteredItems = items.filter((item) => item.type === mediaType);
+
+    if (filteredItems.length === 0) {
+      logger.debug(`No ${mediaType} items found for collection`, {
+        label: `${this.source} Collections`,
+        configName: config.name,
+        mediaType,
+        totalItems: items.length,
+      });
+
+      return {
+        created: 0,
+        updated: 0,
+        itemCount: 0,
+        collectionKeys: [],
+      };
+    }
+
+    // Apply collection mutual exclusion if configured
+    filteredItems = await applyCollectionExclusions(
+      filteredItems,
+      config,
+      plexClient,
+      this.source
+    );
+
+    // Check again if we have items after exclusions
+    if (filteredItems.length === 0) {
+      logger.info(
+        `All ${mediaType} items were excluded from collection "${config.name}" based on mutual exclusion rules`,
+        {
+          label: `${this.source} Collections`,
+          configName: config.name,
+          mediaType,
+        }
+      );
+
+      return {
+        created: 0,
+        updated: 0,
+        itemCount: 0,
+        collectionKeys: [],
+      };
+    }
+
+    const collectionName =
+      (await this.generateCollectionNameWithCustom?.(
+        config,
+        mediaType,
+        libraryCache
+      )) ||
+      config.template ||
+      config.name;
+
+    const result = await this.createOrUpdateCollectionStandardized(
+      filteredItems,
+      collectionName,
+      mediaType,
+      config,
+      plexClient,
+      allCollections,
+      processedCollectionKeys,
+      userInfo,
+      missingItems
+    );
+
+    return {
+      created: result.created || 0,
+      updated: result.updated || 0,
+      itemCount: result.itemCount || 0,
+      collectionKeys: result.collectionRatingKey
+        ? [result.collectionRatingKey]
+        : [],
+      error: result.error,
+    };
+  }
+
+  /**
+   * Generate poster automatically for collections during sync
+   * Called for any collection type with autoPoster enabled
+   */
+  protected async generateAutoPoster(
+    collectionName: string,
+    config: CollectionConfig,
+    collectionRatingKey: string,
+    plexClient: PlexAPI,
+    items?: CollectionItem[],
+    userInfo?: { userId?: number | string; customLabel?: string },
+    options?: {
+      collectionTypeOverride?: string; // For networks/originals to pass platform name
+      dynamicLogo?: string; // For networks to pass extracted sprite logo
+      personImageUrl?: string; // For person collections to pass TMDB profile image
+    }
+  ): Promise<void> {
+    try {
+      const mediaType = getCollectionMediaType(config);
+
+      logger.info(`Auto-generating poster for collection: ${collectionName}`, {
+        label: `${this.source} Collections`,
+        configId: config.id,
+        mediaType,
+      });
+
+      // Convert items to poster format if available
+      let posterItems: CollectionItemWithPoster[] | undefined;
+      if (items && items.length > 0) {
+        // Determine how many items we need based on the template's content grid
+        let maxItems = 4; // Default fallback for old templates
+
+        if (config.autoPosterTemplate) {
+          try {
+            const templateRepository = getRepository(PosterTemplate);
+
+            const template = await templateRepository.findOne({
+              where: { id: config.autoPosterTemplate, isActive: true },
+            });
+
+            if (template) {
+              const templateData = template.getTemplateData();
+
+              // Calculate grid size for unified system
+              if (templateData.elements) {
+                // Unified system - find content-grid elements and calculate total size
+                const contentGridElements = templateData.elements.filter(
+                  (el) => el.type === 'content-grid'
+                );
+                if (contentGridElements.length > 0) {
+                  // Sum up all content grid sizes (in case there are multiple grids)
+                  maxItems = contentGridElements.reduce((total, element) => {
+                    const props = element.properties as {
+                      columns?: number;
+                      rows?: number;
+                    };
+                    return total + (props.columns || 2) * (props.rows || 2);
+                  }, 0);
+                }
+              }
+
+              logger.debug(
+                `Template grid size calculated for collection poster: ${maxItems} items needed`,
+                {
+                  templateId: config.autoPosterTemplate,
+                  hasElements: !!templateData.elements,
+                }
+              );
+            }
+          } catch (error) {
+            logger.warn(
+              'Failed to get template grid size, using default limit',
+              {
+                templateId: config.autoPosterTemplate,
+                error: error instanceof Error ? error.message : String(error),
+              }
+            );
+          }
+        }
+
+        posterItems = items.slice(0, maxItems).map((item) => ({
+          title: item.title,
+          type: item.type,
+          tmdbId: item.tmdbId,
+          posterUrl: item.posterUrl,
+          year: item.year,
+          episodeInfo: item.episodeInfo,
+          metadata: item.metadata,
+        }));
+      }
+
+      // Create collection identifier for poster tracking
+      // For Overseerr users collections: config.id-userId-mediaType
+      // For all other collections: config.id
+      const collectionIdentifier =
+        config.type === 'overseerr' &&
+        config.subtype === 'users' &&
+        userInfo?.userId
+          ? `${config.id}-${userInfo.userId}-${mediaType}`
+          : config.id;
+
+      // Fetch template data for accurate change detection
+      let templateData: unknown = null;
+      if (config.autoPosterTemplate) {
+        const templateRepo = getRepository(PosterTemplate);
+        const template = await templateRepo.findOne({
+          where: { id: config.autoPosterTemplate },
+        });
+        templateData = template?.templateData;
+      }
+
+      // Calculate input hash for poster to check if regeneration needed
+      const { calculatePosterInputHash } = await import(
+        '@server/utils/metadataHashing'
+      );
+      const posterInputHash = calculatePosterInputHash({
+        templateId: config.autoPosterTemplate || null,
+        templateData, // Include template content for change detection
+        itemIds: (posterItems || [])
+          .map((item) => item.tmdbId?.toString() || item.title)
+          .sort(),
+        collectionName,
+        mediaType,
+        collectionType: options?.collectionTypeOverride || config.type,
+        collectionSubtype: config.subtype,
+      });
+
+      // Check if regeneration needed using metadata tracking
+      const metadataService = (
+        await import('@server/lib/metadata/MetadataTrackingService')
+      ).default;
+
+      try {
+        const shouldRegenerate = await metadataService.shouldRegeneratePoster(
+          collectionRatingKey,
+          posterInputHash
+        );
+
+        if (!shouldRegenerate) {
+          // Check if Plex still has correct poster
+          const currentPosterUrl = await plexClient.getCurrentPosterUrl(
+            collectionRatingKey
+          );
+          const shouldReapply = await metadataService.shouldReapplyPoster(
+            collectionRatingKey,
+            currentPosterUrl
+          );
+
+          if (!shouldReapply) {
+            logger.info(
+              'Poster unchanged, skipping regeneration and reapplication',
+              {
+                label: `${this.source} Collections`,
+                collectionName,
+                collectionRatingKey,
+              }
+            );
+            return; // Skip entire poster workflow
+          }
+
+          logger.info(
+            'Poster inputs unchanged but Plex URL differs, reapplying',
+            {
+              label: `${this.source} Collections`,
+              collectionName,
+            }
+          );
+        }
+      } catch (error) {
+        logger.warn(
+          'Metadata check failed, proceeding with poster generation',
+          {
+            label: 'MetadataTracking',
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+        // Fall through to generate poster
+      }
+
+      // Generate the poster using the processed collection name
+      // Returns full path to temp file in system temp directory
+      const posterTempPath = await generatePoster(
+        {
+          collectionName,
+          collectionType: options?.collectionTypeOverride || config.type,
+          collectionSubtype: config.subtype,
+          mediaType,
+          items: posterItems,
+          autoPosterTemplate: config.autoPosterTemplate,
+          libraryId: config.libraryId,
+          ...(options?.dynamicLogo && { dynamicLogo: options.dynamicLogo }),
+          ...(options?.personImageUrl && {
+            personImageUrl: options.personImageUrl,
+          }),
+        },
+        `Auto-generated: ${collectionName}`,
+        collectionIdentifier
+      );
+
+      // Apply poster to collection (smart or regular)
+      await plexClient.updateCollectionPoster(
+        collectionRatingKey,
+        posterTempPath
+      );
+
+      // Get the full Plex poster URL from the collection to complete the workflow
+      const plexPosterUrl = await plexClient.getCurrentPosterUrl(
+        collectionRatingKey
+      );
+
+      if (plexPosterUrl) {
+        // Record metadata tracking for this poster
+        try {
+          await metadataService.recordPosterApplication(
+            collectionRatingKey,
+            posterInputHash,
+            plexPosterUrl,
+            {
+              configId: config.id,
+              libraryKey: undefined, // Library key not available in this context
+            }
+          );
+        } catch (error) {
+          logger.error('Failed to record poster metadata, upload succeeded', {
+            label: 'MetadataTracking',
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // Clean up temp poster file after successful upload
+      try {
+        const fs = await import('fs');
+        if (fs.existsSync(posterTempPath)) {
+          await fs.promises.unlink(posterTempPath);
+          logger.debug(
+            `Deleted temp poster file after upload: ${path.basename(
+              posterTempPath
+            )}`,
+            {
+              label: `${this.source} Collections`,
+              collectionName,
+            }
+          );
+        }
+      } catch (cleanupError) {
+        logger.warn(
+          `Failed to delete temp poster file: ${path.basename(posterTempPath)}`,
+          {
+            label: `${this.source} Collections`,
+            error:
+              cleanupError instanceof Error
+                ? cleanupError.message
+                : String(cleanupError),
+          }
+        );
+      }
+
+      logger.info(
+        `Successfully generated and applied poster for collection: ${collectionName}`,
+        {
+          label: `${this.source} Collections`,
+          configId: config.id,
+          collectionRatingKey,
+          plexPosterUrl,
+        }
+      );
+    } catch (error) {
+      // Log error but don't fail the sync - poster generation is optional
+      logger.warn(
+        `Failed to auto-generate poster for collection: ${collectionName}`,
+        {
+          label: `${this.source} Collections`,
+          configId: config.id,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+    }
+  }
+}
+
+export default BaseCollectionSync;

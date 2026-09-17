@@ -1,0 +1,621 @@
+import os
+import re
+from datetime import datetime
+
+from num2words import num2words
+from PIL import Image, ImageFilter
+from plexapi.exceptions import BadRequest
+from plexapi.video import Episode, Season
+
+from modules import overlay, plex, timings, util
+from modules.builder import CollectionBuilder
+from modules.util import Failed, FilterFailed, NotScheduled, OverlayError
+
+logger = util.logger
+
+
+class Overlays:
+    def __init__(self, config, library):
+        self.config = config
+        self.cache = self.config.Cache
+        self.library = library
+        self.overlays = []
+
+    def _scan_overlay_backup_extensions(self):
+        # Snapshots the backup folder once instead of up to 3 os.path.exists() calls per item in run_overlays - exact-case match, not lower()'d, to match os.path.exists()'s behavior on a case-sensitive filesystem.
+        extensions_by_ratingkey = {}
+        for fname in os.listdir(self.library.overlay_backup):
+            stem, ext = os.path.splitext(fname)
+            if ext in (".png", ".jpg", ".webp"):
+                extensions_by_ratingkey.setdefault(stem, set()).add(ext)
+        return extensions_by_ratingkey
+
+    def run_overlays(self):
+        overlay_start = datetime.now()
+        logger.info("")
+        logger.separator(f"{self.library.name} Library Overlays")
+        logger.info("")
+        os.makedirs(self.library.overlay_backup, exist_ok=True)
+        self._overlay_backup_extensions = self._scan_overlay_backup_extensions()
+
+        key_to_overlays = {}
+        properties = {}
+        if not self.library.remove_overlays:
+            key_to_overlays, properties = self.compile_overlays()
+        ignore_list = [rk for rk in key_to_overlays]
+
+        old_overlays = [la for la in self.library.Plex.listFilterChoices("label") if str(la.title).lower().endswith(" overlay")]
+        if old_overlays:
+            logger.separator(f"Removing Old Overlays for the {self.library.name} Library")
+            logger.info("")
+            for old_overlay in old_overlays:
+                label_items = self.get_overlay_items(label=old_overlay)
+                if label_items:
+                    logger.info("")
+                    logger.separator(f"Removing {old_overlay.title}")
+                    logger.info("")
+                    for i, item in enumerate(label_items, 1):
+                        item_title = self.library.get_item_display_title(item)
+                        logger.ghost(f"Restoring {old_overlay.title}: {i}/{len(label_items)} {item_title}")
+                        self.remove_overlay(item, item_title, old_overlay.title, [os.path.join(self.library.overlay_folder, old_overlay.title[:-8], f"{item.ratingKey}.png")])
+            logger.info("")
+
+        remove_overlays = self.get_overlay_items(ignore=ignore_list)
+        if self.library.is_show:
+            remove_overlays.extend(self.get_overlay_items(libtype="episode", ignore=ignore_list))
+            remove_overlays.extend(self.get_overlay_items(libtype="season", ignore=ignore_list))
+        elif self.library.is_music:
+            remove_overlays.extend(self.get_overlay_items(libtype="album", ignore=ignore_list))
+
+        if remove_overlays:
+            logger.separator(f"Removing {'All ' if self.library.remove_overlays else ''}Overlays for the {self.library.name} Library")
+            for i, item in enumerate(remove_overlays, 1):
+                item_title = self.library.get_item_display_title(item)
+                logger.ghost(f"Restoring: {i}/{len(remove_overlays)} {item_title}")
+                self.remove_overlay(
+                    item, item_title, "Overlay", [os.path.join(self.library.overlay_backup, f"{item.ratingKey}.png"), os.path.join(self.library.overlay_backup, f"{item.ratingKey}.jpg"), os.path.join(self.library.overlay_backup, f"{item.ratingKey}.webp")]
+                )
+            logger.exorcise()
+        else:
+            logger.separator(f"No Overlays to Remove for the {self.library.name} Library")
+        logger.info("")
+        if not self.library.remove_overlays:
+            logger.separator(f"{'Re-' if self.library.reapply_overlays else ''}Applying Overlays for the {self.library.name} Library")
+            logger.info("")
+
+            total_keys = len(key_to_overlays)
+            # Plain attribute (not a `with` block, to avoid re-indenting ~370 lines) tagging every network call in this loop with this library, for per-library cost in timings-*.json.
+            timings.registry.library_ctx = self.library.name
+            # Items freshly composed this run - flushed every plex_bulk_edit_batch_size items (if set), else once at the end.
+            overlay_label_items = []
+            for i, (over_key, (item, over_names)) in enumerate(sorted(key_to_overlays.items(), key=lambda io: self.library.get_item_display_title(io[1][0], sort=True)), 1):
+                item_title = self.library.get_item_display_title(item)
+
+                try:
+                    logger.ghost(f"Overlaying: ({i}/{total_keys}) {item_title}")
+                    image_compare = None
+                    cached_state = {}
+                    poster = None
+                    if self.cache:
+                        _, image_compare = self.cache.query_overlay_poster(item.ratingKey, f"{self.library.image_table_name}_overlays")
+                        cached_state = self.cache.query_overlay_state(item.ratingKey, f"{self.library.image_table_name}_overlay_state")
+                    with timings.track("overlay_item_reload", library=self.library.name):
+                        self.library.reload(item, force=self.library.reapply_overlays)
+                    has_overlay = any([item_tag.tag.lower() == "overlay" for item_tag in self.library.item_labels(item)])
+
+                    current_hashes = {properties[ov].mapping_name: properties[ov].get_overlay_compare() for ov in over_names}
+                    blur_num = 0
+                    applied_names = []
+                    queue_overlays = {}
+                    for over_name in over_names:
+                        current_overlay = properties[over_name]
+                        if current_overlay.name.startswith("blur"):
+                            logger.info(over_name)
+                            blur_test = int(re.search("\\(([^)]+)\\)", current_overlay.name).group(1))  # type: ignore[union-attr]
+                            if blur_test > blur_num:
+                                blur_num = blur_test
+                        elif current_overlay.queue_name:
+                            if current_overlay.queue not in queue_overlays:
+                                queue_overlays[current_overlay.queue] = {}
+                            if current_overlay.weight in queue_overlays[current_overlay.queue]:
+                                raise OverlayError("Overlay Error: Overlays in a queue cannot have the same 'weight' value")
+                            queue_overlays[current_overlay.queue][current_overlay.weight] = over_name
+                        else:
+                            applied_names.append(over_name)
+
+                    overlay_change = "" if has_overlay else "No Overlay Label"
+                    if not overlay_change:
+                        for cached_key in cached_state:
+                            if cached_key not in current_hashes:
+                                overlay_change = f"Overlay Removed: {cached_key}"
+
+                    if not overlay_change:
+                        for over_name in over_names:
+                            mapping_name = properties[over_name].mapping_name
+                            if mapping_name not in cached_state:
+                                overlay_change = f"New Overlay: {mapping_name}"
+                            elif cached_state[mapping_name][0] != current_hashes[mapping_name]:
+                                overlay_change = f"Overlay Changed: {mapping_name}"
+                            elif properties[over_name].updated:
+                                overlay_change = f"Overlay Image Updated: {mapping_name}"
+
+                    if self.cache:
+                        for over_name in over_names:
+                            if properties[over_name].name.startswith("text"):
+                                for cache_key, cache_value in self.cache.query_overlay_value_cache_all(item.ratingKey).items():
+                                    actual = plex.attribute_translation[cache_key] if cache_key in plex.attribute_translation else cache_key
+                                    if cache_key in overlay.rating_sources:
+                                        try:
+                                            real_value = self.library.fetch_overlay_value(item, cache_key)
+                                        except Failed:
+                                            continue
+                                    elif actual == "total_runtime":
+                                        with timings.track("overlay_runtime_lookup", library=self.library.name):
+                                            sub_items = self.library.cached_item_subitems(item, "episodes") if current_overlay.level in ["show", "season"] else self.library.cached_item_subitems(item, "tracks")
+                                            sub_items = [ep.duration for ep in sub_items if hasattr(ep, "duration") and ep.duration]
+                                        real_value = sum(sub_items)
+                                    else:
+                                        if not hasattr(item, actual):
+                                            continue
+                                        real_value = getattr(item, actual)
+                                    if cache_value is None or real_value is None:
+                                        continue
+                                    if cache_key in overlay.float_vars:
+                                        cache_value = float(cache_value)
+                                    if cache_key in overlay.int_vars:
+                                        cache_value = int(cache_value)
+                                    if cache_key in overlay.date_vars:
+                                        real_value = real_value.strftime("%Y-%m-%d")  # type: ignore[union-attr] # noqa
+                                    if real_value != cache_value:
+                                        overlay_change = f"Special Text Changed from {cache_value} to {real_value}"
+                    try:
+                        poster, background, logo, square_art, item_dir, name = self.library.find_item_assets(item)
+                        if not poster and self.library.assets_for_all:
+                            if (
+                                (isinstance(item, Episode) and self.library.show_missing_episode_assets)
+                                or (isinstance(item, Season) and self.library.show_missing_season_assets)
+                                or (not isinstance(item, (Episode, Season)) and self.library.show_missing_assets)
+                            ):
+                                if self.library.asset_folders:
+                                    logger.warning(f"Asset Warning: No poster found for '{item_title}' in the assets folder '{item_dir}'")
+                                else:
+                                    logger.warning(f"Asset Warning: No poster '{name}' found in the assets folders")
+                        if background:
+                            self.library.upload_images(item, background=background)
+                        if logo:
+                            self.library.upload_images(item, logo=logo)
+                        if square_art:
+                            self.library.upload_images(item, square_art=square_art)
+                    except Failed as e:
+                        if self.library.assets_for_all and self.library.show_missing_assets:
+                            logger.warning(e)
+
+                    has_original = None
+                    new_backup = None
+                    changed_image = False
+                    if poster:
+                        if image_compare and str(poster.compare) != str(image_compare):
+                            changed_image = True
+                        for ext in self._overlay_backup_extensions.pop(str(item.ratingKey), set()):
+                            os.remove(os.path.join(self.library.overlay_backup, f"{item.ratingKey}{ext}"))
+                    elif has_overlay:
+                        existing_exts = self._overlay_backup_extensions.get(str(item.ratingKey), set())
+                        if ".png" in existing_exts:
+                            has_original = os.path.join(self.library.overlay_backup, f"{item.ratingKey}.png")
+                        elif ".jpg" in existing_exts:
+                            has_original = os.path.join(self.library.overlay_backup, f"{item.ratingKey}.jpg")
+                        elif ".webp" in existing_exts:
+                            has_original = os.path.join(self.library.overlay_backup, f"{item.ratingKey}.webp")
+                        if self.library.reset_overlays:
+                            reset_list = self.library.reset_overlays
+                        elif has_original is None and not self.library.reset_overlays:
+                            reset_list = ["plex", "tmdb"]
+                        else:
+                            reset_list = []
+                        try:
+                            with timings.track("overlay_fetch", library=self.library.name):
+                                new_backup = self.library.item_posters(item, providers=reset_list)
+                        except Failed as e:
+                            if any(r in reset_list for r in ["plex", "tmdb"]):
+                                logger.error(e)
+                    else:
+                        new_backup = item.posterUrl
+                    logger.info("")
+                    logger.info(f"({i}/{len(key_to_overlays)}) {item_title}")
+                    if new_backup:
+                        try:
+                            with timings.track("overlay_fetch", library=self.library.name):
+                                has_original = self.library.check_image_for_overlay(new_backup, os.path.join(self.library.overlay_backup, f"{item.ratingKey}"))
+                        except Failed as e:
+                            raise Failed(f"  Overlay Error: {e}")
+                    poster_compare = None
+                    resolved_values = {}
+                    unresolved = set()
+                    if poster is None and has_original is None:
+                        logger.error("  Overlay Error: No poster found")
+                    elif self.library.reapply_overlays or new_backup or overlay_change or changed_image:
+                        try:
+                            if not self.library.reapply_overlays and new_backup:
+                                logger.trace("  Overlay Reason: New image detected")
+                            elif not self.library.reapply_overlays and overlay_change:
+                                logger.trace(f"  Overlay Reason: Overlay changed {overlay_change}")
+                            canvas_width, canvas_height = overlay.get_canvas_size(item)
+                            with timings.track("overlay_compose", library=self.library.name), Image.open(poster.location if poster else has_original) as new_poster:  # type: ignore[arg-type]
+                                exif_tags = new_poster.getexif()
+                                exif_tags[0x04BC] = "overlay"
+                                new_poster = new_poster.convert("RGB").resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+
+                                if blur_num > 0:
+                                    new_poster = new_poster.filter(ImageFilter.GaussianBlur(blur_num))
+
+                                def get_text(text_overlay):
+                                    full_text = text_overlay.name[5:-1]
+                                    for format_var in overlay.vars_by_type[text_overlay.level]:
+                                        if f"<<{format_var}" in full_text and format_var == "originally_available[":
+                                            mod = re.search("<<originally_available\\[(.+)]>>", full_text).group(1)  # type: ignore[union-attr]
+                                            format_var = "originally_available"
+                                        elif f"<<{format_var}>>" in full_text and format_var.endswith(tuple(m for m in overlay.double_mods)):
+                                            mod = format_var[-2:]
+                                            format_var = format_var[:-2]
+                                        elif f"<<{format_var}>>" in full_text and format_var.endswith(tuple(m for m in overlay.single_mods)):
+                                            mod = format_var[-1]
+                                            format_var = format_var[:-1]
+                                        elif f"<<{format_var}>>" in full_text:
+                                            mod = ""
+                                        else:
+                                            continue
+                                        if format_var == "show_title":
+                                            actual_attr = "parentTitle" if text_overlay.level == "season" else "grandparentTitle"
+                                        elif format_var in plex.attribute_translation:
+                                            actual_attr = plex.attribute_translation[format_var]
+                                        else:
+                                            actual_attr = format_var
+                                        if format_var == "bitrate":
+                                            actual_value = None
+                                            for media in item.media:  # type: ignore[union-attr]
+                                                current = int(media.bitrate)
+                                                if actual_value is None:
+                                                    actual_value = current
+                                                    if mod == "":
+                                                        break
+                                                elif mod == "H" and current > actual_value:
+                                                    actual_value = current
+                                                elif mod == "L" and current < actual_value:
+                                                    actual_value = current
+                                        elif format_var in overlay.rating_sources:
+                                            found_rating = None
+                                            try:
+                                                found_rating = self.library.fetch_overlay_value(item, format_var)
+                                            except Failed as err:
+                                                logger.error(err)
+                                            if found_rating is not None:
+                                                actual_value = found_rating
+                                                logger.trace(f"{format_var}: {actual_value}")
+                                            else:
+                                                raise OverlayError(f"Overlay Warning: No '{format_var}' found for '{item_title}'")
+                                        elif format_var == "runtime" and text_overlay.level in ["show", "season", "artist", "album"]:
+                                            if hasattr(item, "duration") and item.duration:
+                                                actual_value = item.duration
+                                            else:
+                                                with timings.track("overlay_runtime_lookup", library=self.library.name):
+                                                    sub_items = self.library.cached_item_subitems(item, "episodes") if text_overlay.level in ["show", "season"] else self.library.cached_item_subitems(item, "tracks")
+                                                    sub_items = [ep.duration for ep in sub_items if hasattr(ep, "duration") and ep.duration]  # type: ignore[union-attr]
+                                                actual_value = sum(sub_items) / len(sub_items)
+                                        elif format_var == "total_runtime":
+                                            with timings.track("overlay_runtime_lookup", library=self.library.name):
+                                                sub_items = self.library.cached_item_subitems(item, "episodes") if text_overlay.level in ["show", "season"] else self.library.cached_item_subitems(item, "tracks")
+                                                sub_items = [ep.duration for ep in sub_items if hasattr(ep, "duration") and ep.duration]  # type: ignore[union-attr]
+                                            actual_value = sum(sub_items)
+                                        else:
+                                            if not hasattr(item, actual_attr) or getattr(item, actual_attr) is None:
+                                                raise OverlayError(f"Overlay Error: No '{full_text}' found")
+                                            actual_value = getattr(item, actual_attr)
+                                            if format_var == "versions":
+                                                actual_value = len(actual_value)
+                                        if self.cache and format_var not in overlay.rating_sources:
+                                            cache_store = actual_value.strftime("%Y-%m-%d") if format_var in overlay.date_vars else actual_value  # type: ignore[union-attr]
+                                            self.cache.update_overlay_value_cache(False, item.ratingKey, format_var, cache_store)
+                                        sub_value = None
+                                        if format_var == "originally_available":
+                                            if mod:
+                                                sub_value = "<<originally_available\\[(.+)]>>"
+                                                final_value = actual_value.strftime(mod)  # type: ignore[union-attr]
+                                            else:
+                                                final_value = actual_value.strftime("%Y-%m-%d")  # type: ignore[union-attr]
+                                        elif format_var in ["runtime", "total_runtime"]:
+                                            if mod == "H":
+                                                final_value = int((actual_value / 60000) // 60)  # type: ignore[operator]
+                                            elif mod == "M":
+                                                final_value = int((actual_value / 60000) % 60)  # type: ignore[operator]
+                                            else:
+                                                final_value = int(actual_value / 60000)  # type: ignore[operator]
+                                        elif mod == "%":
+                                            final_value = int(float(actual_value) * 10)  # type: ignore[arg-type]
+                                        elif mod == "#":
+                                            actual_value = f"{float(actual_value):.1f}"  # type: ignore[arg-type]
+                                            final_value = actual_value[:-2] if actual_value.endswith(".0") else actual_value
+                                        elif mod == "/":
+                                            final_value = f"{float(actual_value) / 2:.1f}"  # type: ignore[arg-type]
+                                        elif mod == "W":
+                                            final_value = num2words(int(actual_value))  # type: ignore[arg-type]
+                                        elif mod == "WU":
+                                            final_value = num2words(int(actual_value)).upper()  # type: ignore[arg-type]
+                                        elif mod == "WL":
+                                            final_value = num2words(int(actual_value)).lower()  # type: ignore[arg-type]
+                                        elif mod == "0":
+                                            final_value = f"{int(actual_value):02}"  # type: ignore[arg-type]
+                                        elif mod == "00":
+                                            final_value = f"{int(actual_value):03}"  # type: ignore[arg-type]
+                                        elif mod == "U":
+                                            final_value = str(actual_value).upper()
+                                        elif mod == "L":
+                                            final_value = str(actual_value).lower()
+                                        elif mod == "P":
+                                            final_value = str(actual_value).title()
+                                        elif format_var in overlay.rating_sources:
+                                            final_value = f"{float(actual_value):.1f}"  # type: ignore[arg-type]
+                                        else:
+                                            final_value = actual_value
+                                        if sub_value:
+                                            full_text = re.sub(sub_value, str(final_value), full_text)
+                                        else:
+                                            full_text = full_text.replace(f"<<{format_var}{mod}>>", str(final_value))
+                                    return str(full_text)
+
+                                for over_name in applied_names:
+                                    current_overlay = properties[over_name]
+                                    if current_overlay.name.startswith("text"):
+                                        if "<<" in current_overlay.name:
+                                            image_box = current_overlay.image.size if current_overlay.image else None
+                                            try:
+                                                rendered_text = get_text(current_overlay)
+                                            except Failed as e:
+                                                logger.warning(f"  {e}")
+                                                unresolved.add(current_overlay.mapping_name)
+                                                continue
+                                            resolved_values[current_overlay.mapping_name] = rendered_text
+                                            overlay_image, addon_box = current_overlay.get_backdrop((canvas_width, canvas_height), box=image_box, text=rendered_text)
+                                            new_poster.paste(overlay_image, (0, 0), overlay_image)
+                                        else:
+                                            overlay_image, addon_box = current_overlay.get_canvas(item)
+                                            new_poster.paste(overlay_image, (0, 0), overlay_image)
+                                        if current_overlay.image:
+                                            new_poster.paste(current_overlay.image, addon_box, current_overlay.image)
+                                    elif current_overlay.name == "backdrop":
+                                        overlay_image, _ = current_overlay.get_canvas(item)
+                                        new_poster.paste(overlay_image, (0, 0), overlay_image)
+                                    else:
+                                        if current_overlay.has_coordinates():
+                                            overlay_image, overlay_box = current_overlay.get_canvas(item)
+                                            if overlay_image is not None:
+                                                new_poster.paste(overlay_image, (0, 0), overlay_image)
+                                            new_poster.paste(current_overlay.image, overlay_box, current_overlay.image)
+                                        else:
+                                            new_poster = new_poster.resize(current_overlay.image.size, Image.Resampling.LANCZOS)
+                                            new_poster.paste(current_overlay.image, (0, 0), current_overlay.image)
+                                            new_poster = new_poster.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+
+                                for queue, weights in queue_overlays.items():
+                                    cords = self.library.queues[queue]
+                                    sorted_weights = sorted(weights.items(), reverse=True)
+                                    for o, cord in enumerate(cords):
+                                        if len(sorted_weights) <= o:
+                                            break
+                                        over_name = sorted_weights[o][1]
+                                        current_overlay = properties[over_name]
+                                        if current_overlay.name.startswith("text"):
+                                            image_box = current_overlay.image.size if current_overlay.image else None
+                                            try:
+                                                rendered_text = get_text(current_overlay)
+                                            except Failed as e:
+                                                logger.warning(f"  {e}")
+                                                unresolved.add(current_overlay.mapping_name)
+                                                continue
+                                            resolved_values[current_overlay.mapping_name] = rendered_text
+                                            overlay_image, addon_box = current_overlay.get_backdrop((canvas_width, canvas_height), box=image_box, text=rendered_text, new_cords=cord)
+                                            new_poster.paste(overlay_image, (0, 0), overlay_image)
+                                            if current_overlay.image:
+                                                new_poster.paste(current_overlay.image, addon_box, current_overlay.image)
+                                        else:
+                                            if current_overlay.has_back:
+                                                overlay_image, overlay_box = current_overlay.get_backdrop((canvas_width, canvas_height), box=current_overlay.image.size, new_cords=cord)
+                                                new_poster.paste(overlay_image, (0, 0), overlay_image)
+                                            else:
+                                                overlay_box = current_overlay.get_coordinates((canvas_width, canvas_height), box=current_overlay.image.size, new_cords=cord)
+                                            new_poster.paste(current_overlay.image, overlay_box, current_overlay.image)
+                                ext = "webp" if self.library.overlay_artwork_filetype.startswith("webp") else self.library.overlay_artwork_filetype
+                                temp = os.path.join(self.library.overlay_folder, f"temp.{ext}")
+                                if self.library.overlay_artwork_quality and self.library.overlay_artwork_filetype in ["jpg", "webp_lossy"]:
+                                    new_poster.save(temp, exif=exif_tags, quality=self.library.overlay_artwork_quality)
+                                elif self.library.overlay_artwork_filetype == "webp_lossless":
+                                    new_poster.save(temp, exif=exif_tags, lossless=True)
+                                else:
+                                    new_poster.save(temp, exif=exif_tags)
+                                with timings.track("overlay_plex_upload", library=self.library.name):
+                                    self.library.upload_poster(item, temp)
+                                overlay_label_items.append(item)
+                                if self.library.plex_bulk_edit_batch_size and len(overlay_label_items) >= self.library.plex_bulk_edit_batch_size:
+                                    self.library.batch_add_label(overlay_label_items, "Overlay")
+                                    overlay_label_items = []
+                                poster_compare = poster.compare if poster else item.thumb
+                                logger.info(f"  Overlays Applied: {', '.join(over_names)}")
+                        except (OSError, BadRequest, SyntaxError) as e:
+                            logger.stacktrace()
+                            raise Failed(f"  Overlay Error: {e}")
+                    else:
+                        logger.info(f"  Overlay Update Not Needed (Current Overlays: {', '.join(over_names)})")
+
+                    if self.cache and poster_compare:
+                        self.cache.update_overlay_poster(item.ratingKey, f"{self.library.image_table_name}_overlays", item.thumb, poster_compare)
+                        state_table = f"{self.library.image_table_name}_overlay_state"
+                        self.cache.delete_overlay_state(item.ratingKey, state_table)
+                        for over_name in over_names:
+                            mapping_name = properties[over_name].mapping_name
+                            if mapping_name in unresolved:
+                                continue
+                            self.cache.update_overlay_state(item.ratingKey, mapping_name, state_table, current_hashes[mapping_name], resolved_values.get(mapping_name))
+                except Failed as e:
+                    logger.error(f"  {e}\n  Overlays Attempted on {item_title}: {', '.join(over_names)}")
+                except Exception as e:
+                    logger.info(e)
+                    logger.info(type(e))
+                    logger.stacktrace()
+                    logger.info("")
+                    logger.error(f"Overlays Attempted on {item_title}: {', '.join(over_names)}")
+            if overlay_label_items:
+                self.library.batch_add_label(overlay_label_items, "Overlay")
+        timings.registry.library_ctx = None
+        logger.exorcise()
+        for _, over in properties.items():
+            if over.image:
+                over.image.close()
+        overlay_run_time = str(datetime.now() - overlay_start).split(".")[0]
+        logger.info("")
+        logger.separator(f"Finished {self.library.name} Library Overlays\nOverlays Run Time: {overlay_run_time}")
+        return overlay_run_time
+
+    @timings.timed("compile_overlays")
+    def compile_overlays(self):
+        key_to_item = {}
+        properties = {}
+        overlay_groups = {}
+        key_to_overlays = {}
+
+        with timings.overlay_context(True):
+            for overlay_file in self.library.overlay_files:
+                for k, v in overlay_file.overlays.items():
+                    try:
+                        builder = CollectionBuilder(self.config, overlay_file, k, v, library=self.library, overlay=True)
+                        logger.info("")
+
+                        logger.separator(f"Gathering Items for {k} Overlay", space=False, border=False)
+
+                        prop_name = builder.overlay.mapping_name
+                        properties[prop_name] = builder.overlay
+
+                        builder.display_filters()
+
+                        for method, value in builder.builders:
+                            logger.debug("")
+                            logger.debug(f"Builder: {method}: {value}")
+                            logger.info("")
+                            try:
+                                builder.filter_and_save_items(builder.gather_ids(method, value))
+                            except Failed as e:
+                                if builder.ignore_blank_results:
+                                    logger.info("")
+                                    logger.warning(e)
+                                else:
+                                    raise Failed(e)
+
+                        added_titles = []
+                        if builder.found_items:
+                            for item in builder.found_items:
+                                if builder.limit and len(added_titles) >= builder.limit:
+                                    break
+                                key_to_item[item.ratingKey] = item
+                                added_titles.append(item)
+                                if item.ratingKey not in properties[prop_name].keys:
+                                    properties[prop_name].keys.append(item.ratingKey)
+                        if added_titles:
+                            logger.info(f"{len(added_titles)} Items found for {prop_name}")
+                            logger.trace(f"Titles Found: {[self.library.get_item_display_title(a) for a in added_titles]}")
+                        else:
+                            logger.warning(f"No Items found for {prop_name}")
+                        logger.info("")
+                    except NotScheduled as e:
+                        logger.info(e)
+                    except FilterFailed:
+                        pass
+                    except Failed as e:
+                        logger.error(e)
+                        logger.info("")
+                    except Exception as e:
+                        logger.stacktrace()
+                        logger.error(f"Unknown Error: {e}")
+                        logger.info("")
+
+        logger.separator(f"Overlay Operation for the {self.library.name} Library")
+        logger.debug("")
+        logger.debug(f"Remove Overlays: {self.library.remove_overlays}")
+        logger.debug(f"Reapply Overlays: {self.library.reapply_overlays}")
+        logger.debug(f"Reset Overlays: {self.library.reset_overlays}")
+        logger.debug("")
+        logger.separator("Number of Items Per Overlay", space=False, border=False)
+        logger.debug("")
+
+        longest = 7
+        for overlay_name in properties:
+            if len(overlay_name) > longest:
+                longest = len(overlay_name)
+
+        logger.debug(f"{'Overlay':^{longest}} | Number |")
+        logger.debug(f"{logger.separating_character * longest} | {logger.separating_character * 6} |")
+        for overlay_name, over_obj in properties.items():
+            logger.debug(f"{overlay_name:<{longest}} | {len(over_obj.keys):^6} |")
+        logger.debug("")
+
+        for overlay_name, over_obj in properties.items():
+            if over_obj.group:
+                if over_obj.group not in overlay_groups:
+                    overlay_groups[over_obj.group] = {}
+                overlay_groups[over_obj.group][overlay_name] = over_obj.weight
+
+        for overlay_name, over_obj in properties.items():
+            for over_key in over_obj.keys:
+                if over_key not in key_to_overlays:
+                    key_to_overlays[over_key] = (key_to_item[over_key], [])
+                key_to_overlays[over_key][1].append(overlay_name)
+
+        for over_key, (item, over_names) in key_to_overlays.items():
+            group_status = {}
+            for over_name in over_names:
+                for suppress_name in properties[over_name].suppress:
+                    if suppress_name in over_names:
+                        key_to_overlays[over_key][1].remove(suppress_name)
+            for over_name in over_names:
+                for overlay_group, group_names in overlay_groups.items():
+                    if over_name in group_names:
+                        if overlay_group not in group_status:
+                            group_status[overlay_group] = []
+                        group_status[overlay_group].append(over_name)
+            for gk, gv in group_status.items():
+                if len(gv) > 1:
+                    final = None
+                    for v in gv:
+                        if final is None or overlay_groups[gk][v] > overlay_groups[gk][final]:
+                            final = v
+                    for v in gv:
+                        if final != v:
+                            key_to_overlays[over_key][1].remove(v)
+        return key_to_overlays, properties
+
+    def get_overlay_items(self, label="Overlay", libtype=None, ignore=None):
+        items = self.library.search(label=label, libtype=libtype)
+        return items if not ignore else [o for o in items if o.ratingKey not in ignore]
+
+    def remove_overlay(self, item, item_title, label, locations):
+        try:
+            poster, _, _, _, _, _ = self.library.find_item_assets(item)
+        except Failed:
+            poster = None
+        is_url = False
+        poster_location = None
+        if poster:
+            poster_location = poster.location
+        elif any([os.path.exists(loc) for loc in locations]):
+            poster_location = next((loc for loc in locations if os.path.exists(loc)))
+        if not poster_location:
+            is_url = True
+            try:
+                poster_location = self.library.item_posters(item)
+            except Failed:
+                pass
+        if poster_location:
+            self.library.upload_poster(item, poster_location, url=is_url)
+            self.library.edit_tags("label", item, remove_tags=[label], do_print=False)
+            for loc in locations:
+                if os.path.exists(loc):
+                    os.remove(loc)
+        else:
+            logger.error(f"No Poster found to restore for {item_title}")

@@ -1,0 +1,468 @@
+# Maintainerr - Custom Copilot Instructions
+
+## Important: Workspace Commands
+
+**When running yarn commands (build, test, etc.), always execute from the workspace root:**
+
+```bash
+cd /workspace  <--- ensure you are in the root workspace (inside the devbox container)
+yarn build | tail -20
+yarn test | tail -20
+```
+
+**Do NOT run from subdirectories** unless specifically needed for package-specific commands.
+
+---
+
+## Project Overview
+
+Maintainerr is a media management application that helps users automatically manage their media libraries by creating rules to handle unused or unwatched content. It integrates with Plex, Jellyfin, Emby, \*arr applications (Radarr/Sonarr), Seerr, Tautulli, and Streamystats (Jellyfin only) to provide comprehensive media lifecycle management.
+
+For the broader system architecture map, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Documentation map
+
+**Standing rules - read before writing any code (they apply to all work):**
+
+- [implementation.instructions.md](.github/instructions/implementation.instructions.md) - implementation rules and API-doc references.
+- [project-notes.instructions.md](.github/instructions/project-notes.instructions.md) - non-obvious project knowledge, conventions, and gotchas (rule engine, Tailwind v4, migrations, naming) that isn't derivable from the code or git history.
+
+**Task-specific - read only when the task calls for it (don't load them every session):**
+
+- [i18n.instructions.md](.github/instructions/i18n.instructions.md) - when adding or changing any user-facing text in the UI: which macro to use, what must never be translated, and the ICU quoting trap.
+- [release-review.instructions.md](.github/instructions/release-review.instructions.md) - when auditing a release candidate before tagging.
+- [ARCHITECTURE.md](ARCHITECTURE.md) - before changing cross-module boundaries.
+
+When you add a doc, list it under the matching heading here. For how each agent
+(Claude, Copilot, Cursor, Codex) loads these docs, see [README_AGENTS.md](README_AGENTS.md).
+
+## Repository Structure
+
+This is a **TypeScript monorepo** managed with **Turborepo** and **Yarn workspaces**:
+
+```
+├── apps/
+│   ├── server/      # Nest.js backend API
+│   └── ui/          # Vite + React Router frontend application
+├── packages/
+│   └── contracts/   # Shared TypeScript types, DTOs, and interfaces
+├── package.json     # Root package with Turborepo scripts
+└── turbo.json       # Turborepo configuration
+```
+
+## Technology Stack
+
+### Backend (`apps/server/`)
+
+- **Framework**: Nest.js v11+ with TypeScript
+- **Database**: TypeORM 1.x with SQLite (`better-sqlite3` driver)
+- **Testing**: Jest with @suites for dependency mocking and unit testing
+- **API Documentation**: Swagger/OpenAPI
+- **Validation**: Zod v4+ schemas with nestjs-zod
+- **Architecture**: Event-driven with schedulers and graceful shutdown support. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system-level overview.
+
+### Frontend (`apps/ui/`)
+
+- **Build System**: Vite 8+ for fast development and production builds
+- **Framework**: React 19+ with React Router 7+ for client-side routing
+- **Styling**: TailwindCSS with Headless UI components
+- **State Management**: TanStack Query (React Query)
+- **Forms**: React Hook Form with Zod validation
+- **UI Components**: Custom components with Heroicons
+- **Page Metadata**: React 19 Document Metadata support
+- **Environment Variables**: Vite environment variables (import.meta.env.VITE\_\*)
+
+### Shared (`packages/contracts/`)
+
+- **Purpose**: Shared TypeScript types, DTOs, validation schemas
+- **Technologies**: Zod schemas, class-validator decorators, Nest.js decorators
+
+## Development Environment
+
+The development environment runs inside **`devbox`** - a rootless **podman** container
+managed by systemd quadlets in `~/infra/podman/quadlet/` on the host. This IS the
+devcontainer for this project. There is no docker on the host: no binary, no daemon, no
+socket.
+
+- `devbox` mounts the repo at `/workspace` and has Node 26 + Yarn 4.11 pre-installed.
+  Work directly inside the container at `/workspace` - open your editor/agent here,
+  run all `yarn` commands here. Node is only installed in the container, not the host.
+- Git works normally from `/workspace`: `git commit` and `git push` directly. The
+  SSH key for GitHub is mounted into the container, so no host-side push relay is
+  needed.
+- Agent state (Claude, Copilot, VS Code server/extensions, SSH, Git config) is mounted
+  into `/root` from the host, so it persists across container restarts and recreates.
+  Leave those mounts as configured.
+- `~/infra/podman/quadlet/devbox-app.container` (which defines `devbox`) is live server
+  config on the host, outside this git repo. Treat it as operational state, not project
+  code.
+- **`/tmp` inside the box does not survive.** The quadlet runs `podman run --rm --replace`,
+  so every restart recreates the container and wipes its writable layer. Anything you want
+  to keep goes under `/workspace` (a bind mount) - never `/tmp`.
+- `yarn dev` serves UI on port 3000 and API on port 6246. Logs at `/tmp/yarn-dev.log`.
+
+**Dev media servers** (Plex, Jellyfin, Emby) run as separate rootless podman containers,
+each its own quadlet in `~/infra/podman/quadlet/`, reachable from inside `devbox` by
+hostname:
+- Plex → `http://dev-plex:32400`
+- Jellyfin → `http://dev-jellyfin:8096`
+- Emby → `http://dev-emby:8096`
+
+Credentials are in `~/dev-media-creds.env` (not committed). Media lives on `/mnt/dev-media`.
+
+### Security model - you are L3, the confined devbox
+
+Three trust levels, privilege descending: **`root`@host** (everything) › **`maintainerr-dev`**
+(the SSH host - runs the dev media stack, holds its secrets, controls the devbox) ›
+**`devbox`** (you: dev/test only). You can reach the media/service stack by hostname
+(`dev-plex`, `dev-radarr`, …) to test and seed against it, but you **cannot break out** to
+the host - and that boundary is enforced from above you, so you can't disable it:
+
+- **No container engine at all** - there is no docker/podman client, no socket and no
+  `DOCKER_*` variable in here. Read-only container status comes from a text snapshot the
+  host refreshes at `/host/containers`; it is data, never an API handle.
+- **Host egress firewall** - outbound is default-deny to an allowlist (GitHub, npm, Anthropic,
+  Plex/TMDB) plus the local podman networks. The rules live in a separate netns holder that
+  installs them before this container starts, so they cannot be altered from in here.
+  DNS is equally confined: the only resolver you can reach is the allowlisting one.
+- **`DropCapability=ALL` + `NoNewPrivileges` + rootless** - this container holds *zero*
+  capabilities, bounding set included, so they cannot be regained. Even container-root is
+  an unprivileged subuid, never the host user.
+
+Don't fight these (e.g. trying to `exec` into another container, or reaching a non-allowlisted
+host) - they're intentional, not bugs. Operator-side detail lives in `~/infra/README.md`.
+
+## Development Workflow
+
+### Key Commands
+
+```bash
+# Install dependencies
+yarn install
+
+# Development (all packages)
+yarn dev
+
+# Build entire project
+yarn build
+
+# Lint all packages
+yarn lint
+
+# Format code
+yarn format
+
+# Run tests
+yarn test
+
+# Type checking
+yarn check-types
+```
+
+> **`yarn test` / `yarn lint` fails with `command not found: <tool>` (exit 127)?**
+> Almost always a stale `node_modules` out of sync with `yarn.lock` - yarn can't
+> resolve the binary (commonly `vitest`, which is the one test binary not hoisted
+> to the root `node_modules/.bin`). Run `yarn install` to resync, then retry. It
+> is **not** a PATH or workspace-config problem, so don't reach for explicit
+> `./node_modules/.bin/...` paths - fix the install instead.
+
+### CI Workflow Commands
+
+GitHub quality workflows include a separate YAML lint job:
+
+```bash
+yamllint -s .
+```
+
+The formatting, TypeScript lint, and test workflows use Node.js 26, then run:
+
+```bash
+corepack install
+corepack enable
+yarn --immutable
+yarn format:check
+yarn lint
+yarn turbo build --filter="./packages/*"
+yarn turbo test
+```
+
+The development Docker workflow builds the multi-stage `Dockerfile` for
+`linux/amd64` and `linux/arm64`.
+
+The built Docker image includes `/opt/app/healthcheck.sh` as its
+`HEALTHCHECK`. It probes `/api/health/ready` on `UI_PORT` and preserves
+`BASE_PATH`; use `/api/health/live` for process-only liveness checks and
+`/api/health/ready` for database readiness checks.
+
+### Workspace MCP Servers
+
+Project MCP server config lives in `.codex/config.toml` for Codex, `.mcp.json`
+for Claude Code, and `.vscode/mcp.json` for VS Code. Keep all three files in
+sync when adding or changing servers. The configured GitHub MCP server is
+read-only, and Playwright MCP screenshots should be written under
+`.playwright-mcp/`.
+
+### Package-Specific Commands
+
+```bash
+# Server development
+yarn workspace @maintainerr/server dev
+
+# UI development
+yarn workspace @maintainerr/ui dev
+
+# Contracts build (required by server/ui)
+yarn workspace @maintainerr/contracts build
+```
+
+## Coding Standards
+
+### Code Style
+
+- **ESLint**: Strict TypeScript rules across all packages
+- **Prettier**: Consistent formatting (run `yarn format`)
+- **Commits**: Follow [Conventional Commits](https://conventionalcommits.org/) specification. Commit types map to releases via semantic-release:
+  - `feat:` → minor release
+  - `fix:`, `perf:` → patch release
+  - `refactor:`, `chore:`, `docs:`, `style:`, `test:` → no release
+  - `BREAKING CHANGE` footer or `!` (e.g. `feat!:`) → major release
+- **Import Organization**: Prefer absolute imports, group by type (external, internal, relative)
+- **String Handling**: Avoid regex for simple prefix/suffix/substring checks or single-character trimming. Prefer string primitives such as `endsWith`, `startsWith`, `slice`, `substring`, or direct character inspection to reduce unnecessary regex risk; see [OWASP ReDoS guidance](https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS). Example: `fix: avoid regex backtracking in disk path normalization (#2526)`.
+- **Punctuation**: Never use em or en dashes in any committed artifact (code, comments, log/UI strings, tests, commit messages, docs). Always type a plain ASCII hyphen `-` (U+002D), never `—` (U+2014) or `–` (U+2013). See the convention in [project-notes.instructions.md](.github/instructions/project-notes.instructions.md).
+
+### TypeScript Guidelines
+
+- Use strict type checking
+- Prefer `interface` for object shapes, `type` for unions/computed types
+- Use Zod schemas for runtime validation (especially in contracts package)
+- Leverage Nest.js decorators for API documentation and validation
+
+### Architecture Patterns
+
+#### Backend Patterns
+
+- **Controllers**: Handle HTTP requests, delegate to services
+- **Services**: Business logic, integrate with external APIs
+- **DTOs**: Use Zod schemas from contracts package
+- **Entities**: TypeORM entities for database models
+- **Modules**: Feature-based module organization
+- **Events**: Use Nest.js EventEmitter for decoupled communication
+
+#### Collection links and manual membership
+
+The same bug has been fixed **a dozen times** (e23361e1, #2440, #2663, #2766,
+#3129, #3248, #3298, #3327, #3344, #3383, #3583, b5e4206a): an item is wrongly
+set as **manual**. A manual member of an automatic collection is force-kept, so
+the rule can never remove it, yet it still ages into that collection's
+`deleteAfterDays` and is deleted from disk. Treat it as one bug class, not a
+dozen incidents.
+
+The class regenerates because the adoption decision *defaults to adopting* and
+subtracts known-innocent cases, and every subtraction is computed from
+`collection_media` rows. Any bug whose symptom is a **missing** row is therefore
+invisible to guards of that shape. Adding a sixth guard of the same kind is not a
+fix.
+
+Anything that clears, reassigns or skips `collection.mediaServerId` has to leave
+all five guards standing:
+
+1. Rule-removed stays removed (`collection_media_rule_removal` markers).
+2. Items a sibling rule group holds are never adopted. Siblings are matched on
+   *shared `mediaServerId`*, so dropping a link silently revokes this guard, and
+   whatever that collection left on the media server is then adopted by the rule
+   group still pointing at it.
+3. The run that first links a collection must not import its existing children.
+4. An unreadable child list is never read as "empty".
+5. A mutation whose outcome is unknown is never recorded as refused. A media
+   server that never answered may still have applied the write, so an add that
+   went unanswered records a `direction: 'add'` marker instead of nothing. The
+   read side has been hardened against this four times (#3211, #3248, #3344,
+   #3413); the write side only once.
+
+Reproduce with two same-titled rule groups matching DIFFERENT items. Identical
+rules hide the bug, because both groups own everything and nothing looks foreign.
+For the unanswered-write half, put a proxy in front of the media server that
+forwards the mutation and then holds the response past the client timeout: the
+server commits, the client gives up, and the two disagree.
+
+#### Frontend Patterns
+
+- **Routing**: React Router with `createBrowserRouter` for declarative routing
+- **Routes**: Explicit route configuration in `/src/router.tsx` with nested route support
+- **Lazy Loading**: Prefer route-level lazy loading for non-shell pages and lazy-load heavy optional UI dependencies such as Monaco-backed editors or markdown renderers behind shared loading boundaries
+- **Components**: Reusable UI components in `/src/components`
+- **Hooks**: Custom hooks for data fetching (TanStack Query) and navigation (useNavigate, useLocation)
+- **Forms**: React Hook Form with Zod resolvers
+- **API**: Axios client with TypeScript contracts
+- **Page Metadata**: React Helmet Async for managing `<head>` elements declaratively
+- **Code Splitting**: React.lazy with Suspense for dynamic imports
+
+#### Shared Contracts
+
+- **DTOs**: Request/response shapes with validation
+- **Events**: Type-safe event definitions
+- **Enums**: Shared constants and enumerations
+
+## File Organization
+
+### Server Structure
+
+```
+apps/server/src/
+├── modules/        # Feature modules (collections, rules, settings, etc.)
+├── common/         # Shared utilities, decorators, filters
+├── database/       # TypeORM entities and migrations
+├── events/         # Event definitions and handlers
+└── main.ts         # Application bootstrap
+```
+
+### UI Structure
+
+```
+apps/ui/src/
+├── components/     # Reusable UI components
+├── hooks/          # Custom React hooks
+├── pages/          # Page components for routes (DocsPage, PlexLoadingPage)
+├── utils/          # Client-side utilities
+├── test-utils/     # Vitest helpers (TanStack Query result builders, shared QueryClient)
+├── styles/         # Global styles and Tailwind config
+├── router.tsx      # React Router configuration with route definitions
+└── main.tsx        # Application entry point
+```
+
+When mocking TanStack Query hooks in specs, use the result builders in
+[apps/ui/src/test-utils/queryResults.ts](apps/ui/src/test-utils/queryResults.ts)
+(`buildQuerySuccessResult`, `buildQueryLoadingResult`, `buildQueryErrorResult`)
+instead of casting partial objects with `as unknown as ReturnType<typeof useFoo>`.
+See [apps/ui/src/test-utils/README.md](apps/ui/src/test-utils/README.md).
+
+## Refactoring Guidelines
+
+When modifying existing code, follow these specific refactoring priorities:
+
+### Forms and UI Components
+
+- **React Hook Forms Migration**: Forms that do not use React Hook Form should be refactored to use it, along with their Zod validation schemas and corresponding DTOs from the contracts package. See [PR #1871](https://github.com/Maintainerr/Maintainerr/pull/1871) as a reference example.
+- **Form Components**: Use existing form components from `apps/ui/src/components/Forms/` (Input, Select, etc.) and create new ones in this directory if necessary, following the same patterns.
+- **Component Naming**: Component file names should follow the exported type name(s) rather than using generic `index.tsx` files. For example, use `UserSettingsForm.tsx` instead of `index.tsx`.
+
+### Server-Side Type Safety
+
+- **Strict Typing Evolution**: Extra care should be taken in the **server** project. While strict type checking is not currently enabled (`strictNullChecks: false`, `noImplicitAny: false`), we are moving toward stricter standards.
+- **Type Specifications**: When creating new code, specify explicit types including `undefined` when applicable, rather than relying on computed types.
+- **Any Type Elimination**: When encountering `any` types during code changes, attempt to use proper types or create specific type definitions. This includes external API requests and responses.
+- **Gradual Migration**: Incrementally improve type safety without breaking existing functionality.
+- **Logging**: In injectable server code, prefer `MaintainerrLogger` over raw Nest `Logger`. Set the context once in the constructor. For paired caught-error logs, keep `warn`/`log`/`error` messages plain and put the throwable on `logger.debug(error)`; only use `logger.error('message', error)` when the higher-level log should intentionally carry the throwable.
+
+## External Integrations
+
+The application integrates with several external services:
+
+- **Plex**: Media server API for collections and metadata
+- **Jellyfin/Emby**: Media server APIs through the shared media-server abstraction
+- **Radarr/Sonarr**: Movie/TV show management APIs
+- **Seerr**: Request management system
+- **Tautulli**: Plex analytics and statistics
+- **Streamystats**: Jellyfin item-level analytics surfaced on media details
+- **Sportarr**: Sports league management API, plus its metadata API for league artwork
+
+When working with these integrations:
+
+- Retry through `applyHttpRetry` (`modules/api/lib/httpRetry.ts`), never a
+  per-client axios-retry config: it already answers a 429 with the wait the
+  server declared, capped, so hand-rolled rate-limit handling only drifts
+- Implement caching where appropriate (node-cache)
+- Prefer one batched call per run over one per item: see the Seerr request
+  prefetch (#3152), the batched collection writes, and the removal-notification
+  batching (#3500)
+- Use TypeScript interfaces for external API responses
+
+## External API Documentation
+
+Do not add API doc URLs here. Machine-readable OpenAPI specs live in `SPECS` in
+[tools/api-spec-drift.mjs](tools/api-spec-drift.mjs), which fetches each one
+weekly so the list stays verified. References that have no fetchable spec live in
+[implementation.instructions.md](.github/instructions/implementation.instructions.md).
+
+## Testing Guidelines
+
+### Backend Testing
+
+- **Unit Tests**: Jest with @suites for dependency mocking
+- **File Pattern**: `*.spec.ts` files alongside source code
+- **Coverage**: Focus on service logic and complex business rules
+- **Test Database**: Use in-memory SQLite for integration tests
+
+### Frontend Testing
+
+- **Test Runner**: Vitest with React Testing Library
+- Keep tests focused on critical user flows
+
+### Local dev mocks & seeding (manual / Playwright testing)
+
+For end-to-end checks of media-server-dependent flows (rules, collections,
+overview, calendar, storage) without a real Plex/Jellyfin, the `tools/dev/` folder
+has scripts that **complement Playwright** - Playwright drives the UI, these
+provide the backend data:
+
+- `tools/dev/fake-jellyfin.mjs` - stateless mock Jellyfin (`:8096`).
+- `tools/dev/fake-plex.mjs` - stateless mock Plex (`:32400`); covers the Plex-only
+  getter paths (smart collections, watch history, accounts, ratings,
+  shows/seasons/episodes) that the Jellyfin mock can't.
+- `tools/dev/fake-radarr.mjs` - mock Radarr v3 (`:7878`); covers the
+  collection-handler → RadarrActionHandler flow (DELETE / UNMONITOR / "add import
+  list exclusion") that the media-server mocks can't. Resolves any `tmdbId` to a
+  movie, and replicates Radarr's exclusion semantics: `POST /exclusions/bulk`
+  de-dupes (idempotent), singular `POST /exclusions` 400s on a duplicate.
+- `tools/dev/seed-db.mjs` - the **only** DB-touching script. Seeds settings,
+  collections, and rule groups **with rules** covering ~all rule properties, plus
+  notifications, cron, logs, exclusions, and overlays. The "Stale Movies"
+  collection is seeded as UNMONITOR + listExclusions with `tmdbId`s set, so it
+  exercises the Radarr exclusion path against `fake-radarr.mjs`. Target a server
+  with `MEDIA_SERVER=plex|jellyfin` (default `jellyfin`).
+
+Workflow: start the matching mock(s), stop `yarn dev` (SQLite is single-writer),
+run the seed, restart `yarn dev`. Inspect a getter's live output with
+`POST /api/rules/test {"mediaId","rulegroupId"}`, run a rule with
+`POST /api/rules/:id/execute`, or run collection handling with
+`POST /api/collections/handle`. Note: after editing server code, **restart
+`yarn dev`** - a long-lived dev server can serve stale getter logic. Watchlist
+and plex.tv user enrichment can't be mocked locally (they hit plex.tv) and
+degrade gracefully.
+
+## Development Notes
+
+### Environment Setup
+
+- **Node.js**: 26+ (root `package.json` `engines` is the source of truth; Docker, the devcontainer and every workflow ship Node 26)
+- **Package Manager**: Yarn 4.11 (managed via corepack)
+- **Data Directory**: Requires `data/` folder with proper permissions for development
+
+### Key Configuration Files
+
+- `turbo.json`: Turborepo task configuration and caching
+- `tsconfig.json`: TypeScript configuration per package
+- `.yarnrc.yml`: Yarn package manager configuration
+- Docker support available via `Dockerfile`
+
+### Performance Considerations
+
+- Use Turborepo caching for faster builds
+- Leverage Vite's fast HMR and optimized production builds
+- Implement proper database indexing in TypeORM entities
+- Use React Query for efficient data fetching and caching
+- Use React.lazy with Suspense for code splitting
+- Optimize images and assets appropriately
+
+## Contributing Guidelines
+
+Before contributing:
+
+1. Read `CONTRIBUTING.md` for detailed guidelines
+2. Follow the branching strategy (meaningful branch names)
+3. Ensure all tests pass: `yarn test`
+4. Verify linting: `yarn lint`
+5. Format code: `yarn format`
+6. Use conventional commit messages
+
+**Before suggesting or writing any code, you must read and follow `.github/instructions/implementation.instructions.md`.**

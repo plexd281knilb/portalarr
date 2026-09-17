@@ -1,0 +1,118 @@
+name: "Release 2 - Queue Push PR To Main"
+
+on:
+  pull_request_review:
+    types:
+      - submitted
+
+concurrency:
+  group: release-push-to-main-pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guard_review_actor:
+    name: Guard approving actor
+    if: >-
+      ${{
+        github.event.review.state == 'approved' &&
+        github.event.pull_request.state == 'open' &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.pull_request.head.ref == 'development' &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      }}
+    uses: ./.github/workflows/guard-manual.yml
+    permissions:
+      contents: read
+    with:
+      enabled: true
+      actor: ${{ github.actor }}
+      source: approval review
+
+  resolve_pr:
+    name: Resolve PR context
+    if: >-
+      ${{
+        github.event.review.state == 'approved' &&
+        github.event.pull_request.state == 'open' &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.pull_request.head.ref == 'development' &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      }}
+    needs: guard_review_actor
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.pr.outputs.should_run }}
+      pr_number: ${{ steps.pr.outputs.pr_number }}
+      head_repo: ${{ steps.pr.outputs.head_repo }}
+      review_actor: ${{ steps.pr.outputs.review_actor }}
+      build_release_candidate_image: ${{ steps.pr.outputs.build_release_candidate_image }}
+    steps:
+      - name: Gather PR metadata
+        id: pr
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            const repoFullName = `${context.repo.owner}/${context.repo.repo}`;
+            const headRepo = pr.head.repo?.full_name ?? '';
+            const baseRef = pr.base.ref;
+            const headRef = pr.head.ref;
+            const reviewState = context.payload.review?.state ?? '';
+
+            const shouldRun =
+              reviewState.toLowerCase() === 'approved' &&
+              pr.state === 'open' &&
+              headRepo === repoFullName &&
+              baseRef === 'main' &&
+              headRef === 'development';
+
+            const buildDockerImage = pr.labels.some(l => l.name === 'release:docker-build');
+
+            core.setOutput('should_run', shouldRun ? 'true' : 'false');
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('head_repo', headRepo);
+            core.setOutput('review_actor', context.actor);
+            core.setOutput('build_release_candidate_image', buildDockerImage ? 'true' : 'false');
+
+            if (!shouldRun) {
+              core.warning(
+                `Refusing to continue release flow for reviewState=${reviewState}, ` +
+                  `actor=${context.actor}, base=${baseRef}, head=${headRef}, repo=${headRepo}.`,
+              );
+            }
+
+  queue_release_flow:
+    needs: resolve_pr
+    if: ${{ needs.resolve_pr.outputs.should_run == 'true' }}
+    name: Queue release flow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write release context
+        env:
+          PR_NUMBER: ${{ needs.resolve_pr.outputs.pr_number }}
+          REVIEW_ACTOR: ${{ needs.resolve_pr.outputs.review_actor }}
+          BUILD_DOCKER_IMAGE: ${{ needs.resolve_pr.outputs.build_release_candidate_image }}
+        run: |
+          mkdir -p release-context
+          jq -n \
+            --argjson pr_number "$PR_NUMBER" \
+            --arg review_actor "$REVIEW_ACTOR" \
+            --argjson build_release_candidate_image "$BUILD_DOCKER_IMAGE" \
+            '{pr_number: $pr_number, review_actor: $review_actor, build_release_candidate_image: $build_release_candidate_image}' \
+            > release-context/context.json
+
+      - name: Upload release context
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-push-to-main-context
+          path: release-context/context.json
+          retention-days: 1

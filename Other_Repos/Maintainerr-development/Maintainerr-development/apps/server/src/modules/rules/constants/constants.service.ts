@@ -1,0 +1,257 @@
+import { MediaServerType } from '@maintainerr/contracts';
+import { Injectable } from '@nestjs/common';
+import { resolveValueApplication } from '../helpers/media-server-application.helper';
+import { Property, RuleConstants, RuleType } from './rules.constants';
+
+/**
+ * Derive a friendly "why is this null" explanation entirely from the
+ * property's existing metadata (type, humanName, name). No static tables:
+ * anything added to RuleConstants automatically gets a sensible reason.
+ *
+ * The humanName is already authored in a human-readable form like
+ * "Last view date" or "[list] Collections media is present in (titles)",
+ * so we can reuse it as the noun and wrap it with a verb that matches the
+ * field's type. The `[list]` / `[time]` prefixes are stripped so the
+ * sentence reads naturally.
+ */
+const buildDynamicNullReason = (
+  property: Property,
+  applicationName?: string,
+  lookupFailed?: boolean,
+): string => {
+  const cleanHuman = stripHumanNamePrefix(property.humanName);
+  const noun = cleanHuman || property.name;
+  const label = applicationName ? `${applicationName} ${noun}` : noun;
+
+  // A getter answering `undefined` never established the value, so reporting
+  // it as empty/unset sends the user looking for the wrong problem.
+  if (lookupFailed) {
+    return `${label} could not be read for this item`;
+  }
+
+  switch (property.type) {
+    case RuleType.DATE:
+      return `${label} is not recorded for this item`;
+    case RuleType.NUMBER:
+      return `${label} is not available for this item`;
+    case RuleType.BOOL:
+      return `${label} is not available for this item`;
+    case RuleType.TEXT:
+      return `${label} is not set for this item`;
+    case RuleType.TEXT_LIST:
+      return `${label} has no entries for this item`;
+    default:
+      return `${label} is not available for this item`;
+  }
+};
+
+const stripHumanNamePrefix = (humanName?: string): string => {
+  if (!humanName) return '';
+  // Strip leading "[list]", "[time]", etc. prefixes used in the UI.
+  const trimmed = humanName.trim();
+  if (trimmed.startsWith('[')) {
+    const close = trimmed.indexOf(']');
+    if (close !== -1) return trimmed.slice(close + 1).trim();
+  }
+  return trimmed;
+};
+
+export interface ICustomIdentifier {
+  type: string;
+  value: string | number;
+}
+
+@Injectable()
+export class RuleConstanstService {
+  ruleConstants: RuleConstants;
+
+  constructor() {
+    this.ruleConstants = new RuleConstants();
+  }
+
+  public getRuleConstants() {
+    return this.ruleConstants;
+  }
+
+  /**
+   * Build the `App.property` identifier for a rule value, or return null when
+   * the application/property no longer exists in the constants (e.g. a rule
+   * authored on an older version referencing a since-removed property). Callers
+   * must skip such values rather than emit `App.undefined`, which produces YAML
+   * that cannot be decoded again.
+   */
+  public getValueIdentifier(location: [number, number]): string | null {
+    const application = this.ruleConstants.applications.find(
+      (el) => el.id === location[0],
+    );
+
+    const rule = application?.props.find((el) => el.id === location[1]);
+
+    if (!application || !rule) {
+      return null;
+    }
+
+    return application.name + '.' + rule.name;
+  }
+
+  /**
+   * @param configuredServerType - Names the value after the server that will
+   *   actually be read. A rule stores the app it was authored against, but the
+   *   getter routes every media-server app to the configured server and looks
+   *   the property id up there; property ids do not line up across servers, so
+   *   naming it from the stored app can describe a different property than the
+   *   one that produced the value. Omit to name it exactly as stored.
+   */
+  public getValueHumanName(
+    location: [number, number],
+    configuredServerType?: MediaServerType | null,
+  ) {
+    const applicationId = resolveValueApplication(
+      location[0],
+      configuredServerType,
+    );
+    const application = this.ruleConstants.applications.find(
+      (el) => el.id === applicationId,
+    );
+    return `${application?.name} - ${
+      application?.props.find((el) => el.id === location[1])?.humanName
+    }`;
+  }
+
+  /**
+   * Translate a (null) rule value into a human-readable explanation of why
+   * it was missing. Surfaces in the Test Media YAML output so users stop
+   * seeing bare "null" values and can tell the field has no data for this
+   * item. Derived dynamically from the property's existing metadata - no
+   * static table to maintain. Rules comparisons still fail closed; this is
+   * purely diagnostic.
+   */
+  public getValueNullReason(
+    location: [number, number],
+    configuredServerType?: MediaServerType | null,
+    options?: { lookupFailed?: boolean },
+  ): string {
+    const application = this.ruleConstants.applications.find(
+      (el) =>
+        el.id === resolveValueApplication(location[0], configuredServerType),
+    );
+    const prop = application?.props.find((el) => el.id === location[1]);
+    if (!prop) return 'Value unavailable';
+    return buildDynamicNullReason(
+      prop,
+      application?.name,
+      options?.lookupFailed,
+    );
+  }
+
+  /**
+   * Resolve an `App.property` identifier back to its `[appId, propId]` pair, or
+   * return null when either part is unknown. Callers must skip the rule rather
+   * than crash the whole import, so a single stale identifier (e.g. from an
+   * older export) doesn't reject an otherwise-valid YAML document.
+   */
+  public getValueFromIdentifier(identifier: string): [number, number] | null {
+    const application = identifier.split('.')[0];
+    const rule = identifier.split('.')[1];
+
+    const applicationConstant = this.ruleConstants.applications.find(
+      (el) => el.name.toLowerCase() === application?.toLowerCase(),
+    );
+
+    const ruleConstant = applicationConstant?.props.find(
+      (el) => el.name.toLowerCase() === rule?.toLowerCase(),
+    );
+
+    if (!applicationConstant || !ruleConstant) {
+      return null;
+    }
+
+    return [applicationConstant.id, ruleConstant.id];
+  }
+
+  public getCustomValueIdentifier(customValue: {
+    ruleTypeId: number;
+    value: string;
+  }): ICustomIdentifier {
+    let ruleType: RuleType;
+    let value: string | number;
+    switch (customValue.ruleTypeId) {
+      case 0:
+        if (+customValue.value % 86400 === 0 && +customValue.value != 0) {
+          // when it's custom_days, translate to custom_days
+          ruleType = new RuleType('4', [], 'custom_days');
+          value = (+customValue.value / 86400).toString();
+        } else {
+          // otherwise, it's a normal number
+          ruleType = RuleType.NUMBER;
+          value = +customValue.value;
+        }
+        break;
+      case 1:
+        ruleType = RuleType.DATE;
+        value = customValue.value;
+        break;
+      case 2:
+        ruleType = RuleType.TEXT;
+        value = customValue.value;
+        break;
+      case 3:
+        ruleType = RuleType.BOOL;
+        value = customValue.value == '1' ? 'true' : 'false';
+        break;
+      case 4:
+        ruleType = RuleType.TEXT_LIST;
+        value = customValue.value;
+        break;
+    }
+
+    return { type: ruleType.humanName, value: value };
+  }
+
+  public getCustomValueFromIdentifier(identifier: ICustomIdentifier): {
+    ruleTypeId: number;
+    value: string;
+  } {
+    let ruleType: RuleType;
+    let value: string;
+
+    // The encoder writes the RuleType humanName (e.g. TEXT_LIST -> "text list"),
+    // so normalise spaces to underscores before matching - otherwise "TEXT LIST"
+    // misses the 'TEXT_LIST' case, leaving ruleType undefined and throwing on the
+    // return's .toString(), which fails the whole YAML import.
+    switch (identifier.type.toUpperCase().split(' ').join('_')) {
+      case 'NUMBER':
+        ruleType = RuleType.NUMBER;
+        value = identifier.value.toString();
+        break;
+      case 'DATE':
+        ruleType = RuleType.DATE;
+        value = identifier.value.toString();
+        break;
+      case 'TEXT':
+        ruleType = RuleType.TEXT;
+        value = identifier.value.toString();
+        break;
+      case 'TEXT_LIST':
+        ruleType = RuleType.TEXT_LIST;
+        value = identifier.value.toString();
+        break;
+      case 'BOOLEAN':
+        ruleType = RuleType.BOOL;
+        value = identifier.value == 'true' ? '1' : '0';
+        break;
+      case 'BOOL':
+        ruleType = RuleType.BOOL;
+        value = identifier.value == 'true' ? '1' : '0';
+        break;
+      case 'CUSTOM_DAYS':
+        ruleType = RuleType.NUMBER;
+        value = (+identifier.value * 86400).toString();
+    }
+
+    return {
+      ruleTypeId: +ruleType.toString(), // tostring returns the key
+      value: value,
+    };
+  }
+}

@@ -1,0 +1,387 @@
+import { BasicResponseDto } from '@maintainerr/contracts';
+import { Injectable } from '@nestjs/common';
+import { AxiosError } from 'axios';
+import { unionBy } from 'lodash';
+import { SettingsDataService } from '../../..//modules/settings/settings-data.service';
+import {
+  formatConnectionFailureMessage,
+  logConnectionTestError,
+} from '../../../utils/connection-error';
+import { CONNECTION_TEST_TIMEOUT_MS } from '../lib/httpTimeouts';
+import {
+  MaintainerrLogger,
+  MaintainerrLoggerFactory,
+} from '../../logging/logs.service';
+import { TautulliApi } from './helpers/tautulli-api.helper';
+
+interface TautulliInfo {
+  tautulli_version: string;
+}
+
+export interface TautulliUser {
+  user_id: number;
+  username: string;
+}
+
+export interface TautulliMetadata {
+  media_type:
+    'season' | 'episode' | 'movie' | 'track' | 'album' | 'artist' | 'show';
+  rating_key: string;
+  parent_rating_key: string;
+  grandparent_rating_key: string;
+  added_at: string;
+}
+
+interface TautulliChildrenMetadata {
+  children_count: number;
+  children_list: TautulliMetadata[];
+}
+
+interface TautulliHistory {
+  recordsFiltered: number;
+  recordsTotal: number;
+  data: TautulliHistoryItem[];
+  draw: number;
+  filter_duration: string;
+  total_duration: string;
+}
+
+interface TautulliHistoryItem {
+  user_id: number;
+  user: string;
+  watched_status: number;
+  percent_complete: number;
+  stopped: number;
+  rating_key: number;
+  media_index: number;
+  parent_media_index: number;
+  // Seconds actually played: (stopped - started) minus the paused counter.
+  // Tautulli renamed `duration` to `play_duration` in 2.12.3 and kept both
+  // since; older versions answer only the original name.
+  play_duration?: number;
+  duration?: number;
+}
+
+export interface TautulliHistoryRequestOptions {
+  grouping?: 0 | 1;
+  include_activity?: 0 | 1;
+  user?: string;
+  user_id?: number;
+  rating_key?: number | string;
+  parent_rating_key?: number | string;
+  grandparent_rating_key?: number | string;
+  start_date?: string;
+  before?: string;
+  after?: string;
+  section_id?: number;
+  media_type?: 'movie' | 'episode' | 'track' | 'live';
+  transcode_decision?: 'direct play' | 'transcode' | 'copy';
+  guid?: string;
+  order_column?: string;
+  order_dir?: 'desc' | 'asc';
+  start?: number;
+  length?: number;
+  search?: string;
+}
+
+interface Response<T> {
+  response:
+    | {
+        message: string | null;
+        result: 'success';
+        data: T;
+      }
+    | {
+        message: string | null;
+        result: 'error';
+        data: object;
+      };
+}
+
+const MAX_PAGE_SIZE = 100;
+
+@Injectable()
+export class TautulliApiService {
+  api: TautulliApi;
+
+  constructor(
+    private readonly settings: SettingsDataService,
+    private readonly logger: MaintainerrLogger,
+    private readonly loggerFactory: MaintainerrLoggerFactory,
+  ) {
+    logger.setContext(TautulliApiService.name);
+  }
+
+  public init() {
+    // Drop the previous client first. Without this, removing Tautulli from
+    // settings left the old one in place and the app kept querying an
+    // integration the user had deleted, until the next restart. Tracearr and
+    // Streamystats already reset this way.
+    this.api = undefined;
+
+    if (!this.settings.tautulli_url) {
+      return;
+    }
+
+    this.api = new TautulliApi(
+      {
+        url: `${this.settings.tautulli_url}/api/v2`,
+        apiKey: this.settings.tautulli_api_key,
+      },
+      this.loggerFactory.createLogger(),
+    );
+  }
+
+  public async info(): Promise<Response<TautulliInfo> | null> {
+    try {
+      const response: Response<TautulliInfo> = await this.api.getWithoutCache(
+        '',
+        {
+          signal: AbortSignal.timeout(CONNECTION_TEST_TIMEOUT_MS),
+          params: {
+            cmd: 'get_tautulli_info',
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      this.logger.log("Couldn't fetch Tautulli info");
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  public async getPaginatedHistory(
+    options?: TautulliHistoryRequestOptions,
+  ): Promise<TautulliHistory | null> {
+    try {
+      options.length = options.length ? options.length : MAX_PAGE_SIZE;
+      options.start = options.start || options.start === 0 ? options.start : 0;
+
+      const response: Response<TautulliHistory> = await this.api.get('', {
+        params: {
+          cmd: 'get_history',
+          ...options,
+        },
+      });
+
+      if (response.response.result !== 'success') {
+        throw new Error(
+          'Non-success response when fetching Tautulli paginated history',
+        );
+      }
+
+      return response.response.data;
+    } catch (error) {
+      this.logger.log("Couldn't fetch Tautulli paginated history");
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  public async getHistory(
+    options?: Omit<TautulliHistoryRequestOptions, 'length' | 'start'>,
+  ): Promise<TautulliHistoryItem[] | null> {
+    try {
+      const newOptions: TautulliHistoryRequestOptions = {
+        ...options,
+        length: MAX_PAGE_SIZE,
+        start: 0,
+      };
+
+      let data = await this.getPaginatedHistory(newOptions);
+      // A page that could not be read must not collapse into "no plays" -
+      // the caller cannot tell a confirmed-empty history from an outage.
+      if (!data) {
+        return null;
+      }
+      const pageSize: number = MAX_PAGE_SIZE;
+
+      const totalCount: number =
+        data && data && data.recordsFiltered ? data.recordsFiltered : 0;
+      const pageCount: number = Math.ceil(totalCount / pageSize);
+      let currentPage = 1;
+
+      let results: TautulliHistoryItem[] = [];
+      results = unionBy(
+        results,
+        data && data.data && data.data && data.data.length ? data.data : [],
+        'id',
+      );
+
+      if (results.length < totalCount) {
+        while (currentPage < pageCount) {
+          newOptions.start = currentPage * pageSize;
+          data = await this.getPaginatedHistory(newOptions);
+          // Same for a later page: partial results would undercount views.
+          if (!data) {
+            return null;
+          }
+
+          currentPage++;
+
+          results = unionBy(
+            results,
+            data && data.data && data.data && data.data.length ? data.data : [],
+            'id',
+          );
+
+          if (results.length === totalCount) {
+            break;
+          }
+        }
+      }
+
+      return results;
+    } catch (error) {
+      this.logger.log("Couldn't fetch Tautulli history");
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  public async getMetadata(
+    ratingKey: number | string,
+  ): Promise<TautulliMetadata | null> {
+    try {
+      const response: Response<TautulliMetadata> = await this.api.get('', {
+        params: {
+          cmd: 'get_metadata',
+          rating_key: ratingKey,
+        },
+      });
+
+      if (response.response.result !== 'success') {
+        throw new Error('Non-success response when fetching Tautulli metadata');
+      }
+
+      return response.response.data;
+    } catch (error) {
+      this.logger.log("Couldn't fetch Tautulli metadata");
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  public async getChildrenMetadata(
+    ratingKey: number | string,
+  ): Promise<TautulliMetadata[] | null> {
+    try {
+      const response: Response<TautulliChildrenMetadata> = await this.api.get(
+        '',
+        {
+          params: {
+            cmd: 'get_children_metadata',
+            rating_key: ratingKey,
+          },
+        },
+      );
+
+      if (response.response.result !== 'success') {
+        throw new Error(
+          'Non-success response when fetching Tautulli children metadata',
+        );
+      }
+
+      return response.response.data.children_list;
+    } catch (error) {
+      this.logger.log("Couldn't fetch Tautulli children metadata");
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  public async getUsers(): Promise<TautulliUser[] | null> {
+    try {
+      const response: Response<TautulliUser[]> = await this.api.get('', {
+        params: {
+          cmd: 'get_users',
+        },
+      });
+
+      if (response.response.result !== 'success') {
+        throw new Error('Non-success response when fetching Tautulli users');
+      }
+
+      return response.response.data;
+    } catch (error) {
+      this.logger.log("Couldn't fetch Tautulli users");
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  public async testConnection(
+    params: ConstructorParameters<typeof TautulliApi>[0],
+  ): Promise<BasicResponseDto> {
+    const api = new TautulliApi(
+      {
+        apiKey: params.apiKey,
+        url: `${params.url}/api/v2`,
+      },
+      this.loggerFactory.createLogger(),
+    );
+
+    try {
+      const response = await api.getRawWithoutCache<
+        Response<TautulliInfo> | string | undefined
+      >('', {
+        signal: AbortSignal.timeout(CONNECTION_TEST_TIMEOUT_MS),
+        params: {
+          cmd: 'get_tautulli_info',
+        },
+      });
+
+      if (
+        typeof response.data !== 'object' ||
+        response.data.response?.result === 'error' ||
+        !response.data.response?.data?.tautulli_version
+      ) {
+        const message =
+          typeof response.data === 'object'
+            ? response.data.response?.message
+            : undefined;
+
+        return {
+          status: 'NOK',
+          code: 0,
+          message:
+            message ??
+            'Failure, an unexpected response was returned. The URL is likely incorrect.',
+        };
+      } else {
+        return {
+          status: 'OK',
+          code: 1,
+          message: response.data.response.data.tautulli_version,
+        };
+      }
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Tautulli');
+
+      if (error instanceof AxiosError) {
+        if (error.response?.status === 400) {
+          const data = error.response.data as Response<unknown>;
+
+          // Surface a Tautulli looking response to the user
+          if (data.response?.message && data.response?.result === 'error') {
+            return {
+              status: 'NOK',
+              code: 0,
+              message: data.response.message,
+            };
+          }
+        }
+      }
+
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Tautulli. Verify URL and API key.',
+        ),
+      };
+    }
+  }
+}

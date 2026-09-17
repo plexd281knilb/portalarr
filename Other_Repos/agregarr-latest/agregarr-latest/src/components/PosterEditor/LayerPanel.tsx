@@ -1,0 +1,2545 @@
+import { fontLoader } from '@app/utils/fontLoader';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CodeBracketSquareIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  PlusIcon,
+  Squares2X2Icon,
+  TrashIcon,
+  UserIcon,
+} from '@heroicons/react/24/outline';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { defineMessages, useIntl } from 'react-intl';
+import useSWR, { mutate } from 'swr';
+import { IconSelector } from './IconSelector';
+import type {
+  ContentGridProps,
+  LayeredElement,
+  PersonElementProps,
+  PosterEditorData,
+  RasterElementProps,
+  SVGElementProps,
+  TextElementProps,
+} from './PosterEditorModal';
+
+const messages = defineMessages({
+  layers: 'Layers',
+  addCustomText: 'Add Custom Text',
+  addCollectionTitle: 'Add Collection Title',
+  addImage: 'Add Image',
+  addSourceLogo: 'Add Source Logo',
+  addCustomSVGIcon: 'Add Custom SVG Icon',
+  addGrid: 'Add Grid',
+  moveUp: 'Move Up',
+  moveDown: 'Move Down',
+  deleteElement: 'Delete Element',
+  properties: 'Properties',
+  collectionTitle: 'Collection Title',
+  customText: 'Custom Text',
+  rasterImage: 'Image',
+  personImage: 'Person Image',
+  sourceIcon: 'Source Icon',
+  customIcon: 'Custom Icon',
+  contentGrid: 'Content Grid',
+  noElementSelected: 'Select an element to edit its properties',
+  elements: 'Elements',
+  noElementsAdded: 'No elements added yet',
+  // Text properties
+  fontSize: 'Font Size',
+  fontFamily: 'Font Family',
+  fontWeight: 'Font Weight',
+  fontStyle: 'Font Style',
+  textTransform: 'Text Transform',
+  textColor: 'Text Color',
+  maxLines: 'Max Lines',
+  normal: 'Normal',
+  bold: 'Bold',
+  italic: 'Italic',
+  transformNone: 'None',
+  uppercase: 'Uppercase',
+  lowercase: 'Lowercase',
+  capitalize: 'Capitalize',
+  // Size properties
+  width: 'Width',
+  height: 'Height',
+  lockAspectRatio: 'Lock aspect ratio',
+  // Image/Icon properties
+  selectImage: 'Select Image',
+  selectIcon: 'Select Icon',
+  // Grid properties
+  columns: 'Columns',
+  rows: 'Rows',
+  spacing: 'Spacing',
+  cornerRadius: 'Corner Radius',
+  opacity: 'Opacity',
+  // Background properties
+  background: 'Background',
+  backgroundType: 'Type',
+  backgroundColors: 'Background Colors',
+  color: 'Color',
+  gradient: 'Gradient',
+  radial: 'Radial Gradient',
+  intensity: 'Intensity',
+  primary: 'Primary',
+  secondary: 'Secondary',
+  primaryColor: 'Primary Color',
+  secondaryColor: 'Secondary Color',
+  useSourceColors: 'Use Source Colors',
+  disabledUsingSourceColors: 'Disabled - using source colors',
+  sourceType: 'Source Type',
+  sourceTypeForText: 'Source Type for Text',
+  text: 'Text',
+  collectionTitleNote:
+    "This text will automatically display the collection's name when used.",
+  useSourceTextColors: 'Use Source Text Colors',
+  disabledUsingSourceTextColors: 'Disabled - using source text colors',
+  sourceLogoNote:
+    "This logo will automatically change based on the collection's source when used.",
+  customizeColors: 'Customize Colors',
+  saveSourceColors: 'Save Colors',
+  pixelsUnit: 'px',
+  linesUnit: 'lines',
+  pixelsAutoLabel: 'px - Auto',
+  lockedToAspectRatio: 'Locked to poster aspect ratio (2:3)',
+});
+
+interface FontInfo {
+  family: string;
+  availableWeights: string[];
+  cssValue: string;
+  fontUrl?: string;
+}
+
+const FontOptions: React.FC = () => {
+  const { data: fontsData, error } = useSWR<{
+    fonts: FontInfo[];
+    count: number;
+  }>('/api/v1/fonts');
+
+  // Ensure fonts are loaded when FontOptions is used (safety fallback)
+  useEffect(() => {
+    if (fontsData?.fonts) {
+      const fontsToLoad = fontsData.fonts
+        .filter((font) => font.fontUrl && !fontLoader.isFontLoaded(font.family))
+        .map((font) => ({ family: font.family, fontUrl: font.fontUrl || '' }))
+        .filter((font) => font.fontUrl);
+
+      if (fontsToLoad.length > 0) {
+        fontLoader.loadFonts(fontsToLoad).catch(() => {
+          // Font loading failed - continue with fallbacks
+        });
+      }
+    }
+  }, [fontsData]);
+
+  if (error) {
+    // Fallback to basic system fonts if API fails
+    const fallbackFonts = [
+      { family: 'Inter', cssValue: 'Inter' },
+      { family: 'Arial', cssValue: 'Arial' },
+      { family: 'Georgia', cssValue: 'Georgia' },
+      { family: 'Courier New', cssValue: "'Courier New'" },
+    ];
+
+    return (
+      <>
+        {fallbackFonts.map((font) => (
+          <option key={font.family} value={font.cssValue}>
+            {font.family}
+          </option>
+        ))}
+      </>
+    );
+  }
+
+  if (!fontsData) {
+    return <option value="Arial, sans-serif">Loading fonts...</option>;
+  }
+
+  return (
+    <>
+      {fontsData.fonts.map((font) => (
+        <option key={font.family} value={font.cssValue}>
+          {font.family}
+        </option>
+      ))}
+    </>
+  );
+};
+
+interface LayerPanelProps {
+  posterData: PosterEditorData;
+  onChange: (data: PosterEditorData) => void;
+  selectedElementId?: string;
+  onElementSelect: (elementId: string | undefined) => void;
+  mode: string;
+  onCurrentlyEditingSourceChange?: (source: string | undefined) => void;
+  addToast?: (
+    message: string,
+    options?: {
+      appearance?: 'success' | 'error' | 'warning' | 'info';
+      autoDismiss?: boolean;
+    }
+  ) => void;
+  aspectRatioLocked?: Record<string, boolean>;
+  onAspectRatioLockedChange?: (locked: Record<string, boolean>) => void;
+}
+
+export const LayerPanel: React.FC<LayerPanelProps> = ({
+  posterData,
+  onChange,
+  selectedElementId,
+  onElementSelect,
+  mode,
+  onCurrentlyEditingSourceChange,
+  addToast,
+  aspectRatioLocked = {},
+  onAspectRatioLockedChange,
+}) => {
+  const intl = useIntl();
+  const [localSliderValues, setLocalSliderValues] = useState<
+    Record<string, number>
+  >({});
+  const [localTextValues, setLocalTextValues] = useState<
+    Record<string, string>
+  >({});
+  const [selectedSourceType, setSelectedSourceType] = useState<string>('trakt');
+  const [saveStatus, setSaveStatus] = useState<string>('');
+  const [isSourceColorsExpanded, setIsSourceColorsExpanded] = useState(false);
+  const textUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get elements or create from legacy structure (memoized to prevent re-renders)
+  const elements = useMemo(
+    () => posterData.elements || [],
+    [posterData.elements]
+  );
+
+  // Sort elements by layer order for display (reverse order so top elements appear first)
+  const sortedElements = [...elements].sort(
+    (a, b) => b.layerOrder - a.layerOrder
+  );
+
+  // Find selected element
+  const selectedElement = selectedElementId
+    ? elements.find((el) => el.id === selectedElementId)
+    : undefined;
+
+  const isTemplate = mode.includes('template');
+
+  // Fetch source colors
+  const { data: sourceColorsData } = useSWR<{
+    sourceColors: Record<
+      string,
+      {
+        primaryColor: string;
+        secondaryColor: string;
+        textColor: string;
+      }
+    >;
+    sourceTypes: string[];
+  }>('/api/v1/source-colors');
+
+  // Debounced text update to prevent excessive re-renders during typing
+  const debouncedTextUpdate = useCallback(
+    (elementId: string, newText: string) => {
+      if (textUpdateTimeoutRef.current) {
+        clearTimeout(textUpdateTimeoutRef.current);
+      }
+
+      textUpdateTimeoutRef.current = setTimeout(() => {
+        const elementIndex = elements.findIndex((el) => el.id === elementId);
+        if (elementIndex !== -1) {
+          const newElements = [...elements];
+          const element = newElements[elementIndex];
+          if (element.type === 'text') {
+            newElements[elementIndex] = {
+              ...element,
+              properties: {
+                ...element.properties,
+                text: newText,
+              } as TextElementProps,
+            };
+            onChange({
+              ...posterData,
+              elements: newElements,
+            });
+          }
+        }
+      }, 300); // 300ms delay after user stops typing
+    },
+    [elements, posterData, onChange]
+  );
+
+  // Update element function
+  const updateElement = useCallback(
+    (elementId: string, updates: Partial<LayeredElement>) => {
+      const elementIndex = elements.findIndex((el) => el.id === elementId);
+      if (elementIndex !== -1) {
+        const newElements = [...elements];
+        newElements[elementIndex] = {
+          ...newElements[elementIndex],
+          ...updates,
+        };
+        onChange({
+          ...posterData,
+          elements: newElements,
+        });
+      }
+    },
+    [elements, posterData, onChange]
+  );
+
+  // Update element properties
+  const updateElementProperties = useCallback(
+    (
+      elementId: string,
+      propertyUpdates: Partial<
+        | TextElementProps
+        | RasterElementProps
+        | SVGElementProps
+        | ContentGridProps
+        | PersonElementProps
+      >
+    ) => {
+      const elementIndex = elements.findIndex((el) => el.id === elementId);
+      if (elementIndex !== -1) {
+        const newElements = [...elements];
+        const element = newElements[elementIndex];
+        newElements[elementIndex] = {
+          ...element,
+          properties: {
+            ...element.properties,
+            ...propertyUpdates,
+          },
+        };
+        onChange({
+          ...posterData,
+          elements: newElements,
+        });
+      }
+    },
+    [elements, posterData, onChange]
+  );
+
+  // Update background function
+  const updateBackground = useCallback(
+    (updates: Partial<PosterEditorData['background']>) => {
+      onChange({
+        ...posterData,
+        background: { ...posterData.background, ...updates },
+      });
+    },
+    [posterData, onChange]
+  );
+
+  // Update currently editing source when source colors section is expanded/collapsed or source changes
+  useEffect(() => {
+    if (onCurrentlyEditingSourceChange) {
+      onCurrentlyEditingSourceChange(
+        isSourceColorsExpanded ? selectedSourceType : undefined
+      );
+    }
+  }, [
+    isSourceColorsExpanded,
+    selectedSourceType,
+    onCurrentlyEditingSourceChange,
+  ]);
+
+  // Initialize source colors in posterData if not present
+  useEffect(() => {
+    if (
+      isTemplate &&
+      posterData.background.useSourceColors &&
+      !posterData.background.sourceColors &&
+      sourceColorsData
+    ) {
+      const initialSourceColors = { ...sourceColorsData.sourceColors };
+      updateBackground({ sourceColors: initialSourceColors });
+    }
+  }, [
+    sourceColorsData,
+    posterData.background.useSourceColors,
+    posterData.background.sourceColors,
+    isTemplate,
+    updateBackground,
+  ]);
+
+  const updateSourceColor = (
+    sourceType: string,
+    colorKey: string,
+    colorValue: string
+  ) => {
+    const currentSourceColors = posterData.background.sourceColors || {};
+    const currentSourceTypeColors = currentSourceColors[sourceType] ||
+      sourceColorsData?.sourceColors[sourceType] || {
+        primaryColor: '#6366f1',
+        secondaryColor: '#1e1b4b',
+        textColor: '#ffffff',
+      };
+
+    updateBackground({
+      sourceColors: {
+        ...currentSourceColors,
+        [sourceType]: {
+          ...currentSourceTypeColors,
+          [colorKey]: colorValue,
+        },
+      },
+    });
+  };
+
+  const saveSourceColors = async () => {
+    try {
+      const sourceColors = posterData.background.sourceColors || {};
+      let allSuccessful = true;
+
+      // Save each source type individually to the correct endpoint
+      for (const [sourceType, colors] of Object.entries(sourceColors)) {
+        const response = await fetch(`/api/v1/source-colors/${sourceType}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(colors),
+        });
+
+        if (!response.ok) {
+          allSuccessful = false;
+          break;
+        }
+      }
+
+      if (allSuccessful) {
+        setSaveStatus('Colors Saved!');
+        setTimeout(() => setSaveStatus(''), 2000);
+
+        // Invalidate the SWR cache to refresh source colors in preview
+        mutate('/api/v1/source-colors');
+      }
+    } catch (error) {
+      // Silently handle error - could be logged to monitoring service
+    }
+  };
+
+  const handleReorderElement = useCallback(
+    (elementId: string, direction: 'up' | 'down') => {
+      const currentIndex = elements.findIndex((el) => el.id === elementId);
+      if (currentIndex === -1) return;
+
+      const newElements = [...elements];
+      const element = newElements[currentIndex];
+
+      // Find adjacent element in the specified direction
+      let swapIndex = -1;
+      if (direction === 'up') {
+        // Moving up means higher layerOrder (rendered on top)
+        const higherElements = elements.filter(
+          (el) => el.layerOrder > element.layerOrder
+        );
+        if (higherElements.length > 0) {
+          const nextElement = higherElements.reduce((prev, current) =>
+            prev.layerOrder < current.layerOrder ? prev : current
+          );
+          swapIndex = elements.findIndex((el) => el.id === nextElement.id);
+        }
+      } else {
+        // Moving down means lower layerOrder (rendered behind)
+        const lowerElements = elements.filter(
+          (el) => el.layerOrder < element.layerOrder
+        );
+        if (lowerElements.length > 0) {
+          const nextElement = lowerElements.reduce((prev, current) =>
+            prev.layerOrder > current.layerOrder ? prev : current
+          );
+          swapIndex = elements.findIndex((el) => el.id === nextElement.id);
+        }
+      }
+
+      if (swapIndex !== -1) {
+        // Swap layer orders
+        const tempLayerOrder = newElements[currentIndex].layerOrder;
+        newElements[currentIndex].layerOrder =
+          newElements[swapIndex].layerOrder;
+        newElements[swapIndex].layerOrder = tempLayerOrder;
+
+        onChange({
+          ...posterData,
+          elements: newElements,
+        });
+      }
+    },
+    [elements, posterData, onChange]
+  );
+
+  const handleDeleteElement = useCallback(
+    (elementId: string) => {
+      const newElements = elements.filter((el) => el.id !== elementId);
+      onChange({
+        ...posterData,
+        elements: newElements,
+      });
+
+      // Clear selection if deleted element was selected
+      if (selectedElementId === elementId) {
+        onElementSelect(undefined);
+      }
+    },
+    [elements, posterData, onChange, selectedElementId, onElementSelect]
+  );
+
+  const handleAddElement = useCallback(
+    (type: LayeredElement['type'], subtype?: string) => {
+      const elementId = `${type}-${Date.now()}`;
+      let newElement: LayeredElement;
+
+      // Find highest layer order and add 1
+      const maxLayerOrder =
+        elements.length > 0
+          ? Math.max(...elements.map((el) => el.layerOrder))
+          : 0;
+
+      // Calculate center position based on poster dimensions
+      const centerX = (posterData.width - 200) / 2;
+      const centerY = 200 + elements.length * 50; // Stack vertically
+
+      switch (type) {
+        case 'text':
+          newElement = {
+            id: elementId,
+            layerOrder: maxLayerOrder + 1,
+            type: 'text',
+            x: centerX,
+            y: centerY,
+            width: 200,
+            height: 50,
+            properties: {
+              elementType:
+                subtype === 'collection-title'
+                  ? 'collection-title'
+                  : 'custom-text',
+              text: subtype === 'collection-title' ? undefined : 'New Text',
+              fontSize: 24,
+              fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+              fontWeight: 'normal',
+              fontStyle: 'normal',
+              color: '#ffffff',
+              textAlign: 'center',
+              maxLines: 2,
+              textTransform: 'none',
+            } as TextElementProps,
+          };
+          break;
+        case 'raster':
+          newElement = {
+            id: elementId,
+            layerOrder: maxLayerOrder + 1,
+            type: 'raster',
+            x: (posterData.width - 100) / 2,
+            y: 150 + elements.length * 80,
+            width: 100,
+            height: 100,
+            properties: {
+              imagePath: '',
+            } as RasterElementProps,
+          };
+          break;
+        case 'svg':
+          newElement = {
+            id: elementId,
+            layerOrder: maxLayerOrder + 1,
+            type: 'svg',
+            x: (posterData.width - 50) / 2,
+            y: 100 + elements.length * 70,
+            width: 50,
+            height: 50,
+            properties: {
+              iconType:
+                subtype === 'source-logo' ? 'source-logo' : 'custom-icon',
+              iconPath: '',
+            } as SVGElementProps,
+          };
+          break;
+        case 'content-grid': {
+          const columns = 2;
+          const rows = 2;
+          const spacing = 16;
+          const cellWidth = 80;
+          const cellHeight = cellWidth * 1.5; // 2:3 aspect ratio
+          const totalWidth = cellWidth * columns + spacing * (columns - 1);
+          const totalHeight = cellHeight * rows + spacing * (rows - 1);
+
+          newElement = {
+            id: elementId,
+            layerOrder: maxLayerOrder + 1,
+            type: 'content-grid',
+            x: (posterData.width - totalWidth) / 2,
+            y: 450,
+            width: totalWidth,
+            height: totalHeight,
+            properties: {
+              columns,
+              rows,
+              spacing,
+              cornerRadius: 6,
+            } as ContentGridProps,
+          };
+          break;
+        }
+        default:
+          return;
+      }
+
+      onChange({
+        ...posterData,
+        elements: [...elements, newElement],
+      });
+
+      // Select the new element
+      onElementSelect(elementId);
+    },
+    [elements, posterData, onChange, onElementSelect]
+  );
+
+  const getElementIcon = (type: LayeredElement['type']) => {
+    switch (type) {
+      case 'text':
+        return DocumentTextIcon;
+      case 'raster':
+        return PhotoIcon;
+      case 'person':
+        return UserIcon;
+      case 'svg':
+        return CodeBracketSquareIcon;
+      case 'content-grid':
+        return Squares2X2Icon;
+      default:
+        return DocumentTextIcon;
+    }
+  };
+
+  const getElementLabel = (element: LayeredElement) => {
+    switch (element.type) {
+      case 'text': {
+        const props = element.properties as TextElementProps;
+        return props.elementType === 'collection-title'
+          ? intl.formatMessage(messages.collectionTitle)
+          : props.text || intl.formatMessage(messages.customText);
+      }
+      case 'raster':
+        return intl.formatMessage(messages.rasterImage);
+      case 'person':
+        return intl.formatMessage(messages.personImage);
+      case 'svg': {
+        const props = element.properties as SVGElementProps;
+        return props.iconType === 'source-logo'
+          ? intl.formatMessage(messages.sourceIcon)
+          : intl.formatMessage(messages.customIcon);
+      }
+      case 'content-grid':
+        return intl.formatMessage(messages.contentGrid);
+      default:
+        return element.id;
+    }
+  };
+
+  const getElementPreview = (element: LayeredElement) => {
+    switch (element.type) {
+      case 'text': {
+        const props = element.properties as TextElementProps;
+        return (
+          <div
+            className="flex h-6 w-8 items-center justify-center rounded bg-stone-600 text-xs font-medium text-white"
+            style={{
+              fontSize: '8px',
+              fontFamily: props.fontFamily || 'inherit',
+              fontWeight: props.fontWeight || 'normal',
+              color: props.color || '#ffffff',
+            }}
+          >
+            {props.elementType === 'collection-title' ? 'T' : 'Aa'}
+          </div>
+        );
+      }
+      case 'raster': {
+        const props = element.properties as RasterElementProps;
+        return (
+          <div className="flex h-6 w-8 items-center justify-center rounded bg-gradient-to-br from-blue-500 to-purple-600">
+            {props.imagePath ? (
+              <img
+                src={props.imagePath}
+                alt="Preview"
+                className="h-full w-full rounded object-cover"
+                onError={(e) => {
+                  // Fallback to icon if image fails to load
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            ) : null}
+            <PhotoIcon className="h-4 w-4 text-white" />
+          </div>
+        );
+      }
+      case 'person': {
+        const props = element.properties as RasterElementProps;
+        return (
+          <div className="flex h-6 w-8 items-center justify-center rounded bg-gradient-to-br from-indigo-600 to-stone-800">
+            {props.imagePath ? (
+              <img
+                src={props.imagePath}
+                alt="Preview"
+                className="h-full w-full rounded object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            ) : null}
+            <UserIcon className="h-4 w-4 text-white" />
+          </div>
+        );
+      }
+      case 'svg': {
+        const props = element.properties as SVGElementProps;
+        return (
+          <div className="flex h-6 w-8 items-center justify-center rounded bg-gradient-to-br from-green-500 to-teal-600">
+            {props.iconPath && !props.iconPath.startsWith('/') ? (
+              <img
+                src={props.iconPath}
+                alt="Preview"
+                className="h-4 w-4 object-contain"
+                onError={(e) => {
+                  // Fallback to icon if SVG fails to load
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            ) : null}
+            <CodeBracketSquareIcon className="h-4 w-4 text-white" />
+          </div>
+        );
+      }
+      case 'content-grid': {
+        const props = element.properties as ContentGridProps;
+        return (
+          <div className="flex h-6 w-8 items-center justify-center rounded bg-gradient-to-br from-orange-500 to-red-600">
+            <div
+              className="grid h-4 w-5 gap-0.5"
+              style={{
+                gridTemplateColumns: `repeat(${Math.min(
+                  props.columns,
+                  3
+                )}, 1fr)`,
+                gridTemplateRows: `repeat(${Math.min(props.rows, 2)}, 1fr)`,
+              }}
+            >
+              {Array.from({
+                length: Math.min(props.columns * props.rows, 6),
+              }).map((_, i) => (
+                <div key={i} className="rounded-sm bg-white opacity-80" />
+              ))}
+            </div>
+          </div>
+        );
+      }
+      default:
+        return (
+          <div className="flex h-6 w-8 items-center justify-center rounded bg-stone-600">
+            <DocumentTextIcon className="h-4 w-4 text-white" />
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="space-y-4 p-4">
+        {/* 1. Background Controls Section */}
+        <div className="space-y-3 border-b border-stone-700 pb-4">
+          <h3 className="text-sm font-medium text-stone-300">
+            {intl.formatMessage(messages.background)}
+          </h3>
+
+          {/* Background Type */}
+          <div>
+            <label className="mb-1 block text-xs text-stone-400">
+              {intl.formatMessage(messages.backgroundType)}
+            </label>
+            <select
+              value={posterData.background.type}
+              onChange={(e) =>
+                updateBackground({
+                  type: (e.target as HTMLSelectElement).value as
+                    | 'color'
+                    | 'gradient'
+                    | 'radial',
+                })
+              }
+              className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+            >
+              <option value="color">
+                {intl.formatMessage(messages.color)}
+              </option>
+              <option value="gradient">
+                {intl.formatMessage(messages.gradient)}
+              </option>
+              <option value="radial">
+                {intl.formatMessage(messages.radial)}
+              </option>
+            </select>
+          </div>
+
+          {/* Intensity slider for gradients */}
+          {(posterData.background.type === 'gradient' ||
+            posterData.background.type === 'radial') && (
+            <div>
+              <label className="mb-1 block text-xs text-stone-400">
+                {intl.formatMessage(messages.intensity)} (
+                {localSliderValues['backgroundIntensity'] ??
+                  (posterData.background.intensity || 50)}
+                %)
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={
+                  localSliderValues['backgroundIntensity'] ??
+                  (posterData.background.intensity || 50)
+                }
+                onInput={(e) => {
+                  setLocalSliderValues((prev) => ({
+                    ...prev,
+                    backgroundIntensity: parseInt(
+                      (e.target as HTMLInputElement).value
+                    ),
+                  }));
+                }}
+                onChange={(e) => {
+                  const newIntensity = parseInt(
+                    (e.target as HTMLInputElement).value
+                  );
+                  updateBackground({ intensity: newIntensity });
+                  setLocalSliderValues((prev) => {
+                    const newState = { ...prev };
+                    delete newState.backgroundIntensity;
+                    return newState;
+                  });
+                }}
+                className="w-full"
+              />
+            </div>
+          )}
+
+          {/* Source Colors option for templates */}
+          {isTemplate && (
+            <div className="space-y-2">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={posterData.background.useSourceColors || false}
+                  onChange={(e) => {
+                    updateBackground({
+                      useSourceColors: e.target.checked,
+                      sourceColors: e.target.checked
+                        ? sourceColorsData?.sourceColors || {}
+                        : undefined,
+                    });
+                  }}
+                  className="rounded border-stone-600 bg-stone-800 text-orange-600 focus:ring-orange-500"
+                />
+                <span className="text-xs text-stone-300">
+                  {intl.formatMessage(messages.useSourceColors)}
+                </span>
+              </label>
+
+              {posterData.background.useSourceColors && sourceColorsData && (
+                <div className="space-y-2 border-l border-stone-600 pl-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setIsSourceColorsExpanded(!isSourceColorsExpanded)
+                    }
+                    className="flex w-full items-center space-x-2 py-1 text-xs font-medium text-stone-300 hover:text-white focus:outline-none"
+                  >
+                    <svg
+                      className={`h-3 w-3 transition-transform ${
+                        isSourceColorsExpanded ? 'rotate-90' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                    <span>{intl.formatMessage(messages.customizeColors)}</span>
+                  </button>
+
+                  {isSourceColorsExpanded && (
+                    <div className="space-y-2">
+                      {/* Source Type Selector */}
+                      <div>
+                        <label className="mb-1 block text-xs text-stone-400">
+                          {intl.formatMessage(messages.sourceType)}
+                        </label>
+                        <select
+                          value={selectedSourceType}
+                          onChange={(e) =>
+                            setSelectedSourceType(
+                              (e.target as HTMLSelectElement).value
+                            )
+                          }
+                          className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+                        >
+                          {Object.keys(sourceColorsData.sourceColors).map(
+                            (sourceType) => (
+                              <option key={sourceType} value={sourceType}>
+                                {sourceType.charAt(0).toUpperCase() +
+                                  sourceType.slice(1)}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </div>
+
+                      {/* Background Colors */}
+                      <div className="space-y-2">
+                        <h6 className="text-xs font-medium text-stone-400">
+                          {intl.formatMessage(messages.backgroundColors)}
+                        </h6>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label
+                              htmlFor={`primary-color-${selectedSourceType}`}
+                              className="mb-1 block text-xs text-stone-400"
+                            >
+                              {intl.formatMessage(messages.primary)}
+                            </label>
+                            <input
+                              id={`primary-color-${selectedSourceType}`}
+                              type="color"
+                              value={
+                                posterData.background.sourceColors?.[
+                                  selectedSourceType
+                                ]?.primaryColor ||
+                                sourceColorsData.sourceColors[
+                                  selectedSourceType
+                                ]?.primaryColor ||
+                                '#6366f1'
+                              }
+                              onChange={(e) =>
+                                updateSourceColor(
+                                  selectedSourceType,
+                                  'primaryColor',
+                                  (e.target as HTMLInputElement).value
+                                )
+                              }
+                              className="h-6 w-full rounded border border-stone-600"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor={`secondary-color-${selectedSourceType}`}
+                              className="mb-1 block text-xs text-stone-400"
+                            >
+                              {intl.formatMessage(messages.secondary)}
+                            </label>
+                            <input
+                              id={`secondary-color-${selectedSourceType}`}
+                              type="color"
+                              value={
+                                posterData.background.sourceColors?.[
+                                  selectedSourceType
+                                ]?.secondaryColor ||
+                                sourceColorsData.sourceColors[
+                                  selectedSourceType
+                                ]?.secondaryColor ||
+                                '#1e1b4b'
+                              }
+                              onChange={(e) =>
+                                updateSourceColor(
+                                  selectedSourceType,
+                                  'secondaryColor',
+                                  (e.target as HTMLInputElement).value
+                                )
+                              }
+                              className="h-6 w-full rounded border border-stone-600"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Text Color */}
+                        <div>
+                          <label
+                            htmlFor={`text-color-${selectedSourceType}`}
+                            className="mb-1 block text-xs text-stone-400"
+                          >
+                            {intl.formatMessage(messages.textColor)}
+                          </label>
+                          <input
+                            id={`text-color-${selectedSourceType}`}
+                            type="color"
+                            value={
+                              posterData.background.sourceColors?.[
+                                selectedSourceType
+                              ]?.textColor ||
+                              sourceColorsData.sourceColors[selectedSourceType]
+                                ?.textColor ||
+                              '#ffffff'
+                            }
+                            onChange={(e) =>
+                              updateSourceColor(
+                                selectedSourceType,
+                                'textColor',
+                                (e.target as HTMLInputElement).value
+                              )
+                            }
+                            className="h-6 w-full rounded border border-stone-600"
+                          />
+                        </div>
+
+                        {/* Save Button */}
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={saveSourceColors}
+                            className="w-full rounded bg-orange-600 px-2 py-1 text-xs font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          >
+                            {intl.formatMessage(messages.saveSourceColors)}
+                          </button>
+                          {saveStatus && (
+                            <div className="mt-1 text-center text-xs text-green-400">
+                              {saveStatus}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Primary and Secondary Color Pickers */}
+          <div className="space-y-2">
+            <div>
+              <label className="mb-1 block text-xs text-stone-400">
+                {intl.formatMessage(messages.primaryColor)}
+              </label>
+              <input
+                type="color"
+                value={posterData.background.color || '#6366f1'}
+                onChange={(e) =>
+                  updateBackground({
+                    color: (e.target as HTMLInputElement).value,
+                  })
+                }
+                disabled={isTemplate && posterData.background.useSourceColors}
+                className={`h-8 w-full rounded border border-stone-600 focus:border-orange-500 focus:outline-none ${
+                  isTemplate && posterData.background.useSourceColors
+                    ? 'cursor-not-allowed opacity-50'
+                    : ''
+                }`}
+              />
+              {isTemplate && posterData.background.useSourceColors && (
+                <p className="mt-1 text-xs text-stone-500">
+                  {intl.formatMessage(messages.disabledUsingSourceColors)}
+                </p>
+              )}
+            </div>
+
+            {(posterData.background.type === 'gradient' ||
+              posterData.background.type === 'radial') && (
+              <div>
+                <label className="mb-1 block text-xs text-stone-400">
+                  {intl.formatMessage(messages.secondaryColor)}
+                </label>
+                <input
+                  type="color"
+                  value={posterData.background.secondaryColor || '#1e1b4b'}
+                  onChange={(e) =>
+                    updateBackground({
+                      secondaryColor: (e.target as HTMLInputElement).value,
+                    })
+                  }
+                  disabled={isTemplate && posterData.background.useSourceColors}
+                  className={`h-8 w-full rounded border border-stone-600 focus:border-orange-500 focus:outline-none ${
+                    isTemplate && posterData.background.useSourceColors
+                      ? 'cursor-not-allowed opacity-50'
+                      : ''
+                  }`}
+                />
+                {isTemplate && posterData.background.useSourceColors && (
+                  <p className="mt-1 text-xs text-stone-500">
+                    {intl.formatMessage(messages.disabledUsingSourceColors)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2. Add Element Buttons Section */}
+        <div className="space-y-3 border-b border-stone-700 pb-4">
+          <h3 className="text-sm font-medium text-stone-300">
+            {intl.formatMessage(messages.layers)}
+          </h3>
+          <div className="space-y-2">
+            {/* Text Elements */}
+            <div>
+              <button
+                type="button"
+                onClick={() => handleAddElement('text', 'custom-text')}
+                className="flex w-full items-center justify-center gap-1 rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white hover:bg-stone-600"
+              >
+                <PlusIcon className="h-3 w-3" />
+                {intl.formatMessage(messages.addCustomText)}
+              </button>
+              {isTemplate && (
+                <button
+                  type="button"
+                  onClick={() => handleAddElement('text', 'collection-title')}
+                  className="mt-1 flex w-full items-center justify-center gap-1 rounded border border-orange-600 bg-stone-700 px-2 py-1 text-xs text-white hover:bg-stone-600"
+                >
+                  <PlusIcon className="h-3 w-3" />
+                  {intl.formatMessage(messages.addCollectionTitle)}
+                </button>
+              )}
+            </div>
+
+            {/* Image Elements */}
+            <button
+              type="button"
+              onClick={() => handleAddElement('raster')}
+              className="flex w-full items-center justify-center gap-1 rounded bg-stone-700 px-2 py-1 text-xs text-white hover:bg-stone-600"
+            >
+              <PlusIcon className="h-3 w-3" />
+              {intl.formatMessage(messages.addImage)}
+            </button>
+
+            {/* Icon Elements */}
+            <div>
+              <button
+                type="button"
+                onClick={() => handleAddElement('svg', 'source-logo')}
+                className="flex w-full items-center justify-center gap-1 rounded border border-orange-600 bg-stone-700 px-2 py-1 text-xs text-white hover:bg-stone-600"
+              >
+                <PlusIcon className="h-3 w-3" />
+                {intl.formatMessage(messages.addSourceLogo)}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddElement('svg', 'custom-icon')}
+                className="mt-1 flex w-full items-center justify-center gap-1 rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white hover:bg-stone-600"
+              >
+                <PlusIcon className="h-3 w-3" />
+                {intl.formatMessage(messages.addCustomSVGIcon)}
+              </button>
+            </div>
+
+            {/* Content Grid */}
+            <button
+              type="button"
+              onClick={() => handleAddElement('content-grid')}
+              className="flex w-full items-center justify-center gap-1 rounded bg-stone-700 px-2 py-1 text-xs text-white hover:bg-stone-600"
+            >
+              <PlusIcon className="h-3 w-3" />
+              {intl.formatMessage(messages.addGrid)}
+            </button>
+          </div>
+        </div>
+
+        {/* 3. Element List Section */}
+        <div className="space-y-3 border-b border-stone-700 pb-4">
+          <h3 className="text-sm font-medium text-stone-300">
+            {intl.formatMessage(messages.elements)}
+          </h3>
+          <div className="space-y-1">
+            {sortedElements.length === 0 ? (
+              <div className="py-4 text-center text-xs text-stone-500">
+                {intl.formatMessage(messages.noElementsAdded)}
+              </div>
+            ) : (
+              sortedElements.map((element) => {
+                const IconComponent = getElementIcon(element.type);
+                const isSelected = selectedElementId === element.id;
+
+                return (
+                  <div
+                    key={element.id}
+                    className={`flex cursor-pointer items-center gap-2 rounded p-2 text-sm ${
+                      isSelected
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-stone-700 text-stone-300 hover:bg-stone-600'
+                    }`}
+                    onClick={() => onElementSelect(element.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onElementSelect(element.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    {/* Reorder Controls */}
+                    <div className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReorderElement(element.id, 'up');
+                        }}
+                        className="p-0.5 hover:text-white"
+                        title={intl.formatMessage(messages.moveUp)}
+                      >
+                        <ArrowUpIcon className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReorderElement(element.id, 'down');
+                        }}
+                        className="p-0.5 hover:text-white"
+                        title={intl.formatMessage(messages.moveDown)}
+                      >
+                        <ArrowDownIcon className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    {/* Element Preview */}
+                    <div className="flex-shrink-0">
+                      {getElementPreview(element)}
+                    </div>
+
+                    {/* Element Type Icon */}
+                    <IconComponent className="h-4 w-4 flex-shrink-0" />
+
+                    {/* Element Label */}
+                    <span className="flex-1 truncate">
+                      {getElementLabel(element)}
+                    </span>
+
+                    {/* Delete Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteElement(element.id);
+                      }}
+                      className="p-0.5 hover:text-red-400"
+                      title={intl.formatMessage(messages.deleteElement)}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* 4. Element Properties Section */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-stone-300">
+            {intl.formatMessage(messages.properties)}
+          </h3>
+          {selectedElement ? (
+            <div className="space-y-3">
+              {selectedElement.type === 'text' && (
+                <div className="space-y-2">
+                  {/* Text Source Colors for Templates */}
+                  {isTemplate && (
+                    <div className="mb-3 space-y-2 border-b border-stone-600 pb-3">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={
+                            (selectedElement.properties as TextElementProps)
+                              .useSourceColors || false
+                          }
+                          onChange={(e) => {
+                            updateElementProperties(selectedElement.id, {
+                              useSourceColors: e.target.checked,
+                              sourceColorType: e.target.checked
+                                ? selectedSourceType
+                                : undefined,
+                            });
+                          }}
+                          className="rounded border-stone-600 bg-stone-800 text-orange-600 focus:ring-orange-500"
+                        />
+                        <span className="text-xs text-stone-300">
+                          {intl.formatMessage(messages.useSourceTextColors)}
+                        </span>
+                      </label>
+
+                      {(selectedElement.properties as TextElementProps)
+                        .useSourceColors &&
+                        sourceColorsData && (
+                          <div className="space-y-2 border-l border-stone-600 pl-4">
+                            <div>
+                              <label
+                                htmlFor={`source-type-text-${selectedElement.id}`}
+                                className="mb-1 block text-xs text-stone-400"
+                              >
+                                {intl.formatMessage(messages.sourceTypeForText)}
+                              </label>
+                              <select
+                                id={`source-type-text-${selectedElement.id}`}
+                                value={
+                                  (
+                                    selectedElement.properties as TextElementProps
+                                  ).sourceColorType || selectedSourceType
+                                }
+                                onChange={(e) => {
+                                  updateElementProperties(selectedElement.id, {
+                                    sourceColorType: (
+                                      e.target as HTMLSelectElement
+                                    ).value,
+                                  });
+                                }}
+                                className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+                              >
+                                {Object.keys(sourceColorsData.sourceColors).map(
+                                  (sourceType) => (
+                                    <option key={sourceType} value={sourceType}>
+                                      {sourceType.charAt(0).toUpperCase() +
+                                        sourceType.slice(1)}
+                                    </option>
+                                  )
+                                )}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  )}
+
+                  {/* Text Content */}
+                  {(selectedElement.properties as TextElementProps)
+                    .elementType === 'custom-text' ? (
+                    <div>
+                      <label
+                        htmlFor={`text-input-${selectedElement.id}`}
+                        className="mb-1 block text-xs text-stone-400"
+                      >
+                        {intl.formatMessage(messages.text)}
+                      </label>
+                      <input
+                        id={`text-input-${selectedElement.id}`}
+                        type="text"
+                        value={
+                          localTextValues[selectedElement.id] ??
+                          ((selectedElement.properties as TextElementProps)
+                            .text ||
+                            '')
+                        }
+                        onChange={(e) => {
+                          const newValue = (e.target as HTMLInputElement).value;
+                          // Update local state immediately for responsive UI
+                          setLocalTextValues((prev) => ({
+                            ...prev,
+                            [selectedElement.id]: newValue,
+                          }));
+                          // Debounce the actual poster data update
+                          debouncedTextUpdate(selectedElement.id, newValue);
+                        }}
+                        className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+                        placeholder="Enter text"
+                      />
+                    </div>
+                  ) : (selectedElement.properties as TextElementProps)
+                      .elementType === 'collection-title' ? (
+                    <div>
+                      <p className="mt-1 rounded bg-orange-100 px-2 py-1 text-xs text-orange-800">
+                        {intl.formatMessage(messages.collectionTitleNote)}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {/* Font Size */}
+                  <div>
+                    <label className="mb-1 block text-xs text-stone-400">
+                      {intl.formatMessage(messages.fontSize)} (
+                      {localSliderValues[`fontSize-${selectedElement.id}`] ??
+                        (selectedElement.properties as TextElementProps)
+                          .fontSize}{' '}
+                      {intl.formatMessage(messages.pixelsUnit)})
+                    </label>
+                    <input
+                      type="range"
+                      min="8"
+                      max="72"
+                      value={
+                        localSliderValues[`fontSize-${selectedElement.id}`] ??
+                        (selectedElement.properties as TextElementProps)
+                          .fontSize
+                      }
+                      onInput={(e) => {
+                        setLocalSliderValues((prev) => ({
+                          ...prev,
+                          [`fontSize-${selectedElement.id}`]: Number(
+                            (e.target as HTMLInputElement).value
+                          ),
+                        }));
+                      }}
+                      onChange={(e) => {
+                        const newFontSize = Number(
+                          (e.target as HTMLInputElement).value
+                        );
+                        updateElementProperties(selectedElement.id, {
+                          fontSize: newFontSize,
+                        });
+                        setLocalSliderValues((prev) => {
+                          const newState = { ...prev };
+                          delete newState[`fontSize-${selectedElement.id}`];
+                          return newState;
+                        });
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Font Family */}
+                  <div>
+                    <label className="mb-1 block text-xs text-stone-400">
+                      {intl.formatMessage(messages.fontFamily)}
+                    </label>
+                    <select
+                      value={
+                        (selectedElement.properties as TextElementProps)
+                          .fontFamily
+                      }
+                      onChange={(e) => {
+                        updateElementProperties(selectedElement.id, {
+                          fontFamily: (e.target as HTMLSelectElement).value,
+                        });
+                      }}
+                      className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+                    >
+                      <FontOptions />
+                    </select>
+                  </div>
+
+                  {/* Text Color */}
+                  <div>
+                    <label className="mb-1 block text-xs text-stone-400">
+                      {intl.formatMessage(messages.textColor)}
+                    </label>
+                    <input
+                      type="color"
+                      value={
+                        (selectedElement.properties as TextElementProps).color
+                      }
+                      onChange={(e) => {
+                        updateElementProperties(selectedElement.id, {
+                          color: (e.target as HTMLInputElement).value,
+                        });
+                      }}
+                      disabled={
+                        isTemplate &&
+                        (selectedElement.properties as TextElementProps)
+                          .useSourceColors
+                      }
+                      className={`h-8 w-full rounded border border-stone-600 focus:border-orange-500 focus:outline-none ${
+                        isTemplate &&
+                        (selectedElement.properties as TextElementProps)
+                          .useSourceColors
+                          ? 'cursor-not-allowed opacity-50'
+                          : ''
+                      }`}
+                    />
+                    {isTemplate &&
+                      (selectedElement.properties as TextElementProps)
+                        .useSourceColors && (
+                        <p className="mt-1 text-xs text-stone-500">
+                          {intl.formatMessage(
+                            messages.disabledUsingSourceTextColors
+                          )}
+                        </p>
+                      )}
+                  </div>
+
+                  {/* Font Weight and Style */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.fontWeight)}
+                      </label>
+                      <select
+                        value={
+                          (selectedElement.properties as TextElementProps)
+                            .fontWeight
+                        }
+                        onChange={(e) => {
+                          updateElementProperties(selectedElement.id, {
+                            fontWeight: (e.target as HTMLSelectElement)
+                              .value as 'normal' | 'bold',
+                          });
+                        }}
+                        className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+                      >
+                        <option value="normal">
+                          {intl.formatMessage(messages.normal)}
+                        </option>
+                        <option value="bold">
+                          {intl.formatMessage(messages.bold)}
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.fontStyle)}
+                      </label>
+                      <select
+                        value={
+                          (selectedElement.properties as TextElementProps)
+                            .fontStyle
+                        }
+                        onChange={(e) => {
+                          updateElementProperties(selectedElement.id, {
+                            fontStyle: (e.target as HTMLSelectElement).value as
+                              | 'normal'
+                              | 'italic',
+                          });
+                        }}
+                        className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+                      >
+                        <option value="normal">
+                          {intl.formatMessage(messages.normal)}
+                        </option>
+                        <option value="italic">
+                          {intl.formatMessage(messages.italic)}
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Text Transform */}
+                  <div>
+                    <label className="mb-1 block text-xs text-stone-400">
+                      {intl.formatMessage(messages.textTransform)}
+                    </label>
+                    <select
+                      value={
+                        (selectedElement.properties as TextElementProps)
+                          .textTransform || 'none'
+                      }
+                      onChange={(e) => {
+                        updateElementProperties(selectedElement.id, {
+                          textTransform: (e.target as HTMLSelectElement)
+                            .value as
+                            | 'none'
+                            | 'uppercase'
+                            | 'lowercase'
+                            | 'capitalize',
+                        });
+                      }}
+                      className="w-full rounded border border-stone-600 bg-stone-700 px-2 py-1 text-xs text-white focus:border-orange-500 focus:outline-none"
+                    >
+                      <option value="none">
+                        {intl.formatMessage(messages.transformNone)}
+                      </option>
+                      <option value="uppercase">
+                        {intl.formatMessage(messages.uppercase)}
+                      </option>
+                      <option value="lowercase">
+                        {intl.formatMessage(messages.lowercase)}
+                      </option>
+                      <option value="capitalize">
+                        {intl.formatMessage(messages.capitalize)}
+                      </option>
+                    </select>
+                  </div>
+
+                  {/* Max Lines */}
+                  <div>
+                    <label className="mb-1 block text-xs text-stone-400">
+                      {intl.formatMessage(messages.maxLines)} (
+                      {localSliderValues[`maxLines-${selectedElement.id}`] ??
+                        ((selectedElement.properties as TextElementProps)
+                          .maxLines ||
+                          1)}{' '}
+                      {intl.formatMessage(messages.linesUnit)})
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={
+                        localSliderValues[`maxLines-${selectedElement.id}`] ??
+                        ((selectedElement.properties as TextElementProps)
+                          .maxLines ||
+                          1)
+                      }
+                      onInput={(e) => {
+                        setLocalSliderValues((prev) => ({
+                          ...prev,
+                          [`maxLines-${selectedElement.id}`]: Number(
+                            (e.target as HTMLInputElement).value
+                          ),
+                        }));
+                      }}
+                      onChange={(e) => {
+                        const newMaxLines = Number(
+                          (e.target as HTMLInputElement).value
+                        );
+                        updateElementProperties(selectedElement.id, {
+                          maxLines: newMaxLines,
+                        });
+                        setLocalSliderValues((prev) => {
+                          const newState = { ...prev };
+                          delete newState[`maxLines-${selectedElement.id}`];
+                          return newState;
+                        });
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedElement.type === 'raster' && (
+                <div className="space-y-2">
+                  {/* Image Selection */}
+                  <div>
+                    <label className="mb-1 block text-xs text-stone-400">
+                      {intl.formatMessage(messages.selectImage)}
+                    </label>
+                    <IconSelector
+                      value={
+                        (selectedElement.properties as RasterElementProps)
+                          .imagePath || ''
+                      }
+                      filter="raster"
+                      onChange={(imagePath) => {
+                        // Auto-size raster element to match image dimensions
+                        const img = new window.Image();
+                        img.onload = () => {
+                          // Update image path AND element dimensions in ONE call
+                          updateElement(selectedElement.id, {
+                            width: img.width,
+                            height: img.height,
+                            properties: {
+                              ...selectedElement.properties,
+                              imagePath,
+                            },
+                          });
+                        };
+                        img.onerror = () => {
+                          // If image fails to load, just update the image path
+                          updateElement(selectedElement.id, {
+                            properties: {
+                              ...selectedElement.properties,
+                              imagePath,
+                            },
+                          });
+                        };
+                        img.src = imagePath;
+                      }}
+                      addToast={addToast}
+                    />
+                  </div>
+
+                  {/* Lock aspect ratio */}
+                  <div>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={aspectRatioLocked[selectedElement.id] ?? true}
+                        onChange={(e) => {
+                          onAspectRatioLockedChange?.({
+                            ...aspectRatioLocked,
+                            [selectedElement.id]: e.target.checked,
+                          });
+                        }}
+                        className="rounded border-stone-600 bg-stone-800 text-orange-600 focus:ring-orange-500"
+                      />
+                      <span className="text-xs text-stone-300">
+                        {intl.formatMessage(messages.lockAspectRatio)}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Size Controls */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.width)} (
+                        {localSliderValues[`width-${selectedElement.id}`] ??
+                          selectedElement.width}{' '}
+                        {intl.formatMessage(messages.pixelsUnit)})
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="400"
+                        value={
+                          localSliderValues[`width-${selectedElement.id}`] ??
+                          selectedElement.width
+                        }
+                        onInput={(e) => {
+                          const newWidth = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newHeight = Math.round(
+                              newWidth / aspectRatio
+                            );
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`width-${selectedElement.id}`]: newWidth,
+                              [`height-${selectedElement.id}`]: newHeight,
+                            }));
+                          } else {
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`width-${selectedElement.id}`]: newWidth,
+                            }));
+                          }
+                        }}
+                        onChange={(e) => {
+                          const newWidth = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newHeight = Math.round(
+                              newWidth / aspectRatio
+                            );
+                            updateElement(selectedElement.id, {
+                              width: newWidth,
+                              height: newHeight,
+                            });
+                          } else {
+                            updateElement(selectedElement.id, {
+                              width: newWidth,
+                            });
+                          }
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`width-${selectedElement.id}`];
+                            delete newState[`height-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.height)} (
+                        {localSliderValues[`height-${selectedElement.id}`] ??
+                          selectedElement.height}{' '}
+                        {intl.formatMessage(messages.pixelsUnit)})
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="400"
+                        value={
+                          localSliderValues[`height-${selectedElement.id}`] ??
+                          selectedElement.height
+                        }
+                        onInput={(e) => {
+                          const newHeight = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newWidth = Math.round(
+                              newHeight * aspectRatio
+                            );
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`width-${selectedElement.id}`]: newWidth,
+                              [`height-${selectedElement.id}`]: newHeight,
+                            }));
+                          } else {
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`height-${selectedElement.id}`]: newHeight,
+                            }));
+                          }
+                        }}
+                        onChange={(e) => {
+                          const newHeight = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newWidth = Math.round(
+                              newHeight * aspectRatio
+                            );
+                            updateElement(selectedElement.id, {
+                              width: newWidth,
+                              height: newHeight,
+                            });
+                          } else {
+                            updateElement(selectedElement.id, {
+                              height: newHeight,
+                            });
+                          }
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`width-${selectedElement.id}`];
+                            delete newState[`height-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedElement.type === 'person' && (
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-stone-400">
+                      {intl.formatMessage(messages.opacity)} (
+                      {localSliderValues[
+                        `personOpacity-${selectedElement.id}`
+                      ] ??
+                        Math.round(
+                          ((selectedElement.properties as PersonElementProps)
+                            .overlayOpacity ?? 1) * 100
+                        )}
+                      %)
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={
+                        localSliderValues[
+                          `personOpacity-${selectedElement.id}`
+                        ] ??
+                        Math.round(
+                          ((selectedElement.properties as PersonElementProps)
+                            .overlayOpacity ?? 1) * 100
+                        )
+                      }
+                      onInput={(e) => {
+                        const percent = Number(
+                          (e.target as HTMLInputElement).value
+                        );
+                        setLocalSliderValues((prev) => ({
+                          ...prev,
+                          [`personOpacity-${selectedElement.id}`]: percent,
+                        }));
+                        updateElementProperties(selectedElement.id, {
+                          overlayOpacity: percent / 100,
+                        });
+                      }}
+                      onChange={(e) => {
+                        const percent = Number(
+                          (e.target as HTMLInputElement).value
+                        );
+                        updateElementProperties(selectedElement.id, {
+                          overlayOpacity: percent / 100,
+                        });
+                        setLocalSliderValues((prev) => {
+                          const newState = { ...prev };
+                          delete newState[
+                            `personOpacity-${selectedElement.id}`
+                          ];
+                          return newState;
+                        });
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedElement.type === 'svg' && (
+                <div className="space-y-2">
+                  {/* Icon Selection - Different for source logos vs custom icons */}
+                  {(selectedElement.properties as SVGElementProps).iconType ===
+                  'source-logo' ? (
+                    <div>
+                      <p className="mt-1 rounded bg-orange-100 px-2 py-1 text-xs text-orange-800">
+                        {intl.formatMessage(messages.sourceLogoNote)}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.selectIcon)}
+                      </label>
+                      <IconSelector
+                        value={
+                          (selectedElement.properties as SVGElementProps)
+                            .iconPath || ''
+                        }
+                        filter="svg"
+                        onChange={(iconPath) => {
+                          // Auto-size SVG element to match icon's actual dimensions
+                          // Load the image to get its width and height
+                          const img = new window.Image();
+                          img.onload = () => {
+                            // Update icon path, icon type, AND element dimensions in ONE call
+                            updateElement(selectedElement.id, {
+                              width: img.width,
+                              height: img.height,
+                              properties: {
+                                ...selectedElement.properties,
+                                iconType: 'custom-icon',
+                                iconPath,
+                              },
+                            });
+                          };
+                          img.onerror = () => {
+                            // If image fails to load, just update the icon path and type
+                            updateElement(selectedElement.id, {
+                              properties: {
+                                ...selectedElement.properties,
+                                iconType: 'custom-icon',
+                                iconPath,
+                              },
+                            });
+                          };
+                          img.src = iconPath;
+                        }}
+                        addToast={addToast}
+                      />
+                    </div>
+                  )}
+
+                  {/* Lock aspect ratio */}
+                  <div>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={aspectRatioLocked[selectedElement.id] ?? true}
+                        onChange={(e) => {
+                          onAspectRatioLockedChange?.({
+                            ...aspectRatioLocked,
+                            [selectedElement.id]: e.target.checked,
+                          });
+                        }}
+                        className="rounded border-stone-600 bg-stone-800 text-orange-600 focus:ring-orange-500"
+                      />
+                      <span className="text-xs text-stone-300">
+                        {intl.formatMessage(messages.lockAspectRatio)}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Size Controls */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.width)} (
+                        {localSliderValues[`width-${selectedElement.id}`] ??
+                          selectedElement.width}{' '}
+                        {intl.formatMessage(messages.pixelsUnit)})
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="400"
+                        value={
+                          localSliderValues[`width-${selectedElement.id}`] ??
+                          selectedElement.width
+                        }
+                        onInput={(e) => {
+                          const newWidth = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newHeight = Math.round(
+                              newWidth / aspectRatio
+                            );
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`width-${selectedElement.id}`]: newWidth,
+                              [`height-${selectedElement.id}`]: newHeight,
+                            }));
+                          } else {
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`width-${selectedElement.id}`]: newWidth,
+                            }));
+                          }
+                        }}
+                        onChange={(e) => {
+                          const newWidth = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newHeight = Math.round(
+                              newWidth / aspectRatio
+                            );
+                            updateElement(selectedElement.id, {
+                              width: newWidth,
+                              height: newHeight,
+                            });
+                          } else {
+                            updateElement(selectedElement.id, {
+                              width: newWidth,
+                            });
+                          }
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`width-${selectedElement.id}`];
+                            delete newState[`height-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.height)} (
+                        {localSliderValues[`height-${selectedElement.id}`] ??
+                          selectedElement.height}{' '}
+                        {intl.formatMessage(messages.pixelsUnit)})
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="400"
+                        value={
+                          localSliderValues[`height-${selectedElement.id}`] ??
+                          selectedElement.height
+                        }
+                        onInput={(e) => {
+                          const newHeight = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newWidth = Math.round(
+                              newHeight * aspectRatio
+                            );
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`width-${selectedElement.id}`]: newWidth,
+                              [`height-${selectedElement.id}`]: newHeight,
+                            }));
+                          } else {
+                            setLocalSliderValues((prev) => ({
+                              ...prev,
+                              [`height-${selectedElement.id}`]: newHeight,
+                            }));
+                          }
+                        }}
+                        onChange={(e) => {
+                          const newHeight = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          if (aspectRatioLocked[selectedElement.id] ?? true) {
+                            const aspectRatio =
+                              selectedElement.width / selectedElement.height;
+                            const newWidth = Math.round(
+                              newHeight * aspectRatio
+                            );
+                            updateElement(selectedElement.id, {
+                              width: newWidth,
+                              height: newHeight,
+                            });
+                          } else {
+                            updateElement(selectedElement.id, {
+                              height: newHeight,
+                            });
+                          }
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`width-${selectedElement.id}`];
+                            delete newState[`height-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedElement.type === 'content-grid' && (
+                <div className="space-y-2">
+                  {/* Grid Layout */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.columns)} (
+                        {localSliderValues[`columns-${selectedElement.id}`] ??
+                          (selectedElement.properties as ContentGridProps)
+                            .columns}
+                        )
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={
+                          localSliderValues[`columns-${selectedElement.id}`] ??
+                          (selectedElement.properties as ContentGridProps)
+                            .columns
+                        }
+                        onInput={(e) => {
+                          const newColumns = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+
+                          // Calculate new grid dimensions for preview
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const currentWidth = selectedElement.width;
+                          const availableWidth =
+                            currentWidth - (newColumns - 1) * props.spacing;
+                          const cellWidth = availableWidth / newColumns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+                          const newHeight =
+                            cellHeight * props.rows +
+                            (props.rows - 1) * props.spacing;
+
+                          setLocalSliderValues((prev) => ({
+                            ...prev,
+                            [`columns-${selectedElement.id}`]: newColumns,
+                            [`height-${selectedElement.id}`]:
+                              Math.round(newHeight),
+                          }));
+                        }}
+                        onChange={(e) => {
+                          const newColumns = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+
+                          // Calculate new grid dimensions when columns change
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const currentWidth = selectedElement.width;
+
+                          // Calculate available width for cells after new column count
+                          const availableWidth =
+                            currentWidth - (newColumns - 1) * props.spacing;
+                          const cellWidth = availableWidth / newColumns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+                          const newHeight =
+                            cellHeight * props.rows +
+                            (props.rows - 1) * props.spacing;
+
+                          // Update both columns and dimensions in a single state update
+                          const elementIndex = elements.findIndex(
+                            (el) => el.id === selectedElement.id
+                          );
+                          if (elementIndex !== -1) {
+                            const newElements = [...elements];
+                            newElements[elementIndex] = {
+                              ...newElements[elementIndex],
+                              height: Math.round(newHeight),
+                              properties: {
+                                ...newElements[elementIndex].properties,
+                                columns: newColumns,
+                              },
+                            };
+                            onChange({
+                              ...posterData,
+                              elements: newElements,
+                            });
+                          }
+
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`columns-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.rows)} (
+                        {localSliderValues[`rows-${selectedElement.id}`] ??
+                          (selectedElement.properties as ContentGridProps).rows}
+                        )
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={
+                          localSliderValues[`rows-${selectedElement.id}`] ??
+                          (selectedElement.properties as ContentGridProps).rows
+                        }
+                        onInput={(e) => {
+                          const newRows = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+
+                          // Calculate new grid dimensions for preview
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const currentWidth = selectedElement.width;
+                          const availableWidth =
+                            currentWidth - (props.columns - 1) * props.spacing;
+                          const cellWidth = availableWidth / props.columns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+                          const newHeight =
+                            cellHeight * newRows +
+                            (newRows - 1) * props.spacing;
+
+                          setLocalSliderValues((prev) => ({
+                            ...prev,
+                            [`rows-${selectedElement.id}`]: newRows,
+                            [`height-${selectedElement.id}`]:
+                              Math.round(newHeight),
+                          }));
+                        }}
+                        onChange={(e) => {
+                          const newRows = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+
+                          // Calculate new grid dimensions when rows change
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const currentWidth = selectedElement.width;
+
+                          // Calculate available width for cells (unchanged)
+                          const availableWidth =
+                            currentWidth - (props.columns - 1) * props.spacing;
+                          const cellWidth = availableWidth / props.columns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+                          const newHeight =
+                            cellHeight * newRows +
+                            (newRows - 1) * props.spacing;
+
+                          // Update both rows and dimensions in a single state update
+                          const elementIndex = elements.findIndex(
+                            (el) => el.id === selectedElement.id
+                          );
+                          if (elementIndex !== -1) {
+                            const newElements = [...elements];
+                            newElements[elementIndex] = {
+                              ...newElements[elementIndex],
+                              height: Math.round(newHeight),
+                              properties: {
+                                ...newElements[elementIndex].properties,
+                                rows: newRows,
+                              },
+                            };
+                            onChange({
+                              ...posterData,
+                              elements: newElements,
+                            });
+                          }
+
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`rows-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Spacing and Corner Radius */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.spacing)} (
+                        {localSliderValues[`spacing-${selectedElement.id}`] ??
+                          (selectedElement.properties as ContentGridProps)
+                            .spacing}{' '}
+                        {intl.formatMessage(messages.pixelsUnit)})
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        value={
+                          localSliderValues[`spacing-${selectedElement.id}`] ??
+                          (selectedElement.properties as ContentGridProps)
+                            .spacing
+                        }
+                        onInput={(e) => {
+                          const newSpacing = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+
+                          // Keep cell size constant, adjust grid dimensions
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const currentWidth = selectedElement.width;
+                          const currentAvailableWidth =
+                            currentWidth - (props.columns - 1) * props.spacing;
+                          const cellWidth =
+                            currentAvailableWidth / props.columns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+
+                          // Calculate new grid dimensions with new spacing but same cell size
+                          const newWidth =
+                            cellWidth * props.columns +
+                            (props.columns - 1) * newSpacing;
+                          const newHeight =
+                            cellHeight * props.rows +
+                            (props.rows - 1) * newSpacing;
+
+                          setLocalSliderValues((prev) => ({
+                            ...prev,
+                            [`spacing-${selectedElement.id}`]: newSpacing,
+                            [`width-${selectedElement.id}`]:
+                              Math.round(newWidth),
+                            [`height-${selectedElement.id}`]:
+                              Math.round(newHeight),
+                          }));
+                        }}
+                        onChange={(e) => {
+                          const newSpacing = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+
+                          // Keep cell size constant, adjust grid dimensions
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const currentWidth = selectedElement.width;
+                          const currentAvailableWidth =
+                            currentWidth - (props.columns - 1) * props.spacing;
+                          const cellWidth =
+                            currentAvailableWidth / props.columns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+
+                          // Calculate new grid dimensions with new spacing but same cell size
+                          const newWidth =
+                            cellWidth * props.columns +
+                            (props.columns - 1) * newSpacing;
+                          const newHeight =
+                            cellHeight * props.rows +
+                            (props.rows - 1) * newSpacing;
+
+                          // Update spacing and dimensions in a single state update
+                          const elementIndex = elements.findIndex(
+                            (el) => el.id === selectedElement.id
+                          );
+                          if (elementIndex !== -1) {
+                            const newElements = [...elements];
+                            newElements[elementIndex] = {
+                              ...newElements[elementIndex],
+                              width: Math.round(newWidth),
+                              height: Math.round(newHeight),
+                              properties: {
+                                ...newElements[elementIndex].properties,
+                                spacing: newSpacing,
+                              },
+                            };
+                            onChange({
+                              ...posterData,
+                              elements: newElements,
+                            });
+                          }
+
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`spacing-${selectedElement.id}`];
+                            delete newState[`width-${selectedElement.id}`];
+                            delete newState[`height-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.cornerRadius)} (
+                        {localSliderValues[
+                          `cornerRadius-${selectedElement.id}`
+                        ] ??
+                          (selectedElement.properties as ContentGridProps)
+                            .cornerRadius}{' '}
+                        {intl.formatMessage(messages.pixelsUnit)})
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="20"
+                        value={
+                          localSliderValues[
+                            `cornerRadius-${selectedElement.id}`
+                          ] ??
+                          (selectedElement.properties as ContentGridProps)
+                            .cornerRadius
+                        }
+                        onInput={(e) => {
+                          setLocalSliderValues((prev) => ({
+                            ...prev,
+                            [`cornerRadius-${selectedElement.id}`]: Number(
+                              (e.target as HTMLInputElement).value
+                            ),
+                          }));
+                        }}
+                        onChange={(e) => {
+                          const newCornerRadius = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          updateElementProperties(selectedElement.id, {
+                            cornerRadius: newCornerRadius,
+                          });
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[
+                              `cornerRadius-${selectedElement.id}`
+                            ];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Grid Size Controls - Width only, height auto-calculated for poster aspect ratio */}
+                  <div>
+                    <div>
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.width)} (
+                        {localSliderValues[`width-${selectedElement.id}`] ??
+                          selectedElement.width}{' '}
+                        {intl.formatMessage(messages.pixelsUnit)})
+                      </label>
+                      <input
+                        type="range"
+                        min="50"
+                        max="800"
+                        value={
+                          localSliderValues[`width-${selectedElement.id}`] ??
+                          selectedElement.width
+                        }
+                        onInput={(e) => {
+                          const newWidth = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          // Calculate height based on poster aspect ratio (2:3) and grid layout
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const availableWidth =
+                            newWidth - (props.columns - 1) * props.spacing;
+                          const cellWidth = availableWidth / props.columns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+                          const newHeight =
+                            cellHeight * props.rows +
+                            (props.rows - 1) * props.spacing;
+
+                          setLocalSliderValues((prev) => ({
+                            ...prev,
+                            [`width-${selectedElement.id}`]: newWidth,
+                            [`height-${selectedElement.id}`]:
+                              Math.round(newHeight),
+                          }));
+                        }}
+                        onChange={(e) => {
+                          const newWidth = Number(
+                            (e.target as HTMLInputElement).value
+                          );
+                          // Calculate height based on poster aspect ratio (2:3) and grid layout
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+                          const availableWidth =
+                            newWidth - (props.columns - 1) * props.spacing;
+                          const cellWidth = availableWidth / props.columns;
+                          const cellHeight = cellWidth * 1.5; // 2:3 poster aspect ratio
+                          const newHeight =
+                            cellHeight * props.rows +
+                            (props.rows - 1) * props.spacing;
+
+                          updateElement(selectedElement.id, {
+                            width: newWidth,
+                            height: Math.round(newHeight),
+                          });
+                          setLocalSliderValues((prev) => {
+                            const newState = { ...prev };
+                            delete newState[`width-${selectedElement.id}`];
+                            delete newState[`height-${selectedElement.id}`];
+                            return newState;
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+
+                    {/* Height display (read-only) */}
+                    <div className="mt-2">
+                      <label className="mb-1 block text-xs text-stone-400">
+                        {intl.formatMessage(messages.height)} (
+                        {(() => {
+                          const currentWidth =
+                            localSliderValues[`width-${selectedElement.id}`] ??
+                            selectedElement.width;
+                          const props =
+                            selectedElement.properties as ContentGridProps;
+
+                          // Use local slider values for real-time preview
+                          const currentColumns =
+                            localSliderValues[
+                              `columns-${selectedElement.id}`
+                            ] ?? props.columns;
+                          const currentRows =
+                            localSliderValues[`rows-${selectedElement.id}`] ??
+                            props.rows;
+                          const currentSpacing =
+                            localSliderValues[
+                              `spacing-${selectedElement.id}`
+                            ] ?? props.spacing;
+
+                          const availableWidth =
+                            currentWidth -
+                            (currentColumns - 1) * currentSpacing;
+                          const cellWidth = availableWidth / currentColumns;
+                          const cellHeight = cellWidth * 1.5;
+                          const calculatedHeight =
+                            cellHeight * currentRows +
+                            (currentRows - 1) * currentSpacing;
+                          return Math.round(calculatedHeight);
+                        })()}
+                        {intl.formatMessage(messages.pixelsAutoLabel)})
+                      </label>
+                      <div className="flex h-8 items-center justify-center rounded border border-stone-600 bg-stone-800 px-2 text-xs text-stone-400">
+                        {intl.formatMessage(messages.lockedToAspectRatio)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-stone-500">
+              {intl.formatMessage(messages.noElementSelected)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

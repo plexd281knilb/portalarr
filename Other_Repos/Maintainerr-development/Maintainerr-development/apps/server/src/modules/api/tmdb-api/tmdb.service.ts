@@ -1,0 +1,230 @@
+import { BasicResponseDto, MaintainerrEvent } from '@maintainerr/contracts';
+import { Injectable } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import { MaintainerrLogger } from '../../logging/logs.service';
+import { SettingsDataService } from '../../settings/settings-data.service';
+import {
+  formatConnectionFailureMessage,
+  logConnectionTestError,
+} from '../../../utils/connection-error';
+import { ExternalApiService } from '../external-api/external-api.service';
+import cacheManager from '../lib/cache';
+import {
+  TmdbExternalIdResponse,
+  TmdbMovieDetails,
+  TmdbPersonDetail,
+  TmdbTvDetails,
+  TmdbTvSeasonDetails,
+} from './interfaces/tmdb.interface';
+
+const TMDB_DEFAULT_API_KEY = 'db55323b8d3e4154498498a75642b381';
+
+@Injectable()
+export class TmdbApiService extends ExternalApiService {
+  constructor(
+    private readonly settings: SettingsDataService,
+    protected readonly logger: MaintainerrLogger,
+  ) {
+    logger.setContext(TmdbApiService.name);
+    super(
+      'https://api.themoviedb.org/3',
+      {
+        api_key: TMDB_DEFAULT_API_KEY,
+      },
+      logger,
+      {
+        nodeCache: cacheManager.getCache('tmdb').data,
+      },
+    );
+  }
+
+  onApplicationBootstrap() {
+    const customKey = this.settings.tmdb_api_key;
+    if (customKey) {
+      this.updateApiKey(customKey);
+    }
+  }
+
+  @OnEvent(MaintainerrEvent.Settings_Updated)
+  handleSettingsUpdate(payload: {
+    oldSettings: { tmdb_api_key?: string };
+    settings: { tmdb_api_key?: string };
+  }) {
+    const newKey = payload.settings.tmdb_api_key;
+    const oldKey = payload.oldSettings.tmdb_api_key;
+
+    if (newKey !== oldKey) {
+      this.updateApiKey(newKey || TMDB_DEFAULT_API_KEY);
+      this.logger.log(
+        newKey
+          ? 'TMDB API key updated to user-configured key'
+          : 'TMDB API key reset to default',
+      );
+    }
+  }
+
+  private updateApiKey(apiKey: string) {
+    this.axios.defaults.params = {
+      ...this.axios.defaults.params,
+      api_key: apiKey,
+    };
+  }
+
+  public async testConnection(apiKey?: string): Promise<BasicResponseDto> {
+    const testKey = apiKey || String(this.axios.defaults.params?.api_key || '');
+
+    if (!testKey) {
+      return { status: 'NOK', code: 0, message: 'No TMDB API key configured' };
+    }
+
+    try {
+      const response = await this.axios.get<{ id: number }>('/movie/550', {
+        params: { api_key: testKey },
+      });
+
+      return response.data?.id
+        ? { status: 'OK', code: 1, message: 'Success' }
+        : { status: 'NOK', code: 0, message: 'Unexpected response' };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'TMDB');
+      this.logger.debug(error);
+
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to TMDB. Verify API key.',
+        ),
+      };
+    }
+  }
+
+  public getPerson = async ({
+    personId,
+    language = 'en',
+  }: {
+    personId: number;
+    language?: string;
+  }): Promise<TmdbPersonDetail> => {
+    try {
+      const data = await this.get<TmdbPersonDetail>(`/person/${personId}`, {
+        params: { language },
+      });
+
+      return data;
+    } catch (error) {
+      this.logger.warn('Failed to fetch person details');
+      this.logger.debug(error);
+    }
+  };
+
+  public getMovie = async ({
+    movieId,
+    language = 'en',
+  }: {
+    movieId: number;
+    language?: string;
+  }): Promise<TmdbMovieDetails> => {
+    try {
+      const data = await this.get<TmdbMovieDetails>(
+        `/movie/${movieId}`,
+        {
+          params: {
+            language,
+            append_to_response:
+              'credits,external_ids,videos,release_dates,watch/providers',
+          },
+        },
+        43200,
+      );
+
+      return data;
+    } catch (error) {
+      this.logger.warn('Failed to fetch movie details');
+      this.logger.debug(error);
+    }
+  };
+
+  public getTvShow = async ({
+    tvId,
+    language = 'en',
+  }: {
+    tvId: number;
+    language?: string;
+  }): Promise<TmdbTvDetails> => {
+    try {
+      const data = await this.get<TmdbTvDetails>(
+        `/tv/${tvId}`,
+        {
+          params: {
+            language,
+            append_to_response:
+              'aggregate_credits,credits,external_ids,keywords,videos,content_ratings,watch/providers',
+          },
+        },
+        43200,
+      );
+
+      return data;
+    } catch (error) {
+      this.logger.warn('Failed to fetch TV show details');
+      this.logger.debug(error);
+    }
+  };
+
+  public getTvSeason = async ({
+    tvId,
+    seasonNumber,
+    language = 'en',
+  }: {
+    tvId: number;
+    seasonNumber: number;
+    language?: string;
+  }): Promise<TmdbTvSeasonDetails> => {
+    try {
+      const data = await this.get<TmdbTvSeasonDetails>(
+        `/tv/${tvId}/season/${seasonNumber}`,
+        { params: { language } },
+        43200,
+      );
+
+      return data;
+    } catch (error) {
+      this.logger.warn('Failed to fetch TV season details');
+      this.logger.debug(error);
+    }
+  };
+
+  public async getByExternalId({
+    externalId,
+    type,
+    language = 'en',
+  }:
+    | {
+        externalId: string;
+        type: 'imdb';
+        language?: string;
+      }
+    | {
+        externalId: number;
+        type: 'tvdb';
+        language?: string;
+      }): Promise<TmdbExternalIdResponse> {
+    try {
+      const data = await this.get<TmdbExternalIdResponse>(
+        `/find/${externalId}`,
+        {
+          params: {
+            external_source: type === 'imdb' ? 'imdb_id' : 'tvdb_id',
+            language,
+          },
+        },
+      );
+      return data;
+    } catch (error) {
+      this.logger.warn('Failed to find by external ID');
+      this.logger.debug(error);
+    }
+  }
+}

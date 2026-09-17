@@ -1,0 +1,228 @@
+import { Trans, useLingui } from '@lingui/react/macro'
+import {
+  PencilIcon,
+  PlayIcon,
+  StopIcon,
+  TrashIcon,
+} from '@heroicons/react/solid'
+import { type MediaItemType } from '@maintainerr/contracts'
+import { isAxiosError } from 'axios'
+import clsx from 'clsx'
+import { useState } from 'react'
+import { toast } from 'react-toastify'
+import {
+  useExecuteRuleGroup,
+  useStopRuleGroupExecution,
+} from '../../../api/rules'
+import { useTaskStatusContext } from '../../../contexts/taskstatus-context'
+import { useLibraryDisplay } from '../../../hooks/useLibraryDisplay'
+import { DeleteApiHandler } from '../../../utils/ApiHandler'
+import { logClientError } from '../../../utils/ClientLogger'
+import { ICollection } from '../../Collection'
+import DeleteButton from '../../Common/DeleteButton'
+import EditButton from '../../Common/EditButton'
+import type { AgentConfiguration } from '../../Settings/Notifications/CreateNotificationModal'
+import { IRuleJson } from '../Rule'
+
+export interface IRuleGroup {
+  id: number
+  name: string
+  description: string
+  libraryId: string
+  isActive: boolean
+  collectionId: number
+  rules: IRuleJson[]
+  useRules: boolean
+  dataType: MediaItemType
+  notifications?: AgentConfiguration[]
+  collection?: ICollection
+  ruleHandlerCronSchedule?: string | null
+}
+
+const RuleGroup = (props: {
+  group: IRuleGroup
+  onDelete: () => void
+  onEdit: (group: IRuleGroup) => void
+}) => {
+  const { t } = useLingui()
+  const [showSureDelete, setShowSureDelete] = useState<boolean>(false)
+  const {
+    title: libraryTitle,
+    hasLibraryId,
+    isUnreachable: libraryUnreachable,
+  } = useLibraryDisplay(props.group.libraryId)
+  const { queueStatus } = useTaskStatusContext()
+  const { mutate: executeRules } = useExecuteRuleGroup({
+    onError(error) {
+      if (isAxiosError(error) && error.response?.data?.message) {
+        toast.error(
+          error.response?.data?.message || t`Failed to start rule execution.`,
+        )
+      } else {
+        toast.error(t`Failed to start rule execution.`)
+      }
+    },
+  })
+  const { mutate: stopExecution } = useStopRuleGroupExecution({
+    onSuccess() {
+      toast.success(t`Requested to stop rule execution.`)
+    },
+    onError() {
+      toast.error(t`Failed to request stop of rule execution.`)
+    },
+  })
+
+  const onRemove = () => {
+    setShowSureDelete(true)
+  }
+
+  const onEdit = () => {
+    props.onEdit(props.group)
+  }
+
+  const confirmedDelete = () => {
+    DeleteApiHandler(`/rules/${props.group.id}`)
+      .then((resp) => {
+        if (resp.code === 1) props.onDelete()
+        // The media server explains a refused delete, and it stays refused
+        // until the user acts on the reason.
+        else toast.error(resp.message || t`Failed to delete rule group.`)
+      })
+      .catch((error: unknown) => {
+        void logClientError(
+          'Failed to delete rule group.',
+          error,
+          'RuleGroup.confirmedDelete',
+        )
+        toast.error(t`Failed to delete rule group. Check logs for details.`)
+      })
+  }
+
+  const isQueued = queueStatus?.queue.includes(props.group.id)
+  const isPending = queueStatus?.pendingRuleGroupIds?.includes(props.group.id)
+  const ruleExecutingOrQueued =
+    queueStatus?.executingRuleGroupId === props.group.id ||
+    isQueued ||
+    isPending
+  const hasNoLibrary = !hasLibraryId
+
+  return (
+    <>
+      <div className="inset-0 z-0 h-fit p-3">
+        <div className="flex justify-between gap-4">
+          <div className="truncate text-base font-bold text-white sm:text-lg">
+            {props.group.name}
+          </div>
+          {props.group.isActive && (
+            <button
+              type="button"
+              className="text-zinc-400 hover:text-zinc-300"
+              onClick={() =>
+                ruleExecutingOrQueued
+                  ? stopExecution(props.group.id)
+                  : executeRules(props.group.id)
+              }
+              title={
+                ruleExecutingOrQueued
+                  ? t`Request stop execution`
+                  : t`Start execution`
+              }
+              aria-label={
+                ruleExecutingOrQueued
+                  ? t`Request stop execution`
+                  : t`Start execution`
+              }
+            >
+              {!ruleExecutingOrQueued ? (
+                <PlayIcon className="m-auto h-7" />
+              ) : (
+                <StopIcon
+                  className={clsx('m-auto h-7', {
+                    'animate-pulse': !isQueued,
+                  })}
+                />
+              )}
+            </button>
+          )}
+        </div>
+        <div className="tiny-scrollbar mt-2 mb-2 h-12 max-h-12 overflow-y-hidden pr-2 text-base whitespace-normal text-zinc-400 hover:overflow-y-auto">
+          {props.group.description}
+        </div>
+      </div>
+      <div className="inset-0 z-0 p-3 pt-0">
+        <div className="mt-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 sm:gap-y-2 [&>div:nth-child(2n)]:text-right sm:[&>div:nth-child(2n)]:text-left sm:[&>div:nth-child(3n)]:text-right sm:[&>div:nth-child(3n-1)]:text-center">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+                <Trans>Status</Trans>
+              </p>
+              <p>
+                {props.group.isActive ? (
+                  <span className="text-success-500">
+                    <Trans>Active</Trans>
+                  </span>
+                ) : (
+                  <span className="text-error-500">
+                    <Trans>Inactive</Trans>
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+                <Trans>Library</Trans>
+              </p>
+              {hasNoLibrary ? (
+                <p
+                  className="truncate text-error-500"
+                  title={t`Please edit this rule and select a library`}
+                >
+                  <Trans>Not set</Trans>
+                </p>
+              ) : libraryUnreachable ? (
+                <p
+                  className="truncate text-warning-500"
+                  title={t`Media server is unreachable. The stored library selection is preserved.`}
+                >
+                  <Trans>Unavailable</Trans>
+                </p>
+              ) : (
+                <p className="truncate text-maintainerr">
+                  {libraryTitle ?? '-'}
+                </p>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+                <Trans>Rules</Trans>
+              </p>
+              <p className="text-maintainerr">{props.group.rules.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 grid w-full grid-cols-1 xl:grid-cols-2">
+          <div>
+            <EditButton
+              onClick={onEdit}
+              text={t`Edit`}
+              svgIcon={<PencilIcon className="m-auto h-5 text-zinc-200" />}
+            />
+          </div>
+          <div>
+            {showSureDelete ? (
+              <DeleteButton onClick={confirmedDelete} text={t`Are you sure?`} />
+            ) : (
+              <DeleteButton
+                onClick={onRemove}
+                text={t`Delete`}
+                svgIcon={<TrashIcon className="m-auto h-5 text-zinc-200" />}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default RuleGroup

@@ -1,0 +1,161 @@
+import { get } from 'lodash';
+import { rateLimitAwareHttp } from '../../api/lib/httpRetry';
+import { MaintainerrLogger } from '../../logging/logs.service';
+import { SettingsDataService } from '../../settings/settings-data.service';
+import { Notification } from '../entities/notification.entities';
+import {
+  NotificationAgentKey,
+  NotificationAgentWebhook,
+  NotificationType,
+} from '../notifications-interfaces';
+import { hasNotificationType } from '../notifications.service';
+import type { NotificationAgent, NotificationPayload } from './agent';
+import { validateWebhookUrl } from './webhookUrl';
+
+type KeyMapFunction = (
+  payload: NotificationPayload,
+  type: NotificationType,
+) => string;
+
+const KeyMap: Record<string, string | KeyMapFunction> = {
+  notification_type: (payload, type) => NotificationType[type],
+  event: 'event',
+  subject: 'subject',
+  message: 'message',
+  image: 'image',
+};
+
+class WebhookAgent implements NotificationAgent {
+  public constructor(
+    private readonly appSettings: SettingsDataService,
+    private readonly settings: NotificationAgentWebhook,
+    private readonly logger: MaintainerrLogger,
+    readonly notification: Notification,
+  ) {
+    logger.setContext(WebhookAgent.name);
+    this.notification = notification;
+  }
+
+  getNotification = () => this.notification;
+
+  getSettings = () => this.settings;
+
+  getIdentifier = () => NotificationAgentKey.WEBHOOK;
+
+  private parseKeys(
+    finalPayload: Record<string, unknown>,
+    payload: NotificationPayload,
+    type: NotificationType,
+    extra: NonNullable<NotificationPayload['extra']>,
+  ): Record<string, unknown> {
+    Object.keys(finalPayload).forEach((key) => {
+      if (key === '{{extra}}') {
+        finalPayload.extra = extra;
+        delete finalPayload[key];
+        key = 'extra';
+      }
+
+      if (typeof finalPayload[key] === 'string') {
+        Object.keys(KeyMap).forEach((keymapKey) => {
+          const keymapValue = KeyMap[keymapKey as keyof typeof KeyMap];
+          finalPayload[key] = (finalPayload[key] as string).replace(
+            `{{${keymapKey}}}`,
+            typeof keymapValue === 'function'
+              ? keymapValue(payload, type)
+              : (get(payload, keymapValue) ?? ''),
+          );
+        });
+      } else if (finalPayload[key] && typeof finalPayload[key] === 'object') {
+        finalPayload[key] = this.parseKeys(
+          finalPayload[key] as Record<string, unknown>,
+          payload,
+          type,
+          extra,
+        );
+      }
+    });
+
+    return finalPayload;
+  }
+
+  private buildPayload(type: NotificationType, payload: NotificationPayload) {
+    const extra = payload.extra ?? [];
+
+    // Flatten onto a copy: `sendNotification` hands the same payload object to
+    // every agent, so deleting `extra` here stripped it from any agent that ran
+    // after us (email and LunaSea both forward it) and left `{{extra}}` empty.
+    const flattened: Record<string, unknown> = { ...payload };
+    delete flattened.extra;
+    for (const el of extra) {
+      flattened[el.name] = el.value;
+    }
+
+    const payloadString = this.getSettings().options.jsonPayload;
+    const parsedJSON = JSON.parse(JSON.stringify(payloadString));
+
+    Object.assign(parsedJSON, flattened);
+
+    return this.parseKeys(parsedJSON, payload, type, extra);
+  }
+
+  public shouldSend(): boolean {
+    const settings = this.getSettings();
+
+    if (settings.enabled && settings.options.webhookUrl) {
+      return true;
+    }
+
+    return false;
+  }
+
+  public async send(
+    type: NotificationType,
+    payload: NotificationPayload,
+  ): Promise<string> {
+    const settings = this.getSettings();
+
+    if (!hasNotificationType(type, settings.types ?? [0])) {
+      return 'Success';
+    }
+
+    const webhookUrl = validateWebhookUrl(settings.options.webhookUrl);
+    if (!webhookUrl.ok) {
+      this.logger.error(
+        `Webhook URL ${JSON.stringify(settings.options.webhookUrl)} rejected: ${webhookUrl.reason}.`,
+      );
+      return `Failure: ${webhookUrl.reason}`;
+    }
+
+    this.logger.log('Sending webhook notification');
+
+    try {
+      await rateLimitAwareHttp.post(
+        webhookUrl.url,
+        this.buildPayload(type, payload),
+        settings.options.authHeader
+          ? {
+              headers: {
+                Authorization: settings.options.authHeader,
+              },
+            }
+          : undefined,
+      );
+
+      return 'Success';
+    } catch (error) {
+      const err = error as Error & { response?: { data?: unknown } };
+      this.logger.error(
+        `Error sending Webhook notification. Details: ${JSON.stringify({
+          type: NotificationType[type],
+          subject: payload.subject,
+          response: err.response?.data,
+        })}`,
+        error,
+      );
+
+      return `Failure: ${err.message}`;
+    }
+  }
+}
+
+export default WebhookAgent;

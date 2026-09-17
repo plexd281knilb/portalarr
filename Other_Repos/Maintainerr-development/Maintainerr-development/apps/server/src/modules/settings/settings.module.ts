@@ -1,0 +1,79 @@
+import { Global, Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { InternalApiModule } from '../api/internal-api/internal-api.module';
+import { MediaServerModule } from '../api/media-server/media-server.module';
+import { SeerrApiModule } from '../api/seerr-api/seerr-api.module';
+import { DownloadClientApiModule } from '../api/download-client-api/download-client-api.module';
+import { PlexApiModule } from '../api/plex-api/plex-api.module';
+import { ServarrApiModule } from '../api/servarr-api/servarr-api.module';
+import { StreamystatsApiModule } from '../api/streamystats-api/streamystats-api.module';
+import { TautulliApiModule } from '../api/tautulli-api/tautulli-api.module';
+import { TracearrApiModule } from '../api/tracearr-api/tracearr-api.module';
+import { SportarrMetadataApiModule } from '../api/sportarr-metadata-api/sportarr-metadata.module';
+import { TmdbApiModule } from '../api/tmdb-api/tmdb.module';
+import { TvdbApiModule } from '../api/tvdb-api/tvdb.module';
+import { Collection } from '../collections/entities/collection.entities';
+import { CollectionLog } from '../collections/entities/collection_log.entities';
+import { CollectionMedia } from '../collections/entities/collection_media.entities';
+import { Exclusion } from '../rules/entities/exclusion.entities';
+import { RuleGroup } from '../rules/entities/rule-group.entities';
+import { Rules } from '../rules/entities/rules.entities';
+import { DatabaseDownloadService } from './database-download.service';
+import { RadarrSettings } from './entities/radarr_settings.entities';
+import { Settings } from './entities/settings.entities';
+import { SonarrSettings } from './entities/sonarr_settings.entities';
+import { SportarrSettings } from './entities/sportarr_settings.entities';
+import { MediaServerSwitchService } from './media-server-switch.service';
+import { MetadataSettingsService } from './metadata-settings.service';
+import { RuleMigrationService } from './rule-migration.service';
+import { SettingsController } from './settings.controller';
+import { SettingsOperationsService } from './settings-operations.service';
+import { TelemetryModule } from '../telemetry/telemetry.module';
+import { SettingsDataService } from './settings-data.service';
+
+@Global()
+@Module({
+  imports: [
+    PlexApiModule,
+    MediaServerModule,
+    ServarrApiModule,
+    SeerrApiModule,
+    TautulliApiModule,
+    StreamystatsApiModule,
+    TracearrApiModule,
+    DownloadClientApiModule,
+    SportarrMetadataApiModule,
+    TmdbApiModule,
+    TvdbApiModule,
+    InternalApiModule,
+    TelemetryModule,
+    TypeOrmModule.forFeature([
+      Settings,
+      RadarrSettings,
+      SonarrSettings,
+      SportarrSettings,
+      Collection,
+      CollectionMedia,
+      CollectionLog,
+      Exclusion,
+      RuleGroup,
+      Rules,
+    ]),
+  ],
+  providers: [
+    SettingsDataService,
+    SettingsOperationsService,
+    MetadataSettingsService,
+    RuleMigrationService,
+    MediaServerSwitchService,
+    DatabaseDownloadService,
+  ],
+  exports: [
+    SettingsDataService,
+    SettingsOperationsService,
+    RuleMigrationService,
+    MediaServerSwitchService,
+  ],
+  controllers: [SettingsController],
+})
+export class SettingsModule {}

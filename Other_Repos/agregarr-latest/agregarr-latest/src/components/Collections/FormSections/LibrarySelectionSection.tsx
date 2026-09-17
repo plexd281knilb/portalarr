@@ -1,0 +1,289 @@
+import type { CollectionFormConfig, Library } from '@app/types/collections';
+import { ErrorMessage, type FormikErrors } from 'formik';
+import { defineMessages, useIntl } from 'react-intl';
+import Select, { type MultiValue } from 'react-select';
+
+const messages = defineMessages({
+  librarySelection: 'Library Selection',
+  selectLibraries: 'Select Libraries',
+  allLibraries: 'All Libraries',
+  analyzingListContent: 'Analyzing list content to detect media types...',
+  bothMediaTypes: 'List contains both Movies and TV Shows.',
+  movies: 'Movies',
+  tvShows: 'TV Shows',
+  detectedSingleMediaType:
+    'Detected {mediaTypeLabel} only. {oppositeTypeLabel} collections will be empty until matching content is added.',
+  noLibrariesSelected: 'No libraries selected',
+  librarySelectionHelper:
+    'Select the libraries where collections should be created',
+});
+
+interface LibraryCheckboxDropdownProps {
+  selectedLibraries: string[];
+  allLibraries: Library[];
+  onSelectionChange: (selectedIds: string[]) => void;
+  disabled?: boolean;
+  error?: string;
+  showAllLibrariesOption?: boolean;
+}
+
+const LibraryCheckboxDropdown = ({
+  selectedLibraries,
+  allLibraries,
+  onSelectionChange,
+  disabled = false,
+  error,
+  showAllLibrariesOption = true,
+}: LibraryCheckboxDropdownProps) => {
+  const intl = useIntl();
+  const options = [
+    ...(showAllLibrariesOption
+      ? [{ value: 'all', label: intl.formatMessage(messages.allLibraries) }]
+      : []),
+    ...allLibraries.map((lib) => ({ value: lib.key, label: lib.name })),
+  ];
+
+  const selectedOptions = options.filter((option) =>
+    selectedLibraries.includes(option.value)
+  );
+
+  const handleChange = (
+    newSelectedOptions: MultiValue<{ value: string; label: string }>
+  ) => {
+    let values = newSelectedOptions
+      ? newSelectedOptions.map((option) => option.value)
+      : [];
+
+    // If "All Libraries" is selected, expand to all individual library IDs
+    if (values.includes('all')) {
+      values = allLibraries.map((lib) => lib.key);
+    }
+
+    onSelectionChange(values);
+  };
+
+  return (
+    <Select
+      isMulti
+      options={options}
+      value={selectedOptions}
+      onChange={handleChange}
+      isDisabled={disabled}
+      placeholder={intl.formatMessage(messages.selectLibraries)}
+      menuPlacement="auto"
+      className="react-select-container"
+      classNamePrefix="react-select"
+      closeMenuOnSelect={false}
+      hideSelectedOptions={false}
+      styles={{
+        // Error state styling for control border
+        control: (base, state) => ({
+          ...base,
+          ...(error && {
+            borderColor: '#ef4444',
+            '&:hover': {
+              borderColor: '#ef4444',
+            },
+            boxShadow: state.isFocused ? '0 0 0 1px #ef4444' : 'none',
+          }),
+        }),
+        // Disabled option styling when "all" is selected
+        option: (base, state) => {
+          const isOptionDisabled =
+            selectedLibraries.includes('all') && state.data.value !== 'all';
+          if (!isOptionDisabled) return base;
+          return {
+            ...base,
+            color: '#6b7280',
+            cursor: 'not-allowed',
+          };
+        },
+      }}
+    />
+  );
+};
+
+interface LibrarySelectionSectionProps {
+  values: CollectionFormConfig;
+  libraries: Library[];
+  setFieldValue: (
+    field: string,
+    value: string | number | boolean | string[] | object | null
+  ) => void;
+  errors: FormikErrors<CollectionFormConfig>;
+  isEnhancedForm?: boolean;
+  isVisible?: boolean;
+  filteredLibraries?: Library[];
+  detectedMediaType?: 'movie' | 'tv' | 'both' | 'mixed';
+  isDetectingMediaType?: boolean;
+}
+
+const LibrarySelectionSection = ({
+  values,
+  libraries,
+  setFieldValue,
+  errors,
+  isEnhancedForm = false,
+  isVisible = true,
+  filteredLibraries,
+  detectedMediaType,
+  isDetectingMediaType = false,
+}: LibrarySelectionSectionProps) => {
+  const intl = useIntl();
+
+  if (!isVisible) return null;
+
+  const librariesToUse = filteredLibraries || libraries;
+
+  // Generate message based on detected media type or detection state
+  const getMediaTypeMessage = (): {
+    message: string;
+    type: 'warning' | 'info' | 'success';
+  } | null => {
+    // Show loading state if currently detecting
+    if (isDetectingMediaType) {
+      return {
+        message: intl.formatMessage(messages.analyzingListContent),
+        type: 'info',
+      };
+    }
+
+    // Show success message if both types detected
+    if (detectedMediaType === 'both' || detectedMediaType === 'mixed') {
+      return {
+        message: intl.formatMessage(messages.bothMediaTypes),
+        type: 'success',
+      };
+    }
+
+    // Show warning if specific media type detected
+    if (detectedMediaType === 'movie' || detectedMediaType === 'tv') {
+      const mediaTypeLabel =
+        detectedMediaType === 'movie'
+          ? intl.formatMessage(messages.movies)
+          : intl.formatMessage(messages.tvShows);
+      const oppositeTypeLabel =
+        detectedMediaType === 'movie'
+          ? intl.formatMessage(messages.tvShows)
+          : intl.formatMessage(messages.movies);
+
+      return {
+        message: intl.formatMessage(messages.detectedSingleMediaType, {
+          mediaTypeLabel,
+          oppositeTypeLabel,
+        }),
+        type: 'warning',
+      };
+    }
+
+    return null;
+  };
+
+  const messageData = getMediaTypeMessage();
+
+  // For custom lists and tag collections, always show a message area to prevent layout jumping
+  const shouldShowMessageArea =
+    values.subtype === 'custom' ||
+    values.type === 'radarrtag' ||
+    values.type === 'sonarrtag';
+
+  if (isEnhancedForm) {
+    // Enhanced form - read-only display
+    return (
+      <div>
+        <label className="mb-2 block text-sm text-gray-300">
+          {intl.formatMessage(messages.librarySelection)}
+        </label>
+        <div className="rounded-md border border-stone-500 bg-stone-800 p-3">
+          <div className="text-sm text-gray-300">
+            {values.libraryIds && Array.isArray(values.libraryIds) ? (
+              values.libraryIds.includes('all') ? (
+                <span className="font-medium text-orange-300">
+                  {intl.formatMessage(messages.allLibraries)}
+                </span>
+              ) : (
+                values.libraryIds.map((id: string, index: number) => {
+                  const library = librariesToUse.find((lib) => lib.key === id);
+                  return (
+                    <span key={id}>
+                      {library?.name || `Library ${id}`}
+                      {index < (values.libraryIds?.length || 0) - 1 && ', '}
+                    </span>
+                  );
+                })
+              )
+            ) : values.libraryId ? (
+              (() => {
+                const library = librariesToUse.find(
+                  (lib) => lib.key === values.libraryId
+                );
+                return library?.name || `Library ${values.libraryId}`;
+              })()
+            ) : (
+              <span className="italic text-gray-500">
+                {intl.formatMessage(messages.noLibrariesSelected)}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Regular form - editable
+  return (
+    <div>
+      <label className="mb-2 block text-sm text-gray-300">
+        {intl.formatMessage(messages.librarySelection)}{' '}
+        <span className="text-red-500">*</span>
+      </label>
+
+      {/* Media type detection feedback - visible for custom lists and tag collections */}
+      {(shouldShowMessageArea || messageData) && (
+        <div className="mb-2 min-h-[1.25rem]">
+          {messageData && (
+            <p
+              className={`text-xs ${
+                messageData.type === 'info'
+                  ? 'text-gray-400'
+                  : messageData.type === 'success'
+                  ? 'text-green-400'
+                  : 'text-amber-400'
+              }`}
+            >
+              {messageData.message}
+            </p>
+          )}
+        </div>
+      )}
+
+      <LibraryCheckboxDropdown
+        selectedLibraries={values.libraryIds || []}
+        allLibraries={librariesToUse}
+        onSelectionChange={(selectedIds) => {
+          setFieldValue('libraryIds', selectedIds);
+        }}
+        error={
+          typeof errors.libraryIds === 'string' ? errors.libraryIds : undefined
+        }
+        showAllLibrariesOption={true}
+      />
+
+      <ErrorMessage
+        name="libraryIds"
+        component="div"
+        className="mt-1 text-sm text-red-500"
+      />
+
+      {/* Helper text */}
+      <p className="mt-2 text-xs text-gray-400">
+        {intl.formatMessage(messages.librarySelectionHelper)}
+      </p>
+
+      {/* Note: Warning for "both" media type removed - no longer supported */}
+    </div>
+  );
+};
+
+export default LibrarySelectionSection;
+export { LibraryCheckboxDropdown };

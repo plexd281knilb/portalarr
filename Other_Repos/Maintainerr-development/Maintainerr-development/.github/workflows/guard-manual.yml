@@ -1,0 +1,100 @@
+name: Guard Manual Runs
+
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+        required: true
+      actor:
+        type: string
+        required: true
+      allowed:
+        type: string
+        required: false
+        default: "__CODEOWNERS__"
+      source:
+        type: string
+        required: false
+        default: workflow run
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        if: ${{ inputs.enabled && inputs.allowed == '__CODEOWNERS__' }}
+        uses: actions/checkout@v7
+        with:
+          # Callers triggered by pull_request_review check out refs/pull/N/merge
+          # by default, so a pull request could add its own author to CODEOWNERS
+          # and then pass the gate that decides whether it may be merged with
+          # admin rights. The owner list only counts once it is on the default
+          # branch.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Resolve allowed actors
+        id: allowed
+        if: inputs.enabled
+        shell: bash
+        env:
+          EXPLICIT_ALLOWED: ${{ inputs.allowed }}
+        run: |
+          explicit_allowed="$EXPLICIT_ALLOWED"
+
+          if [ "$explicit_allowed" != '__CODEOWNERS__' ]; then
+            echo "allowed_raw=$explicit_allowed" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ ! -f .github/CODEOWNERS ]; then
+            echo "::error title=Missing CODEOWNERS::.github/CODEOWNERS was not found."
+            exit 1
+          fi
+
+          allowed_from_codeowners="$({
+            grep -v '^[[:space:]]*#' .github/CODEOWNERS |
+              grep -v '^[[:space:]]*$' |
+              tr -s '[:space:]' ' ' |
+              cut -d' ' -f2- |
+              tr ' ' '\n' |
+              grep '^@' |
+              grep -v '/' |
+              sed 's/^@//' |
+              sort -u |
+              paste -sd, -
+          } || true)"
+
+          if [ -z "$allowed_from_codeowners" ]; then
+            echo "::error title=Missing code owner users::No individual code owners were found in .github/CODEOWNERS."
+            exit 1
+          fi
+
+          echo "allowed_raw=$allowed_from_codeowners" >> "$GITHUB_OUTPUT"
+
+      - name: Check actor
+        if: inputs.enabled
+        shell: bash
+        env:
+          ALLOWED_RAW: ${{ steps.allowed.outputs.allowed_raw }}
+          ACTOR: ${{ inputs.actor }}
+          SOURCE: ${{ inputs.source }}
+        run: |
+          IFS=',' read -r -a ALLOWED <<< "$ALLOWED_RAW"
+
+          for user in "${ALLOWED[@]}"; do
+            if [ "$ACTOR" == "$user" ]; then
+              echo "::notice::${SOURCE} authorized for ${ACTOR}"
+              exit 0
+            fi
+          done
+
+          echo "::error title=Unauthorized ${SOURCE}::User '${ACTOR}' is not allowed. Allowed: ${ALLOWED_RAW}."
+          exit 1
+      - name: Skip actor check
+        if: ${{ !inputs.enabled }}
+        run: echo "Guard disabled for this event."

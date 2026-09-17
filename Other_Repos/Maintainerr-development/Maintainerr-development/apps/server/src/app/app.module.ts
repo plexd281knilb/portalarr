@@ -1,0 +1,124 @@
+import { Module, OnModuleInit } from '@nestjs/common';
+import { APP_PIPE } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { GracefulShutdownModule } from '@tygra/nestjs-graceful-shutdown';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { join } from 'path';
+import { ExternalApiModule } from '../modules/api/external-api/external-api.module';
+import { GitHubApiModule } from '../modules/api/github-api/github-api.module';
+import { MediaServerFactory } from '../modules/api/media-server/media-server.factory';
+import { MediaServerModule } from '../modules/api/media-server/media-server.module';
+import { DownloadClientApiModule } from '../modules/api/download-client-api/download-client-api.module';
+import { DownloadClientApiService } from '../modules/api/download-client-api/download-client-api.service';
+import { PlexApiModule } from '../modules/api/plex-api/plex-api.module';
+import { SeerrApiModule } from '../modules/api/seerr-api/seerr-api.module';
+import { SeerrApiService } from '../modules/api/seerr-api/seerr-api.service';
+import { ServarrApiModule } from '../modules/api/servarr-api/servarr-api.module';
+import { StreamystatsApiModule } from '../modules/api/streamystats-api/streamystats-api.module';
+import { StreamystatsApiService } from '../modules/api/streamystats-api/streamystats-api.service';
+import { TautulliApiModule } from '../modules/api/tautulli-api/tautulli-api.module';
+import { TautulliApiService } from '../modules/api/tautulli-api/tautulli-api.service';
+import { TracearrApiModule } from '../modules/api/tracearr-api/tracearr-api.module';
+import { TracearrApiService } from '../modules/api/tracearr-api/tracearr-api.service';
+import { CollectionsModule } from '../modules/collections/collections.module';
+import { EventsModule } from '../modules/events/events.module';
+import { LogsModule } from '../modules/logging/logs.module';
+import { MetadataModule } from '../modules/metadata/metadata.module';
+import { NotificationsModule } from '../modules/notifications/notifications.module';
+import { NotificationService } from '../modules/notifications/notifications.service';
+import { OverlaysModule } from '../modules/overlays/overlays.module';
+import { RulesModule } from '../modules/rules/rules.module';
+import { SettingsModule } from '../modules/settings/settings.module';
+import { SettingsDataService } from '../modules/settings/settings-data.service';
+import { StorageMetricsModule } from '../modules/storage-metrics/storage-metrics.module';
+import { TelemetryModule } from '../modules/telemetry/telemetry.module';
+import { VersionModule } from '../modules/version/version.module';
+import { AppController } from './app.controller';
+import { HealthController } from './health.controller';
+import { HealthService } from './health.service';
+import ormConfig from './config/typeOrmConfig';
+import { resolveUiRootPath } from './config/uiPath';
+
+@Module({
+  imports: [
+    GracefulShutdownModule.forRoot(),
+    TypeOrmModule.forRoot(ormConfig),
+    EventEmitterModule.forRoot({
+      wildcard: true,
+    }),
+    LogsModule,
+    SettingsModule,
+    PlexApiModule,
+    MediaServerModule,
+    ExternalApiModule,
+    GitHubApiModule,
+    MetadataModule,
+    ServarrApiModule,
+    SeerrApiModule,
+    TautulliApiModule,
+    StreamystatsApiModule,
+    TracearrApiModule,
+    DownloadClientApiModule,
+    RulesModule,
+    CollectionsModule,
+    NotificationsModule,
+    EventsModule,
+    OverlaysModule,
+    StorageMetricsModule,
+    TelemetryModule,
+    VersionModule,
+    ServeStaticModule.forRootAsync({
+      useFactory: () => {
+        if (process.env.NODE_ENV !== 'production') {
+          return [];
+        }
+
+        return [
+          {
+            rootPath: resolveUiRootPath(join(__dirname, '..', 'ui')),
+            serveRoot: process.env.BASE_PATH || undefined,
+            exclude: ['/api/{*path}'],
+          },
+        ];
+      },
+    }),
+  ],
+  controllers: [AppController, HealthController],
+  providers: [
+    HealthService,
+    {
+      provide: APP_PIPE,
+      useClass: ZodValidationPipe,
+    },
+  ],
+})
+export class AppModule implements OnModuleInit {
+  constructor(
+    private readonly settingsDataService: SettingsDataService,
+    private readonly mediaServerFactory: MediaServerFactory,
+    private readonly seerrApi: SeerrApiService,
+    private readonly tautulliApi: TautulliApiService,
+    private readonly streamystatsApi: StreamystatsApiService,
+    private readonly tracearrApi: TracearrApiService,
+    private readonly downloadClientApi: DownloadClientApiService,
+    private readonly notificationService: NotificationService,
+  ) {}
+  async onModuleInit() {
+    // Initialize modules requiring settings
+    await this.settingsDataService.init();
+
+    // Initialize configured media server (Plex or Jellyfin)
+    await this.mediaServerFactory.initialize();
+
+    this.seerrApi.init();
+    this.tautulliApi.init();
+    this.streamystatsApi.init();
+    this.tracearrApi.init();
+    this.downloadClientApi.init();
+
+    // intialize notification agents
+    await this.notificationService.registerConfiguredAgents();
+  }
+}

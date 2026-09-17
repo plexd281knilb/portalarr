@@ -1,0 +1,187 @@
+name: "Release 1 - Prepare PR"
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_release_candidate_image:
+        type: boolean
+        description: Build release candidate image
+        default: false
+  push:
+    branches:
+      - development
+
+concurrency:
+  group: release-prepare-pr-${{ github.ref_name || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  MAIN_BRANCH: main
+  DEVELOPMENT_BRANCH: development
+  RELEASE_PR_TITLE: "chore: sync development to main"
+  RELEASE_PR_TEMPLATE: .github/PULL_REQUEST_TEMPLATE/release-main.md
+
+jobs:
+  guard_manual_run:
+    uses: ./.github/workflows/guard-manual.yml
+    permissions:
+      contents: read
+    with:
+      enabled: ${{ github.event_name == 'workflow_dispatch' }}
+      actor: ${{ github.actor }}
+      source: manual workflow run
+
+  guard_release_branch:
+    name: Guard release branch
+    needs: guard_manual_run
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Ensure release PR prep was started from development
+        run: |
+          if [ "${{ github.ref_name }}" != "development" ]; then
+            echo "Prepare Release PR must be run from development. Current ref: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+  prepare_pr:
+    name: Create or update release PR
+    needs: guard_release_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.MERGE_APP_ID }}
+          private-key: ${{ secrets.MERGE_APP_KEY }}
+
+      - name: Checkout development
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Run preflight checks
+        run: |
+          git fetch origin
+
+          development_ahead_of_main="$(git rev-list --count origin/main..origin/development)"
+          main_ahead_of_development="$(git rev-list --count origin/development..origin/main)"
+
+          echo "development_ahead_of_main=${development_ahead_of_main}"
+          echo "main_ahead_of_development=${main_ahead_of_development}"
+
+          echo "==> Content diff summary"
+          git diff --shortstat origin/main origin/development || true
+
+          echo "==> Changed files"
+          git diff --name-status origin/main origin/development || true
+
+          echo "==> merge-tree preview"
+          merge_base="$(git merge-base origin/main origin/development)"
+          preview="$(git merge-tree "$merge_base" origin/main origin/development)"
+          if [ -z "$preview" ]; then
+            echo "clean"
+          else
+            printf '%s\n' "$preview"
+          fi
+
+          {
+            echo "## Release Preflight"
+            echo
+            echo "- development_ahead_of_main=${development_ahead_of_main}"
+            echo "- main_ahead_of_development=${main_ahead_of_development}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create or update release PR
+        id: release-pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          existing_number="$(gh pr list --base "$MAIN_BRANCH" --head "$DEVELOPMENT_BRANCH" --state open --json number --jq '.[0].number // empty')"
+
+          if [ -z "$existing_number" ] && [ "$EVENT_NAME" = "push" ]; then
+            echo "No open release PR; skipping body refresh on push event."
+            {
+              echo "## Release PR"
+              echo
+              echo "No open release PR; nothing to refresh."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          body_file="$(mktemp)"
+          cp "$RELEASE_PR_TEMPLATE" "$body_file"
+
+          changes="$(git log "origin/${MAIN_BRANCH}..origin/${DEVELOPMENT_BRANCH}" --pretty=format:'%s' \
+            | awk '{ key=$0; sub(/ \(#[0-9]+\)$/, "", key); if (!seen[key]++) print }' \
+            | { grep -vE '^chore(\([^)]*\))?!?:' || true; } \
+            | sed 's/^/- /')"
+
+          if [ -n "$changes" ]; then
+            printf '\n%s\n' "$changes" >> "$body_file"
+          else
+            printf '\n_No non-chore commits._\n' >> "$body_file"
+          fi
+
+          if [ -n "$existing_number" ]; then
+            gh pr edit "$existing_number" \
+              --title "$RELEASE_PR_TITLE" \
+              --body-file "$body_file"
+
+            pr_url="$(gh pr view "$existing_number" --json url --jq '.url')"
+            echo "pr_number=${existing_number}" >> "$GITHUB_OUTPUT"
+            echo "Updated release PR: $pr_url"
+            {
+              echo "## Release PR"
+              echo
+              echo "Updated existing PR: $pr_url"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            pr_url="$(gh pr create \
+              --base "$MAIN_BRANCH" \
+              --head "$DEVELOPMENT_BRANCH" \
+              --title "$RELEASE_PR_TITLE" \
+              --body-file "$body_file")"
+
+            pr_number="$(gh pr view "$pr_url" --json number --jq '.number')"
+            echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
+            echo "Created release PR: $pr_url"
+            {
+              echo "## Release PR"
+              echo
+              echo "Created PR: $pr_url"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Manage docker-build label on release PR
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.release-pr.outputs.pr_number }}
+          BUILD_DOCKER: ${{ inputs.build_release_candidate_image }}
+        run: |
+          gh label create "release:docker-build" \
+            --color "0075ca" \
+            --description "Build release candidate Docker image" \
+            --force
+
+          if [ "$BUILD_DOCKER" = "true" ]; then
+            gh pr edit "$PR_NUMBER" --add-label "release:docker-build"
+            echo "Added release:docker-build label to PR #${PR_NUMBER}"
+            echo "- Docker build label: **added** (images will be built and pushed)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh pr edit "$PR_NUMBER" --remove-label "release:docker-build" 2>/dev/null || true
+            echo "Removed release:docker-build label from PR #${PR_NUMBER} (or was not present)"
+            echo "- Docker build label: **not set** (images will not be built)" >> "$GITHUB_STEP_SUMMARY"
+          fi

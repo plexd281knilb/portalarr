@@ -1,0 +1,847 @@
+import {
+  BULK_MEDIA_ACTION_MAX_ITEMS,
+  bulkCollectionMediaRequestSchema,
+  type BulkCollectionMediaRequest,
+  type BulkMediaResponse,
+  COLLECTION_POSTER_MAX_BYTES,
+  COLLECTION_POSTER_MAX_LABEL,
+  CollectionPosterDeleteResponse,
+  CollectionPosterUploadResponse,
+  CollectionLogMeta,
+  CollectionMediaSortField,
+  DELETE_AFTER_MAX_DAYS,
+  ECollectionLogType,
+  MediaItemType,
+  MediaItemTypes,
+  MediaLibrarySortField,
+  MediaSortOrder,
+  POSTPONE_MAX_DAYS,
+  POSTPONE_MIN_DAYS,
+  ServarrAction,
+  collectionMediaSortFields,
+  mediaLibrarySortFields,
+  mediaSortOrders,
+} from '@maintainerr/contracts';
+import {
+  BadGatewayException,
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  Delete,
+  Get,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { isValidCron } from 'cron-validator';
+import { Response } from 'express';
+import * as fs from 'fs';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { z } from 'zod';
+import { MaintainerrLogger } from '../logging/logs.service';
+import { ExclusionAction } from '../rules/dtos/exclusion.dto';
+import {
+  ExecutionLockService,
+  RULES_COLLECTIONS_EXECUTION_LOCK_KEY,
+} from '../tasks/execution-lock.service';
+import { CollectionHandler } from './collection-handler';
+import {
+  CollectionPosterService,
+  InvalidCollectionPosterError,
+} from './collection-poster.service';
+import { CollectionWorkerService } from './collection-worker.service';
+import {
+  CollectionsService,
+  PostponeCollectionMediaResult,
+} from './collections.service';
+
+// How long a postpone waits for an in-flight collection or rule run before
+// giving up. Long enough to ride out a run that is finishing, short enough to
+// stay within a browser's patience.
+const POSTPONE_LOCK_WAIT_MS = 30000;
+
+const collectionMediaSortQuerySchema = z
+  .enum(collectionMediaSortFields)
+  .optional();
+const mediaLibrarySortQuerySchema = z.enum(mediaLibrarySortFields).optional();
+const mediaSortOrderQuerySchema = z.enum(mediaSortOrders).optional();
+const collectionMediaSortKeySchema = z.union(
+  collectionMediaSortFields.flatMap((field) =>
+    mediaSortOrders.map((order) => z.literal(`${field}.${order}` as const)),
+  ),
+);
+
+const ruleValueSchema = z.union([
+  z.number(),
+  z.string(),
+  z.boolean(),
+  z.date(),
+  z.array(z.number()),
+  z.array(z.string()),
+  z.null(),
+]);
+
+const ruleComparisonResultSchema = z.object({
+  firstValueName: z.string(),
+  firstValue: ruleValueSchema,
+  firstValueReason: z.string().optional(),
+  secondValueName: z.string().optional(),
+  secondValue: ruleValueSchema.optional(),
+  secondValueReason: z.string().optional(),
+  action: z.string(),
+  operator: z.string().optional(),
+  result: z.boolean(),
+});
+
+const sectionComparisonResultsSchema = z.object({
+  id: z.number(),
+  result: z.boolean(),
+  operator: z.string().optional(),
+  ruleResults: z.array(ruleComparisonResultSchema),
+});
+
+const comparisonStatisticsSchema = z.object({
+  mediaServerId: z.string(),
+  result: z.boolean(),
+  sectionResults: z.array(sectionComparisonResultsSchema),
+});
+
+const collectionLogMetaInnerSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('media_added_manually'),
+  }),
+  z.object({
+    type: z.literal('media_removed_manually'),
+  }),
+  z.object({
+    type: z.literal('media_added_by_rule'),
+    data: comparisonStatisticsSchema,
+  }),
+  z.object({
+    type: z.literal('media_removed_by_rule'),
+    data: comparisonStatisticsSchema,
+  }),
+]);
+
+const collectionLogMetaSchema = z.custom<CollectionLogMeta>(
+  (value) => collectionLogMetaInnerSchema.safeParse(value).success,
+  { message: 'Invalid collection log metadata' },
+);
+
+const collectionMediaChangeSchema = z.object({
+  mediaServerId: z.string().min(1),
+  reason: collectionLogMetaSchema.optional(),
+});
+
+const collectionBaseShape = {
+  type: z.enum(MediaItemTypes),
+  mediaServerId: z.string().min(1).optional().nullable(),
+  libraryId: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean(),
+  arrAction: z.nativeEnum(ServarrAction),
+  visibleOnRecommended: z.boolean().optional(),
+  visibleOnHome: z.boolean().optional(),
+  listExclusions: z.boolean().optional(),
+  cleanupLeftoverFolders: z.boolean().optional(),
+  forceSeerr: z.boolean().optional(),
+  deleteAfterDays: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(DELETE_AFTER_MAX_DAYS)
+    .optional(),
+  manualCollection: z.boolean().optional(),
+  manualCollectionName: z.string().optional().nullable(),
+  keepLogsForMonths: z.coerce.number().int().optional(),
+  tautulliWatchedPercentOverride: z.coerce.number().int().optional().nullable(),
+  radarrSettingsId: z.coerce.number().int().optional().nullable(),
+  sonarrSettingsId: z.coerce.number().int().optional().nullable(),
+  sportarrSettingsId: z.coerce.number().int().optional().nullable(),
+  radarrQualityProfileId: z.coerce.number().int().optional().nullable(),
+  sonarrQualityProfileId: z.coerce.number().int().optional().nullable(),
+  sportarrQualityProfileId: z.coerce.number().int().optional().nullable(),
+  tagInArr: z.boolean().optional(),
+  // keepInMaintainerrOnly is deliberately absent: it is a rule-group option, and
+  // a collection created here has no rule group to turn it back off with.
+  sortTitle: z.string().optional().nullable(),
+  mediaServerSort: collectionMediaSortKeySchema.optional().nullable(),
+  overlayEnabled: z.boolean().optional(),
+  overlayTemplateId: z.coerce.number().int().optional().nullable(),
+};
+
+export const collectionBodySchema = z.object({
+  ...collectionBaseShape,
+  id: z.coerce.number().int(),
+});
+const newCollectionBodySchema = z.object({
+  ...collectionBaseShape,
+  id: z.coerce.number().int().optional(),
+});
+export const createCollectionBodySchema = z.object({
+  collection: newCollectionBodySchema,
+  media: z.array(collectionMediaChangeSchema).optional(),
+});
+export const addToCollectionBodySchema = z.object({
+  collectionId: z.coerce.number().int(),
+  media: z.array(collectionMediaChangeSchema),
+  manual: z.boolean().optional(),
+});
+export const removeFromCollectionBodySchema = z.object({
+  collectionId: z.coerce.number().int(),
+  media: z.array(collectionMediaChangeSchema),
+});
+export const removeCollectionBodySchema = z.object({
+  collectionId: z.coerce.number().int(),
+});
+export const updateScheduleBodySchema = z.object({
+  schedule: z
+    .string()
+    .min(1)
+    .refine((value) => isValidCron(value), {
+      message: 'Invalid cron expression',
+    }),
+});
+const manualCollectionContextSchema = z.object({
+  // Media-server item id: a numeric Plex ratingKey or a hex-GUID Jellyfin/Emby
+  // id. Coerce to a string rather than a number - a GUID coerced to a number is
+  // NaN (#3185), and every consumer already uses the id as a string.
+  id: z.coerce.string().min(1),
+  index: z.coerce.number().int().optional(),
+  parentIndex: z.coerce.number().int().optional(),
+  type: z.enum(MediaItemTypes),
+});
+export const manualCollectionActionBodySchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal(0),
+    mediaId: z.string().min(1),
+    context: manualCollectionContextSchema,
+    collectionId: z.coerce.number().int(),
+  }),
+  z.object({
+    action: z.literal(1),
+    mediaId: z.string().min(1),
+    context: manualCollectionContextSchema,
+    collectionId: z.coerce.number().int().optional(),
+  }),
+]);
+export const handleCollectionMediaBodySchema = z.object({
+  collectionId: z.number().int(),
+  mediaId: z.string().min(1),
+});
+export const postponeCollectionMediaBodySchema = z.object({
+  // Coerced like the other collection endpoints: this one is called by
+  // external automation, which routinely sends ids as strings.
+  collectionId: z.coerce.number().int(),
+  mediaId: z.string().min(1),
+  // Omit to reset the full grace window; provide to push the deadline out by
+  // this many days.
+  days: z.coerce
+    .number()
+    .int()
+    .min(POSTPONE_MIN_DAYS)
+    .max(POSTPONE_MAX_DAYS)
+    .optional(),
+});
+
+type CreateCollectionBody = z.infer<typeof createCollectionBodySchema>;
+type AddToCollectionBody = z.infer<typeof addToCollectionBodySchema>;
+type RemoveFromCollectionBody = z.infer<typeof removeFromCollectionBodySchema>;
+type RemoveCollectionBody = z.infer<typeof removeCollectionBodySchema>;
+type UpdateCollectionBody = z.infer<typeof collectionBodySchema>;
+type UpdateScheduleBody = z.infer<typeof updateScheduleBodySchema>;
+type ManualCollectionActionBody = z.infer<
+  typeof manualCollectionActionBodySchema
+>;
+type HandleCollectionMediaBody = z.infer<
+  typeof handleCollectionMediaBodySchema
+>;
+type PostponeCollectionMediaBody = z.infer<
+  typeof postponeCollectionMediaBodySchema
+>;
+
+@Controller('api/collections')
+export class CollectionsController {
+  constructor(
+    private readonly collectionService: CollectionsService,
+    private readonly collectionWorkerService: CollectionWorkerService,
+    private readonly executionLock: ExecutionLockService,
+    private readonly collectionHandler: CollectionHandler,
+    private readonly collectionPosterService: CollectionPosterService,
+    private readonly logger: MaintainerrLogger,
+  ) {
+    this.logger.setContext(CollectionsController.name);
+  }
+  @Post()
+  async createCollection(
+    @Body(new ZodValidationPipe(createCollectionBodySchema))
+    request: CreateCollectionBody,
+  ) {
+    await this.collectionService.createCollectionWithChildren(
+      request.collection,
+      request.media,
+    );
+  }
+  @Post('/add')
+  async addToCollection(
+    @Body(new ZodValidationPipe(addToCollectionBodySchema))
+    request: AddToCollectionBody,
+  ) {
+    await this.collectionService.addToCollection(
+      request.collectionId,
+      request.media,
+      request.manual ?? false,
+    );
+  }
+  @Post('/remove')
+  async removeFromCollection(
+    @Body(new ZodValidationPipe(removeFromCollectionBodySchema))
+    request: RemoveFromCollectionBody,
+  ) {
+    await this.collectionService.removeFromCollection(
+      request.collectionId,
+      request.media,
+    );
+  }
+  @Post('/removeCollection')
+  removeCollection(
+    @Body(new ZodValidationPipe(removeCollectionBodySchema))
+    request: RemoveCollectionBody,
+  ) {
+    return this.collectionService.deleteCollection(request.collectionId);
+  }
+
+  @Put()
+  updateCollection(
+    @Body(new ZodValidationPipe(collectionBodySchema))
+    request: UpdateCollectionBody,
+  ) {
+    return this.collectionService.updateCollection(request);
+  }
+
+  @Post('/handle')
+  async handleCollection() {
+    if (this.collectionWorkerService.isRunning()) {
+      throw new HttpException(
+        'The collection handler is already running',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    this.collectionWorkerService
+      .execute()
+      .catch((error) =>
+        this.logger.error(
+          'Failed to start collection handler execution',
+          error,
+        ),
+      );
+  }
+
+  @Put('/schedule/update')
+  updateSchedule(
+    @Body(new ZodValidationPipe(updateScheduleBodySchema))
+    request: UpdateScheduleBody,
+  ) {
+    return this.collectionWorkerService.updateJob(request.schedule);
+  }
+
+  @Get('/deactivate/:id')
+  deactivate(@Param('id', ParseIntPipe) id: number) {
+    return this.collectionService.deactivateCollection(id);
+  }
+
+  @Get('/activate/:id')
+  activate(@Param('id', ParseIntPipe) id: number) {
+    return this.collectionService.activateCollection(id);
+  }
+
+  @Get()
+  getCollections(
+    @Query('libraryId') libraryId: string,
+    @Query('typeId') typeId: MediaItemType,
+  ) {
+    return this.collectionService.getCollections(
+      libraryId || undefined,
+      typeId || undefined,
+    );
+  }
+
+  @Get('/overlay-data')
+  @ApiOperation({
+    summary: 'Get collections with full media membership for overlay consumers',
+  })
+  @ApiQuery({
+    name: 'libraryId',
+    required: false,
+    description: 'Filter collections by library id.',
+  })
+  @ApiQuery({
+    name: 'typeId',
+    required: false,
+    enum: MediaItemTypes,
+    description: 'Filter collections by media item type.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns collections with full media arrays for overlay and helper integrations.',
+  })
+  getCollectionsForOverlayData(
+    @Query('libraryId') libraryId: string,
+    @Query('typeId') typeId: MediaItemType,
+  ) {
+    return this.collectionService.getCollectionsForOverlayData(
+      libraryId || undefined,
+      typeId || undefined,
+    );
+  }
+
+  @Get('/collection/:id')
+  getCollection(@Param('id', ParseIntPipe) collectionId: number) {
+    return this.collectionService.getCollection(collectionId);
+  }
+
+  @Post('/media/add')
+  async ManualActionOnCollection(
+    @Body(new ZodValidationPipe(manualCollectionActionBodySchema))
+    request: ManualCollectionActionBody,
+  ) {
+    const result =
+      await this.collectionService.MediaCollectionActionWithContext(
+        request.collectionId,
+        request.context,
+        { mediaServerId: request.mediaId },
+        request.action === ExclusionAction.ADD ? 'add' : 'remove',
+      );
+
+    // A rejected item and an item the context resolved to nothing both used to
+    // answer 201, so the modal closed as though the action had worked.
+    if (result.resolvedCount === 0) {
+      throw new BadRequestException(
+        'This item cannot be applied to the selected collection',
+      );
+    }
+
+    // Nothing was written locally or remotely, so answering 201 would close the
+    // modal on a no-op. Not a media server refusal: it was never asked.
+    if (result.unlinkedIds?.length) {
+      throw new BadRequestException(
+        'This collection has no media server collection to add to. Check that its collection still exists on the media server.',
+      );
+    }
+
+    if (result.serverRejectedIds.length > 0) {
+      throw new BadGatewayException(
+        `The media server refused ${result.serverRejectedIds.length} of ${result.resolvedCount} item(s)`,
+      );
+    }
+
+    // Not a refusal: the media server never answered, so it may or may not have
+    // applied the change. Answering 201 here is the false success #3383 removed.
+    if (result.serverUnconfirmedIds?.length) {
+      throw new BadGatewayException(
+        `The media server did not answer for ${result.serverUnconfirmedIds.length} of ${result.resolvedCount} item(s), so it is unclear whether they were added`,
+      );
+    }
+
+    return result.collection;
+  }
+
+  @Post('/media/bulk')
+  @ApiOperation({
+    summary: 'Add or remove a media selection to or from one collection',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Per-item results; failures are reported per media id.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: `Rejected without processing: empty, more than ${BULK_MEDIA_ACTION_MAX_ITEMS} media ids, or an add without a collection.`,
+  })
+  async bulkMediaCollectionAction(
+    @Body(new ZodValidationPipe(bulkCollectionMediaRequestSchema))
+    request: BulkCollectionMediaRequest,
+  ): Promise<BulkMediaResponse> {
+    // Only a removal can mean "every collection"; an add needs a target.
+    if (
+      request.action === ExclusionAction.ADD &&
+      request.collectionId === undefined
+    ) {
+      throw new BadRequestException(
+        'A collection is required to add media to it',
+      );
+    }
+
+    return await this.collectionService.bulkMediaCollectionAction(
+      request.mediaIds,
+      request.collectionId,
+      request.action === ExclusionAction.ADD ? 'add' : 'remove',
+      request.mediaType,
+      request.context,
+    );
+  }
+
+  @Post('/media/handle')
+  async handleCollectionMedia(
+    @Body(new ZodValidationPipe(handleCollectionMediaBodySchema))
+    request: HandleCollectionMediaBody,
+  ) {
+    if (
+      this.collectionWorkerService.isRunning() ||
+      this.executionLock.isRuleQueueProcessing()
+    ) {
+      throw new ConflictException(
+        'Collection handling is already running. Try again when the current collection or rule execution finishes.',
+      );
+    }
+
+    const collection = await this.collectionService.getCollectionRecord(
+      request.collectionId,
+    );
+
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
+    const collectionMedia =
+      await this.collectionService.getCollectionMediaRecord(
+        request.collectionId,
+        request.mediaId,
+      );
+
+    if (!collectionMedia) {
+      throw new NotFoundException('Media not found in collection');
+    }
+
+    const release = this.executionLock.tryAcquire(
+      RULES_COLLECTIONS_EXECUTION_LOCK_KEY,
+    );
+
+    if (!release) {
+      throw new ConflictException(
+        'Collection handling is already running. Try again when the current collection or rule execution finishes.',
+      );
+    }
+
+    try {
+      const result = await this.collectionHandler.handleMedia(
+        collection,
+        collectionMedia,
+      );
+
+      // 'handled' and 'removed-missing' both leave the item resolved (acted on
+      // or pruned because it no longer exists); only an unrecoverable 'failed'
+      // is surfaced as a conflict.
+      if (result === 'failed') {
+        throw new ConflictException(
+          'The collection action could not be executed for this item',
+        );
+      }
+    } finally {
+      release();
+    }
+  }
+
+  @Post('/media/postpone')
+  @ApiOperation({
+    summary: 'Postpone (or reset) the deletion timer for one collection item',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns the new addDate, the collection deleteAfterDays, and the resulting deletionDate.',
+  })
+  async postponeCollectionMedia(
+    @Body(new ZodValidationPipe(postponeCollectionMediaBodySchema))
+    request: PostponeCollectionMediaBody,
+  ) {
+    // Share the collection/rule execution lock: a worker run that has already
+    // selected this item for deletion would otherwise delete it despite the
+    // postpone. Queue behind a run that is about to finish rather than
+    // dropping the caller's "keep" outright - nothing retries a 409, and once
+    // the run ends the answer is definite either way (postponed, or a 404
+    // because the item was handled).
+    const release = await this.executionLock.acquireWithin(
+      RULES_COLLECTIONS_EXECUTION_LOCK_KEY,
+      POSTPONE_LOCK_WAIT_MS,
+    );
+
+    if (!release) {
+      throw new ConflictException(
+        'Collection handling is already running. Try again when the current collection or rule execution finishes.',
+      );
+    }
+
+    let result: PostponeCollectionMediaResult | undefined;
+    try {
+      result = await this.collectionService.postponeCollectionMedia(
+        request.collectionId,
+        request.mediaId,
+        request.days,
+      );
+    } finally {
+      release();
+    }
+
+    if (!result) {
+      throw new NotFoundException('Media not found in collection');
+    }
+
+    // Outside the lock: resolving the item's title hits the media server, and
+    // a slow one must not stall every queued rule or collection run.
+    await this.collectionService.logPostponedCollectionMedia(
+      request.collectionId,
+      request.mediaId,
+      request.days,
+    );
+
+    return result;
+  }
+
+  @Delete('/media')
+  deleteMediaFromCollection(
+    @Query('mediaId') mediaId: string,
+    @Query('collectionId', new ParseIntPipe({ optional: true }))
+    collectionId?: number,
+  ) {
+    if (!collectionId) {
+      return this.collectionService.removeFromAllCollections([
+        { mediaServerId: mediaId },
+      ]);
+    }
+    return this.collectionService.removeFromCollection(collectionId, [
+      { mediaServerId: mediaId },
+    ]);
+  }
+
+  @Get('/media/')
+  getMediaInCollection(
+    @Query('collectionId', ParseIntPipe) collectionId: number,
+  ) {
+    return this.collectionService.getCollectionMedia(collectionId);
+  }
+
+  @Get('/media/count')
+  getMediaInCollectionCount(
+    @Query('collectionId', new ParseIntPipe({ optional: true }))
+    collectionId?: number,
+  ) {
+    return this.collectionService.getCollectionMediaCount(collectionId);
+  }
+
+  @Get('/media/:id/content/:page')
+  getLibraryContent(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('page', ParseIntPipe) page: number,
+    @Query('sort', new ZodValidationPipe(collectionMediaSortQuerySchema))
+    sort?: CollectionMediaSortField,
+    @Query('sortOrder', new ZodValidationPipe(mediaSortOrderQuerySchema))
+    sortOrder?: MediaSortOrder,
+    @Query('size', new ParseIntPipe({ optional: true })) amount?: number,
+  ) {
+    const size = amount ?? 25;
+    const offset = (page - 1) * size;
+    return this.collectionService.getCollectionMediaWithServerDataAndPaging(
+      id,
+      {
+        offset: offset,
+        size: size,
+        sort,
+        sortOrder,
+      },
+    );
+  }
+
+  @Get('/exclusions/:id/content/:page')
+  getExclusions(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('page', ParseIntPipe) page: number,
+    @Query('sort', new ZodValidationPipe(mediaLibrarySortQuerySchema))
+    sort?: MediaLibrarySortField,
+    @Query('sortOrder', new ZodValidationPipe(mediaSortOrderQuerySchema))
+    sortOrder?: MediaSortOrder,
+    @Query('size', new ParseIntPipe({ optional: true })) amount?: number,
+  ) {
+    const size = amount ?? 25;
+    const offset = (page - 1) * size;
+    return this.collectionService.getCollectionExclusionsWithServerDataAndPaging(
+      id,
+      {
+        offset: offset,
+        size: size,
+        sort,
+        sortOrder,
+      },
+    );
+  }
+
+  // ── Custom collection poster ─────────────────────────────────────────────
+
+  @Get('/:id/poster')
+  @ApiOperation({
+    summary:
+      'Stream the user-uploaded poster bytes for a collection. 404 when none.',
+  })
+  @ApiResponse({ status: 200, description: 'Returns the stored JPEG bytes.' })
+  @ApiResponse({
+    status: 404,
+    description: 'No custom poster on this collection.',
+  })
+  getCollectionPoster(
+    @Param('id', ParseIntPipe) id: number,
+    @Res({ passthrough: true }) res: Response,
+  ): StreamableFile {
+    const stored = this.collectionPosterService.getStoredPosterFile(id);
+    if (!stored) {
+      throw new NotFoundException('No custom poster set for this collection');
+    }
+
+    res.setHeader('Content-Type', stored.contentType);
+    res.setHeader('Cache-Control', 'no-cache');
+    return new StreamableFile(fs.createReadStream(stored.path));
+  }
+
+  @Post('/:id/poster')
+  @UseInterceptors(
+    FileInterceptor('poster', {
+      limits: { fileSize: COLLECTION_POSTER_MAX_BYTES },
+    }),
+  )
+  @ApiOperation({
+    summary: `Upload a custom collection poster. Stored locally and pushed to the media server (best-effort). ${COLLECTION_POSTER_MAX_LABEL} max.`,
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Returns { pushed, attempted } so clients can distinguish a deferred local save from an attempted live media-server push.',
+    schema: {
+      type: 'object',
+      required: ['pushed', 'attempted'],
+      properties: {
+        pushed: {
+          type: 'boolean',
+          description:
+            'True when the live media-server upload succeeded during this request.',
+        },
+        attempted: {
+          type: 'boolean',
+          description:
+            'True when Maintainerr attempted a live media-server upload during this request.',
+        },
+      },
+    },
+  })
+  async uploadCollectionPoster(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: { originalname: string; buffer: Buffer } | undefined,
+  ): Promise<CollectionPosterUploadResponse> {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('No poster file uploaded');
+    }
+
+    const collection = await this.collectionService.getCollectionRecord(id);
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
+    let stored: { buffer: Buffer; contentType: string };
+    try {
+      stored = await this.collectionPosterService.storePoster(id, file.buffer);
+    } catch (error) {
+      if (error instanceof InvalidCollectionPosterError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+
+    const pushResult = await this.collectionPosterService.pushToMediaServer(
+      collection.mediaServerId,
+      stored.buffer,
+      stored.contentType,
+    );
+
+    return {
+      pushed: pushResult.pushed,
+      attempted: pushResult.attempted,
+    };
+  }
+
+  @Delete('/:id/poster')
+  @ApiOperation({
+    summary:
+      'Clear the stored custom poster and request a best-effort metadata refresh on the media server. Artwork may or may not change depending on the configured server behavior and agents.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns whether the local poster was cleared and whether Maintainerr successfully requested a media-server metadata refresh.',
+    schema: {
+      type: 'object',
+      required: ['cleared', 'refreshRequested'],
+      properties: {
+        cleared: {
+          type: 'boolean',
+          description: 'True when the stored local poster file was removed.',
+        },
+        refreshRequested: {
+          type: 'boolean',
+          description:
+            'True when Maintainerr successfully sent a metadata refresh request to the current media server. This does not guarantee that artwork will change.',
+        },
+      },
+    },
+  })
+  async deleteCollectionPoster(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<CollectionPosterDeleteResponse> {
+    const collection = await this.collectionService.getCollectionRecord(id);
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
+    this.collectionPosterService.removeStoredPoster(id);
+    const refreshResult =
+      await this.collectionPosterService.refreshCollectionOnMediaServer(
+        collection.mediaServerId,
+      );
+    return { cleared: true, refreshRequested: refreshResult.requested };
+  }
+
+  @Get('/logs/:id/content/:page')
+  getCollectionLogs(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('page', ParseIntPipe) page: number,
+    @Query('search') search: string,
+    @Query('sort') sort: 'ASC' | 'DESC' = 'DESC',
+    @Query('filter') filter: ECollectionLogType,
+    @Query('size', new ParseIntPipe({ optional: true })) amount?: number,
+  ) {
+    const size = amount ?? 25;
+    const offset = (page - 1) * size;
+    return this.collectionService.getCollectionLogsWithPaging(
+      id,
+      {
+        offset: offset,
+        size: size,
+      },
+      search,
+      sort,
+      filter,
+    );
+  }
+}

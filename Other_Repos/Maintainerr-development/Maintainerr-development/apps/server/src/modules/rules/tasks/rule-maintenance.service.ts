@@ -1,0 +1,101 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { readItemPresence } from '../../api/media-server/item-presence.util';
+import { MediaServerFactory } from '../../api/media-server/media-server.factory';
+import { CollectionsService } from '../../collections/collections.service';
+import { Collection } from '../../collections/entities/collection.entities';
+import { MaintainerrLogger } from '../../logging/logs.service';
+import { SettingsOperationsService } from '../../settings/settings-operations.service';
+import { TaskBase } from '../../tasks/task.base';
+import { TasksService } from '../../tasks/tasks.service';
+import { RulesService } from '../rules.service';
+
+@Injectable()
+export class RuleMaintenanceService extends TaskBase {
+  protected name = 'Rule Maintenance';
+  protected cronSchedule = '20 4 * * *';
+
+  constructor(
+    protected readonly taskService: TasksService,
+    protected readonly logger: MaintainerrLogger,
+    private readonly settingsOperationsService: SettingsOperationsService,
+    private readonly rulesService: RulesService,
+    @InjectRepository(Collection)
+    private readonly collectionRepo: Repository<Collection>,
+    private readonly mediaServerFactory: MediaServerFactory,
+    private readonly collectionsService: CollectionsService,
+  ) {
+    logger.setContext(RuleMaintenanceService.name);
+    super(taskService, logger);
+  }
+
+  protected async executeTask() {
+    try {
+      this.logger.log('Starting maintenance');
+      const mediaServerReachable =
+        await this.settingsOperationsService.testMediaServerConnection();
+
+      if (mediaServerReachable) {
+        // remove media exclusions that are no longer available
+        await this.removeLeftoverExclusions();
+        // remove collection media entries for items deleted from media server
+        await this.collectionsService.removeStaleCollectionMedia();
+        // Only prune orphaned collection rows against a reachable server. This
+        // drops the row without touching the media server (by design since
+        // f5826cc1), so running it during an outage can strand a collection
+        // whose delete had just failed. The guard was lost when the task moved
+        // to the media-server abstraction (174a5cb2).
+        await this.removeCollectionsWithoutRule();
+      } else {
+        this.logger.warn(
+          'Skipping media server cleanup; media server was not reachable.',
+        );
+      }
+
+      this.logger.log('Maintenance done');
+    } catch (error) {
+      this.logger.error('Rule Maintenance failed');
+      this.logger.debug(error);
+    }
+  }
+
+  private async removeLeftoverExclusions() {
+    const exclusions = await this.rulesService.getAllExclusions();
+    const mediaServer = await this.mediaServerFactory.getService();
+
+    // `missing` is a confirmed absence only, so a transient failure never
+    // deletes the protection an exclusion provides.
+    const { missing } = await readItemPresence(
+      mediaServer,
+      exclusions.map((exclusion) => exclusion.mediaServerId),
+      (error) => this.logger.debug(error),
+    );
+
+    for (const exclusion of exclusions) {
+      if (missing.has(exclusion.mediaServerId)) {
+        await this.rulesService.removeExclusion(exclusion.id);
+      }
+    }
+  }
+
+  private async removeCollectionsWithoutRule() {
+    try {
+      const collections = await this.collectionRepo.find(); // get all collections
+      const rulegroups = await this.rulesService.getRuleGroups();
+
+      for (const collection of collections) {
+        if (
+          !rulegroups.find(
+            (rulegroup) => rulegroup.collection?.id === collection.id,
+          )
+        ) {
+          await this.collectionRepo.delete({ id: collection.id });
+        }
+      }
+    } catch (error) {
+      this.logger.error("Couldn't remove collection without rule");
+      this.logger.debug(error);
+    }
+  }
+}

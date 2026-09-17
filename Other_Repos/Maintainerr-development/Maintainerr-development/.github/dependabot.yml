@@ -1,0 +1,38 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3
+    groups:
+      nestjs:
+        patterns:
+          - "@nestjs/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      eslint:
+        patterns:
+          - "@eslint/js"
+          - "eslint"
+      lingui:
+        patterns:
+          - "@lingui/*"
+    ignore:
+      - dependency-name: "@heroicons/react"
+      - dependency-name: "chalk"
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: daily
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: weekly

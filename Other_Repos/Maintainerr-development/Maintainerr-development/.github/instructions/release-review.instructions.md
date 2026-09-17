@@ -1,0 +1,272 @@
+---
+# Task-specific: not auto-loaded on every interaction. Copilot's applyTo is a
+# file-path glob and can't express "during a release review", so this triggers
+# on release artifacts (changelogs, release workflows) as a proxy. For an
+# explicit release audit, read this file directly - AGENTS.md links it.
+applyTo: "CHANGELOG.md,apps/*/CHANGELOG.md,.github/workflows/release_*.yml"
+---
+
+## Release review - how to audit a release candidate before tagging
+
+Read [ARCHITECTURE.md](../../ARCHITECTURE.md) for the system architecture overview before auditing cross-module or runtime changes.
+
+Use this checklist when asked to do a production-readiness review
+between the last released tag and the current release candidate. The
+goal is to catch real regressions and security issues without
+re-litigating decisions that were already made deliberately in merged
+changes.
+
+### 0. Read intent before reading diffs
+
+This is the single most important step. Skipping it produces false
+positives and wastes reviewer context on deliberate changes.
+
+1. `git log <lastTag>..HEAD --oneline` - get the full commit list.
+2. `git log <lastTag>..HEAD --format="%H %s" | grep -iE "feat|fix|refactor|security|perf"`
+   - isolate the substantive commits.
+3. For every non-trivial PR number referenced in a commit subject
+   (`(#1234)`), run `gh pr view <n> --json title,body` and read the
+   description in full. Pay special attention to sections titled
+   "Key design decisions", "Notes", "Tradeoffs", "Accepted edge cases".
+4. For fix-style commits without a PR, `git show <sha>` and read the
+   body.
+
+Anything explicitly called out in a PR body as intentional is not a
+finding. Examples of patterns that often look like bugs but may be
+deliberate:
+
+- Logs quieted or downgraded from `warn`/`error` to `debug`
+- Overwriting user-configured settings during auto-recovery flows
+- Read-modify-write without a mutex for a state that the PR labels
+  "accepted edge case"
+- Extra network calls where the PR explains they fix a data-correctness
+  bug
+- Security fixes that intentionally address a specific flagged sink or
+  exploit path without broadening the change scope
+
+### 1. Inventory the diff
+
+```bash
+git diff <lastTag>..HEAD --stat | tail -60
+git diff <lastTag>..HEAD --name-status | grep '^A' # added files
+git diff <lastTag>..HEAD --name-only | wc -l       # churn size
+```
+
+Flag anything that looks like it needs a migration, a configuration
+change, a client contract update, or release-note coverage - those are
+common sources of upgrade-path surprises.
+
+### 2. High-risk files to read in full
+
+Always read these diffs end-to-end, even if small:
+
+- Any database migration or schema file
+- Any settings, configuration, DTO, or persistence layer change
+- Any rule executor, scheduler, queue, or background task change
+- Any external service adapter, client, or integration helper
+- Any shared contract or cross-process type change
+- Any action handler or code that mutates third-party state
+- Any new controller, route, or request handler
+- Any authentication, authorization, logging, or request-building change
+
+### 3. What to actually look for
+
+#### Migrations
+
+- Up and down paths both present and symmetric
+- In TypeORM-**generated** schema migrations, raw `queryRunner.query(...)`
+  DDL is expected (SQLite table rebuilds) - audit it, don't reject it. Verify
+  each `INSERT INTO temporary_*` column list matches its `SELECT` column list.
+  Hand-written **data**/backfill migrations are different: those must use
+  `QueryBuilder`, never raw query strings (see project-notes.instructions.md)
+- No manually written DDL - must be TypeORM-generated
+  (see [typeorm_instructions.txt](../../typeorm_instructions.txt))
+- Default values provided for every new `NOT NULL` column
+- Indexes recreated after the table rebuild
+- Data transforms (e.g. backfill from a legacy flag) are lossless on
+  the down path, or the down path is documented as destructive in the
+  release notes
+
+#### Stateful domain logic / background execution
+
+- Renames should be mechanical - verify no semantic parameter was lost
+- Reads of derived state should still go through the canonical helper or
+  accessor, not a stale raw field
+- Any deletion or removal API should receive explicit scope when the
+  intent is scoped
+
+#### Shared abstraction layers
+
+- Shared layers must not import provider-specific types or constants
+- New interface methods must be implemented by every adapter, or be
+  explicitly gated behind a feature-capability check
+
+#### Action handlers and external mutations
+
+- New action values are handled by every affected dispatcher and remain
+  reachable from the caller
+- `switch` cases with declarations use block scope
+- No-op states short-circuit before reissuing expensive or repeated
+  external mutations
+- Validate external IDs before mutating third-party state
+
+#### Date and lookup handling
+
+- If a helper now throws on error, every caller must catch it or return
+  a safe default
+- If date-only matching round-trips through a `Date`, verify every input
+  source preserves the same calendar day across time zones
+
+#### Connection discovery and failover
+
+- Auto-recovery writes should respect manual-mode or user-managed
+  configurations
+- Tests cover the opt-out or manual-mode skip path
+- Any newly introduced connection metadata is either consumed
+  intentionally or safely ignored
+
+#### API endpoints
+
+- New routes use the correct API namespace and framework conventions
+- User input is validated at the boundary
+- User-controlled path, host, header, or query data is sanitized before
+  interpolation into logs or URLs
+- Avoid request-building helpers in error paths that can reintroduce SSRF
+  or unsafe URL construction issues
+
+#### Security checklist (OWASP top 10)
+
+- No new SQL built by string concatenation - application/runtime queries go
+  through TypeORM repositories or `QueryBuilder` with parameters. (The raw DDL
+  inside generated schema migrations is the documented exception above.)
+- No `exec`/`spawn` of a shell with user input
+- No new `fs` reads where the path is derived from request input
+  without `path.resolve` + allow-list check
+- No secrets (tokens, api keys) in log messages - run
+  `git diff <lastTag>..HEAD | grep -iE "(api[_-]?key|token|secret|password)"`
+  and audit each hit
+- New external HTTP calls should go through the shared client or wrapper
+  that enforces timeouts, retries, and sanitized failure logging
+
+### 4. Verify, don't assume
+
+Before writing any finding:
+
+- Read the surrounding `try/catch` to confirm a throw actually escapes
+- Search for every caller of a changed function signature
+- Check `git blame -L <start>,<end> <file>` for the context of the line
+  you're about to flag
+- If the finding is "X removed a null-check", verify the function
+  being called no longer returns null
+
+### 5. Run the suites
+
+Run the relevant build, test, and typecheck suites for the changed
+areas, plus at least one full-project validation command if the release
+scope is broad.
+
+A green build and test run is necessary but not sufficient - tests only
+catch regressions that someone thought to write a test for.
+
+### 5a. Exercise the affected flows end-to-end (seeded DB + Playwright)
+
+Automated suites do not cover rendering, navigation, or the
+media-server-dependent flows (rules, collections, overview, calendar,
+storage). Always drive those in a real browser before signing off - and
+always against the **seeded dev DB + mock media server**, never a hand-set
+or empty database, so every reviewer hits the same deterministic dataset.
+
+1. Start the matching mock media server:
+   - `node tools/dev/fake-jellyfin.mjs` (`:8096`), or
+   - `node tools/dev/fake-plex.mjs` (`:32400`) for the Plex-only getter paths.
+2. Stop `yarn dev` (SQLite is single-writer), seed, then restart:
+   - `node tools/dev/seed-db.mjs` (Jellyfin, default) or
+     `MEDIA_SERVER=plex node tools/dev/seed-db.mjs`.
+   - Re-run the seed after any DB-shape migration in the release so the
+     dataset matches the migrated schema.
+3. Drive the UI with **Playwright** (the `playwright` MCP server) - do not
+   rely on eyeballing screenshots alone. At minimum, for the areas the diff
+   touches: load the page, perform the changed interaction, and assert on
+   the resulting DOM/network. Capture a screenshot of each flow you touched
+   for the report.
+4. For server-side rule/getter changes, confirm live output through the
+   seeded stack: `POST /api/rules/test {"mediaId","rulegroupId"}` or
+   `POST /api/rules/:id/execute`. After editing server code, **restart
+   `yarn dev`** - a long-lived dev server serves stale getter logic.
+
+Note what you exercised (and what you could not - e.g. plex.tv watchlist
+enrichment can't be mocked locally) in the report. A flow you did not drive
+is an untested flow; say so rather than implying coverage.
+
+### 5b. Audit the dependency tree (supply chain)
+
+The diff review only covers our own code. A release can ship a
+vulnerable or compromised dependency without a single line of ours
+changing: Dependabot auto-merges non-major bumps once required checks
+pass (`dependabot_merge.yml`) and `.yarnrc.yml` sets
+`npmMinimalAgeGate: 3d` (a short cooling-off period for freshly
+published versions, raised from 0 in #3439), so this step is the human
+review for everything that entered the release range that way.
+
+1. `yarn npm audit --all --recursive` - known advisories for the exact
+   resolved versions. Triage by reachability, not raw severity: use
+   `yarn why <pkg>` to classify each hit as server runtime, shipped UI
+   bundle, or dev/CI-only toolchain. Advisories reachable in production
+   code paths block the tag; dev-only hits become follow-ups. Read the
+   advisory's conditions before accepting a hit as real - a
+   vulnerability in a framework mode we do not use is not a blocker,
+   but document why it does not apply.
+2. Reconcile with the repo's open Dependabot alerts (GitHub Security
+   tab, or `gh api "repos/<owner>/<repo>/dependabot/alerts?state=open"`).
+   Both this and the audit also flag known-malicious versions (malware
+   advisories), which covers packages hit by supply-chain attacks.
+3. Check security news for active npm supply-chain attacks before
+   tagging: the GitHub Advisory Database, the npm blog, security
+   vendors' write-ups, and general security press. For any compromised
+   package family in the news, cross-reference `yarn.lock`: confirm the
+   resolved versions predate the attack and that the malicious versions
+   are not in semver range of our lockfile entries. Advisory databases
+   lag fresh compromises by hours to days - news first, databases
+   second.
+4. Review dependency changes in the release range for name legitimacy:
+   `git diff <lastTag>..HEAD -- '**/package.json'`. Verify any newly
+   added package name against the registry (publisher, linked repo,
+   weekly downloads, age) - typosquats and AI-hallucinated lookalikes
+   (slopsquatting) are registered precisely to be installed by mistake.
+5. Confirm `yarn.lock` still resolves everything through the npm
+   registry (`npm:` protocol only - no git, url, or file entries), and
+   skim the auto-merged bumps in the range
+   (`git log <lastTag>..HEAD --oneline | grep "build(deps"`) for
+   anything unexpected.
+
+### 6. Write the report
+
+Use severity levels, in this order:
+
+- **CRITICAL** - data loss, auth bypass, remote code execution, broken
+  migration. Must fix before tagging.
+- **HIGH** - observable user-facing regression, silent failure mode,
+  real security exposure. Should fix before tagging.
+- **MEDIUM** - performance regression, log quality, inconsistent
+  behavior. Fix in a follow-up.
+- **LOW** - code hygiene, dead code, defense-in-depth. Nice-to-have.
+
+Every finding must include:
+
+- Full file path as a markdown link
+- Exact line range of the problem
+- What specifically breaks (one sentence)
+- A concrete fix (code snippet or clear instruction)
+- Why this is not already covered by the change's stated intent - if you
+  cannot answer this, the finding probably is not real
+
+### 7. When in doubt
+
+Do not flag something as "may race", "could leak", or "potentially
+unsafe" without reproducing it or pointing at a specific sequence that
+triggers it. Speculative findings burn reviewer goodwill and make the
+real findings harder to notice.
+
+If a change looks wrong but the PR body says it's deliberate, write
+the finding as a **question** to the author instead of an assertion,
+or skip it entirely.

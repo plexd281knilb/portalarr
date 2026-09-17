@@ -1,0 +1,21 @@
+data/
+node_modules
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.idea
+.turbo
+
+# Development documentation (not committed)
+jellyfin-dev-documents/
+
+# External dependencies (local only)
+.external/
+.DS_Store
+
+# Playwright MCP scratch artifacts (snapshots, screenshots)
+.playwright-mcp/

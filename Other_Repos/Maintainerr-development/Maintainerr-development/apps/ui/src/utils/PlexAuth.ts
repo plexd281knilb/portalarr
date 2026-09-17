@@ -1,0 +1,205 @@
+import { t } from '@lingui/core/macro'
+import axios from 'axios'
+import Bowser from 'bowser'
+
+const PIN_POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes - matches Plex PIN expiry
+
+interface PlexHeaders extends Record<string, string> {
+  Accept: string
+  'X-Plex-Product': string
+  'X-Plex-Version': string
+  'X-Plex-Client-Identifier': string
+  'X-Plex-Model': string
+  'X-Plex-Platform': string
+  'X-Plex-Platform-Version': string
+  'X-Plex-Device': string
+  'X-Plex-Device-Name': string
+  'X-Plex-Device-Screen-Resolution': string
+  'X-Plex-Language': string
+}
+
+interface PlexPin {
+  id: number
+  code: string
+}
+
+class PlexOAuth {
+  private plexHeaders?: PlexHeaders
+
+  private pin?: PlexPin
+  private popup?: Window
+
+  private authToken?: string
+
+  public initializeHeaders(clientIdentifier: string): void {
+    if (!clientIdentifier) {
+      // Surfaced to the user: the login button's catch renders error.message,
+      // exactly like the rejection messages further down this file.
+      throw new Error(
+        t`Missing Plex client identifier. Refresh the page and try again.`,
+      )
+    }
+
+    if (!window) {
+      throw new Error(
+        'Window is not defined. Are you calling this in the browser?',
+      )
+    }
+    const browser = Bowser.getParser(window.navigator.userAgent)
+    this.plexHeaders = {
+      Accept: 'application/json',
+      'X-Plex-Product': 'Maintainerr',
+      'X-Plex-Version': '2.0',
+      'X-Plex-Client-Identifier': clientIdentifier,
+      'X-Plex-Model': 'Plex OAuth',
+      'X-Plex-Platform': browser.getOSName() ?? 'Unknown',
+      'X-Plex-Platform-Version': browser.getOSVersion() ?? 'Unknown',
+      'X-Plex-Device': browser.getBrowserName() ?? 'Unknown',
+      'X-Plex-Device-Name': `${browser.getBrowserVersion() ?? 'Unknown'} (Maintainerr)`,
+      'X-Plex-Device-Screen-Resolution':
+        window.screen.width + 'x' + window.screen.height,
+      'X-Plex-Language': 'en',
+    }
+  }
+
+  public async getPin(): Promise<PlexPin> {
+    if (!this.plexHeaders) {
+      throw new Error(
+        'You must initialize the plex headers clientside to login',
+      )
+    }
+    const response = await axios.post(
+      'https://plex.tv/api/v2/pins?strong=true',
+      undefined,
+      { headers: this.plexHeaders },
+    )
+
+    this.pin = { id: response.data.id, code: response.data.code }
+
+    return this.pin
+  }
+
+  public preparePopup(): void {
+    this.openPopup({ title: 'Plex Auth', w: 600, h: 700 })
+  }
+
+  public hasPopup(): boolean {
+    return !!this.popup && !this.popup.closed
+  }
+
+  public async login(clientIdentifier: string): Promise<string> {
+    this.initializeHeaders(clientIdentifier)
+    await this.getPin()
+
+    if (!this.plexHeaders || !this.pin) {
+      throw new Error('Unable to call login if class is not initialized.')
+    }
+
+    const params = new URLSearchParams({
+      clientID: this.plexHeaders['X-Plex-Client-Identifier'],
+      'context[device][product]': this.plexHeaders['X-Plex-Product'],
+      'context[device][version]': this.plexHeaders['X-Plex-Version'],
+      'context[device][platform]': this.plexHeaders['X-Plex-Platform'],
+      'context[device][platformVersion]':
+        this.plexHeaders['X-Plex-Platform-Version'],
+      'context[device][device]': this.plexHeaders['X-Plex-Device'],
+      'context[device][deviceName]': this.plexHeaders['X-Plex-Device-Name'],
+      'context[device][model]': this.plexHeaders['X-Plex-Model'],
+      'context[device][screenResolution]':
+        this.plexHeaders['X-Plex-Device-Screen-Resolution'],
+      'context[device][layout]': 'desktop',
+      code: this.pin.code,
+    })
+
+    if (this.popup) {
+      this.popup.location.href = `https://app.plex.tv/auth/#!?${params}`
+    }
+
+    return this.pinPoll()
+  }
+
+  private async pinPoll(): Promise<string> {
+    const deadline = Date.now() + PIN_POLL_TIMEOUT_MS
+
+    const executePoll = async (
+      resolve: (authToken: string) => void,
+      reject: (e: unknown) => void,
+    ) => {
+      try {
+        if (!this.pin) {
+          throw new Error('Unable to poll when pin is not initialized.')
+        }
+
+        if (Date.now() >= deadline) {
+          this.closePopup()
+          reject(new Error(t`Authentication timed out. Please try again.`))
+          return
+        }
+
+        const response = await axios.get(
+          `https://plex.tv/api/v2/pins/${this.pin.id}`,
+          { headers: this.plexHeaders },
+        )
+
+        if (response.data?.authToken) {
+          this.authToken = response.data.authToken as string
+          this.closePopup()
+          resolve(this.authToken)
+        } else if (response.data?.expiresAt) {
+          const expiresAt = new Date(response.data.expiresAt).getTime()
+          if (expiresAt <= Date.now()) {
+            this.closePopup()
+            reject(new Error(t`Authentication PIN expired. Please try again.`))
+            return
+          }
+          if (!this.popup?.closed) {
+            setTimeout(executePoll, 1000, resolve, reject)
+          } else {
+            reject(new Error(t`Popup closed without completing login`))
+          }
+        } else if (!this.popup?.closed) {
+          setTimeout(executePoll, 1000, resolve, reject)
+        } else {
+          reject(new Error(t`Popup closed without completing login`))
+        }
+      } catch (error) {
+        this.closePopup()
+        reject(error)
+      }
+    }
+
+    return new Promise(executePoll)
+  }
+
+  private closePopup(): void {
+    this.popup?.close()
+    this.popup = undefined
+  }
+
+  private openPopup({
+    title,
+    w,
+    h,
+  }: {
+    title: string
+    w: number
+    h: number
+  }): Window | void {
+    const left = Math.round(window.screenLeft + (window.innerWidth - w) / 2)
+    const top = Math.round(window.screenTop + (window.innerHeight - h) / 2)
+
+    const newWindow = window.open(
+      'about:blank',
+      title,
+      `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`,
+    )
+
+    if (newWindow) {
+      newWindow.focus()
+      this.popup = newWindow
+      return this.popup
+    }
+  }
+}
+
+export default PlexOAuth

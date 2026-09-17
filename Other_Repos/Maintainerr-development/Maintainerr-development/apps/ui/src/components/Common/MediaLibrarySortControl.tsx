@@ -1,0 +1,340 @@
+import { t as globalT } from '@lingui/core/macro'
+import { useLingui } from '@lingui/react/macro'
+import {
+  compareMediaItemsBySort,
+  type CollectionMediaSortParams,
+  type MediaItem,
+  type MediaLibrary,
+  type MediaLibrarySortKey,
+  type MediaLibrarySortParams,
+  type MediaSortOrder,
+} from '@maintainerr/contracts'
+import { useState } from 'react'
+import { Select } from '../Forms/Select'
+import { SmallLoadingSpinner } from './LoadingSpinner'
+
+const defaultSortValue = ''
+const defaultOverviewSortValue: MediaLibrarySortKey = 'title.asc'
+// Functions, not constants: a label resolved at module load would be stuck in
+// whichever locale was active on first import.
+const titleAscendingSortLabel = () => globalT`Title (A-Z) Ascending`
+
+type SortParams = {
+  sort: string
+  sortOrder: MediaSortOrder
+}
+
+interface SortOption<TSortParams extends SortParams = MediaLibrarySortParams> {
+  value: string
+  label: string
+  sortParams?: TSortParams
+}
+
+interface SortConfig<TSortParams extends SortParams = MediaLibrarySortParams> {
+  defaultValue: string
+  options: SortOption<TSortParams>[]
+}
+
+const createMediaLibrarySortOption = (
+  value: MediaLibrarySortKey,
+  label: string,
+): SortOption<MediaLibrarySortParams> => {
+  const [sort, sortOrder] = value.split('.') as [
+    MediaLibrarySortParams['sort'],
+    MediaSortOrder,
+  ]
+
+  return {
+    value,
+    label,
+    sortParams: {
+      sort,
+      sortOrder,
+    },
+  }
+}
+
+const getSortOptionByValue = <TSortParams extends SortParams>(
+  options: ReadonlyArray<SortOption<TSortParams>>,
+  value: string,
+) => {
+  return options.find((option) => option.value === value)
+}
+
+const getResolvedSortOption = <TSortParams extends SortParams>(
+  options: ReadonlyArray<SortOption<TSortParams>>,
+  value: string,
+  defaultValue: string,
+): SortOption<TSortParams> => {
+  return (
+    getSortOptionByValue(options, value) ??
+    getSortOptionByValue(options, defaultValue) ??
+    options[0]!
+  )
+}
+
+const getMediaLibrarySortOptions = (
+  libraryType?: MediaLibrary['type'],
+  {
+    includeTitleAscending = true,
+    includeStudioSort = false,
+  }: {
+    includeTitleAscending?: boolean
+    includeStudioSort?: boolean
+  } = {},
+): Array<SortOption<MediaLibrarySortParams>> => {
+  const options: Array<SortOption<MediaLibrarySortParams>> = []
+
+  if (includeTitleAscending) {
+    options.push(
+      createMediaLibrarySortOption('title.asc', titleAscendingSortLabel()),
+    )
+  }
+
+  options.push(
+    createMediaLibrarySortOption('title.desc', globalT`Title (Z-A) Descending`),
+  )
+
+  if (includeStudioSort) {
+    options.push(
+      createMediaLibrarySortOption(
+        'studio.asc',
+        globalT`Studio (A-Z) Ascending`,
+      ),
+      createMediaLibrarySortOption(
+        'studio.desc',
+        globalT`Studio (Z-A) Descending`,
+      ),
+    )
+  }
+
+  // The air-date pair is spelled out per library type rather than composed
+  // from a shared noun, so each reads naturally once translated.
+  options.push(
+    createMediaLibrarySortOption(
+      'airDate.desc',
+      libraryType === 'show'
+        ? globalT`First Air Date Descending`
+        : globalT`Release Date Descending`,
+    ),
+    createMediaLibrarySortOption(
+      'airDate.asc',
+      libraryType === 'show'
+        ? globalT`First Air Date Ascending`
+        : globalT`Release Date Ascending`,
+    ),
+    createMediaLibrarySortOption('rating.desc', globalT`Rating Descending`),
+    createMediaLibrarySortOption('rating.asc', globalT`Rating Ascending`),
+    createMediaLibrarySortOption('watchCount.desc', globalT`Most Watched`),
+    createMediaLibrarySortOption('watchCount.asc', globalT`Least Watched`),
+  )
+
+  return options
+}
+
+export const getMediaLibrarySortConfig = (
+  libraryType?: MediaLibrary['type'],
+  includeStudioSort: boolean = false,
+): SortConfig<MediaLibrarySortParams> => {
+  return {
+    defaultValue: defaultOverviewSortValue,
+    options: [
+      createMediaLibrarySortOption(
+        defaultOverviewSortValue,
+        titleAscendingSortLabel(),
+      ),
+      ...getMediaLibrarySortOptions(libraryType, {
+        includeTitleAscending: false,
+        includeStudioSort,
+      }),
+      createMediaLibrarySortOption('manual.desc', globalT`Manual Added First`),
+      createMediaLibrarySortOption('excluded.desc', globalT`Excluded First`),
+    ],
+  }
+}
+
+export const getCollectionSortConfig = (
+  libraryType?: MediaLibrary['type'],
+  defaultLabel?: string,
+  includeStudioSort: boolean = false,
+): SortConfig<MediaLibrarySortParams> => {
+  return {
+    defaultValue: defaultSortValue,
+    options: [
+      {
+        value: defaultSortValue,
+        label: defaultLabel ?? globalT`Recently Excluded`,
+      },
+      ...getMediaLibrarySortOptions(libraryType, { includeStudioSort }),
+    ],
+  }
+}
+
+const collectionDeleteSoonestSortOption =
+  (): SortOption<CollectionMediaSortParams> => ({
+    value: 'deleteSoonest.asc',
+    label: globalT`Delete Soonest`,
+    sortParams: { sort: 'deleteSoonest', sortOrder: 'asc' },
+  })
+
+const collectionDeleteLatestSortOption =
+  (): SortOption<CollectionMediaSortParams> => ({
+    value: 'deleteSoonest.desc',
+    label: globalT`Delete Latest`,
+    sortParams: { sort: 'deleteSoonest', sortOrder: 'desc' },
+  })
+
+export const getCollectionMediaSortConfig = (
+  libraryType?: MediaLibrary['type'],
+  includeDeleteSoonest: boolean = false,
+  includeStudioSort: boolean = false,
+  includeStatusSorts: boolean = false,
+): SortConfig<CollectionMediaSortParams> => {
+  const options = getCollectionSortConfig(
+    libraryType,
+    globalT`Recently Added`,
+    includeStudioSort,
+  )
+    .options.map((option) => ({
+      value: option.value,
+      label: option.label,
+      sortParams: option.sortParams
+        ? {
+            sort: option.sortParams.sort,
+            sortOrder: option.sortParams.sortOrder,
+          }
+        : undefined,
+    }))
+    // When Delete Soonest/Latest are present they replace the empty-string
+    // fallback, which would otherwise surface as a meaningless duplicate.
+    .filter(
+      (option) => !includeDeleteSoonest || option.value !== defaultSortValue,
+    )
+
+  const resolvedOptions = includeDeleteSoonest
+    ? [
+        collectionDeleteSoonestSortOption(),
+        collectionDeleteLatestSortOption(),
+        ...options,
+      ]
+    : options
+
+  return {
+    defaultValue: includeDeleteSoonest
+      ? collectionDeleteSoonestSortOption().value
+      : defaultSortValue,
+    // Opt-in, and only the collection media page opts in. The rule group form
+    // persists its selection as the order pushed to the media server, which is
+    // resolved without Maintainerr state, and the exclusions tab shares the
+    // config this builds on while listing nothing but exclusions.
+    options: includeStatusSorts
+      ? [
+          ...resolvedOptions,
+          createMediaLibrarySortOption(
+            'manual.desc',
+            globalT`Manual Added First`,
+          ),
+          createMediaLibrarySortOption(
+            'excluded.desc',
+            globalT`Excluded First`,
+          ),
+        ]
+      : resolvedOptions,
+  }
+}
+
+export const sortMediaItems = (
+  items: MediaItem[],
+  sortParams?: MediaLibrarySortParams,
+): MediaItem[] => {
+  const resolvedSortParams: MediaLibrarySortParams = sortParams ?? {
+    sort: 'title',
+    sortOrder: 'asc',
+  }
+
+  return [...items].sort((leftItem, rightItem) =>
+    compareMediaItemsBySort(
+      leftItem,
+      rightItem,
+      resolvedSortParams.sort,
+      resolvedSortParams.sortOrder,
+    ),
+  )
+}
+
+interface MediaLibrarySortControlProps {
+  ariaLabel: string
+  options: ReadonlyArray<{ value: string; label: string }>
+  value: string
+  onSortChange: (value: string) => void
+  isLoading?: boolean
+}
+
+export const useMediaLibrarySort = <TSortParams extends SortParams>(
+  config: SortConfig<TSortParams>,
+) => {
+  const [sortValue, setSortValue] = useState(config.defaultValue)
+  const resolvedSortOption = getResolvedSortOption(
+    config.options,
+    sortValue,
+    config.defaultValue,
+  )
+
+  const onSortChange = (nextValue: string) => {
+    const nextSortOption = getSortOptionByValue(config.options, nextValue)
+    if (!nextSortOption || nextSortOption.value === resolvedSortOption.value) {
+      return undefined
+    }
+
+    setSortValue((currentValue) =>
+      currentValue === nextSortOption.value
+        ? currentValue
+        : nextSortOption.value,
+    )
+
+    return nextSortOption
+  }
+
+  return {
+    sortValue: resolvedSortOption.value,
+    sortParams: resolvedSortOption.sortParams,
+    onSortChange,
+  }
+}
+
+export const MediaLibrarySortControl = ({
+  ariaLabel,
+  options,
+  value,
+  onSortChange,
+  isLoading = false,
+}: MediaLibrarySortControlProps) => {
+  const { t } = useLingui()
+
+  return (
+    <div className="relative w-full">
+      <Select
+        aria-label={ariaLabel}
+        name="sort"
+        value={value}
+        onChange={(event) => onSortChange(event.target.value)}
+        className={isLoading ? 'pr-14' : undefined}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+      {isLoading ? (
+        <div
+          role="status"
+          aria-label={t`Loading sorted items`}
+          className="pointer-events-none absolute top-1/2 right-8 -translate-y-1/2"
+        >
+          <SmallLoadingSpinner className="h-4 w-4" />
+        </div>
+      ) : null}
+    </div>
+  )
+}

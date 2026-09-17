@@ -1,0 +1,1128 @@
+import type { MessageDescriptor } from '@lingui/core'
+import { msg } from '@lingui/core/macro'
+import { Trans, useLingui } from '@lingui/react/macro'
+import { TrashIcon } from '@heroicons/react/solid'
+import {
+  Application,
+  type ArrDiskspaceResource,
+  DISKSPACE_REMAINING_PROPERTY,
+  DISKSPACE_TOTAL_PROPERTY,
+  isPerUserProperty,
+  type MediaItemType,
+  MediaType,
+  normalizeDiskPath,
+  RulePossibility,
+} from '@maintainerr/contracts'
+import { FormEvent, useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { IRule } from '../'
+import {
+  useRadarrDiskspace,
+  useRuleConstants,
+  useRuleUsernames,
+  useSonarrDiskspace,
+} from '../../../../../api/rules'
+import {
+  IConstants,
+  IProperty,
+} from '../../../../../contexts/constants-context'
+import { useMediaServerType } from '../../../../../hooks/useMediaServerType'
+import LoadingSpinner from '../../../../Common/LoadingSpinner'
+import { DatalistInput } from '../../../../Forms/DatalistInput'
+import { Input } from '../../../../Forms/Input'
+import { Select } from '../../../../Forms/Select'
+
+// The single source for these labels (the old contracts constant is gone):
+// Lingui can only extract literal descriptors, and the option value sent to
+// the server stays the numeric enum.
+const rulePossibilityLabels: Record<RulePossibility, MessageDescriptor> = {
+  [RulePossibility.BIGGER]: msg`Bigger`,
+  [RulePossibility.SMALLER]: msg`Smaller`,
+  [RulePossibility.EQUALS]: msg`Equals`,
+  [RulePossibility.NOT_EQUALS]: msg`Not Equals`,
+  [RulePossibility.CONTAINS]: msg`Contains (Exact list match)`,
+  [RulePossibility.BEFORE]: msg`Before`,
+  [RulePossibility.AFTER]: msg`After`,
+  [RulePossibility.IN_LAST]: msg`In Last`,
+  [RulePossibility.IN_NEXT]: msg`In Next`,
+  [RulePossibility.NOT_CONTAINS]: msg`Not Contains (Exact list match)`,
+  [RulePossibility.CONTAINS_PARTIAL]: msg`Contains (Partial list match)`,
+  [RulePossibility.NOT_CONTAINS_PARTIAL]: msg`Not Contains (Partial list match)`,
+  [RulePossibility.CONTAINS_ALL]: msg`Contains (All items)`,
+  [RulePossibility.NOT_CONTAINS_ALL]: msg`Not Contains (All items)`,
+  [RulePossibility.COUNT_EQUALS]: msg`Count Equals`,
+  [RulePossibility.COUNT_NOT_EQUALS]: msg`Count Does Not Equal`,
+  [RulePossibility.COUNT_BIGGER]: msg`Count Is Bigger Than`,
+  [RulePossibility.COUNT_SMALLER]: msg`Count Is Smaller Than`,
+  [RulePossibility.EXISTS]: msg`Exists`,
+  [RulePossibility.NOT_EXISTS]: msg`Does Not Exist`,
+}
+
+// One shared list of users for every rule card: the options are rendered once
+// by the rule creator, not per card, so a server with thousands of users does
+// not multiply them across the editor.
+export const RULE_USERNAMES_DATALIST_ID = 'rule-usernames'
+
+enum RuleType {
+  NUMBER,
+  DATE,
+  TEXT,
+  BOOL,
+  TEXT_LIST,
+}
+enum RuleOperators {
+  AND,
+  OR,
+}
+
+enum CustomParams {
+  CUSTOM_NUMBER = 'custom_number',
+  CUSTOM_DAYS = 'custom_days',
+  CUSTOM_DATE = 'custom_date',
+  CUSTOM_TEXT = 'custom_text',
+  CUSTOM_TEXT_LIST = 'custom_text_list',
+  CUSTOM_BOOLEAN = 'custom_boolean',
+}
+
+interface IRuleInput {
+  id?: number
+  tagId?: number
+  mediaType?: MediaType
+  dataType?: MediaItemType
+  section?: number
+  editData?: { rule: IRule }
+  onCommit: (rule: IRule) => void
+  onIncomplete: (id: number) => void
+  onDelete: (section: number, id: number) => void
+  allowDelete?: boolean
+  radarrSettingsId?: number | null
+  sonarrSettingsId?: number | null
+  sportarrSettingsId?: number | null
+}
+
+/**
+ * Helper function to determine if an application should be filtered out
+ * based on server selection and media server type
+ */
+const shouldFilterApplication = (
+  appId: number,
+  radarrSettingsId: number | null | undefined,
+  sonarrSettingsId: number | null | undefined,
+  sportarrSettingsId: number | null | undefined,
+  isPlex: boolean,
+  isJellyfin: boolean,
+  isEmby: boolean = false,
+): boolean => {
+  // Filter out Radarr if no Radarr server is selected
+  if (
+    appId === Application.RADARR &&
+    (radarrSettingsId === undefined || radarrSettingsId === null)
+  ) {
+    return true
+  }
+  // Filter out Sonarr if no Sonarr server is selected
+  if (
+    appId === Application.SONARR &&
+    (sonarrSettingsId === undefined || sonarrSettingsId === null)
+  ) {
+    return true
+  }
+  // Filter out Sportarr if no Sportarr server is selected
+  if (
+    appId === Application.SPORTARR &&
+    (sportarrSettingsId === undefined || sportarrSettingsId === null)
+  ) {
+    return true
+  }
+  // Filter out Plex/Tautulli on non-Plex servers (Jellyfin, Emby).
+  if (
+    (isJellyfin || isEmby) &&
+    (appId === Application.PLEX || appId === Application.TAUTULLI)
+  ) {
+    return true
+  }
+  // Filter out Jellyfin and its Streamystats companion on Plex/Emby.
+  if (
+    (isPlex || isEmby) &&
+    (appId === Application.JELLYFIN || appId === Application.STREAMYSTATS)
+  ) {
+    return true
+  }
+  // Filter out Emby on Plex/Jellyfin.
+  if ((isPlex || isJellyfin) && appId === Application.EMBY) {
+    return true
+  }
+  return false
+}
+
+const isArrDiskspaceProperty = (prop?: IProperty): boolean => {
+  return (
+    prop?.name === DISKSPACE_REMAINING_PROPERTY ||
+    prop?.name === DISKSPACE_TOTAL_PROPERTY
+  )
+}
+
+const isUnaryRuleAction = (action: RulePossibility | undefined): boolean => {
+  return (
+    action === RulePossibility.EXISTS || action === RulePossibility.NOT_EXISTS
+  )
+}
+
+const getCustomValueState = (
+  secondVal: string | undefined,
+): {
+  customValActive: boolean
+  customValType: RuleType | undefined
+} => {
+  if (secondVal === CustomParams.CUSTOM_NUMBER) {
+    return { customValActive: true, customValType: RuleType.NUMBER }
+  }
+
+  if (secondVal === CustomParams.CUSTOM_DATE) {
+    return { customValActive: true, customValType: RuleType.DATE }
+  }
+
+  if (
+    secondVal === CustomParams.CUSTOM_DAYS ||
+    secondVal === CustomParams.CUSTOM_TEXT
+  ) {
+    return { customValActive: true, customValType: RuleType.TEXT }
+  }
+
+  if (secondVal === CustomParams.CUSTOM_TEXT_LIST) {
+    return { customValActive: true, customValType: RuleType.TEXT_LIST }
+  }
+
+  if (secondVal === CustomParams.CUSTOM_BOOLEAN) {
+    return { customValActive: true, customValType: RuleType.BOOL }
+  }
+
+  return { customValActive: false, customValType: undefined }
+}
+
+const buildDiskspaceOptions = (
+  resources: ArrDiskspaceResource[] | undefined,
+  includePathsWithoutAccurateTotals: boolean,
+): Array<{ value: string; label: string }> => {
+  const options = new Map<string, string>()
+
+  for (const resource of resources ?? []) {
+    if (!resource.path) continue
+    if (
+      !includePathsWithoutAccurateTotals &&
+      resource.hasAccurateTotalSpace === false
+    ) {
+      continue
+    }
+
+    const normalizedPath = normalizeDiskPath(resource.path)
+    const label = resource.label
+      ? `${normalizedPath} (${resource.label})`
+      : normalizedPath
+    if (!options.has(normalizedPath)) {
+      options.set(normalizedPath, label)
+    }
+  }
+
+  return [...options.entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.value.localeCompare(b.value))
+}
+
+const getPropFromTuple = (
+  value: [number, number] | string,
+  constants: IConstants | undefined,
+): IProperty | undefined => {
+  if (!constants) return undefined
+
+  const parsed = typeof value === 'string' ? JSON.parse(value) : value
+  const application = constants.applications?.find((el) => el.id === +parsed[0])
+
+  return application?.props.find((el) => el.id === +parsed[1])
+}
+
+const getPropFromValue = (
+  value: string | undefined,
+  constants: IConstants | undefined,
+): IProperty | undefined => {
+  // The second value holds either a property tuple or a CustomParams marker.
+  return value?.startsWith('[') ? getPropFromTuple(value, constants) : undefined
+}
+
+interface InitialRuleState {
+  operator: string | undefined
+  firstVal: string | undefined
+  action: RulePossibility | undefined
+  secondVal: string | undefined
+  customVal: string | undefined
+  arrDiskPath: string
+  username: string
+  ruleType: RuleType
+}
+
+const getInitialRuleState = (props: IRuleInput): InitialRuleState => {
+  const rule = props.editData?.rule
+
+  if (!rule) {
+    return {
+      operator: undefined,
+      firstVal: undefined,
+      action: undefined,
+      secondVal: undefined,
+      customVal: undefined,
+      arrDiskPath: '',
+      username: '',
+      ruleType: RuleType.NUMBER,
+    }
+  }
+
+  const initialState: InitialRuleState = {
+    operator: rule.operator?.toString(),
+    firstVal: JSON.stringify(rule.firstVal),
+    action: rule.action,
+    secondVal: undefined,
+    customVal: undefined,
+    arrDiskPath: rule.arrDiskPath ? normalizeDiskPath(rule.arrDiskPath) : '',
+    username: rule.username ?? '',
+    ruleType: RuleType.NUMBER,
+  }
+
+  if (rule.customVal) {
+    switch (rule.customVal.ruleTypeId) {
+      case 0:
+        initialState.secondVal =
+          (rule.customVal.value as number) % 86400 === 0 &&
+          (rule.customVal.value as number) != 0
+            ? CustomParams.CUSTOM_DAYS
+            : CustomParams.CUSTOM_NUMBER
+        initialState.ruleType = RuleType.NUMBER
+        break
+      case 1:
+        initialState.secondVal = CustomParams.CUSTOM_DATE
+        initialState.ruleType = RuleType.DATE
+        break
+      case 2:
+        initialState.secondVal = CustomParams.CUSTOM_TEXT
+        initialState.ruleType = RuleType.TEXT
+        break
+      case 3:
+        initialState.secondVal = CustomParams.CUSTOM_BOOLEAN
+        initialState.ruleType = RuleType.BOOL
+        break
+      case 4:
+        initialState.secondVal = CustomParams.CUSTOM_TEXT_LIST
+        initialState.ruleType = RuleType.TEXT_LIST
+        break
+    }
+    initialState.customVal = rule.customVal.value.toString()
+  } else {
+    initialState.secondVal = JSON.stringify(rule.lastVal)
+  }
+
+  return initialState
+}
+
+const RuleInput = (props: IRuleInput) => {
+  const { t } = useLingui()
+  const [initialRuleState] = useState(() => getInitialRuleState(props))
+  const [operator, setOperator] = useState<string | undefined>(
+    initialRuleState.operator,
+  )
+  const [firstVal, setFirstVal] = useState<string | undefined>(
+    initialRuleState.firstVal,
+  )
+  const [action, setAction] = useState<RulePossibility | undefined>(
+    initialRuleState.action,
+  )
+  const [secondVal, setSecondVal] = useState<string | undefined>(
+    initialRuleState.secondVal,
+  )
+
+  const [customVal, setCustomVal] = useState<string | undefined>(
+    initialRuleState.customVal,
+  )
+  const [arrDiskPath, setArrDiskPath] = useState<string>(
+    initialRuleState.arrDiskPath,
+  )
+  const [username, setUsername] = useState<string>(initialRuleState.username)
+
+  const { data: constants, isLoading: constantsLoading } = useRuleConstants()
+  const { isPlex, isJellyfin, isEmby } = useMediaServerType()
+
+  const availableApplications = useMemo(() => {
+    return (
+      constants?.applications
+        ?.filter(
+          (app) =>
+            !shouldFilterApplication(
+              app.id,
+              props.radarrSettingsId,
+              props.sonarrSettingsId,
+              props.sportarrSettingsId,
+              isPlex,
+              isJellyfin,
+              isEmby,
+            ) &&
+            (app.mediaType === MediaType.BOTH ||
+              props.mediaType === app.mediaType),
+        )
+        .map((app) => ({
+          ...app,
+          props: app.props.filter(
+            (prop) =>
+              (prop.mediaType === MediaType.BOTH ||
+                props.mediaType === prop.mediaType) &&
+              (props.mediaType === MediaType.MOVIE ||
+                prop.showType === undefined ||
+                prop.showType.includes(props.dataType!)),
+          ),
+        })) ?? []
+    )
+  }, [
+    constants?.applications,
+    isEmby,
+    isJellyfin,
+    isPlex,
+    props.dataType,
+    props.mediaType,
+    props.radarrSettingsId,
+    props.sonarrSettingsId,
+    props.sportarrSettingsId,
+  ])
+
+  const validFirstVal = useMemo(() => {
+    if (!firstVal) {
+      return undefined
+    }
+
+    // Keep the raw saved selection in state so edit flows can recover it if later inputs make it valid again.
+    const [applicationId, propertyId] = JSON.parse(firstVal) as [number, number]
+    const application = availableApplications.find(
+      (currentApplication) => currentApplication.id === +applicationId,
+    )
+
+    return application?.props.find((prop) => prop.id === +propertyId)
+      ? firstVal
+      : undefined
+  }, [availableApplications, firstVal])
+
+  const firstValueTuple = useMemo<[number, number] | undefined>(() => {
+    if (!validFirstVal) return undefined
+    return JSON.parse(validFirstVal) as [number, number]
+  }, [validFirstVal])
+
+  const selectedFirstValueAppId = firstValueTuple?.[0]
+  const selectedFirstValueProp = validFirstVal
+    ? getPropFromTuple(validFirstVal, constants)
+    : undefined
+  const ruleType =
+    selectedFirstValueProp?.type.key != null
+      ? (+selectedFirstValueProp.type.key as RuleType)
+      : initialRuleState.ruleType
+  const possibilities = selectedFirstValueProp?.type.possibilities ?? []
+  const isSelectedArrDiskspaceRule =
+    (selectedFirstValueAppId === Application.RADARR ||
+      selectedFirstValueAppId === Application.SONARR) &&
+    isArrDiskspaceProperty(selectedFirstValueProp)
+
+  // Either side can hold a per-user property; both read the one user here.
+  const isSelectedPerUserRule =
+    isPerUserProperty(selectedFirstValueProp?.name) ||
+    isPerUserProperty(getPropFromValue(secondVal, constants)?.name)
+
+  const {
+    data: ruleUsernames = [],
+    isLoading: ruleUsernamesLoading,
+    isError: ruleUsernamesFailed,
+  } = useRuleUsernames({ enabled: isSelectedPerUserRule })
+
+  // A typo would save a rule that then skips every item, so only a known user
+  // counts - or the one already saved, which keeps a rule editable after the
+  // account is gone.
+  const isUsernameUsable =
+    !!username &&
+    (ruleUsernames.length === 0 ||
+      ruleUsernames.includes(username) ||
+      username === initialRuleState.username)
+
+  const { data: radarrDiskspace = [], isLoading: radarrDiskspaceLoading } =
+    useRadarrDiskspace(props.radarrSettingsId, {
+      enabled:
+        isSelectedArrDiskspaceRule &&
+        selectedFirstValueAppId === Application.RADARR,
+    })
+
+  const { data: sonarrDiskspace = [], isLoading: sonarrDiskspaceLoading } =
+    useSonarrDiskspace(props.sonarrSettingsId, {
+      enabled:
+        isSelectedArrDiskspaceRule &&
+        selectedFirstValueAppId === Application.SONARR,
+    })
+
+  const isSelectedArrTotalDiskspaceRule =
+    selectedFirstValueProp?.name === DISKSPACE_TOTAL_PROPERTY
+
+  const arrDiskspaceOptions = useMemo(() => {
+    if (selectedFirstValueAppId === Application.RADARR) {
+      return buildDiskspaceOptions(
+        radarrDiskspace,
+        !isSelectedArrTotalDiskspaceRule,
+      )
+    }
+    if (selectedFirstValueAppId === Application.SONARR) {
+      return buildDiskspaceOptions(
+        sonarrDiskspace,
+        !isSelectedArrTotalDiskspaceRule,
+      )
+    }
+    return []
+  }, [
+    isSelectedArrTotalDiskspaceRule,
+    selectedFirstValueAppId,
+    radarrDiskspace,
+    sonarrDiskspace,
+  ])
+
+  const isDiskspaceLoading =
+    selectedFirstValueAppId === Application.RADARR
+      ? radarrDiskspaceLoading
+      : selectedFirstValueAppId === Application.SONARR
+        ? sonarrDiskspaceLoading
+        : false
+
+  const preservedArrDiskPathOption = useMemo(() => {
+    if (!arrDiskPath) {
+      return undefined
+    }
+
+    // Preserve a saved path label while current ARR diskspace options are temporarily filtered or refetching.
+    const normalizedPath = normalizeDiskPath(arrDiskPath)
+    const hasMatchingOption = arrDiskspaceOptions.some(
+      (option) => option.value === normalizedPath,
+    )
+
+    if (hasMatchingOption) {
+      return undefined
+    }
+
+    return {
+      value: normalizedPath,
+      label: isSelectedArrTotalDiskspaceRule
+        ? t`${{ path: normalizedPath }} (saved selection; total space unavailable)`
+        : t`${{ path: normalizedPath }} (saved selection)`,
+    }
+  }, [arrDiskPath, arrDiskspaceOptions, isSelectedArrTotalDiskspaceRule, t])
+
+  const { customValActive, customValType } = useMemo(
+    () => getCustomValueState(secondVal),
+    [secondVal],
+  )
+
+  const updateFirstValue = (event: { target: { value: string } }) => {
+    const nextFirstValue = event.target.value || undefined
+
+    if (!nextFirstValue) {
+      setFirstVal(undefined)
+      setArrDiskPath('')
+      return
+    }
+
+    const nextProp = getPropFromTuple(nextFirstValue, constants)
+    const nextRuleType =
+      nextProp?.type.key != null
+        ? (+nextProp.type.key as RuleType)
+        : initialRuleState.ruleType
+
+    setFirstVal(nextFirstValue)
+
+    if (nextRuleType !== ruleType) {
+      setSecondVal(undefined)
+      setCustomVal('')
+    }
+
+    if (!isArrDiskspaceProperty(nextProp)) {
+      setArrDiskPath('')
+    }
+
+    if (
+      !isPerUserProperty(nextProp?.name) &&
+      !isPerUserProperty(getPropFromValue(secondVal, constants)?.name)
+    ) {
+      setUsername('')
+    }
+  }
+
+  const updateSecondValue = (event: { target: { value: string } }) => {
+    const nextSecondVal = event.target.value || undefined
+    const nextCustomValueState = getCustomValueState(nextSecondVal)
+
+    setSecondVal(nextSecondVal)
+
+    if (nextSecondVal === CustomParams.CUSTOM_BOOLEAN) {
+      setCustomVal((currentValue) =>
+        currentValue === '0' ? currentValue : '1',
+      )
+      return
+    }
+
+    if (!nextCustomValueState.customValActive) {
+      setCustomVal(undefined)
+    }
+  }
+
+  const updateCustomValue = (event: { target: { value: string } }) => {
+    if (secondVal === CustomParams.CUSTOM_DAYS) {
+      setCustomVal((+event.target.value * 86400).toString())
+    } else {
+      setCustomVal(event.target.value)
+    }
+  }
+
+  // Unique per card: every rule renders this field, and a shared id would bind
+  // all their labels to the first one.
+  const usernameFieldId = `username_${props.section ?? 0}_${props.id ?? 0}`
+
+  const updateUsername = (event: { target: { value: string } }) => {
+    setUsername(event.target.value)
+  }
+
+  const updateArrDiskPath = (event: { target: { value: string } }) => {
+    const value = event.target.value
+    setArrDiskPath(value ? normalizeDiskPath(value) : '')
+  }
+
+  const updateAction = (event: { target: { value: string } }) => {
+    if (event.target.value === '') {
+      setAction(undefined)
+    } else {
+      const nextAction = +event.target.value as RulePossibility
+      setAction(nextAction)
+      if (isUnaryRuleAction(nextAction)) {
+        setSecondVal(undefined)
+        setCustomVal(undefined)
+      }
+    }
+  }
+
+  const updateOperator = (event: { target: { value: string } }) => {
+    if (event.target.value === '') {
+      setOperator(undefined)
+    } else {
+      setOperator(event.target.value)
+    }
+  }
+
+  const onDelete = (e: FormEvent | null) => {
+    e?.preventDefault()
+    props.onDelete(props.section ? props.section : 0, props.id ? props.id : 0)
+  }
+
+  const commitCurrentRule = () => {
+    const requiresSecondValue = !isUnaryRuleAction(action)
+    const hasSecondValue =
+      !!secondVal &&
+      secondVal !== CustomParams.CUSTOM_DATE &&
+      secondVal !== CustomParams.CUSTOM_DAYS &&
+      secondVal !== CustomParams.CUSTOM_NUMBER &&
+      secondVal !== CustomParams.CUSTOM_TEXT &&
+      secondVal !== CustomParams.CUSTOM_TEXT_LIST &&
+      secondVal !== CustomParams.CUSTOM_BOOLEAN
+
+    // Every rule except the very first one renders an operator dropdown
+    // (mirrors the render gate below): the section operator for the first
+    // rule of a section, otherwise the within-section operator. Require an
+    // explicit choice so the combine semantics are never inferred from an
+    // unset (null) value - see the comparator's section-action handling.
+    const operatorRequired =
+      props.id !== 1 &&
+      (!!(props.id && props.id > 0) || !!(props.section && props.section > 1))
+
+    if (
+      validFirstVal &&
+      action != null &&
+      (!requiresSecondValue || hasSecondValue || !!customVal) &&
+      (!operatorRequired || !!operator) &&
+      (!isSelectedPerUserRule || isUsernameUsable)
+    ) {
+      const ruleValues = {
+        operator: operator ? operator : null,
+        firstVal: JSON.parse(validFirstVal),
+        action,
+        section: props.section ? props.section - 1 : 0,
+        ...(isSelectedArrDiskspaceRule && arrDiskPath ? { arrDiskPath } : {}),
+        ...(isSelectedPerUserRule && username ? { username } : {}),
+      }
+      if (!requiresSecondValue) {
+        props.onCommit(ruleValues)
+      } else if (customVal) {
+        props.onCommit({
+          customVal: {
+            ruleTypeId: customValActive
+              ? customValType === RuleType.DATE
+                ? customValType
+                : customValType === RuleType.NUMBER
+                  ? customValType
+                  : customValType === RuleType.TEXT &&
+                      secondVal === CustomParams.CUSTOM_DAYS
+                    ? RuleType.NUMBER
+                    : customValType === RuleType.TEXT
+                      ? customValType
+                      : customValType === RuleType.BOOL
+                        ? customValType
+                        : customValType === RuleType.TEXT_LIST
+                          ? customValType
+                          : +ruleType
+              : +ruleType,
+            value: customVal,
+          },
+          ...ruleValues,
+        })
+      } else {
+        props.onCommit({
+          lastVal: JSON.parse(secondVal!),
+          ...ruleValues,
+        })
+      }
+    } else {
+      props.onIncomplete(props.id ? props.id : 0)
+    }
+  }
+
+  const submitCurrentRule = useEffectEvent(() => {
+    commitCurrentRule()
+  })
+
+  const submit = (e: FormEvent | null) => {
+    e?.preventDefault()
+    commitCurrentRule()
+  }
+
+  useEffect(() => {
+    submitCurrentRule()
+  }, [
+    action,
+    arrDiskPath,
+    customVal,
+    validFirstVal,
+    isSelectedArrDiskspaceRule,
+    isSelectedPerUserRule,
+    isUsernameUsable,
+    operator,
+    ruleType,
+    secondVal,
+    username,
+  ])
+
+  if (!constants || constantsLoading) {
+    return <LoadingSpinner />
+  }
+
+  return (
+    <div
+      className="w-full rounded-2xl bg-zinc-800 p-4 text-zinc-100 shadow-lg"
+      onSubmit={submit}
+    >
+      {/* Header Section */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-maintainerr-600">
+          {t`Rule #${{
+            // Truthiness, matching the original chain: a 0 falls through
+            // to the next candidate rather than being displayed.
+            ruleNumber: props.tagId || props.id || 1,
+          }}`}
+        </h3>
+
+        {props.allowDelete ? (
+          <button
+            className="flex items-center rounded-lg bg-error-600 px-3 py-1 text-zinc-100 shadow-md hover:bg-error-500"
+            onClick={onDelete}
+            title={t`Remove rule ${{ ruleNumber: props.tagId }}, section ${{ sectionNumber: props.section }}`}
+          >
+            <TrashIcon className="mr-1 h-5 w-5" />
+            <Trans>Delete</Trans>
+          </button>
+        ) : null}
+      </div>
+
+      {props.id !== 1 ? (
+        (props.id && props.id > 0) || (props.section && props.section > 1) ? (
+          <div className="mt-2 mb-3 md:flex md:items-center">
+            {!props.id || (props.tagId ? props.tagId === 1 : props.id === 1) ? (
+              <label htmlFor="operator">
+                <Trans>Section Operator</Trans>
+              </label>
+            ) : (
+              <label htmlFor="operator">
+                <Trans>Operator</Trans>
+              </label>
+            )}
+            <div className="md:ml-4">
+              <div className="flex w-1/2 md:w-fit">
+                <Select
+                  name="operator"
+                  id="operator"
+                  onChange={updateOperator}
+                  value={operator}
+                >
+                  <option value=""> </option>
+                  {Object.keys(RuleOperators).map(
+                    (value: string, key: number) => {
+                      if (!isNaN(+value)) {
+                        return (
+                          <option key={key} value={key}>
+                            {RuleOperators[key]}
+                          </option>
+                        )
+                      }
+                    },
+                  )}
+                </Select>
+              </div>
+            </div>
+          </div>
+        ) : undefined
+      ) : undefined}
+
+      {/* First Value Selection */}
+      <div className="mt-1 grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2">
+        <div>
+          <label htmlFor="first_val" className="block text-sm font-medium">
+            <Trans>First Value</Trans>
+          </label>
+          <Select
+            name="first_val"
+            id="first_val"
+            onChange={updateFirstValue}
+            value={validFirstVal}
+          >
+            <option value="" className="text-maintainerr-600">
+              {t`Select First Value...`}
+            </option>
+            {availableApplications.map((app) =>
+              app.props.length > 0 ? (
+                <optgroup key={app.id} label={app.name}>
+                  {app.props.map((prop) => (
+                    <option
+                      key={`${app.id}-${prop.id}`}
+                      value={JSON.stringify([app.id, prop.id])}
+                    >
+                      {`${app.name} - ${prop.humanName}`}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null,
+            )}
+          </Select>
+        </div>
+
+        {/* Action Selection */}
+        <div>
+          <label htmlFor="action" className="mb-1 block text-sm font-medium">
+            <Trans>Action</Trans>
+          </label>
+          <Select
+            name="action"
+            id="action"
+            onChange={updateAction}
+            value={action}
+          >
+            <option value="" className="text-maintainerr-600">
+              {t`Select Action...`}
+            </option>
+            {possibilities.map((action) => (
+              <option key={action} value={action}>
+                {t(rulePossibilityLabels[action])}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {!isUnaryRuleAction(action) ? (
+          <div>
+            <label
+              htmlFor="second_val"
+              className="mb-1 block text-sm font-medium"
+            >
+              <Trans>Second Value</Trans>
+            </label>
+            <Select
+              name="second_val"
+              id="second_val"
+              onChange={updateSecondValue}
+              value={secondVal}
+            >
+              <option value="" className="text-maintainerr-600">
+                {t`Select Second Value...`}
+              </option>
+              <optgroup label={t`Custom values`}>
+                {ruleType === RuleType.DATE ? (
+                  <>
+                    <option value={CustomParams.CUSTOM_DAYS}>
+                      {t`Amount of days`}
+                    </option>
+                    {action != null &&
+                    action !== RulePossibility.IN_LAST &&
+                    action !== RulePossibility.IN_NEXT ? (
+                      <option value={CustomParams.CUSTOM_DATE}>
+                        {t`Specific date`}
+                      </option>
+                    ) : undefined}
+                  </>
+                ) : undefined}
+                {ruleType === RuleType.NUMBER ? (
+                  <option
+                    value={CustomParams.CUSTOM_NUMBER}
+                  >{t`Number`}</option>
+                ) : undefined}
+                {ruleType === RuleType.BOOL ? (
+                  <option value={CustomParams.CUSTOM_BOOLEAN}>
+                    {t`Boolean`}
+                  </option>
+                ) : undefined}
+                {ruleType === RuleType.TEXT ? (
+                  <option value={CustomParams.CUSTOM_TEXT}>{t`Text`}</option>
+                ) : undefined}
+                <MaybeTextListOptions ruleType={ruleType} action={action} />
+              </optgroup>
+              {availableApplications.map((app) => {
+                return (app.mediaType === MediaType.BOTH ||
+                  props.mediaType === app.mediaType) &&
+                  action != null &&
+                  action !== RulePossibility.IN_LAST &&
+                  action !== RulePossibility.IN_NEXT ? (
+                  <optgroup key={app.id} label={app.name}>
+                    {app.props.map((prop) => {
+                      const secondValueTypes = getSecondValueTypes(ruleType)
+                      for (const type of secondValueTypes) {
+                        if (+prop.type.key === type) {
+                          return (prop.mediaType === MediaType.BOTH ||
+                            props.mediaType === prop.mediaType) &&
+                            (props.mediaType === MediaType.MOVIE ||
+                              prop.showType === undefined ||
+                              prop.showType.includes(props.dataType!)) ? (
+                            <option
+                              key={app.id + 10 + prop.id}
+                              value={JSON.stringify([app.id, prop.id])}
+                            >{`${app.name} - ${prop.humanName}`}</option>
+                          ) : undefined
+                        }
+                      }
+                    })}
+                  </optgroup>
+                ) : undefined
+              })}
+            </Select>
+          </div>
+        ) : null}
+
+        {isSelectedPerUserRule ? (
+          <div>
+            <label
+              htmlFor={usernameFieldId}
+              className="mb-1 block text-sm font-medium"
+            >
+              <Trans>User</Trans>
+            </label>
+            <DatalistInput
+              name="username"
+              id={usernameFieldId}
+              list={RULE_USERNAMES_DATALIST_ID}
+              placeholder={
+                ruleUsernamesLoading ? t`Loading users...` : t`Select a user`
+              }
+              onChange={updateUsername}
+              value={username}
+              error={!!username && !isUsernameUsable}
+            />
+            {!!username && !isUsernameUsable ? (
+              // The same reason the save would be rejected with - without it
+              // the rule just never commits and nothing says why.
+              <p className="mt-1 text-xs text-error-500">
+                <Trans>
+                  {/* Doubled apostrophes are the ICU escape for a literal
+                      one; a single quote would swallow the placeholder. */}
+                  The media server has no user named &apos;&apos;{username}
+                  &apos;&apos;
+                </Trans>
+              </p>
+            ) : ruleUsernamesFailed ? (
+              <p className="mt-1 text-xs text-zinc-400">
+                <Trans>The user list could not be loaded</Trans>
+              </p>
+            ) : !ruleUsernamesLoading && ruleUsernames.length === 0 ? (
+              <p className="mt-1 text-xs text-zinc-400">
+                <Trans>No users reported by the media server</Trans>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {isSelectedArrDiskspaceRule ? (
+          <div>
+            <label
+              htmlFor="arr_disk_path"
+              className="mb-1 block text-sm font-medium"
+            >
+              <Trans>Disk Target</Trans>
+            </label>
+            <Select
+              name="arr_disk_path"
+              id="arr_disk_path"
+              onChange={updateArrDiskPath}
+              value={arrDiskPath}
+            >
+              <option value="">{t`Aggregate (all paths)`}</option>
+              {preservedArrDiskPathOption ? (
+                <option
+                  key={preservedArrDiskPathOption.value}
+                  value={preservedArrDiskPathOption.value}
+                >
+                  {preservedArrDiskPathOption.label}
+                </option>
+              ) : null}
+              {arrDiskspaceOptions.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}
+                </option>
+              ))}
+              {!isDiskspaceLoading &&
+              !preservedArrDiskPathOption &&
+              arrDiskspaceOptions.length === 0 ? (
+                <option disabled value="__no_paths">
+                  {isSelectedArrTotalDiskspaceRule
+                    ? t`No disk paths with total space reported by ARR`
+                    : t`No disk paths reported by ARR`}
+                </option>
+              ) : null}
+            </Select>
+            {isSelectedArrTotalDiskspaceRule ? (
+              <p className="mt-1 text-xs text-zinc-400">
+                <Trans>
+                  Total disk space only works for paths reported by ARR disk
+                  space. Root-folder fallback paths can still be used for
+                  remaining space, but they do not expose a reliable total size.
+                </Trans>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Custom Value Input */}
+        {customValActive ? (
+          <div className="mb-2">
+            <label
+              htmlFor="custom_val"
+              className="mb-1 block text-sm font-medium"
+            >
+              <Trans>Custom Value</Trans>
+            </label>
+            {customValType === RuleType.TEXT &&
+            secondVal === CustomParams.CUSTOM_DAYS ? (
+              <Input
+                type="number"
+                name="custom_val"
+                id="custom_val"
+                onChange={updateCustomValue}
+                value={customVal ? +customVal / 86400 : ''}
+                placeholder={t`Amount of days`}
+              />
+            ) : (customValType === RuleType.TEXT &&
+                secondVal === CustomParams.CUSTOM_TEXT) ||
+              customValType === RuleType.TEXT_LIST ? (
+              <Input
+                type="text"
+                name="custom_val"
+                id="custom_val"
+                onChange={updateCustomValue}
+                value={customVal ?? ''}
+                placeholder={
+                  ruleType === RuleType.TEXT_LIST ||
+                  customValType === RuleType.TEXT_LIST
+                    ? 'Value1 or ["Value1", "Value2"]'
+                    : t`Text`
+                }
+              />
+            ) : customValType === RuleType.DATE ? (
+              <Input
+                type="date"
+                name="custom_val"
+                id="custom_val"
+                onChange={updateCustomValue}
+                value={customVal ?? ''}
+                placeholder={t`Date`}
+              />
+            ) : customValType === RuleType.BOOL ? (
+              <Select
+                name="custom_val"
+                id="custom_val"
+                onChange={updateCustomValue}
+                value={customVal}
+              >
+                <option value={1}>{t`True`}</option>
+                <option value={0}>{t`False`}</option>
+              </Select>
+            ) : (
+              <Input
+                type="number"
+                name="custom_val"
+                id="custom_val"
+                onChange={updateCustomValue}
+                value={customVal ?? ''}
+                placeholder={t`Number`}
+              />
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/** Returns a list of types that are valid to be matched against a given first value type. */
+function getSecondValueTypes(firstType: RuleType) {
+  if (firstType === RuleType.TEXT_LIST || firstType === RuleType.TEXT) {
+    return [RuleType.TEXT, RuleType.TEXT_LIST]
+  }
+  return [firstType]
+}
+
+function MaybeTextListOptions({
+  ruleType,
+  action,
+}: {
+  ruleType: RuleType
+  action: RulePossibility | undefined
+}) {
+  const { t } = useLingui()
+
+  if (action == null || ruleType !== RuleType.TEXT_LIST) {
+    return
+  }
+
+  if (
+    [
+      RulePossibility.COUNT_EQUALS,
+      RulePossibility.COUNT_NOT_EQUALS,
+      RulePossibility.COUNT_BIGGER,
+      RulePossibility.COUNT_SMALLER,
+    ].includes(action)
+  ) {
+    return (
+      <option value={CustomParams.CUSTOM_NUMBER}>{t`Count (number)`}</option>
+    )
+  }
+
+  return (
+    <>
+      <option value={CustomParams.CUSTOM_TEXT}>{t`Text`}</option>
+      {/* This was accidentally shipped - we keep it as a hidden option so that it still appears in
+          the UI if somebody had already selected it, but we don't want it to be able to be selected
+          in new rules. We should run a migration at some point to update all
+          "customValue { type: 'text list' }" to "customValue { type: text }". */}
+      <option hidden value={CustomParams.CUSTOM_TEXT_LIST}>
+        {t`Text (legacy list option)`}
+      </option>
+    </>
+  )
+}
+
+export default RuleInput

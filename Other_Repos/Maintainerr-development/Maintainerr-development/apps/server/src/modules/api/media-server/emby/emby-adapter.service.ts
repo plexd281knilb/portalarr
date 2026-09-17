@@ -1,0 +1,2036 @@
+import {
+  MediaServerFeature,
+  MediaServerType,
+  type CollectionVisibilitySettings,
+  type CreateCollectionParams,
+  type LibraryQueryOptions,
+  type MediaCollection,
+  type MediaItem,
+  type MediaItemType,
+  type MediaLibrary,
+  type MediaPlaylist,
+  type MediaServerStatus,
+  type MediaUser,
+  type PagedResult,
+  type RecentlyAddedOptions,
+  type UpdateCollectionParams,
+  type WatchRecord,
+} from '@maintainerr/contracts';
+import { Injectable } from '@nestjs/common';
+import { type AxiosInstance, AxiosError, isAxiosError } from 'axios';
+import { formatConnectionFailureMessage } from '../../../../utils/connection-error';
+import { MaintainerrLogger } from '../../../logging/logs.service';
+import { SettingsDataService } from '../../../settings/settings-data.service';
+import { EmbyApi } from '../../emby-api/emby-api.helper';
+import cacheManager, { type Cache } from '../../lib/cache';
+import { NO_TIMEOUT } from '../../lib/httpTimeouts';
+import { resolveContextActionIds } from '../context-action.util';
+import { onlyRequestedItemKinds } from '../item-kinds.util';
+import { supportsFeature } from '../media-server.constants';
+import type {
+  IMediaServerService,
+  MediaWatchState,
+  CollectionMutationOutcome,
+} from '../media-server.interface';
+import {
+  classifyMutationError,
+  recordMutationFailure,
+} from '../mutation-outcome.util';
+import {
+  EMBY_BATCH_SIZE,
+  EMBY_CACHE_KEYS,
+  EMBY_CACHE_TTL,
+  EMBY_CLIENT_INFO,
+  EMBY_DEVICE_INFO,
+} from './emby.constants';
+import { readMetadataInBatches } from '../metadata-batch.util';
+import { EmbyMapper } from './emby.mapper';
+import type {
+  EmbyAuthenticationResult,
+  EmbyBaseItemDto,
+  EmbyItemsQueryResponse,
+  EmbySessionInfoDto,
+  EmbySystemInfo,
+  EmbyUserDto,
+} from './emby.types';
+
+/**
+ * Emby media server adapter.
+ *
+ * Implements IMediaServerService against Emby's HTTP API (https://dev.emby.media/).
+ * Emby and Jellyfin share a common API ancestor (Jellyfin forked Emby in 2018),
+ * so endpoint shapes are largely identical. Key Emby-specific differences:
+ * - Uses X-Emby-Authorization. Emby's parser accepts either `Emby` or
+ *   `MediaBrowser` as the scheme prefix and stores Version without enforcing it.
+ * - Recently-added uses /Users/{userId}/Items/Latest (vs Jellyfin /Items/Latest).
+ * - Admin validation is stricter at setup.
+ *
+ * Methods marked with TODO(emby-server-test) have not been verified against a
+ * live Emby server and require validation before production use.
+ */
+// The fields a metadata read needs, shared by the single-item and bulk reads so
+// the two can never drift into answering differently shaped items.
+//
+// Everything after Studios is only returned by `/Users/{userId}/Items/{itemId}`
+// unless it is named: verified on Emby 4.9.5 that a `/Items` list read omits
+// each one until asked, while the mapper reads them all (PremiereDate,
+// CommunityRating and ProductionYear are sort keys). The parity spec derives
+// this list from the mapper, so a newly consumed field fails a test instead of
+// silently losing its value on batched rows. Naming fields cannot close every
+// list-route gap, though: it stubs UserData (PlayCount 0, no LastPlayedDate,
+// EnableUserData or not) and answers a BoxSet id only with IncludeItemTypes -
+// which is why batch rows are cached apart from the direct-route rows
+// getMetadata serves.
+export const EMBY_METADATA_FIELDS =
+  'ProviderIds,DateCreated,Overview,Tags,MediaSources,Path,Genres,People,Studios,ParentId,ChildCount,PremiereDate,CommunityRating,OfficialRating,ProductionYear,IndexNumberEnd,CriticRating,DateLastSaved';
+
+@Injectable()
+export class EmbyAdapterService implements IMediaServerService {
+  private http: AxiosInstance | undefined;
+  private initialized = false;
+  private embyUrl: string | undefined;
+  private embyApiKey: string | undefined;
+  private embyUserId: string | undefined;
+  private deviceId: string;
+  private readonly cache: Cache;
+  // Shared in-flight metadata reads, keyed by item id. See getMetadata.
+  private readonly metadataRequests = new Map<
+    string,
+    Promise<MediaItem | undefined>
+  >();
+
+  constructor(
+    private readonly settings: SettingsDataService,
+    private readonly logger: MaintainerrLogger,
+  ) {
+    this.logger.setContext(EmbyAdapterService.name);
+    this.cache = cacheManager.getCache('emby');
+    this.deviceId = `${EMBY_DEVICE_INFO.idPrefix}-${this.randomToken(12)}`;
+  }
+
+  // ============================================================================
+  // Lifecycle
+  // ============================================================================
+
+  async initialize(): Promise<void> {
+    const url = this.settings.emby_url;
+    const apiKey = this.settings.emby_api_key;
+    const userId = this.settings.emby_user_id;
+
+    if (!url || !apiKey) {
+      this.logger.debug(
+        'Emby settings incomplete - skipping initialize (url or api_key missing)',
+      );
+      this.initialized = false;
+      this.http = undefined;
+      return;
+    }
+
+    let cleanUrl = url;
+    while (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
+    this.embyUrl = cleanUrl;
+    this.embyApiKey = apiKey;
+    this.embyUserId = userId || undefined;
+
+    this.http = new EmbyApi({
+      url: this.embyUrl,
+      apiKey,
+      authHeader: this.buildAuthHeader(),
+    }).axios;
+
+    try {
+      const info = await this.http.get<EmbySystemInfo>('/System/Info');
+      this.initialized = true;
+      this.logger.log(
+        `Emby connection established to ${info.data.ServerName ?? this.embyUrl} (v${info.data.Version ?? 'unknown'})`,
+      );
+    } catch (error) {
+      this.initialized = false;
+      this.logger.warn(
+        `Failed to initialize Emby connection: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+    }
+  }
+
+  uninitialize(): void {
+    this.http = undefined;
+    this.initialized = false;
+    this.embyUrl = undefined;
+    this.embyApiKey = undefined;
+    this.embyUserId = undefined;
+    this.cache.flush();
+  }
+
+  isSetup(): boolean {
+    return this.initialized && this.http !== undefined;
+  }
+
+  getServerType(): MediaServerType {
+    return MediaServerType.EMBY;
+  }
+
+  supportsFeature(feature: MediaServerFeature): boolean {
+    return supportsFeature(MediaServerType.EMBY, feature);
+  }
+
+  // ============================================================================
+  // Server / Users
+  // ============================================================================
+
+  async getStatus(): Promise<MediaServerStatus | undefined> {
+    if (!this.http) return undefined;
+    try {
+      const cached = this.cache.data.get<EmbySystemInfo>(
+        EMBY_CACHE_KEYS.STATUS,
+      );
+      const info = cached
+        ? cached
+        : (await this.http.get<EmbySystemInfo>('/System/Info')).data;
+      if (!cached) {
+        this.cache.data.set(
+          EMBY_CACHE_KEYS.STATUS,
+          info,
+          EMBY_CACHE_TTL.STATUS,
+        );
+      }
+      return EmbyMapper.toMediaServerStatus(
+        info.Id || '',
+        info.Version || 'unknown',
+        info.ServerName,
+        info.OperatingSystem,
+        this.embyUrl,
+      );
+    } catch (error) {
+      this.logger.debug(
+        `Emby getStatus failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return undefined;
+    }
+  }
+
+  async getUsers(throwOnError = false): Promise<MediaUser[]> {
+    if (!this.http) {
+      if (throwOnError) {
+        throw new Error('Emby API not initialized');
+      }
+      return [];
+    }
+    try {
+      const cached = this.cache.data.get<EmbyUserDto[]>(EMBY_CACHE_KEYS.USERS);
+      const users = cached ? cached : await this.fetchUsersQuery(this.http);
+      if (!cached) {
+        this.cache.data.set(EMBY_CACHE_KEYS.USERS, users, EMBY_CACHE_TTL.USERS);
+      }
+      return users.map(EmbyMapper.toMediaUser);
+    } catch (error) {
+      this.logger.debug(
+        `Emby getUsers failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      if (throwOnError) {
+        throw error;
+      }
+      return [];
+    }
+  }
+
+  async getUser(id: string): Promise<MediaUser | undefined> {
+    if (!this.http) return undefined;
+    try {
+      const { data } = await this.http.get<EmbyUserDto>(`/Users/${id}`);
+      return EmbyMapper.toMediaUser(data);
+    } catch (error) {
+      this.logger.debug(
+        `Emby getUser(${id}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return undefined;
+    }
+  }
+
+  // ============================================================================
+  // Libraries
+  // ============================================================================
+
+  async getLibraries(): Promise<MediaLibrary[]> {
+    if (!this.http) return [];
+    try {
+      const cached = this.cache.data.get<EmbyBaseItemDto[]>(
+        EMBY_CACHE_KEYS.LIBRARIES,
+      );
+      const folders = cached ? cached : await this.fetchLibraryFolders();
+      if (!cached) {
+        this.cache.data.set(
+          EMBY_CACHE_KEYS.LIBRARIES,
+          folders,
+          EMBY_CACHE_TTL.LIBRARIES,
+        );
+      }
+      return folders
+        .filter((f) =>
+          ['movies', 'tvshows'].includes(
+            (f.CollectionType ?? '').toLowerCase(),
+          ),
+        )
+        .map(EmbyMapper.toMediaLibrary);
+    } catch (error) {
+      this.logger.warn(
+        `Emby getLibraries failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  private async fetchLibraryFolders(): Promise<EmbyBaseItemDto[]> {
+    if (!this.http) return [];
+    // /Library/VirtualFolders returns the configured libraries.
+    // /Users/{id}/Views returns the user-visible libraries; prefer the latter
+    // when we have a user context.
+    const path = this.embyUserId
+      ? `/Users/${this.embyUserId}/Views`
+      : '/Library/MediaFolders';
+    const { data } = await this.http.get<EmbyItemsQueryResponse>(path);
+    return data.Items ?? [];
+  }
+
+  async getLibrariesStorage(): Promise<Map<string, number>> {
+    // TODO(emby-server-test): Emby doesn't expose per-library byte totals
+    // through a single cheap endpoint. Return empty map; callers fall back to
+    // computeLibraryStorageSizes() for the slow path.
+    return new Map();
+  }
+
+  async computeLibraryStorageSizes(): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (!this.http) return result;
+
+    const libraries = await this.getLibraries();
+    const path = this.embyUserId ? `/Users/${this.embyUserId}/Items` : '/Items';
+
+    for (const lib of libraries) {
+      try {
+        let total = 0;
+        let offset = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data } = await this.http.get<EmbyItemsQueryResponse>(path, {
+            params: {
+              ParentId: lib.id,
+              Recursive: true,
+              IncludeItemTypes: 'Movie,Episode',
+              // Size lives in MediaSources[].Size; without requesting it,
+              // Emby omits the field entirely and every item sums to 0.
+              Fields: 'MediaSources',
+              Limit: EMBY_BATCH_SIZE.MAX_PAGE_SIZE,
+              StartIndex: offset,
+              EnableTotalRecordCount: true,
+              ...this.libraryQueryDefaults(),
+            },
+          });
+
+          const items = data.Items ?? [];
+          total += items.reduce(
+            (sum, item) =>
+              sum +
+              (item.Size ??
+                item.MediaSources?.reduce((s, src) => s + (src.Size ?? 0), 0) ??
+                0),
+            0,
+          );
+
+          offset += items.length;
+          const totalCount = data.TotalRecordCount ?? offset;
+          hasMore = items.length > 0 && offset < totalCount;
+        }
+
+        if (total > 0) result.set(lib.id, total);
+      } catch (error) {
+        this.logger.debug(
+          `Emby computeLibraryStorageSizes(${lib.id}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+        );
+      }
+    }
+    return result;
+  }
+
+  async getLibraryContents(
+    libraryId: string,
+    options?: LibraryQueryOptions,
+  ): Promise<PagedResult<MediaItem>> {
+    if (!this.http) {
+      throw new Error('Emby not initialized');
+    }
+    const limit = options?.limit ?? EMBY_BATCH_SIZE.DEFAULT_PAGE_SIZE;
+    const offset = options?.offset ?? 0;
+
+    try {
+      const includeItemTypes = options?.type
+        ? EmbyMapper.toEmbyItemKind(options.type)
+        : 'Movie,Series';
+      const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+        params: {
+          ParentId: libraryId,
+          Recursive: true,
+          IncludeItemTypes: includeItemTypes,
+          Fields: 'ProviderIds,DateCreated,Overview,Tags',
+          SortBy: this.toEmbySortBy(options?.sort),
+          SortOrder: options?.sortOrder === 'desc' ? 'Descending' : 'Ascending',
+          StartIndex: offset,
+          Limit: limit,
+          ...this.libraryQueryDefaults(),
+        },
+      });
+      return {
+        items: onlyRequestedItemKinds(data.Items, includeItemTypes).map(
+          EmbyMapper.toMediaItem,
+        ),
+        totalSize: data.TotalRecordCount ?? data.Items?.length ?? 0,
+        offset,
+        limit,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Emby getLibraryContents(${libraryId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      // A fabricated empty page reads as end-of-library downstream, which
+      // truncates rule evaluation and mass-removes the unevaluated tail from
+      // collections (#3307). Fail closed like getCollectionChildren.
+      throw error;
+    }
+  }
+
+  async getLibraryContentCount(
+    libraryId: string,
+    type?: MediaItemType,
+  ): Promise<number> {
+    if (!this.http) return 0;
+    try {
+      const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+        params: {
+          ParentId: libraryId,
+          Recursive: true,
+          IncludeItemTypes: type
+            ? EmbyMapper.toEmbyItemKind(type)
+            : 'Movie,Series',
+          Limit: 0,
+          EnableTotalRecordCount: true,
+          ...this.libraryQueryDefaults(),
+        },
+      });
+      return data.TotalRecordCount ?? 0;
+    } catch (error) {
+      this.logger.debug(
+        `Emby getLibraryContentCount(${libraryId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      // Same contract as getLibraryContents: a fabricated count masks a
+      // failed read from callers that gate work on it.
+      throw error;
+    }
+  }
+
+  async searchLibraryContents(
+    libraryId: string,
+    query: string,
+    type?: MediaItemType,
+  ): Promise<MediaItem[]> {
+    if (!this.http) return [];
+    try {
+      const includeItemTypes = type
+        ? EmbyMapper.toEmbyItemKind(type)
+        : 'Movie,Series';
+      const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+        params: {
+          ParentId: libraryId,
+          Recursive: true,
+          SearchTerm: query,
+          IncludeItemTypes: includeItemTypes,
+          Fields: 'ProviderIds,DateCreated,Overview',
+          Limit: EMBY_BATCH_SIZE.DEFAULT_PAGE_SIZE,
+          ...this.libraryQueryDefaults(),
+        },
+      });
+      return onlyRequestedItemKinds(data.Items, includeItemTypes).map(
+        EmbyMapper.toMediaItem,
+      );
+    } catch (error) {
+      this.logger.debug(
+        `Emby searchLibraryContents failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  // ============================================================================
+  // Metadata
+  // ============================================================================
+
+  /**
+   * Cached for the same reason as the Jellyfin adapter's: every rule condition
+   * re-reads the evaluated item and its parents through here, so an uncached
+   * read costs one wide request per condition per item (#3355), and
+   * concurrently evaluated siblings all miss the cold key together so they
+   * share the in-flight read. See there for why only a resolved item is
+   * stored, and why a MediaItem's UserData-derived fields must not feed a
+   * watch or deletion decision.
+   */
+  async getMetadata(itemId: string): Promise<MediaItem | undefined> {
+    if (!this.http) return undefined;
+
+    const cacheKey = `${EMBY_CACHE_KEYS.METADATA}:${itemId}`;
+    const cached = this.cache.data.get<MediaItem>(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const inFlight = this.metadataRequests.get(itemId);
+    if (inFlight !== undefined) return inFlight;
+
+    const pending = this.fetchMetadata(itemId, cacheKey).finally(() => {
+      this.metadataRequests.delete(itemId);
+    });
+    this.metadataRequests.set(itemId, pending);
+
+    return pending;
+  }
+
+  async getMetadataBatch(itemIds: string[]): Promise<MediaItem[]> {
+    if (!this.http) return [];
+
+    return readMetadataInBatches({
+      itemIds,
+      // Ids are comma separated in one `Ids` parameter.
+      perIdCost: 1,
+      cache: {
+        get: (itemId) =>
+          this.cache.data.get<MediaItem>(
+            `${EMBY_CACHE_KEYS.METADATA_BATCH}:${itemId}`,
+          ),
+        set: (item) =>
+          this.cache.data.set(
+            `${EMBY_CACHE_KEYS.METADATA_BATCH}:${item.id}`,
+            item,
+            EMBY_CACHE_TTL.METADATA,
+          ),
+      },
+      readBatch: async (idBatch) => {
+        // User-scoped, like every other Emby read. Unscoped, the list route
+        // answers rows with no UserData at all, so treat a missing user as
+        // inconclusive: the thrown batch comes back unresolved rather than
+        // trimmed (fetchItem draws the same line).
+        const userId = await this.resolveUserId();
+        if (!userId) {
+          throw new Error(
+            'Cannot resolve an Emby user for the batched metadata read',
+          );
+        }
+        const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+          params: {
+            UserId: userId,
+            Ids: idBatch.join(','),
+            Fields: EMBY_METADATA_FIELDS,
+          },
+        });
+
+        return (data.Items ?? []).map(EmbyMapper.toMediaItem);
+      },
+      // Emby answers 500 for a malformed id, so one bad id costs its batch.
+      onBatchError: (idBatch, error) => {
+        this.logger.warn(
+          `Failed to get metadata for ${idBatch.length} Emby item(s)`,
+        );
+        this.logger.debug(
+          formatConnectionFailureMessage(error, 'Connection failed'),
+        );
+      },
+    });
+  }
+
+  private async fetchMetadata(
+    itemId: string,
+    cacheKey: string,
+  ): Promise<MediaItem | undefined> {
+    try {
+      const data = await this.fetchItem(itemId, EMBY_METADATA_FIELDS);
+
+      if (!data) {
+        return undefined;
+      }
+
+      const mediaItem = EmbyMapper.toMediaItem(data);
+      this.cache.data.set(cacheKey, mediaItem, EMBY_CACHE_TTL.METADATA);
+      return mediaItem;
+    } catch (error) {
+      this.logger.debug(
+        `Emby getMetadata(${itemId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Cached like the Jellyfin adapter's (#3355) - see there for why only a
+   * completed read is stored.
+   */
+  async getChildrenMetadata(
+    parentId: string,
+    childType?: MediaItemType,
+    throwOnError = false,
+  ): Promise<MediaItem[]> {
+    if (!this.http) {
+      if (throwOnError) {
+        throw new Error('Emby API not initialized');
+      }
+      return [];
+    }
+
+    const cacheKey = `${EMBY_CACHE_KEYS.CHILDREN}:${parentId}:${childType ?? 'any'}`;
+    const cached = this.cache.data.get<MediaItem[]>(cacheKey);
+    if (cached !== undefined) return cached;
+
+    try {
+      // Seasons of a series live under /Shows/{seriesId}/Seasons, not under
+      // /Items?ParentId= (ParentId of a season points to the library folder,
+      // not the show). Same data model as Jellyfin.
+      if (childType === 'season') {
+        const { data } = await this.http.get<EmbyItemsQueryResponse>(
+          `/Shows/${parentId}/Seasons`,
+          {
+            params: {
+              UserId: this.embyUserId,
+              Fields: 'ProviderIds,DateCreated,Overview,Tags',
+              EnableUserData: true,
+            },
+          },
+        );
+        if (
+          !Array.isArray(data.Items) ||
+          data.Items.some((season) => !season.Id)
+        ) {
+          throw new Error('Emby returned invalid season items');
+        }
+        return this.cacheChildren(
+          cacheKey,
+          data.Items.map(EmbyMapper.toMediaItem),
+        );
+      }
+
+      const paginated = childType === 'episode';
+      const children: MediaItem[] = [];
+      const seenIds = new Set<string>();
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+          params: {
+            ParentId: parentId,
+            IncludeItemTypes: childType
+              ? EmbyMapper.toEmbyItemKind(childType)
+              : undefined,
+            // Skip virtual (unaired) episodes the same way the Jellyfin adapter does.
+            ExcludeLocationTypes:
+              childType === 'episode' ? 'Virtual' : undefined,
+            Fields: 'ProviderIds,DateCreated,Overview,Tags',
+            EnableUserData: true,
+            Limit: EMBY_BATCH_SIZE.MAX_PAGE_SIZE,
+            StartIndex: paginated ? offset : undefined,
+            EnableTotalRecordCount: paginated ? true : undefined,
+          },
+        });
+
+        if (paginated && !Array.isArray(data.Items)) {
+          throw new Error('Emby returned children without an Items list');
+        }
+        const items = data.Items ?? [];
+
+        if (paginated) {
+          if (
+            !Number.isSafeInteger(data.TotalRecordCount) ||
+            data.TotalRecordCount! < 0
+          ) {
+            throw new Error('Emby returned an invalid child count');
+          }
+          for (const item of items) {
+            if (!item.Id || seenIds.has(item.Id)) {
+              throw new Error('Emby returned duplicate child items');
+            }
+            seenIds.add(item.Id);
+          }
+        }
+
+        children.push(...items.map(EmbyMapper.toMediaItem));
+        offset += items.length;
+        hasMore = paginated && offset < data.TotalRecordCount!;
+        if (hasMore && items.length === 0) {
+          throw new Error('Emby child pagination made no progress');
+        }
+      }
+
+      return this.cacheChildren(cacheKey, children);
+    } catch (error) {
+      if (throwOnError) {
+        // Worded like the Plex adapter's: the raw client error reaches the user
+        // as "Request failed with status code 404", which names nothing.
+        throw new Error(
+          `Could not read the children of Emby item ${parentId}`,
+          { cause: error },
+        );
+      }
+
+      this.logger.debug(
+        `Emby getChildrenMetadata(${parentId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  private cacheChildren(cacheKey: string, children: MediaItem[]): MediaItem[] {
+    this.cache.data.set(cacheKey, children, EMBY_CACHE_TTL.METADATA);
+    return children;
+  }
+
+  /**
+   * User IDs of every user with `IsFavorite=true` on this item. Mirrors
+   * `JellyfinAdapterService.getItemFavoritedBy` (per-user fan-out - Emby
+   * has no central favorites endpoint).
+   */
+  async getItemFavoritedBy(itemId: string): Promise<string[]> {
+    if (!this.http) return [];
+    try {
+      const users = await this.getUsers();
+      const favoritedBy: string[] = [];
+      for (const user of users) {
+        try {
+          const { data } = await this.http.get<EmbyBaseItemDto>(
+            `/Users/${user.id}/Items/${itemId}`,
+          );
+          if (data.UserData?.IsFavorite) favoritedBy.push(user.id);
+        } catch {
+          // user may lack visibility on this item - skip silently
+        }
+      }
+      return favoritedBy;
+    } catch (error) {
+      this.logger.debug(
+        `Emby getItemFavoritedBy(${itemId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Sum of `UserData.PlayCount` across all users (counts unfinished plays).
+   * Mirrors `JellyfinAdapterService.getTotalPlayCount`.
+   */
+  async getTotalPlayCount(itemId: string): Promise<number> {
+    if (!this.http) return 0;
+    try {
+      const users = await this.getUsers();
+      let total = 0;
+      for (const user of users) {
+        try {
+          const { data } = await this.http.get<EmbyBaseItemDto>(
+            `/Users/${user.id}/Items/${itemId}`,
+          );
+          total += data.UserData?.PlayCount ?? 0;
+        } catch {
+          // skip users without visibility
+        }
+      }
+      return total;
+    } catch (error) {
+      this.logger.debug(
+        `Emby getTotalPlayCount(${itemId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Users who watched at least one episode under `parentId` (season or show).
+   * One /Items request per user, each scoped to that user with `IsPlayed=true`
+   * + `Limit=1` - we only need to know whether any played episode exists.
+   *
+   * Errors propagate for the same reason they do in getWatchHistory: an empty
+   * watcher list is indistinguishable from "nobody watched this", which would
+   * make a failed lookup a deletion candidate. The Jellyfin adapter answers the
+   * same question from its prefetched snapshot instead, because Emby omits the
+   * watch dates a bulk sweep would need (see getWatchHistory).
+   */
+  /**
+   * Watch records for every episode under `parentId`, keyed by episode id, the
+   * shape the Jellyfin adapter answers from its sweep. Emby has no dated bulk
+   * listing, so every episode costs one /Users/Query plus one
+   * /Users/{userId}/Items/{itemId} read per user, walked in batches.
+   * All-or-nothing: a failed read throws rather than answering with an
+   * episode missing from the map.
+   */
+  async getDescendantEpisodeWatchHistory(
+    parentId: string,
+    parentType: 'show' | 'season',
+  ): Promise<Record<string, WatchRecord[]>> {
+    const seasons =
+      parentType === 'season'
+        ? [{ id: parentId }]
+        : await this.getChildrenMetadata(parentId, 'season', true);
+    const episodeIds: string[] = [];
+    for (const season of seasons) {
+      const episodes = await this.getChildrenMetadata(
+        season.id,
+        'episode',
+        true,
+      );
+      episodeIds.push(...episodes.map((episode) => episode.id));
+    }
+
+    const watchHistory: Record<string, WatchRecord[]> = {};
+    for (
+      let i = 0;
+      i < episodeIds.length;
+      i += EMBY_BATCH_SIZE.EPISODE_WATCH_HISTORY
+    ) {
+      const batch = episodeIds.slice(
+        i,
+        i + EMBY_BATCH_SIZE.EPISODE_WATCH_HISTORY,
+      );
+      const records = await Promise.all(
+        batch.map((episodeId) => this.getWatchHistory(episodeId)),
+      );
+      batch.forEach((episodeId, index) => {
+        watchHistory[episodeId] = records[index];
+      });
+    }
+    return watchHistory;
+  }
+
+  async getDescendantEpisodeWatchers(parentId: string): Promise<string[]> {
+    if (!this.http) return [];
+
+    const users = await this.fetchUsersQuery(this.http);
+    const watchers = new Set<string>();
+    for (const user of users) {
+      const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+        params: {
+          UserId: user.Id,
+          ParentId: parentId,
+          Recursive: true,
+          IncludeItemTypes: 'Episode',
+          ExcludeLocationTypes: 'Virtual',
+          IsPlayed: true,
+          Limit: 1,
+          EnableUserData: true,
+        },
+      });
+      if ((data.Items ?? []).length > 0) watchers.add(user.Id);
+    }
+
+    return [...watchers];
+  }
+
+  /**
+   * Items inside a playlist. Mirrors `JellyfinAdapterService.getPlaylistItems`.
+   */
+  async getPlaylistItems(playlistId: string): Promise<MediaItem[]> {
+    if (!this.http) return [];
+    try {
+      const { data } = await this.http.get<EmbyItemsQueryResponse>(
+        `/Playlists/${playlistId}/Items`,
+        { params: { UserId: this.embyUserId } },
+      );
+      return (data.Items ?? []).map(EmbyMapper.toMediaItem);
+    } catch (error) {
+      this.logger.debug(
+        `Emby getPlaylistItems(${playlistId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  async getRecentlyAdded(
+    libraryId: string,
+    options?: RecentlyAddedOptions,
+  ): Promise<MediaItem[]> {
+    if (!this.http) return [];
+    // Emby uses /Users/{userId}/Items/Latest (per Seerr precedent),
+    // whereas Jellyfin exposes /Items/Latest. The user-scoped endpoint is the
+    // documented path for Emby.
+    if (!this.embyUserId) {
+      this.logger.warn(
+        'Emby getRecentlyAdded requires a configured user ID - none set',
+      );
+      return [];
+    }
+    try {
+      const includeItemTypes = options?.type
+        ? EmbyMapper.toEmbyItemKind(options.type)
+        : 'Movie,Episode';
+      // Latest groups episodes under their series, so an Episode request comes
+      // back as Series rows (Emby 4.9.5). Allow the grouped kind through: the
+      // filter is here to drop BoxSets, not to unpick grouping.
+      const returnedItemTypes = includeItemTypes.includes('Episode')
+        ? `${includeItemTypes},Series`
+        : includeItemTypes;
+      const { data } = await this.http.get<EmbyBaseItemDto[]>(
+        `/Users/${this.embyUserId}/Items/Latest`,
+        {
+          params: {
+            ParentId: libraryId,
+            IncludeItemTypes: includeItemTypes,
+            Fields: 'ProviderIds,DateCreated,Overview',
+            Limit: options?.limit ?? 20,
+            ...this.libraryQueryDefaults(),
+          },
+        },
+      );
+      return onlyRequestedItemKinds(
+        Array.isArray(data) ? data : [],
+        returnedItemTypes,
+      ).map(EmbyMapper.toMediaItem);
+    } catch (error) {
+      this.logger.debug(
+        `Emby getRecentlyAdded(${libraryId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  async searchContent(query: string): Promise<MediaItem[]> {
+    if (!this.http) return [];
+    try {
+      const includeItemTypes = 'Movie,Series,Episode';
+      const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+        params: {
+          Recursive: true,
+          SearchTerm: query,
+          IncludeItemTypes: includeItemTypes,
+          Fields: 'ProviderIds,DateCreated,Overview,Studios',
+          Limit: EMBY_BATCH_SIZE.DEFAULT_PAGE_SIZE,
+          ...this.libraryQueryDefaults(),
+        },
+      });
+      return onlyRequestedItemKinds(data.Items, includeItemTypes).map(
+        EmbyMapper.toMediaItem,
+      );
+    } catch (error) {
+      this.logger.debug(
+        `Emby searchContent failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Pick a single random item of the given kinds from a library section (or
+   * across all sections when `sectionIds` is omitted). Emby honours
+   * `SortBy=Random` server-side, mirroring Jellyfin's behaviour. Virtual
+   * (unaired) entries are excluded so episode previews never land on a
+   * placeholder. Returns null on failure or empty result.
+   */
+  async findRandomItem(
+    sectionIds: string[] | undefined,
+    kinds: string[],
+  ): Promise<EmbyBaseItemDto | null> {
+    if (!this.http) return null;
+    try {
+      const parentId = sectionIds?.[0];
+      const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+        params: {
+          userId: this.embyUserId,
+          ParentId: parentId,
+          IncludeItemTypes: kinds.join(','),
+          Recursive: true,
+          SortBy: 'Random',
+          SortOrder: 'Ascending',
+          Limit: 1,
+          ExcludeLocationTypes: 'Virtual',
+          Fields: 'ProviderIds,DateCreated,Overview',
+          ImageTypeLimit: 1,
+          ...this.libraryQueryDefaults(),
+        },
+      });
+      return data.Items?.[0] ?? null;
+    } catch (error) {
+      this.logger.warn('Failed to pick random Emby item');
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  async findRandomEpisode(
+    sectionIds: string[] | undefined,
+  ): Promise<EmbyBaseItemDto | null> {
+    return this.findRandomItem(sectionIds, ['Episode']);
+  }
+
+  async refreshItemMetadata(itemId: string): Promise<void> {
+    if (!this.http) {
+      throw new Error('Emby not initialized');
+    }
+    try {
+      await this.http.post(`/Items/${itemId}/Refresh`, null, {
+        params: {
+          Recursive: false,
+          ImageRefreshMode: 'Default',
+          MetadataRefreshMode: 'FullRefresh',
+          ReplaceAllImages: false,
+          ReplaceAllMetadata: false,
+        },
+      });
+    } catch (error) {
+      // Plex and Jellyfin throw here, and #2594's verify-and-retry-with-a-
+      // corrected-id path only runs on a rejection - swallowing left that
+      // dead on Emby and every refresh reported as queued.
+      this.logger.error(
+        `Emby refreshItemMetadata(${itemId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      throw error;
+    }
+  }
+
+  async scanFolder(libraryId: string, folderPath: string): Promise<void> {
+    if (!this.http) {
+      throw new Error('Emby not initialized');
+    }
+    await this.http.post('/Library/Media/Updated', {
+      Updates: [{ Path: folderPath, UpdateType: 'Deleted' }],
+    });
+  }
+
+  // ============================================================================
+  // Watch State
+  // ============================================================================
+  // TODO(emby-server-test): Emby lacks a central watch-history endpoint; per
+  // Seerr precedent, iterate over users via /Users/{id}/Items with
+  // IsPlayed=true filter. The implementations below mirror the Jellyfin
+  // adapter's shape but use Emby endpoint paths.
+
+  async prefetchWatchHistory(): Promise<void> {
+    // Emby cannot do what the Jellyfin adapter does here: it omits
+    // LastPlayedDate and PlayCount from every bulk /Items listing shape, so a
+    // sweep would report watched items as having no watch date. Gated by
+    // supportsFeature(CENTRAL_WATCH_HISTORY) which is false for Emby - callers
+    // shouldn't reach here.
+    throw new Error(
+      'Bulk watch-history prefetch is not supported on Emby (per-user history)',
+    );
+  }
+
+  /**
+   * Stays per item, unlike the Jellyfin twin's descendant sweep (#3337): Emby
+   * omits LastPlayedDate and PlayCount from every bulk /Items listing shape
+   * (verified on 4.9.5 with and without UserId scoping and Fields=UserData)
+   * and returns them only from /Users/{userId}/Items/{itemId}. A bulk sweep
+   * would therefore report every watched episode as having no watch date.
+   */
+  async getWatchHistory(itemId: string): Promise<WatchRecord[]> {
+    if (!this.http) return [];
+    let users: EmbyUserDto[];
+    try {
+      users = await this.fetchUsersQuery(this.http);
+    } catch (error) {
+      this.logger.debug(
+        `Emby getWatchHistory(${itemId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      throw error;
+    }
+
+    const records: WatchRecord[] = [];
+    for (const user of users) {
+      try {
+        const { data } = await this.http.get<EmbyBaseItemDto>(
+          `/Users/${user.Id}/Items/${itemId}`,
+        );
+        if (data.UserData?.Played) {
+          records.push(
+            EmbyMapper.toWatchRecord(
+              user.Id,
+              itemId,
+              data.UserData.LastPlayedDate
+                ? new Date(data.UserData.LastPlayedDate)
+                : undefined,
+            ),
+          );
+        }
+      } catch (error) {
+        // A hidden or unavailable item is a per-user visibility miss, so skip
+        // that user. Anything else leaves the aggregate short of a user who may
+        // have watched it, and callers read the result as a confirmed date -
+        // it has to reach them instead (#3531).
+        if (
+          isAxiosError(error) &&
+          (error.response?.status === 403 || error.response?.status === 404)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return records;
+  }
+
+  /**
+   * Return the newest playback timestamp across all users, including
+   * unfinished playback. Unlike watch history, this deliberately ignores
+   * UserData.Played and fails if any user-scoped item lookup fails because an
+   * incomplete sweep cannot prove the newest timestamp.
+   */
+  async getLastPlayedAt(itemId: string): Promise<Date | null> {
+    if (!this.http) {
+      throw new Error('Emby API not initialized');
+    }
+
+    const users = await this.fetchUsersQuery(this.http);
+    let latestMs: number | undefined;
+
+    for (let i = 0; i < users.length; i += EMBY_BATCH_SIZE.USER_WATCH_HISTORY) {
+      const batch = users.slice(i, i + EMBY_BATCH_SIZE.USER_WATCH_HISTORY);
+      const responses = await Promise.all(
+        batch.map((user) =>
+          this.http!.get<EmbyBaseItemDto>(`/Users/${user.Id}/Items/${itemId}`),
+        ),
+      );
+
+      for (const response of responses) {
+        const lastPlayedDate = response.data.UserData?.LastPlayedDate;
+        if (!lastPlayedDate) continue;
+
+        const playedMs = new Date(lastPlayedDate).getTime();
+        if (
+          !Number.isNaN(playedMs) &&
+          (latestMs === undefined || playedMs > latestMs)
+        ) {
+          latestMs = playedMs;
+        }
+      }
+    }
+
+    return latestMs === undefined ? null : new Date(latestMs);
+  }
+
+  async getWatchState(
+    itemId: string,
+    nativeViewCount?: number,
+  ): Promise<MediaWatchState> {
+    const history = await this.getWatchHistory(itemId);
+    const viewCount = history.length;
+    const isWatched =
+      viewCount > 0 || (nativeViewCount !== undefined && nativeViewCount > 0);
+    return { viewCount, isWatched };
+  }
+
+  async getItemSeenBy(itemId: string): Promise<string[]> {
+    const history = await this.getWatchHistory(itemId);
+    return history.map((r) => r.userId);
+  }
+
+  async getActiveSessions(): Promise<Set<string>> {
+    if (!this.http) return new Set<string>();
+    try {
+      const { data } = await this.http.get<EmbySessionInfoDto[]>('/Sessions');
+      const playing = new Set<string>();
+      for (const session of data ?? []) {
+        const item = session.NowPlayingItem;
+        if (!item) continue;
+        // A collection can track an episode at any level, so protect the
+        // episode and its season and series. ParentId is intentionally
+        // omitted - for Emby movies it is the library folder, not a
+        // collectable ancestor. Movies only carry Id.
+        if (item.Id) playing.add(item.Id);
+        if (item.SeasonId) playing.add(item.SeasonId);
+        if (item.SeriesId) playing.add(item.SeriesId);
+      }
+      return playing;
+    } catch (error) {
+      this.logger.warn('Failed to fetch active Emby sessions.');
+      this.logger.debug(error);
+      return new Set<string>();
+    }
+  }
+
+  // ============================================================================
+  // Collections
+  // ============================================================================
+
+  async getCollections(
+    libraryId: string,
+    useCache = true,
+  ): Promise<MediaCollection[]> {
+    if (!this.http) {
+      throw new Error('Emby not initialized');
+    }
+
+    const cacheKey = `${EMBY_CACHE_KEYS.COLLECTIONS}:${libraryId}`;
+    // Still written back on a live read, so per-item reads stay warm.
+    const cached = useCache
+      ? this.cache.data.get<MediaCollection[]>(cacheKey)
+      : undefined;
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      // User-scoped read: Emby resolves the BoxSet query against a user's
+      // library view, so an unscoped read can miss or 404. Pass the user via the
+      // UserId query param on the literal /Items path - functionally the same as
+      // /Users/{id}/Items, and the param idiom already used elsewhere here. (A
+      // user value interpolated into the request path is a CodeQL SSRF sink; a
+      // query param is not.)
+      const userId = await this.resolveUserId();
+      // A truncated page is an HTTP 200, so failing closed cannot catch it.
+      const collections: MediaCollection[] = [];
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+          params: {
+            ...(userId ? { UserId: userId } : {}),
+            ParentId: libraryId,
+            IncludeItemTypes: 'BoxSet',
+            Recursive: true,
+            Fields: 'DateCreated,Overview,ChildCount',
+            Limit: EMBY_BATCH_SIZE.MAX_PAGE_SIZE,
+            StartIndex: offset,
+            EnableTotalRecordCount: true,
+          },
+        });
+
+        const items = data.Items ?? [];
+        collections.push(...items.map(EmbyMapper.toMediaCollection));
+        offset += items.length;
+        hasMore =
+          items.length > 0 && offset < (data.TotalRecordCount ?? offset);
+      }
+      // Skip caching empty results so a transient zero-collection response
+      // (e.g. mid-library-scan) can't mask a just-created entry.
+      if (collections.length > 0) {
+        this.cache.data.set(cacheKey, collections, EMBY_CACHE_TTL.COLLECTIONS);
+      }
+      return collections;
+    } catch (error) {
+      this.logger.error(
+        `Emby getCollections(${libraryId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * The userId to scope item reads to. Emby resolves ParentId/BoxSet/recursive
+   * queries against a user's library view, so those reads need a userId even
+   * though auth is a server-level admin key. Prefer the configured admin user;
+   * otherwise resolve and cache the first admin so token-only setups still get
+   * a user-scoped read instead of the unreliable plain /Items path. Returns
+   * undefined only when no admin can be resolved - callers must treat that as
+   * inconclusive, never fall back to an unscoped read.
+   */
+  private async resolveUserId(): Promise<string | undefined> {
+    if (this.embyUserId) return this.embyUserId;
+    if (!this.http) return undefined;
+
+    const cached = this.cache.data.get<string>(
+      EMBY_CACHE_KEYS.RESOLVED_USER_ID,
+    );
+    if (cached) return cached;
+
+    try {
+      const users = await this.fetchUsersQuery(this.http);
+      const adminId = users.find((u) => u.Policy?.IsAdministrator)?.Id;
+      if (adminId) {
+        this.cache.data.set(
+          EMBY_CACHE_KEYS.RESOLVED_USER_ID,
+          adminId,
+          EMBY_CACHE_TTL.USERS,
+        );
+        return adminId;
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Emby resolveUserId failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+    }
+    return undefined;
+  }
+
+  /**
+   * Drop the cached getCollections() result so a create/rename/delete is
+   * visible immediately. Mirrors the Jellyfin adapter: pass a libraryId to
+   * clear that library, or omit it to clear every library's cache.
+   */
+  private invalidateCollectionsCache(libraryId?: string): void {
+    if (libraryId) {
+      this.cache.data.del(`${EMBY_CACHE_KEYS.COLLECTIONS}:${libraryId}`);
+      return;
+    }
+    const prefix = `${EMBY_CACHE_KEYS.COLLECTIONS}:`;
+    const stale = this.cache.data.keys().filter((k) => k.startsWith(prefix));
+    if (stale.length > 0) this.cache.data.del(stale);
+  }
+
+  async getCollection(
+    collectionId: string,
+    throwOnError = false,
+  ): Promise<MediaCollection | undefined> {
+    // Guard predates throwOnError, and answered "confirmed 404" without it.
+    if (!this.http) {
+      if (throwOnError) {
+        throw new Error('Emby not initialized');
+      }
+      return undefined;
+    }
+    // Emby answers 404 on the unscoped /Items/{id} route for a collection that
+    // exists, so reading that as a confirmed absence unlinks a live collection.
+    // Only the user-scoped route tells the two apart, and it is also the only
+    // one that carries ChildCount, which the empty-collection heal reads.
+    const userId = await this.resolveUserId();
+    if (!userId) {
+      const message = `Emby getCollection(${collectionId}) has no user to scope the lookup to; its existence is unknown`;
+      if (throwOnError) throw new Error(message);
+      this.logger.debug(message);
+      return undefined;
+    }
+
+    try {
+      const { data } = await this.http.get<EmbyBaseItemDto>(
+        `/Users/${userId}/Items/${collectionId}`,
+      );
+      return EmbyMapper.toMediaCollection(data);
+    } catch (error) {
+      // A 404 is the server confirming the collection is gone; anything else
+      // leaves its existence unknown, so throwOnError callers must not read it
+      // as "missing".
+      if (error instanceof AxiosError && error.response?.status === 404) {
+        this.logger.debug(
+          `Emby collection ${collectionId} not found; treating it as missing`,
+        );
+        return undefined;
+      }
+
+      if (throwOnError) throw error;
+      this.logger.debug(
+        `Emby getCollection(${collectionId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return undefined;
+    }
+  }
+
+  async createCollection(
+    params: CreateCollectionParams,
+  ): Promise<MediaCollection> {
+    if (!this.http) throw new Error('Emby not initialized');
+    try {
+      // Create with one item: Emby's create-collection endpoint throws HTTP 500
+      // ("Sequence contains no elements" in CollectionManager) when creating an
+      // empty collection under a library folder, so it needs at least one item
+      // (#3075 - the regression from #3001's empty-create). The rest are added
+      // afterwards via addBatchToCollection; re-adding this item there is an
+      // idempotent no-op (collection membership is a set).
+      const { data } = await this.http.post<EmbyBaseItemDto>(
+        '/Collections',
+        null,
+        {
+          params: {
+            Name: params.title,
+            ParentId: params.libraryId,
+            ...(params.initialItemId ? { Ids: params.initialItemId } : {}),
+            // IsLocked enables composite image generation from items, matching
+            // the Jellyfin adapter; without it, Emby may skip the auto-cover.
+            IsLocked: true,
+          },
+        },
+      );
+      let collection = EmbyMapper.toMediaCollection(data);
+      if (!collection.id) {
+        throw new Error('Collection created but no ID returned');
+      }
+      // Invalidate here, not after the refetch/metadata follow-up below: those
+      // can throw, and the collection already exists on the server. Leaving the
+      // stale listing behind makes the next attempt create a second BoxSet.
+      this.invalidateCollectionsCache(params.libraryId);
+      if (!collection.title) {
+        const refreshed = await this.getCollection(collection.id, true);
+        if (!refreshed) {
+          throw new Error('Collection created but could not be fetched');
+        }
+        collection = refreshed;
+      }
+      if (params.summary || params.sortTitle) {
+        try {
+          await this.updateCollection({
+            libraryId: params.libraryId,
+            collectionId: collection.id,
+            summary: params.summary,
+            sortTitle: params.sortTitle,
+          });
+        } catch (error) {
+          this.logger.warn(
+            `Emby createCollection metadata follow-up failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+          );
+        }
+      }
+      return collection;
+    } catch (error) {
+      const message = formatConnectionFailureMessage(
+        error,
+        'Connection failed',
+      );
+      this.logger.warn(`Emby createCollection failed: ${message}`);
+      throw new Error(`Failed to create Emby collection: ${message}`);
+    }
+  }
+
+  async deleteCollection(collectionId: string): Promise<void> {
+    if (!this.http) throw new Error('Emby not initialized');
+    try {
+      await this.http.delete(`/Items/${collectionId}`);
+      this.invalidateCollectionsCache();
+    } catch (error) {
+      const message = formatConnectionFailureMessage(
+        error,
+        'Connection failed',
+      );
+      throw new Error(`Failed to delete Emby collection: ${message}`);
+    }
+  }
+
+  async cleanupCollectionForLibrary(
+    collectionId: string,
+    libraryId: string,
+    isManualCollection: boolean,
+  ): Promise<void> {
+    if (!this.http) return;
+    const children = await this.getCollectionChildren(collectionId);
+    const fromLibrary: MediaItem[] = [];
+    let membershipUnknown = false;
+
+    for (const child of children) {
+      const inLibrary = await this.itemIsInLibrary(child.id, libraryId);
+      if (inLibrary === undefined) {
+        membershipUnknown = true;
+      } else if (inLibrary) {
+        fromLibrary.push(child);
+      }
+    }
+
+    if (fromLibrary.length > 0) {
+      await this.removeBatchFromCollection(
+        collectionId,
+        fromLibrary.map((c) => c.id),
+      );
+    }
+
+    // Guard only the removal, not the delete: an automatic collection that is
+    // already empty still has to go, which the old "nothing to remove" early
+    // return skipped - leaving it behind while the caller dropped the link.
+    const remaining = await this.getCollectionChildren(collectionId);
+    if (remaining.length === 0 && !isManualCollection) {
+      await this.deleteCollection(collectionId);
+    }
+
+    if (membershipUnknown) {
+      throw new Error(
+        `Could not determine library membership for every child of collection ${collectionId}`,
+      );
+    }
+  }
+
+  async getCollectionChildren(collectionId: string): Promise<MediaItem[]> {
+    if (!this.http) {
+      throw new Error('Emby not initialized');
+    }
+    try {
+      // User-scoped read for the same reason as getCollections; Jellyfin's
+      // adapter likewise requires a userId to enumerate BoxSet children. UserId
+      // goes in the query param (not the path) to stay clear of CodeQL's SSRF
+      // sink while keeping the read user-scoped.
+      const userId = await this.resolveUserId();
+      // Callers treat a non-empty list as a complete snapshot, so a bare
+      // Limit made everything past the cap look absent.
+      const children: MediaItem[] = [];
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+          params: {
+            ...(userId ? { UserId: userId } : {}),
+            ParentId: collectionId,
+            // Collection grids are sorted Maintainerr-side, so studio
+            // ordering needs the field on every hydrated child.
+            Fields: 'ProviderIds,DateCreated,Overview,Studios',
+            Limit: EMBY_BATCH_SIZE.MAX_PAGE_SIZE,
+            StartIndex: offset,
+            EnableTotalRecordCount: true,
+          },
+        });
+
+        const items = data.Items ?? [];
+        children.push(...items.map(EmbyMapper.toMediaItem));
+        offset += items.length;
+        hasMore =
+          items.length > 0 && offset < (data.TotalRecordCount ?? offset);
+      }
+
+      return children;
+    } catch (error) {
+      this.logger.error(
+        `Emby getCollectionChildren(${collectionId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      // A swallowed enumeration failure reads as "the collection is empty"
+      // downstream, which mass-resyncs rule-owned items and adopts stale
+      // server children as ghost manual members.
+      throw error;
+    }
+  }
+
+  async addToCollection(collectionId: string, itemId: string): Promise<void> {
+    // The batch call reports failure by return value; the interface contract for
+    // the singular form is to throw, and callers rely on that (Plex and Jellyfin
+    // both throw here). Dropping the result reported every failed add as a
+    // success.
+    const { refused, unknown } = await this.addBatchToCollection(collectionId, [
+      itemId,
+    ]);
+
+    if (refused.length > 0 || unknown.length > 0) {
+      throw new Error(
+        `Failed to add item ${itemId} to collection ${collectionId}`,
+      );
+    }
+  }
+
+  async addBatchToCollection(
+    collectionId: string,
+    itemIds: string[],
+  ): Promise<CollectionMutationOutcome> {
+    if (itemIds.length === 0) return { refused: [], unknown: [] };
+    if (!this.http) return { refused: [], unknown: [...itemIds] };
+
+    const outcome: CollectionMutationOutcome = { refused: [], unknown: [] };
+    for (const chunk of this.chunked(
+      itemIds,
+      EMBY_BATCH_SIZE.COLLECTION_MUTATION,
+    )) {
+      try {
+        await this.http.post(`/Collections/${collectionId}/Items`, null, {
+          params: { Ids: chunk.join(',') },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Emby addBatchToCollection chunk failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+        );
+        recordMutationFailure(outcome, chunk, classifyMutationError(error));
+      }
+    }
+    return outcome;
+  }
+
+  async removeFromCollection(
+    collectionId: string,
+    itemId: string,
+  ): Promise<void> {
+    const { refused, unknown } = await this.removeBatchFromCollection(
+      collectionId,
+      [itemId],
+    );
+
+    if (refused.length > 0 || unknown.length > 0) {
+      throw new Error(
+        `Failed to remove item ${itemId} from collection ${collectionId}`,
+      );
+    }
+  }
+
+  async removeBatchFromCollection(
+    collectionId: string,
+    itemIds: string[],
+  ): Promise<CollectionMutationOutcome> {
+    if (itemIds.length === 0) return { refused: [], unknown: [] };
+    if (!this.http) return { refused: [], unknown: [...itemIds] };
+
+    const outcome: CollectionMutationOutcome = { refused: [], unknown: [] };
+    for (const chunk of this.chunked(
+      itemIds,
+      EMBY_BATCH_SIZE.COLLECTION_MUTATION,
+    )) {
+      try {
+        await this.http.delete(`/Collections/${collectionId}/Items`, {
+          params: { Ids: chunk.join(',') },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Emby removeBatchFromCollection chunk failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+        );
+        recordMutationFailure(outcome, chunk, classifyMutationError(error));
+      }
+    }
+    return outcome;
+  }
+
+  async updateCollection(
+    params: UpdateCollectionParams,
+  ): Promise<MediaCollection> {
+    if (!this.http) throw new Error('Emby not initialized');
+    try {
+      // Emby's POST /Items/{id} expects the full updated item. Fetch, mutate, send.
+      // The read has to be user-scoped: the unscoped route 404s for an item that
+      // exists, and the list form answers a trimmed item that would write back
+      // as a wipe of everything it omits.
+      const userId = await this.resolveUserId();
+      if (!userId) {
+        throw new Error('no Emby user available to read the collection');
+      }
+      const { data: current } = await this.http.get<EmbyBaseItemDto>(
+        `/Users/${userId}/Items/${params.collectionId}`,
+      );
+      const updated: EmbyBaseItemDto = {
+        ...current,
+        Name: params.title ?? current.Name,
+        Overview: params.summary ?? current.Overview,
+        ForcedSortName: params.sortTitle ?? current.ForcedSortName,
+      };
+      await this.http.post(`/Items/${params.collectionId}`, updated);
+      // Title/sortTitle may have changed, which affects name-based lookups.
+      this.invalidateCollectionsCache(params.libraryId);
+      const refreshed = await this.getCollection(params.collectionId);
+      if (!refreshed) {
+        throw new Error('Collection vanished after update');
+      }
+      return refreshed;
+    } catch (error) {
+      const message = formatConnectionFailureMessage(
+        error,
+        'Connection failed',
+      );
+      throw new Error(`Failed to update Emby collection: ${message}`);
+    }
+  }
+
+  async updateCollectionVisibility(
+    settings: CollectionVisibilitySettings,
+  ): Promise<void> {
+    void settings;
+    throw new Error(
+      'updateCollectionVisibility is not supported on Emby (Plex-only feature)',
+    );
+  }
+
+  async reorderCollectionItems(
+    collectionId: string,
+    orderedItemIds: string[],
+  ): Promise<void> {
+    void collectionId;
+    void orderedItemIds;
+    // Emby exposes DisplayOrder = PremiereDate | SortName on a BoxSet (via
+    // ItemUpdateService) but no item-move/reorder endpoint, so an explicit
+    // ordered list of item IDs can't be expressed. Gated by
+    // supportsFeature(COLLECTION_SORT) which is false for Emby - callers
+    // shouldn't reach here.
+    throw new Error(
+      'Collection sort is not supported on Emby (no item-move API)',
+    );
+  }
+
+  /**
+   * Fetches a single image off an item as a Buffer. Returns null when the
+   * item has no image of that type (Emby responds 404) or any other request
+   * failure. Mirrors JellyfinAdapterService.getItemImageBuffer.
+   */
+  async getItemImageBuffer(
+    itemId: string,
+    imageType = 'Primary',
+  ): Promise<Buffer | null> {
+    if (!this.http) return null;
+    try {
+      const response = await this.http.get<ArrayBuffer>(
+        `/Items/${itemId}/Images/${imageType}`,
+        { responseType: 'arraybuffer' },
+      );
+      return Buffer.from(response.data);
+    } catch (error) {
+      if (error instanceof AxiosError && error.response?.status === 404) {
+        return null;
+      }
+      this.logger.warn(
+        `Failed to download ${imageType} image for item ${itemId}`,
+      );
+      this.logger.debug(error);
+      return null;
+    }
+  }
+
+  async setCollectionImage(
+    collectionId: string,
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<void> {
+    if (!this.http) throw new Error('Emby not initialized');
+    try {
+      // Emby accepts POST /Items/{id}/Images/{type} with base64-encoded body
+      // and a Content-Type header on the body matching the image MIME type.
+      const base64 = buffer.toString('base64');
+      await this.http.post(`/Items/${collectionId}/Images/Primary`, base64, {
+        headers: { 'Content-Type': contentType },
+      });
+    } catch (error) {
+      const message = formatConnectionFailureMessage(
+        error,
+        'Connection failed',
+      );
+      // A 500 here is raised inside Emby's own image handler - most often the
+      // library's "Save artwork into media folders" setting (per library, not
+      // global) makes Emby write the poster next to the media file, and that
+      // path is read-only (e.g. a movie library mounted read-only while the TV
+      // library is writable). Emby's response body carries the real cause, so
+      // fold it into the thrown error: the formatted message keeps only the
+      // bare status, and the caller logs this via debug(error).
+      let detail = '';
+      if (error instanceof AxiosError && error.response?.data != null) {
+        const body =
+          typeof error.response.data === 'string'
+            ? error.response.data
+            : JSON.stringify(error.response.data);
+        if (body) detail = ` - ${body.slice(0, 500)}`;
+      }
+      throw new Error(
+        `Failed to upload Emby collection image: ${message}${detail}`,
+      );
+    }
+  }
+
+  // ============================================================================
+  // Playlists
+  // ============================================================================
+
+  async getPlaylists(libraryId: string): Promise<MediaPlaylist[]> {
+    if (!this.http) return [];
+    try {
+      const { data } = await this.http.get<EmbyItemsQueryResponse>('/Items', {
+        params: {
+          ParentId: libraryId,
+          IncludeItemTypes: 'Playlist',
+          Recursive: true,
+          Fields: 'DateCreated,Overview,ChildCount',
+          Limit: EMBY_BATCH_SIZE.MAX_PAGE_SIZE,
+        },
+      });
+      return (data.Items ?? []).map(EmbyMapper.toMediaPlaylist);
+    } catch (error) {
+      this.logger.debug(
+        `Emby getPlaylists(${libraryId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return [];
+    }
+  }
+
+  // ============================================================================
+  // Destructive
+  // ============================================================================
+
+  async deleteFromDisk(itemId: string): Promise<void> {
+    if (!this.http) throw new Error('Emby not initialized');
+
+    // Same guard as the Jellyfin adapter: a blank id would leave `/Items/`,
+    // which is a different route from the single-item delete this intends.
+    if (!itemId || itemId.trim() === '') {
+      throw new Error(
+        'deleteFromDisk called with empty itemId - aborting to prevent unintended deletion',
+      );
+    }
+
+    try {
+      await this.http.delete(`/Items/${itemId}`, { timeout: NO_TIMEOUT });
+    } catch (error) {
+      const message = formatConnectionFailureMessage(
+        error,
+        'Connection failed',
+      );
+      throw new Error(`Failed to delete Emby item from disk: ${message}`);
+    }
+  }
+
+  // ============================================================================
+  // Context-action ID resolution
+  // ============================================================================
+
+  async getAllIdsForContextAction(
+    collectionType: MediaItemType | undefined,
+    context: { type: MediaItemType; id: string },
+    mediaId: string,
+  ): Promise<string[]> {
+    return resolveContextActionIds(
+      collectionType,
+      context,
+      mediaId,
+      (parentId, type) => this.getChildrenMetadata(parentId, type, true),
+      (message) => this.logger.warn(message),
+    );
+  }
+
+  // ============================================================================
+  // Cache management
+  // ============================================================================
+
+  // The item id is ignored: besides the server-wide aggregates
+  // (users/libraries/status/collections) the only per-item entries are
+  // getMetadata's, and watch reads still hit the API fresh, so a full flush is
+  // the simplest correct reset.
+  resetMetadataCache(): void {
+    this.cache.flush();
+  }
+
+  // ============================================================================
+  // Connection testing (used by settings UI before save)
+  // ============================================================================
+
+  async testConnection(
+    url: string,
+    apiKey: string,
+  ): Promise<{
+    success: boolean;
+    serverName?: string;
+    version?: string;
+    error?: string;
+    users?: Array<{ id: string; name: string }>;
+  }> {
+    const probe = new EmbyApi({
+      url,
+      apiKey,
+      authHeader: this.buildAuthHeader(),
+      timeout: 15000,
+    }).axios;
+    try {
+      const [info, users] = await Promise.all([
+        probe.get<EmbySystemInfo>('/System/Info'),
+        probe.get<EmbyUserDto[] | EmbyItemsQueryResponse<EmbyUserDto>>(
+          '/Users/Query',
+        ),
+      ]);
+      const resolvedUsers = this.normalizeUsersResponse(users.data);
+      return {
+        success: true,
+        serverName: info.data.ServerName,
+        version: info.data.Version,
+        users: resolvedUsers
+          .filter((u) => u.Policy?.IsAdministrator)
+          .map((u) => ({ id: u.Id, name: u.Name ?? '' })),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: formatConnectionFailureMessage(error, 'Connection failed'),
+      };
+    }
+  }
+
+  /**
+   * Authenticate against Emby with username/password and return the resulting
+   * access token. Used by the settings flow that mirrors Plex's login dance.
+   */
+  async loginWithCredentials(
+    url: string,
+    username: string,
+    password: string,
+  ): Promise<{
+    success: boolean;
+    token?: string;
+    userId?: string;
+    serverName?: string;
+    error?: string;
+    users?: Array<{ id: string; name: string }>;
+    libraries?: Array<{ id: string; name: string; type: string }>;
+  }> {
+    const probe = new EmbyApi({
+      url,
+      authHeader: this.buildAuthHeader(),
+      timeout: 15000,
+      extraHeaders: { 'Content-Type': 'application/json' },
+    }).axios;
+    try {
+      const { data } = await probe.post<EmbyAuthenticationResult>(
+        '/Users/AuthenticateByName',
+        { Username: username, Pw: password },
+      );
+      if (!data.User?.Policy?.IsAdministrator) {
+        return {
+          success: false,
+          error:
+            'User authenticated but is not an administrator on this Emby server',
+        };
+      }
+      const authed = new EmbyApi({
+        url,
+        apiKey: data.AccessToken,
+        authHeader: this.buildAuthHeader(),
+        timeout: 15000,
+      }).axios;
+      const [info, libs, users] = await Promise.all([
+        authed.get<EmbySystemInfo>('/System/Info'),
+        authed.get<EmbyItemsQueryResponse>(`/Users/${data.User.Id}/Views`),
+        authed.get<EmbyUserDto[] | EmbyItemsQueryResponse<EmbyUserDto>>(
+          '/Users/Query',
+        ),
+      ]);
+      const resolvedUsers = this.normalizeUsersResponse(users.data);
+      return {
+        success: true,
+        token: data.AccessToken,
+        userId: data.User.Id,
+        serverName: info.data.ServerName,
+        users: resolvedUsers.map((u) => ({
+          id: u.Id,
+          name: u.Name ?? '',
+        })),
+        libraries: (libs.data.Items ?? []).map((l) => ({
+          id: l.Id,
+          name: l.Name ?? '',
+          type: l.CollectionType ?? 'unknown',
+        })),
+      };
+    } catch (error) {
+      const ax = error as AxiosError;
+      return {
+        success: false,
+        error:
+          ax.response?.status === 401
+            ? 'Invalid Emby username or password'
+            : formatConnectionFailureMessage(error, 'Connection failed'),
+      };
+    }
+  }
+
+  async itemExists(itemId: string): Promise<boolean> {
+    if (!this.http) {
+      throw new Error('Emby not initialized');
+    }
+
+    try {
+      return Boolean(await this.fetchItem(itemId));
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return false;
+      }
+      // Anything else is inconclusive and must not read as "deleted".
+      throw error;
+    }
+  }
+
+  /**
+   * `emby_user_id` is optional, and Emby answers **404 on the unscoped
+   * `/Items/{id}` route for an item that exists** - which `itemExists` read as
+   * deleted. Resolve a user instead, as every other single-item read here does.
+   * The list form resolves without a user but answers a trimmed item (7 fields
+   * against this route's 31, no ChildCount even when asked for), so it cannot
+   * stand in for a metadata read. With no user at all the lookup is
+   * inconclusive, which the caller must not read as "deleted".
+   */
+  private async fetchItem(
+    itemId: string,
+    fields?: string,
+  ): Promise<EmbyBaseItemDto | undefined> {
+    const userId = await this.resolveUserId();
+    if (!userId) {
+      throw new Error(
+        `Emby has no user to scope the lookup of item ${itemId} to`,
+      );
+    }
+
+    const path = `/Users/${userId}/Items/${itemId}`;
+    const { data } = await (fields
+      ? this.http.get<EmbyBaseItemDto>(path, { params: { Fields: fields } })
+      : this.http.get<EmbyBaseItemDto>(path));
+    return data?.Id ? data : undefined;
+  }
+
+  // ============================================================================
+  // Internal helpers
+  // ============================================================================
+
+  private async itemIsInLibrary(
+    itemId: string,
+    libraryId: string,
+  ): Promise<boolean | undefined> {
+    if (!this.http) return undefined;
+
+    try {
+      // Unscoped, Emby answers the physical folder tree, which never contains
+      // the CollectionFolder id Maintainerr stores as the library. Every child
+      // then reads as "not in this library". The user-scoped read answers the
+      // library view, matching the Jellyfin adapter's getAncestors({ userId }).
+      const userId = await this.resolveUserId();
+      if (!userId) return undefined;
+
+      const { data } = await this.http.get<EmbyBaseItemDto[]>(
+        `/Items/${itemId}/Ancestors`,
+        { params: { UserId: userId } },
+      );
+
+      return (data ?? []).some((ancestor) => ancestor.Id === libraryId);
+    } catch (error) {
+      this.logger.debug(
+        `Emby itemIsInLibrary(${itemId}, ${libraryId}) failed: ${formatConnectionFailureMessage(error, 'Connection failed')}`,
+      );
+      return undefined;
+    }
+  }
+
+  private async fetchUsersQuery(client: AxiosInstance): Promise<EmbyUserDto[]> {
+    const { data } = await client.get<
+      EmbyUserDto[] | EmbyItemsQueryResponse<EmbyUserDto>
+    >('/Users/Query');
+
+    return this.normalizeUsersResponse(data);
+  }
+
+  private normalizeUsersResponse(
+    data: EmbyUserDto[] | EmbyItemsQueryResponse<EmbyUserDto>,
+  ): EmbyUserDto[] {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.Items)) return data.Items;
+    throw new Error('Emby returned users without an Items list');
+  }
+
+  private buildAuthHeader(): string {
+    return `MediaBrowser Client="${EMBY_CLIENT_INFO.name}", Device="${EMBY_DEVICE_INFO.name}", DeviceId="${this.deviceId}", Version="${EMBY_CLIENT_INFO.version}"`;
+  }
+
+  private toEmbySortBy(sort?: string): string {
+    switch (sort) {
+      case 'airDate':
+        return 'PremiereDate';
+      case 'rating':
+        return 'CommunityRating';
+      case 'watchCount':
+        return 'PlayCount';
+      case 'studio':
+        return 'Studio';
+      case 'title':
+      default:
+        return 'SortName';
+    }
+  }
+
+  /**
+   * Spread into every library-scoped query that surfaces real media items.
+   * Without it, a library that groups films into collections answers with the
+   * BoxSet instead of its members (#2554), and reportedly alongside them
+   * (#3550). Mirrors JELLYFIN_LIBRARY_QUERY_DEFAULTS.
+   */
+  private libraryQueryDefaults(): Record<string, unknown> {
+    return { CollapseBoxSetItems: false };
+  }
+
+  private randomToken(length: number): string {
+    const chars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let out = '';
+    for (let i = 0; i < length; i++) {
+      out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+  }
+
+  private *chunked<T>(arr: T[], size: number): Generator<T[]> {
+    for (let i = 0; i < arr.length; i += size) {
+      yield arr.slice(i, i + size);
+    }
+  }
+}

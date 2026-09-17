@@ -1,0 +1,276 @@
+import { MediaItemType } from './enums'
+import { MediaLibrarySortField, MediaSortOrder } from './sorting'
+
+/**
+ * Provider IDs for external databases (IMDB, TMDB, TVDB) and for Sportarr,
+ * whose media server agents stamp their own `sportarr` namespace (lg-000278).
+ */
+export interface MediaProviderIds {
+  imdb?: string[]
+  tmdb?: string[]
+  tvdb?: string[]
+  sportarr?: string[]
+}
+
+/**
+ * Media source/file information
+ */
+export interface MediaSource {
+  id: string
+  duration: number
+  bitrate?: number
+  width?: number
+  height?: number
+  aspectRatio?: number
+  audioChannels?: number
+  audioCodec?: string
+  videoCodec?: string
+  videoResolution?: string
+  container?: string
+  sizeBytes?: number
+}
+
+/**
+ * Genre information
+ */
+export interface MediaGenre {
+  id?: number | string
+  name: string
+}
+
+/**
+ * Actor/role information
+ */
+export interface MediaActor {
+  id?: number | string
+  name: string
+  role?: string
+  thumb?: string
+}
+
+/**
+ * Rating information (critic/audience)
+ */
+export interface MediaRating {
+  source: string
+  value: number
+  type?: 'audience' | 'critic'
+}
+
+/**
+ * Server-agnostic media item representation.
+ * Maps from PlexLibraryItem, JellyfinMediaItem, etc.
+ */
+export interface MediaItem {
+  id: string
+  parentId?: string
+  grandparentId?: string
+  title: string
+  parentTitle?: string
+  grandparentTitle?: string
+  guid: string
+  parentGuid?: string
+  grandparentGuid?: string
+  type: MediaItemType
+  addedAt: Date
+  updatedAt?: Date
+  providerIds: MediaProviderIds
+  mediaSources: MediaSource[]
+  /**
+   * Where the item lives on the server's own filesystem: the media file for
+   * movies and episodes, the folder for shows and seasons. Only single-item
+   * reads carry it, and a Plex season has none.
+   */
+  path?: string
+  library: {
+    id: string
+    title: string
+  }
+  summary?: string
+  viewCount?: number
+  skipCount?: number
+  lastViewedAt?: Date
+  year?: number
+  durationMs?: number
+  originallyAvailableAt?: Date
+  contentRating?: string
+  ratings?: MediaRating[]
+  userRating?: number
+  genres?: MediaGenre[]
+  actors?: MediaActor[]
+  childCount?: number
+  watchedChildCount?: number
+  index?: number
+  indexEnd?: number
+  parentIndex?: number
+  collections?: string[]
+  labels?: string[]
+  studios?: string[]
+  maintainerrExclusionType?: 'specific' | 'global'
+  maintainerrExclusionId?: number
+  maintainerrIsManual?: boolean
+  maintainerrCollections?: string[]
+}
+
+export interface MaintainerrMediaStatusEntry {
+  label: string
+  targetPath?: string
+}
+
+export interface MaintainerrMediaStatusDetails {
+  excludedFrom: MaintainerrMediaStatusEntry[]
+  manuallyAddedTo: MaintainerrMediaStatusEntry[]
+}
+
+/**
+ * MediaItem extended with parent metadata.
+ * Used when child items need their parent's metadata (e.g., for provider IDs).
+ */
+export interface MediaItemWithParent extends MediaItem {
+  parentItem?: MediaItem
+}
+
+/**
+ * Server-agnostic library representation
+ */
+export interface MediaLibrary {
+  id: string
+  title: string
+  type: 'movie' | 'show'
+  agent?: string
+}
+
+/**
+ * Server-agnostic user representation
+ */
+export interface MediaUser {
+  id: string
+  name: string
+  thumb?: string
+}
+
+/**
+ * Watch history record
+ */
+export interface WatchRecord {
+  userId: string
+  itemId: string
+  watchedAt?: Date
+  progress?: number
+}
+
+/**
+ * Server-agnostic collection representation
+ */
+export interface MediaCollection {
+  id: string
+  title: string
+  /**
+   * Media type the collection holds, where the server has the concept. Plex
+   * fixes it at creation and rejects anything else; Jellyfin and Emby BoxSets
+   * have no subtype, so it stays undefined there.
+   */
+  type?: MediaItemType
+  summary?: string
+  thumb?: string
+  childCount: number
+  addedAt?: Date
+  updatedAt?: Date
+  smart?: boolean
+  libraryId?: string
+}
+
+/**
+ * Server-agnostic playlist representation
+ */
+export interface MediaPlaylist {
+  id: string
+  title: string
+  summary?: string
+  smart?: boolean
+  itemCount: number
+  durationMs?: number
+  addedAt?: Date
+  updatedAt?: Date
+}
+
+/**
+ * Server status information
+ */
+export interface MediaServerStatus {
+  machineId: string
+  version: string
+  name?: string
+  platform?: string
+  url?: string
+}
+
+/**
+ * Options for querying library contents
+ */
+export interface LibraryQueryOptions {
+  type?: MediaItemType
+  offset?: number
+  limit?: number
+  sort?: MediaLibrarySortField
+  sortOrder?: MediaSortOrder
+}
+
+/**
+ * Options for getting recently added items
+ */
+export interface RecentlyAddedOptions {
+  limit?: number
+  type?: MediaItemType
+}
+
+/**
+ * Paginated result wrapper
+ */
+export interface PagedResult<T> {
+  items: T[]
+  totalSize: number
+  offset: number
+  limit: number
+}
+
+/**
+ * Parameters for creating a collection
+ */
+export interface CreateCollectionParams {
+  libraryId: string
+  title: string
+  summary?: string
+  type: MediaItemType
+  sortTitle?: string
+  /**
+   * Optional id of a single item to include when the collection is created.
+   * Emby's create-collection endpoint throws (HTTP 500) when asked to create an
+   * empty collection under a library folder (#3075), so it must be given at least
+   * one item. Plex and Jellyfin create empty (their behaviour since #3001) and do
+   * not read this. Kept to a single id so the create request stays well under the
+   * URL length limit (#3001); the rest are added afterwards via
+   * addBatchToCollection.
+   */
+  initialItemId?: string
+}
+
+/** Plex-only visibility settings */
+export interface CollectionVisibilitySettings {
+  libraryId: string
+  collectionId: string
+  ownHome?: boolean
+  sharedHome?: boolean
+  recommended?: boolean
+}
+
+/**
+ * Parameters for updating a collection's metadata
+ */
+export interface UpdateCollectionParams {
+  libraryId: string
+  collectionId: string
+  title?: string
+  summary?: string
+  sortTitle?: string
+}

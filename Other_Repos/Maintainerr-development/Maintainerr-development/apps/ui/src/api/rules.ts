@@ -1,0 +1,478 @@
+import { t } from '@lingui/core/macro'
+import type {
+  ArrDiskspaceResource,
+  MediaServerCollectionSort,
+} from '@maintainerr/contracts'
+import {
+  BasicResponseDto,
+  MediaItemType,
+  RuleExecuteStatusDto,
+} from '@maintainerr/contracts'
+import {
+  useMutation,
+  UseMutationOptions,
+  useQuery,
+  useQueryClient,
+  UseQueryOptions,
+} from '@tanstack/react-query'
+import type { IRule } from '../components/Rules/Rule/RuleCreator'
+import type { IRuleGroup } from '../components/Rules/RuleGroup'
+import type { AgentConfiguration } from '../components/Settings/Notifications/CreateNotificationModal'
+import { IConstants } from '../contexts/constants-context'
+import { invalidateCollectionQueries } from './collections'
+import GetApiHandler, {
+  PostApiHandler,
+  PutApiHandler,
+} from '../utils/ApiHandler'
+
+type UseRuleGroupForCollectionQueryKey = ['rules', 'collection', string]
+
+type UseRuleGroupForCollectionOptions = Omit<
+  UseQueryOptions<
+    IRuleGroup,
+    Error,
+    IRuleGroup,
+    UseRuleGroupForCollectionQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+export const useRuleGroupForCollection = (
+  collectionId?: string | number,
+  options?: UseRuleGroupForCollectionOptions,
+) => {
+  const normalizedId = collectionId != null ? String(collectionId) : ''
+  const queryEnabled = normalizedId.length > 0 && (options?.enabled ?? true)
+
+  return useQuery<
+    IRuleGroup,
+    Error,
+    IRuleGroup,
+    UseRuleGroupForCollectionQueryKey
+  >({
+    queryKey: ['rules', 'collection', normalizedId],
+    queryFn: async () => {
+      if (!normalizedId) {
+        throw new Error('Collection ID is required to fetch rule group data.')
+      }
+
+      return await GetApiHandler<IRuleGroup>(
+        `/rules/collection/${normalizedId}`,
+      )
+    },
+    staleTime: 0,
+    ...options,
+    enabled: queryEnabled,
+  })
+}
+
+export type UseRuleGroupForCollectionResult = ReturnType<
+  typeof useRuleGroupForCollection
+>
+
+export interface RuleGroupCollectionPayload {
+  visibleOnRecommended: boolean
+  visibleOnHome: boolean
+  overlayEnabled?: boolean
+  overlayTemplateId?: number | null
+  deleteAfterDays?: number
+  manualCollection?: boolean
+  manualCollectionName?: string
+  keepLogsForMonths?: number
+  sortTitle?: string
+  mediaServerSort?: MediaServerCollectionSort
+}
+
+export interface RuleGroupCreatePayload {
+  name: string
+  description: string
+  libraryId: string
+  arrAction: number
+  isActive: boolean
+  useRules: boolean
+  listExclusions: boolean
+  cleanupLeftoverFolders: boolean
+  forceSeerr: boolean
+  tautulliWatchedPercentOverride?: number
+  radarrSettingsId?: number
+  sonarrSettingsId?: number
+  sportarrSettingsId?: number
+  radarrQualityProfileId?: number
+  sonarrQualityProfileId?: number
+  sportarrQualityProfileId?: number
+  tagInArr?: boolean
+  keepInMaintainerrOnly?: boolean
+  collection: RuleGroupCollectionPayload
+  rules: IRule[]
+  dataType: MediaItemType
+  notifications: AgentConfiguration[]
+  ruleHandlerCronSchedule: string | null
+}
+
+export type RuleGroupUpdatePayload = RuleGroupCreatePayload & { id: number }
+
+type UseRuleGroupQueryKey = ['rules', 'group', string]
+
+type UseRuleGroupOptions = Omit<
+  UseQueryOptions<IRuleGroup, Error, IRuleGroup, UseRuleGroupQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+export const useRuleGroup = (
+  id?: string | number,
+  options?: UseRuleGroupOptions,
+) => {
+  const normalizedId = id != null ? String(id) : ''
+  const queryEnabled = normalizedId.length > 0 && (options?.enabled ?? true)
+
+  return useQuery<IRuleGroup, Error, IRuleGroup, UseRuleGroupQueryKey>({
+    queryKey: ['rules', 'group', normalizedId],
+    queryFn: async () => {
+      if (!normalizedId) {
+        throw new Error('Rule Group ID is required to fetch rule data.')
+      }
+
+      return await GetApiHandler<IRuleGroup>(`/rules/${normalizedId}`)
+    },
+    staleTime: 0,
+    ...options,
+    enabled: queryEnabled,
+  })
+}
+
+export type UseRuleGroupResult = ReturnType<typeof useRuleGroup>
+
+type UseRuleGroupsQueryKey = ['rules', 'groups', string]
+
+type UseRuleGroupsOptions = Omit<
+  UseQueryOptions<IRuleGroup[], Error, IRuleGroup[], UseRuleGroupsQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+export const fetchRuleGroups = async (libraryId?: string) => {
+  return await GetApiHandler<IRuleGroup[]>(
+    libraryId && libraryId !== 'all'
+      ? `/rules?libraryId=${libraryId}`
+      : '/rules',
+  )
+}
+
+export const useRuleGroups = (
+  libraryId: string,
+  options?: UseRuleGroupsOptions,
+) => {
+  return useQuery<IRuleGroup[], Error, IRuleGroup[], UseRuleGroupsQueryKey>({
+    queryKey: ['rules', 'groups', libraryId],
+    queryFn: async () => {
+      return await fetchRuleGroups(libraryId)
+    },
+    staleTime: 0,
+    retry: 1,
+    ...options,
+  })
+}
+
+type UseRuleConstantsQueryKey = ['rules', 'constants']
+
+type UseRuleConstantsOptions = Omit<
+  UseQueryOptions<IConstants, Error, IConstants, UseRuleConstantsQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+export const useRuleConstants = (options?: UseRuleConstantsOptions) => {
+  return useQuery({
+    queryKey: ['rules', 'constants'],
+    queryFn: async () => {
+      return await GetApiHandler<IConstants>(`/rules/constants`)
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export type UseRuleConstants = ReturnType<typeof useRuleConstants>
+
+type UseRuleUsernamesQueryKey = ['rules', 'users']
+
+type UseRuleUsernamesOptions = Omit<
+  UseQueryOptions<string[], Error, string[], UseRuleUsernamesQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+/**
+ * Users a rule can be scoped to, named as the rule getters resolve them.
+ */
+export const useRuleUsernames = (options?: UseRuleUsernamesOptions) => {
+  return useQuery<string[], Error, string[], UseRuleUsernamesQueryKey>({
+    queryKey: ['rules', 'users'],
+    queryFn: async () => {
+      return await GetApiHandler<string[]>('/rules/users')
+    },
+    staleTime: 60000,
+    ...options,
+  })
+}
+
+export type { ArrDiskspaceResource } from '@maintainerr/contracts'
+
+type UseArrDiskspaceQueryKey = [
+  'servarr',
+  'diskspace',
+  'radarr' | 'sonarr',
+  string,
+]
+
+type UseArrDiskspaceOptions = Omit<
+  UseQueryOptions<
+    ArrDiskspaceResource[],
+    Error,
+    ArrDiskspaceResource[],
+    UseArrDiskspaceQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+const useArrDiskspace = (
+  app: 'radarr' | 'sonarr',
+  settingsId?: number | null,
+  options?: UseArrDiskspaceOptions,
+) => {
+  const normalizedId = settingsId != null ? String(settingsId) : ''
+  const queryEnabled = normalizedId.length > 0 && (options?.enabled ?? true)
+
+  return useQuery<
+    ArrDiskspaceResource[],
+    Error,
+    ArrDiskspaceResource[],
+    UseArrDiskspaceQueryKey
+  >({
+    queryKey: ['servarr', 'diskspace', app, normalizedId],
+    queryFn: async () => {
+      if (!normalizedId) {
+        throw new Error('Server ID is required to fetch diskspace data.')
+      }
+
+      return await GetApiHandler<ArrDiskspaceResource[]>(
+        `/servarr/${app}/${normalizedId}/diskspace`,
+      )
+    },
+    staleTime: 60 * 1000,
+    ...options,
+    enabled: queryEnabled,
+  })
+}
+
+export const useRadarrDiskspace = (
+  settingsId?: number | null,
+  options?: UseArrDiskspaceOptions,
+) => useArrDiskspace('radarr', settingsId, options)
+
+export const useSonarrDiskspace = (
+  settingsId?: number | null,
+  options?: UseArrDiskspaceOptions,
+) => useArrDiskspace('sonarr', settingsId, options)
+
+type UseCreateRuleGroupOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, RuleGroupCreatePayload>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useCreateRuleGroup = (options?: UseCreateRuleGroupOptions) => {
+  const queryClient = useQueryClient()
+  const { onSuccess, ...mutationOptions } = options ?? {}
+
+  return useMutation<BasicResponseDto, Error, RuleGroupCreatePayload>({
+    mutationKey: ['rules', 'groups', 'create'],
+    mutationFn: async (payload) => {
+      const response = await PostApiHandler<BasicResponseDto>('/rules', payload)
+
+      if (response.code !== 1) {
+        throw new Error(response.message ?? t`Failed to create rule group`)
+      }
+
+      return response
+    },
+    onSuccess: async (data, variables, context, mutation) => {
+      await invalidateCollectionQueries(queryClient)
+
+      if (onSuccess) {
+        await onSuccess(data, variables, context, mutation)
+      }
+    },
+    ...mutationOptions,
+  })
+}
+
+export type UseCreateRuleGroupResult = ReturnType<typeof useCreateRuleGroup>
+
+type UseUpdateRuleGroupOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, RuleGroupUpdatePayload>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useUpdateRuleGroup = (options?: UseUpdateRuleGroupOptions) => {
+  const queryClient = useQueryClient()
+  const { onSuccess, ...mutationOptions } = options ?? {}
+
+  return useMutation<BasicResponseDto, Error, RuleGroupUpdatePayload>({
+    mutationKey: ['rules', 'groups', 'update'],
+    mutationFn: async (payload) => {
+      const response = await PutApiHandler<BasicResponseDto>('/rules', payload)
+
+      if (response.code !== 1) {
+        throw new Error(response.message ?? t`Failed to update rule group`)
+      }
+
+      return response
+    },
+    onSuccess: async (data, variables, context, mutation) => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'rules',
+          'group',
+          String(variables.id),
+        ] satisfies UseRuleGroupQueryKey,
+      })
+
+      await invalidateCollectionQueries(queryClient)
+
+      if (onSuccess) {
+        await onSuccess(data, variables, context, mutation)
+      }
+    },
+    ...mutationOptions,
+  })
+}
+
+export type UseUpdateRuleGroupResult = ReturnType<typeof useUpdateRuleGroup>
+
+type UseRuleHandlerStatusQueryKey = ['rules', 'execute', 'status']
+
+type UseRuleHandlerStatusOptions = Omit<
+  UseQueryOptions<
+    RuleExecuteStatusDto,
+    Error,
+    RuleExecuteStatusDto,
+    UseRuleHandlerStatusQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+export const useRuleHandlerStatus = (options?: UseRuleHandlerStatusOptions) => {
+  return useQuery({
+    queryKey: ['rules', 'execute', 'status'],
+    queryFn: async () => {
+      return await GetApiHandler<RuleExecuteStatusDto>('/rules/execute/status')
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export type UseRuleHandlerStatus = ReturnType<typeof useRuleHandlerStatus>
+
+type UseStopAllRuleExecutionOptions = Omit<
+  UseMutationOptions<void, Error, void>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useStopAllRuleExecution = (
+  options?: UseStopAllRuleExecutionOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<void, Error, void>({
+    mutationKey: ['rules', 'execute', 'stop'],
+    mutationFn: async () => {
+      await PostApiHandler<void>('/rules/execute/stop', {})
+    },
+    onSuccess: async (data, variables, context, mutation) => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'rules',
+          'execute',
+          'status',
+        ] satisfies UseRuleHandlerStatusQueryKey,
+      })
+
+      if (options?.onSuccess) {
+        await options.onSuccess(data, variables, context, mutation)
+      }
+    },
+    ...options,
+  })
+}
+
+export type UseStopAllRuleExecution = ReturnType<typeof useStopAllRuleExecution>
+
+type UseStopRuleGroupExecutionOptions = Omit<
+  UseMutationOptions<void, Error, number | string>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useStopRuleGroupExecution = (
+  options?: UseStopRuleGroupExecutionOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<void, Error, number | string>({
+    mutationKey: ['rules', 'execute', 'rulegroup', 'stop'],
+    mutationFn: async (id) => {
+      const normalizedId = String(id)
+
+      await PostApiHandler<void>(`/rules/${normalizedId}/execute/stop`, {})
+    },
+    onSuccess: async (data, variables, context, mutation) => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'rules',
+          'execute',
+          'status',
+        ] satisfies UseRuleHandlerStatusQueryKey,
+      })
+
+      if (options?.onSuccess) {
+        await options.onSuccess(data, variables, context, mutation)
+      }
+    },
+    ...options,
+  })
+}
+
+export type UseStopRuleGroupExecution = ReturnType<
+  typeof useStopRuleGroupExecution
+>
+
+type UseExecuteRuleGroupOptions = Omit<
+  UseMutationOptions<void, Error, number | string>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useExecuteRuleGroup = (options?: UseExecuteRuleGroupOptions) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<void, Error, number | string>({
+    mutationKey: ['rules', 'execute', 'rulegroup', 'start'],
+    mutationFn: async (id) => {
+      const normalizedId = String(id)
+
+      await PostApiHandler<void>(`/rules/${normalizedId}/execute`, {})
+    },
+    onSuccess: async (data, variables, context, mutation) => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'rules',
+          'execute',
+          'status',
+        ] satisfies UseRuleHandlerStatusQueryKey,
+      })
+
+      if (options?.onSuccess) {
+        await options.onSuccess(data, variables, context, mutation)
+      }
+    },
+    ...options,
+  })
+}
+
+export type UseExecuteRuleGroup = ReturnType<typeof useExecuteRuleGroup>

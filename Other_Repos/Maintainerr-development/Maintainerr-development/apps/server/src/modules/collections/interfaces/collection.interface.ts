@@ -1,0 +1,44 @@
+import {
+  MediaItemType,
+  MediaServerCollectionSort,
+  MediaServerType,
+  ServarrAction,
+} from '@maintainerr/contracts';
+import { CollectionMedia } from '../entities/collection_media.entities';
+
+export { ServarrAction };
+
+export interface ICollection {
+  id?: number;
+  type: MediaItemType;
+  mediaServerId?: string;
+  mediaServerType?: MediaServerType;
+  libraryId: string;
+  title: string;
+  description?: string;
+  isActive: boolean;
+  arrAction: ServarrAction;
+  visibleOnRecommended?: boolean;
+  visibleOnHome?: boolean;
+  listExclusions?: boolean;
+  keepInMaintainerrOnly?: boolean;
+  cleanupLeftoverFolders?: boolean;
+  forceSeerr?: boolean;
+  deleteAfterDays?: number; // amount of days after add
+  media?: CollectionMedia[];
+  manualCollection?: boolean;
+  manualCollectionName?: string;
+  keepLogsForMonths?: number;
+  tautulliWatchedPercentOverride?: number;
+  radarrSettingsId?: number;
+  sonarrSettingsId?: number;
+  sportarrSettingsId?: number;
+  radarrQualityProfileId?: number;
+  sonarrQualityProfileId?: number;
+  sportarrQualityProfileId?: number;
+  tagInArr?: boolean;
+  sortTitle?: string;
+  mediaServerSort?: MediaServerCollectionSort | null;
+  overlayEnabled?: boolean;
+  overlayTemplateId?: number | null;
+}

@@ -1,0 +1,107 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ActionsModule } from '../actions/actions.module';
+import { MediaServerModule } from '../api/media-server/media-server.module';
+import { SeerrApiModule } from '../api/seerr-api/seerr-api.module';
+import { PlexApiModule } from '../api/plex-api/plex-api.module';
+import { ServarrApiModule } from '../api/servarr-api/servarr-api.module';
+import { StreamystatsApiModule } from '../api/streamystats-api/streamystats-api.module';
+import { TautulliApiModule } from '../api/tautulli-api/tautulli-api.module';
+import { TracearrApiModule } from '../api/tracearr-api/tracearr-api.module';
+import { CollectionsModule } from '../collections/collections.module';
+import { Collection } from '../collections/entities/collection.entities';
+import { CollectionMedia } from '../collections/entities/collection_media.entities';
+import { MetadataModule } from '../metadata/metadata.module';
+import { RadarrSettings } from '../settings/entities/radarr_settings.entities';
+import { Settings } from '../settings/entities/settings.entities';
+import { SonarrSettings } from '../settings/entities/sonarr_settings.entities';
+import { SportarrSettings } from '../settings/entities/sportarr_settings.entities';
+import { TasksModule } from '../tasks/tasks.module';
+import { RuleConstanstService } from './constants/constants.service';
+import { CommunityRuleKarma } from './entities/community-rule-karma.entities';
+import { Exclusion } from './entities/exclusion.entities';
+import { RuleGroup } from './entities/rule-group.entities';
+import { Rules } from './entities/rules.entities';
+import { EmbyGetterService } from './getter/emby-getter.service';
+import { ValueGetterService } from './getter/getter.service';
+import { JellyfinGetterService } from './getter/jellyfin-getter.service';
+import { MetadataRuleValueService } from './getter/metadata-rule-value.service';
+import { SeerrGetterService } from './getter/seerr-getter.service';
+import { PlexGetterService } from './getter/plex-getter.service';
+import { RadarrGetterService } from './getter/radarr-getter.service';
+import { SonarrGetterService } from './getter/sonarr-getter.service';
+import { SportarrGetterService } from './getter/sportarr-getter.service';
+import { RuleUsersService } from './rule-users.service';
+import { StreamystatsGetterService } from './getter/streamystats-getter.service';
+import { TautulliGetterService } from './getter/tautulli-getter.service';
+import { TracearrGetterService } from './getter/tracearr-getter.service';
+import {
+  RuleComparatorService,
+  RuleComparatorServiceFactory,
+} from './helpers/rule.comparator.service';
+import { RuleYamlService } from './helpers/yaml.service';
+import { RulesController } from './rules.controller';
+import { RulesService } from './rules.service';
+import { ExclusionTypeCorrectorService } from './tasks/exclusion-corrector.service';
+import { RuleExecutorJobManagerService } from './tasks/rule-executor-job-manager.service';
+import { RuleExecutorProgressService } from './tasks/rule-executor-progress.service';
+import { RuleExecutorSchedulerService } from './tasks/rule-executor-scheduler.service';
+import { RuleExecutorService } from './tasks/rule-executor.service';
+import { RuleMaintenanceService } from './tasks/rule-maintenance.service';
+
+@Module({
+  imports: [
+    PlexApiModule,
+    ServarrApiModule,
+    MediaServerModule,
+    TypeOrmModule.forFeature([
+      Rules,
+      RuleGroup,
+      Collection,
+      CollectionMedia,
+      Exclusion,
+      CommunityRuleKarma,
+      Settings,
+      RadarrSettings,
+      SonarrSettings,
+      SportarrSettings,
+    ]),
+    SeerrApiModule,
+    TautulliApiModule,
+    StreamystatsApiModule,
+    TracearrApiModule,
+    MetadataModule,
+    ActionsModule,
+    CollectionsModule,
+    TasksModule,
+  ],
+  providers: [
+    RulesService,
+    RuleExecutorService,
+    RuleExecutorSchedulerService,
+    RuleMaintenanceService,
+    RuleExecutorProgressService,
+    RuleExecutorJobManagerService,
+    ExclusionTypeCorrectorService,
+    PlexGetterService,
+    JellyfinGetterService,
+    EmbyGetterService,
+    MetadataRuleValueService,
+    RadarrGetterService,
+    SonarrGetterService,
+    SportarrGetterService,
+    SeerrGetterService,
+    TautulliGetterService,
+    StreamystatsGetterService,
+    RuleUsersService,
+    TracearrGetterService,
+    ValueGetterService,
+    RuleYamlService,
+    RuleComparatorService,
+    RuleConstanstService,
+    RuleComparatorServiceFactory,
+  ],
+  controllers: [RulesController],
+  exports: [RuleExecutorJobManagerService],
+})
+export class RulesModule {}

@@ -1,0 +1,286 @@
+import axios, { AxiosError, AxiosInstance, RawAxiosRequestConfig } from 'axios';
+import NodeCache from 'node-cache';
+import { MaintainerrLogger } from '../../logging/logs.service';
+import { applyHttpRetry } from '../lib/httpRetry';
+import { DEFAULT_REQUEST_TIMEOUT_MS } from '../lib/httpTimeouts';
+import { describeRequestTarget } from '../lib/requestLogging';
+
+// 20 minute default TTL (in seconds)
+const DEFAULT_TTL = 1200;
+
+// 10 seconds default rolling buffer (in ms)
+const DEFAULT_ROLLING_BUFFER = 10000;
+
+interface ExternalAPIOptions {
+  nodeCache?: NodeCache;
+  headers?: Record<string, unknown>;
+}
+
+export class ExternalApiService {
+  protected axios: AxiosInstance;
+  private baseUrl: string;
+  private cache?: NodeCache;
+
+  constructor(
+    baseUrl: string,
+    params: Record<string, unknown>,
+    protected readonly logger: MaintainerrLogger,
+    options: ExternalAPIOptions = {},
+  ) {
+    this.axios = axios.create({
+      baseURL: baseUrl,
+      params,
+      timeout: DEFAULT_REQUEST_TIMEOUT_MS,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...options.headers,
+      },
+    });
+    applyHttpRetry(this.axios);
+    this.baseUrl = baseUrl;
+    this.cache = options.nodeCache;
+  }
+
+  public async get<T>(
+    endpoint: string,
+    config?: RawAxiosRequestConfig,
+    ttl?: number,
+  ): Promise<T> {
+    try {
+      const cacheKey = this.serializeCacheKey(endpoint, config?.params);
+      const cachedItem = this.cache?.get<T>(cacheKey);
+      if (cachedItem) {
+        return cachedItem;
+      }
+      const response = await this.axios.get<T>(endpoint, config);
+
+      if (this.cache && this.isCacheable(response.data)) {
+        this.cache.set(cacheKey, response.data, ttl ?? DEFAULT_TTL);
+      }
+
+      return response.data;
+    } catch (error) {
+      this.logRequestFailure('GET', endpoint, config, error);
+      return undefined;
+    }
+  }
+
+  public async getWithoutCache<T>(
+    endpoint: string,
+    config?: RawAxiosRequestConfig,
+  ): Promise<T> {
+    try {
+      return (await this.axios.get<T>(endpoint, config)).data;
+    } catch (error) {
+      this.logRequestFailure('GET', endpoint, config, error);
+      return undefined;
+    }
+  }
+
+  public async getRawWithoutCache<T>(
+    endpoint: string,
+    config?: RawAxiosRequestConfig,
+  ) {
+    return this.axios.get<T>(endpoint, config);
+  }
+
+  public async delete<T>(
+    endpoint: string,
+    config?: RawAxiosRequestConfig,
+    options?: { rethrow?: boolean },
+  ): Promise<T> {
+    try {
+      const response = await this.axios.delete<T>(endpoint, config);
+      return response.data;
+    } catch (error) {
+      // Same escape hatch as post(): a 204 answers an empty body, so a caller
+      // cannot tell success from failure by the return value.
+      if (options?.rethrow) {
+        throw error;
+      }
+      this.logRequestFailure('DELETE', endpoint, config, error);
+      return undefined;
+    }
+  }
+
+  public async put<T>(
+    endpoint: string,
+    data: string,
+    config?: RawAxiosRequestConfig,
+  ): Promise<T> {
+    try {
+      const response = await this.axios.put<T>(endpoint, data, config);
+      return response.data;
+    } catch (error) {
+      this.logRequestFailure('PUT', endpoint, config, error);
+      return undefined;
+    }
+  }
+
+  public async post<T>(
+    endpoint: string,
+    data?: any,
+    config?: RawAxiosRequestConfig,
+    options?: { rethrow?: boolean },
+  ): Promise<T> {
+    try {
+      const response = await this.axios.post<T>(endpoint, data, config);
+      return response.data;
+    } catch (error) {
+      // rethrow lets a caller inspect the failure (e.g. the HTTP status) instead
+      // of collapsing every error to undefined; it then owns the logging.
+      if (options?.rethrow) {
+        throw error;
+      }
+      this.logRequestFailure('POST', endpoint, config, error);
+      return undefined;
+    }
+  }
+
+  public async getRolling<T>(
+    endpoint: string,
+    config?: RawAxiosRequestConfig,
+    ttl?: number,
+  ): Promise<T> {
+    try {
+      const cacheKey = this.serializeCacheKey(endpoint, config?.params);
+      const cachedItem = this.cache?.get<T>(cacheKey);
+
+      if (cachedItem) {
+        const keyTtl = this.cache?.getTtl(cacheKey) ?? 0;
+
+        // If the item has passed our rolling check, fetch again in background
+        if (
+          keyTtl - (ttl ?? DEFAULT_TTL) * 1000 <
+          Date.now() - DEFAULT_ROLLING_BUFFER
+        ) {
+          void this.axios.get<T>(endpoint, config).then((response) => {
+            if (this.isCacheable(response.data)) {
+              this.cache?.set(cacheKey, response.data, ttl ?? DEFAULT_TTL);
+            }
+          });
+        }
+        return cachedItem;
+      }
+
+      const response = await this.axios.get<T>(endpoint, config);
+
+      if (this.cache && this.isCacheable(response.data)) {
+        this.cache.set(cacheKey, response.data, ttl ?? DEFAULT_TTL);
+      }
+
+      return response.data;
+    } catch (error) {
+      this.logRequestFailure('GET', endpoint, config, error);
+      return undefined;
+    }
+  }
+
+  public async postRolling<T>(
+    endpoint: string,
+    data?: string,
+    config?: RawAxiosRequestConfig,
+    ttl?: number,
+  ): Promise<T | undefined> {
+    const url = describeRequestTarget(this.baseUrl, endpoint, config);
+
+    try {
+      const cacheKey = this.serializeCacheKey(
+        endpoint + data ? data.replace(/\s/g, '').trim() : '',
+        config?.params,
+      );
+      const cachedItem = this.cache?.get<T>(cacheKey);
+
+      if (cachedItem) {
+        const keyTtl = this.cache?.getTtl(cacheKey) ?? 0;
+
+        // If the item has passed our rolling check, fetch again in background
+        if (keyTtl < Date.now() - DEFAULT_ROLLING_BUFFER) {
+          this.axios
+            .post<T>(endpoint, data, config)
+            .then((response) => {
+              if (this.isCacheable(response.data)) {
+                this.cache?.set(cacheKey, response.data, ttl ?? DEFAULT_TTL);
+              }
+            })
+            .catch((error: AxiosError) => {
+              this.logger.warn(this.formatRequestFailure('POST', url, error));
+            });
+        }
+        return cachedItem;
+      }
+
+      const response = await this.axios
+        .post<T>(endpoint, data, config)
+        .catch((error: AxiosError) => {
+          this.logger.warn(this.formatRequestFailure('POST', url, error));
+          return undefined;
+        });
+
+      if (this.cache && this.isCacheable(response?.data)) {
+        this.cache.set(cacheKey, response.data, ttl ?? DEFAULT_TTL);
+      }
+
+      return response?.data;
+    } catch (error: any) {
+      this.logger.warn(this.formatRequestFailure('POST', url, error));
+      return undefined;
+    }
+  }
+
+  private isCacheable(data: unknown): boolean {
+    return data != null && typeof data === 'object' && !Buffer.isBuffer(data);
+  }
+
+  private logRequestFailure(
+    method: string,
+    endpoint: string,
+    config: RawAxiosRequestConfig | undefined,
+    error: unknown,
+  ) {
+    const url = describeRequestTarget(this.baseUrl, endpoint, config);
+    this.logger.debug(this.formatRequestFailure(method, url, error));
+  }
+
+  private formatRequestFailure(
+    method: string,
+    url: string,
+    error: unknown,
+  ): string {
+    if (error instanceof AxiosError) {
+      const status = error.response?.status;
+      const statusText = error.response?.statusText;
+      const code = error.code;
+
+      if (status !== undefined) {
+        return `${method} ${url} failed with status ${status}${statusText ? ` ${statusText}` : ''}`;
+      }
+
+      return `${method} ${url} failed${code ? ` (code=${code})` : ''}`;
+    }
+
+    if (error instanceof Error) {
+      return `${method} ${url} failed: ${error.message}`;
+    }
+
+    return `${method} ${url} failed`;
+  }
+
+  private serializeCacheKey(
+    endpoint: string,
+    params?: Record<string, unknown>,
+  ) {
+    try {
+      if (!params) {
+        return `${this.baseUrl}${endpoint}`;
+      }
+
+      return `${this.baseUrl}${endpoint}${JSON.stringify(params)}`;
+    } catch (error) {
+      this.logger.debug('Failed serializing cache key');
+      this.logger.debug(error);
+      return undefined;
+    }
+  }
+}

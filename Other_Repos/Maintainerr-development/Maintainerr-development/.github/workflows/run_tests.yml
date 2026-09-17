@@ -1,0 +1,66 @@
+name: "Run tests"
+
+on:
+  pull_request:
+    branches:
+      - "development"
+      - "main"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard_manual_run:
+    uses: ./.github/workflows/guard-manual.yml
+    with:
+      enabled: ${{ github.event_name == 'workflow_dispatch' }}
+      actor: ${{ github.actor }}
+      source: manual workflow run
+
+  run_tests:
+    name: Run integration tests
+    needs: guard_manual_run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Use Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Activate corepack
+        run: |
+          corepack install
+          corepack enable
+
+      - name: Cache Yarn downloads
+        uses: actions/cache@v6
+        with:
+          path: .yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # node-canvas downloads a prebuilt binary during install and falls back to
+      # a source build when that download fails. The runners have no pixman, so
+      # the fallback died and took the job with it. These make the fallback work.
+      - name: Install node-canvas build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+            libpixman-1-dev
+      - name: Install dependencies
+        run: yarn --immutable
+
+      - name: Build
+        run: yarn turbo build --filter="./packages/*"
+
+      - name: Run tests
+        run: yarn turbo test
+
+      # Guards the rules regression matrix itself: it silently stopped
+      # starting once before because nothing ran it (#3426).
+      - name: Run rules regression matrix
+        run: yarn workspace @maintainerr/server test:e2e

@@ -1,0 +1,261 @@
+import { Transition } from '@headlessui/react'
+import {
+  BaseEventDto,
+  CollectionHandlerFinishedEventDto,
+  CollectionHandlerProgressedEventDto,
+  CollectionHandlerStartedEventDto,
+  MaintainerrEvent,
+  RuleHandlerFinishedEventDto,
+  RuleHandlerProgressedEventDto,
+  RuleHandlerStartedEventDto,
+} from '@maintainerr/contracts'
+import { Trans } from '@lingui/react/macro'
+import { useRef, useState } from 'react'
+import { useEvent } from '../../contexts/events-context'
+import { getPercentValue } from '../../utils/formatBytes'
+import { SmallLoadingSpinner } from '../Common/LoadingSpinner'
+
+const toProgressWidth = (
+  processed: number | undefined,
+  total: number | undefined,
+) => {
+  if (processed == null || total == null) {
+    return '0%'
+  }
+
+  const percent = getPercentValue(processed, total, { clamp: true })
+  if (percent === null) {
+    return '0%'
+  }
+
+  return `${percent}%`
+}
+
+const isStartedOrFinishedEvent = (
+  event: BaseEventDto,
+): event is
+  | CollectionHandlerStartedEventDto
+  | CollectionHandlerFinishedEventDto
+  | RuleHandlerStartedEventDto
+  | RuleHandlerFinishedEventDto => {
+  return (
+    event.type == MaintainerrEvent.CollectionHandler_Started ||
+    event.type == MaintainerrEvent.RuleHandler_Started ||
+    event.type == MaintainerrEvent.CollectionHandler_Finished ||
+    event.type == MaintainerrEvent.RuleHandler_Finished
+  )
+}
+
+const isRuleHandlerProgressedEvent = (
+  event: BaseEventDto,
+): event is RuleHandlerProgressedEventDto => {
+  return event.type == MaintainerrEvent.RuleHandler_Progressed
+}
+
+const isCollectionHandlerProgressedEvent = (
+  event: BaseEventDto,
+): event is CollectionHandlerProgressedEventDto => {
+  return event.type == MaintainerrEvent.CollectionHandler_Progressed
+}
+
+const Messages = () => {
+  return (
+    <div className="flex flex-col gap-y-4">
+      <RuleHandlerMessages />
+      <CollectionHandlerMessages />
+    </div>
+  )
+}
+
+const RuleHandlerMessages = () => {
+  const finishedTimerRef = useRef<NodeJS.Timeout>(undefined)
+  const [show, setShow] = useState<boolean>(false)
+
+  const [event, setEvent] = useState<
+    | RuleHandlerStartedEventDto
+    | RuleHandlerProgressedEventDto
+    | RuleHandlerFinishedEventDto
+  >()
+
+  useEvent<RuleHandlerStartedEventDto>(
+    MaintainerrEvent.RuleHandler_Started,
+    (event) => {
+      setEvent(event)
+      setShow(true)
+      clearTimeout(finishedTimerRef.current)
+    },
+  )
+
+  useEvent<RuleHandlerProgressedEventDto>(
+    MaintainerrEvent.RuleHandler_Progressed,
+    (event) => {
+      setEvent(event)
+      setShow(true)
+      clearTimeout(finishedTimerRef.current)
+    },
+  )
+
+  useEvent<RuleHandlerFinishedEventDto>(
+    MaintainerrEvent.RuleHandler_Finished,
+    (event) => {
+      setEvent(event)
+      setShow(true)
+      finishedTimerRef.current = setTimeout(() => setShow(false), 5000)
+    },
+  )
+
+  // Named here so the extracted message reads "Processing: {ruleGroupName}".
+  const ruleGroupName =
+    event && isRuleHandlerProgressedEvent(event)
+      ? event.ruleGroupName
+      : undefined
+
+  return (
+    <Transition
+      as="div"
+      show={show}
+      className="transition duration-1000"
+      enterFrom="opacity-0"
+      enterTo="opacity-100"
+      leaveFrom="opacity-100"
+      leaveTo="opacity-0"
+    >
+      <div
+        className={
+          'mx-2 flex flex-col rounded-lg bg-zinc-900 py-2 pr-4 pl-2 text-xs font-bold text-zinc-300 ring-1 ring-zinc-700'
+        }
+      >
+        <div className="flex items-center gap-2">
+          <div>
+            <SmallLoadingSpinner className="m-auto h-4 px-0.5" />
+          </div>
+          {event && isStartedOrFinishedEvent(event) && <>{event.message}</>}
+          {event && isRuleHandlerProgressedEvent(event) && (
+            <div>
+              <Trans>Processing: {ruleGroupName}</Trans>
+            </div>
+          )}
+        </div>
+        {event && isRuleHandlerProgressedEvent(event) && (
+          <div className="mt-2 ml-8 bg-zinc-800">
+            <div
+              data-testid="rule-handler-total-progress"
+              className="h-1.5 bg-maintainerrdark-700 transition-width duration-150 ease-in-out"
+              style={{
+                width: toProgressWidth(
+                  event.processedEvaluations,
+                  event.totalEvaluations,
+                ),
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </Transition>
+  )
+}
+
+const CollectionHandlerMessages = () => {
+  const finishedTimerRef = useRef<NodeJS.Timeout>(undefined)
+  const [show, setShow] = useState<boolean>(false)
+
+  const [event, setEvent] = useState<
+    | CollectionHandlerStartedEventDto
+    | CollectionHandlerProgressedEventDto
+    | CollectionHandlerFinishedEventDto
+  >()
+
+  useEvent<CollectionHandlerStartedEventDto>(
+    MaintainerrEvent.CollectionHandler_Started,
+    (event) => {
+      setEvent(event)
+      setShow(true)
+      clearTimeout(finishedTimerRef.current)
+    },
+  )
+
+  useEvent<CollectionHandlerProgressedEventDto>(
+    MaintainerrEvent.CollectionHandler_Progressed,
+    (event) => {
+      setEvent(event)
+      setShow(true)
+      clearTimeout(finishedTimerRef.current)
+    },
+  )
+
+  useEvent<CollectionHandlerFinishedEventDto>(
+    MaintainerrEvent.CollectionHandler_Finished,
+    (event) => {
+      setEvent(event)
+      setShow(true)
+      finishedTimerRef.current = setTimeout(() => setShow(false), 5000)
+    },
+  )
+
+  const showCollectionProgressBars =
+    !!event &&
+    isCollectionHandlerProgressedEvent(event) &&
+    event.totalMediaToHandle > 0
+
+  // Named here so the extracted message reads "Processing: {collectionName}".
+  const collectionName =
+    event && isCollectionHandlerProgressedEvent(event)
+      ? event.processingCollection?.name
+      : undefined
+
+  return (
+    <Transition
+      as="div"
+      show={show}
+      className="mx-2 flex flex-col rounded-lg bg-zinc-900 py-2 pr-4 pl-2 text-xs font-bold text-zinc-300 ring-1 ring-zinc-700 hover:bg-zinc-800"
+      enter="transition opacity-0 duration-1000"
+      enterFrom="opacity-0"
+      enterTo="opacity-100"
+      leave="transition opacity-100 duration-1000"
+      leaveFrom="opacity-100"
+      leaveTo="opacity-0"
+    >
+      <div className="flex items-center gap-2">
+        <div>
+          <SmallLoadingSpinner className="m-auto h-4 px-0.5" />
+        </div>
+        {event && isStartedOrFinishedEvent(event) && <>{event.message}</>}
+        {event &&
+          isCollectionHandlerProgressedEvent(event) &&
+          event.processingCollection && (
+            <div>
+              <Trans>Processing: {collectionName}</Trans>
+            </div>
+          )}
+      </div>
+      {showCollectionProgressBars && (
+        <div className="mt-2 ml-8 bg-zinc-800">
+          {event.totalCollections > 1 && (
+            <div
+              data-testid="collection-handler-current-progress"
+              className={`h-1.5 bg-maintainerr transition-width ease-in-out ${event.processingCollection?.processedMedias === 0 ? 'duration-0' : 'duration-150'}`}
+              style={{
+                width: toProgressWidth(
+                  event.processingCollection?.processedMedias,
+                  event.processingCollection?.totalMedias,
+                ),
+              }}
+            />
+          )}
+          <div
+            data-testid="collection-handler-total-progress"
+            className="h-1.5 bg-maintainerrdark-700 transition-width duration-150 ease-in-out"
+            style={{
+              width: toProgressWidth(
+                event.processedMedias,
+                event.totalMediaToHandle,
+              ),
+            }}
+          />
+        </div>
+      )}
+    </Transition>
+  )
+}
+
+export default Messages

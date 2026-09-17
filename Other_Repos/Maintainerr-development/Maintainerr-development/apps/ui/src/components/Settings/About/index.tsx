@@ -1,0 +1,304 @@
+import { Trans, useLingui } from '@lingui/react/macro'
+import { InformationCircleIcon } from '@heroicons/react/solid'
+import { type VersionResponse } from '@maintainerr/contracts'
+import { useEffect, useState } from 'react'
+import GetApiHandler from '../../../utils/ApiHandler'
+import { startsWithDigit } from '../../../utils/version'
+import BrandLink from '../../Common/BrandLink'
+import Releases from './Releases'
+
+const AboutSettings = () => {
+  const { t } = useLingui()
+  // Maintainerr Timezone
+  const [timezone, setTimezone] = useState<string>('')
+  useEffect(() => {
+    GetApiHandler<string>('/app/timezone').then((resp) => {
+      setTimezone(resp)
+    })
+  }, [])
+  // End Maintainerr Timezone
+
+  // Maintainerr Version
+  const [version, setVersion] = useState<string>('')
+  const [commitTag, setCommitTag] = useState<string>('')
+  useEffect(() => {
+    GetApiHandler('/app/status').then((resp: VersionResponse) => {
+      if (resp.status) {
+        setVersion(resp.version)
+        setCommitTag(resp.commitTag)
+      }
+    })
+  }, [])
+  // End Maintainerr Version
+
+  const showReleaseTag =
+    startsWithDigit(version) && commitTag !== '' && commitTag !== 'local'
+  const displayVersion =
+    commitTag === 'local'
+      ? 'local'
+      : showReleaseTag
+        ? `${version} (${commitTag})`
+        : version
+
+  // Maintainerr Rules Count
+  const [ruleCount, setRuleCount] = useState<number>()
+  useEffect(() => {
+    GetApiHandler<number>('/rules/count/').then((resp) => {
+      setRuleCount(resp)
+    })
+  }, [])
+  // End Maintainerr Rules Count
+
+  // Maintainerr Collection Items
+  const [itemCount, setItemCount] = useState<number>()
+  useEffect(() => {
+    GetApiHandler<number>('/collections/media/count').then((resp) => {
+      setItemCount(resp)
+    })
+  }, [])
+  // End Maintainerr Collection Items
+
+  // Maintainerr Community Rules Count
+  const [communityCount, setCommunityCount] = useState<number>()
+  useEffect(() => {
+    GetApiHandler<number>('/rules/community/count').then((resp) => {
+      setCommunityCount(resp)
+    })
+  }, [])
+  // End Maintainerr Community Rules Count
+
+  return (
+    <>
+      <title>{t`About - Maintainerr`}</title>
+      <div className="h-full w-full">
+        <div className="mt-6 rounded-md border border-maintainerr-600 bg-maintainerr/20 p-4 backdrop-blur-sm">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <InformationCircleIcon className="h-5 w-5 text-gray-100" />
+            </div>
+            <div className="ml-3 flex-1 md:flex md:justify-between">
+              <p className="text-sm leading-5 text-gray-100">
+                <Trans>
+                  If you find any broken features and/or are experiencing
+                  instability, please report it on GitHub!
+                </Trans>
+              </p>
+              <p className="mt-3 text-sm leading-5 md:mt-0 md:ml-6">
+                <a
+                  href="https://github.com/Maintainerr/Maintainerr"
+                  className="font-medium whitespace-nowrap text-gray-100 transition duration-150 ease-in-out hover:text-white"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  GitHub &rarr;
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+        {/* Maintainerr Portion */}
+        <div className="section mb-2 h-full w-full">
+          <h3 className="heading">
+            <Trans>About Maintainerr</Trans>
+          </h3>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section my-2">
+          <div className="form-row my-2">
+            <label htmlFor="name" className="text-label">
+              <Trans>Version</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field">
+                <span className="">
+                  <code>{displayVersion}</code>
+                </span>
+              </div>
+            </div>
+          </div>
+          <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+          <div className="form-row my-2">
+            <label htmlFor="name" className="text-label">
+              <Trans>Container Config Path</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field">
+                <span className="">
+                  <code>/opt/data</code>
+                </span>
+              </div>
+            </div>
+          </div>
+          <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+          <div className="form-row my-2">
+            <label htmlFor="name" className="text-label">
+              <Trans>Time Zone</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field">
+                <span className="">
+                  <code>{timezone}</code>
+                </span>
+              </div>
+            </div>
+          </div>
+          <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+          <div className="form-row my-2">
+            <label htmlFor="name" className="text-label">
+              <Trans>Number Of Rules</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field">
+                <span className="">
+                  <code>{ruleCount}</code>
+                </span>
+              </div>
+            </div>
+          </div>
+          <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+          <div className="form-row my-2">
+            <label htmlFor="name" className="text-label">
+              <Trans>Total Media in Collections</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field">
+                <span className="">
+                  <code>{itemCount}</code>
+                </span>
+              </div>
+            </div>
+          </div>
+          <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+          <div className="form-row my-2">
+            <label htmlFor="name" className="text-label">
+              <Trans>Community Rules</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field">
+                <span className="">
+                  <code>{communityCount}</code>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        {/* End Maintainerr Portion */}
+        {/* Useful Links */}
+        <div className="section mb-2 h-full w-full">
+          <h3 className="heading">
+            <Trans>Useful Links</Trans>
+          </h3>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section my-2">
+          <div className="form-row my-2">
+            <label className="text-label">
+              {' '}
+              <Trans>Documentation</Trans>{' '}
+            </label>
+            <div className="form-input">
+              <div className="form-input-field font-bold text-maintainerr-600 underline">
+                <BrandLink external href="https://docs.maintainerr.info">
+                  https://docs.maintainerr.info
+                </BrandLink>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section my-2">
+          <div className="form-row my-2">
+            <label className="text-label"> Discord </label>
+            <div className="form-input">
+              <div className="form-input-field font-bold text-maintainerr-600 underline">
+                <BrandLink external href="https://discord.gg/WP4ZW2QYwk">
+                  https://discord.gg/WP4ZW2QYwk
+                </BrandLink>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section my-2">
+          <div className="form-row my-2">
+            <label className="text-label">
+              {' '}
+              <Trans>Feature Requests</Trans>{' '}
+            </label>
+            <div className="form-input">
+              <div className="form-input-field font-bold text-maintainerr-600 underline">
+                <BrandLink external href="https://features.maintainerr.info">
+                  https://features.maintainerr.info
+                </BrandLink>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section my-2">
+          <div className="form-row my-2">
+            <label className="text-label">
+              {' '}
+              <Trans>Services Status</Trans>{' '}
+            </label>
+            <div className="form-input">
+              <div className="form-input-field font-bold text-maintainerr-600 underline">
+                <BrandLink external href="https://status.maintainerr.info">
+                  https://status.maintainerr.info
+                </BrandLink>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section mb-2 h-full w-full">
+          <h3 className="heading">
+            <Trans>Loving Maintainerr?</Trans>
+          </h3>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section my-2">
+          <div className="form-row my-2">
+            <label className="text-label">
+              <Trans>Donations Welcome</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field font-bold text-maintainerr-600">
+                <BrandLink
+                  external
+                  href="https://opencollective.com/maintainerr"
+                >
+                  OpenCollective
+                </BrandLink>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr className="my-2 h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        <div className="section my-2">
+          <div className="form-row my-2">
+            <label className="text-label">
+              <Trans>Telemetry</Trans>
+            </label>
+            <div className="form-input">
+              <div className="form-input-field font-bold text-maintainerr-600">
+                <BrandLink to="/settings/telemetry">
+                  <Trans>Help us improve it</Trans>
+                </BrandLink>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr className="h-px border-0 bg-gray-200 dark:bg-gray-700"></hr>
+        {/* End Userful Links */}
+        {/* Show Releases */}
+        <div className="section">
+          <Releases currentVersion={version} />
+        </div>
+        {/* End Showing Releases */}
+      </div>
+    </>
+  )
+}
+export default AboutSettings

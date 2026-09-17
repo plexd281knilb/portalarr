@@ -1,0 +1,840 @@
+import {
+  IComparisonStatistics,
+  MediaServerType,
+  IRuleComparisonResult,
+  MediaItem,
+  MediaItemType,
+  RuleValueType,
+} from '@maintainerr/contracts';
+import { Injectable } from '@nestjs/common';
+import { MaintainerrLogger } from '../../logging/logs.service';
+import { RuleConstanstService } from '../constants/constants.service';
+import {
+  RuleOperators,
+  RulePossibility,
+  RuleType,
+  RULE_EVALUATION_CONCURRENCY,
+} from '../constants/rules.constants';
+import { RuleDto } from '../dtos/rule.dto';
+import { RuleDbDto } from '../dtos/ruleDb.dto';
+import { RuleGroupDto } from '../dtos/ruleGroup.dto';
+import { ValueGetterService } from '../getter/getter.service';
+import { ArrLookupCache } from './arr-lookup-cache';
+
+interface IComparatorReturnValue {
+  stats: IComparisonStatistics[];
+  data: MediaItem[];
+  transientFailureMediaIds: Set<string>;
+}
+
+@Injectable()
+export class RuleComparatorServiceFactory {
+  constructor(
+    private readonly valueGetter: ValueGetterService,
+    private readonly ruleConstanstService: RuleConstanstService,
+    private readonly logger: MaintainerrLogger,
+  ) {}
+
+  create(): RuleComparatorService {
+    return new RuleComparatorService(
+      this.valueGetter,
+      this.ruleConstanstService,
+      this.logger,
+    );
+  }
+}
+
+@Injectable()
+export class RuleComparatorService {
+  workerData: MediaItem[];
+  resultData: MediaItem[];
+  plexData: MediaItem[];
+  plexDataType: MediaItemType;
+  statistics: IComparisonStatistics[];
+  statisticWorker: IRuleComparisonResult[];
+  abortSignal?: AbortSignal;
+
+  private workerIds: Set<string>;
+  private resultIds: Set<string>;
+  private statsById: Map<string, IComparisonStatistics>;
+  private transientFailureIds: Set<string>;
+  private arrLookupCache?: ArrLookupCache;
+  // Resolved once per run: names every value after the server it was read
+  // from, rather than the one the rule was authored against.
+  private configuredServerType?: MediaServerType | null;
+
+  private static readonly UNARY_RULE_ACTIONS = new Set<RulePossibility>([
+    RulePossibility.EXISTS,
+    RulePossibility.NOT_EXISTS,
+  ]);
+
+  constructor(
+    private readonly valueGetter: ValueGetterService,
+    private readonly ruleConstanstService: RuleConstanstService,
+    private readonly logger: MaintainerrLogger,
+  ) {
+    logger.setContext(RuleComparatorService.name);
+  }
+
+  public async executeRulesWithData(
+    rulegroup: RuleGroupDto,
+    plexData: MediaItem[],
+    onRuleProgress?: (processingRule: number) => void,
+    abortSignal?: AbortSignal,
+    arrLookupCache?: ArrLookupCache,
+  ): Promise<IComparatorReturnValue> {
+    try {
+      // prepare
+      this.plexData = plexData;
+      this.plexDataType = rulegroup.dataType ? rulegroup.dataType : undefined;
+      this.workerData = [];
+      this.resultData = [];
+      this.statistics = [];
+      this.statisticWorker = [];
+      this.abortSignal = abortSignal;
+      this.arrLookupCache = arrLookupCache;
+
+      this.workerIds = new Set<string>();
+      this.resultIds = new Set<string>();
+      this.statsById = new Map<string, IComparisonStatistics>();
+      this.transientFailureIds = new Set<string>();
+      this.configuredServerType =
+        await this.valueGetter.getConfiguredServerType();
+
+      // run rules
+      let currentSection = 0;
+      let sectionActionAnd = false;
+
+      this.prepareStatistics();
+
+      let ruleNumber = 0;
+
+      for (const rule of rulegroup.rules) {
+        ruleNumber++;
+        onRuleProgress?.(ruleNumber);
+
+        const parsedRule = JSON.parse((rule as RuleDbDto).ruleJson) as RuleDto;
+
+        // force operator of very first rule to null, otherwise this might cause corruption
+        if ((rule as RuleDbDto)?.id === (rulegroup.rules[0] as RuleDbDto)?.id) {
+          parsedRule.operator = null;
+        }
+
+        if (currentSection === (rule as RuleDbDto).section) {
+          // if section didn't change
+          // execute and store in work array
+          await this.executeRule(parsedRule, rulegroup);
+        } else {
+          // set the stat results of the completed section
+          this.setStatisticSectionResults();
+
+          // handle section action
+          this.handleSectionAction(sectionActionAnd);
+
+          // save new section action
+          // Null-guarded coercion. The section operator lives on the first
+          // condition of the new section and is persisted as a string
+          // ("0"/"1"), or null when unset. +null === 0 is true in JS, so the
+          // bare `+operator === 0` check coerced an unset operator to AND.
+          // Guard against null first, then coerce - mirroring the
+          // within-section idiom (`operator != null && +operator === ...`)
+          // used elsewhere in this service - so an unset operator falls
+          // through to OR while an explicit AND ("0") is still honoured.
+          // Persisted rules are normalised to an explicit operator by
+          // migration, so null should not reach here in practice.
+          sectionActionAnd =
+            parsedRule.operator != null &&
+            +parsedRule.operator === RuleOperators.AND;
+          // reset first operator of new section
+          parsedRule.operator = null;
+          // add new section to stats
+          this.addSectionToStatistics(
+            (rule as RuleDbDto).section,
+            sectionActionAnd,
+          );
+          // Execute the rule and set the new section
+          await this.executeRule(parsedRule, rulegroup);
+          currentSection = (rule as RuleDbDto).section;
+        }
+      }
+      // set the stat results of the last section
+      this.setStatisticSectionResults();
+
+      // handle last section
+      this.handleSectionAction(sectionActionAnd);
+
+      // update result for matched media
+      this.updateStatisticResults();
+
+      // return comparatorReturnValue
+      return {
+        stats: this.statistics,
+        data: this.resultData,
+        transientFailureMediaIds: this.transientFailureIds,
+      };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+
+      this.logger.log(
+        `Something went wrong while running rule ${rulegroup.name}`,
+      );
+      this.logger.debug(
+        `Something went wrong while running rule ${rulegroup.name}`,
+        error,
+      );
+      // Swallowing here returned `undefined` for the whole chunk: the
+      // executor then saw none of these items as matching or transiently
+      // failed and removed them from the collection. Fail the run instead
+      // (#3307).
+      throw error;
+    }
+  }
+
+  private updateStatisticResults() {
+    this.statistics.forEach((el) => {
+      el.result = this.resultIds.has(el.mediaServerId);
+    });
+  }
+
+  private setStatisticSectionResults() {
+    // add the result of the last section. If media is in workerData, section = true.
+    this.statistics.forEach((stat) => {
+      if (this.workerIds.has(stat.mediaServerId)) {
+        stat.sectionResults[stat.sectionResults.length - 1].result = true;
+      } else {
+        stat.sectionResults[stat.sectionResults.length - 1].result = false;
+      }
+    });
+  }
+
+  private addSectionToStatistics(id: number, isAND: boolean) {
+    this.statistics.forEach((data) => {
+      data.sectionResults.push({
+        id: id,
+        result: undefined,
+        operator: isAND ? 'AND' : 'OR',
+        ruleResults: [],
+      });
+    });
+  }
+
+  private async executeRule(rule: RuleDto, ruleGroup: RuleGroupDto) {
+    let data: MediaItem[];
+    let firstVal: RuleValueType;
+    let secondVal: RuleValueType;
+
+    if (rule.operator === null || +rule.operator === +RuleOperators.OR) {
+      data = this.plexData.filter(
+        (mediaItem) => !this.workerIds.has(mediaItem.id),
+      );
+    } else {
+      data = this.workerData;
+    }
+
+    // Value resolution (firstVal/secondVal) is the slow part: each item may
+    // trigger an external lookup. Plex leaf watch history is prefetched for the
+    // rule batch, but show/season rollups and other integrations can still make
+    // per-item calls. These getters are pure reads and touch no comparator
+    // state, so we resolve them up front in bounded parallel batches - the same
+    // chunk + Promise.all idiom used for Plex collection writes. Batching lives
+    // only here, so the total in-flight lookups never exceed
+    // RULE_EVALUATION_CONCURRENCY. The mutation pass below then stays strictly
+    // sequential and in the original backward order, preserving the index-based
+    // splice semantics exactly.
+    const firstVals: RuleValueType[] = new Array(data.length);
+    const secondVals: RuleValueType[] = new Array(data.length);
+    for (
+      let start = 0;
+      start < data.length;
+      start += RULE_EVALUATION_CONCURRENCY
+    ) {
+      this.abortSignal?.throwIfAborted();
+      const end = Math.min(start + RULE_EVALUATION_CONCURRENCY, data.length);
+      await Promise.all(
+        Array.from({ length: end - start }, (_, offset) => start + offset).map(
+          async (i) => {
+            // Check abort inside each task so a long-running batch stops
+            // resolving values promptly once the job is cancelled/superseded.
+            this.abortSignal?.throwIfAborted();
+            const mediaItem = data[i];
+            firstVals[i] = await this.valueGetter.get(
+              rule.firstVal,
+              mediaItem,
+              ruleGroup,
+              this.plexDataType,
+              rule,
+              this.arrLookupCache,
+            );
+            this.abortSignal?.throwIfAborted();
+            secondVals[i] = this.isUnaryRuleAction(rule.action)
+              ? null
+              : await this.getSecondValue(
+                  rule,
+                  mediaItem,
+                  ruleGroup,
+                  firstVals[i],
+                );
+          },
+        ),
+      );
+    }
+    this.abortSignal?.throwIfAborted();
+
+    // loop media items
+    for (let i = data.length - 1; i >= 0; i--) {
+      // read pre-resolved values
+      const mediaItem = data[i];
+      const mediaId = mediaItem.id;
+      firstVal = firstVals[i];
+      secondVal = secondVals[i];
+
+      const firstValTransient = firstVal === undefined;
+      const secondValTransient =
+        rule.lastVal != null && secondVal === undefined;
+      if (firstValTransient || secondValTransient) {
+        this.transientFailureIds.add(mediaId);
+      }
+
+      const reasons = this.buildMissingReasons(rule, firstVal, secondVal);
+      // `undefined` from a getter is the documented transport-failure signal
+      // (outer catch in plex/seerr-getter); `null` is definitive absence.
+      // Skip unary EXISTS/NOT_EXISTS on transient `undefined` so it never
+      // resolves to `!hasExistsValue(undefined) === true` and spuriously
+      // adds the item (#1446).
+      const shouldCompare = this.isUnaryRuleAction(rule.action)
+        ? !firstValTransient
+        : firstVal != null && (secondVal != null || rule.lastVal != null);
+
+      if (shouldCompare) {
+        // do action
+        const comparisonResult = this.doRuleAction(
+          firstVal,
+          secondVal,
+          rule.action,
+        );
+
+        // add stats if enabled
+        this.addStatistictoParent(
+          rule,
+          firstVal,
+          secondVal,
+          mediaId,
+          comparisonResult,
+          reasons,
+        );
+
+        // alter workerData
+        if (rule.operator === null || +rule.operator === +RuleOperators.OR) {
+          if (comparisonResult) {
+            // add to workerdata if not yet available
+            if (!this.workerIds.has(mediaId)) {
+              this.workerIds.add(mediaId);
+              this.workerData.push(mediaItem);
+            }
+          }
+        } else {
+          if (!comparisonResult) {
+            // remove from workerdata
+            this.workerData.splice(i, 1);
+            this.workerIds.delete(mediaId);
+          }
+        }
+      } else {
+        this.logMissingOperand(rule, ruleGroup, mediaId, firstVal, secondVal);
+        this.addStatistictoParent(
+          rule,
+          firstVal,
+          secondVal,
+          mediaId,
+          false,
+          reasons,
+        );
+
+        if (rule.operator != null && +rule.operator === +RuleOperators.AND) {
+          this.workerData.splice(i, 1);
+          this.workerIds.delete(mediaId);
+        }
+      }
+    }
+  }
+
+  private buildMissingReasons(
+    rule: RuleDto,
+    firstVal: RuleValueType,
+    secondVal: RuleValueType,
+  ): { firstValueReason?: string; secondValueReason?: string } {
+    const reasons: { firstValueReason?: string; secondValueReason?: string } =
+      {};
+    // `undefined` is the transport-failure signal, `null` a confirmed absence -
+    // keep them apart here so the Test Media output stops reporting a failed
+    // lookup as "no entries for this item".
+    if (firstVal == null) {
+      reasons.firstValueReason = this.ruleConstanstService.getValueNullReason(
+        rule.firstVal,
+        this.configuredServerType,
+        { lookupFailed: firstVal === undefined },
+      );
+    }
+    if (secondVal == null && rule.lastVal) {
+      reasons.secondValueReason = this.ruleConstanstService.getValueNullReason(
+        rule.lastVal,
+        this.configuredServerType,
+        { lookupFailed: secondVal === undefined },
+      );
+    }
+    return reasons;
+  }
+
+  private isUnaryRuleAction(action: RulePossibility): boolean {
+    return RuleComparatorService.UNARY_RULE_ACTIONS.has(action);
+  }
+
+  private async getSecondValue(
+    rule: RuleDto,
+    data: MediaItem,
+    rulegroup: RuleGroupDto,
+    firstVal: RuleValueType,
+  ): Promise<RuleValueType> {
+    let secondVal: RuleValueType;
+    if (rule.lastVal) {
+      secondVal = await this.valueGetter.get(
+        rule.lastVal,
+        data,
+        rulegroup,
+        this.plexDataType,
+        rule,
+        this.arrLookupCache,
+      );
+    } else {
+      secondVal =
+        rule.customVal.ruleTypeId === +RuleType.DATE
+          ? rule.customVal.value.includes('-')
+            ? new Date(rule.customVal.value)
+            : new Date(+rule.customVal.value * 1000)
+          : rule.customVal.ruleTypeId === +RuleType.TEXT ||
+              rule.customVal.ruleTypeId === +RuleType.TEXT_LIST
+            ? rule.customVal.value
+            : rule.customVal.ruleTypeId === +RuleType.NUMBER ||
+                rule.customVal.ruleTypeId === +RuleType.BOOL
+              ? +rule.customVal.value
+              : null;
+      // Key conversion off the first-value slot's *declared* type, not the
+      // runtime value. This preserves the previous behavior for every action
+      // (before/after/in_last/in_next plus equals/not_equals) while still
+      // converting custom_days when firstVal is null - see issue #2582.
+      const firstValProperty = this.ruleConstanstService
+        .getRuleConstants()
+        .applications.find((app) => app.id === rule.firstVal[0])
+        ?.props.find((prop) => prop.id === rule.firstVal[1]);
+      const firstValIsDateType = firstValProperty?.type === RuleType.DATE;
+      if (
+        firstValIsDateType &&
+        rule.customVal.ruleTypeId === +RuleType.NUMBER
+      ) {
+        if (
+          [RulePossibility.IN_LAST, RulePossibility.BEFORE].includes(
+            rule.action,
+          )
+        ) {
+          secondVal = new Date(new Date().getTime() - +secondVal * 1000);
+        } else {
+          secondVal = new Date(new Date().getTime() + +secondVal * 1000);
+        }
+      } else if (
+        firstVal instanceof Date &&
+        rule.customVal.ruleTypeId === +RuleType.DATE
+      ) {
+        secondVal = new Date(+secondVal);
+      }
+      if (
+        // if custom secondval is text or text list, check if it's parsable as an array
+        [+RuleType.TEXT, +RuleType.TEXT_LIST].includes(
+          rule.customVal.ruleTypeId,
+        ) &&
+        typeof secondVal === 'string' &&
+        this.isStringParsableToArray(secondVal)
+      ) {
+        secondVal = JSON.parse(secondVal);
+      }
+    }
+    return secondVal;
+  }
+
+  private prepareStatistics() {
+    this.plexData.forEach((data) => {
+      const mediaId = data.id;
+      const stat: IComparisonStatistics = {
+        mediaServerId: mediaId,
+        result: false,
+        sectionResults: [
+          {
+            id: 0,
+            result: undefined,
+            ruleResults: [],
+          },
+        ],
+      };
+
+      this.statistics.push(stat);
+      this.statsById.set(mediaId, stat);
+    });
+  }
+
+  private addStatistictoParent(
+    rule: RuleDto,
+    firstVal: RuleValueType,
+    secondVal: RuleValueType,
+    mediaId: string,
+    result: boolean,
+    reasons?: { firstValueReason?: string; secondValueReason?: string },
+  ) {
+    const stat = this.statsById.get(mediaId);
+    if (!stat) {
+      return;
+    }
+    const lastSectionIndex = stat.sectionResults.length - 1;
+    const secondValueFields = this.isUnaryRuleAction(rule.action)
+      ? {}
+      : {
+          secondValueName: this.getSecondValueName(rule),
+          secondValue: secondVal,
+          ...(reasons?.secondValueReason
+            ? { secondValueReason: reasons.secondValueReason }
+            : undefined),
+        };
+
+    // push result to currently last section
+    stat.sectionResults[lastSectionIndex].ruleResults.push({
+      ...(rule.operator != null
+        ? { operator: RuleOperators[rule.operator] }
+        : undefined),
+      action: RulePossibility[rule.action].toLowerCase(),
+      firstValueName: this.ruleConstanstService.getValueHumanName(
+        rule.firstVal,
+        this.configuredServerType,
+      ),
+      firstValue: firstVal,
+      ...(reasons?.firstValueReason
+        ? { firstValueReason: reasons.firstValueReason }
+        : undefined),
+      ...secondValueFields,
+      result: result,
+    });
+  }
+
+  private logMissingOperand(
+    rule: RuleDto,
+    ruleGroup: RuleGroupDto,
+    mediaId: string,
+    firstVal: RuleValueType,
+    secondVal: RuleValueType,
+  ): void {
+    const firstValueName = this.ruleConstanstService.getValueHumanName(
+      rule.firstVal,
+      this.configuredServerType,
+    );
+
+    this.logger.debug(
+      `Skipping rule comparison because a value is unavailable: ` +
+        `ruleGroup="${ruleGroup.name}", section=${rule.section}, ` +
+        `mediaId=${mediaId}, action=${RulePossibility[rule.action]}, ` +
+        `firstValueName=${firstValueName}, firstValue=${JSON.stringify(firstVal)}, ` +
+        `secondValueName=${this.getSecondValueName(rule)}, secondValue=${JSON.stringify(secondVal)}`,
+    );
+  }
+
+  private getSecondValueName(rule: RuleDto): string {
+    if (rule.lastVal) {
+      return this.ruleConstanstService.getValueHumanName(
+        rule.lastVal,
+        this.configuredServerType,
+      );
+    }
+    // Unary actions (EXISTS / NOT_EXISTS) have neither a second value nor a
+    // custom value. Guard against it so this diagnostic-only helper never
+    // throws while logging a skipped comparison (which would abort the run).
+    if (rule.customVal) {
+      return this.ruleConstanstService.getCustomValueIdentifier(rule.customVal)
+        .type;
+    }
+    return 'none';
+  }
+
+  private handleSectionAction(sectionActionAnd: boolean) {
+    if (!sectionActionAnd) {
+      // section action is OR, then push in result array
+      for (const item of this.workerData) {
+        const mediaId = item.id;
+        if (!this.resultIds.has(mediaId)) {
+          this.resultIds.add(mediaId);
+          this.resultData.push(item);
+        }
+      }
+    } else {
+      // section action is AND, then filter media not in work array out of result array
+      const idsInCurrentData = new Set<string>(
+        this.plexData.map((mediaItem) => {
+          return mediaItem.id;
+        }),
+      );
+
+      this.resultData = this.resultData.filter((el) => {
+        const mediaId = el.id;
+        // If in current data.. Otherwise we're removing previously added media
+        if (idsInCurrentData.has(mediaId)) {
+          return this.workerIds.has(mediaId);
+        } else {
+          // If not in current data, skip check
+          return true;
+        }
+      });
+
+      this.resultIds = new Set<string>(
+        this.resultData.map((el) => {
+          return el.id;
+        }),
+      );
+    }
+    // empty workerdata. prepare for execution of new section
+    this.workerData = [];
+    this.workerIds.clear();
+  }
+
+  private doRuleAction(
+    val1: RuleValueType,
+    val2: RuleValueType,
+    action: RulePossibility,
+  ): boolean {
+    if (action === RulePossibility.EXISTS) {
+      return this.hasExistsValue(val1);
+    }
+
+    if (action === RulePossibility.NOT_EXISTS) {
+      return !this.hasExistsValue(val1);
+    }
+
+    if (typeof val1 === 'string') {
+      val1 = val1.toLowerCase();
+    }
+
+    if (typeof val2 === 'string') {
+      val2 = val2.toLowerCase();
+    }
+
+    if (Array.isArray(val1)) {
+      val1 = (val1 as (number | string)[]).map((el) =>
+        typeof el == 'string' ? el.toLowerCase() : el,
+      ) as RuleValueType;
+    }
+
+    if (Array.isArray(val2)) {
+      val2 = (val2 as (number | string)[]).map((el) =>
+        typeof el == 'string' ? el.toLowerCase() : el,
+      ) as RuleValueType;
+    }
+
+    if (action === RulePossibility.BIGGER) {
+      return val1 > val2;
+    }
+
+    if (action === RulePossibility.SMALLER) {
+      return val1 < val2;
+    }
+
+    if (action === RulePossibility.EQUALS) {
+      if (!Array.isArray(val1)) {
+        if (val1 instanceof Date && val2 instanceof Date) {
+          return (
+            new Date(val1.toDateString()).valueOf() ===
+            new Date(val2.toDateString()).valueOf()
+          );
+        }
+
+        if (typeof val1 === 'boolean') {
+          return val1 == val2;
+        }
+
+        return val1 === val2;
+      } else {
+        const val2Array = Array.isArray(val2) ? val2 : [val2];
+
+        if (val1.length === val2Array.length) {
+          const set1 = new Set<RuleValueType>(val1);
+          const set2 = new Set<RuleValueType>(val2Array);
+          return [...set1].every((value) => set2.has(value));
+        } else {
+          return false;
+        }
+      }
+    }
+
+    if (action === RulePossibility.NOT_EQUALS) {
+      return !this.doRuleAction(val1, val2, RulePossibility.EQUALS);
+    }
+
+    if (action === RulePossibility.CONTAINS) {
+      try {
+        if (!Array.isArray(val2)) {
+          return (val1 as unknown[])?.includes(val2);
+        } else {
+          if (val2.length > 0) {
+            return (val2 as (number | string)[]).some((el) => {
+              return (val1 as unknown[])?.includes(el);
+            });
+          } else {
+            return false;
+          }
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    if (action === RulePossibility.CONTAINS_PARTIAL) {
+      try {
+        if (!Array.isArray(val2)) {
+          return (
+            (Array.isArray(val1) ? (val1 as unknown[]) : [val1]).some(
+              (line) => {
+                return typeof line === 'string' &&
+                  val2 != undefined &&
+                  String(val2).length > 0
+                  ? line.includes(String(val2))
+                  : line == val2
+                    ? true
+                    : false;
+              },
+            ) || false
+          );
+        } else {
+          if (val2.length > 0) {
+            return (val2 as string[]).some((el) => {
+              return (
+                (val1 as unknown[]).some((line) => {
+                  return typeof line === 'string' &&
+                    el != undefined &&
+                    el.length > 0
+                    ? line.includes(String(el))
+                    : line == el
+                      ? true
+                      : false;
+                }) || false
+              );
+            });
+          } else {
+            return false;
+          }
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    if (action === RulePossibility.CONTAINS_ALL) {
+      try {
+        if (!Array.isArray(val2)) {
+          return (val1 as unknown[])?.includes(val2);
+        } else {
+          if (val2.length > 0) {
+            return val2.every((el) => {
+              return (val1 as unknown[])?.includes(el);
+            });
+          } else {
+            return false;
+          }
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    if (action === RulePossibility.NOT_CONTAINS) {
+      return !this.doRuleAction(val1, val2, RulePossibility.CONTAINS);
+    }
+
+    if (action === RulePossibility.NOT_CONTAINS_PARTIAL) {
+      return !this.doRuleAction(val1, val2, RulePossibility.CONTAINS_PARTIAL);
+    }
+
+    if (action === RulePossibility.NOT_CONTAINS_ALL) {
+      return !this.doRuleAction(val1, val2, RulePossibility.CONTAINS_ALL);
+    }
+
+    if (action === RulePossibility.BEFORE) {
+      if (!(val1 instanceof Date) || !(val2 instanceof Date)) {
+        return false;
+      }
+      return val1 && val2 ? val1 <= val2 : false;
+    }
+
+    if (action === RulePossibility.AFTER) {
+      if (!(val1 instanceof Date) || !(val2 instanceof Date)) {
+        return false;
+      }
+      return val1 && val2 ? val1 >= val2 : false;
+    }
+
+    if (action === RulePossibility.IN_LAST) {
+      return (
+        (val1 as Date) >= val2 && // time in s
+        (val1 as unknown as Date) <= new Date()
+      );
+    }
+
+    if (action === RulePossibility.IN_NEXT) {
+      return (
+        (val1 as Date) <= val2 && //  time in s
+        (val1 as unknown as Date) >= new Date()
+      );
+    }
+
+    if (action === RulePossibility.COUNT_NOT_EQUALS) {
+      return !this.doRuleAction(val1, val2, RulePossibility.COUNT_EQUALS);
+    }
+    if (
+      [
+        RulePossibility.COUNT_EQUALS,
+        RulePossibility.COUNT_BIGGER,
+        RulePossibility.COUNT_SMALLER,
+      ].includes(action)
+    ) {
+      if (!Array.isArray(val1)) {
+        return false;
+      }
+      if (!Array.isArray(val2) && typeof val2 !== 'number') {
+        return false;
+      }
+      const val2Length = Array.isArray(val2) ? val2.length : val2;
+      if (action === RulePossibility.COUNT_EQUALS) {
+        return val1.length === val2Length;
+      } else if (action === RulePossibility.COUNT_BIGGER) {
+        return val1.length > val2Length;
+      } else if (action === RulePossibility.COUNT_SMALLER) {
+        return val1.length < val2Length;
+      }
+    }
+  }
+
+  private hasExistsValue(val: RuleValueType): boolean {
+    if (val == null) {
+      return false;
+    }
+
+    if (Array.isArray(val) || typeof val === 'string') {
+      return val.length > 0;
+    }
+
+    return true;
+  }
+
+  private isStringParsableToArray(str: string) {
+    try {
+      const array = JSON.parse(str);
+      return Array.isArray(array);
+    } catch (error) {
+      return false;
+    }
+  }
+}

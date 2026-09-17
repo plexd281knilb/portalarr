@@ -1,0 +1,138 @@
+import { Logger } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { setupGracefulShutdown } from '@tygra/nestjs-graceful-shutdown';
+import compression from 'compression';
+import * as fs from 'fs';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
+import path from 'path';
+import { AppModule } from './app/app.module';
+import { resolveCorsOptions } from './app/config/cors';
+import { dataDir } from './app/config/dataDir';
+import { MaintainerrLogger } from './modules/logging/logs.service';
+import { installStdioPipeGuards } from './modules/logging/winston/stdioPipeGuard';
+import { isSharpAvailable, SHARP_UNAVAILABLE_MESSAGE } from './utils/sharp';
+
+// Pre-bootstrap guard so the console.warn/console.error calls below - and any
+// other write before LogsModule loads - cannot crash the process on a broken
+// stdio pipe. The logging module re-installs these (idempotent) for
+// defence-in-depth.
+installStdioPipeGuards();
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+
+  setupGracefulShutdown({ app });
+
+  // The UI bundle is served by this process and monaco alone is several MB, so
+  // without this every asset goes out uncompressed. Registered before the
+  // modules initialise so it also wraps ServeStaticModule. The SSE endpoints
+  // are unaffected: they send Cache-Control: no-transform, which this skips.
+  app.use(compression());
+
+  const basePathEnv = process.env.BASE_PATH?.trim();
+  if (basePathEnv && basePathEnv !== '/') {
+    let bpStart = 0;
+    while (bpStart < basePathEnv.length && basePathEnv[bpStart] === '/') {
+      bpStart += 1;
+    }
+    let bpEnd = basePathEnv.length;
+    while (bpEnd > bpStart && basePathEnv[bpEnd - 1] === '/') {
+      bpEnd -= 1;
+    }
+    const normalizedBasePath = basePathEnv.slice(bpStart, bpEnd);
+
+    if (normalizedBasePath.length > 0) {
+      app.setGlobalPrefix(normalizedBasePath);
+    }
+  }
+
+  const config = new DocumentBuilder().setTitle('Maintainerr').build();
+  const documentFactory = () => SwaggerModule.createDocument(app, config);
+  const document = documentFactory();
+  cleanupOpenApiDoc(document);
+  SwaggerModule.setup('api/swagger', app, document);
+
+  app.useLogger(await app.resolve(MaintainerrLogger));
+
+  const corsOptions = resolveCorsOptions();
+  if (corsOptions) {
+    app.enableCors(corsOptions);
+  }
+
+  if (!isSharpAvailable) {
+    const sharpLogger = await app.resolve(MaintainerrLogger);
+    sharpLogger.setContext('Sharp');
+    sharpLogger.warn(SHARP_UNAVAILABLE_MESSAGE);
+  }
+
+  const apiPort = process.env.UI_PORT || 6246;
+  const apiHostname = process.env.UI_HOSTNAME || '0.0.0.0';
+  await app.listen(apiPort, apiHostname);
+}
+
+function createDataDirectoryStructure() {
+  try {
+    // Check if data directory has read and write permissions
+    fs.accessSync(dataDir, fs.constants.R_OK | fs.constants.W_OK);
+
+    // create logs dir
+    const dir = path.join(dataDir, 'logs');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, {
+        recursive: true,
+        mode: 0o755,
+      });
+    }
+
+    // create overlay user-resource dirs so the list/delete endpoints can
+    // operate on a fresh install without first having to upload something
+    for (const name of ['overlays/fonts', 'overlays/images']) {
+      const overlayDir = path.join(dataDir, name);
+      if (!fs.existsSync(overlayDir)) {
+        fs.mkdirSync(overlayDir, { recursive: true, mode: 0o755 });
+      }
+    }
+
+    // if db already exists, check r/w permissions
+    const db = path.join(dataDir, 'maintainerr.sqlite');
+    if (fs.existsSync(db)) {
+      fs.accessSync(db, fs.constants.R_OK | fs.constants.W_OK);
+    }
+  } catch (error) {
+    console.warn(
+      `THE CONTAINER NO LONGER OPERATES WITH PRIVILEGED USER PERMISSIONS. PLEASE UPDATE YOUR CONFIGURATION ACCORDINGLY: https://github.com/Maintainerr/Maintainerr/releases/tag/v2.0.0`,
+    );
+    console.error(
+      'Could not create or access (files in) the data directory. Please make sure the necessary permissions are set',
+    );
+    process.exit(1);
+  }
+}
+
+createDataDirectoryStructure();
+bootstrap().catch((error) => {
+  console.error(
+    'A fatal error occurred starting the server. This is likely a bug, please report this issue on GitHub.',
+    { error },
+  );
+  process.exit(1);
+});
+
+process
+  .on('unhandledRejection', (err) => {
+    new Logger('main').error(
+      'An unhandledRejection has occurred. This is likely a bug, please report this issue on GitHub.',
+      err,
+    );
+    // We do not exit the process here as the error is unlikely to be fatal.
+  })
+  .on('uncaughtException', (err) => {
+    new Logger('main').error(
+      'The server has crashed because of an uncaughtException. This is likely a bug, please report this issue on GitHub.',
+      err,
+    );
+    process.exit(2);
+  });

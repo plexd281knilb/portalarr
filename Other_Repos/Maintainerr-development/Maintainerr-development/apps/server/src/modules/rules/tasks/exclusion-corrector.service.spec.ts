@@ -1,0 +1,287 @@
+import { createMockLogger } from '../../../../test/utils/data';
+import { ExclusionTypeCorrectorService } from './exclusion-corrector.service';
+
+describe('ExclusionTypeCorrectorService', () => {
+  const logger = createMockLogger();
+
+  const createQueryBuilder = (results: any[]) => ({
+    where: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue(results),
+  });
+
+  const createService = (options?: {
+    exclusions?: any[];
+    collections?: any[];
+    ruleGroups?: any[];
+    isSetup?: boolean;
+    mediaServer?: { getMetadataBatch?: jest.Mock; itemExists?: jest.Mock };
+  }) => {
+    const {
+      exclusions = [],
+      collections = [],
+      ruleGroups = [],
+      isSetup = false,
+    } = options ?? {};
+
+    const exclusionRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(createQueryBuilder(exclusions)),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const collectionRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(createQueryBuilder(collections)),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const ruleGroupRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(createQueryBuilder(ruleGroups)),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const mediaServer = {
+      getMetadataBatch: jest.fn().mockResolvedValue([]),
+      itemExists: jest.fn().mockResolvedValue(true),
+      ...options?.mediaServer,
+    };
+
+    const mediaServerFactory = {
+      getService: jest.fn().mockResolvedValue(mediaServer),
+    };
+
+    const settings = {
+      testSetup: jest.fn().mockResolvedValue(isSetup),
+    };
+
+    const rulesService = {
+      removeExclusion: jest.fn(),
+    };
+
+    const service = new ExclusionTypeCorrectorService(
+      mediaServerFactory as any,
+      settings as any,
+      rulesService as any,
+      exclusionRepo as any,
+      collectionRepo as any,
+      ruleGroupRepo as any,
+      logger as any,
+    );
+
+    return {
+      service,
+      exclusionRepo,
+      collectionRepo,
+      ruleGroupRepo,
+      settings,
+      mediaServerFactory,
+      mediaServer,
+      rulesService,
+    };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('onModuleInit - legacy integer type conversion', () => {
+    it('converts legacy integer-as-string exclusion types to MediaItemType strings', async () => {
+      const exclusions = [
+        { id: 1, type: '1' },
+        { id: 2, type: '2' },
+        { id: 3, type: '3' },
+        { id: 4, type: '4' },
+      ];
+
+      const { service, exclusionRepo } = createService({ exclusions });
+
+      await service.onModuleInit();
+
+      expect(exclusions[0].type).toBe('movie');
+      expect(exclusions[1].type).toBe('show');
+      expect(exclusions[2].type).toBe('season');
+      expect(exclusions[3].type).toBe('episode');
+      expect(exclusionRepo.save).toHaveBeenCalledWith(exclusions);
+    });
+
+    it('converts legacy integer-as-string collection types to MediaItemType strings', async () => {
+      const collections = [
+        { id: 10, type: '1' },
+        { id: 11, type: '2' },
+      ];
+
+      const { service, collectionRepo } = createService({ collections });
+
+      await service.onModuleInit();
+
+      expect(collections[0].type).toBe('movie');
+      expect(collections[1].type).toBe('show');
+      expect(collectionRepo.save).toHaveBeenCalledWith(collections);
+    });
+
+    it('converts legacy integer-as-string rule_group dataType to MediaItemType strings', async () => {
+      const ruleGroups = [
+        { id: 20, dataType: '2' },
+        { id: 21, dataType: '3' },
+      ];
+
+      const { service, ruleGroupRepo } = createService({ ruleGroups });
+
+      await service.onModuleInit();
+
+      expect(ruleGroups[0].dataType).toBe('show');
+      expect(ruleGroups[1].dataType).toBe('season');
+      expect(ruleGroupRepo.save).toHaveBeenCalledWith(ruleGroups);
+    });
+
+    it('does not save when no legacy types are found', async () => {
+      const { service, exclusionRepo, collectionRepo, ruleGroupRepo } =
+        createService();
+
+      await service.onModuleInit();
+
+      expect(exclusionRepo.save).not.toHaveBeenCalled();
+      expect(collectionRepo.save).not.toHaveBeenCalled();
+      expect(ruleGroupRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('still converts types even when conversion error occurs in one table', async () => {
+      const ruleGroups = [{ id: 1, dataType: '1' }];
+      const { service, ruleGroupRepo } = createService({ ruleGroups });
+
+      // Even if onModuleInit catches an error, conversion should have completed
+      await service.onModuleInit();
+
+      expect(ruleGroups[0].dataType).toBe('movie');
+      expect(ruleGroupRepo.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('onModuleInit - correctExclusionTypes', () => {
+    it('runs both type conversion and exclusion correction during startup', async () => {
+      const ruleGroups = [{ id: 1, dataType: '1' }];
+      const { service, ruleGroupRepo, settings } = createService({
+        ruleGroups,
+        isSetup: true,
+      });
+
+      await service.onModuleInit();
+
+      expect(ruleGroups[0].dataType).toBe('movie');
+      expect(ruleGroupRepo.save).toHaveBeenCalled();
+      expect(settings.testSetup).toHaveBeenCalled();
+    });
+
+    it('does not call correctExclusionTypes when media server is not configured', async () => {
+      const { service, settings, mediaServerFactory } = createService({
+        isSetup: false,
+      });
+
+      await service.onModuleInit();
+
+      expect(settings.testSetup).toHaveBeenCalled();
+      expect(mediaServerFactory.getService).not.toHaveBeenCalled();
+    });
+
+    it('logs warning when correctExclusionTypes fails', async () => {
+      const { service, settings } = createService({ isSetup: true });
+      settings.testSetup.mockRejectedValue(new Error('connection refused'));
+
+      await service.onModuleInit();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Exclusion type corrections failed',
+      );
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'connection refused' }),
+      );
+    });
+  });
+
+  describe('correctExclusionTypes - stale vs unreachable media (#3307 follow-up)', () => {
+    it('backfills the type and saves only corrected rows', async () => {
+      const exclusions = [{ id: 1, type: null, mediaServerId: '11' }];
+      const { service, exclusionRepo, rulesService, mediaServer } =
+        createService({
+          exclusions,
+          isSetup: true,
+          mediaServer: {
+            getMetadataBatch: jest
+              .fn()
+              .mockResolvedValue([{ id: '11', type: 'movie' }]),
+          },
+        });
+
+      await service.onModuleInit();
+
+      expect(exclusions[0].type).toBe('movie');
+      expect(rulesService.removeExclusion).not.toHaveBeenCalled();
+      expect(exclusionRepo.save).toHaveBeenLastCalledWith([exclusions[0]]);
+      // An item the batch answered for needs no confirmation of its own.
+      expect(mediaServer.itemExists).not.toHaveBeenCalled();
+    });
+
+    it('removes an exclusion only on a confirmed 404 and does not re-save the removed row', async () => {
+      const exclusions = [{ id: 1, type: null, mediaServerId: '11' }];
+      const { service, exclusionRepo, rulesService } = createService({
+        exclusions,
+        isSetup: true,
+        mediaServer: {
+          itemExists: jest.fn().mockResolvedValue(false),
+        },
+      });
+
+      await service.onModuleInit();
+
+      expect(rulesService.removeExclusion).toHaveBeenCalledWith(1);
+      // Saving the full list would re-insert the row removed above.
+      expect(exclusionRepo.save).toHaveBeenLastCalledWith([]);
+    });
+
+    it('keeps the exclusion when the existence check is inconclusive', async () => {
+      const exclusions = [{ id: 1, type: null, mediaServerId: '11' }];
+      const { service, rulesService } = createService({
+        exclusions,
+        isSetup: true,
+        mediaServer: {
+          itemExists: jest.fn().mockRejectedValue(new Error('unreachable')),
+        },
+      });
+
+      await service.onModuleInit();
+
+      expect(rulesService.removeExclusion).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Bug #2358 regression: collection clearing on rule save', () => {
+    /**
+     * Reproduces the root cause of Bug #2358 (collection clearing).
+     *
+     * After the JellyfinSupport migration, rule_group.dataType contains
+     * integer-as-string values like '2' instead of 'show'. When a user
+     * saves a rule change, rules.service.ts compares:
+     *   group.dataType !== params.dataType  →  '2' !== 'show'  →  TRUE
+     * This triggers a full collection clear.
+     *
+     * The fix ensures conversion runs in onModuleInit() (synchronous with
+     * startup) rather than @Timeout(5000) (5s delay, race condition).
+     */
+    it('converts dataType "2" to "show" so rule save comparison succeeds', async () => {
+      const ruleGroup = { id: 42, dataType: '2' };
+      const { service } = createService({ ruleGroups: [ruleGroup] });
+
+      await service.onModuleInit();
+
+      // After conversion, dataType should match what the frontend sends
+      const frontendDataType = 'show';
+      expect(ruleGroup.dataType).toBe(frontendDataType);
+      // This comparison caused the bug: group.dataType !== params.dataType
+      expect(ruleGroup.dataType !== frontendDataType).toBe(false);
+    });
+  });
+});

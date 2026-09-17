@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "ui": "stream",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": ["TELEMETRY", "TELEMETRY_URL"]
+    },
+    "test": {
+      "dependsOn": ["check-types"]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "format": {
+      "dependsOn": ["^format"]
+    },
+    "format:check": {
+      "dependsOn": ["^format:check"]
+    },
+    "check-types": {
+      "dependsOn": ["^build"]
+    }
+  }
+}

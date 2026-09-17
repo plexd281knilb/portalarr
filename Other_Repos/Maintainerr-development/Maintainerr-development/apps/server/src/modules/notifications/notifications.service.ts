@@ -1,0 +1,1294 @@
+import {
+  BasicResponseDto,
+  MaintainerrEvent,
+  MediaItem,
+  RuleHandlerQueueStatusUpdatedEventDto,
+} from '@maintainerr/contracts';
+import {
+  Injectable,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import { InjectRepository } from '@nestjs/typeorm';
+import { isEqual, sortBy } from 'lodash';
+import { DataSource, Repository } from 'typeorm';
+import { getErrorMessage } from '../../utils/connection-error';
+import { MediaServerFactory } from '../api/media-server/media-server.factory';
+import { IMediaServerService } from '../api/media-server/media-server.interface';
+import {
+  CollectionHandlerFailedDto,
+  CollectionMediaAddedDto,
+  CollectionMediaHandledDto,
+  CollectionMediaRemovedDto,
+  NotificationMediaItem,
+  OverlayAppliedDto,
+  OverlayRevertedDto,
+  RuleHandlerFailedDto,
+} from '../events/events.dto';
+import {
+  MaintainerrLogger,
+  MaintainerrLoggerFactory,
+} from '../logging/logs.service';
+import { RuleGroup } from '../rules/entities/rule-group.entities';
+import { SettingsDataService } from '../settings/settings-data.service';
+import type { NotificationAgent, NotificationPayload } from './agents/agent';
+import DiscordAgent from './agents/discord';
+import EmailAgent from './agents/email';
+import GotifyAgent from './agents/gotify';
+import LunaSeaAgent from './agents/lunasea';
+import NtfyAgent from './agents/ntfy';
+import PushbulletAgent from './agents/pushbullet';
+import PushoverAgent from './agents/pushover';
+import SlackAgent from './agents/slack';
+import TelegramAgent from './agents/telegram';
+import WebhookAgent from './agents/webhook';
+import { Notification } from './entities/notification.entities';
+import {
+  DiscordOptions,
+  EmailOptions,
+  GotifyOptions,
+  LunaSeaOptions,
+  NotificationAgentKey,
+  NotificationAgentOptions,
+  NotificationType,
+  NtfyOptions,
+  PushbulletOptions,
+  PushoverOptions,
+  SlackOptions,
+  TelegramOptions,
+  WebhookOptions,
+} from './notifications-interfaces';
+
+export const hasNotificationType = (
+  type: NotificationType,
+  value: NotificationType[],
+): boolean => {
+  return value.includes(type);
+};
+
+@Injectable()
+export class NotificationService implements OnModuleInit {
+  private activeAgents: NotificationAgent[] = [];
+
+  // Dedupe state for notifications fired during a rule-executor batch
+  // (one processQueue() pass). Two same-titled automatic rule groups
+  // sharing a Plex collection both emit `Media Added`/`Removed` for the
+  // same item; without dedupe, the user sees N copies (one per sibling
+  // rule). State resets at every batch transition so notifications from
+  // *different* runs are never collapsed.
+  private batchActive = false;
+  private readonly batchSeenKeys = new Set<string>();
+
+  // Collection handling acts on one item at a time, so every removal emits its
+  // own CollectionMedia_Removed - one webhook per item, which Discord answers
+  // with 429 and drops. Buffer them for the length of a handler run and send
+  // one notification per collection at the end. Rule runs already batch at the
+  // emitter, so they keep sending immediately.
+  private collectionRunActive = false;
+  private readonly collectionRunRemovals = new Map<
+    number,
+    CollectionMediaRemovedDto
+  >();
+
+  constructor(
+    @InjectRepository(Notification)
+    private readonly notificationRepo: Repository<Notification>,
+    @InjectRepository(RuleGroup)
+    private readonly ruleGroupRepo: Repository<RuleGroup>,
+    private readonly connection: DataSource,
+    private readonly settings: SettingsDataService,
+    private readonly mediaServerFactory: MediaServerFactory,
+    private readonly logger: MaintainerrLogger,
+    private readonly loggerFactory: MaintainerrLoggerFactory,
+  ) {
+    logger.setContext(NotificationService.name);
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.registerConfiguredAgents();
+  }
+
+  private async getMediaServer(): Promise<IMediaServerService> {
+    return this.mediaServerFactory.getService();
+  }
+
+  public registerAgents = (
+    agents: NotificationAgent[],
+    skiplog = false,
+  ): void => {
+    this.activeAgents = [...this.activeAgents, ...agents];
+
+    if (!skiplog) {
+      this.logger.log(
+        `Registered ${agents.length} notification agent${agents.length === 1 ? '' : 's'}`,
+      );
+    }
+  };
+
+  public getActiveAgents = () => {
+    return this.activeAgents;
+  };
+
+  /** Returns each agent's outcome, so a caller can tell whether anyone took it. */
+  public async sendNotification(
+    type: NotificationType,
+    payload: NotificationPayload,
+    rulegroup?: RuleGroup,
+  ): Promise<string[]> {
+    const results = await Promise.allSettled(
+      this.activeAgents.map(async (agent) => {
+        // if rulegroup is supplied, then only send the notification if configured
+        if (
+          rulegroup == undefined ||
+          rulegroup?.notifications?.find(
+            (n) => n.id === agent.getNotification().id,
+          )
+        )
+          return await this.sendNotificationToAgent(type, payload, agent);
+
+        return 'Agent is not connected to this rule group.';
+      }),
+    );
+
+    return results.map((result) =>
+      result.status === 'fulfilled' ? result.value : 'Failure',
+    );
+  }
+
+  public async sendNotificationToAgent(
+    type: NotificationType,
+    payload: NotificationPayload,
+    agent: NotificationAgent,
+  ): Promise<string> {
+    if (this.canSend(type, agent)) {
+      return await agent.send(type, payload);
+    }
+    return Promise.resolve('Agent is not allowed to send this message.');
+  }
+
+  /**
+   * Whether any configured agent would actually deliver this type. Lets a
+   * producer skip work (and skip marking something as announced) when nobody
+   * is listening yet.
+   */
+  public hasSubscribers(type: NotificationType): boolean {
+    return this.activeAgents.some((agent) => this.canSend(type, agent));
+  }
+
+  private canSend(type: NotificationType, agent: NotificationAgent): boolean {
+    return agent.shouldSend() && !!agent.getSettings().types?.includes(type);
+  }
+
+  async addNotificationConfiguration(payload: {
+    id?: number;
+    agent: NotificationAgentKey;
+    name: string;
+    enabled: boolean;
+    types: number[];
+    aboutScale: number;
+    options: NotificationAgentOptions;
+  }): Promise<BasicResponseDto> {
+    try {
+      if (payload.id !== undefined) {
+        // update
+        await this.connection
+          .createQueryBuilder()
+          .update(Notification)
+          .set({
+            name: payload.name,
+            agent: payload.agent,
+            enabled: payload.enabled,
+            aboutScale: payload.aboutScale,
+            types: payload.types,
+            options: payload.options,
+          })
+          .where('id = :id', { id: payload.id })
+          .execute();
+      } else {
+        await this.connection
+          .createQueryBuilder()
+          .insert()
+          .into(Notification)
+          .values({
+            name: payload.name,
+            agent: payload.agent,
+            enabled: payload.enabled,
+            aboutScale: payload.aboutScale,
+            types: payload.types,
+            options: payload.options,
+          })
+          .execute();
+      }
+
+      // reset & reload notification agents
+      await this.registerConfiguredAgents(true);
+      return { code: 1, status: 'OK', message: 'Success' };
+    } catch (error) {
+      this.logger.error(
+        'Adding a new notification configuration failed',
+        error,
+      );
+      return {
+        code: 0,
+        status: 'NOK',
+        message: getErrorMessage(
+          error,
+          'Failed to add notification configuration',
+        ),
+      };
+    }
+  }
+
+  async connectNotificationConfigurationToRule(payload: {
+    rulegroupId: number;
+    notificationId: number;
+  }) {
+    try {
+      if (payload.rulegroupId && payload.notificationId) {
+        const ruleGroup = await this.ruleGroupRepo.findOne({
+          where: { id: payload.rulegroupId },
+        });
+
+        const notificationConfig = await this.notificationRepo.findOne({
+          where: { id: payload.notificationId },
+        });
+
+        if (ruleGroup && notificationConfig) {
+          ruleGroup.notifications.push(notificationConfig);
+          await this.ruleGroupRepo.save(ruleGroup);
+          return { code: 1, result: 'success' };
+        }
+      }
+      this.logger.warn('Connecting the notification configuration failed');
+      return { code: 0, result: 'failed' };
+    } catch (error) {
+      this.logger.error(
+        'Connecting the notification configuration failed',
+        error,
+      );
+      return {
+        code: 0,
+        result: getErrorMessage(
+          error,
+          'Failed to connect notification configuration',
+        ),
+      };
+    }
+  }
+
+  async disconnectNotificationConfigurationFromRule(payload: {
+    rulegroupId: number;
+    notificationId: number;
+  }) {
+    try {
+      if (payload.rulegroupId && payload.notificationId) {
+        const ruleGroup = await this.ruleGroupRepo.findOne({
+          where: { id: payload.rulegroupId },
+        });
+
+        const notificationConfig = await this.notificationRepo.findOne({
+          where: { id: payload.notificationId },
+        });
+
+        if (ruleGroup && notificationConfig) {
+          ruleGroup.notifications = ruleGroup.notifications.filter(
+            (c) => c.id !== payload.notificationId,
+          );
+          await this.ruleGroupRepo.save(ruleGroup);
+          return { code: 1, result: 'success' };
+        }
+      }
+
+      return { code: 0, result: 'failed' };
+    } catch (error) {
+      this.logger.error(
+        'Disconnecting the notification configuration failed',
+        error,
+      );
+      return {
+        code: 0,
+        result: getErrorMessage(
+          error,
+          'Failed to disconnect notification configuration',
+        ),
+      };
+    }
+  }
+
+  async getNotificationConfigurations(withRelation = false) {
+    try {
+      if (withRelation) {
+        const notifConfigs = await this.notificationRepo.find();
+        // hack to get the relationship working. I was tired of the typeORM headache
+        return await Promise.all(
+          notifConfigs.map(async (n) => {
+            n.rulegroups = await this.ruleGroupRepo.find({
+              where: { notifications: { id: n.id } },
+            });
+            return n;
+          }),
+        );
+      }
+
+      return await this.notificationRepo.find();
+    } catch (error) {
+      this.logger.error('Fetching Notification configurations failed');
+      this.logger.debug(error);
+    }
+  }
+
+  public createDummyTestAgent(payload: {
+    id?: number;
+    agent: NotificationAgentKey;
+    name: string;
+    enabled: boolean;
+    types: number[];
+    aboutScale: number;
+    options: NotificationAgentOptions;
+  }) {
+    payload.types = [...payload.types, NotificationType.TEST_NOTIFICATION];
+
+    const notification = new Notification();
+    notification.id = -1;
+    notification.agent = payload.agent;
+    notification.enabled = payload.enabled;
+    notification.aboutScale = payload.aboutScale;
+    notification.name = payload.name;
+    notification.options = payload.options;
+    notification.types = payload.types;
+
+    return this.createAgent(notification);
+  }
+
+  public async registerConfiguredAgents(skiplog = false) {
+    const configuredAgents = await this.getNotificationConfigurations();
+
+    const sameAgents = (a: Notification[], b: Notification[]) =>
+      isEqual(sortBy(a, 'id'), sortBy(b, 'id'));
+
+    const notifications = this.activeAgents.map((e) => e.getNotification());
+
+    // Only (re-)register agents when required
+    if (!sameAgents(notifications, configuredAgents)) {
+      this.activeAgents = [];
+
+      // A row whose agent key this build doesn't know (a downgrade after
+      // configuring a newer agent type) yields no agent. Drop it here rather
+      // than letting an undefined entry reach the send paths.
+      const agents: NotificationAgent[] = [];
+      for (const notification of configuredAgents ?? []) {
+        const agent = this.createAgent(notification);
+
+        if (!agent) {
+          this.logger.warn(
+            `Skipping notification configuration '${notification.name}': unknown agent '${notification.agent}'`,
+          );
+          continue;
+        }
+
+        agents.push(agent);
+      }
+
+      this.registerAgents(agents, skiplog);
+    }
+  }
+
+  private createAgent(notification: Notification) {
+    switch (notification.agent as NotificationAgentKey) {
+      case NotificationAgentKey.DISCORD:
+        return new DiscordAgent(
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as DiscordOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.PUSHOVER:
+        return new PushoverAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as PushoverOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.EMAIL:
+        return new EmailAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as EmailOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.GOTIFY:
+        return new GotifyAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as GotifyOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.LUNASEA:
+        return new LunaSeaAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as LunaSeaOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.NTFY:
+        return new NtfyAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as NtfyOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.PUSHBULLET:
+        return new PushbulletAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as PushbulletOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.SLACK:
+        return new SlackAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as SlackOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.TELEGRAM:
+        return new TelegramAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as TelegramOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+      case NotificationAgentKey.WEBHOOK:
+        return new WebhookAgent(
+          this.settings,
+          {
+            enabled: notification.enabled,
+            types: notification.types,
+            options: notification.options as WebhookOptions,
+          },
+          this.loggerFactory.createLogger(),
+          notification,
+        );
+    }
+  }
+
+  async deleteNotificationConfiguration(notificationId: number) {
+    try {
+      await this.notificationRepo.delete(notificationId);
+
+      // reset & reload notification agents
+      await this.registerConfiguredAgents(true);
+
+      return { code: 1, result: 'success' };
+    } catch (error) {
+      this.logger.error('Notification configuration removal failed');
+      this.logger.debug(error);
+      return {
+        code: 0,
+        result: getErrorMessage(
+          error,
+          'Failed to remove notification configuration',
+        ),
+      };
+    }
+  }
+
+  public getTypes() {
+    return Object.keys(NotificationType)
+      .filter(
+        (key) =>
+          isNaN(Number(key)) &&
+          NotificationType[key] !== NotificationType.TEST_NOTIFICATION,
+      )
+      .map((key) => ({
+        title: this.humanizeTitle(key),
+        id: NotificationType[key],
+      }));
+  }
+
+  // Helper function to convert enum keys to human-readable titles
+  private humanizeTitle(key: string): string {
+    return key
+      .split('_')
+      .join(' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  public getAgentSpec() {
+    return [
+      {
+        name: NotificationAgentKey.EMAIL,
+        friendlyName: 'Email',
+        options: [
+          { field: 'emailFrom', type: 'text', required: true, extraInfo: '' },
+          { field: 'senderName', type: 'text', required: true, extraInfo: '' },
+          { field: 'emailTo', type: 'text', required: true, extraInfo: '' },
+          { field: 'smtpHost', type: 'text', required: true, extraInfo: '' },
+          { field: 'smtpPort', type: 'number', required: true, extraInfo: '' },
+          {
+            field: 'secure',
+            type: 'checkbox',
+            required: false,
+            extraInfo: 'TLS: Use implicit TLS',
+          },
+          {
+            field: 'ignoreTls',
+            type: 'checkbox',
+            required: false,
+            extraInfo: 'TLS: None',
+          },
+          {
+            field: 'requireTls',
+            type: 'checkbox',
+            required: false,
+            extraInfo: 'TLS: Always use STARTLS',
+          },
+          { field: 'authUser', type: 'text', required: false, extraInfo: '' },
+          {
+            field: 'authPass',
+            type: 'password',
+            required: false,
+            extraInfo: '',
+          },
+          {
+            field: 'allowSelfSigned',
+            type: 'checkbox',
+            required: false,
+            extraInfo: '',
+          },
+          { field: 'pgpKey', type: 'text', required: false, extraInfo: '' },
+          {
+            field: 'pgpPassword',
+            type: 'password',
+            required: false,
+            extraInfo: '',
+          },
+        ],
+      },
+      {
+        name: NotificationAgentKey.DISCORD,
+        friendlyName: 'Discord',
+        options: [
+          { field: 'webhookUrl', type: 'text', required: true, extraInfo: '' },
+          {
+            field: 'botUsername',
+            type: 'text',
+            required: false,
+            extraInfo: '',
+          },
+          {
+            field: 'botAvatarUrl',
+            type: 'text',
+            required: false,
+            extraInfo: '',
+          },
+        ],
+      },
+      {
+        name: NotificationAgentKey.LUNASEA,
+        friendlyName: 'LunaSea',
+        options: [
+          { field: 'webhookUrl', type: 'text', required: true, extraInfo: '' },
+          {
+            field: 'profileName',
+            type: 'text',
+            required: false,
+            extraInfo: 'Only required if not using the default profile',
+          },
+        ],
+      },
+      {
+        name: NotificationAgentKey.SLACK,
+        friendlyName: 'Slack',
+        options: [
+          { field: 'webhookUrl', type: 'text', required: true, extraInfo: '' },
+        ],
+      },
+      {
+        name: NotificationAgentKey.TELEGRAM,
+        friendlyName: 'Telegram',
+        options: [
+          {
+            field: 'botAuthToken',
+            type: 'text',
+            required: true,
+            extraInfo: '',
+          },
+          {
+            field: 'botUsername',
+            type: 'text',
+            required: false,
+            extraInfo:
+              'Allow users to also start a chat with your bot and configure their own notifications',
+          },
+          {
+            field: 'chatId',
+            type: 'text',
+            required: true,
+            extraInfo:
+              'Start a chat with your bot, add @get_id_bot, and issue the /my_id command',
+          },
+          {
+            field: 'sendSilently',
+            type: 'checkbox',
+            required: false,
+            extraInfo: 'Send notifications with no sound',
+          },
+        ],
+      },
+      {
+        name: NotificationAgentKey.PUSHBULLET,
+        friendlyName: 'Pushbullet',
+        options: [
+          { field: 'accessToken', type: 'text', required: true, extraInfo: '' },
+          { field: 'channelTag', type: 'text', required: false, extraInfo: '' },
+        ],
+      },
+      {
+        name: NotificationAgentKey.PUSHOVER,
+        friendlyName: 'Pushover',
+        options: [
+          { field: 'accessToken', type: 'text', required: true, extraInfo: '' },
+          {
+            field: 'userToken',
+            type: 'text',
+            required: true,
+            extraInfo: 'Your 30-character user or group identifier',
+          },
+          { field: 'sound', type: 'text', required: false, extraInfo: '' },
+        ],
+      },
+      {
+        name: NotificationAgentKey.WEBHOOK,
+        friendlyName: 'Webhook',
+        options: [
+          { field: 'webhookUrl', type: 'text', required: true, extraInfo: '' },
+          { field: 'jsonPayload', type: 'json', required: true, extraInfo: '' },
+          { field: 'authHeader', type: 'text', required: false, extraInfo: '' },
+        ],
+      },
+      {
+        name: NotificationAgentKey.GOTIFY,
+        friendlyName: 'Gotify',
+        options: [
+          { field: 'url', type: 'text', required: true, extraInfo: '' },
+          { field: 'token', type: 'text', required: true, extraInfo: '' },
+        ],
+      },
+      {
+        name: NotificationAgentKey.NTFY,
+        friendlyName: 'Ntfy',
+        options: [
+          { field: 'url', type: 'text', required: true, extraInfo: '' },
+          { field: 'topic', type: 'text', required: true, extraInfo: '' },
+          { field: 'token', type: 'text', required: false, extraInfo: '' },
+        ],
+      },
+    ];
+  }
+
+  public async handleNotification(
+    type: NotificationType,
+    mediaItems?: NotificationMediaItem[],
+    collectionName?: string,
+    dayAmount?: number,
+    agent?: NotificationAgent,
+    identifier?: { type: string; value: number },
+  ) {
+    const { subject, message } = this.getContent(
+      type,
+      mediaItems && mediaItems.length > 1,
+    );
+
+    const payload: NotificationPayload = {
+      subject,
+      message,
+    };
+
+    payload.message = await this.transformMessageContent(
+      message,
+      mediaItems,
+      collectionName,
+      dayAmount,
+    );
+
+    // add extra fields
+    payload.extra = [];
+    payload.extra.push({ name: 'collectionName', value: collectionName });
+    payload.extra.push({ name: 'dayAmount', value: dayAmount?.toString() });
+    payload.extra.push({
+      name: 'mediaItems',
+      // The identity an external workflow needs, and nothing else from the
+      // snapshot: `requestedBy` to know who to ask before deletion, and
+      // `type`/`title`/`providerIds` to still identify the item once deletion
+      // has invalidated its media server id. `title` is the message's own
+      // rendering, so both name the item the same way. `providerIds` are the
+      // item's own: a season or episode carries season/episode-scoped ids (a
+      // TVDB season id, not the series one), so a consumer keying a show-level
+      // list off them has to resolve the series itself.
+      value: JSON.stringify(
+        mediaItems?.map((item) => ({
+          mediaServerId: item.mediaServerId,
+          ...(item.metadata
+            ? {
+                type: item.metadata.type,
+                title: this.getTitle(item.metadata),
+                providerIds: item.metadata.providerIds,
+              }
+            : {}),
+          ...(item.requestedBy?.length
+            ? { requestedBy: item.requestedBy }
+            : {}),
+        })),
+      ),
+    });
+
+    // get the rulegroup when available
+    let rulegroup = undefined;
+    if (identifier) {
+      switch (identifier.type) {
+        case 'rulegroup':
+          rulegroup = await this.ruleGroupRepo.findOne({
+            where: {
+              id: +identifier.value,
+            },
+          });
+          break;
+        case 'collection':
+          rulegroup = await this.ruleGroupRepo.findOne({
+            where: {
+              collectionId: +identifier.value,
+            },
+          });
+          break;
+      }
+    }
+
+    // notify
+    if (agent) {
+      return this.sendNotificationToAgent(type, payload, agent);
+    } else {
+      await this.sendNotification(type, payload, rulegroup);
+      return 'Success';
+    }
+  }
+
+  /**
+   * Announces a newer Maintainerr release to every agent subscribed to the
+   * type. Separate from `handleNotification` because it substitutes versions
+   * rather than media, and carries no collection or day count to put in
+   * `extra`. Returns whether an agent accepted it.
+   */
+  public async handleUpdateAvailableNotification(
+    currentVersion: string,
+    newVersion: string,
+    releaseUrl?: string,
+  ): Promise<boolean> {
+    const type = NotificationType.UPDATE_AVAILABLE;
+    const { subject, message } = this.getContent(type, false);
+
+    const results = await this.sendNotification(type, {
+      subject,
+      message: message
+        .replace('{current_version}', currentVersion)
+        .replace('{new_version}', newVersion)
+        .replace(
+          '{release_notes}',
+          releaseUrl ? `\n\nRelease notes: ${releaseUrl}` : '',
+        ),
+      extra: [
+        { name: 'currentVersion', value: currentVersion },
+        { name: 'newVersion', value: newVersion },
+        ...(releaseUrl ? [{ name: 'releaseUrl', value: releaseUrl }] : []),
+      ],
+    });
+
+    return results.includes('Success');
+  }
+
+  private getContent(
+    type: NotificationType,
+    multiple: boolean,
+    dayAmount?: number,
+  ): { subject: string; message: string } {
+    let subject: string;
+
+    let message: string;
+
+    if (!multiple) {
+      switch (type) {
+        case NotificationType.TEST_NOTIFICATION:
+          subject = 'Test Notification';
+          message =
+            "\uD83D\uDD0D Just checking if this thing works... if you're seeing this, success! If not, well... we have a problem!";
+          break;
+        case NotificationType.COLLECTION_HANDLING_FAILED:
+          subject = 'Collection Handling Failed';
+          message =
+            "⚠️ Couldn't finish handling one or more items in '{collection_name}'. Check the Maintainerr logs for details.";
+          break;
+        case NotificationType.RULE_HANDLING_FAILED:
+          subject = 'Rule Handling Failed';
+          message =
+            '⚠️ Oops! Something went wrong while processing your rules.';
+          break;
+        case NotificationType.MEDIA_ABOUT_TO_BE_HANDLED:
+          subject = 'Media About to be Handled';
+          message =
+            "⏰ Reminder: '{media_title}'{requested_by} will be handled in {days} days. If you want to keep it, make sure to take action before it's gone. Don’t miss out!";
+          break;
+        case NotificationType.MEDIA_ADDED_TO_COLLECTION:
+          subject = 'Media Added to Collection';
+          message = `\uD83D\uDCC2 '{media_title}' has been added to '{collection_name}'.`;
+          if (dayAmount != null) {
+            message += ' The item will be handled in {days} days.';
+          }
+          break;
+        case NotificationType.MEDIA_REMOVED_FROM_COLLECTION:
+          subject = 'Media Removed from Collection';
+          message = `\uD83D\uDCC2 '{media_title}' has been removed from '{collection_name}'.`;
+          if (dayAmount != null) {
+            message += ` It won't be handled anymore.`;
+          }
+          break;
+        case NotificationType.MEDIA_HANDLED:
+          subject = 'Media Handled';
+          message =
+            "✅ '{media_title}' has been handled by '{collection_name}'.";
+          break;
+        case NotificationType.OVERLAY_APPLIED:
+          subject = 'Overlay Applied';
+          message =
+            "🖼️ Overlay has been applied to '{media_title}' in '{collection_name}'.";
+          break;
+        case NotificationType.OVERLAY_REVERTED:
+          subject = 'Overlay Reverted';
+          message =
+            "↩️ Overlay has been reverted for '{media_title}' in '{collection_name}'.";
+          break;
+        case NotificationType.UPDATE_AVAILABLE:
+          subject = 'Update Available';
+          // {release_notes} carries its own separator so the single replace
+          // always fires, collapsing to '' for a branch build that has no
+          // release page. A raw token can never reach a user.
+          message =
+            "📦 Maintainerr {new_version} is available. You're running {current_version}.{release_notes}\n\nHow to update: https://docs.maintainerr.info/installation/#updating";
+          break;
+      }
+    } else {
+      switch (type) {
+        case NotificationType.MEDIA_ABOUT_TO_BE_HANDLED:
+          subject = 'Media About to be Handled';
+          message =
+            "⏰ Reminder: These media items will be handled in {days} days. If you want to keep them, make sure to take action before they're gone. Don’t miss out!\n\n{media_items}";
+          break;
+        case NotificationType.MEDIA_ADDED_TO_COLLECTION:
+          subject = 'Media Added to Collection';
+          message = `\uD83D\uDCC2 These media items have been added to '{collection_name}'.`;
+          if (dayAmount != null) {
+            message +=
+              ' The items will be handled in {days} days.\n\n{media_items}';
+          } else {
+            message += '\n\n{media_items}';
+          }
+          break;
+        case NotificationType.MEDIA_REMOVED_FROM_COLLECTION:
+          subject = 'Media Removed from Collection';
+          message = `\uD83D\uDCC2 These media items have been removed from '{collection_name}'.`;
+          if (dayAmount != null) {
+            message +=
+              ' The items will not be handled anymore.\n\n{media_items}';
+          } else {
+            message += '\n\n{media_items}';
+          }
+          break;
+        case NotificationType.MEDIA_HANDLED:
+          subject = 'Media Handled';
+          message =
+            "✅ These media items have been handled by '{collection_name}'.\n\n{media_items}";
+          break;
+        case NotificationType.OVERLAY_APPLIED:
+          subject = 'Overlay Applied';
+          message =
+            "🖼️ Overlays have been applied to these media items in '{collection_name}'.\n\n{media_items}";
+          break;
+        case NotificationType.OVERLAY_REVERTED:
+          subject = 'Overlay Reverted';
+          message =
+            "↩️ Overlays have been reverted for these media items in '{collection_name}'.\n\n{media_items}";
+          break;
+      }
+    }
+
+    return {
+      subject,
+      message,
+    };
+  }
+
+  private async transformMessageContent(
+    message: string,
+    items?: NotificationMediaItem[],
+    collectionName?: string,
+    dayAmount?: number,
+  ): Promise<string> {
+    // Collection name and day count are plain string substitutions that don't
+    // need the media server - resolve them up front so an unavailable media
+    // server (which only affects the media-title lookups below) can't leave
+    // their placeholders raw. Strip the collection clause entirely when there's
+    // no collection context (e.g. an infrastructure-level failure) so we never
+    // deliver a raw "{collection_name}" token.
+    message = collectionName
+      ? message.replace('{collection_name}', collectionName)
+      : message.replace(" in '{collection_name}'", '');
+
+    message =
+      dayAmount && dayAmount > 0
+        ? message.replace('{days}', dayAmount.toString())
+        : message;
+
+    if (!items) {
+      return this.applyRequestedBy(message);
+    }
+
+    try {
+      const mediaServer = await this.getMediaServer();
+      if (items.length > 1) {
+        // if multiple items
+        const titles = [];
+        let numUnknownItems = 0;
+
+        for (const i of items) {
+          // Prefer the snapshot captured before handling; a handled item is
+          // often already gone from the media server, so a live lookup would
+          // come back empty (#3249).
+          const item =
+            i.metadata ?? (await mediaServer.getMetadata(i.mediaServerId));
+
+          if (item) {
+            // Per line, not per message: a batch can mix requesters.
+            titles.push(`${this.getTitle(item)}${this.formatRequestedBy(i)}`);
+          } else {
+            numUnknownItems++;
+          }
+        }
+
+        if (numUnknownItems > 0) {
+          titles.push(
+            `${numUnknownItems} item${
+              numUnknownItems > 1 ? 's' : ''
+            } that no longer exist${numUnknownItems > 1 ? '' : 's'} in the media server`,
+          );
+        }
+
+        const result = titles
+          .map((name) => `* ${name.charAt(0).toUpperCase() + name.slice(1)}`)
+          .join(' \n');
+
+        message = message.replace('{media_items}', result);
+        message = this.applyRequestedBy(message);
+      } else {
+        // if 1 item
+        const item =
+          items[0].metadata ??
+          (await mediaServer.getMetadata(items[0].mediaServerId));
+        message = message.replace(
+          '{media_title}',
+          item
+            ? this.getTitle(item)
+            : '1 item that no longer exists in the media server',
+        );
+        message = this.applyRequestedBy(message, items[0]);
+      }
+
+      return message;
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        // Media server in transition (switched but not yet configured, or
+        // mid-switch). Leave the message untransformed; downstream handlers
+        // will still see the raw template. The requester came from Seerr, so it
+        // still resolves.
+        this.logger.debug(
+          'Skipping notification message transformation; media server not ready',
+        );
+        this.logger.debug(error);
+        return this.applyRequestedBy(
+          message,
+          items.length === 1 ? items[0] : undefined,
+        );
+      }
+      this.logger.error("Couldn't transform notification message");
+      this.logger.debug(error);
+    }
+  }
+
+  /**
+   * The `{requested_by}` placeholder carries its own punctuation so this single
+   * replace always fires, collapsing to '' when nobody requested the item. A
+   * raw token can therefore never reach a user.
+   */
+  private applyRequestedBy(
+    message: string,
+    item?: NotificationMediaItem,
+  ): string {
+    return message.replace('{requested_by}', this.formatRequestedBy(item));
+  }
+
+  private formatRequestedBy(item?: NotificationMediaItem): string {
+    return item?.requestedBy?.length
+      ? ` (requested by ${item.requestedBy.join(', ')})`
+      : '';
+  }
+
+  private getTitle(item: MediaItem): string {
+    // Branch on the server-agnostic item type, not on parentId/grandparentId
+    // presence. Plex leaves a movie's parent empty, but Emby/Jellyfin set
+    // parentId to the containing library folder - so keying off parentId
+    // misclassified Emby movies as seasons and rendered them as
+    // "undefined - season undefined".
+    switch (item.type) {
+      case 'episode':
+        return item.parentIndex != null && item.index != null
+          ? `${item.grandparentTitle} - season ${item.parentIndex} - episode ${item.index}`
+          : this.underShow(item.grandparentTitle, item.title);
+      case 'season':
+        return item.index != null
+          ? `${item.parentTitle} - season ${item.index}`
+          : this.underShow(item.parentTitle, item.title);
+      default:
+        return item.title;
+    }
+  }
+
+  /**
+   * A library can leave the season/episode number unset - Jellyfin files those
+   * under a "Season Unknown" container - so name the item itself rather than
+   * render "season undefined". A sports or PVR library tends to name the
+   * episode after the show already, so don't repeat the show in that case.
+   */
+  private underShow(show: string | undefined, title: string): string {
+    return show && !title.startsWith(show) ? `${show} - ${title}` : title;
+  }
+
+  // OnEvent handlers
+
+  @OnEvent(MaintainerrEvent.RuleHandler_Failed)
+  private async ruleHandlerFailed(data: RuleHandlerFailedDto) {
+    await this.handleNotification(
+      NotificationType.RULE_HANDLING_FAILED,
+      undefined,
+      data?.collectionName,
+      undefined,
+      undefined,
+      data?.identifier,
+    );
+  }
+
+  @OnEvent(MaintainerrEvent.CollectionHandler_Failed)
+  private async collectionHandlerFailed(data?: CollectionHandlerFailedDto) {
+    await this.handleNotification(
+      NotificationType.COLLECTION_HANDLING_FAILED,
+      undefined,
+      data?.collectionName,
+      undefined,
+      undefined,
+      data?.identifier,
+    );
+  }
+
+  @OnEvent(MaintainerrEvent.RuleHandlerQueue_StatusUpdated)
+  private ruleQueueStatusChanged(event: RuleHandlerQueueStatusUpdatedEventDto) {
+    const nowActive = !!event.data?.processingQueue;
+    if (nowActive === this.batchActive) {
+      // Mid-batch progress update - nothing to do.
+      return;
+    }
+    // Reset on every transition (in either direction). Clearing on the
+    // false→true edge also recovers from a missed prior false event.
+    this.batchSeenKeys.clear();
+    this.batchActive = nowActive;
+  }
+
+  @OnEvent(MaintainerrEvent.CollectionMedia_Added)
+  private async collectionMediaAdded(data: CollectionMediaAddedDto) {
+    const filteredMediaItems = this.dedupeBatchMediaItems(
+      MaintainerrEvent.CollectionMedia_Added,
+      data.collectionName,
+      data.mediaItems,
+    );
+    if (filteredMediaItems.length === 0) return;
+
+    await this.handleNotification(
+      NotificationType.MEDIA_ADDED_TO_COLLECTION,
+      filteredMediaItems,
+      data.collectionName,
+      data.dayAmount,
+      undefined,
+      data.identifier,
+    );
+  }
+
+  @OnEvent(MaintainerrEvent.CollectionMedia_Removed)
+  private async collectionMediaRemoved(data: CollectionMediaRemovedDto) {
+    if (this.collectionRunActive) {
+      // Appending is enough: an item can only be removed once, so the same id
+      // cannot arrive twice in one run.
+      const buffered = this.collectionRunRemovals.get(data.collectionId);
+      if (buffered) {
+        buffered.mediaItems.push(...data.mediaItems);
+      } else {
+        this.collectionRunRemovals.set(
+          data.collectionId,
+          new CollectionMediaRemovedDto(
+            [...data.mediaItems],
+            data.collectionName,
+            data.identifier,
+            data.collectionId,
+            data.dayAmount,
+          ),
+        );
+      }
+      return;
+    }
+
+    await this.notifyCollectionMediaRemoved(data);
+  }
+
+  private async notifyCollectionMediaRemoved(data: CollectionMediaRemovedDto) {
+    const filteredMediaItems = this.dedupeBatchMediaItems(
+      MaintainerrEvent.CollectionMedia_Removed,
+      data.collectionName,
+      data.mediaItems,
+    );
+    if (filteredMediaItems.length === 0) return;
+
+    await this.handleNotification(
+      NotificationType.MEDIA_REMOVED_FROM_COLLECTION,
+      filteredMediaItems,
+      data.collectionName,
+      data.dayAmount,
+      undefined,
+      data.identifier,
+    );
+  }
+
+  @OnEvent(MaintainerrEvent.CollectionHandler_Started)
+  private collectionHandlerStarted() {
+    this.collectionRunRemovals.clear();
+    this.collectionRunActive = true;
+  }
+
+  @OnEvent(MaintainerrEvent.CollectionHandler_Finished)
+  private async collectionHandlerFinished() {
+    this.collectionRunActive = false;
+    const buffered = [...this.collectionRunRemovals.values()];
+    this.collectionRunRemovals.clear();
+
+    for (const data of buffered) {
+      await this.notifyCollectionMediaRemoved(data);
+    }
+  }
+
+  /**
+   * When a rule-executor batch is active, drops media items that have
+   * already produced a notification for this (event, collection title)
+   * during the same batch. Outside a batch this is a no-op so manual
+   * test notifications and standalone runs are unaffected.
+   *
+   * Mutates `batchSeenKeys` synchronously before any caller awaits, so
+   * concurrent handler invocations from sibling rule groups can't both
+   * pass the same item through.
+   */
+  private dedupeBatchMediaItems(
+    event:
+      | MaintainerrEvent.CollectionMedia_Added
+      | MaintainerrEvent.CollectionMedia_Removed,
+    collectionName: string,
+    mediaItems: { mediaServerId: string }[],
+  ): { mediaServerId: string }[] {
+    if (!this.batchActive || !mediaItems || mediaItems.length === 0) {
+      return mediaItems ?? [];
+    }
+    const filteredMediaItems: { mediaServerId: string }[] = [];
+    for (const item of mediaItems) {
+      const key = `${event}|${collectionName ?? ''}|${item?.mediaServerId ?? ''}`;
+      if (this.batchSeenKeys.has(key)) continue;
+      this.batchSeenKeys.add(key);
+      filteredMediaItems.push(item);
+    }
+    return filteredMediaItems;
+  }
+
+  @OnEvent(MaintainerrEvent.CollectionMedia_Handled)
+  private async collectionMediaHandled(data: CollectionMediaHandledDto) {
+    await this.handleNotification(
+      NotificationType.MEDIA_HANDLED,
+      data.mediaItems,
+      data.collectionName,
+      undefined,
+      undefined,
+      data.identifier,
+    );
+  }
+
+  @OnEvent(MaintainerrEvent.Overlay_Applied)
+  private async overlayApplied(data: OverlayAppliedDto) {
+    await this.handleNotification(
+      NotificationType.OVERLAY_APPLIED,
+      data.mediaItems,
+      data.collectionName,
+      undefined,
+      undefined,
+      data.identifier,
+    );
+  }
+
+  @OnEvent(MaintainerrEvent.Overlay_Reverted)
+  private async overlayReverted(data: OverlayRevertedDto) {
+    await this.handleNotification(
+      NotificationType.OVERLAY_REVERTED,
+      data.mediaItems,
+      data.collectionName,
+      undefined,
+      undefined,
+      data.identifier,
+    );
+  }
+}

@@ -1,0 +1,96 @@
+import { useLingui } from '@lingui/react/macro'
+import { type MediaLibrary } from '@maintainerr/contracts'
+import { useEffect, useRef } from 'react'
+import { Select } from '../../Forms/Select'
+
+interface ILibrarySwitcher {
+  onLibraryChange: (libraryId: string) => void
+  shouldShowAllOption?: boolean
+  selectedLibraryId?: string
+  containerClassName?: string
+  formClassName?: string
+  libraries?: MediaLibrary[]
+  librariesLoading?: boolean
+  librariesError?: boolean
+}
+
+const LibrarySwitcher = (props: ILibrarySwitcher) => {
+  const { t } = useLingui()
+  const {
+    onLibraryChange,
+    selectedLibraryId,
+    shouldShowAllOption,
+    containerClassName,
+    formClassName,
+    libraries,
+    librariesLoading = false,
+    librariesError = false,
+  } = props
+  const lastAutoSelectedLibraryIdRef = useRef<string | null>(null)
+  const selectValue =
+    librariesLoading || librariesError
+      ? ''
+      : (selectedLibraryId ??
+        (shouldShowAllOption === false ? (libraries?.[0]?.id ?? '') : 'all'))
+
+  const onSwitchLibrary = (event: { target: { value: string } }) => {
+    onLibraryChange(event.target.value)
+  }
+
+  useEffect(() => {
+    if (!libraries || libraries.length === 0) {
+      return
+    }
+
+    if (shouldShowAllOption === false) {
+      if (selectedLibraryId) {
+        lastAutoSelectedLibraryIdRef.current = selectedLibraryId
+        return
+      }
+
+      const firstId = libraries[0].id
+
+      if (firstId && lastAutoSelectedLibraryIdRef.current !== firstId) {
+        lastAutoSelectedLibraryIdRef.current = firstId
+        onLibraryChange(firstId)
+      }
+    } else {
+      lastAutoSelectedLibraryIdRef.current = null
+    }
+  }, [libraries, onLibraryChange, selectedLibraryId, shouldShowAllOption])
+
+  return (
+    <div className={`w-full ${containerClassName ?? 'mb-5'}`}>
+      <form className={`ml-auto w-full ${formClassName ?? 'max-w-xs'}`}>
+        <Select name="library" onChange={onSwitchLibrary} value={selectValue}>
+          {librariesLoading ? (
+            <option disabled={true} value="">
+              {t`Loading libraries...`}
+            </option>
+          ) : librariesError ? (
+            <option disabled={true} value="">
+              {t`Could not fetch libraries`}
+            </option>
+          ) : (
+            <>
+              {(props.shouldShowAllOption === undefined ||
+                props.shouldShowAllOption) && (
+                <option value="all">{t`All`}</option>
+              )}
+
+              {libraries?.map((lib) => {
+                return (
+                  <option key={lib.id} value={lib.id}>
+                    {lib.title}
+                  </option>
+                )
+              })}
+            </>
+          )}
+        </Select>
+      </form>
+    </div>
+  )
+}
+
+export default LibrarySwitcher

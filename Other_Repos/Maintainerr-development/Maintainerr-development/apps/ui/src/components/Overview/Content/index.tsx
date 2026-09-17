@@ -1,0 +1,238 @@
+import { Trans, useLingui } from '@lingui/react/macro'
+import {
+  getCollectionDeleteDate,
+  type MediaItem,
+  type MediaItemWithParent,
+  type MediaProviderIds,
+} from '@maintainerr/contracts'
+import { debounce } from 'lodash-es'
+import { useEffect, useEffectEvent } from 'react'
+import { DEFAULT_INFINITE_SCROLL_THRESHOLD } from '../../../utils/uiBehavior'
+import { ICollection, ICollectionMedia } from '../../Collection'
+import LoadingSpinner, {
+  SmallLoadingSpinner,
+} from '../../Common/LoadingSpinner'
+import MediaCard from '../../Common/MediaCard'
+
+interface IOverviewContent {
+  data: MediaItem[]
+  dataFinished: boolean
+  loading: boolean
+  extrasLoading?: boolean
+  fetchData: () => void
+  onRemove?: (id: string) => void
+  onItemPostponed?: (id: string, addDate: string) => void
+  collectionPage?: boolean
+  collectionInfo?: ICollectionMedia[]
+  collectionId?: number
+  collection?: ICollection
+  selectionMode?: boolean
+  selectedMediaIds?: ReadonlySet<string>
+  onToggleSelection?: (mediaId: string, selected: boolean) => void
+  /** Items a bulk action changed, which carry no marker to key the status off. */
+  statusChangedMediaIds?: ReadonlySet<string>
+}
+
+function extractProviderIds(
+  item: MediaItem | MediaItemWithParent,
+): MediaProviderIds | undefined {
+  const parentItem = (item as MediaItemWithParent).parentItem
+
+  if (
+    (item.type === 'season' || item.type === 'episode') &&
+    parentItem?.providerIds
+  ) {
+    return parentItem.providerIds
+  }
+
+  if (item.providerIds && Object.keys(item.providerIds).length > 0) {
+    return item.providerIds
+  }
+
+  if (
+    parentItem?.providerIds &&
+    Object.keys(parentItem.providerIds).length > 0
+  ) {
+    return parentItem.providerIds
+  }
+
+  return undefined
+}
+
+const OverviewContent = (props: IOverviewContent) => {
+  const { t } = useLingui()
+  const { data, dataFinished, extrasLoading, fetchData, loading } = props
+
+  const isNearBottom = () =>
+    window.innerHeight + document.documentElement.scrollTop >=
+    document.documentElement.scrollHeight * DEFAULT_INFINITE_SCROLL_THRESHOLD
+
+  const handleScroll = useEffectEvent(() => {
+    if (isNearBottom() && !extrasLoading && !dataFinished) {
+      fetchData()
+    }
+  })
+
+  useEffect(() => {
+    const debouncedScroll = debounce(handleScroll, 200)
+    window.addEventListener('scroll', debouncedScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener('scroll', debouncedScroll)
+      debouncedScroll.cancel() // Cancel pending debounced calls
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isNearBottom() && !loading && !extrasLoading && !dataFinished) {
+      fetchData()
+    }
+  }, [data, dataFinished, extrasLoading, fetchData, loading])
+
+  const getDaysLeft = (mediaId: string) => {
+    if (!props.collectionInfo) {
+      return undefined
+    }
+
+    const collectionData = props.collectionInfo.find(
+      (colEl) => colEl.mediaServerId === mediaId,
+    )
+    if (!collectionData) {
+      return undefined
+    }
+
+    const resolvedCollection = props.collection ?? collectionData.collection
+    if (resolvedCollection?.deleteAfterDays == null) {
+      return undefined
+    }
+
+    const deleteDate = getCollectionDeleteDate(
+      collectionData.addDate,
+      resolvedCollection.deleteAfterDays,
+    )
+    if (!deleteDate) {
+      return undefined
+    }
+
+    const diffTime = deleteDate.getTime() - new Date().getTime()
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  }
+
+  /**
+   * Get the parent year from a MediaItem.
+   * For episodes/seasons, this is the show's year.
+   */
+  const getParentYear = (item: MediaItem): number | undefined => {
+    const parentItem = (item as MediaItemWithParent).parentItem
+    return parentItem?.year
+  }
+
+  const hasData = data && data.length > 0
+  const showInitialLoading = loading && !hasData
+  const showAppendLoading = hasData && Boolean(extrasLoading)
+
+  return (
+    <>
+      {showInitialLoading ? (
+        <div className="min-h-80">
+          <LoadingSpinner />
+        </div>
+      ) : hasData ? (
+        // @container lets the grid size its columns to this wrapper's width
+        // (not the viewport), so it lays out correctly inside narrow contexts
+        // like the collection-detail exclusions slideover.
+        <div className="@container">
+          <ul
+            className="cards-vertical"
+            aria-busy={loading || Boolean(extrasLoading)}
+          >
+            {data.map((el) => (
+              <li key={el.id}>
+                <MediaCard
+                  id={el.id}
+                  summary={el.summary}
+                  year={
+                    el.type === 'episode'
+                      ? el.parentTitle
+                      : getParentYear(el)
+                        ? getParentYear(el)?.toString()
+                        : el.year?.toString()
+                  }
+                  mediaType={el.type}
+                  seasonNumber={
+                    el.type === 'season'
+                      ? el.index
+                      : el.type === 'episode'
+                        ? el.parentIndex
+                        : undefined
+                  }
+                  episodeNumber={el.type === 'episode' ? el.index : undefined}
+                  episodeTitle={el.type === 'episode' ? el.title : undefined}
+                  title={
+                    el.grandparentTitle
+                      ? el.grandparentTitle
+                      : el.parentTitle
+                        ? el.parentTitle
+                        : el.title
+                  }
+                  exclusionId={
+                    el.maintainerrExclusionId
+                      ? el.maintainerrExclusionId
+                      : undefined
+                  }
+                  providerIds={extractProviderIds(el)}
+                  collectionPage={
+                    props.collectionPage ? props.collectionPage : false
+                  }
+                  exclusionType={el.maintainerrExclusionType}
+                  onRemove={props.onRemove}
+                  onItemPostponed={props.onItemPostponed}
+                  collectionId={props.collectionId}
+                  collection={
+                    props.collection ??
+                    props.collectionInfo?.find(
+                      (colEl) => colEl.mediaServerId === el.id,
+                    )?.collection
+                  }
+                  isManual={
+                    el.maintainerrIsManual ? el.maintainerrIsManual : false
+                  }
+                  collections={el.maintainerrCollections}
+                  selectionMode={props.selectionMode}
+                  selected={props.selectedMediaIds?.has(el.id) ?? false}
+                  onToggleSelection={props.onToggleSelection}
+                  forceStatusLoad={
+                    props.statusChangedMediaIds?.has(el.id) ?? false
+                  }
+                  {...(props.collectionInfo
+                    ? {
+                        daysLeft: getDaysLeft(el.id),
+                        collectionId: props.collectionInfo.find(
+                          (colEl) => colEl.mediaServerId === el.id,
+                        )?.collectionId,
+                      }
+                    : undefined)}
+                />
+              </li>
+            ))}
+            {showAppendLoading ? (
+              <li
+                className="flex min-h-10 items-center justify-center"
+                style={{ overflowAnchor: 'none' }}
+              >
+                <div role="status" aria-label={t`Loading more items`}>
+                  <SmallLoadingSpinner className="h-10 w-10" />
+                </div>
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : (
+        <div className="flex min-h-80 items-center justify-center rounded-xl border border-dashed border-zinc-700 bg-zinc-900/30 p-6 text-sm text-zinc-400">
+          <Trans>No items found.</Trans>
+        </div>
+      )}
+    </>
+  )
+}
+export default OverviewContent

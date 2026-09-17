@@ -1,0 +1,446 @@
+import {
+  MediaServerSwitchPreview,
+  MediaServerType,
+  SwitchMediaServerRequest,
+  SwitchMediaServerResponse,
+} from '@maintainerr/contracts';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
+import { dataDir as configDataDir } from '../../app/config/dataDir';
+import { MediaServerSwitchState } from '../api/media-server/media-server-switch-state.service';
+import { MediaServerFactory } from '../api/media-server/media-server.factory';
+import { Collection } from '../collections/entities/collection.entities';
+import { CollectionLog } from '../collections/entities/collection_log.entities';
+import { CollectionMedia } from '../collections/entities/collection_media.entities';
+import { MaintainerrLogger } from '../logging/logs.service';
+import { Exclusion } from '../rules/entities/exclusion.entities';
+import { RuleGroup } from '../rules/entities/rule-group.entities';
+import { Settings } from './entities/settings.entities';
+import { RuleMigrationService } from './rule-migration.service';
+import { TracearrApiService } from '../api/tracearr-api/tracearr-api.service';
+import { SettingsDataService } from './settings-data.service';
+
+interface MediaServerDataCounts {
+  collections: number;
+  collectionMedia: number;
+  exclusions: number;
+  collectionLogs: number;
+}
+
+const COLLECTION_POSTER_DIR = path.join(configDataDir, 'collection-posters');
+const COLLECTION_POSTER_EXTENSION = '.jpg';
+
+/**
+ * Service for handling media server switching operations.
+ *
+ * Extracted from SettingsOperationsService to follow Single Responsibility Principle.
+ * This service orchestrates the complex process of switching between
+ * Plex and Jellyfin, including data cleanup and rule migration.
+ */
+@Injectable()
+export class MediaServerSwitchService {
+  constructor(
+    private readonly settingsDataService: SettingsDataService,
+    private readonly mediaServerFactory: MediaServerFactory,
+    private readonly mediaServerSwitchState: MediaServerSwitchState,
+    @InjectRepository(Collection)
+    private readonly collectionRepo: Repository<Collection>,
+    @InjectRepository(CollectionMedia)
+    private readonly collectionMediaRepo: Repository<CollectionMedia>,
+    @InjectRepository(CollectionLog)
+    private readonly collectionLogRepo: Repository<CollectionLog>,
+    @InjectRepository(Exclusion)
+    private readonly exclusionRepo: Repository<Exclusion>,
+    private readonly connection: DataSource,
+    private readonly ruleMigrationService: RuleMigrationService,
+    private readonly tracearrApi: TracearrApiService,
+    private readonly logger: MaintainerrLogger,
+  ) {
+    logger.setContext(MediaServerSwitchService.name);
+  }
+
+  /**
+   * Preview what data will be cleared when switching media servers
+   */
+  async previewSwitch(
+    targetServerType: MediaServerType,
+  ): Promise<MediaServerSwitchPreview> {
+    const currentServerType = this.settingsDataService.getMediaServerType();
+    const dataToBeCleared = await this.getMediaServerDataCounts();
+
+    // Preview rule migration
+    const ruleMigrationPreview = currentServerType
+      ? await this.ruleMigrationService.previewMigration(
+          currentServerType,
+          targetServerType,
+        )
+      : undefined;
+
+    return {
+      currentServerType,
+      targetServerType,
+      dataToBeCleared,
+      dataToBeKept: {
+        generalSettings: true,
+        radarrSettings: await this.settingsDataService.getRadarrSettingsCount(),
+        sonarrSettings: await this.settingsDataService.getSonarrSettingsCount(),
+        sportarrSettings:
+          await this.settingsDataService.getSportarrSettingsCount(),
+        seerrSettings: this.settingsDataService.seerrConfigured(),
+        // Tautulli is Plex-specific and gets cleared when switching away from Plex
+        tautulliSettings:
+          currentServerType === MediaServerType.PLEX
+            ? false
+            : this.settingsDataService.tautulliConfigured(),
+        notificationSettings: true,
+      },
+      ruleMigration: ruleMigrationPreview,
+    };
+  }
+
+  /**
+   * Switch media server type and clear media server-specific data.
+   *
+   * Keeps: general settings, *arr settings, notification settings
+   * Clears: collections, collection media, exclusions, collection logs
+   * Optionally migrates rules if migrateRules is true
+   */
+  async executeSwitch(
+    request: SwitchMediaServerRequest,
+  ): Promise<SwitchMediaServerResponse> {
+    if (this.mediaServerSwitchState.isSwitching()) {
+      throw new ConflictException(
+        'A media server switch is already in progress',
+      );
+    }
+    this.mediaServerSwitchState.setSwitching(true);
+
+    let response: SwitchMediaServerResponse;
+    try {
+      response = await this.executeSwitchInternal(request);
+    } finally {
+      this.mediaServerSwitchState.setSwitching(false);
+    }
+
+    // Initialize the now-active media server adapter once the switch lock is
+    // released - getService() refuses while a switch is in progress, so this
+    // can't run inside executeSwitchInternal. When the target's credentials
+    // carried over (e.g. switching back to a still-configured server), this
+    // brings the adapter up immediately so its connection test reflects reality
+    // instead of reporting a false failure until the first operation lazily
+    // initializes it. No-ops gracefully when credentials aren't set yet (the
+    // switch-then-save flow), mirroring how updateSettings re-initializes after
+    // a settings save.
+    if (response.status === 'OK') {
+      await this.mediaServerFactory.initialize();
+    }
+
+    return response;
+  }
+
+  private async executeSwitchInternal(
+    request: SwitchMediaServerRequest,
+  ): Promise<SwitchMediaServerResponse> {
+    const { targetServerType, migrateRules } = request;
+
+    // Get current server type - don't default to PLEX on fresh install
+    const currentServerType = this.settingsDataService.getMediaServerType();
+
+    // Check if already on target server type (only if currentServerType is actually set)
+    if (currentServerType && currentServerType === targetServerType) {
+      return {
+        status: 'NOK',
+        code: 0,
+        message: `Already using ${targetServerType} as media server`,
+      };
+    }
+
+    try {
+      this.logger.log(
+        currentServerType
+          ? `Switching media server from ${currentServerType} to ${targetServerType}${migrateRules ? ' (with rule migration)' : ''}`
+          : `Setting initial media server to ${targetServerType}`,
+      );
+
+      const dataToBeCleared = await this.getMediaServerDataCounts();
+
+      const queryRunner = this.connection.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      let ruleMigrationResult = undefined;
+
+      try {
+        // Migrate rules if requested (inside transaction)
+        if (migrateRules && currentServerType) {
+          this.logger.log('Attempting rule migration...');
+          ruleMigrationResult = await this.ruleMigrationService.migrateRules(
+            currentServerType,
+            targetServerType,
+            true, // skipIncompatible
+            queryRunner.manager,
+          );
+          this.logger.log(
+            `Rule migration complete: ${ruleMigrationResult.migratedRules}/${ruleMigrationResult.totalRules} rules migrated`,
+          );
+        }
+
+        // Clear media server-specific data in correct order (respecting foreign keys)
+        const clearedCollectionIds = await this.clearMediaServerData(
+          queryRunner,
+          migrateRules,
+          targetServerType,
+          dataToBeCleared,
+        );
+
+        await this.updateMediaServerTypeInTransaction(
+          queryRunner,
+          targetServerType,
+          currentServerType,
+        );
+
+        await queryRunner.commitTransaction();
+
+        for (const collectionId of clearedCollectionIds) {
+          try {
+            const storedPosterPath = path.join(
+              COLLECTION_POSTER_DIR,
+              `${collectionId}${COLLECTION_POSTER_EXTENSION}`,
+            );
+            if (fs.existsSync(storedPosterPath)) {
+              fs.unlinkSync(storedPosterPath);
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to remove stored poster for deleted collection ${collectionId}`,
+            );
+            this.logger.debug(error);
+          }
+        }
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
+
+      // Refresh in-memory settings and uninitialize old server after commit
+      await this.settingsDataService.init();
+
+      // Clearing the stored binding is not enough: the resolved server is also
+      // held in memory, and reusing it would point the next run at the server
+      // the switch just moved away from.
+      this.tracearrApi.invalidateHistory();
+
+      // Uninitialize old media server adapter
+      this.uninitializeOldServer(currentServerType);
+
+      this.logger.log(
+        currentServerType
+          ? `Successfully switched media server to ${targetServerType}`
+          : `Successfully set media server to ${targetServerType}`,
+      );
+
+      const response: SwitchMediaServerResponse = {
+        status: 'OK',
+        code: 1,
+        message: this.buildSwitchSuccessMessage(
+          currentServerType,
+          targetServerType,
+          migrateRules,
+          ruleMigrationResult,
+        ),
+        clearedData: dataToBeCleared,
+      };
+
+      if (ruleMigrationResult) {
+        response.ruleMigration = ruleMigrationResult;
+      }
+
+      return response;
+    } catch (error) {
+      this.logger.error('Error switching media server');
+      this.logger.debug(error);
+      return {
+        status: 'NOK',
+        code: 0,
+        message:
+          'Failed to switch media server. Please check your configuration and try again.',
+      };
+    }
+  }
+
+  /**
+   * Clear media server-specific data in the correct order (respecting foreign keys).
+   * All operations are wrapped in a transaction for atomicity.
+   */
+  private async clearMediaServerData(
+    queryRunner: QueryRunner,
+    migrateRules: boolean,
+    targetServerType: MediaServerType,
+    counts: MediaServerDataCounts,
+  ): Promise<number[]> {
+    // 1. Collection media (references collections)
+    await queryRunner.manager.clear(CollectionMedia);
+    this.logger.log(`Cleared ${counts.collectionMedia} collection media items`);
+
+    // 2. Collection logs (references collections)
+    await queryRunner.manager.clear(CollectionLog);
+    this.logger.log(`Cleared ${counts.collectionLogs} collection logs`);
+
+    // 3. Exclusions (references rule groups)
+    await queryRunner.manager.clear(Exclusion);
+    this.logger.log(`Cleared ${counts.exclusions} exclusions`);
+
+    if (!migrateRules) {
+      const collectionsToDelete = await queryRunner.manager.find(Collection, {
+        select: { id: true },
+      });
+
+      // 4. Rule groups (references collections via OneToOne) - cascades to rules
+      await queryRunner.manager.clear(RuleGroup);
+      this.logger.log(`Cleared rule groups and rules`);
+
+      // 5. Collections - only clear if not migrating
+      await queryRunner.manager.clear(Collection);
+      this.logger.log(`Cleared ${counts.collections} collections`);
+
+      return collectionsToDelete.map(({ id }) => id);
+    } else {
+      // When migrating rules, preserve collections but reset media server references:
+      // - Reset libraryId on rule groups (will need to be re-assigned by user)
+      // - Deactivate rule groups so they can't run without a valid library
+      // - Keep collectionId linked so the collection metadata is preserved
+      await queryRunner.manager
+        .createQueryBuilder()
+        .update(RuleGroup)
+        .set({
+          libraryId: '', // Mark as needing library assignment
+          isActive: false, // Prevent execution until user re-assigns library
+        })
+        .execute();
+
+      // Reset media server ID on collections (the Plex/Jellyfin collection will be recreated)
+      // Also reset libraryId since library IDs differ between servers
+      await queryRunner.manager
+        .createQueryBuilder()
+        .update(Collection)
+        .set({
+          mediaServerId: null,
+          mediaServerType: targetServerType,
+          libraryId: '', // Will be updated when user assigns library
+        })
+        .execute();
+
+      this.logger.log(
+        `Preserved ${counts.collections} collections, reset media server references`,
+      );
+
+      return [];
+    }
+  }
+
+  private async getMediaServerDataCounts(): Promise<MediaServerDataCounts> {
+    const [collections, collectionMedia, exclusions, collectionLogs] =
+      await Promise.all([
+        this.collectionRepo.count(),
+        this.collectionMediaRepo.count(),
+        this.exclusionRepo.count(),
+        this.collectionLogRepo.count(),
+      ]);
+
+    return {
+      collections,
+      collectionMedia,
+      exclusions,
+      collectionLogs,
+    };
+  }
+
+  private buildSwitchSuccessMessage(
+    currentServerType: MediaServerType | null,
+    targetServerType: MediaServerType,
+    migrateRules: boolean | undefined,
+    ruleMigrationResult?: SwitchMediaServerResponse['ruleMigration'],
+  ): string {
+    if (!currentServerType) {
+      return `Successfully set ${targetServerType} as media server`;
+    }
+
+    if (!migrateRules || !ruleMigrationResult) {
+      return `Successfully switched from ${currentServerType} to ${targetServerType}`;
+    }
+
+    const skippedSummary =
+      ruleMigrationResult.skippedRules > 0
+        ? ` (${ruleMigrationResult.skippedRules} skipped due to incompatible properties)`
+        : '';
+
+    return (
+      `Successfully switched from ${currentServerType} to ${targetServerType}. ` +
+      `${ruleMigrationResult.migratedRules} of ${ruleMigrationResult.totalRules} rules migrated` +
+      `${skippedSummary}. Rule groups have been deactivated and need library re-assignment.`
+    );
+  }
+
+  private async updateMediaServerTypeInTransaction(
+    queryRunner: QueryRunner,
+    targetServerType: MediaServerType,
+    currentServerType: MediaServerType | null,
+  ): Promise<void> {
+    const settingsDb = await queryRunner.manager.findOne(Settings, {
+      where: {},
+    });
+
+    if (!settingsDb) {
+      throw new Error('Settings not found');
+    }
+
+    const updatedSettings: Partial<Settings> = {
+      ...settingsDb,
+      media_server_type: targetServerType,
+    };
+
+    if (currentServerType === MediaServerType.PLEX) {
+      updatedSettings.plex_name = null;
+      updatedSettings.plex_hostname = null;
+      updatedSettings.plex_port = null;
+      updatedSettings.plex_ssl = null;
+      updatedSettings.plex_auth_token = null;
+      updatedSettings.tautulli_url = null;
+      updatedSettings.tautulli_api_key = null;
+    } else if (currentServerType === MediaServerType.JELLYFIN) {
+      updatedSettings.jellyfin_url = null;
+      updatedSettings.jellyfin_api_key = null;
+      updatedSettings.jellyfin_user_id = null;
+      updatedSettings.jellyfin_server_name = null;
+      updatedSettings.streamystats_url = null;
+    } else if (currentServerType === MediaServerType.EMBY) {
+      updatedSettings.emby_url = null;
+      updatedSettings.emby_api_key = null;
+      updatedSettings.emby_user_id = null;
+      updatedSettings.emby_server_name = null;
+    }
+
+    // The Tracearr instance survives a switch, but its selected server does
+    // not: rating keys are per media server, so a stale binding silently
+    // matches nothing.
+    updatedSettings.tracearr_server_id = null;
+
+    await queryRunner.manager.save(Settings, updatedSettings);
+  }
+
+  /**
+   * Uninitialize the old media server adapter
+   */
+  private uninitializeOldServer(
+    currentServerType: MediaServerType | null,
+  ): void {
+    if (currentServerType) {
+      this.mediaServerFactory.uninitializeServer(currentServerType);
+    }
+  }
+}

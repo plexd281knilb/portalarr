@@ -1,0 +1,1039 @@
+import { t } from '@lingui/core/macro'
+import {
+  BasicResponseDto,
+  DownloadClientSetting,
+  DownloadClientSettingResponse,
+  DownloadClientType,
+  EmbySetting,
+  JellyfinSetting,
+  MediaServerSwitchPreview,
+  MediaServerType,
+  MetadataProviderPreference,
+  MetadataProviderSetting,
+  SwitchMediaServerRequest,
+  SwitchMediaServerResponse,
+  TelemetryPing,
+  TelemetrySetting,
+  TelemetryStatus,
+} from '@maintainerr/contracts'
+import {
+  useMutation,
+  UseMutationOptions,
+  useQuery,
+  useQueryClient,
+  UseQueryOptions,
+} from '@tanstack/react-query'
+import axios from 'axios'
+import type { IRadarrSetting } from '../components/Settings/Radarr'
+import type { ISonarrSetting } from '../components/Settings/Sonarr'
+import type { ISportarrSetting } from '../components/Settings/Sportarr'
+import GetApiHandler, {
+  API_BASE_PATH,
+  DeleteApiHandler,
+  PatchApiHandler,
+  PostApiHandler,
+} from '../utils/ApiHandler'
+
+export interface ISettings {
+  id: number
+  clientId: string
+  applicationTitle: string
+  applicationUrl: string
+  apikey: string
+  seerr_url: string
+  locale: string
+  // Media server type - null when not yet selected
+  media_server_type?: MediaServerType | null
+  // Plex settings
+  plex_name: string
+  plex_hostname: string
+  plex_port: number
+  plex_ssl: number
+  plex_auth_token: string | null
+  plex_machine_id?: string | null
+  plex_manual_mode?: number
+  // Jellyfin settings
+  jellyfin_url?: string
+  jellyfin_api_key?: string
+  jellyfin_user_id?: string
+  jellyfin_server_name?: string
+  // Emby settings
+  emby_url?: string
+  emby_api_key?: string
+  emby_user_id?: string
+  emby_server_name?: string
+  // Seerr integration
+  seerr_api_key: string
+  tautulli_url: string
+  tautulli_api_key: string
+  streamystats_url?: string
+  tracearr_url?: string
+  tracearr_api_key?: string
+  tracearr_server_id?: string
+  // Download client integration
+  download_client_type?: DownloadClientType | null
+  download_client_url?: string
+  download_client_username?: string
+  download_client_password?: string
+  download_client_delete_data?: boolean
+  download_client_fallback_ratio?: number
+  collection_handler_job_cron: string
+  rules_handler_job_cron: string
+  metadata_provider_preference?: MetadataProviderPreference
+  // *arr exclusion tagging (https://features.maintainerr.info/posts/81) - Radarr and Sonarr configured independently
+  radarr_tag_exclusions?: boolean
+  radarr_exclusion_tag?: string
+  radarr_untag_on_unexclude?: boolean
+  sonarr_tag_exclusions?: boolean
+  sonarr_exclusion_tag?: string
+  sonarr_untag_on_unexclude?: boolean
+  telemetryEnabled?: boolean | null
+}
+
+// Jellyfin test result (not in contracts as it's UI-specific)
+export interface JellyfinTestResult {
+  status: string
+  code: number
+  message: string
+  serverName?: string
+  version?: string
+  users?: Array<{
+    id: string
+    name: string
+  }>
+}
+
+// Emby shares the Jellyfin test-result shape; aliased for call-site clarity.
+export type EmbyTestResult = JellyfinTestResult
+
+// Login response shape for the Plex-style Emby credentials login flow.
+export interface EmbyLoginResult extends JellyfinTestResult {
+  token?: string
+  userId?: string
+  libraries?: Array<{
+    id: string
+    name: string
+    type: string
+  }>
+}
+
+type UseSettingsQueryKey = ['settings']
+
+type UseSettingsOptions = Omit<
+  UseQueryOptions<ISettings, Error, ISettings, UseSettingsQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+export const useSettings = (options?: UseSettingsOptions) => {
+  const queryEnabled = options?.enabled ?? true
+
+  return useQuery<ISettings, Error, ISettings, UseSettingsQueryKey>({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      return await GetApiHandler<ISettings>(`/settings`)
+    },
+    staleTime: 0,
+    ...options,
+    enabled: queryEnabled,
+  })
+}
+
+export type UseSettingsResult = ReturnType<typeof useSettings>
+
+type UsePatchSettingsOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, Partial<ISettings>>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const usePatchSettings = (options?: UsePatchSettingsOptions) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, Partial<ISettings>>({
+    mutationKey: ['settings', 'patch'],
+    mutationFn: async (payload) => {
+      return await PatchApiHandler<BasicResponseDto>('/settings', payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UsePatchSettingsResult = ReturnType<typeof usePatchSettings>
+
+type UsePlexServersQueryKey = ['settings', 'plexServers']
+type UsePlexAuthValidationQueryKey = ['settings', 'plexAuthValidation']
+type UseServarrSettingsQueryKey = [
+  'settings',
+  'servarr',
+  'radarr' | 'sonarr' | 'sportarr',
+]
+
+export interface PlexAuthValidationResult {
+  valid: boolean
+  // plex.tv couldn't be reached to verify a stored token; it may still be valid.
+  unreachable?: boolean
+  errorMessage?: string
+}
+
+type UseDeletePlexAuthOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, void>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useDeletePlexAuth = (options?: UseDeletePlexAuthOptions) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, void>({
+    mutationKey: ['settings', 'deletePlexAuth'],
+    mutationFn: async () => {
+      return await DeleteApiHandler<BasicResponseDto>('/settings/plex/auth')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+      queryClient.removeQueries({
+        queryKey: [
+          'settings',
+          'plexAuthValidation',
+        ] satisfies UsePlexAuthValidationQueryKey,
+      })
+      queryClient.removeQueries({
+        queryKey: ['settings', 'plexServers'] satisfies UsePlexServersQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseDeletePlexAuthResult = ReturnType<typeof useDeletePlexAuth>
+
+type UseJellyfinSettingsQueryKey = ['settings', 'jellyfin']
+
+type UseJellyfinSettingsOptions = Omit<
+  UseQueryOptions<
+    JellyfinSetting,
+    Error,
+    JellyfinSetting,
+    UseJellyfinSettingsQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+export const useJellyfinSettings = (options?: UseJellyfinSettingsOptions) => {
+  return useQuery<
+    JellyfinSetting,
+    Error,
+    JellyfinSetting,
+    UseJellyfinSettingsQueryKey
+  >({
+    queryKey: ['settings', 'jellyfin'],
+    queryFn: async () => {
+      return await GetApiHandler<JellyfinSetting>(`/settings/jellyfin`)
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export type UseJellyfinSettingsResult = ReturnType<typeof useJellyfinSettings>
+
+type UseUpdatePlexAuthOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, string>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useUpdatePlexAuth = (options?: UseUpdatePlexAuthOptions) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, string>({
+    mutationKey: ['settings', 'updatePlexAuth'],
+    mutationFn: async (token: string) => {
+      return await PostApiHandler<BasicResponseDto>('/settings/plex/token', {
+        plex_auth_token: token,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+      queryClient.removeQueries({
+        queryKey: [
+          'settings',
+          'plexAuthValidation',
+        ] satisfies UsePlexAuthValidationQueryKey,
+      })
+      queryClient.removeQueries({
+        queryKey: ['settings', 'plexServers'] satisfies UsePlexServersQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseUpdatePlexAuthResult = ReturnType<typeof useUpdatePlexAuth>
+
+type UsePlexAuthValidationOptions = Omit<
+  UseQueryOptions<
+    PlexAuthValidationResult,
+    Error,
+    PlexAuthValidationResult,
+    UsePlexAuthValidationQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+export const usePlexAuthValidation = (
+  options?: UsePlexAuthValidationOptions,
+) => {
+  return useQuery<
+    PlexAuthValidationResult,
+    Error,
+    PlexAuthValidationResult,
+    UsePlexAuthValidationQueryKey
+  >({
+    queryKey: ['settings', 'plexAuthValidation'],
+    queryFn: async () => {
+      const result = await GetApiHandler<{
+        status: string
+        code: number
+        unreachable?: boolean
+        message: string
+      }>('/settings/test/plex/auth')
+
+      if (result.status === 'OK') {
+        return { valid: true }
+      }
+
+      return {
+        valid: false,
+        unreachable: result.unreachable === true,
+        // No invented message when plex.tv simply could not be reached: the
+        // saved token may be perfectly good, and claiming the credentials are
+        // invalid sends people off to re-authenticate for nothing. Leaving it
+        // unset lets the caller show its softer "still retrying" wording.
+        errorMessage:
+          result.message ||
+          (result.unreachable
+            ? undefined
+            : t`Stored Plex credentials are invalid. Re-authenticate with Plex.`),
+      }
+    },
+    staleTime: 0,
+    // If plex.tv was unreachable, retry a few times 3s apart so a transient
+    // blip self-heals; then stop to avoid an endless poll.
+    refetchInterval: (query) =>
+      query.state.data?.unreachable && query.state.dataUpdateCount < 3
+        ? 3000
+        : false,
+    ...options,
+  })
+}
+
+export interface PlexConnection {
+  protocol: string
+  address: string
+  port: number
+  uri: string
+  local: boolean
+  relay?: boolean
+  IPv6?: boolean
+  status?: number
+  latency?: number
+}
+
+export interface PlexDevice {
+  name: string
+  product: string
+  productVersion: string
+  platform: string
+  platformVersion: string
+  device: string
+  clientIdentifier: string
+  createdAt: Date
+  lastSeenAt: Date
+  provides: string[]
+  owned: boolean
+  accessToken?: string
+  publicAddress?: string
+  httpsRequired?: boolean
+  synced?: boolean
+  relay?: boolean
+  dnsRebindingProtection?: boolean
+  natLoopbackSupported?: boolean
+  publicAddressMatches?: boolean
+  presence?: boolean
+  ownerID?: string
+  home?: boolean
+  sourceTitle?: string
+  connection: PlexConnection[]
+}
+
+type UsePlexServersOptions = Omit<
+  UseQueryOptions<PlexDevice[], Error, PlexDevice[], UsePlexServersQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+export const usePlexServers = (options?: UsePlexServersOptions) => {
+  return useQuery<PlexDevice[], Error, PlexDevice[], UsePlexServersQueryKey>({
+    queryKey: ['settings', 'plexServers'],
+    queryFn: async () =>
+      GetApiHandler<PlexDevice[]>('/settings/plex/devices/servers'),
+    staleTime: 0,
+    ...options,
+  })
+}
+
+type UseServarrSettingsOptions<TSetting> = Omit<
+  UseQueryOptions<TSetting[], Error, TSetting[], UseServarrSettingsQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+export const useServarrSettings = <
+  TSetting extends IRadarrSetting | ISonarrSetting | ISportarrSetting,
+>(
+  type: 'radarr' | 'sonarr' | 'sportarr',
+  options?: UseServarrSettingsOptions<TSetting>,
+) => {
+  return useQuery<TSetting[], Error, TSetting[], UseServarrSettingsQueryKey>({
+    queryKey: ['settings', 'servarr', type],
+    queryFn: async () => {
+      return await GetApiHandler<TSetting[]>(`/settings/${type}`)
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+type UseTestJellyfinOptions = Omit<
+  UseMutationOptions<JellyfinTestResult, Error, JellyfinSetting>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useTestJellyfin = (options?: UseTestJellyfinOptions) => {
+  return useMutation<JellyfinTestResult, Error, JellyfinSetting>({
+    mutationKey: ['settings', 'testJellyfin'],
+    mutationFn: async (payload) => {
+      return await PostApiHandler<JellyfinTestResult>(
+        '/settings/jellyfin/test',
+        payload,
+      )
+    },
+    ...options,
+  })
+}
+
+export type UseTestJellyfinResult = ReturnType<typeof useTestJellyfin>
+
+const assertSettingsMutationSucceeded = (
+  response: BasicResponseDto,
+  fallbackMessage: string,
+): BasicResponseDto => {
+  if (response.code === 1) {
+    return response
+  }
+
+  throw new Error(response.message || fallbackMessage)
+}
+
+type UseSaveJellyfinSettingsOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, JellyfinSetting>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useSaveJellyfinSettings = (
+  options?: UseSaveJellyfinSettingsOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, JellyfinSetting>({
+    mutationKey: ['settings', 'saveJellyfin'],
+    mutationFn: async (payload) => {
+      const response = await PostApiHandler<BasicResponseDto>(
+        '/settings/jellyfin',
+        payload,
+      )
+
+      return assertSettingsMutationSucceeded(
+        response,
+        t`Jellyfin settings could not be updated`,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseSaveJellyfinSettingsResult = ReturnType<
+  typeof useSaveJellyfinSettings
+>
+
+type UseDeleteJellyfinSettingsOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, void>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useDeleteJellyfinSettings = (
+  options?: UseDeleteJellyfinSettingsOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, void>({
+    mutationKey: ['settings', 'deleteJellyfin'],
+    mutationFn: async () => {
+      const response =
+        await DeleteApiHandler<BasicResponseDto>('/settings/jellyfin')
+
+      return assertSettingsMutationSucceeded(
+        response,
+        t`Jellyfin settings could not be updated`,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseDeleteJellyfinSettingsResult = ReturnType<
+  typeof useDeleteJellyfinSettings
+>
+
+// --------------------------------------------------------------------------
+// Download client
+// --------------------------------------------------------------------------
+
+type UseDownloadClientSettingsQueryKey = ['settings', 'download-client']
+
+type UseDownloadClientSettingsOptions = Omit<
+  UseQueryOptions<
+    DownloadClientSettingResponse,
+    Error,
+    DownloadClientSettingResponse,
+    UseDownloadClientSettingsQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+export const useDownloadClientSettings = (
+  options?: UseDownloadClientSettingsOptions,
+) => {
+  return useQuery<
+    DownloadClientSettingResponse,
+    Error,
+    DownloadClientSettingResponse,
+    UseDownloadClientSettingsQueryKey
+  >({
+    queryKey: ['settings', 'download-client'],
+    queryFn: async () => {
+      return await GetApiHandler<DownloadClientSettingResponse>(
+        `/settings/download-client`,
+      )
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export type UseDownloadClientSettingsResult = ReturnType<
+  typeof useDownloadClientSettings
+>
+
+type UseTestDownloadClientOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, DownloadClientSetting>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useTestDownloadClient = (
+  options?: UseTestDownloadClientOptions,
+) => {
+  return useMutation<BasicResponseDto, Error, DownloadClientSetting>({
+    mutationKey: ['settings', 'testDownloadClient'],
+    mutationFn: async (payload) => {
+      return await PostApiHandler<BasicResponseDto>(
+        '/settings/test/download-client',
+        payload,
+      )
+    },
+    ...options,
+  })
+}
+
+export type UseTestDownloadClientResult = ReturnType<
+  typeof useTestDownloadClient
+>
+
+type UseSaveDownloadClientSettingsOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, DownloadClientSetting>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useSaveDownloadClientSettings = (
+  options?: UseSaveDownloadClientSettingsOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, DownloadClientSetting>({
+    mutationKey: ['settings', 'saveDownloadClient'],
+    mutationFn: async (payload) => {
+      const response = await PostApiHandler<BasicResponseDto>(
+        '/settings/download-client',
+        payload,
+      )
+
+      return assertSettingsMutationSucceeded(
+        response,
+        t`Download client settings could not be updated`,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+      queryClient.invalidateQueries({
+        queryKey: [
+          'settings',
+          'download-client',
+        ] satisfies UseDownloadClientSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseSaveDownloadClientSettingsResult = ReturnType<
+  typeof useSaveDownloadClientSettings
+>
+
+type UseDeleteDownloadClientSettingsOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, void>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useDeleteDownloadClientSettings = (
+  options?: UseDeleteDownloadClientSettingsOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, void>({
+    mutationKey: ['settings', 'deleteDownloadClient'],
+    mutationFn: async () => {
+      const response = await DeleteApiHandler<BasicResponseDto>(
+        '/settings/download-client',
+      )
+
+      return assertSettingsMutationSucceeded(
+        response,
+        t`Download client settings could not be updated`,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+      queryClient.invalidateQueries({
+        queryKey: [
+          'settings',
+          'download-client',
+        ] satisfies UseDownloadClientSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseDeleteDownloadClientSettingsResult = ReturnType<
+  typeof useDeleteDownloadClientSettings
+>
+
+// --------------------------------------------------------------------------
+// Emby
+// --------------------------------------------------------------------------
+
+type UseEmbySettingsQueryKey = ['settings', 'emby']
+
+type UseEmbySettingsOptions = Omit<
+  UseQueryOptions<EmbySetting, Error, EmbySetting, UseEmbySettingsQueryKey>,
+  'queryKey' | 'queryFn'
+>
+
+export const useEmbySettings = (options?: UseEmbySettingsOptions) => {
+  return useQuery<EmbySetting, Error, EmbySetting, UseEmbySettingsQueryKey>({
+    queryKey: ['settings', 'emby'],
+    queryFn: async () => {
+      return await GetApiHandler<EmbySetting>(`/settings/emby`)
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export type UseEmbySettingsResult = ReturnType<typeof useEmbySettings>
+
+type UseTestEmbyOptions = Omit<
+  UseMutationOptions<EmbyTestResult, Error, EmbySetting>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useTestEmby = (options?: UseTestEmbyOptions) => {
+  return useMutation<EmbyTestResult, Error, EmbySetting>({
+    mutationKey: ['settings', 'testEmby'],
+    mutationFn: async (payload) => {
+      return await PostApiHandler<EmbyTestResult>(
+        '/settings/emby/test',
+        payload,
+      )
+    },
+    ...options,
+  })
+}
+
+export type UseTestEmbyResult = ReturnType<typeof useTestEmby>
+
+type UseSaveEmbySettingsOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, EmbySetting>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useSaveEmbySettings = (options?: UseSaveEmbySettingsOptions) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, EmbySetting>({
+    mutationKey: ['settings', 'saveEmby'],
+    mutationFn: async (payload) => {
+      const response = await PostApiHandler<BasicResponseDto>(
+        '/settings/emby',
+        payload,
+      )
+
+      return assertSettingsMutationSucceeded(
+        response,
+        t`Emby settings could not be updated`,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseSaveEmbySettingsResult = ReturnType<typeof useSaveEmbySettings>
+
+type UseDeleteEmbySettingsOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, void>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useDeleteEmbySettings = (
+  options?: UseDeleteEmbySettingsOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, void>({
+    mutationKey: ['settings', 'deleteEmby'],
+    mutationFn: async () => {
+      const response =
+        await DeleteApiHandler<BasicResponseDto>('/settings/emby')
+
+      return assertSettingsMutationSucceeded(
+        response,
+        t`Emby settings could not be updated`,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseDeleteEmbySettingsResult = ReturnType<
+  typeof useDeleteEmbySettings
+>
+
+// Login (Plex-style): URL + admin username/password → access token + lists
+type UseLoginEmbyOptions = Omit<
+  UseMutationOptions<
+    EmbyLoginResult,
+    Error,
+    { emby_url: string; username: string; password: string }
+  >,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useLoginEmby = (options?: UseLoginEmbyOptions) => {
+  return useMutation<
+    EmbyLoginResult,
+    Error,
+    { emby_url: string; username: string; password: string }
+  >({
+    mutationKey: ['settings', 'loginEmby'],
+    mutationFn: async (payload) => {
+      return await PostApiHandler<EmbyLoginResult>(
+        '/settings/emby/login',
+        payload,
+      )
+    },
+    ...options,
+  })
+}
+
+export type UseLoginEmbyResult = ReturnType<typeof useLoginEmby>
+
+type UsePreviewMediaServerSwitchOptions = Omit<
+  UseMutationOptions<MediaServerSwitchPreview, Error, MediaServerType>,
+  'mutationFn' | 'mutationKey'
+>
+
+export const usePreviewMediaServerSwitch = (
+  options?: UsePreviewMediaServerSwitchOptions,
+) => {
+  return useMutation<MediaServerSwitchPreview, Error, MediaServerType>({
+    mutationKey: ['settings', 'previewMediaServerSwitch'],
+    mutationFn: async (targetServerType) => {
+      return await GetApiHandler<MediaServerSwitchPreview>(
+        `/settings/media-server/switch/preview/${targetServerType}`,
+      )
+    },
+    ...options,
+  })
+}
+
+export type UsePreviewMediaServerSwitchResult = ReturnType<
+  typeof usePreviewMediaServerSwitch
+>
+
+type UseSwitchMediaServerOptions = Omit<
+  UseMutationOptions<
+    SwitchMediaServerResponse,
+    Error,
+    SwitchMediaServerRequest
+  >,
+  'mutationFn' | 'mutationKey'
+>
+
+export const useSwitchMediaServer = (options?: UseSwitchMediaServerOptions) => {
+  return useMutation<
+    SwitchMediaServerResponse,
+    Error,
+    SwitchMediaServerRequest
+  >({
+    mutationKey: ['settings', 'switchMediaServer'],
+    mutationFn: async (payload) => {
+      return await PostApiHandler<SwitchMediaServerResponse>(
+        '/settings/media-server/switch',
+        payload,
+      )
+    },
+    ...options,
+  })
+}
+
+export type UseSwitchMediaServerResult = ReturnType<typeof useSwitchMediaServer>
+
+type UseMetadataProviderPreferenceQueryKey = ['settings', 'metadata-provider']
+
+type UseMetadataProviderPreferenceOptions = Omit<
+  UseQueryOptions<
+    { preference: MetadataProviderPreference },
+    Error,
+    MetadataProviderPreference,
+    UseMetadataProviderPreferenceQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+export const useMetadataProviderPreference = (
+  options?: UseMetadataProviderPreferenceOptions,
+) => {
+  return useQuery<
+    { preference: MetadataProviderPreference },
+    Error,
+    MetadataProviderPreference,
+    UseMetadataProviderPreferenceQueryKey
+  >({
+    queryKey: ['settings', 'metadata-provider'],
+    queryFn: async () => {
+      return await GetApiHandler<{ preference: MetadataProviderPreference }>(
+        '/settings/metadata-provider',
+      )
+    },
+    select: (result) => result.preference,
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export type UseMetadataProviderPreferenceResult = ReturnType<
+  typeof useMetadataProviderPreference
+>
+
+type UseUpdateMetadataProviderPreferenceOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, MetadataProviderPreference>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useUpdateMetadataProviderPreference = (
+  options?: UseUpdateMetadataProviderPreferenceOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, MetadataProviderPreference>({
+    mutationKey: ['settings', 'updateMetadataProviderPreference'],
+    mutationFn: async (preference) => {
+      return await PostApiHandler<BasicResponseDto>(
+        '/settings/metadata-provider',
+        {
+          preference,
+        } satisfies MetadataProviderSetting,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+      queryClient.invalidateQueries({
+        queryKey: [
+          'settings',
+          'metadata-provider',
+        ] satisfies UseMetadataProviderPreferenceQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseUpdateMetadataProviderPreferenceResult = ReturnType<
+  typeof useUpdateMetadataProviderPreference
+>
+
+type UseTelemetryPreviewQueryKey = ['settings', 'telemetry', 'preview']
+
+type UseTelemetryPreviewOptions = Omit<
+  UseQueryOptions<
+    TelemetryPing,
+    Error,
+    TelemetryPing,
+    UseTelemetryPreviewQueryKey
+  >,
+  'queryKey' | 'queryFn'
+>
+
+/**
+ * The exact ping this server would send, sample block included. There is no
+ * send-now endpoint on purpose: every real post increments the census, so a
+ * test button would let an instance inflate the instance count. This preview
+ * is the verification mechanism.
+ */
+export const useTelemetryPreview = (options?: UseTelemetryPreviewOptions) => {
+  return useQuery<
+    TelemetryPing,
+    Error,
+    TelemetryPing,
+    UseTelemetryPreviewQueryKey
+  >({
+    queryKey: ['settings', 'telemetry', 'preview'],
+    queryFn: async () => {
+      return await GetApiHandler<TelemetryPing>('/settings/telemetry/preview')
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export const useTelemetryStatus = (options?: { enabled?: boolean }) => {
+  return useQuery<TelemetryStatus, Error, TelemetryStatus, string[]>({
+    queryKey: ['settings', 'telemetry', 'status'],
+    queryFn: async () => {
+      return await GetApiHandler<TelemetryStatus>('/settings/telemetry/status')
+    },
+    staleTime: 0,
+    ...options,
+  })
+}
+
+export type UseTelemetryPreviewResult = ReturnType<typeof useTelemetryPreview>
+
+type UseUpdateTelemetrySettingOptions = Omit<
+  UseMutationOptions<BasicResponseDto, Error, boolean>,
+  'mutationFn' | 'mutationKey' | 'onSuccess'
+>
+
+export const useUpdateTelemetrySetting = (
+  options?: UseUpdateTelemetrySettingOptions,
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<BasicResponseDto, Error, boolean>({
+    mutationKey: ['settings', 'updateTelemetrySetting'],
+    mutationFn: async (enabled) => {
+      const response = await PostApiHandler<BasicResponseDto>(
+        '/settings/telemetry',
+        { enabled } satisfies TelemetrySetting,
+      )
+
+      // A failed write answers 2xx with code 0, so without this the page would
+      // report a save that did not happen.
+      if (response?.code !== 1) {
+        throw new Error(response?.message ?? 'Failed to update telemetry')
+      }
+
+      return response
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['settings'] satisfies UseSettingsQueryKey,
+      })
+    },
+    ...options,
+  })
+}
+
+export type UseUpdateTelemetrySettingResult = ReturnType<
+  typeof useUpdateTelemetrySetting
+>
+
+export const downloadDatabase = async (
+  customFilename?: string,
+): Promise<void> => {
+  const response = await axios.get<Blob>(
+    `${API_BASE_PATH}/api/settings/database/download`,
+    {
+      responseType: 'blob',
+    },
+  )
+
+  const fileUrl = URL.createObjectURL(response.data)
+  const link = document.createElement('a')
+  const contentDisposition = response.headers['content-disposition']
+  const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/)
+  const normalizedCustomFilename = customFilename?.trim()
+
+  link.href = fileUrl
+  link.download =
+    normalizedCustomFilename && normalizedCustomFilename.length > 0
+      ? normalizedCustomFilename
+      : (filenameMatch?.[1] ?? 'maintainerr.sqlite')
+  document.body.append(link)
+  link.click()
+  link.remove()
+  setTimeout(() => {
+    URL.revokeObjectURL(fileUrl)
+  }, 0)
+}

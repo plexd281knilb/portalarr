@@ -1,0 +1,78 @@
+export enum MediaServerType {
+  PLEX = 'plex',
+  JELLYFIN = 'jellyfin',
+  EMBY = 'emby',
+}
+
+export type MediaItemType = 'movie' | 'show' | 'season' | 'episode'
+
+/** All MediaItemType values. Must match the MediaItemType union. */
+export const MediaItemTypes: MediaItemType[] = [
+  'movie',
+  'show',
+  'season',
+  'episode',
+]
+
+/** Display labels keyed by MediaItemType (derived). */
+export const MediaItemTypeLabels: Record<MediaItemType, string> =
+  Object.fromEntries(
+    MediaItemTypes.map((t) => [
+      t,
+      t.charAt(0).toUpperCase() + t.slice(1) + 's',
+    ]),
+  ) as Record<MediaItemType, string>
+
+/** Uppercase type strings for serialization, e.g. YAML export (derived). */
+export const MediaDataTypeStrings: string[] = MediaItemTypes.map((t) =>
+  MediaItemTypeLabels[t].toUpperCase(),
+)
+
+export function isMediaType(
+  itemType: MediaItemType | null | undefined,
+  expectedType: MediaItemType,
+): boolean {
+  return itemType === expectedType
+}
+
+export function isValidMediaItemType(type: string): type is MediaItemType {
+  return MediaItemTypes.includes(type as MediaItemType)
+}
+
+/**
+ * Feature flags for capability detection
+ * Different media servers support different features
+ */
+export enum MediaServerFeature {
+  /** Ability to set collection visibility (home/recommended) */
+  COLLECTION_VISIBILITY = 'collection_visibility',
+  /** Watchlist functionality via external API (Plex.tv) */
+  WATCHLIST = 'watchlist',
+  /** Watch history can be fetched in bulk up front, rather than per item */
+  CENTRAL_WATCH_HISTORY = 'central_watch_history',
+  /** Support for labels/tags on media items */
+  LABELS = 'labels',
+  /** Playlist management */
+  PLAYLISTS = 'playlists',
+  /** Custom poster artwork can be set on collections */
+  COLLECTION_POSTER = 'collection_poster',
+  /** Ability to sort collections */
+  COLLECTION_SORT = 'collection_sort',
+  /** Ability to natively sort media-library listings by studio */
+  LIBRARY_STUDIO_SORT = 'library_studio_sort',
+  /**
+   * A single collection can span multiple libraries. Jellyfin/Emby BoxSets are
+   * server-global and may hold items from any library; Plex collections are
+   * bound to one library. Gates the cross-library lookup for manual collections.
+   */
+  CROSS_LIBRARY_COLLECTIONS = 'cross_library_collections',
+  /**
+   * An empty collection-children read is a trustworthy "this collection is
+   * empty" answer rather than a possible sync-delay artefact. Plex answers
+   * definitively; the .NET BoxSet API can return no children for a brief window
+   * after a collection is modified, so treating that as empty would flag every
+   * member as removed by hand. Gates the membership reconciliation that runs
+   * off an empty child list.
+   */
+  TRUSTWORTHY_EMPTY_COLLECTION = 'trustworthy_empty_collection',
+}

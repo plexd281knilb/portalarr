@@ -1,0 +1,276 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { DataSource, MigrationInterface } from 'typeorm';
+
+// Generic migration matrix - we don't test each migration individually. These
+// confirm TypeORM behaves and that migrations comply with typeorm_instructions.txt
+// (generated from the entities, never hand-waived):
+//   1. The whole chain applies in order on a fresh DB, each recorded once -
+//      proving every migration is structurally valid SQL that TypeORM accepts.
+//   2. The schema migration this PR adds reproduces its entity columns EXACTLY
+//      (type + NOT NULL + default). A hand-edited migration that drifts from the
+//      entity definition fails here - the in-jest stand-in for `migration:generate`
+//      reporting "No changes". (The repo-wide entity-vs-schema diff stays a manual
+//      release step: TypeORM's metadata builder can't run under @swc/jest, which
+//      reflects the codebase's `T | null` columns as `Object` and rejects the
+//      build. A new migration adds its columns to test 2.)
+//   3. That migration's up() carries TypeORM's SQLite create-temporary-table
+//      rebuild - the fingerprint of `migration:generate`. Matching columns (2)
+//      can be reproduced by a hand-written `ALTER TABLE ADD COLUMN`; the rebuild
+//      cannot, so its absence flags a hand-waived migration.
+//   4. The newest migration's down() is symmetric.
+// v1→current upgrade + rule-operator backfill live in upgrade-from-1x.spec.ts.
+
+const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
+type MigrationCtor = new () => MigrationInterface;
+
+const loadMigrations = (): { ts: number; file: string; cls: MigrationCtor }[] =>
+  fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => /^\d+-.*\.ts$/.test(f))
+    .map((file) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require(path.join(MIGRATIONS_DIR, file));
+      const cls = Object.values(mod).find(
+        (v): v is MigrationCtor => typeof v === 'function',
+      );
+      return { ts: Number(file.split('-')[0]), file, cls: cls! };
+    })
+    .sort((a, b) => a.ts - b.ts);
+
+const makeDS = (migrations: MigrationCtor[]) =>
+  new DataSource({
+    type: 'better-sqlite3',
+    database: ':memory:',
+    synchronize: false,
+    migrationsTableName: 'migrations',
+    entities: [],
+    migrations,
+  });
+
+type ColInfo = {
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: string | null;
+};
+const columns = (ds: DataSource, table: string): Promise<ColInfo[]> =>
+  ds.query(`PRAGMA table_info('${table}')`);
+const byName = (cols: ColInfo[]): Record<string, ColInfo> =>
+  Object.fromEntries(cols.map((c) => [c.name, c]));
+
+describe('database migrations', () => {
+  const all = loadMigrations();
+
+  it('apply in order on a fresh DB, each recorded exactly once', async () => {
+    const ds = await makeDS(all.map((m) => m.cls)).initialize();
+    try {
+      const applied = await ds.runMigrations();
+      expect(applied).toHaveLength(all.length);
+
+      const [{ c }] = await ds.query(`SELECT COUNT(*) AS c FROM migrations`);
+      expect(Number(c)).toBe(all.length);
+
+      const tables = (
+        await ds.query(`SELECT name FROM sqlite_master WHERE type='table'`)
+      ).map((t: { name: string }) => t.name);
+      expect(tables).toEqual(
+        expect.arrayContaining([
+          'settings',
+          'collection',
+          'rules',
+          'rule_group',
+          'exclusion',
+        ]),
+      );
+    } finally {
+      await ds.destroy();
+    }
+  });
+
+  it('add exactly the entity-declared columns (generated, not hand-waived)', async () => {
+    const ds = await makeDS(all.map((m) => m.cls)).initialize();
+    try {
+      await ds.runMigrations();
+      const collection = byName(await columns(ds, 'collection'));
+      const settings = byName(await columns(ds, 'settings'));
+
+      // Must match the @Column definitions exactly; a hand-edited migration that
+      // drifted (wrong type/default/nullability) would not.
+      const bool = { type: 'boolean', notnull: 1, dflt_value: '0' };
+      const dnd = { type: 'varchar', notnull: 1, dflt_value: "'dnd'" };
+      // SQLite reports INTEGER affinity uppercased via PRAGMA table_info.
+      const intNullable = { type: 'INTEGER', notnull: 0, dflt_value: null };
+      expect(collection.tagInArr).toMatchObject(bool);
+      expect(settings.radarr_tag_exclusions).toMatchObject(bool);
+      expect(settings.radarr_exclusion_tag).toMatchObject(dnd);
+      expect(settings.radarr_untag_on_unexclude).toMatchObject(bool);
+      expect(settings.sonarr_tag_exclusions).toMatchObject(bool);
+      expect(settings.sonarr_exclusion_tag).toMatchObject(dnd);
+      expect(settings.sonarr_untag_on_unexclude).toMatchObject(bool);
+
+      // AddCollectionMediaRuleRemoval: the rule-removal marker table columns.
+      const ruleRemoval = byName(
+        await columns(ds, 'collection_media_rule_removal'),
+      );
+      // SQLite upper-cases the `integer` storage-class keyword in PRAGMA,
+      // while non-storage-class types (varchar) stay as declared.
+      expect(ruleRemoval.collectionId).toMatchObject({
+        type: 'INTEGER',
+        notnull: 1,
+      });
+      expect(ruleRemoval.mediaServerId).toMatchObject({
+        type: 'varchar',
+        notnull: 1,
+      });
+
+      // AddCollectionMediaPendingDirection: defaults to 'remove' so every marker
+      // written before the add direction existed keeps its original meaning.
+      expect(ruleRemoval.direction).toMatchObject({
+        type: 'varchar',
+        notnull: 1,
+        dflt_value: "'remove'",
+      });
+
+      // AddSportarrSettings: the Sportarr connection columns.
+      expect(collection.sportarrSettingsId).toMatchObject(intNullable);
+      expect(collection.sportarrQualityProfileId).toMatchObject(intNullable);
+      const sportarrSettings = byName(await columns(ds, 'sportarr_settings'));
+      expect(sportarrSettings.serverName).toMatchObject({
+        type: 'varchar',
+        notnull: 1,
+      });
+      expect(sportarrSettings.url).toMatchObject({
+        type: 'varchar',
+        notnull: 0,
+      });
+      expect(sportarrSettings.apiKey).toMatchObject({
+        type: 'varchar',
+        notnull: 0,
+      });
+
+      const nullableVarchar = {
+        type: 'varchar',
+        notnull: 0,
+        dflt_value: null,
+      };
+      expect(settings.tracearr_url).toMatchObject(nullableVarchar);
+      expect(settings.tracearr_api_key).toMatchObject(nullableVarchar);
+      expect(settings.tracearr_server_id).toMatchObject(nullableVarchar);
+
+      // AddKeepCollectionInMaintainerrOnly: the per-collection opt-in, off by
+      // default so every existing collection keeps syncing.
+      expect(collection.keepInMaintainerrOnly).toMatchObject({
+        type: 'boolean',
+        notnull: 1,
+        dflt_value: '0',
+      });
+
+      // AddTelemetryEnabled: nullable with no default, so an existing install
+      // is grandfathered to "not asked yet" rather than opted in silently.
+      expect(settings.telemetryEnabled).toMatchObject({
+        type: 'boolean',
+        notnull: 0,
+        dflt_value: null,
+      });
+
+      // MakeDownloadClientTypeNullable: null until a client is chosen, like
+      // media_server_type, so an unconfigured integration never reads as one.
+      expect(settings.download_client_type).toMatchObject({
+        type: 'varchar',
+        notnull: 0,
+        dflt_value: null,
+      });
+    } finally {
+      await ds.destroy();
+    }
+  });
+
+  it('emit the SQLite create-temporary-table rebuild (generated, not hand-waived)', () => {
+    const newest = all[all.length - 1];
+    const src = fs.readFileSync(path.join(MIGRATIONS_DIR, newest.file), 'utf8');
+    // SQLite can't ALTER most columns in place, so `migration:generate` always
+    // emits a full create-temporary-table / copy / drop / rename rebuild for the
+    // changed tables. A hand-written ALTER shortcut lacks it - this is the
+    // cheapest signal the migration was generated rather than authored. The
+    // newest migration relaxes a settings column, so it rebuilds that table.
+    expect(src).toContain('CREATE TABLE "temporary_settings"');
+  });
+
+  // The rebuild in (3) drops and recreates the table, so its INSERT...SELECT is
+  // the only thing carrying an existing install's settings across. Every other
+  // test here migrates an empty DB, where a rebuild that copies nothing looks
+  // identical to one that copies correctly.
+  it('carry existing settings through the newest rebuild', async () => {
+    const newest = all[all.length - 1];
+    const ds = await makeDS(all.slice(0, -1).map((m) => m.cls)).initialize();
+    try {
+      await ds.runMigrations();
+      await ds.query(
+        `INSERT INTO settings ("id", "applicationTitle", "applicationUrl", "locale", "metadata_provider_preference", "download_client_url", "download_client_delete_data", "download_client_fallback_ratio") VALUES (1, 'Media Manager', 'http://localhost:6246', 'en', 'tmdb_primary', 'http://localhost:8080', 0, 1.25)`,
+      );
+      await ds.query(
+        `INSERT INTO settings ("id", "applicationTitle", "applicationUrl", "locale", "metadata_provider_preference") VALUES (2, 'Fresh', 'http://localhost:6246', 'en', 'tmdb_primary')`,
+      );
+
+      const runner = ds.createQueryRunner();
+      await new newest.cls().up(runner);
+      await runner.release();
+
+      const rows = await ds.query(`SELECT * FROM settings ORDER BY id`);
+      expect(rows).toHaveLength(2);
+      // A configured client keeps the qBittorrent backfill: the only client
+      // that existed before the type column did.
+      expect(rows[0]).toMatchObject({
+        applicationTitle: 'Media Manager',
+        applicationUrl: 'http://localhost:6246',
+        download_client_url: 'http://localhost:8080',
+        download_client_delete_data: 0,
+        download_client_fallback_ratio: 1.25,
+        download_client_type: 'qbittorrent',
+      });
+      // No URL means no client, so the earlier default is cleared.
+      expect(rows[1]).toMatchObject({
+        applicationTitle: 'Fresh',
+        download_client_url: null,
+        download_client_type: null,
+      });
+    } finally {
+      await ds.destroy();
+    }
+  });
+
+  // We don't revert the whole chain: several pre-existing migrations have
+  // non-reversible down() paths (production only ever migrates up). We do confirm
+  // the newest migration's down() is symmetric - the regression this catches when
+  // a migration is added.
+  it('revert the newest migration cleanly (symmetric down)', async () => {
+    const ds = await makeDS(all.map((m) => m.cls)).initialize();
+    try {
+      await ds.runMigrations();
+      const typeColumn = async () =>
+        byName(await columns(ds, 'settings')).download_client_type;
+      expect(await typeColumn()).toMatchObject({
+        notnull: 0,
+        dflt_value: null,
+      });
+      // A row without a client must survive the return to NOT NULL.
+      await ds.query(
+        `INSERT INTO settings ("id", "applicationTitle", "applicationUrl", "locale", "metadata_provider_preference") VALUES (1, 'Fresh', 'http://localhost:6246', 'en', 'tmdb_primary')`,
+      );
+
+      await ds.undoLastMigration();
+
+      expect(await typeColumn()).toMatchObject({
+        notnull: 1,
+        dflt_value: "'qbittorrent'",
+      });
+      const [row] = await ds.query(`SELECT download_client_type FROM settings`);
+      expect(row.download_client_type).toBe('qbittorrent');
+      const [{ c }] = await ds.query(`SELECT COUNT(*) AS c FROM migrations`);
+      expect(Number(c)).toBe(all.length - 1);
+    } finally {
+      await ds.destroy();
+    }
+  });
+});

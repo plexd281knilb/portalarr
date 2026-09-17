@@ -1,0 +1,375 @@
+import { MediaServerType } from '@maintainerr/contracts'
+import { act, fireEvent, render, screen } from '../../test-utils/render'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { INTERACTION_DEBOUNCE_MS } from '../../utils/uiBehavior'
+import SettingsWrapper from './index'
+
+const navigate = vi.fn()
+const toastError = vi.fn()
+
+const getMediaServerSettingsPath = (mediaServerType: MediaServerType) => {
+  switch (mediaServerType) {
+    case MediaServerType.PLEX:
+      return '/settings/plex'
+    case MediaServerType.EMBY:
+      return '/settings/emby'
+    default:
+      return '/settings/jellyfin'
+  }
+}
+
+let currentPath = getMediaServerSettingsPath(MediaServerType.JELLYFIN)
+
+type MockSettingsResult = {
+  data?: {
+    media_server_type?: MediaServerType | null
+    plex_auth_token: string | null
+    jellyfin_url?: string
+    jellyfin_api_key?: string
+    emby_url?: string
+    emby_api_key?: string
+  }
+  isLoading: boolean
+  error?: Error
+}
+
+let currentSettingsResult: MockSettingsResult
+let currentServarrSettings: { data: unknown[] } = { data: [] }
+
+vi.mock('../../api/settings', () => ({
+  useSettings: () => currentSettingsResult,
+  useServarrSettings: () => currentServarrSettings,
+}))
+
+vi.mock('../Common/Alert', () => ({
+  default: ({ title }: { title: string }) => <div>{title}</div>,
+}))
+
+vi.mock('../../router', () => ({
+  prefetchRoute: vi.fn(),
+}))
+
+vi.mock('react-toastify', () => ({
+  toast: {
+    error: (...args: unknown[]) => toastError(...args),
+    dismiss: vi.fn(),
+  },
+}))
+
+vi.mock('react-router-dom', async () => {
+  const actual =
+    await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+
+  return {
+    ...actual,
+    Navigate: ({ to }: { to: string }) => (
+      <div data-testid="navigate" data-to={to} />
+    ),
+    Link: ({
+      to,
+      children,
+      ...props
+    }: React.PropsWithChildren<{ to: string }>) => (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    ),
+    Outlet: () => <div>settings outlet</div>,
+    useLocation: () => ({ pathname: currentPath }),
+    useNavigate: () => navigate,
+  }
+})
+
+const getDesktopTabLabels = (container: HTMLElement) => {
+  return Array.from(container.querySelectorAll('nav.flex a')).map((link) =>
+    link.textContent?.trim(),
+  )
+}
+
+describe('SettingsWrapper', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    navigate.mockReset()
+    toastError.mockReset()
+    currentPath = getMediaServerSettingsPath(MediaServerType.JELLYFIN)
+    currentSettingsResult = {
+      data: undefined,
+      isLoading: true,
+      error: undefined,
+    }
+    currentServarrSettings = { data: [] }
+  })
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+  })
+
+  it('keeps the configured media server tab stable while settings are loading', () => {
+    const { container, rerender } = render(<SettingsWrapper />)
+
+    expect(getDesktopTabLabels(container)).toEqual([
+      'General',
+      'Jellyfin',
+      'Seerr',
+      'Radarr',
+      'Sonarr',
+      'Sportarr',
+      'Metadata',
+      'Tracearr',
+      'Streamystats',
+      'Notifications',
+      'Logs',
+      'Jobs',
+      'About',
+    ])
+
+    act(() => {
+      vi.advanceTimersByTime(INTERACTION_DEBOUNCE_MS - 1)
+    })
+
+    currentSettingsResult = {
+      data: {
+        media_server_type: MediaServerType.JELLYFIN,
+        plex_auth_token: null,
+        jellyfin_url: 'http://jellyfin.local',
+        jellyfin_api_key: 'token',
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    rerender(<SettingsWrapper />)
+
+    expect(getDesktopTabLabels(container)).toEqual([
+      'General',
+      'Jellyfin',
+      'Seerr',
+      'Radarr',
+      'Sonarr',
+      'Sportarr',
+      'Metadata',
+      'Tracearr',
+      'Streamystats',
+      'Notifications',
+      'Logs',
+      'Jobs',
+      'About',
+    ])
+  })
+
+  it('does not mark the loading placeholder media server tab as active on the general route', () => {
+    currentPath = '/settings/main'
+
+    const { container } = render(<SettingsWrapper />)
+
+    const desktopLinks = Array.from(container.querySelectorAll('nav.flex a'))
+    const activeLinks = desktopLinks.filter((link) =>
+      link.className.includes('text-maintainerr'),
+    )
+
+    expect(activeLinks).toHaveLength(1)
+    expect(activeLinks[0]?.textContent?.trim()).toBe('General')
+  })
+
+  it('redirects blocked settings routes to general with an error toast when no media server is selected', () => {
+    currentPath = '/settings/sonarr'
+    currentSettingsResult = {
+      data: {
+        media_server_type: null,
+        plex_auth_token: null,
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    render(<SettingsWrapper />)
+
+    expect(toastError).toHaveBeenCalledWith(
+      'You need to set up the media server first.',
+      expect.any(Object),
+    )
+
+    expect(screen.getByTestId('navigate').getAttribute('data-to')).toBe(
+      '/settings/main',
+    )
+  })
+
+  it('keeps blocked settings tabs disabled in the mobile selector during first setup', () => {
+    currentPath = '/settings/main'
+    currentSettingsResult = {
+      data: {
+        media_server_type: null,
+        plex_auth_token: null,
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    render(<SettingsWrapper />)
+
+    expect(
+      (screen.getByRole('option', { name: 'Sonarr' }) as HTMLOptionElement)
+        .disabled,
+    ).toBe(true)
+  })
+
+  it('shows a welcome modal during first setup on allowed settings routes', () => {
+    currentPath = '/settings/main'
+    currentSettingsResult = {
+      data: {
+        media_server_type: null,
+        plex_auth_token: null,
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    render(<SettingsWrapper />)
+
+    expect(screen.getByText('Welcome to Maintainerr!')).toBeTruthy()
+    expect(
+      screen.getByText('Connect your media server to finish setup.'),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Choose your media server, confirm the connection, and then you can continue configuring the rest of Maintainerr.',
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: "Let's get started" }),
+    ).toBeTruthy()
+    expect(screen.queryByTestId('navigate')).toBeNull()
+  })
+
+  it('does not show the welcome modal when a media server type is already selected', () => {
+    currentPath = '/settings/main'
+    currentSettingsResult = {
+      data: {
+        media_server_type: MediaServerType.JELLYFIN,
+        plex_auth_token: null,
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    render(<SettingsWrapper />)
+
+    expect(screen.queryByText('Welcome to Maintainerr!')).toBeNull()
+  })
+
+  it('keeps the selected media server tab enabled during incomplete setup', () => {
+    currentPath = '/settings/jellyfin'
+    currentSettingsResult = {
+      data: {
+        media_server_type: MediaServerType.JELLYFIN,
+        plex_auth_token: null,
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    render(<SettingsWrapper />)
+
+    expect(screen.queryByTestId('navigate')).toBeNull()
+    expect(
+      screen
+        .getByRole('link', { name: 'Jellyfin' })
+        .getAttribute('aria-disabled'),
+    ).not.toBe('true')
+  })
+
+  it('renders the Emby tab when media_server_type is EMBY', () => {
+    currentPath = getMediaServerSettingsPath(MediaServerType.EMBY)
+    currentSettingsResult = {
+      data: {
+        media_server_type: MediaServerType.EMBY,
+        plex_auth_token: null,
+        emby_url: 'http://emby.local',
+        emby_api_key: 'token',
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    const { container } = render(<SettingsWrapper />)
+
+    const labels = getDesktopTabLabels(container)
+    expect(labels).toContain('Emby')
+    expect(labels).not.toContain('Plex')
+    expect(labels).not.toContain('Jellyfin')
+
+    expect(
+      screen.getByRole('link', { name: 'Emby' }).getAttribute('href'),
+    ).toBe('/settings/emby')
+  })
+
+  it('hides the Download client tab when no Radarr/Sonarr is configured', () => {
+    currentSettingsResult = {
+      data: {
+        media_server_type: MediaServerType.JELLYFIN,
+        plex_auth_token: null,
+        jellyfin_url: 'http://jellyfin.local',
+        jellyfin_api_key: 'token',
+      },
+      isLoading: false,
+      error: undefined,
+    }
+    currentServarrSettings = { data: [] }
+
+    const { container } = render(<SettingsWrapper />)
+
+    expect(getDesktopTabLabels(container)).not.toContain('Download client')
+  })
+
+  it('shows the Download client tab when Radarr/Sonarr is configured', () => {
+    currentSettingsResult = {
+      data: {
+        media_server_type: MediaServerType.JELLYFIN,
+        plex_auth_token: null,
+        jellyfin_url: 'http://jellyfin.local',
+        jellyfin_api_key: 'token',
+      },
+      isLoading: false,
+      error: undefined,
+    }
+    currentServarrSettings = { data: [{ id: 1 }] }
+
+    const { container } = render(<SettingsWrapper />)
+
+    const labels = getDesktopTabLabels(container)
+    expect(labels).toContain('Download client')
+    expect(
+      screen
+        .getByRole('link', { name: 'Download client' })
+        .getAttribute('href'),
+    ).toBe('/settings/download-client')
+  })
+
+  it('shows an error toast when a blocked settings tab is clicked during first setup', () => {
+    currentPath = '/settings/main'
+    currentSettingsResult = {
+      data: {
+        media_server_type: null,
+        plex_auth_token: null,
+      },
+      isLoading: false,
+      error: undefined,
+    }
+
+    render(<SettingsWrapper />)
+
+    const blockedSonarrLink = screen
+      .getAllByRole('link', { name: 'Sonarr' })
+      .find((link) => link.getAttribute('aria-disabled') === 'true')
+
+    expect(blockedSonarrLink).toBeDefined()
+
+    fireEvent.click(blockedSonarrLink as HTMLElement)
+
+    expect(toastError).toHaveBeenCalledWith(
+      'You need to set up the media server first.',
+      expect.any(Object),
+    )
+  })
+})

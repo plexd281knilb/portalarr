@@ -1,0 +1,1730 @@
+import {
+  BasicResponseDto,
+  EmbySetting,
+  JellyfinSetting,
+  DownloadClientSetting,
+  MediaServerType,
+  MINIMUM_SPORTARR_VERSION,
+  SeerrSetting,
+  StreamystatsSetting,
+  TautulliSetting,
+  TracearrConnection,
+  TracearrServer,
+  TracearrSetting,
+} from '@maintainerr/contracts';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import {
+  formatConnectionFailureMessage,
+  getErrorMessage,
+  logConnectionTestError,
+} from '../../utils/connection-error';
+import { InternalApiService } from '../api/internal-api/internal-api.service';
+import { MediaServerFactory } from '../api/media-server/media-server.factory';
+import { DownloadClientApiService } from '../api/download-client-api/download-client-api.service';
+import { PlexApiService } from '../api/plex-api/plex-api.service';
+import { SeerrApiService } from '../api/seerr-api/seerr-api.service';
+import { isBelowMinimumVersion } from '../../utils/required-version-helper';
+import { ServarrService } from '../api/servarr-api/servarr.service';
+import { StreamystatsApiService } from '../api/streamystats-api/streamystats-api.service';
+import { TautulliApiService } from '../api/tautulli-api/tautulli-api.service';
+import { TracearrApiService } from '../api/tracearr-api/tracearr-api.service';
+import { MaintainerrLogger } from '../logging/logs.service';
+import { SettingsDataService } from './settings-data.service';
+import {
+  DeleteRadarrSettingResponseDto,
+  RadarrSettingRawDto,
+  RadarrSettingResponseDto,
+} from "./dto's/radarr-setting.dto";
+import {
+  DeleteSonarrSettingResponseDto,
+  SonarrSettingRawDto,
+  SonarrSettingResponseDto,
+} from "./dto's/sonarr-setting.dto";
+import {
+  DeleteSportarrSettingResponseDto,
+  SportarrSettingRawDto,
+  SportarrSettingResponseDto,
+} from "./dto's/sportarr-setting.dto";
+import { RadarrSettings } from './entities/radarr_settings.entities';
+import { Settings } from './entities/settings.entities';
+import { SonarrSettings } from './entities/sonarr_settings.entities';
+import { SportarrSettings } from './entities/sportarr_settings.entities';
+
+@Injectable()
+export class SettingsOperationsService {
+  constructor(
+    private readonly settingsDataService: SettingsDataService,
+    private readonly plexApi: PlexApiService,
+    private readonly mediaServerFactory: MediaServerFactory,
+    private readonly servarr: ServarrService,
+    private readonly seerr: SeerrApiService,
+    private readonly tautulli: TautulliApiService,
+    private readonly streamystats: StreamystatsApiService,
+    private readonly tracearr: TracearrApiService,
+    private readonly downloadClient: DownloadClientApiService,
+    private readonly internalApi: InternalApiService,
+    @InjectRepository(Settings)
+    private readonly settingsRepo: Repository<Settings>,
+    @InjectRepository(RadarrSettings)
+    private readonly radarrSettingsRepo: Repository<RadarrSettings>,
+    @InjectRepository(SonarrSettings)
+    private readonly sonarrSettingsRepo: Repository<SonarrSettings>,
+    @InjectRepository(SportarrSettings)
+    private readonly sportarrSettingsRepo: Repository<SportarrSettings>,
+    private readonly logger: MaintainerrLogger,
+  ) {
+    logger.setContext(SettingsOperationsService.name);
+  }
+
+  // ==========================================================================
+  // Read API - delegated to the passive settings store
+  // ==========================================================================
+
+  public init() {
+    return this.settingsDataService.init();
+  }
+
+  public getSettings() {
+    return this.settingsDataService.getSettings();
+  }
+
+  public getPublicSettings() {
+    return this.settingsDataService.getPublicSettings();
+  }
+
+  public getMediaServerType(): MediaServerType | null {
+    return this.settingsDataService.getMediaServerType();
+  }
+
+  public seerrConfigured(): boolean {
+    return this.settingsDataService.seerrConfigured();
+  }
+
+  public tautulliConfigured(): boolean {
+    return this.settingsDataService.tautulliConfigured();
+  }
+
+  public getRadarrSettings() {
+    return this.settingsDataService.getRadarrSettings();
+  }
+
+  public getRadarrSetting(id: number) {
+    return this.settingsDataService.getRadarrSetting(id);
+  }
+
+  public getSonarrSettings() {
+    return this.settingsDataService.getSonarrSettings();
+  }
+
+  public getSonarrSetting(id: number) {
+    return this.settingsDataService.getSonarrSetting(id);
+  }
+
+  public getRadarrSettingsCount(): Promise<number> {
+    return this.settingsDataService.getRadarrSettingsCount();
+  }
+
+  public getSonarrSettingsCount(): Promise<number> {
+    return this.settingsDataService.getSonarrSettingsCount();
+  }
+
+  public getSportarrSettings() {
+    return this.settingsDataService.getSportarrSettings();
+  }
+
+  public getSportarrSetting(id: number) {
+    return this.settingsDataService.getSportarrSetting(id);
+  }
+
+  public getSportarrSettingsCount(): Promise<number> {
+    return this.settingsDataService.getSportarrSettingsCount();
+  }
+
+  public generateApiKey(): string {
+    return this.settingsDataService.generateApiKey();
+  }
+
+  public appVersion(): string {
+    return this.settingsDataService.appVersion();
+  }
+
+  public cronIsValid(schedule: string) {
+    return this.settingsDataService.cronIsValid(schedule);
+  }
+
+  public async updatePlexConnectionDetails(
+    details: Partial<
+      Pick<
+        Settings,
+        | 'plex_hostname'
+        | 'plex_port'
+        | 'plex_ssl'
+        | 'plex_machine_id'
+        | 'plex_manual_mode'
+      >
+    >,
+  ): Promise<void> {
+    return this.settingsDataService.updatePlexConnectionDetails(details);
+  }
+
+  // ==========================================================================
+  // Coordination - test / save / reinit flows
+  // ==========================================================================
+
+  public async addRadarrSetting(
+    settings: Omit<RadarrSettings, 'id' | 'collections'>,
+  ): Promise<RadarrSettingResponseDto> {
+    try {
+      settings.url = settings.url.toLowerCase();
+
+      const savedSetting = await this.radarrSettingsRepo.save(settings);
+
+      this.logger.log('Radarr setting added');
+      return {
+        data: savedSetting,
+        status: 'OK',
+        code: 1,
+        message: 'Success',
+      };
+    } catch (error) {
+      this.logger.error('Error while adding Radarr setting');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure' };
+    }
+  }
+
+  public async updateRadarrSetting(
+    settings: Omit<RadarrSettings, 'collections'>,
+  ): Promise<RadarrSettingResponseDto> {
+    try {
+      settings.url = settings.url.toLowerCase();
+
+      const settingsDb = await this.radarrSettingsRepo.findOne({
+        where: { id: settings.id },
+      });
+
+      const data = {
+        ...settingsDb,
+        ...settings,
+      };
+
+      await this.radarrSettingsRepo.save(data);
+
+      this.servarr.deleteCachedRadarrApiClient(settings.id);
+      this.logger.log('Radarr settings updated');
+      return { data, status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating Radarr settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure' };
+    }
+  }
+
+  public async deleteRadarrSetting(
+    id: number,
+  ): Promise<DeleteRadarrSettingResponseDto> {
+    try {
+      const settingsDb = await this.radarrSettingsRepo.findOne({
+        where: { id: id },
+        relations: { collections: true },
+      });
+
+      if (settingsDb.collections.length > 0) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: 'Cannot delete setting with associated collections',
+          data: {
+            collectionsInUse: settingsDb.collections,
+          },
+        };
+      }
+
+      await this.radarrSettingsRepo.delete({
+        id,
+      });
+
+      this.servarr.deleteCachedRadarrApiClient(id);
+
+      this.logger.log('Radarr setting deleted');
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while deleting Radarr setting');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure', data: null };
+    }
+  }
+
+  public async removeTautulliSetting() {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        tautulli_url: null,
+        tautulli_api_key: null,
+      });
+
+      await this.settingsDataService.init();
+      this.tautulli.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error removing Tautulli settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async updateTautulliSetting(
+    settings: TautulliSetting,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        tautulli_url: settings.url,
+        tautulli_api_key: settings.api_key,
+      });
+
+      await this.settingsDataService.init();
+      this.tautulli.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating Tautulli settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async updateTelemetrySetting(
+    enabled: boolean,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        telemetryEnabled: enabled,
+      });
+
+      await this.settingsDataService.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating telemetry settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async removeStreamystatsSetting() {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        streamystats_url: null,
+      });
+
+      await this.settingsDataService.init();
+      this.streamystats.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error removing Streamystats settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async updateStreamystatsSetting(
+    settings: StreamystatsSetting,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        streamystats_url: settings.url,
+      });
+
+      await this.settingsDataService.init();
+      this.streamystats.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating Streamystats settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async removeTracearrSetting(): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        tracearr_url: null,
+        tracearr_api_key: null,
+        tracearr_server_id: null,
+      });
+
+      await this.settingsDataService.init();
+      this.tracearr.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error removing Tracearr settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async updateTracearrSetting(
+    settings: TracearrSetting,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      // A chosen server wins: it is only ever offered when Tracearr has several
+      // of the configured type and nothing can pick between them.
+      const serverId =
+        settings.server_id ??
+        (await this.tracearr.resolveServerId({
+          url: settings.url,
+          apiKey: settings.api_key,
+        }));
+      if (!serverId) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: `Tracearr has no single ${this.settingsDataService.media_server_type ?? 'media'} server matching the one Maintainerr manages. Add it in Tracearr and let it sync a library first, or pick the server to use.`,
+        };
+      }
+
+      // A chosen server is checked rather than trusted: rating keys from the
+      // wrong server match nothing, and every rule would read as unwatched.
+      const sharesLibrary = await this.tracearr.serverSharesLibrary(
+        { url: settings.url, apiKey: settings.api_key },
+        serverId,
+      );
+      if (sharesLibrary === false) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message:
+            'That Tracearr server tracks a different media server than the one Maintainerr manages. Pick the Tracearr server for this media server.',
+        };
+      }
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        tracearr_url: settings.url,
+        tracearr_api_key: settings.api_key,
+        tracearr_server_id: serverId,
+      });
+
+      await this.settingsDataService.init();
+      this.tracearr.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error updating Tracearr settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  /**
+   * Settings resolved against the media server go stale when Maintainerr is
+   * re-pointed at another instance of the same type: the type is unchanged, so
+   * the switch path never runs.
+   */
+  private async revalidateMediaServerDependentSettings(): Promise<void> {
+    try {
+      // The swept history, the resolved server and its verification all
+      // describe the previous connection, so they go regardless of what the
+      // check below concludes. Keeping them would let the next run read the
+      // old server from memory without probing it again.
+      this.tracearr.invalidateHistory();
+
+      if ((await this.tracearr.savedServerTracksMediaServer()) !== false) {
+        return;
+      }
+
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        tracearr_server_id: null,
+      });
+      await this.settingsDataService.init();
+
+      this.logger.log(
+        'Cleared the selected Tracearr server: it tracks a different media server than the one now configured.',
+      );
+    } catch (error) {
+      // The settings are already saved; this check must not fail that.
+      this.logger.debug(error);
+    }
+  }
+
+  public getTracearrServers(
+    settings: TracearrConnection,
+  ): Promise<TracearrServer[] | undefined> {
+    return this.tracearr.getServers({
+      url: settings.url,
+      apiKey: settings.api_key,
+    });
+  }
+
+  public testTracearr(settings: TracearrSetting): Promise<BasicResponseDto> {
+    return this.tracearr.testConnection({
+      url: settings.url,
+      apiKey: settings.api_key,
+    });
+  }
+
+  public async removeDownloadClientSetting() {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      // Clear the whole integration config, not just the connection fields, so
+      // a removed download client leaves no stale cleanup options behind (and a
+      // later reconfigure starts from defaults).
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        download_client_type: null,
+        download_client_url: null,
+        download_client_username: null,
+        download_client_password: null,
+        download_client_delete_data: true,
+        download_client_fallback_ratio: 0.5,
+      });
+
+      await this.settingsDataService.init();
+      this.downloadClient.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error removing download client settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async updateDownloadClientSetting(
+    settings: DownloadClientSetting,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        download_client_type: settings.download_client_type,
+        download_client_url: settings.download_client_url,
+        download_client_username: settings.download_client_username || null,
+        download_client_password: settings.download_client_password || null,
+        download_client_delete_data: settings.download_client_delete_data,
+        download_client_fallback_ratio: settings.download_client_fallback_ratio,
+      });
+
+      await this.settingsDataService.init();
+      this.downloadClient.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating download client settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async removeSeerrSetting() {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        seerr_url: null,
+        seerr_api_key: null,
+      });
+
+      await this.settingsDataService.init();
+      this.seerr.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error removing Seerr settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async updateSeerrSetting(
+    settings: SeerrSetting,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        seerr_url: settings.url,
+        seerr_api_key: settings.api_key,
+      });
+
+      await this.settingsDataService.init();
+      this.seerr.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating Seerr settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  /**
+   * Test connection to a Jellyfin server
+   */
+  public async testJellyfin(settings: JellyfinSetting): Promise<
+    BasicResponseDto & {
+      serverName?: string;
+      version?: string;
+      users?: Array<{ id: string; name: string }>;
+    }
+  > {
+    try {
+      const result = await this.mediaServerFactory.testJellyfinConnection(
+        settings.jellyfin_url,
+        settings.jellyfin_api_key,
+      );
+
+      if (result.success) {
+        return {
+          status: 'OK',
+          code: 1,
+          message: `Connected to ${result.serverName}`,
+          serverName: result.serverName,
+          version: result.version,
+          users: result.users,
+        };
+      }
+
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          result.error,
+          'Failed to connect to Jellyfin. Verify URL and API key.',
+        ),
+      };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Jellyfin');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Jellyfin. Verify URL and API key.',
+        ),
+      };
+    }
+  }
+
+  /**
+   * Save Jellyfin settings and initialize the service
+   */
+  public async saveJellyfinSettings(
+    settings: JellyfinSetting,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      // Test connection - block save on failure
+      const testResult = await this.testJellyfin(settings);
+      if (testResult.code !== 1) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: testResult.message || 'Connection test failed',
+        };
+      }
+
+      // The connection test already lists the admin users; default to the first
+      let userId = settings.jellyfin_user_id;
+      if (!userId) {
+        userId = testResult.users?.[0]?.id;
+        if (userId) {
+          this.logger.log(`Auto-detected Jellyfin admin user ID: ${userId}`);
+        } else {
+          this.logger.warn(
+            'Could not auto-detect Jellyfin admin user. Some features may not work correctly.',
+          );
+        }
+      }
+
+      // Validate selected user is an admin when provided
+      if (userId && testResult.users && testResult.users.length > 0) {
+        const selectedUser = testResult.users.find((u) => u.id === userId);
+        if (!selectedUser) {
+          return {
+            status: 'NOK',
+            code: 0,
+            message:
+              'Selected Jellyfin user must be an admin. Please re-test connection and select a valid admin.',
+          };
+        }
+      }
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        jellyfin_url: settings.jellyfin_url,
+        jellyfin_api_key: settings.jellyfin_api_key,
+        jellyfin_user_id: userId || null,
+        jellyfin_server_name: testResult.serverName || null,
+        media_server_type: MediaServerType.JELLYFIN,
+      });
+
+      // Uninitialize service so it reinitializes with new credentials on next use
+      this.mediaServerFactory.uninitializeServer(MediaServerType.JELLYFIN);
+
+      await this.settingsDataService.init();
+
+      // Streamystats uses the Jellyfin API key + server identity. Re-init so
+      // the cached client and resolved serverId track the new credentials.
+      this.streamystats.init();
+
+      if (
+        settingsDb?.jellyfin_url !== settings.jellyfin_url ||
+        settingsDb?.jellyfin_api_key !== settings.jellyfin_api_key
+      ) {
+        await this.revalidateMediaServerDependentSettings();
+      }
+
+      this.logger.log('Jellyfin settings saved successfully');
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while saving Jellyfin settings');
+      this.logger.debug(error);
+      const message =
+        error instanceof Error ? error.message : 'Failed to save settings';
+      return { status: 'NOK', code: 0, message };
+    }
+  }
+
+  /**
+   * Remove Jellyfin settings
+   */
+  public async removeJellyfinSettings(): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      // Streamystats can't authenticate without Jellyfin credentials; clear
+      // its URL alongside Jellyfin so we don't leave a half-configured state.
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        jellyfin_url: null,
+        jellyfin_api_key: null,
+        jellyfin_user_id: null,
+        jellyfin_server_name: null,
+        streamystats_url: null,
+      });
+
+      // Uninitialize service to clear credentials
+      this.mediaServerFactory.uninitializeServer(MediaServerType.JELLYFIN);
+
+      await this.settingsDataService.init();
+      this.streamystats.init();
+
+      this.logger.log('Jellyfin settings cleared');
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error removing Jellyfin settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  // ==========================================================================
+  // Emby
+  // ==========================================================================
+
+  /**
+   * Test connection to an Emby server using the API-key flow.
+   */
+  public async testEmby(settings: EmbySetting): Promise<
+    BasicResponseDto & {
+      serverName?: string;
+      version?: string;
+      users?: Array<{ id: string; name: string }>;
+    }
+  > {
+    try {
+      const result = await this.mediaServerFactory.testEmbyConnection(
+        settings.emby_url,
+        settings.emby_api_key,
+      );
+
+      if (result.success) {
+        return {
+          status: 'OK',
+          code: 1,
+          message: `Connected to ${result.serverName}`,
+          serverName: result.serverName,
+          version: result.version,
+          users: result.users,
+        };
+      }
+
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          result.error,
+          'Failed to connect to Emby. Verify URL and API key.',
+        ),
+      };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Emby');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Emby. Verify URL and API key.',
+        ),
+      };
+    }
+  }
+
+  /**
+   * Authenticate against Emby with admin username/password and return the
+   * library/user lists for the post-login confirmation step (Plex-style UX).
+   */
+  public async loginEmby(
+    url: string,
+    username: string,
+    password: string,
+  ): Promise<
+    BasicResponseDto & {
+      token?: string;
+      userId?: string;
+      serverName?: string;
+      users?: Array<{ id: string; name: string }>;
+      libraries?: Array<{ id: string; name: string; type: string }>;
+    }
+  > {
+    try {
+      const result = await this.mediaServerFactory.loginEmbyWithCredentials(
+        url,
+        username,
+        password,
+      );
+      if (result.success) {
+        return {
+          status: 'OK',
+          code: 1,
+          message: `Authenticated against ${result.serverName ?? url}`,
+          token: result.token,
+          userId: result.userId,
+          serverName: result.serverName,
+          users: result.users,
+          libraries: result.libraries,
+        };
+      }
+      return {
+        status: 'NOK',
+        code: 0,
+        message: result.error || 'Emby authentication failed',
+      };
+    } catch (error) {
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to authenticate with Emby. Verify URL and credentials.',
+        ),
+      };
+    }
+  }
+
+  /**
+   * Save Emby settings and initialize the service.
+   */
+  public async saveEmbySettings(
+    settings: EmbySetting,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      const testResult = await this.testEmby(settings);
+      if (testResult.code !== 1) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: testResult.message || 'Connection test failed',
+        };
+      }
+
+      // Validate selected user is an admin when provided
+      const userId = settings.emby_user_id;
+      if (userId && testResult.users && testResult.users.length > 0) {
+        const selectedUser = testResult.users.find((u) => u.id === userId);
+        if (!selectedUser) {
+          return {
+            status: 'NOK',
+            code: 0,
+            message:
+              'Selected Emby user must be an admin. Re-test the connection and pick a valid admin.',
+          };
+        }
+      }
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        emby_url: settings.emby_url,
+        emby_api_key: settings.emby_api_key,
+        emby_user_id: userId || null,
+        emby_server_name: testResult.serverName || null,
+        media_server_type: MediaServerType.EMBY,
+      });
+
+      this.mediaServerFactory.uninitializeServer(MediaServerType.EMBY);
+
+      await this.settingsDataService.init();
+
+      if (
+        settingsDb?.emby_url !== settings.emby_url ||
+        settingsDb?.emby_api_key !== settings.emby_api_key
+      ) {
+        await this.revalidateMediaServerDependentSettings();
+      }
+
+      this.logger.log('Emby settings saved successfully');
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while saving Emby settings');
+      this.logger.debug(error);
+      const message =
+        error instanceof Error ? error.message : 'Failed to save settings';
+      return { status: 'NOK', code: 0, message };
+    }
+  }
+
+  /**
+   * Remove Emby settings.
+   */
+  public async removeEmbySettings(): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsDataService.saveSettings({
+        ...settingsDb,
+        emby_url: null,
+        emby_api_key: null,
+        emby_user_id: null,
+        emby_server_name: null,
+      });
+
+      this.mediaServerFactory.uninitializeServer(MediaServerType.EMBY);
+
+      await this.settingsDataService.init();
+
+      this.logger.log('Emby settings cleared');
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error removing Emby settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  public async addSonarrSetting(
+    settings: Omit<SonarrSettings, 'id' | 'collections'>,
+  ): Promise<SonarrSettingResponseDto> {
+    try {
+      settings.url = settings.url.toLowerCase();
+
+      const savedSetting = await this.sonarrSettingsRepo.save(settings);
+
+      this.logger.log('Sonarr setting added');
+      return {
+        data: savedSetting,
+        status: 'OK',
+        code: 1,
+        message: 'Success',
+      };
+    } catch (error) {
+      this.logger.error('Error while adding Sonarr setting');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure' };
+    }
+  }
+
+  public async updateSonarrSetting(
+    settings: Omit<SonarrSettings, 'collections'>,
+  ): Promise<SonarrSettingResponseDto> {
+    try {
+      settings.url = settings.url.toLowerCase();
+
+      const settingsDb = await this.sonarrSettingsRepo.findOne({
+        where: { id: settings.id },
+      });
+
+      const data = {
+        ...settingsDb,
+        ...settings,
+      };
+
+      await this.sonarrSettingsRepo.save(data);
+
+      this.servarr.deleteCachedSonarrApiClient(settings.id);
+
+      this.logger.log('Sonarr settings updated');
+      return { data, status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating Sonarr settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure' };
+    }
+  }
+
+  public async deleteSonarrSetting(
+    id: number,
+  ): Promise<DeleteSonarrSettingResponseDto> {
+    try {
+      const settingsDb = await this.sonarrSettingsRepo.findOne({
+        where: { id: id },
+        relations: { collections: true },
+      });
+
+      if (settingsDb.collections.length > 0) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: 'Cannot delete setting with associated collections',
+          data: {
+            collectionsInUse: settingsDb.collections,
+          },
+        };
+      }
+
+      await this.sonarrSettingsRepo.delete({
+        id,
+      });
+      this.servarr.deleteCachedSonarrApiClient(id);
+
+      this.logger.log('Sonarr settings deleted');
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while deleting Sonarr setting');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure', data: null };
+    }
+  }
+
+  public async addSportarrSetting(
+    settings: Omit<SportarrSettings, 'id' | 'collections'>,
+  ): Promise<SportarrSettingResponseDto> {
+    try {
+      settings.url = settings.url.toLowerCase();
+
+      const savedSetting = await this.sportarrSettingsRepo.save(settings);
+
+      this.logger.log('Sportarr setting added');
+      return {
+        data: savedSetting,
+        status: 'OK',
+        code: 1,
+        message: 'Success',
+      };
+    } catch (error) {
+      this.logger.error('Error while adding Sportarr setting');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure' };
+    }
+  }
+
+  public async updateSportarrSetting(
+    settings: Omit<SportarrSettings, 'collections'>,
+  ): Promise<SportarrSettingResponseDto> {
+    try {
+      settings.url = settings.url.toLowerCase();
+
+      const settingsDb = await this.sportarrSettingsRepo.findOne({
+        where: { id: settings.id },
+      });
+
+      const data = {
+        ...settingsDb,
+        ...settings,
+      };
+
+      await this.sportarrSettingsRepo.save(data);
+
+      this.servarr.deleteCachedSportarrApiClient(settings.id);
+
+      this.logger.log('Sportarr settings updated');
+      return { data, status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating Sportarr settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure' };
+    }
+  }
+
+  public async deleteSportarrSetting(
+    id: number,
+  ): Promise<DeleteSportarrSettingResponseDto> {
+    try {
+      const settingsDb = await this.sportarrSettingsRepo.findOne({
+        where: { id: id },
+        relations: { collections: true },
+      });
+
+      if (settingsDb.collections.length > 0) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: 'Cannot delete setting with associated collections',
+          data: {
+            collectionsInUse: settingsDb.collections,
+          },
+        };
+      }
+
+      await this.sportarrSettingsRepo.delete({
+        id,
+      });
+      this.servarr.deleteCachedSportarrApiClient(id);
+
+      this.logger.log('Sportarr settings deleted');
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while deleting Sportarr setting');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure', data: null };
+    }
+  }
+
+  public async deletePlexApiAuth(): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsRepo.update(
+        {
+          id: settingsDb.id,
+        },
+        { plex_auth_token: null },
+      );
+
+      await this.settingsDataService.init();
+      this.plexApi.uninitialize();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error(
+        'Something went wrong while deleting the Plex auth token',
+      );
+      this.logger.debug(error);
+      return {
+        status: 'NOK',
+        code: 0,
+        message: getErrorMessage(error, 'Failed to delete the Plex auth token'),
+      };
+    }
+  }
+
+  public async savePlexApiAuthToken(plex_auth_token: string) {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      await this.settingsRepo.update(
+        {
+          id: settingsDb.id,
+        },
+        {
+          plex_auth_token: plex_auth_token,
+        },
+      );
+
+      await this.settingsDataService.init();
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating Plex auth token');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failed' };
+    }
+  }
+
+  /** Kept as its own route verb; updateSettings merges over the stored row too. */
+  public async patchSettings(
+    settings: Partial<Settings>,
+  ): Promise<BasicResponseDto> {
+    return this.updateSettings(settings);
+  }
+
+  private stripPlexProtocolPrefix(hostname: string | null | undefined) {
+    if (!hostname) {
+      return hostname;
+    }
+
+    if (hostname.startsWith('https://')) {
+      return hostname.slice('https://'.length);
+    }
+
+    if (hostname.startsWith('http://')) {
+      return hostname.slice('http://'.length);
+    }
+
+    return hostname;
+  }
+
+  private normalizePlexServerConnectionSettings({
+    hostname,
+    port,
+    fallbackSsl,
+  }: {
+    hostname: string | null | undefined;
+    port: number | null | undefined;
+    fallbackSsl: number | null | undefined;
+  }) {
+    const normalizedHostnameInput = hostname?.trim().toLowerCase();
+    const normalizedHostname = this.stripPlexProtocolPrefix(
+      normalizedHostnameInput,
+    );
+    // Only a scheme prefix or port 443 says anything about TLS. The stored
+    // hostname is always bare and auto-discovery stores plex.direct hosts on
+    // 32400 with ssl=1, so a bare hostname must not downgrade fallbackSsl.
+    const normalizedSsl =
+      normalizedHostnameInput?.startsWith('https://') || port === 443
+        ? 1
+        : normalizedHostnameInput?.startsWith('http://')
+          ? 0
+          : (fallbackSsl ?? 0);
+
+    return {
+      hostname: normalizedHostname,
+      port,
+      ssl: normalizedSsl,
+    };
+  }
+
+  private isPlexServerSettingsUpdate(
+    currentSettings: Settings,
+    nextSettings: Partial<Settings>,
+  ): boolean {
+    const currentMediaServerType =
+      nextSettings.media_server_type ?? currentSettings.media_server_type;
+
+    if (currentMediaServerType !== MediaServerType.PLEX) {
+      return false;
+    }
+
+    const normalizedCurrent = this.normalizePlexServerConnectionSettings({
+      hostname: currentSettings.plex_hostname,
+      port: currentSettings.plex_port,
+      fallbackSsl: currentSettings.plex_ssl,
+    });
+    const normalizedNext = this.normalizePlexServerConnectionSettings({
+      hostname: nextSettings.plex_hostname,
+      port: nextSettings.plex_port,
+      fallbackSsl: nextSettings.plex_ssl,
+    });
+
+    return (
+      currentSettings.plex_name !== nextSettings.plex_name ||
+      normalizedCurrent.hostname !== normalizedNext.hostname ||
+      normalizedCurrent.port !== normalizedNext.port ||
+      normalizedCurrent.ssl !== normalizedNext.ssl
+    );
+  }
+
+  public async updateSettings(
+    settings: Partial<Settings>,
+  ): Promise<BasicResponseDto> {
+    try {
+      const settingsDb = await this.settingsRepo.findOne({ where: {} });
+
+      if (!settingsDb) {
+        this.logger.error('Settings could not be loaded for update.');
+        return {
+          status: 'NOK',
+          code: 0,
+          message: 'No settings found to update',
+        };
+      }
+
+      // Merge before anything reads the payload. An absent field means "leave
+      // as-is", and every step below - cron validation, the Plex-change check,
+      // URL lowercasing, hostname/ssl normalisation - assumes it is looking at
+      // a complete settings object. Reading the raw partial instead reset
+      // plex_ssl to 0 and rescheduled the collection handler to "undefined".
+      const merged: Settings = { ...settingsDb, ...settings };
+
+      if (
+        !this.cronIsValid(merged.collection_handler_job_cron) ||
+        !this.cronIsValid(merged.rules_handler_job_cron)
+      ) {
+        this.logger.error(
+          'Invalid CRON configuration found, settings update aborted.',
+        );
+        return {
+          status: 'NOK',
+          code: 0,
+          message: 'Update failed, invalid CRON value was found',
+        };
+      }
+
+      if (
+        this.isPlexServerSettingsUpdate(settingsDb, merged) &&
+        !settingsDb.plex_auth_token
+      ) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: 'Authenticate with Plex before saving Plex server settings.',
+        };
+      }
+
+      merged.seerr_url = merged.seerr_url?.toLowerCase();
+      merged.tautulli_url = merged.tautulli_url?.toLowerCase();
+
+      const normalizedPlexServerSettings =
+        this.normalizePlexServerConnectionSettings({
+          hostname: merged.plex_hostname,
+          port: merged.plex_port,
+          fallbackSsl: merged.plex_ssl,
+        });
+
+      merged.plex_hostname = normalizedPlexServerSettings.hostname;
+      merged.plex_ssl = normalizedPlexServerSettings.ssl;
+
+      // Plex is the only media server configured through this endpoint; the
+      // others have their own save paths.
+      const mediaServerConnectionChanged = this.isPlexServerSettingsUpdate(
+        settingsDb,
+        merged,
+      );
+
+      await this.settingsDataService.saveSettings(merged);
+
+      await this.settingsDataService.init();
+      this.logger.log('Settings updated');
+      await this.mediaServerFactory.initialize();
+      this.seerr.init();
+      this.tautulli.init();
+      this.downloadClient.init();
+      this.internalApi.init();
+
+      if (mediaServerConnectionChanged) {
+        await this.revalidateMediaServerDependentSettings();
+      }
+
+      // reload Collection handler job if changed
+      if (
+        settingsDb.collection_handler_job_cron !==
+        merged.collection_handler_job_cron
+      ) {
+        this.logger.log(
+          `Collection Handler cron schedule changed.. Reloading job.`,
+        );
+        await this.internalApi
+          .getApi()
+          .put(
+            '/collections/schedule/update',
+            `{"schedule": "${merged.collection_handler_job_cron}"}`,
+          );
+      }
+
+      return { status: 'OK', code: 1, message: 'Success' };
+    } catch (error) {
+      this.logger.error('Error while updating settings');
+      this.logger.debug(error);
+      return { status: 'NOK', code: 0, message: 'Failure' };
+    }
+  }
+
+  public async testSeerr(setting?: SeerrSetting): Promise<BasicResponseDto> {
+    return await this.seerr.testConnection(
+      setting
+        ? {
+            apiKey: setting.api_key,
+            url: setting.url,
+          }
+        : undefined,
+    );
+  }
+
+  public async testTautulli(
+    setting?: TautulliSetting,
+  ): Promise<BasicResponseDto> {
+    if (setting) {
+      return await this.tautulli.testConnection({
+        apiKey: setting.api_key,
+        url: setting.url,
+      });
+    }
+
+    try {
+      const resp = await this.tautulli.info();
+      return resp?.response && resp?.response.result == 'success'
+        ? {
+            status: 'OK',
+            code: 1,
+            message: resp.response.data?.tautulli_version,
+          }
+        : { status: 'NOK', code: 0, message: 'Failure' };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Tautulli');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Tautulli. Verify URL and API key.',
+        ),
+      };
+    }
+  }
+
+  public async testStreamystats(
+    setting?: StreamystatsSetting,
+  ): Promise<BasicResponseDto> {
+    if (setting) {
+      // testConnection only hits Streamystats's unauthenticated /api/version
+      // endpoint, so we deliberately do not send the stored Jellyfin API key
+      // here. This avoids handing the stored credential to a URL the caller
+      // just supplied via the test endpoint.
+      return await this.streamystats.testConnection({
+        url: setting.url,
+      });
+    }
+
+    try {
+      const info = await this.streamystats.info();
+      return info?.currentVersion
+        ? {
+            status: 'OK',
+            code: 1,
+            message: info.currentVersion,
+          }
+        : { status: 'NOK', code: 0, message: 'Failure' };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Streamystats');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Streamystats. Verify URL and that the service is running.',
+        ),
+      };
+    }
+  }
+
+  public testDownloadClient(
+    setting: DownloadClientSetting,
+  ): Promise<BasicResponseDto> {
+    return this.downloadClient.testConnection({
+      type: setting.download_client_type,
+      url: setting.download_client_url,
+      username: setting.download_client_username,
+      password: setting.download_client_password,
+    });
+  }
+
+  public async testRadarr(
+    id: number | RadarrSettingRawDto,
+  ): Promise<BasicResponseDto> {
+    try {
+      const apiClient = await this.servarr.getRadarrApiClient(id);
+
+      const resp = await apiClient.info();
+      //Make sure it's actually Radarr and not Sonarr
+      if (resp?.appName && resp.appName.toLowerCase() !== 'radarr') {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: `Unexpected application name returned: ${resp.appName}`,
+        };
+      }
+      return resp?.version != null
+        ? { status: 'OK', code: 1, message: resp.version }
+        : { status: 'NOK', code: 0, message: 'Failure' };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Radarr');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Radarr. Verify URL and API key.',
+        ),
+      };
+    }
+  }
+
+  public async testSonarr(
+    id: number | SonarrSettingRawDto,
+  ): Promise<BasicResponseDto> {
+    try {
+      const apiClient = await this.servarr.getSonarrApiClient(id);
+
+      const resp = await apiClient.info();
+      //Make sure it's actually Sonarr and not Radarr
+      if (resp?.appName && resp.appName.toLowerCase() !== 'sonarr') {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: `Unexpected application name returned: ${resp.appName}`,
+        };
+      }
+      return resp?.version != null
+        ? { status: 'OK', code: 1, message: resp.version }
+        : { status: 'NOK', code: 0, message: 'Failure' };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Sonarr');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Sonarr. Verify URL and API key.',
+        ),
+      };
+    }
+  }
+
+  public async testSportarr(
+    id: number | SportarrSettingRawDto,
+  ): Promise<BasicResponseDto> {
+    try {
+      const apiClient = await this.servarr.getSportarrApiClient(id);
+
+      const resp = await apiClient.info();
+      // Make sure it's actually Sportarr and not another *arr behind the URL
+      if (resp?.appName && resp.appName.toLowerCase() !== 'sportarr') {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: `Unexpected application name returned: ${resp.appName}`,
+        };
+      }
+      if (
+        resp?.version != null &&
+        isBelowMinimumVersion(resp.version, MINIMUM_SPORTARR_VERSION)
+      ) {
+        return {
+          status: 'NOK',
+          code: 0,
+          message: `Sportarr ${resp.version} is below the minimum supported version ${MINIMUM_SPORTARR_VERSION}. Please update Sportarr.`,
+        };
+      }
+      return resp?.version != null
+        ? { status: 'OK', code: 1, message: resp.version }
+        : { status: 'NOK', code: 0, message: 'Failure' };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Sportarr');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Sportarr. Verify URL and API key.',
+        ),
+      };
+    }
+  }
+
+  public async testPlex(): Promise<BasicResponseDto> {
+    if (!this.settingsDataService.plex_auth_token) {
+      return {
+        status: 'NOK',
+        code: 0,
+        message: 'Authenticate with Plex before testing the connection.',
+      };
+    }
+
+    try {
+      const resp = await this.plexApi.getStatus();
+      return resp?.version != null
+        ? { status: 'OK', code: 1, message: resp.version }
+        : { status: 'NOK', code: 0, message: 'Failure' };
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Plex');
+      return {
+        status: 'NOK',
+        code: 0,
+        message: formatConnectionFailureMessage(
+          error,
+          'Failed to connect to Plex. Verify host and credentials.',
+        ),
+      };
+    }
+  }
+
+  public async testPlexAuthToken(): Promise<
+    BasicResponseDto & { unreachable?: boolean }
+  > {
+    if (!this.settingsDataService.plex_auth_token) {
+      return {
+        status: 'NOK',
+        code: 0,
+        message: 'Authenticate with Plex before validating the connection.',
+      };
+    }
+
+    const unreachableMessage =
+      "Couldn't reach plex.tv to verify your credentials - retrying. Your saved token is still in use.";
+
+    try {
+      switch (await this.plexApi.validateAuthToken()) {
+        case 'valid':
+          return { status: 'OK', code: 1, message: 'Success' };
+        case 'invalid':
+          return {
+            status: 'NOK',
+            code: 0,
+            message:
+              'Stored Plex credentials are invalid. Re-authenticate with Plex.',
+          };
+        case 'unreachable':
+          return {
+            status: 'NOK',
+            code: 0,
+            unreachable: true,
+            message: unreachableMessage,
+          };
+      }
+    } catch (error) {
+      logConnectionTestError(this.logger, 'Plex auth');
+      return {
+        status: 'NOK',
+        code: 0,
+        unreachable: true,
+        message: formatConnectionFailureMessage(error, unreachableMessage),
+      };
+    }
+  }
+
+  public async testMediaServerConnection(): Promise<boolean> {
+    if (!this.settingsDataService.media_server_type) {
+      return false;
+    }
+
+    switch (this.settingsDataService.media_server_type) {
+      case MediaServerType.JELLYFIN: {
+        if (
+          !this.settingsDataService.jellyfin_url ||
+          !this.settingsDataService.jellyfin_api_key
+        ) {
+          return false;
+        }
+
+        return (
+          (
+            await this.testJellyfin({
+              jellyfin_url: this.settingsDataService.jellyfin_url,
+              jellyfin_api_key: this.settingsDataService.jellyfin_api_key,
+              jellyfin_user_id: this.settingsDataService.jellyfin_user_id,
+            })
+          ).status === 'OK'
+        );
+      }
+      case MediaServerType.EMBY: {
+        if (
+          !this.settingsDataService.emby_url ||
+          !this.settingsDataService.emby_api_key
+        ) {
+          return false;
+        }
+        return (
+          (
+            await this.testEmby({
+              emby_url: this.settingsDataService.emby_url,
+              emby_api_key: this.settingsDataService.emby_api_key,
+              emby_user_id: this.settingsDataService.emby_user_id,
+            })
+          ).status === 'OK'
+        );
+      }
+      case MediaServerType.PLEX:
+        return (await this.testPlex()).status === 'OK';
+      default:
+        return false;
+    }
+  }
+
+  // Test if all configured applications are reachable. Media server is required.
+  public async testConnections(): Promise<boolean> {
+    try {
+      // If no media server type is configured, connections cannot be tested
+      if (!this.settingsDataService.media_server_type) {
+        return false;
+      }
+
+      const [radarrSettings, sonarrSettings] = await Promise.all([
+        this.radarrSettingsRepo.find(),
+        this.sonarrSettingsRepo.find(),
+      ]);
+
+      const [
+        mediaServerState,
+        radarrResults,
+        sonarrResults,
+        seerrState,
+        tautulliState,
+      ] = await Promise.all([
+        this.testMediaServerConnection(),
+        Promise.all(
+          radarrSettings.map((s) =>
+            this.testRadarr(s.id).then((r) => r.status === 'OK'),
+          ),
+        ),
+        Promise.all(
+          sonarrSettings.map((s) =>
+            this.testSonarr(s.id).then((r) => r.status === 'OK'),
+          ),
+        ),
+        this.seerrConfigured()
+          ? this.testSeerr().then((r) => r.status === 'OK')
+          : true,
+        this.tautulliConfigured()
+          ? this.testTautulli().then((r) => r.status === 'OK')
+          : true,
+      ]);
+
+      return (
+        mediaServerState &&
+        radarrResults.every(Boolean) &&
+        sonarrResults.every(Boolean) &&
+        seerrState &&
+        tautulliState
+      );
+    } catch (error) {
+      this.logger.debug(
+        'Failed to verify external service connectivity',
+        error,
+      );
+      return false;
+    }
+  }
+
+  // Test if all required settings are set.
+  public async testSetup(): Promise<boolean> {
+    return this.settingsDataService.testSetup();
+  }
+
+  public async getPlexServers() {
+    return await this.plexApi.getAvailableServers();
+  }
+}

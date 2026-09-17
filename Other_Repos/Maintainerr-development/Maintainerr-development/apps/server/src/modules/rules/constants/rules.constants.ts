@@ -1,0 +1,1898 @@
+import {
+  Application,
+  MediaItemType,
+  MediaType,
+  RuleOperators,
+  RulePossibility,
+} from '@maintainerr/contracts';
+
+export { Application, MediaType, RuleOperators, RulePossibility };
+
+// How many media items a rule is evaluated against concurrently. Each item's
+// operand lookup can hit an external service (Plex, Tautulli, Sonarr, …). Plex
+// leaf watch history now has a batch-scoped prefetch, but show/season rollups
+// and other integrations still fall back to per-item calls. Resolving a bounded
+// number of items in parallel turns a long sequential chain of round-trips into
+// batches. This is the single global cap on concurrent operand lookups (batching
+// happens only here, never nested inside the getters).
+//
+// Deliberately conservative: the binding constraint is the slowest co-located
+// backend, not the host's core count. On an all-in-one box (e.g. Tautulli's
+// CPU-heavy history queries sharing a 4-core N100 with the media server and
+// Maintainerr), too many concurrent lookups starve each request past its 10s
+// timeout, which then retries and amplifies the load. 8 keeps that in check
+// while still being far faster than sequential.
+export const RULE_EVALUATION_CONCURRENCY = 8;
+
+export const enum ArrAction {
+  DELETE,
+  UNMONITOR,
+  SW_UNMONITOR_EXISTING_SEASONS,
+  UNMONITOR_NO_DELETE,
+}
+
+export class RuleType {
+  static readonly NUMBER = new RuleType(
+    '0',
+    [
+      RulePossibility.BIGGER,
+      RulePossibility.SMALLER,
+      RulePossibility.EQUALS,
+      RulePossibility.NOT_EQUALS,
+      RulePossibility.EXISTS,
+      RulePossibility.NOT_EXISTS,
+    ],
+    'number',
+  );
+  static readonly DATE = new RuleType(
+    '1',
+    [
+      RulePossibility.EQUALS,
+      RulePossibility.NOT_EQUALS,
+      RulePossibility.BEFORE,
+      RulePossibility.AFTER,
+      RulePossibility.IN_LAST,
+      RulePossibility.IN_NEXT,
+      RulePossibility.EXISTS,
+      RulePossibility.NOT_EXISTS,
+    ],
+    'date',
+  );
+  static readonly TEXT = new RuleType(
+    '2',
+    [
+      RulePossibility.EQUALS,
+      RulePossibility.NOT_EQUALS,
+      RulePossibility.CONTAINS,
+      RulePossibility.NOT_CONTAINS,
+      RulePossibility.EXISTS,
+      RulePossibility.NOT_EXISTS,
+    ],
+    'text',
+  );
+  static readonly BOOL = new RuleType(
+    '3',
+    [
+      RulePossibility.EQUALS,
+      RulePossibility.NOT_EQUALS,
+      RulePossibility.EXISTS,
+      RulePossibility.NOT_EXISTS,
+    ],
+    'boolean',
+  );
+  static readonly TEXT_LIST = new RuleType(
+    '4',
+    [
+      RulePossibility.EQUALS,
+      RulePossibility.NOT_EQUALS,
+      RulePossibility.CONTAINS,
+      RulePossibility.NOT_CONTAINS,
+      RulePossibility.CONTAINS_PARTIAL,
+      RulePossibility.NOT_CONTAINS_PARTIAL,
+      RulePossibility.CONTAINS_ALL,
+      RulePossibility.NOT_CONTAINS_ALL,
+      RulePossibility.COUNT_EQUALS,
+      RulePossibility.COUNT_NOT_EQUALS,
+      RulePossibility.COUNT_BIGGER,
+      RulePossibility.COUNT_SMALLER,
+      RulePossibility.EXISTS,
+      RulePossibility.NOT_EXISTS,
+    ],
+    'text list',
+  );
+  public constructor(
+    private readonly key: string,
+    public readonly possibilities: number[],
+    public readonly humanName: string,
+  ) {}
+  toString() {
+    return this.key;
+  }
+}
+
+export interface Property {
+  id: number;
+  name: string;
+  type: RuleType;
+  mediaType: MediaType;
+  humanName: string;
+  cacheReset?: boolean; // for properties that require a cache reset between group executions
+  showType?: MediaItemType[]; // if not configured = available for all types
+  /**
+   * When this property doesn't exist on a target server during migration,
+   * fall back to the property with this name instead of marking it incompatible.
+   *
+   * Example: Plex's `collectionsIncludingSmart` sets `migrateTo: 'collections'`
+   * because Jellyfin has no smart-collection concept and uses regular collections.
+   */
+  migrateTo?: string;
+}
+
+export interface ApplicationProperties {
+  id: number;
+  name: string;
+  mediaType: MediaType;
+  props: Property[];
+}
+export class RuleConstants {
+  applications: ApplicationProperties[] = [
+    {
+      id: Application.PLEX,
+      name: 'Plex',
+      mediaType: MediaType.BOTH,
+      props: [
+        {
+          id: 0,
+          name: 'addDate',
+          humanName: 'Date added',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 1,
+          name: 'seenBy',
+          humanName: '[list] Viewed by (username)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT_LIST, // returns usernames []
+        },
+        {
+          id: 2,
+          name: 'releaseDate',
+          humanName: 'Release date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 3,
+          name: 'rating_user',
+          humanName: 'User rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 4,
+          name: 'people',
+          humanName: '[list] People involved',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST, // return text[]
+        },
+        {
+          id: 5,
+          name: 'viewCount',
+          humanName: 'Times viewed',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 6,
+          name: 'collections',
+          humanName: 'Present in amount of other collections',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          cacheReset: true,
+        },
+        {
+          id: 7,
+          name: 'lastViewedAt',
+          humanName: 'Last view date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 8,
+          name: 'fileVideoResolution',
+          humanName: 'Media file resolution (4k, 1080,..)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 9,
+          name: 'fileBitrate',
+          humanName: 'Media file bitrate',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 10,
+          name: 'fileVideoCodec',
+          humanName: 'Media file codec',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 11,
+          name: 'genre',
+          humanName: '[list] List of genres (Action, Adventure,..)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST, // return text[]
+        },
+        {
+          id: 12,
+          name: 'sw_allEpisodesSeenBy',
+          humanName: '[list] Users that watched every episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // return usernames []
+          showType: ['show', 'season'],
+        },
+        {
+          id: 49,
+          name: 'sw_allEpisodesSeenBySinceAdded',
+          humanName: '[list] Users that watched every episode since added',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 13,
+          name: 'sw_lastWatched',
+          humanName: 'Newest episode view date',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 14,
+          name: 'sw_episodes',
+          humanName: 'Amount of available episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 15,
+          name: 'sw_viewedEpisodes',
+          humanName: 'Amount of watched episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 45,
+          name: 'sw_markedWatchedEpisodes',
+          humanName: 'Amount of episodes marked as watched',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 16,
+          name: 'sw_lastEpisodeAddedAt',
+          humanName: 'Last episode added at',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 17,
+          name: 'sw_amountOfViews',
+          humanName: 'Total views',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 18,
+          name: 'sw_watchers',
+          humanName: '[list] Users that watched at least one episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // return usernames []
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 50,
+          name: 'sw_watchersSinceAdded',
+          humanName:
+            '[list] Users that watched at least one episode since added',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 19,
+          name: 'collection_names',
+          humanName: '[list] Collections media is present in (titles)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+          cacheReset: true,
+        },
+        {
+          id: 20,
+          name: 'playlists',
+          humanName: 'Present in amount of playlists',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 21,
+          name: 'playlist_names',
+          humanName: '[list] Playlists media is present in (titles)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 22,
+          name: 'rating_critics',
+          humanName: 'Critics rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 23,
+          name: 'rating_audience',
+          humanName: 'Audience rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 24,
+          name: 'labels',
+          humanName: '[list] Labels',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 25,
+          name: 'sw_collections_including_parent',
+          humanName: 'Present in amount of other collections (incl. parents)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+          cacheReset: true,
+        },
+        {
+          id: 26,
+          name: 'sw_collection_names_including_parent',
+          humanName:
+            '[list] Collections media is present in (titles) (incl. parents)',
+          mediaType: MediaType.SHOW,
+          showType: ['season', 'episode'],
+          cacheReset: true,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 27,
+          name: 'sw_lastEpisodeAiredAt',
+          humanName: 'Last episode aired at',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 28,
+          name: 'watchlist_isListedByUsers',
+          humanName: '[list] Watchlisted by (username) [experimental]',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 30,
+          name: 'watchlist_isWatchlisted',
+          humanName: 'Is Watchlisted',
+          mediaType: MediaType.BOTH,
+          type: RuleType.BOOL,
+        },
+        {
+          id: 29,
+          name: 'sw_seasonLastEpisodeAiredAt',
+          humanName: 'Last episode aired at (season)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['episode'],
+        },
+        {
+          id: 31,
+          name: 'rating_imdb',
+          humanName: 'IMDb rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 35,
+          name: 'rating_imdbShow',
+          humanName: 'IMDb rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 32,
+          name: 'rating_rottenTomatoesCritic',
+          humanName: 'Rotten Tomatoes critic rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 36,
+          name: 'rating_rottenTomatoesCriticShow',
+          humanName: 'Rotten Tomatoes critic rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 33,
+          name: 'rating_rottenTomatoesAudience',
+          humanName: 'Rotten Tomatoes audience rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 37,
+          name: 'rating_rottenTomatoesAudienceShow',
+          humanName: 'Rotten Tomatoes audience rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 34,
+          name: 'rating_tmdb',
+          humanName: 'The Movie Database rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 38,
+          name: 'rating_tmdbShow',
+          humanName: 'The Movie Database rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 39,
+          name: 'collectionsIncludingSmart',
+          humanName:
+            'Present in amount of other collections (incl. smart collections)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          cacheReset: true,
+          migrateTo: 'collections',
+        },
+        {
+          id: 40,
+          name: 'sw_collections_including_parent_and_smart',
+          humanName:
+            'Present in amount of other collections (incl. parents and smart collections)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+          cacheReset: true,
+          migrateTo: 'sw_collections_including_parent',
+        },
+        {
+          id: 41,
+          name: 'sw_collection_names_including_parent_and_smart',
+          humanName:
+            '[list] Collections media is present in (titles) (incl. parents and smart collections)',
+          mediaType: MediaType.SHOW,
+          showType: ['season', 'episode'],
+          cacheReset: true,
+          type: RuleType.TEXT_LIST,
+          migrateTo: 'sw_collection_names_including_parent',
+        },
+        {
+          id: 42,
+          name: 'collection_names_including_smart',
+          humanName:
+            '[list] Collections media is present in (titles) (incl. smart collections)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+          cacheReset: true,
+          migrateTo: 'collection_names',
+        },
+        {
+          id: 43,
+          name: 'isWatched',
+          humanName: 'Is Watched',
+          mediaType: MediaType.BOTH,
+          showType: ['episode'],
+          type: RuleType.BOOL,
+        },
+        {
+          id: 44,
+          name: 'collection_siblings_lastViewedAt',
+          humanName: 'Newest view date across collection',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.DATE,
+          cacheReset: true,
+        },
+        {
+          id: 46,
+          name: 'studios',
+          humanName: '[list] Studios',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 47,
+          name: 'lastPlayedAt',
+          humanName: 'Last play date (including unfinished)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          // Plex retained history includes views of episodes since removed
+          // from the library.
+          id: 48,
+          name: 'sw_lastViewedAtThroughSeason',
+          humanName: 'Newest episode view date in this or an earlier season',
+          mediaType: MediaType.SHOW,
+          showType: ['season'],
+          type: RuleType.DATE,
+        },
+      ],
+    },
+    {
+      id: Application.RADARR,
+      name: 'Radarr',
+      mediaType: MediaType.MOVIE,
+      props: [
+        {
+          id: 0,
+          name: 'addDate',
+          humanName: 'Date added',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.DATE,
+        },
+        // Don't use ID 1, It was once used for an old rule value. Changing the id's messes up existing rules.
+        {
+          id: 2,
+          name: 'tags',
+          humanName: '[list] Tags',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT_LIST, // return text[]
+        },
+        {
+          id: 3,
+          name: 'profile',
+          humanName: 'Quality profile',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 4,
+          name: 'releaseDate',
+          humanName: 'Release date',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.DATE,
+        },
+        {
+          id: 5,
+          name: 'monitored',
+          humanName: 'is monitored',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.BOOL,
+        },
+        {
+          id: 6,
+          name: 'inCinemas',
+          humanName: 'In cinemas date',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.DATE,
+        },
+        {
+          id: 7,
+          name: 'fileSize',
+          humanName: 'File - size in MB',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 8,
+          name: 'fileAudioChannels',
+          humanName: 'File - audio channels',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 22,
+          name: 'fileAudioLanguages',
+          humanName: 'File - audio languages',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 9,
+          name: 'fileQuality',
+          humanName: 'File - quality (2160, 1080,..)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 10,
+          name: 'fileDate',
+          humanName: 'File - download date',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.DATE,
+        },
+        {
+          id: 11,
+          name: 'runTime',
+          humanName: 'File - runtime in minutes',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 12,
+          name: 'filePath',
+          humanName: 'File - file path',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 21,
+          name: 'fileQualityName',
+          humanName: 'File - quality name',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 20,
+          name: 'fileQualityCutoffMet',
+          humanName: 'File - quality cutoff met',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.BOOL,
+        },
+        {
+          id: 13,
+          name: 'originalLanguage',
+          humanName: 'Original language',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 14,
+          name: 'rottenTomatoesRating',
+          humanName: 'Rotten Tomatoes rating (scale 0-100)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 17,
+          name: 'rottenTomatoesRatingVotes',
+          humanName: 'Rotten Tomatoes rating vote count',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 15,
+          name: 'traktRating',
+          humanName: 'Trakt rating (scale 0-10)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 18,
+          name: 'traktRatingVotes',
+          humanName: 'Trakt rating vote count',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 16,
+          name: 'imdbRating',
+          humanName: 'IMDb rating (scale 0-10)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 19,
+          name: 'imdbRatingVotes',
+          humanName: 'IMDb rating vote count',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 23,
+          name: 'diskspace_remaining_gb',
+          humanName: 'Remaining disk space (GB)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 24,
+          name: 'diskspace_total_gb',
+          humanName: 'Total disk space (GB)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 25,
+          name: 'movieTitle',
+          humanName: 'Movie title',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 26,
+          name: 'movieId',
+          humanName: 'Movie ID',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+      ],
+    },
+    {
+      id: Application.SONARR,
+      name: 'Sonarr',
+      mediaType: MediaType.SHOW,
+      props: [
+        {
+          id: 0,
+          name: 'addDate',
+          humanName: 'Date added',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show'],
+        },
+        {
+          id: 1,
+          name: 'diskSizeEntireShow',
+          humanName: 'Files - Disk size in MB ',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 2,
+          name: 'tags',
+          humanName: '[list] Tags (show)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // return text[]
+        },
+        {
+          id: 25,
+          name: 'qualityProfileName',
+          humanName: 'Quality profile name',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 3,
+          name: 'qualityProfileId',
+          humanName: 'Quality profile ID',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 4,
+          name: 'firstAirDate',
+          humanName: 'First air date',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+        },
+        {
+          id: 5,
+          name: 'seasons',
+          humanName: 'Number of seasons / episodes (also unavailable)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 6,
+          name: 'status',
+          humanName: 'Status (continuing, ended)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 7,
+          name: 'ended',
+          humanName: 'Show ended',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 8,
+          name: 'monitored',
+          humanName: 'Is monitored (deprecated)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 9,
+          name: 'monitored',
+          humanName: 'Is monitored',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+        },
+        {
+          id: 10,
+          name: 'unaired_episodes',
+          humanName: 'Has unaired episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 11,
+          name: 'seasons_monitored',
+          humanName: 'Number of monitored seasons / episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 12,
+          name: 'unaired_episodes_season',
+          humanName: 'Season has unaired episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['episode'],
+        },
+        {
+          id: 13,
+          name: 'part_of_latest_season',
+          humanName: 'Is (part of) latest aired/airing season',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['episode', 'season'],
+        },
+        {
+          id: 14,
+          name: 'filePath',
+          humanName: 'Base file path (show)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 15,
+          name: 'originalLanguage',
+          humanName: 'Original language',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 16,
+          name: 'seasonFinale',
+          humanName: 'Has season finale episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['season'],
+        },
+        {
+          id: 17,
+          name: 'seriesFinale',
+          humanName: 'Has series finale episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 18,
+          name: 'seasonNumber',
+          humanName: 'Season number',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'season'],
+        },
+        {
+          id: 19,
+          name: 'rating',
+          humanName: 'Show rating (IMDb) (scale 0-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 20,
+          name: 'ratingVotes',
+          humanName: 'Show rating (IMDb) vote count',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 22,
+          name: 'episodeNumber',
+          humanName: 'Episode number',
+          showType: ['episode'],
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 21,
+          name: 'episodeFilePath',
+          humanName: 'Episode file path',
+          showType: ['episode'],
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 23,
+          name: 'fileQualityCutoffMet',
+          humanName: 'Episode file quality cutoff met',
+          showType: ['episode'],
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+        },
+        {
+          id: 24,
+          name: 'fileQualityName',
+          humanName: 'Episode file quality',
+          showType: ['episode'],
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 26,
+          name: 'fileAudioLanguages',
+          humanName: 'Episode file audio languages',
+          showType: ['episode'],
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 27,
+          name: 'seriesType',
+          humanName: 'Series type',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 28,
+          name: 'diskspace_remaining_gb',
+          humanName: 'Remaining disk space (GB)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 29,
+          name: 'diskspace_total_gb',
+          humanName: 'Total disk space (GB)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 30,
+          name: 'missing_episodes_season',
+          humanName: 'Number of missing episodes in season',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 31,
+          name: 'missing_episodes_show',
+          humanName: 'Number of missing episodes in show',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 32,
+          name: 'episodeFileRank',
+          humanName: 'Episode position by air date (1 = latest)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['episode'],
+        },
+        {
+          id: 33,
+          name: 'seriesTitle',
+          humanName: 'Series title',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 34,
+          name: 'seriesId',
+          humanName: 'Series ID',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 35,
+          name: 'seasonFileRank',
+          humanName: 'Season position by air date (1 = latest)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season'],
+        },
+      ],
+    },
+    {
+      id: Application.SPORTARR,
+      name: 'Sportarr',
+      mediaType: MediaType.SHOW,
+      props: [
+        {
+          id: 0,
+          name: 'addDate',
+          humanName: 'Date added',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show'],
+        },
+        {
+          id: 1,
+          name: 'monitored',
+          humanName: 'Is monitored',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 2,
+          name: 'sport',
+          humanName: 'Sport',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 3,
+          name: 'leagueTitle',
+          humanName: 'League title',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 4,
+          name: 'leagueId',
+          humanName: 'League ID',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 5,
+          name: 'qualityProfileId',
+          humanName: 'Quality profile ID',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 6,
+          name: 'qualityProfileName',
+          humanName: 'Quality profile name',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 7,
+          name: 'events',
+          humanName: 'Number of events',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 8,
+          name: 'downloadedEvents',
+          humanName: 'Number of downloaded events',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 14,
+          name: 'hasFutureEvents',
+          humanName: 'Has upcoming events',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 9,
+          name: 'seasonNumber',
+          humanName: 'Season number (year)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 10,
+          name: 'episodeNumber',
+          humanName: 'Event number in season',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['episode'],
+        },
+        {
+          id: 11,
+          name: 'eventDate',
+          humanName: 'Event date',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['episode'],
+        },
+        {
+          id: 12,
+          name: 'hasFile',
+          humanName: 'Event has a file',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['episode'],
+        },
+        {
+          id: 13,
+          name: 'filePath',
+          humanName: 'Event file path',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT,
+          showType: ['episode'],
+        },
+      ],
+    },
+    {
+      id: Application.SEERR,
+      name: 'Seerr',
+      mediaType: MediaType.BOTH,
+      props: [
+        {
+          id: 0,
+          name: 'addUser',
+          humanName:
+            'Requested by user (Jellyfin, Emby, Plex or local username)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 1,
+          name: 'requestDate',
+          humanName: 'Request date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 2,
+          name: 'releaseDate',
+          humanName: 'Release/air date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 3,
+          name: 'approvalDate',
+          humanName: 'Approval date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 4,
+          name: 'mediaAddedAt',
+          humanName: 'Media downloaded date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 5,
+          name: 'amountRequested',
+          humanName: 'Amount of requests',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 6,
+          name: 'isRequested',
+          humanName: 'Requested in Seerr',
+          mediaType: MediaType.BOTH,
+          type: RuleType.BOOL,
+        },
+      ],
+    },
+    {
+      id: Application.TAUTULLI,
+      name: 'Tautulli',
+      mediaType: MediaType.BOTH,
+      props: [
+        {
+          id: 0,
+          name: 'seenBy',
+          humanName: '[list] Viewed by (username)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT_LIST, // returns usernames []
+        },
+        {
+          id: 1,
+          name: 'sw_allEpisodesSeenBy',
+          humanName: '[list] Users that watched every episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // return usernames []
+          showType: ['show', 'season'],
+        },
+        {
+          id: 2,
+          name: 'addDate',
+          humanName: 'Date added',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 3,
+          name: 'viewCount',
+          humanName: 'Times viewed',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 4,
+          name: 'lastViewedAt',
+          humanName: 'Last view date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 5,
+          name: 'sw_amountOfViews',
+          humanName: 'Total views',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 6,
+          name: 'sw_viewedEpisodes',
+          humanName: 'Amount of watched episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 7,
+          name: 'sw_lastWatched',
+          humanName: 'Newest episode view date',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 8,
+          name: 'sw_watchers',
+          humanName: '[list] Users that watched at least one episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // return usernames []
+          showType: ['show', 'season', 'episode'],
+        },
+        // Scoped to the rule's user; same names as the other two companions.
+        {
+          id: 9,
+          name: 'viewCountByUser',
+          humanName: 'Times viewed by user',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 10,
+          name: 'watchTimeByUser',
+          humanName: 'Watch time by user (minutes)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 11,
+          name: 'lastViewedAtByUser',
+          humanName: 'Last view date by user',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 12,
+          name: 'lastPlayedAt',
+          humanName: 'Last play date (including unfinished)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+      ],
+    },
+    {
+      id: Application.TRACEARR,
+      name: 'Tracearr',
+      mediaType: MediaType.BOTH,
+      props: [
+        {
+          id: 0,
+          name: 'seenBy',
+          humanName: '[list] Viewed by (username)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 1,
+          name: 'sw_allEpisodesSeenBy',
+          humanName: '[list] Users that watched every episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['show', 'season'],
+        },
+        // Id 2 remains reserved for Tautulli's addDate. Rule property IDs are
+        // persisted, so Tracearr must never renumber this gap.
+        {
+          id: 3,
+          name: 'viewCount',
+          humanName: 'Times viewed',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 4,
+          name: 'lastViewedAt',
+          humanName: 'Last view date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 5,
+          name: 'sw_amountOfViews',
+          humanName: 'Total views',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 6,
+          name: 'sw_viewedEpisodes',
+          humanName: 'Amount of watched episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 7,
+          name: 'sw_lastWatched',
+          humanName: 'Newest episode view date',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 8,
+          name: 'sw_watchers',
+          humanName: '[list] Users that watched at least one episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['show', 'season', 'episode'],
+        },
+        // Scoped to the rule's user; same names as the other two companions.
+        {
+          id: 9,
+          name: 'viewCountByUser',
+          humanName: 'Times viewed by user',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 10,
+          name: 'watchTimeByUser',
+          humanName: 'Watch time by user (minutes)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 11,
+          name: 'lastViewedAtByUser',
+          humanName: 'Last view date by user',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 12,
+          name: 'lastPlayedAt',
+          humanName: 'Last play date (including unfinished)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+      ],
+    },
+    {
+      id: Application.JELLYFIN,
+      name: 'Jellyfin',
+      mediaType: MediaType.BOTH,
+      props: [
+        {
+          id: 0,
+          name: 'addDate',
+          humanName: 'Date added',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 1,
+          name: 'seenBy',
+          humanName: '[list] Viewed by (username)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT_LIST, // returns usernames []
+        },
+        {
+          id: 2,
+          name: 'releaseDate',
+          humanName: 'Release date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 3,
+          name: 'rating_user',
+          humanName: 'User rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 4,
+          name: 'people',
+          humanName: '[list] People involved',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST, // return text[]
+        },
+        {
+          id: 5,
+          name: 'viewCount',
+          humanName: 'Times viewed',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 6,
+          name: 'collections',
+          humanName: 'Present in amount of other collections',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          cacheReset: true,
+        },
+        {
+          id: 7,
+          name: 'lastViewedAt',
+          humanName: 'Last view date',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          id: 8,
+          name: 'fileVideoResolution',
+          humanName: 'Media file resolution (4k, 1080,..)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 9,
+          name: 'fileBitrate',
+          humanName: 'Media file bitrate',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 10,
+          name: 'fileVideoCodec',
+          humanName: 'Media file codec',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT,
+        },
+        {
+          id: 11,
+          name: 'genre',
+          humanName: '[list] List of genres (Action, Adventure,..)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST, // return text[]
+        },
+        {
+          id: 12,
+          name: 'sw_allEpisodesSeenBy',
+          humanName: '[list] Users that watched every episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // return usernames []
+          showType: ['show', 'season'],
+        },
+        {
+          id: 13,
+          name: 'sw_lastWatched',
+          humanName: 'Newest episode view date',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 14,
+          name: 'sw_episodes',
+          humanName: 'Amount of available episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 15,
+          name: 'sw_viewedEpisodes',
+          humanName: 'Amount of watched episodes',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 16,
+          name: 'sw_lastEpisodeAddedAt',
+          humanName: 'Last episode added at',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 17,
+          name: 'sw_amountOfViews',
+          humanName: 'Total views',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 18,
+          name: 'sw_watchers',
+          humanName: '[list] Users that watched at least one episode',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // return usernames []
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 19,
+          name: 'collection_names',
+          humanName: '[list] Collections media is present in (titles)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+          cacheReset: true,
+        },
+        {
+          id: 20,
+          name: 'playlists',
+          humanName: 'Present in amount of playlists',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 21,
+          name: 'playlist_names',
+          humanName: '[list] Playlists media is present in (titles)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 22,
+          name: 'rating_critics',
+          humanName: 'Critics rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 23,
+          name: 'rating_audience',
+          humanName: 'Audience rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 24,
+          name: 'labels',
+          humanName: '[list] Tags',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 25,
+          name: 'sw_collections_including_parent',
+          humanName: 'Present in amount of other collections (incl. parents)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+          cacheReset: true,
+        },
+        {
+          id: 26,
+          name: 'sw_collection_names_including_parent',
+          humanName:
+            '[list] Collections media is present in (titles) (incl. parents)',
+          mediaType: MediaType.SHOW,
+          showType: ['season', 'episode'],
+          cacheReset: true,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 27,
+          name: 'sw_lastEpisodeAiredAt',
+          humanName: 'Last episode aired at',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 29,
+          name: 'sw_seasonLastEpisodeAiredAt',
+          humanName: 'Last episode aired at (season)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.DATE,
+          showType: ['episode'],
+        },
+        {
+          id: 30,
+          name: 'playCount',
+          humanName: 'Total play attempts (including unfinished)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.NUMBER,
+        },
+        {
+          id: 31,
+          name: 'sw_playCount',
+          humanName: 'Total play attempts (including unfinished)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['episode'],
+        },
+        // Rating properties - sourced from Jellyfin's CommunityRating and CriticRating.
+        // CommunityRating is provider-dependent, commonly TMDb and sometimes IMDb.
+        // CriticRating is typically the Rotten Tomatoes Tomatometer via OMDb.
+        // IDs match Plex so rules migrate without property ID remapping.
+        {
+          id: 32,
+          name: 'rating_rottenTomatoesCritic',
+          humanName: 'Rotten Tomatoes critic rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 33,
+          name: 'rating_rottenTomatoesAudience',
+          humanName: 'Rotten Tomatoes audience rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 34,
+          name: 'rating_tmdb',
+          humanName: 'The Movie Database rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 44,
+          name: 'rating_imdb',
+          humanName: 'IMDb rating (scale 1-10)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['episode', 'show'],
+        },
+        {
+          id: 35,
+          name: 'rating_imdbShow',
+          humanName: 'IMDb rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 36,
+          name: 'rating_rottenTomatoesCriticShow',
+          humanName: 'Rotten Tomatoes critic rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 37,
+          name: 'rating_rottenTomatoesAudienceShow',
+          humanName: 'Rotten Tomatoes audience rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 38,
+          name: 'rating_tmdbShow',
+          humanName: 'The Movie Database rating (show) (scale 1-10)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.NUMBER,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 39,
+          name: 'favoritedBy',
+          humanName: '[list] Favorited by (username)',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 40,
+          name: 'sw_favoritedBy',
+          humanName: '[list] Favorited by (username)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['show', 'season', 'episode'],
+        },
+        {
+          id: 41,
+          name: 'sw_favoritedBy_including_parent',
+          humanName: '[list] Favorited by (username) (incl. parents)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 42,
+          name: 'isWatched',
+          humanName: 'Is Watched',
+          mediaType: MediaType.BOTH,
+          showType: ['episode'],
+          type: RuleType.BOOL,
+        },
+        {
+          id: 45,
+          name: 'collection_siblings_lastViewedAt',
+          humanName: 'Newest view date across collection',
+          mediaType: MediaType.MOVIE,
+          type: RuleType.DATE,
+          cacheReset: true,
+        },
+        {
+          id: 46,
+          name: 'studios',
+          humanName: '[list] Studios',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST,
+        },
+        {
+          id: 47,
+          name: 'lastPlayedAt',
+          humanName: 'Last play date (including unfinished)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+        },
+        {
+          // Jellyfin and Emby derive this from current episode children, so
+          // views of episodes since removed from the library do not count.
+          id: 48,
+          name: 'sw_lastViewedAtThroughSeason',
+          humanName: 'Newest episode view date in this or an earlier season',
+          mediaType: MediaType.SHOW,
+          showType: ['season'],
+          type: RuleType.DATE,
+        },
+        {
+          id: 49,
+          name: 'sw_allEpisodesSeenBySinceAdded',
+          humanName: '[list] Users that watched every episode since added',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['show', 'season'],
+        },
+        {
+          id: 50,
+          name: 'sw_watchersSinceAdded',
+          humanName:
+            '[list] Users that watched at least one episode since added',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST,
+          showType: ['show', 'season'],
+        },
+      ],
+    },
+    {
+      // Streamystats is an optional, Jellyfin-only companion (the Jellyfin
+      // analog of Tautulli for Plex). It is removed from the constants unless
+      // configured and Jellyfin is the active server (see RulesService).
+      //
+      // A Streamystats "watchlist" is a user-created curated list, and only
+      // PUBLIC lists are reachable with Maintainerr's Jellyfin API key - see
+      // the StreamystatsWatchlistMembership contract for why. These properties
+      // act as a "users curated this" protection signal.
+      id: Application.STREAMYSTATS,
+      name: 'Streamystats',
+      mediaType: MediaType.BOTH,
+      props: [
+        {
+          id: 0,
+          name: 'isInWatchlist',
+          humanName: 'Is in a watchlist',
+          mediaType: MediaType.BOTH,
+          type: RuleType.BOOL,
+        },
+        {
+          id: 1,
+          name: 'watchlistedByUsers',
+          humanName: '[list] In watchlist of (username)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.TEXT_LIST, // returns usernames []
+        },
+        // Parent-inclusive variants: a Streamystats list holds the show item ID,
+        // not its seasons/episodes, so the item-only props above never match a
+        // watchlisted show when evaluated below show level. These roll the
+        // parent show (and season) in. Show-only and season/episode-only - a
+        // show is the top level (no parent) and a movie has no parent show.
+        {
+          id: 2,
+          name: 'isInWatchlist_including_parent',
+          humanName: 'Is in a watchlist (incl. parents)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.BOOL,
+          showType: ['season', 'episode'],
+        },
+        {
+          id: 3,
+          name: 'watchlistedByUsers_including_parent',
+          humanName: '[list] In watchlist of (username) (incl. parents)',
+          mediaType: MediaType.SHOW,
+          type: RuleType.TEXT_LIST, // returns usernames []
+          showType: ['season', 'episode'],
+        },
+        // Scoped to the rule's user. Streamystats aggregates a show from its
+        // episodes but holds no session against a season, so seasons are out.
+        {
+          id: 4,
+          name: 'viewCountByUser',
+          humanName: 'Times viewed by user',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['show', 'episode'],
+        },
+        {
+          id: 5,
+          name: 'watchTimeByUser',
+          humanName: 'Watch time by user (minutes)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.NUMBER,
+          showType: ['show', 'episode'],
+        },
+        {
+          id: 6,
+          name: 'lastViewedAtByUser',
+          humanName: 'Last view date by user',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+          showType: ['show', 'episode'],
+        },
+        {
+          id: 7,
+          name: 'lastPlayedAt',
+          humanName: 'Last play date (including unfinished)',
+          mediaType: MediaType.BOTH,
+          type: RuleType.DATE,
+          showType: ['show', 'episode'],
+        },
+      ],
+    },
+  ];
+
+  constructor() {
+    // Emby shares Jellyfin's data model and rule properties. We mirror the
+    // Jellyfin property list verbatim (same IDs and names) so rule migration
+    // between Jellyfin and Emby is a no-op on the property side. The Emby
+    // getter implements the same property names against Emby's HTTP endpoints.
+    const jellyfinApp = this.applications.find(
+      (a) => a.id === Application.JELLYFIN,
+    );
+    if (
+      jellyfinApp &&
+      !this.applications.some((a) => a.id === Application.EMBY)
+    ) {
+      this.applications.push({
+        id: Application.EMBY,
+        name: 'Emby',
+        mediaType: MediaType.BOTH,
+        props: jellyfinApp.props,
+      });
+    }
+  }
+}
