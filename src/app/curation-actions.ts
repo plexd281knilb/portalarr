@@ -22,6 +22,7 @@ import {
     addLabelToPlexItem,
     removeLabelFromPlexItem,
     updatePlexItemTitle,
+    updatePlexItemEdition,
     getPlexItemChildrenMetadata,
     refreshPlexLibrarySection,
     PlexMediaStreamInfo,
@@ -1265,8 +1266,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                     const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
                     const mImdb = it.guids?.imdb && builtinImdbIds.has(String(it.guids.imdb).toLowerCase());
                     const mTitle = it.title && builtinTitles.has(it.title.toLowerCase().trim());
-                    const mRating = it.rating && it.rating >= 8.2;
-                    return mTmdb || mImdb || mTitle || mRating;
+                    return mTmdb || mImdb || mTitle;
                 }).map(it => it.ratingKey);
 
                 if (builtinMatches.length > 0) {
@@ -1576,8 +1576,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
                         const mImdb = it.guids?.imdb && builtinImdbIds.has(String(it.guids.imdb).toLowerCase());
                         const mTitle = it.title && builtinTitles.has(it.title.toLowerCase().trim());
-                        const mRating = it.rating && it.rating >= 8.2;
-                        return mTmdb || mImdb || mTitle || mRating;
+                        return mTmdb || mImdb || mTitle;
                     });
                 } else if (sourceQuery === "top-oscar-best-picture") {
                     executionMethod += " (MDBList key not configured; configure in settings to fetch official Oscar list).";
@@ -2269,43 +2268,89 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
             });
         }
 
-        if (collection) {
-            if (deleteFromPlex && collection.ratingKey) {
-                try {
-                    const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
-                    if (resolved && resolved.serverUrl && resolved.token) {
-                        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                        await deletePlexCollection(urlsToTry, resolved.token, collection.ratingKey);
-                    }
-                } catch (err: any) {
-                    logger.addLog("WARN", "PLEX", `Could not delete collection "${collection.title}" from Plex: ${err.message}`);
-                }
-            }
+        const collTitle = collection?.title || collectionId;
+        const collRatingKey = collection?.ratingKey || collectionId;
+        const serverId = collection?.serverId;
+        const sectionKey = collection?.sectionKey;
 
-            // Delete the canonical record AND any duplicate records matching this title / server / sectionKey
-            await prisma.mediaCollection.deleteMany({
-                where: {
-                    OR: [
-                        { id: collection.id },
-                        { id: collectionId },
-                        {
-                            ...(collection.serverId ? { serverId: collection.serverId } : {}),
-                            ...(collection.sectionKey ? { sectionKey: collection.sectionKey } : {}),
-                            title: collection.title
-                        }
-                    ]
+        if (deleteFromPlex) {
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(serverId || undefined);
+                if (resolved && resolved.serverUrl && resolved.token) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    await deletePlexCollection(urlsToTry, resolved.token, collRatingKey, sectionKey || undefined);
+                    if (collTitle && collTitle !== collRatingKey) {
+                        await deletePlexCollection(urlsToTry, resolved.token, collTitle, sectionKey || undefined);
+                    }
                 }
-            });
-        } else {
-            // Even if record wasn't found by findUnique, attempt deletion by id anyway
-            await prisma.mediaCollection.deleteMany({
-                where: { id: collectionId }
-            }).catch(() => {});
+            } catch (err: any) {
+                logger.addLog("WARN", "PLEX", `Could not delete collection "${collTitle}" from Plex: ${err.message}`);
+            }
         }
 
-        return { success: true, message: `Deleted collection.` };
+        // Delete the canonical record AND any duplicate records matching this title / server / sectionKey
+        await prisma.mediaCollection.deleteMany({
+            where: {
+                OR: [
+                    { id: collectionId },
+                    ...(collection ? [{ id: collection.id }] : []),
+                    ...(collTitle ? [{ title: collTitle }] : [])
+                ]
+            }
+        });
+
+        logger.addLog("SUCCESS", "PLEX", `Deleted collection "${collTitle}" from database and Plex.`);
+        return { success: true, message: `Deleted collection "${collTitle}".` };
     } catch (e: any) {
         return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Server action to delete all collections and hubs in a Plex library section and wipe DB records.
+ */
+export async function deleteAllPlexCollectionsAction(
+    serverId: string,
+    sectionKey: string
+): Promise<{ success: boolean; deletedCount: number; message: string }> {
+    await verifyAdmin();
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl || !resolved.token) {
+            return { success: false, deletedCount: 0, message: "Plex server connection unavailable." };
+        }
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const token = resolved.token;
+
+        // 1. Fetch all collections in this section from Plex
+        const plexCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
+        let deletedCount = 0;
+
+        for (const c of plexCollections) {
+            try {
+                const success = await deletePlexCollection(urlsToTry, token, c.ratingKey || c.title, sectionKey);
+                if (success) deletedCount++;
+            } catch {}
+        }
+
+        // 2. Also wipe all mediaCollection records for this server & section in DB
+        const dbResult = await prisma.mediaCollection.deleteMany({
+            where: {
+                serverId,
+                sectionKey
+            }
+        });
+
+        const total = Math.max(deletedCount, dbResult.count);
+        logger.addLog("SUCCESS", "PLEX", `Wiped ${total} collection(s) & hubs for section ${sectionKey} on Plex server "${resolved.serverName}"`);
+
+        return {
+            success: true,
+            deletedCount: total,
+            message: `Successfully deleted ${total} collection(s) from Plex section and reset Agregarr configurations.`
+        };
+    } catch (e: any) {
+        return { success: false, deletedCount: 0, message: e.message };
     }
 }
 
@@ -6779,10 +6824,6 @@ export async function createPlaceholderItemInternal(
                     const strmFile = path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.strm`);
                     fs.writeFileSync(strmFile, trailerUrl);
                     try { fs.chmodSync(strmFile, 0o666); } catch {}
-
-                    const plainStrm = path.join(targetDir, `${cleanTitle}${yearStr}.strm`);
-                    fs.writeFileSync(plainStrm, trailerUrl);
-                    try { fs.chmodSync(plainStrm, 0o666); } catch {}
                 }
 
                 // Save lightweight stub file ({tmdb-id} {edition-Trailer}.disc)
@@ -6819,7 +6860,9 @@ export async function createPlaceholderItemInternal(
                     if (match?.ratingKey) {
                         await addLabelToPlexItem(urlsToTry, resolved.token, match.ratingKey, "trailer-placeholder");
 
-                        if (isTv) {
+                        if (!isTv) {
+                            await updatePlexItemEdition(urlsToTry, resolved.token, match.ratingKey, "Trailer");
+                        } else {
                             const seasons = await getPlexItemChildrenMetadata(urlsToTry, resolved.token, match.ratingKey);
                             const season0 = seasons.find(s => s.index === 0 || s.title?.toLowerCase().includes("specials"));
                             if (season0?.ratingKey) {
@@ -7429,7 +7472,12 @@ export async function tagAllPlaceholdersInPlexInternal(
                             if (success) totalTagged++;
                         }
 
-                        // 2. If TV show: inspect Season 00 / S00E00
+                        // 2. If movie: set editionTitle to "Trailer" in Plex
+                        if (!isTv && item.type !== "show") {
+                            await updatePlexItemEdition(urlsToTry, token, item.ratingKey, "Trailer");
+                        }
+
+                        // 3. If TV show: inspect Season 00 / S00E00
                         if (isTv || item.type === "show") {
                             try {
                                 const seasons = await getPlexItemChildrenMetadata(urlsToTry, token, item.ratingKey);
@@ -7514,9 +7562,9 @@ export async function deployFilteredRecentlyAddedHubAction(
             const titleFilter = encodeURIComponent("Trailer (Placeholder)");
             filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${titleFilter}&label!=trailer-placeholder`;
         } else {
-            // Filter out items with label "trailer-placeholder"
+            // Filter out items with label "trailer-placeholder" and edition "Trailer"
             const labelFilter = encodeURIComponent("trailer-placeholder");
-            filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${labelFilter}`;
+            filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${labelFilter}&editionTitle!=Trailer`;
         }
 
         // Get machineId
@@ -7927,8 +7975,33 @@ export async function cleanupAvailablePlaceholdersInternal(
                         for (const sec of sections) {
                             if (sectionKey && String(sec.key) !== String(sectionKey)) continue;
                             if (sec.type !== "movie" && sec.type !== "show") continue;
-                            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, String(sec.key), 5000);
+                            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, String(sec.key), 5000, undefined, true, true);
                             for (const it of items) {
+                                if (it.isPlaceholder) continue;
+                                const fileLower = (it.filePath || "").toLowerCase();
+                                if (fileLower.includes(".portalarr-missing") || 
+                                    fileLower.includes("edition-trailer") || 
+                                    fileLower.includes("edition-placeholder") || 
+                                    fileLower.endsWith(".disc") || 
+                                    fileLower.endsWith(".strm") ||
+                                    fileLower.includes("coming_soon") ||
+                                    fileLower.includes("coming soon") ||
+                                    fileLower.includes("placeholders") ||
+                                    fileLower.includes("test_placeholders")
+                                ) {
+                                    continue;
+                                }
+                                const isInsideShare = Array.from(shareDirectories).some(sd => fileLower.includes(sd.toLowerCase()) || fileLower.includes(path.basename(sd).toLowerCase()));
+                                if (isInsideShare) continue;
+
+                                if (it.labels?.some(l => l.toLowerCase() === "trailer-placeholder" || l.toLowerCase() === "placeholder")) {
+                                    continue;
+                                }
+
+                                if (it.type === "movie" && it.fileSize && it.fileSize < 1000000) {
+                                    continue;
+                                }
+
                                 if (it.guids?.tmdb) libraryTmdbIds.add(String(it.guids.tmdb));
                                 if (it.guids?.imdb) libraryImdbIds.add(String(it.guids.imdb));
                                 if (it.title) {

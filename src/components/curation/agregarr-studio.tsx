@@ -102,7 +102,8 @@ import {
     runFullCurationSyncAction,
     getArrInstancesListAction,
     deployFilteredRecentlyAddedHubAction,
-    tagAllPlaceholdersInPlexAction
+    tagAllPlaceholdersInPlexAction,
+    deleteAllPlexCollectionsAction
 } from "@/app/curation-actions";
 import {
     COLLECTION_PRESETS,
@@ -1498,6 +1499,33 @@ export function AgregarrStudio() {
         }
     };
 
+    // Wipe / delete all collections in the section from Plex and Portalarr
+    const [deletingAllCollections, setDeletingAllCollections] = useState(false);
+    const [deleteAllMsg, setDeleteAllMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+    const handleDeleteAllCollections = async () => {
+        if (!selectedServerId || !selectedSectionKey) return;
+        const confirmMsg = `Are you sure you want to completely delete ALL (${collections.length}) collections and hubs in this library section from Plex and Portalarr? This will remove all collection tags from items in Plex.`;
+        if (!confirm(confirmMsg)) return;
+
+        setDeletingAllCollections(true);
+        setDeleteAllMsg(null);
+        try {
+            const res = await deleteAllPlexCollectionsAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setDeleteAllMsg({ success: true, text: res.message });
+                loadCollections();
+                setTimeout(() => setDeleteAllMsg(null), 6000);
+            } else {
+                setDeleteAllMsg({ success: false, text: res.message || "Failed wiping collections." });
+            }
+        } catch (err: any) {
+            setDeleteAllMsg({ success: false, text: err.message || "Error wiping collections." });
+        } finally {
+            setDeletingAllCollections(false);
+        }
+    };
+
     const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
     const currentSections = currentServer?.sections || [];
     const currentSection = currentSections.find((s: any) => String(s.key) === selectedSectionKey);
@@ -2016,16 +2044,53 @@ export function AgregarrStudio() {
                     {/* Active Collections List */}
                     <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
                         <CardHeader className="p-4 border-b border-slate-800/80">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                    <Layers className="h-4 w-4 text-amber-400" />
-                                    <span>Active Collections ({filteredCollections.length})</span>
-                                </CardTitle>
-                                <span className="text-xs text-slate-400">
-                                    Click <span className="text-amber-300 font-bold">Inspect Media</span> (👁️) to preview live items, release dates, and trailer stubs
-                                </span>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                        <Layers className="h-4 w-4 text-amber-400" />
+                                        <span>Active Collections ({filteredCollections.length})</span>
+                                    </CardTitle>
+                                    <span className="text-xs text-slate-400">
+                                        Click <span className="text-amber-300 font-bold">Inspect Media</span> (👁️) to preview live items, release dates, and trailer stubs
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleImportPlexCollections}
+                                        className="border-slate-700 hover:bg-slate-800 text-xs h-7 gap-1 text-slate-300 hover:text-white cursor-pointer"
+                                        title="Import existing native Plex collections and hubs into Portalarr Agregarr Studio"
+                                    >
+                                        <RefreshCw className="h-3 w-3 text-sky-400" />
+                                        <span>Import from Plex</span>
+                                    </Button>
+                                    {collections.length > 0 && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={deletingAllCollections}
+                                            onClick={handleDeleteAllCollections}
+                                            className="border-rose-800/60 hover:bg-rose-950/40 text-xs h-7 gap-1 text-rose-300 hover:text-rose-200 cursor-pointer"
+                                            title="Delete ALL collections and hubs in this section from Plex and Portalarr to start fresh"
+                                        >
+                                            {deletingAllCollections ? <Loader2 className="h-3 w-3 animate-spin text-rose-400" /> : <Trash2 className="h-3 w-3 text-rose-400" />}
+                                            <span>Reset &amp; Delete All</span>
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
                         </CardHeader>
+                        {deleteAllMsg && (
+                            <div className={`p-3 text-xs border-b flex items-center gap-2 ${
+                                deleteAllMsg.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                            }`}>
+                                {deleteAllMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                <span>{deleteAllMsg.text}</span>
+                            </div>
+                        )}
                         <CardContent className="p-4 space-y-2.5">
                             {filteredCollections.length === 0 ? (
                                 <div className="text-center py-12 text-slate-500 space-y-3">

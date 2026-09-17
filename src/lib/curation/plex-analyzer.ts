@@ -1639,7 +1639,8 @@ export async function removeItemsFromPlexCollection(
     serverUrlOrCandidates: string | string[],
     token: string,
     collectionTitle: string,
-    ratingKeysToRemove: string[]
+    ratingKeysToRemove: string[],
+    collectionRatingKey?: string
 ): Promise<number> {
     if (!ratingKeysToRemove || ratingKeysToRemove.length === 0) return 0;
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
@@ -1649,14 +1650,57 @@ export async function removeItemsFromPlexCollection(
         for (const cleanBase of urlsToTry) {
             if (removed) break;
             try {
-                const removeUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?collection%5B%5D.tag.tag-=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
-                const res = await fetch(removeUrl, {
-                    method: "PUT",
-                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                // 1. If collectionRatingKey is numeric and valid, use PMS DELETE /library/collections/{collectionRatingKey}/items/{rKey}
+                if (collectionRatingKey && !collectionRatingKey.startsWith("hub:")) {
+                    const deleteUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items/${encodeURIComponent(rKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+                    const dRes = await fetch(deleteUrl, {
+                        method: "DELETE",
+                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    });
+                    if (dRes.ok) {
+                        removedCount++;
+                        removed = true;
+                        continue;
+                    }
+                }
+
+                // 2. Fallback: Fetch item metadata, remove collectionTitle from collection list, and PUT updated list
+                const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+                const res = await fetch(metaUrl, {
+                    headers: { Accept: "application/json", "X-Plex-Token": token }
                 });
                 if (res.ok) {
-                    removedCount++;
-                    removed = true;
+                    const data = await res.json();
+                    const meta = data.MediaContainer?.Metadata?.[0] || data.MediaContainer?.Directory?.[0];
+                    const existingColls: string[] = [];
+                    if (Array.isArray(meta?.Collection)) {
+                        for (const c of meta.Collection) {
+                            const name = typeof c === "string" ? c : c?.tag;
+                            if (name && name.toLowerCase() !== collectionTitle.toLowerCase()) {
+                                existingColls.push(name);
+                            }
+                        }
+                    }
+                    const params = new URLSearchParams();
+                    if (existingColls.length === 0) {
+                        params.set("collection[0].tag.tag-", "");
+                    } else {
+                        existingColls.forEach((c, idx) => {
+                            params.set(`collection[${idx}].tag.tag`, c);
+                        });
+                    }
+                    params.set("collection.locked", "1");
+                    params.set("X-Plex-Token", token);
+
+                    const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?${params.toString()}`;
+                    const putRes = await fetch(putUrl, {
+                        method: "PUT",
+                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    });
+                    if (putRes.ok) {
+                        removedCount++;
+                        removed = true;
+                    }
                 }
             } catch {}
         }
@@ -1704,7 +1748,7 @@ export async function syncPlexCollection(
             const currentKeys = await getPlexCollectionChildRatingKeys(urlsToTry, token, collectionRatingKey);
             const staleKeys = currentKeys.filter(k => !itemRatingKeys.includes(k));
             if (staleKeys.length > 0) {
-                await removeItemsFromPlexCollection(urlsToTry, token, collectionTitle, staleKeys);
+                await removeItemsFromPlexCollection(urlsToTry, token, collectionTitle, staleKeys, collectionRatingKey);
             }
         } catch {}
     } else {
@@ -2025,26 +2069,89 @@ export async function uploadPlexItemPosterFromUrl(
 export async function deletePlexCollection(
     serverUrlOrCandidates: string | string[],
     token: string,
-    collectionRatingKey: string
+    collectionRatingKeyOrTitle: string,
+    sectionKey?: string | number
 ): Promise<boolean> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    let targetRatingKey = collectionRatingKeyOrTitle;
+    let resolvedTitle = collectionRatingKeyOrTitle;
 
-    for (const cleanBase of urlsToTry) {
-        const url = `${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+    // 1. If non-numeric or starts with "hub:", resolve real numeric ratingKey from section collections
+    if ((!/^\d+$/.test(targetRatingKey) || targetRatingKey.startsWith("hub:")) && sectionKey) {
         try {
-            const res = await fetch(url, {
-                method: "DELETE",
-                headers: {
-                    "X-Plex-Token": token,
-                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            const collections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
+            const match = collections.find(c => 
+                c.ratingKey === targetRatingKey || 
+                c.title.toLowerCase() === targetRatingKey.toLowerCase()
+            );
+            if (match) {
+                resolvedTitle = match.title;
+                if (/^\d+$/.test(match.ratingKey)) {
+                    targetRatingKey = match.ratingKey;
                 }
-            });
-            if (res.ok) return true;
-        } catch (e) {
-            // Try next candidate
+            }
+        } catch {}
+    }
+
+    let deleted = false;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        // Try DELETE /library/metadata/{ratingKey}
+        if (/^\d+$/.test(targetRatingKey)) {
+            try {
+                const url = `${cleanBase}/library/metadata/${encodeURIComponent(targetRatingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+                const res = await fetch(url, {
+                    method: "DELETE",
+                    headers: {
+                        "X-Plex-Token": token,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    }
+                });
+                if (res.ok) {
+                    deleted = true;
+                    break;
+                }
+            } catch {}
+
+            // Also try /library/collections/{ratingKey}
+            try {
+                const cUrl = `${cleanBase}/library/collections/${encodeURIComponent(targetRatingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+                const cRes = await fetch(cUrl, {
+                    method: "DELETE",
+                    headers: {
+                        "X-Plex-Token": token,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    }
+                });
+                if (cRes.ok) {
+                    deleted = true;
+                    break;
+                }
+            } catch {}
         }
     }
-    return false;
+
+    // 2. If we have sectionKey, untag all items in section that have this collection tag
+    if (sectionKey && resolvedTitle) {
+        try {
+            const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 5000);
+            const taggedItems = items.filter(it => 
+                it.collections?.some(c => c.toLowerCase() === resolvedTitle.toLowerCase())
+            );
+            if (taggedItems.length > 0) {
+                await removeItemsFromPlexCollection(
+                    urlsToTry, 
+                    token, 
+                    resolvedTitle, 
+                    taggedItems.map(it => it.ratingKey),
+                    /^\d+$/.test(targetRatingKey) ? targetRatingKey : undefined
+                );
+                deleted = true;
+            }
+        } catch {}
+    }
+
+    return deleted;
 }
 
 /**
@@ -2618,6 +2725,7 @@ export async function addLabelToPlexItem(
             allLabels.forEach((lbl, idx) => {
                 params.set(`label[${idx}].tag.tag`, lbl);
             });
+            params.set("label.locked", "1");
             params.set("X-Plex-Token", token);
 
             const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?${params.toString()}`;
@@ -2667,6 +2775,11 @@ export async function removeLabelFromPlexItem(
                     if (typeof l === "string") existingLabels.push(l);
                     else if (l?.tag) existingLabels.push(l.tag);
                 }
+            } else if (meta?.labels && Array.isArray(meta.labels)) {
+                for (const l of meta.labels) {
+                    if (typeof l === "string") existingLabels.push(l);
+                    else if (l?.tag) existingLabels.push(l.tag);
+                }
             }
 
             const filteredLabels = existingLabels.filter(l => l.toLowerCase() !== labelTag.toLowerCase());
@@ -2686,6 +2799,7 @@ export async function removeLabelFromPlexItem(
                 filteredLabels.forEach((lbl, idx) => {
                     params.set(`label[${idx}].tag.tag`, lbl);
                 });
+                params.set("label.locked", "1");
                 params.set("X-Plex-Token", token);
                 await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?${params.toString()}`, {
                     method: "PUT",
@@ -2693,6 +2807,39 @@ export async function removeLabelFromPlexItem(
                 });
             }
             return true;
+        } catch {}
+    }
+    return false;
+}
+
+/**
+ * Updates an item's edition title in Plex (e.g. "Trailer", "Extended Edition") and locks the edition field.
+ */
+export async function updatePlexItemEdition(
+    urlsToTry: string[],
+    token: string,
+    ratingKey: string,
+    editionTitle = "Trailer"
+): Promise<boolean> {
+    if (!ratingKey) return false;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const params = new URLSearchParams();
+            params.set("editionTitle.value", editionTitle);
+            params.set("editionTitle.locked", "1");
+            params.set("editionTitle", editionTitle);
+            params.set("X-Plex-Token", token);
+
+            const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?${params.toString()}`;
+            const putRes = await fetch(putUrl, {
+                method: "PUT",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (putRes.ok) return true;
         } catch {}
     }
     return false;
