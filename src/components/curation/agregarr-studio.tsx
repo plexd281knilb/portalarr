@@ -101,7 +101,8 @@ import {
     toggleAllCurationServerSectionsAction,
     runFullCurationSyncAction,
     getArrInstancesListAction,
-    deployFilteredRecentlyAddedHubAction
+    deployFilteredRecentlyAddedHubAction,
+    tagAllPlaceholdersInPlexAction
 } from "@/app/curation-actions";
 import {
     COLLECTION_PRESETS,
@@ -269,6 +270,7 @@ export function AgregarrStudio() {
 
     // Filtered Recently Added Smart Collection Hub Deployer
     const [deployingRecentlyAdded, setDeployingRecentlyAdded] = useState<boolean>(false);
+    const [taggingPlaceholders, setTaggingPlaceholders] = useState<boolean>(false);
     const [recentlyAddedDeployMsg, setRecentlyAddedDeployMsg] = useState<{ success: boolean; text: string } | null>(null);
 
     // Multi-Instance Radarr & Sonarr Mapping
@@ -1467,6 +1469,35 @@ export function AgregarrStudio() {
         }
     };
 
+    // Tag all placeholder trailers in Plex with trailer-placeholder label
+    const handleTagAllPlaceholders = async () => {
+        if (!selectedServerId) return;
+        setTaggingPlaceholders(true);
+        setRecentlyAddedDeployMsg(null);
+        try {
+            const res = await tagAllPlaceholdersInPlexAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setRecentlyAddedDeployMsg({
+                    success: true,
+                    text: res.message || "✓ Successfully scanned and labeled all placeholder trailers in Plex!"
+                });
+                setTimeout(() => setRecentlyAddedDeployMsg(null), 6000);
+            } else {
+                setRecentlyAddedDeployMsg({
+                    success: false,
+                    text: res.message || "Failed labeling placeholders in Plex."
+                });
+            }
+        } catch (err: any) {
+            setRecentlyAddedDeployMsg({
+                success: false,
+                text: err.message || "Error labeling placeholders in Plex."
+            });
+        } finally {
+            setTaggingPlaceholders(false);
+        }
+    };
+
     const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
     const currentSections = currentServer?.sections || [];
     const currentSection = currentSections.find((s: any) => String(s.key) === selectedSectionKey);
@@ -1839,6 +1870,18 @@ export function AgregarrStudio() {
                             >
                                 {deployingRecentlyAdded ? <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" /> : <Clapperboard className="h-3.5 w-3.5 text-cyan-400" />}
                                 <span>Filtered Recently Added Hub</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={taggingPlaceholders}
+                                onClick={handleTagAllPlaceholders}
+                                className="border-emerald-500/40 hover:bg-emerald-950/40 text-emerald-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                title="Scans Plex library sections, detects placeholder files & trailers, and applies the 'trailer-placeholder' label so they never pollute Recently Added carousels"
+                            >
+                                {taggingPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <Tag className="h-3.5 w-3.5 text-emerald-400" />}
+                                <span>Tag Placeholders</span>
                             </Button>
                             <Button
                                 type="button"

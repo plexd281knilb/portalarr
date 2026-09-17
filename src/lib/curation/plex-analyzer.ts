@@ -2569,3 +2569,217 @@ export async function deleteMediaFromPlexServer(
     }
 }
 
+/**
+ * Adds a metadata label to an item in Plex, preserving all existing labels.
+ */
+export async function addLabelToPlexItem(
+    urlsToTry: string[],
+    token: string,
+    ratingKey: string,
+    labelTag: string
+): Promise<boolean> {
+    if (!ratingKey || !labelTag) return false;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            // 1. Fetch current item metadata to retrieve existing labels
+            const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(metaUrl, {
+                headers: {
+                    Accept: "application/json",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const meta = data.MediaContainer?.Metadata?.[0] || data.MediaContainer?.Directory?.[0];
+            const existingLabels: string[] = [];
+            if (meta?.Label && Array.isArray(meta.Label)) {
+                for (const l of meta.Label) {
+                    if (typeof l === "string") existingLabels.push(l);
+                    else if (l?.tag) existingLabels.push(l.tag);
+                }
+            } else if (meta?.labels && Array.isArray(meta.labels)) {
+                for (const l of meta.labels) {
+                    if (typeof l === "string") existingLabels.push(l);
+                    else if (l?.tag) existingLabels.push(l.tag);
+                }
+            }
+
+            // If label already exists, return true immediately
+            if (existingLabels.some(l => l.toLowerCase() === labelTag.toLowerCase())) {
+                return true;
+            }
+
+            const allLabels = [...existingLabels, labelTag];
+            const params = new URLSearchParams();
+            allLabels.forEach((lbl, idx) => {
+                params.set(`label[${idx}].tag.tag`, lbl);
+            });
+            params.set("X-Plex-Token", token);
+
+            const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?${params.toString()}`;
+            const putRes = await fetch(putUrl, {
+                method: "PUT",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (putRes.ok) {
+                return true;
+            }
+        } catch {}
+    }
+    return false;
+}
+
+/**
+ * Removes a metadata label from an item in Plex, preserving all other labels.
+ */
+export async function removeLabelFromPlexItem(
+    urlsToTry: string[],
+    token: string,
+    ratingKey: string,
+    labelTag: string
+): Promise<boolean> {
+    if (!ratingKey || !labelTag) return false;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(metaUrl, {
+                headers: {
+                    Accept: "application/json",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const meta = data.MediaContainer?.Metadata?.[0] || data.MediaContainer?.Directory?.[0];
+            const existingLabels: string[] = [];
+            if (meta?.Label && Array.isArray(meta.Label)) {
+                for (const l of meta.Label) {
+                    if (typeof l === "string") existingLabels.push(l);
+                    else if (l?.tag) existingLabels.push(l.tag);
+                }
+            }
+
+            const filteredLabels = existingLabels.filter(l => l.toLowerCase() !== labelTag.toLowerCase());
+            if (filteredLabels.length === existingLabels.length) {
+                return true; // Not present
+            }
+
+            // Remove all labels then set filtered
+            const clearUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?label%5B0%5D.tag.tag-=&X-Plex-Token=${encodeURIComponent(token)}`;
+            await fetch(clearUrl, {
+                method: "PUT",
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            });
+
+            if (filteredLabels.length > 0) {
+                const params = new URLSearchParams();
+                filteredLabels.forEach((lbl, idx) => {
+                    params.set(`label[${idx}].tag.tag`, lbl);
+                });
+                params.set("X-Plex-Token", token);
+                await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?${params.toString()}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+            }
+            return true;
+        } catch {}
+    }
+    return false;
+}
+
+/**
+ * Updates an item's title in Plex and locks the title field.
+ */
+export async function updatePlexItemTitle(
+    urlsToTry: string[],
+    token: string,
+    ratingKey: string,
+    title: string
+): Promise<boolean> {
+    if (!ratingKey || !title) return false;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?title.value=${encodeURIComponent(title)}&title.locked=1&X-Plex-Token=${encodeURIComponent(token)}`;
+            const putRes = await fetch(putUrl, {
+                method: "PUT",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (putRes.ok) return true;
+        } catch {}
+    }
+    return false;
+}
+
+/**
+ * Fetches children metadata for a container (e.g. seasons of a show, or episodes of a season).
+ */
+export async function getPlexItemChildrenMetadata(
+    urlsToTry: string[],
+    token: string,
+    ratingKey: string
+): Promise<any[]> {
+    if (!ratingKey) return [];
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/children?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(url, {
+                headers: {
+                    Accept: "application/json",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || [];
+                return Array.isArray(items) ? items : [items];
+            }
+        } catch {}
+    }
+    return [];
+}
+
+/**
+ * Triggers a library section refresh / scan in Plex.
+ */
+export async function refreshPlexLibrarySection(
+    urlsToTry: string[],
+    token: string,
+    sectionKey: string
+): Promise<boolean> {
+    if (!sectionKey) return false;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const url = `${cleanBase}/library/sections/${encodeURIComponent(sectionKey)}/refresh?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(url, {
+                method: "GET",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (res.ok) return true;
+        } catch {}
+    }
+    return false;
+}
+
+

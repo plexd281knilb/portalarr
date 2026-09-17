@@ -19,6 +19,11 @@ import {
     deleteMediaFromPlexServer,
     searchPlexLibraryItems,
     inspectPlexMediaItemFull,
+    addLabelToPlexItem,
+    removeLabelFromPlexItem,
+    updatePlexItemTitle,
+    getPlexItemChildrenMetadata,
+    refreshPlexLibrarySection,
     PlexMediaStreamInfo,
     PruneCandidateItem
 } from "@/lib/curation/plex-analyzer";
@@ -66,6 +71,7 @@ import {
     getMdblistRatings, 
     getMdblistItems 
 } from "@/lib/curation/mdblist";
+import { getBuiltinImdbTopList } from "@/lib/curation/imdb-top250-data";
 import { 
     COLLECTION_PRESETS, 
     CollectionPreset,
@@ -1224,6 +1230,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 }
             }
         } else if (collection.sourceType === "mdblist") {
+            let matched = false;
             if (collection.sourceQuery) {
                 const items = await getMdblistItems(collection.sourceQuery);
                 if (items && items.length > 0) {
@@ -1233,44 +1240,37 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                         return true;
                     });
                     const tmdbIds = new Set(scopedItems.map((t: any) => String(t.tmdbId)).filter(Boolean));
-                    const imdbIds = new Set(scopedItems.map((t: any) => String(t.imdbId)).filter(Boolean));
-                    matchingRatingKeys.push(...libraryItems.filter(it => 
+                    const imdbIds = new Set(scopedItems.map((t: any) => String(t.imdbId).toLowerCase()).filter(Boolean));
+                    const titles = new Set(scopedItems.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
+                    const res = libraryItems.filter(it => 
                         (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb)))
-                    ).map(it => it.ratingKey));
+                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
+                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                    ).map(it => it.ratingKey);
+                    if (res.length > 0) {
+                        matchingRatingKeys.push(...res);
+                        matched = true;
+                    }
                 }
             }
 
-            // Fallback for IMDb Top 250 / top-rated collections when MDBList is not configured or returns 0
-            if (matchingRatingKeys.length === 0 && (collection.title.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb"))) {
-                try {
-                    const topRatedPages = isTvSection 
-                        ? await Promise.all([
-                            getTmdbTopRatedTv(1),
-                            getTmdbTopRatedTv(2),
-                            getTmdbTopRatedTv(3),
-                            getTmdbTopRatedTv(4)
-                        ])
-                        : await Promise.all([
-                            getTmdbTopRatedMovies(1),
-                            getTmdbTopRatedMovies(2),
-                            getTmdbTopRatedMovies(3),
-                            getTmdbTopRatedMovies(4),
-                            getTmdbTopRatedMovies(5),
-                            getTmdbTopRatedMovies(6),
-                            getTmdbTopRatedMovies(7),
-                            getTmdbTopRatedMovies(8)
-                        ]);
-                    const tmdbTopIds = new Set(topRatedPages.flat().map(m => String(m.id)).filter(Boolean));
-                    const tmdbMatches = libraryItems.filter(it => it.guids?.tmdb && tmdbTopIds.has(String(it.guids.tmdb))).map(it => it.ratingKey);
-                    if (tmdbMatches.length > 0) {
-                        matchingRatingKeys.push(...tmdbMatches);
-                    } else {
-                        // High-rating fallback (items rated >= 8.0 in library)
-                        matchingRatingKeys.push(...libraryItems.filter(it => it.rating && it.rating >= 8.0).map(it => it.ratingKey));
-                    }
-                } catch (e) {
-                    matchingRatingKeys.push(...libraryItems.filter(it => it.rating && it.rating >= 8.0).map(it => it.ratingKey));
+            // Built-in Official IMDb Top 250 Registry & High-Rating Fallback
+            if (!matched && (collection.title.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb"))) {
+                const builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+                const builtinTmdbIds = new Set(builtinList.map(b => String(b.tmdbId)));
+                const builtinImdbIds = new Set(builtinList.map(b => b.imdbId.toLowerCase()));
+                const builtinTitles = new Set(builtinList.map(b => b.title.toLowerCase().trim()));
+
+                const builtinMatches = libraryItems.filter(it => {
+                    const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
+                    const mImdb = it.guids?.imdb && builtinImdbIds.has(String(it.guids.imdb).toLowerCase());
+                    const mTitle = it.title && builtinTitles.has(it.title.toLowerCase().trim());
+                    const mRating = it.rating && it.rating >= 8.2;
+                    return mTmdb || mImdb || mTitle || mRating;
+                }).map(it => it.ratingKey);
+
+                if (builtinMatches.length > 0) {
+                    matchingRatingKeys.push(...builtinMatches);
                 }
             }
         }
@@ -1556,18 +1556,29 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
                     return true;
                 });
-                const imdbIds = scopedItems.map((t: any) => t.imdbId).filter(Boolean);
+                const imdbIds = scopedItems.map((t: any) => String(t.imdbId).toLowerCase()).filter(Boolean);
                 const tmdbIds = scopedItems.map((t: any) => String(t.tmdbId)).filter(Boolean);
                 const titles = scopedItems.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb).toLowerCase())) ||
                     (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
                     (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             } else {
-                if (sourceQuery === "top-imdb-250" || sourceQuery === "top-imdb-tv") {
-                    executionMethod += " (No MDBList key found — showing smart library fallback: items with Plex rating ≥ 8.0).";
-                    matchedItems = libraryItems.filter(it => it.rating && it.rating >= 8.0);
+                if (sourceQuery === "top-imdb-250" || sourceQuery === "top-imdb-tv" || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("top 250"))) {
+                    executionMethod = "Official Built-in IMDb Top 250 Master Registry: Matching against verified IMDb & TMDb IDs and library items.";
+                    const builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+                    const builtinTmdbIds = new Set(builtinList.map(b => String(b.tmdbId)));
+                    const builtinImdbIds = new Set(builtinList.map(b => b.imdbId.toLowerCase()));
+                    const builtinTitles = new Set(builtinList.map(b => b.title.toLowerCase().trim()));
+
+                    matchedItems = libraryItems.filter(it => {
+                        const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
+                        const mImdb = it.guids?.imdb && builtinImdbIds.has(String(it.guids.imdb).toLowerCase());
+                        const mTitle = it.title && builtinTitles.has(it.title.toLowerCase().trim());
+                        const mRating = it.rating && it.rating >= 8.2;
+                        return mTmdb || mImdb || mTitle || mRating;
+                    });
                 } else if (sourceQuery === "top-oscar-best-picture") {
                     executionMethod += " (MDBList key not configured; configure in settings to fetch official Oscar list).";
                 }
@@ -6723,52 +6734,105 @@ export async function createPlaceholderItemInternal(
             fs.writeFileSync(posterFilePath, posterBuffer);
             try { fs.chmodSync(posterFilePath, 0o666); } catch {}
 
-            // If YouTube trailer exists, save .strm file with YouTube stream URL so Plex can play it
-            if (trailerUrl) {
-                const strmFile = path.join(targetDir, `${cleanTitle}${yearStr}.strm`);
-                fs.writeFileSync(strmFile, trailerUrl);
-                try { fs.chmodSync(strmFile, 0o666); } catch {}
+            if (isTv) {
+                // TV Shows: Create Season 00 specials folder for trailer episode
+                const season00Dir = path.join(targetDir, "Season 00");
+                if (!fs.existsSync(season00Dir)) {
+                    fs.mkdirSync(season00Dir, { recursive: true });
+                }
+                try { fs.chmodSync(season00Dir, 0o777); } catch {}
+
+                // Save Season 00 poster
+                const seasonPoster = path.join(season00Dir, "poster.png");
+                fs.writeFileSync(seasonPoster, posterBuffer);
+                try { fs.chmodSync(seasonPoster, 0o666); } catch {}
+
+                // Save S00E00.Trailer.strm (with YouTube trailer stream URL)
+                if (trailerUrl) {
+                    const strmFile = path.join(season00Dir, "S00E00.Trailer.strm");
+                    fs.writeFileSync(strmFile, trailerUrl);
+                    try { fs.chmodSync(strmFile, 0o666); } catch {}
+                    
+                    const namedStrmFile = path.join(season00Dir, `S00E00 {tmdb-${itemData.tmdbId}} {edition-Trailer}.strm`);
+                    fs.writeFileSync(namedStrmFile, trailerUrl);
+                    try { fs.chmodSync(namedStrmFile, 0o666); } catch {}
+                }
+
+                // Save lightweight stub file (S00E00 {tmdb-id}.disc)
+                const stubFile = path.join(season00Dir, `S00E00 {tmdb-${itemData.tmdbId}}.disc`);
+                fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
+                try { fs.chmodSync(stubFile, 0o666); } catch {}
+
+                // Immunity markers
+                const showImmunity = path.join(targetDir, ".portalarr-missing");
+                fs.writeFileSync(showImmunity, "portalarr-placeholder");
+                try { fs.chmodSync(showImmunity, 0o666); } catch {}
+
+                const seasonImmunity = path.join(season00Dir, ".portalarr-missing");
+                fs.writeFileSync(seasonImmunity, "portalarr-placeholder");
+                try { fs.chmodSync(seasonImmunity, 0o666); } catch {}
+
+                setPermissionsRecursive(targetDir, 0o777, 0o666);
+            } else {
+                // Movies: Create Movie folder with {tmdb-id} {edition-Trailer} files
+                if (trailerUrl) {
+                    const strmFile = path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.strm`);
+                    fs.writeFileSync(strmFile, trailerUrl);
+                    try { fs.chmodSync(strmFile, 0o666); } catch {}
+
+                    const plainStrm = path.join(targetDir, `${cleanTitle}${yearStr}.strm`);
+                    fs.writeFileSync(plainStrm, trailerUrl);
+                    try { fs.chmodSync(plainStrm, 0o666); } catch {}
+                }
+
+                // Save lightweight stub file ({tmdb-id} {edition-Trailer}.disc)
+                const stubFile = path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.disc`);
+                fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
+                try { fs.chmodSync(stubFile, 0o666); } catch {}
+
+                // Immunity marker (.portalarr-missing)
+                const immunityMarker = path.join(targetDir, ".portalarr-missing");
+                fs.writeFileSync(immunityMarker, "portalarr-placeholder");
+                try { fs.chmodSync(immunityMarker, 0o666); } catch {}
+
+                setPermissionsRecursive(targetDir, 0o777, 0o666);
             }
-
-            // Save lightweight stub file (.disc)
-            const stubFile = path.join(targetDir, `${cleanTitle}${yearStr}.disc`);
-            fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
-            try { fs.chmodSync(stubFile, 0o666); } catch {}
-
-            // Immunity marker (.portalarr-missing)
-            const immunityMarker = path.join(targetDir, ".portalarr-missing");
-            fs.writeFileSync(immunityMarker, "portalarr-placeholder");
-            try { fs.chmodSync(immunityMarker, 0o666); } catch {}
-
-            // Apply recursive Unraid / NAS share permissions (0777 on directories, 0666 on files)
-            setPermissionsRecursive(targetDir, 0o777, 0o666);
 
             shareSaved = true;
             createdFolderPath = targetDir;
             logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}"${trailerUrl ? " with YouTube trailer .strm" : ""}`);
         }
 
-        // Tag label trailer-placeholder in Plex if the item is present
+        // Trigger section refresh & tag label trailer-placeholder in Plex if the item is present
         try {
             if (serverId && sectionKey) {
                 const resolved = await resolveWorkingPlexServerConnection(serverId);
                 if (resolved && resolved.serverUrl) {
                     const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    await refreshPlexLibrarySection(urlsToTry, resolved.token, sectionKey);
+
                     const foundItems = await searchPlexLibraryItems(resolved.serverUrl, resolved.token, itemData.title, sectionKey);
                     const match = foundItems.find(it => 
                         it.guids?.tmdb === String(itemData.tmdbId) || 
                         it.title.toLowerCase().trim() === itemData.title.toLowerCase().trim()
                     );
                     if (match?.ratingKey) {
-                        for (const cleanBase of urlsToTry) {
-                            try {
-                                const labelUrl = `${cleanBase}/library/metadata/${encodeURIComponent(match.ratingKey)}?label%5B0%5D.tag.tag=${encodeURIComponent("trailer-placeholder")}&X-Plex-Token=${encodeURIComponent(resolved.token)}`;
-                                await fetch(labelUrl, {
-                                    method: "PUT",
-                                    headers: { "X-Plex-Token": resolved.token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-                                });
-                                break;
-                            } catch {}
+                        await addLabelToPlexItem(urlsToTry, resolved.token, match.ratingKey, "trailer-placeholder");
+
+                        if (isTv) {
+                            const seasons = await getPlexItemChildrenMetadata(urlsToTry, resolved.token, match.ratingKey);
+                            const season0 = seasons.find(s => s.index === 0 || s.title?.toLowerCase().includes("specials"));
+                            if (season0?.ratingKey) {
+                                await addLabelToPlexItem(urlsToTry, resolved.token, String(season0.ratingKey), "trailer-placeholder");
+                                const episodes = await getPlexItemChildrenMetadata(urlsToTry, resolved.token, String(season0.ratingKey));
+                                const ep0 = episodes.find(e => e.index === 0 || e.title?.toLowerCase().includes("trailer"));
+                                if (ep0?.ratingKey) {
+                                    if (ep0.title !== "Trailer (Placeholder)") {
+                                        await updatePlexItemTitle(urlsToTry, resolved.token, String(ep0.ratingKey), "Trailer (Placeholder)");
+                                    }
+                                    await addLabelToPlexItem(urlsToTry, resolved.token, String(ep0.ratingKey), "trailer-placeholder");
+                                }
+                            }
                         }
                     }
                 }
@@ -7054,6 +7118,17 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         }));
                 }
             }
+
+            if (candidateItems.length === 0 && (collection.title?.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb"))) {
+                const builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+                candidateItems = builtinList.map(b => ({
+                    id: b.tmdbId,
+                    title: b.title,
+                    mediaType: (b.mediaType === "show" ? "tv" : "movie") as "movie" | "tv",
+                    releaseDate: `${b.year}-01-01`,
+                    imdbId: b.imdbId
+                }));
+            }
         }
 
         // Strict mediaType filter on candidate items
@@ -7205,6 +7280,20 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
             }
         }
 
+        // Trigger Plex section refresh & run placeholder labeling sweep
+        try {
+            if (collection.serverId && collection.sectionKey) {
+                const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
+                if (resolved?.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    await refreshPlexLibrarySection(urlsToTry, resolved.token, collection.sectionKey);
+                }
+            }
+            await tagAllPlaceholdersInPlexInternal(collection.serverId, collection.sectionKey);
+        } catch (sweepErr: any) {
+            console.warn(`[PLACEHOLDERS] Post-generation labeling sweep error:`, sweepErr.message);
+        }
+
         logger.addLog("SUCCESS", "CURATION", `Generated ${generatedCount} placeholders for collection "${collection.title}".`);
 
         return {
@@ -7232,6 +7321,161 @@ export async function generateCollectionPlaceholdersAction(collectionId: string)
 }
 
 /**
+ * Master worker to scan Plex library sections, detect all placeholder items (by file path, edition-Trailer, 
+ * Coming Soon share location, or advisory placeholder records), and tag them with Plex label "trailer-placeholder".
+ * Also ensures TV show placeholder episodes (S00E00) are titled "Trailer (Placeholder)" and tagged.
+ */
+export async function tagAllPlaceholdersInPlexInternal(
+    targetServerId?: string,
+    targetSectionKey?: string
+): Promise<{ success: boolean; taggedCount: number; message: string }> {
+    try {
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let serverStorageConfig: Record<string, any> = {};
+        if (settings?.serverStorageConfig) {
+            try { serverStorageConfig = JSON.parse(settings.serverStorageConfig); } catch {}
+        }
+        let comingSoonShares: Record<string, string> = {};
+        if (settings?.comingSoonShares) {
+            try { comingSoonShares = JSON.parse(settings.comingSoonShares); } catch {}
+        }
+
+        // Collect all known placeholder advisory records from database
+        const placeholderAdvisories = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                OR: [
+                    { ratingKey: { startsWith: "placeholder_tmdb_" } },
+                    { leavingReason: { startsWith: "Placeholder:" } },
+                    { customTags: { contains: '"isPlaceholder":true' } }
+                ]
+            }
+        });
+
+        const placeholderTmdbSet = new Set<string>();
+        const placeholderTitleSet = new Set<string>();
+        for (const adv of placeholderAdvisories) {
+            if (adv.tmdbId) placeholderTmdbSet.add(String(adv.tmdbId));
+            if (adv.title) placeholderTitleSet.add(adv.title.toLowerCase().trim());
+        }
+
+        // Gather all share directory paths to identify files in Coming Soon shares
+        const shareDirPaths: string[] = [];
+        for (const p of Object.values(comingSoonShares)) {
+            if (p) shareDirPaths.push(path.normalize(p).toLowerCase());
+        }
+        for (const cfg of Object.values(serverStorageConfig)) {
+            if (cfg.tvSharePath) shareDirPaths.push(path.normalize(cfg.tvSharePath).toLowerCase());
+            if (cfg.movieSharePath) shareDirPaths.push(path.normalize(cfg.movieSharePath).toLowerCase());
+            if (cfg.sharePath) shareDirPaths.push(path.normalize(cfg.sharePath).toLowerCase());
+        }
+
+        const mainToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        const plexServers = mainToken ? await getPlexServers(mainToken) : [];
+        let serverIds = targetServerId ? [targetServerId] : plexServers.map(s => s.clientIdentifier);
+        if (serverIds.length === 0 && targetServerId) serverIds = [targetServerId];
+        if (serverIds.length === 0 && Object.keys(serverStorageConfig).length > 0) {
+            serverIds = Object.keys(serverStorageConfig);
+        }
+        let totalTagged = 0;
+
+        for (const srvId of serverIds) {
+            const resolved = await resolveWorkingPlexServerConnection(srvId);
+            if (!resolved || !resolved.serverUrl) continue;
+            const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+            const token = resolved.token;
+
+            const sections = await getPlexServerSections(token, srvId, resolved.serverUrl);
+            const filteredSections = targetSectionKey 
+                ? sections.filter(s => String(s.key) === String(targetSectionKey))
+                : sections;
+
+            for (const sec of filteredSections) {
+                const secKey = String(sec.key);
+                const isTv = sec.type === "show" || sec.type === "tv";
+
+                // Fetch all items from the library section (do NOT exclude placeholders, as we want to find and tag them)
+                const items = await getPlexLibraryMediaItems(urlsToTry, token, secKey, 10000, undefined, true, false);
+
+                for (const item of items) {
+                    const fileLower = (item.filePath || "").toLowerCase();
+                    const titleLower = (item.title || "").toLowerCase().trim();
+                    const tmdbIdStr = item.guids?.tmdb ? String(item.guids.tmdb) : "";
+
+                    // Check if this item is a placeholder trailer
+                    const isInComingSoonShare = shareDirPaths.some(sp => fileLower.includes(sp)) || 
+                                                fileLower.includes("/coming_soon/") || 
+                                                fileLower.includes("\\coming_soon\\");
+                    const hasTrailerName = fileLower.includes("edition-trailer") || 
+                                           fileLower.includes("edition-placeholder") || 
+                                           fileLower.includes("s00e00") || 
+                                           fileLower.endsWith(".disc") || 
+                                           fileLower.endsWith(".strm") || 
+                                           fileLower.includes(".portalarr-missing");
+                    const isKnownTmdb = Boolean(tmdbIdStr && placeholderTmdbSet.has(tmdbIdStr));
+                    const isKnownTitle = placeholderTitleSet.has(titleLower);
+                    const isStubSize = Boolean(item.fileSize && item.fileSize > 0 && item.fileSize < 1000000);
+
+                    const isPlaceholderItem = item.isPlaceholder || 
+                                              isInComingSoonShare || 
+                                              hasTrailerName || 
+                                              (isKnownTmdb && (isInComingSoonShare || hasTrailerName || isStubSize)) ||
+                                              (isKnownTitle && (isInComingSoonShare || hasTrailerName || isStubSize));
+
+                    if (isPlaceholderItem) {
+                        // 1. Tag item with trailer-placeholder label in Plex
+                        const hasLabel = item.labels?.some(l => l.toLowerCase() === "trailer-placeholder");
+                        if (!hasLabel) {
+                            const success = await addLabelToPlexItem(urlsToTry, token, item.ratingKey, "trailer-placeholder");
+                            if (success) totalTagged++;
+                        }
+
+                        // 2. If TV show: inspect Season 00 / S00E00
+                        if (isTv || item.type === "show") {
+                            try {
+                                const seasons = await getPlexItemChildrenMetadata(urlsToTry, token, item.ratingKey);
+                                const season0 = seasons.find(s => s.index === 0 || s.title?.toLowerCase().includes("specials"));
+                                if (season0?.ratingKey) {
+                                    await addLabelToPlexItem(urlsToTry, token, String(season0.ratingKey), "trailer-placeholder");
+                                    const episodes = await getPlexItemChildrenMetadata(urlsToTry, token, String(season0.ratingKey));
+                                    const ep0 = episodes.find(e => e.index === 0 || e.title?.toLowerCase().includes("trailer"));
+                                    if (ep0?.ratingKey) {
+                                        if (ep0.title !== "Trailer (Placeholder)") {
+                                            await updatePlexItemTitle(urlsToTry, token, String(ep0.ratingKey), "Trailer (Placeholder)");
+                                        }
+                                        await addLabelToPlexItem(urlsToTry, token, String(ep0.ratingKey), "trailer-placeholder");
+                                    }
+                                }
+                            } catch {}
+                        }
+                    }
+                }
+            }
+        }
+
+        logger.addLog("SUCCESS", "CURATION", `Placeholder sweep completed: verified and tagged ${totalTagged} items with "trailer-placeholder" in Plex.`);
+        return {
+            success: true,
+            taggedCount: totalTagged,
+            message: `Verified and labeled ${totalTagged} placeholder trailers with "trailer-placeholder" in Plex.`
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "CURATION", `Error in tagAllPlaceholdersInPlexInternal: ${e.message}`);
+        return { success: false, taggedCount: 0, message: e.message };
+    }
+}
+
+/**
+ * Server action to tag all placeholder items in Plex with "trailer-placeholder"
+ */
+export async function tagAllPlaceholdersInPlexAction(
+    serverId?: string,
+    sectionKey?: string
+) {
+    await verifyAdmin();
+    return await tagAllPlaceholdersInPlexInternal(serverId, sectionKey);
+}
+
+/**
  * Server action to deploy a Filtered Recently Added Smart Collection to Plex for a library section.
  * Replaces or overrides Plex's raw un-filtered Recently Added hub so that coming soon trailer placeholders
  * never appear in users' Recently Added hubs or on the Home Screen.
@@ -7242,6 +7486,13 @@ export async function deployFilteredRecentlyAddedHubAction(
 ): Promise<{ success: boolean; message: string; collectionRatingKey?: string }> {
     await verifyAdmin();
     try {
+        // Step 1: Run placeholder sweep to ensure all existing placeholders on this server are tagged with trailer-placeholder label
+        try {
+            await tagAllPlaceholdersInPlexInternal(serverId, sectionKey);
+        } catch (sweepErr: any) {
+            console.warn(`[RECENTLY-ADDED] Pre-deploy placeholder labeling sweep error:`, sweepErr.message);
+        }
+
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) {
             throw new Error(`Cannot connect to Plex server ${serverId}`);
