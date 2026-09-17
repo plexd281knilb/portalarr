@@ -6051,7 +6051,7 @@ export async function getTrendingAndPlaceholderMediaAction(
             let arrStatus: "NOT_REQUESTED" | "COMING_SOON" | "MONITORED_RELEASED" | "IN_LIBRARY" | "UPCOMING_UNREQUESTED";
             let suggestedBannerType = "not_requested";
             let suggestedBannerText = "NOT REQUESTED";
-            let suggestedBannerTheme = "crimson-red";
+            let suggestedBannerTheme = category?.includes("netflix") ? "netflix-red" : "crimson-red";
             let statusBadgeText = "NOT REQUESTED";
             let statusBadgeColor = "rose";
 
@@ -6062,43 +6062,37 @@ export async function getTrendingAndPlaceholderMediaAction(
                 suggestedBannerTheme = "emerald-green";
                 statusBadgeText = "✓ IN LIBRARY";
                 statusBadgeColor = "emerald";
-            } else if (isMonitored && !isReleased) {
-                // Requested / monitored in Radarr or Sonarr, but not released yet -> COMING SOON
+            } else if (!isMonitored) {
+                // Media item is NOT requested / NOT in Radarr or Sonarr
+                arrStatus = "NOT_REQUESTED";
+                suggestedBannerType = "not_requested";
+                suggestedBannerText = "NOT REQUESTED";
+                suggestedBannerTheme = category?.includes("netflix") ? "netflix-red" : "crimson-red";
+                statusBadgeText = "NOT REQUESTED";
+                statusBadgeColor = "rose";
+            } else if (!isReleased) {
+                // Requested / monitored in Radarr or Sonarr, but NOT released yet -> COMING SOON
                 arrStatus = "COMING_SOON";
-                suggestedBannerType = "countdown";
-                const appLabel = inRadarr ? "RADARR" : inSonarr ? "SONARR" : "ARR";
-                suggestedBannerText = item.digitalReleaseDate 
-                    ? `DIGITAL RELEASE • ${formatNiceDate(item.digitalReleaseDate)}`
-                    : `MONITORED IN ${appLabel} • COMING SOON`;
-                suggestedBannerTheme = "amber-gold";
+                suggestedBannerType = "coming_soon";
+                if (item.digitalReleaseDate) {
+                    const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    suggestedBannerText = daysToRel > 0 && daysToRel <= 30
+                        ? `STREAMING IN ${daysToRel} DAYS`
+                        : `STREAMING ${formatNiceDate(item.digitalReleaseDate).toUpperCase()}`;
+                } else {
+                    suggestedBannerText = "COMING SOON";
+                }
+                suggestedBannerTheme = "indigo-purple";
                 statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON";
                 statusBadgeColor = "amber";
-            } else if (isMonitored && isReleased) {
-                // Monitored in Radarr/Sonarr and already released -> DOWNLOADING SOON
+            } else {
+                // Requested / monitored in Radarr or Sonarr AND already released -> DOWNLOADING SOON
                 arrStatus = "MONITORED_RELEASED";
                 suggestedBannerType = "now_streaming";
                 suggestedBannerText = "DOWNLOADING SOON";
                 suggestedBannerTheme = "emerald-green";
                 statusBadgeText = inRadarr ? "IN RADARR (DOWNLOADING)" : inSonarr ? "IN SONARR (DOWNLOADING)" : "DOWNLOADING";
                 statusBadgeColor = "cyan";
-            } else if (isReleased && !isMonitored) {
-                // Released (in theaters or past release date) but NOT requested in Radarr or Sonarr -> RELEASED BUT NOT REQUESTED
-                arrStatus = "NOT_REQUESTED";
-                suggestedBannerType = "not_requested";
-                suggestedBannerText = "TRENDING • NOT REQUESTED";
-                suggestedBannerTheme = "crimson-red";
-                statusBadgeText = "NOT REQUESTED";
-                statusBadgeColor = "rose";
-            } else {
-                // Unmonitored and unreleased -> UPCOMING UNREQUESTED
-                arrStatus = "UPCOMING_UNREQUESTED";
-                suggestedBannerType = "coming_soon";
-                suggestedBannerText = item.digitalReleaseDate
-                    ? `STREAMING SOON • ${formatNiceDate(item.digitalReleaseDate)}`
-                    : "COMING SOON • NOT REQUESTED";
-                suggestedBannerTheme = "indigo-purple";
-                statusBadgeText = "UPCOMING (NOT REQUESTED)";
-                statusBadgeColor = "purple";
             }
 
             const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
@@ -6620,30 +6614,31 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
 
                 let bannerText = "NOT REQUESTED";
-                let bannerTheme = "crimson-red";
+                let bannerTheme = (collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix")) ? "netflix-red" : "crimson-red";
                 let bannerType = "not_requested";
 
-                if (isMonitored && !isReleased) {
-                    const appLabel = inRadarr ? "RADARR" : inSonarr ? "SONARR" : "ARR";
-                    bannerText = item.digitalReleaseDate
-                        ? `DIGITAL RELEASE • ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                        : `MONITORED IN ${appLabel} • COMING SOON`;
-                    bannerTheme = "amber-gold";
-                    bannerType = "countdown";
-                } else if (isMonitored && isReleased) {
+                if (!isMonitored) {
+                    // Not in Radarr or Sonarr -> NOT REQUESTED
+                    bannerText = "NOT REQUESTED";
+                    bannerTheme = (collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix")) ? "netflix-red" : "crimson-red";
+                    bannerType = "not_requested";
+                } else if (!isReleased) {
+                    // Monitored in Radarr/Sonarr, but unreleased -> COMING SOON
+                    if (item.digitalReleaseDate) {
+                        const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        bannerText = daysToRel > 0 && daysToRel <= 30
+                            ? `STREAMING IN ${daysToRel} DAYS`
+                            : `STREAMING ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`;
+                    } else {
+                        bannerText = "COMING SOON";
+                    }
+                    bannerTheme = "indigo-purple";
+                    bannerType = "coming_soon";
+                } else {
+                    // Monitored in Radarr/Sonarr and already released -> DOWNLOADING SOON
                     bannerText = "DOWNLOADING SOON";
                     bannerTheme = "emerald-green";
                     bannerType = "now_streaming";
-                } else if (isReleased && !isMonitored) {
-                    bannerText = "TRENDING • NOT REQUESTED";
-                    bannerTheme = "crimson-red";
-                    bannerType = "not_requested";
-                } else {
-                    bannerText = item.digitalReleaseDate
-                        ? `STREAMING SOON • ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                        : "COMING SOON • NOT REQUESTED";
-                    bannerTheme = "indigo-purple";
-                    bannerType = "coming_soon";
                 }
 
                 const year = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;

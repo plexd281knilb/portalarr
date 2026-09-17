@@ -846,9 +846,9 @@ export function AgregarrStudio() {
         setPlaceholderSuccessMsg(null);
         setPlaceholderModalOpen(true);
 
-        const bannerText = item.suggestedBannerText || (item.inTheaters ? "IN THEATERS" : item.digitalReleaseDate ? "NOW STREAMING" : "NOT REQUESTED");
-        const bannerType = item.suggestedBannerType || (item.inTheaters ? "in_theaters" : item.digitalReleaseDate ? "now_streaming" : "not_requested");
-        const bannerTheme = item.suggestedBannerTheme || (item.arrStatus === "COMING_SOON" ? "amber-gold" : item.arrStatus === "NOT_REQUESTED" ? "crimson-red" : "indigo-purple");
+        const bannerText = item.suggestedBannerText || (!item.isMonitored ? "NOT REQUESTED" : item.isReleased ? "DOWNLOADING SOON" : "COMING SOON");
+        const bannerType = item.suggestedBannerType || (!item.isMonitored ? "not_requested" : item.isReleased ? "now_streaming" : "coming_soon");
+        const bannerTheme = item.suggestedBannerTheme || (!item.isMonitored ? "crimson-red" : item.isReleased ? "emerald-green" : "indigo-purple");
 
         setPlaceholderModalBannerText(bannerText);
         setPlaceholderModalBannerType(bannerType);

@@ -1015,7 +1015,7 @@ function getBannerThemeColors(theme?: string): {
 function generateBannerSvg(
     text: string,
     theme: string,
-    position: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string = "bottom"
+    position: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | "top-right" | "top-left" | "bottom-right" | "bottom-left" | string = "bottom"
 ): { svg: string; width: number; height: number; top: number; left: number } {
     const colors = getBannerThemeColors(theme);
     const escapedText = (text || "LEAVING SOON")
@@ -1025,10 +1025,51 @@ function generateBannerSvg(
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&apos;");
 
-    if (position === "corner") {
-        const size = 520;
+    const isCorner = position === "corner" || position.includes("corner") || position === "top-right" || position === "top-left" || position === "bottom-right" || position === "bottom-left";
+
+    if (isCorner) {
+        const size = 420;
         const len = escapedText.length;
-        const fontSize = len > 28 ? 20 : len > 22 ? 23 : len > 16 ? 26 : len > 10 ? 30 : 34;
+        const fontSize = len > 26 ? 20 : len > 20 ? 23 : len > 14 ? 26 : len > 8 ? 30 : 34;
+        const textYOffset = Math.round(fontSize * 0.35);
+
+        let polyPoints = "";
+        let cx = 210, cy = 210;
+        let rotAngle = 45;
+        let top = 0;
+        let left = 1000 - size;
+
+        const effectivePos = position === "corner" ? "top-right" : position;
+
+        if (effectivePos === "top-right") {
+            polyPoints = "100,0 420,320 420,420 0,0";
+            cx = 245;
+            cy = 185;
+            rotAngle = 45;
+            top = 0;
+            left = 1000 - size;
+        } else if (effectivePos === "top-left") {
+            polyPoints = "320,0 0,320 0,420 420,0";
+            cx = 175;
+            cy = 185;
+            rotAngle = -45;
+            top = 0;
+            left = 0;
+        } else if (effectivePos === "bottom-right") {
+            polyPoints = "0,420 420,0 420,100 100,420";
+            cx = 245;
+            cy = 235;
+            rotAngle = -45;
+            top = 1500 - size;
+            left = 1000 - size;
+        } else { // bottom-left
+            polyPoints = "420,420 0,0 0,100 320,420";
+            cx = 175;
+            cy = 235;
+            rotAngle = 45;
+            top = 1500 - size;
+            left = 0;
+        }
 
         const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -1037,46 +1078,34 @@ function generateBannerSvg(
                     <stop offset="50%" stop-color="${colors.grad2}" />
                     <stop offset="100%" stop-color="${colors.grad3}" />
                 </linearGradient>
+                <style type="text/css">
+                    .corner-shadow {
+                        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                        font-size: ${fontSize}px;
+                        font-weight: 900;
+                        fill: #000000;
+                        text-anchor: middle;
+                    }
+                    .corner-fg {
+                        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                        font-size: ${fontSize}px;
+                        font-weight: 900;
+                        fill: ${colors.text || '#ffffff'};
+                        stroke: ${colors.accent || '#fca5a5'};
+                        stroke-width: 0.8px;
+                        text-anchor: middle;
+                    }
+                </style>
             </defs>
-            <g>
-                <polygon points="120,0 520,400 520,520 0,0" fill="url(#cornerGrad)" />
-                <line x1="120" y1="0" x2="520" y2="400" stroke="${colors.border}" stroke-width="4" />
-                <line x1="0" y1="0" x2="520" y2="520" stroke="${colors.border}" stroke-width="4" />
-                <line x1="60" y1="0" x2="520" y2="460" stroke="${colors.accent}" stroke-width="1.5" stroke-dasharray="8 4" opacity="0.7" />
+            <polygon points="${polyPoints}" fill="url(#cornerGrad)" />
+            <g transform="rotate(${rotAngle} ${cx} ${cy})">
+                <text x="${cx + 1}" y="${cy + textYOffset + 2}" class="corner-shadow" opacity="0.9">${escapedText}</text>
+                <text x="${cx - 1}" y="${cy + textYOffset + 2}" class="corner-shadow" opacity="0.9">${escapedText}</text>
+                <text x="${cx}" y="${cy + textYOffset}" class="corner-fg">${escapedText}</text>
             </g>
-            <!-- Shadow Layer -->
-            <text x="290" y="232" transform="rotate(45 290 232)" 
-                dominant-baseline="middle"
-                alignment-baseline="middle"
-                font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
-                font-size="${fontSize}" 
-                font-weight="900" 
-                letter-spacing="2" 
-                fill="#000000" 
-                stroke="#000000"
-                stroke-width="5"
-                stroke-linejoin="round"
-                opacity="0.8"
-                text-anchor="middle">
-                ${escapedText}
-            </text>
-            <!-- Crisp Foreground Text -->
-            <text x="290" y="230" transform="rotate(45 290 230)" 
-                dominant-baseline="middle"
-                alignment-baseline="middle"
-                font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
-                font-size="${fontSize}" 
-                font-weight="900" 
-                letter-spacing="2" 
-                fill="${colors.text || '#ffffff'}" 
-                stroke="${colors.border || 'none'}"
-                stroke-width="1"
-                paint-order="stroke fill"
-                text-anchor="middle">
-                ${escapedText}
-            </text>
         </svg>`;
-        return { svg, width: size, height: size, top: 0, left: 1000 - size };
+
+        return { svg, width: size, height: size, top, left };
     }
 
     const width = 1000;
@@ -1095,8 +1124,9 @@ function generateBannerSvg(
         topPos = 1060;
     }
 
-    const fontSize = escapedText.length > 34 ? 32 : escapedText.length > 22 ? 40 : 48;
-    const letterSpacing = escapedText.length > 28 ? 2 : 3.5;
+    const len = escapedText.length;
+    const fontSize = len > 34 ? 32 : len > 22 ? 40 : 46;
+    const textY = Math.round(height / 2 + fontSize * 0.35);
 
     const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -1112,6 +1142,24 @@ function generateBannerSvg(
                 <stop offset="75%" stop-color="${colors.accent}" stop-opacity="0.9" />
                 <stop offset="100%" stop-color="${colors.border}" stop-opacity="0.2" />
             </linearGradient>
+            <style type="text/css">
+                .banner-shadow {
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    font-size: ${fontSize}px;
+                    font-weight: 900;
+                    fill: #000000;
+                    text-anchor: middle;
+                }
+                .banner-fg {
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    font-size: ${fontSize}px;
+                    font-weight: 900;
+                    fill: ${colors.text || '#ffffff'};
+                    stroke: ${colors.accent || '#fca5a5'};
+                    stroke-width: 1px;
+                    text-anchor: middle;
+                }
+            </style>
         </defs>
         
         <rect x="0" y="0" width="${width}" height="${height}" fill="url(#bannerGrad)" />
@@ -1124,38 +1172,13 @@ function generateBannerSvg(
                <line x1="0" y1="${height - 3}" x2="${width}" y2="${height - 3}" stroke="url(#lineGrad)" stroke-width="5" opacity="0.5" />`
         }
 
-        <!-- Drop Shadow Outline Layer -->
-        <text x="500" y="98" 
-            dominant-baseline="middle"
-            alignment-baseline="middle"
-            font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
-            font-size="${fontSize}" 
-            font-weight="900" 
-            letter-spacing="${letterSpacing}" 
-            fill="#000000"
-            stroke="#000000"
-            stroke-width="8"
-            stroke-linejoin="round"
-            opacity="0.9"
-            text-anchor="middle">
-            ${escapedText}
-        </text>
+        <!-- Deep Drop Shadows -->
+        <text x="502" y="${textY + 3}" class="banner-shadow" opacity="0.9">${escapedText}</text>
+        <text x="498" y="${textY + 3}" class="banner-shadow" opacity="0.9">${escapedText}</text>
+        <text x="500" y="${textY + 4}" class="banner-shadow" opacity="0.95">${escapedText}</text>
 
         <!-- Crisp High-Contrast Foreground Text Layer -->
-        <text x="500" y="96" 
-            dominant-baseline="middle"
-            alignment-baseline="middle"
-            font-family="'Impact', 'Arial Black', Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
-            font-size="${fontSize}" 
-            font-weight="900" 
-            letter-spacing="${letterSpacing}" 
-            fill="${colors.text || '#ffffff'}" 
-            stroke="${colors.border || '#ffffff'}"
-            stroke-width="1.5"
-            paint-order="stroke fill"
-            text-anchor="middle">
-            ${escapedText}
-        </text>
+        <text x="500" y="${textY}" class="banner-fg">${escapedText}</text>
     </svg>`;
 
     return { svg, width, height, top: topPos, left: 0 };
@@ -1183,6 +1206,23 @@ function generatePlaceholderBackdropSvg(title: string): string {
             <filter id="posterGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#000000" flood-opacity="0.8" />
             </filter>
+            <style type="text/css">
+                .backdrop-title {
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    font-size: 44px;
+                    font-weight: 900;
+                    fill: #f8fafc;
+                    text-anchor: middle;
+                }
+                .backdrop-sub {
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    font-size: 20px;
+                    font-weight: 700;
+                    letter-spacing: 3px;
+                    fill: #94a3b8;
+                    text-anchor: middle;
+                }
+            </style>
         </defs>
         
         <rect width="1000" height="1500" fill="url(#bgGrad)" />
@@ -1198,26 +1238,8 @@ function generatePlaceholderBackdropSvg(title: string): string {
         </g>
 
         <g filter="url(#posterGlow)">
-            <text x="500" y="780" 
-                dominant-baseline="central"
-                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
-                font-size="44" 
-                font-weight="900" 
-                letter-spacing="1.5" 
-                fill="#f8fafc" 
-                text-anchor="middle">
-                ${escapedTitle}
-            </text>
-            <text x="500" y="830" 
-                dominant-baseline="central"
-                font-family="Arial, 'DejaVu Sans', 'Liberation Sans', sans-serif" 
-                font-size="20" 
-                font-weight="600" 
-                letter-spacing="3" 
-                fill="#94a3b8" 
-                text-anchor="middle">
-                PORTALARR PREVIEW
-            </text>
+            <text x="500" y="780" class="backdrop-title">${escapedTitle}</text>
+            <text x="500" y="830" class="backdrop-sub">PORTALARR PREVIEW</text>
         </g>
     </svg>`;
 }
@@ -1458,31 +1480,20 @@ export async function applyOverlaysToPoster(
         if (winningRibbonName) {
             const ribbonRelPath = resolveStockRibbonPath(winningRibbonName, winningTheme);
             if (ribbonRelPath) {
-                // If it's a blank ribbon (e.g. leaving_soon or custom text), render dynamic corner banner with text!
-                if (ribbonRelPath.includes("blank-") || winningRibbonName === "leaving_soon") {
+                // If it's a blank ribbon (e.g. leaving_soon or custom text or generic tier), render dynamic corner banner with crisp text!
+                if (ribbonRelPath.includes("blank-") || winningRibbonName === "leaving_soon" || !fs.existsSync(path.join(STOCK_KOMETA_DIR, ribbonRelPath))) {
                     const ribbonText = winningRibbonName === "leaving_soon" 
                         ? (options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON") 
-                        : (options.ribbonText || winningRibbonName).toUpperCase();
+                        : (options.ribbonText || winningRibbonName).replace(/_/g, " ").toUpperCase();
 
-                    const bannerInfo = generateBannerSvg(ribbonText, winningTheme === "gold" ? "amber-gold" : "crimson-red", "corner");
-                    let ribbonSharp = sharp(Buffer.from(bannerInfo.svg)).resize(380, 380);
-
-                    if (rPos === "bottom-left") {
-                        ribbonSharp = ribbonSharp.flop();
-                    } else if (rPos === "top-left") {
-                        ribbonSharp = ribbonSharp.flip().flop();
-                    } else if (rPos === "bottom-right") {
-                        ribbonSharp = ribbonSharp.flip();
-                    }
-
-                    const ribbonBuf = await ribbonSharp.toBuffer();
-                    const rTop = rPos.startsWith("top") ? 0 : 1500 - 380;
-                    const rLeft = rPos.endsWith("right") ? 1000 - 380 : 0;
+                    const bannerTheme = winningTheme === "gold" ? "amber-gold" : winningTheme === "crimson" ? "crimson-red" : winningTheme === "purple" ? "indigo-purple" : "amber-gold";
+                    const bannerInfo = generateBannerSvg(ribbonText, bannerTheme, rPos);
+                    const ribbonBuf = await sharp(Buffer.from(bannerInfo.svg)).toBuffer();
 
                     overlays.push({
                         input: ribbonBuf,
-                        top: rTop,
-                        left: rLeft
+                        top: Math.round(bannerInfo.top),
+                        left: Math.round(bannerInfo.left)
                     });
                     renderedRibbonCorner = rPos;
                 } else {
