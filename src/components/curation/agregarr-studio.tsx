@@ -94,6 +94,7 @@ import {
     saveServerStorageConfigAction,
     validateDirectoryPathAction,
     cleanupAvailablePlaceholdersAction,
+    fixPlaceholderPermissionsAction,
     getCurationSettingsAction,
     saveCurationSettingsAction,
     toggleCurationLibrarySectionAction,
@@ -283,6 +284,7 @@ export function AgregarrStudio() {
     const [sharesSavedMsg, setSharesSavedMsg] = useState(false);
     const [pathCheckResults, setPathCheckResults] = useState<Record<string, { checking: boolean; success?: boolean; msg?: string }>>({});
     const [cleaningPlaceholders, setCleaningPlaceholders] = useState(false);
+    const [fixingPermissions, setFixingPermissions] = useState(false);
     const [cleanupResultMsg, setCleanupResultMsg] = useState<{ success: boolean; text: string } | null>(null);
 
     // Automated Schedule & Enabled Library States
@@ -415,6 +417,26 @@ export function AgregarrStudio() {
             });
         } finally {
             setCleaningPlaceholders(false);
+        }
+    };
+
+    const handleFixPermissions = async () => {
+        setFixingPermissions(true);
+        setCleanupResultMsg(null);
+        try {
+            const res = await fixPlaceholderPermissionsAction();
+            setCleanupResultMsg({
+                success: res.success,
+                text: res.message || "Permissions updated."
+            });
+            setTimeout(() => setCleanupResultMsg(null), 6000);
+        } catch (err: any) {
+            setCleanupResultMsg({
+                success: false,
+                text: err.message || "Failed fixing placeholder permissions."
+            });
+        } finally {
+            setFixingPermissions(false);
         }
     };
 
@@ -2756,6 +2778,19 @@ export function AgregarrStudio() {
                                 >
                                     {cleaningPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <RotateCcw className="h-3.5 w-3.5 text-amber-400" />}
                                     <span>Clean Acquired Placeholders</span>
+                                </Button>
+
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={fixingPermissions}
+                                    onClick={handleFixPermissions}
+                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs gap-1.5 cursor-pointer"
+                                    title="Recursively unlocks all Coming Soon placeholder folders on disk with 0777 (drwxrwxrwx) permissions"
+                                >
+                                    {fixingPermissions ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />}
+                                    <span>Fix Share Permissions</span>
                                 </Button>
 
                                 {sharesSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-1">✓ Saved!</span>}

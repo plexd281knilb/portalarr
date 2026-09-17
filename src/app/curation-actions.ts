@@ -111,6 +111,26 @@ async function verifyAdmin() {
     return user;
 }
 
+/**
+ * Recursively sets Unraid/Linux/NAS filesystem permissions on directories and files.
+ * Default: 0o777 for directories (rwxrwxrwx) and 0o666 for files (rw-rw-rw-).
+ */
+function setPermissionsRecursive(targetPath: string, dirMode = 0o777, fileMode = 0o666) {
+    if (!fs.existsSync(targetPath)) return;
+    try {
+        const stat = fs.statSync(targetPath);
+        if (stat.isDirectory()) {
+            try { fs.chmodSync(targetPath, dirMode); } catch {}
+            const items = fs.readdirSync(targetPath);
+            for (const item of items) {
+                setPermissionsRecursive(path.join(targetPath, item), dirMode, fileMode);
+            }
+        } else {
+            try { fs.chmodSync(targetPath, fileMode); } catch {}
+        }
+    } catch {}
+}
+
 export async function getCurationSettingsAction() {
     await verifyAdmin();
     await ensureSchemaColumns();
@@ -6651,24 +6671,32 @@ export async function createPlaceholderItemInternal(
             if (!fs.existsSync(targetDir)) {
                 fs.mkdirSync(targetDir, { recursive: true });
             }
+            try { fs.chmodSync(targetDir, 0o777); } catch {}
 
             // Save poster.png
             const posterFilePath = path.join(targetDir, "poster.png");
             fs.writeFileSync(posterFilePath, posterBuffer);
+            try { fs.chmodSync(posterFilePath, 0o666); } catch {}
 
             // If YouTube trailer exists, save .strm file with YouTube stream URL so Plex can play it
             if (trailerUrl) {
                 const strmFile = path.join(targetDir, `${cleanTitle}${yearStr}.strm`);
                 fs.writeFileSync(strmFile, trailerUrl);
+                try { fs.chmodSync(strmFile, 0o666); } catch {}
             }
 
             // Save lightweight stub file (.disc)
             const stubFile = path.join(targetDir, `${cleanTitle}${yearStr}.disc`);
             fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
+            try { fs.chmodSync(stubFile, 0o666); } catch {}
 
             // Immunity marker (.portalarr-missing)
             const immunityMarker = path.join(targetDir, ".portalarr-missing");
             fs.writeFileSync(immunityMarker, "portalarr-placeholder");
+            try { fs.chmodSync(immunityMarker, 0o666); } catch {}
+
+            // Apply recursive Unraid / NAS share permissions (0777 on directories, 0666 on files)
+            setPermissionsRecursive(targetDir, 0o777, 0o666);
 
             shareSaved = true;
             createdFolderPath = targetDir;
@@ -7647,6 +7675,9 @@ export async function cleanupAvailablePlaceholdersInternal(
                         continue;
                     }
 
+                    // Auto-repair permissions on any existing placeholder folder so NAS/Unraid shares can read/write/delete freely
+                    setPermissionsRecursive(folderPath, 0o777, 0o666);
+
                     // Extract metadata from .disc file if present
                     let itemTmdbId = "";
                     let itemTitle = "";
@@ -7689,6 +7720,8 @@ export async function cleanupAvailablePlaceholdersInternal(
                     if (isAvailable) {
                         // Clean up placeholder directory on disk
                         try {
+                            try { fs.chmodSync(folderPath, 0o777); } catch {}
+                            setPermissionsRecursive(folderPath, 0o777, 0o666);
                             fs.rmSync(folderPath, { recursive: true, force: true });
                             removedCount++;
                             removedItems.push(itemTitle || entry.name);
@@ -7746,6 +7779,98 @@ export async function cleanupAvailablePlaceholdersAction(serverId?: string, sect
 }
 
 /**
+ * Server action to recursively fix filesystem permissions (chmod 0777/0666) across all Coming Soon placeholder share folders.
+ */
+export async function fixPlaceholderPermissionsAction() {
+    await verifyAdmin();
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
+            ? JSON.parse(settings.comingSoonShares) 
+            : {};
+        let serverStorageConfig: Record<string, any> = {};
+        if (settings?.serverStorageConfig) {
+            try { serverStorageConfig = JSON.parse(settings.serverStorageConfig); } catch {}
+        }
+
+        const shareDirectories = new Set<string>();
+        for (const p of Object.values(comingSoonShares)) {
+            if (p && fs.existsSync(p)) shareDirectories.add(p);
+        }
+        for (const cfg of Object.values(serverStorageConfig)) {
+            if (cfg.sharePath && fs.existsSync(cfg.sharePath)) shareDirectories.add(cfg.sharePath);
+            if (cfg.movieSharePath && fs.existsSync(cfg.movieSharePath)) shareDirectories.add(cfg.movieSharePath);
+            if (cfg.tvSharePath && fs.existsSync(cfg.tvSharePath)) shareDirectories.add(cfg.tvSharePath);
+        }
+
+        const defaultTv = path.resolve("./data/coming_soon/tv");
+        if (fs.existsSync(defaultTv)) shareDirectories.add(defaultTv);
+        const defaultMovies = path.resolve("./data/coming_soon/movies");
+        if (fs.existsSync(defaultMovies)) shareDirectories.add(defaultMovies);
+
+        let fixedCount = 0;
+        for (const shareDir of Array.from(shareDirectories)) {
+            try {
+                const entries = fs.readdirSync(shareDir, { withFileTypes: true });
+                for (const entry of entries) {
+                    const folderPath = path.join(shareDir, entry.name);
+                    setPermissionsRecursive(folderPath, 0o777, 0o666);
+                    fixedCount++;
+                }
+                setPermissionsRecursive(shareDir, 0o777, 0o666);
+            } catch (e: any) {
+                console.warn(`[PERMISSIONS-FIX] Error fixing permissions in ${shareDir}:`, e.message);
+            }
+        }
+
+        logger.addLog("SUCCESS", "CURATION", `[PERMISSIONS-FIX] Repaired permissions to 0777 / 0666 on ${fixedCount} placeholder items across Coming Soon shares.`);
+
+        return {
+            success: true,
+            fixedCount,
+            message: `Permissions updated to 0777 (drwxrwxrwx) across ${fixedCount} placeholder folders & files in your Coming Soon shares!`
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            message: e.message || "Failed updating placeholder permissions."
+        };
+    }
+}
+
+/**
+ * Server action to manually delete a single placeholder folder from disk and remove its advisory record.
+ */
+export async function deletePlaceholderFolderAction(folderPath: string, tmdbId?: string | number) {
+    await verifyAdmin();
+    try {
+        if (!folderPath || !fs.existsSync(folderPath)) {
+            if (tmdbId) {
+                await prisma.mediaContentAdvisory.deleteMany({
+                    where: { ratingKey: `placeholder_tmdb_${tmdbId}` }
+                });
+            }
+            return { success: true, message: "Placeholder record cleared." };
+        }
+
+        try { fs.chmodSync(folderPath, 0o777); } catch {}
+        setPermissionsRecursive(folderPath, 0o777, 0o666);
+        fs.rmSync(folderPath, { recursive: true, force: true });
+
+        if (tmdbId) {
+            await prisma.mediaContentAdvisory.deleteMany({
+                where: { ratingKey: `placeholder_tmdb_${tmdbId}` }
+            });
+        }
+
+        logger.addLog("INFO", "CURATION", `Manually deleted placeholder folder at "${folderPath}".`);
+        return { success: true, message: "Placeholder folder and advisory deleted successfully!" };
+    } catch (e: any) {
+        console.error("Failed deleting placeholder folder:", e);
+        return { success: false, message: e.message || "Failed deleting placeholder folder." };
+    }
+}
+
 /**
  * Reads a local Kometa YAML configuration file from disk.
  */
