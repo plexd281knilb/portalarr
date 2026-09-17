@@ -70,6 +70,7 @@ export interface PlexMediaStreamInfo {
     isBlockedByGuardRail?: boolean;
     guardRailBlockReason?: string;
     serverGuardRailActive?: boolean;
+    isPlaceholder?: boolean;
 }
 
 /**
@@ -485,8 +486,13 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         return acc + parts.reduce((pAcc: number, p: any) => pAcc + (parseInt(p.size || "0", 10)), 0);
     }, 0);
 
-    const firstPart = rawMediaList[0]?.Part?.[0] || rawMediaList[0]?.Part;
-    const filePath: string | undefined = firstPart?.file;
+    const isPlaceholder = Boolean(
+        extractedLabels.some(l => l.toLowerCase() === "trailer-placeholder" || l.toLowerCase() === "placeholder") ||
+        (firstPartFile && (firstPartFile.includes(".portalarr-missing") || firstPartFile.includes("edition-Trailer") || firstPartFile.includes("edition-Placeholder") || firstPartFile.endsWith(".disc") || firstPartFile.endsWith(".strm"))) ||
+        (rawEditionTitle && (rawEditionTitle.toLowerCase().includes("trailer") || rawEditionTitle.toLowerCase().includes("placeholder"))) ||
+        (metadata.title && metadata.title.toLowerCase().includes("trailer (placeholder)")) ||
+        (metadata.type === "movie" && totalSize > 0 && totalSize < 1000000 && (firstPartFile.endsWith(".mp4") || firstPartFile.endsWith(".mkv")))
+    );
 
     return {
         ratingKey: String(metadata.ratingKey),
@@ -512,9 +518,10 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         lastViewedAt: metadata.lastViewedAt ? parseInt(metadata.lastViewedAt, 10) * 1000 : undefined,
         viewCount: metadata.viewCount ? parseInt(metadata.viewCount, 10) : 0,
         fileSize: totalSize > 0 ? totalSize : undefined,
-        filePath,
+        filePath: firstPartFile || undefined,
         guids,
         media: mediaList,
+        isPlaceholder,
         detectedBadges: {
             resolution: detectedRes,
             hdr: detectedHdr,
@@ -905,7 +912,8 @@ export async function getPlexLibraryMediaItems(
     sectionKey: string | number,
     limit = 500,
     sort?: string,
-    includeStreams = true
+    includeStreams = true,
+    excludePlaceholders = false
 ): Promise<PlexMediaStreamInfo[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastError: any = null;
@@ -920,7 +928,9 @@ export async function getPlexLibraryMediaItems(
             const rKey = String(m.ratingKey || m.key || "");
             if (!rKey || seenKeys.has(rKey)) continue;
             seenKeys.add(rKey);
-            res.push(analyzeMediaStreamInfo(m));
+            const analyzed = analyzeMediaStreamInfo(m);
+            if (excludePlaceholders && analyzed.isPlaceholder) continue;
+            res.push(analyzed);
         }
         return res;
     };

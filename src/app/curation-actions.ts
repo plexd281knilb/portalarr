@@ -5819,9 +5819,37 @@ export interface ArrItemStatus {
 }
 
 /**
- * Fast multi-instance indexer for Radarr and Sonarr
+ * Server action to list all configured Radarr and Sonarr instances for Agregarr / Curation mapping.
  */
-export async function getArrMonitoredIndex(): Promise<{
+export async function getArrInstancesListAction() {
+    await verifyAdmin();
+    try {
+        const radarrApps = await prisma.mediaApp.findMany({
+            where: { type: "radarr" },
+            select: { id: true, name: true, type: true, url: true, externalUrl: true }
+        });
+        const sonarrApps = await prisma.mediaApp.findMany({
+            where: { type: "sonarr" },
+            select: { id: true, name: true, type: true, url: true, externalUrl: true }
+        });
+        return {
+            success: true,
+            radarr: radarrApps,
+            sonarr: sonarrApps
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message, radarr: [], sonarr: [] };
+    }
+}
+
+/**
+ * Fast multi-instance indexer for Radarr and Sonarr, with optional per-server instance filtering.
+ */
+export async function getArrMonitoredIndex(options?: {
+    targetRadarrId?: string;
+    targetSonarrId?: string;
+    targetServerId?: string;
+}): Promise<{
     moviesByTmdb: Map<string, ArrItemStatus>;
     moviesByImdb: Map<string, ArrItemStatus>;
     moviesByTitle: Map<string, ArrItemStatus>;
@@ -5838,10 +5866,31 @@ export async function getArrMonitoredIndex(): Promise<{
 
     const now = new Date();
 
+    let radarrId = options?.targetRadarrId;
+    let sonarrId = options?.targetSonarrId;
+
+    if (options?.targetServerId && (!radarrId || !sonarrId)) {
+        try {
+            const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+            if (settings?.serverStorageConfig) {
+                const parsed = JSON.parse(settings.serverStorageConfig);
+                const srvConfig = parsed[options.targetServerId];
+                if (srvConfig) {
+                    if (!radarrId && srvConfig.radarrId) radarrId = srvConfig.radarrId;
+                    if (!sonarrId && srvConfig.sonarrId) sonarrId = srvConfig.sonarrId;
+                }
+            }
+        } catch {}
+    }
+
     try {
         const radarrRes = await getEnabledArrInstancesInternal("radarr");
         if (radarrRes.success && radarrRes.data) {
-            for (const app of radarrRes.data) {
+            const targetApps = radarrId && radarrId !== "auto" && radarrId !== "all"
+                ? radarrRes.data.filter(app => app.id === radarrId)
+                : radarrRes.data;
+
+            for (const app of targetApps) {
                 try {
                     const movies = await arrApiGet(app, "/api/v3/movie");
                     if (Array.isArray(movies)) {
@@ -5892,7 +5941,11 @@ export async function getArrMonitoredIndex(): Promise<{
     try {
         const sonarrRes = await getEnabledArrInstancesInternal("sonarr");
         if (sonarrRes.success && sonarrRes.data) {
-            for (const app of sonarrRes.data) {
+            const targetApps = sonarrId && sonarrId !== "auto" && sonarrId !== "all"
+                ? sonarrRes.data.filter(app => app.id === sonarrId)
+                : sonarrRes.data;
+
+            for (const app of targetApps) {
                 try {
                     const series = await arrApiGet(app, "/api/v3/series");
                     if (Array.isArray(series)) {
@@ -6002,8 +6055,8 @@ export async function getTrendingAndPlaceholderMediaAction(
         const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
         const libraryTitles = new Map(libraryItems.map(it => [it.title?.toLowerCase().trim(), it]));
 
-        // 2. Query Radarr and Sonarr index
-        const arrIndex = await getArrMonitoredIndex();
+        // 2. Query Radarr and Sonarr index with server-specific mapping
+        const arrIndex = await getArrMonitoredIndex({ targetServerId: serverId });
         const now = new Date();
 
         const formatNiceDate = (dStr?: string) => {
@@ -6172,6 +6225,11 @@ export async function getPlaceholderPreviewDataUrlAction(
         source?: string;
         status?: string;
         reason?: string;
+        year?: number | string;
+        edition?: string;
+        genre?: string;
+        quality?: string;
+        network?: string;
     } = {}
 ) {
     await verifyAdmin();
@@ -6186,9 +6244,13 @@ export async function getPlaceholderPreviewDataUrlAction(
             daysRemaining: options.daysRemaining ?? 14,
             formattedDate: options.formattedDate || options.date || "10/31/2026",
             date: options.date || options.formattedDate || "10/31/2026",
-            source: options.source || "Plex",
-            status: options.status || "Leaving Soon",
-            reason: options.reason || "Unwatched for 180+ Days"
+            source: options.source || options.network || "Plex",
+            status: options.status || "Coming Soon",
+            reason: options.reason || "Trending Release",
+            year: options.year,
+            edition: options.edition,
+            genre: options.genre,
+            quality: options.quality
         });
 
         const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
@@ -6241,6 +6303,10 @@ export async function createPlaceholderItemInternal(
         source?: string;
         status?: string;
         reason?: string;
+        edition?: string;
+        genre?: string;
+        quality?: string;
+        network?: string;
     }
 ) {
     try {
@@ -6297,7 +6363,11 @@ export async function createPlaceholderItemInternal(
             date: itemData.date,
             source: itemData.source,
             status: itemData.status,
-            reason: itemData.reason
+            reason: itemData.reason,
+            year: itemData.year,
+            edition: itemData.edition,
+            genre: itemData.genre,
+            quality: itemData.quality
         });
 
         const cleanTitle = itemData.title.replace(/[\/\\:*?"<>|]/g, "_").trim();
@@ -6335,6 +6405,33 @@ export async function createPlaceholderItemInternal(
             createdFolderPath = targetDir;
             logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}"${trailerUrl ? " with YouTube trailer .strm" : ""}`);
         }
+
+        // Tag label trailer-placeholder in Plex if the item is present
+        try {
+            if (serverId && sectionKey) {
+                const resolved = await resolveWorkingPlexServerConnection(serverId);
+                if (resolved && resolved.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    const foundItems = await searchPlexLibraryItems(resolved.serverUrl, resolved.token, itemData.title, sectionKey);
+                    const match = foundItems.find(it => 
+                        it.guids?.tmdb === String(itemData.tmdbId) || 
+                        it.title.toLowerCase().trim() === itemData.title.toLowerCase().trim()
+                    );
+                    if (match?.ratingKey) {
+                        for (const cleanBase of urlsToTry) {
+                            try {
+                                const labelUrl = `${cleanBase}/library/metadata/${encodeURIComponent(match.ratingKey)}?label%5B0%5D.tag.tag=${encodeURIComponent("trailer-placeholder")}&X-Plex-Token=${encodeURIComponent(resolved.token)}`;
+                                await fetch(labelUrl, {
+                                    method: "PUT",
+                                    headers: { "X-Plex-Token": resolved.token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                                });
+                                break;
+                            } catch {}
+                        }
+                    }
+                }
+            }
+        } catch {}
 
         // Save record into MediaContentAdvisory for tracking and display
         const placeholderKey = `placeholder_tmdb_${itemData.tmdbId}`;
@@ -6434,6 +6531,10 @@ export async function createPlaceholderItemAction(
         source?: string;
         status?: string;
         reason?: string;
+        edition?: string;
+        genre?: string;
+        quality?: string;
+        network?: string;
     }
 ) {
     await verifyAdmin();
@@ -6607,8 +6708,8 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
             };
         }
 
-        // 4. Query Radarr and Sonarr monitored index
-        const arrIndex = await getArrMonitoredIndex();
+        // 4. Query Radarr and Sonarr monitored index with server-specific mapping
+        const arrIndex = await getArrMonitoredIndex({ targetServerId: collection.serverId });
         const now = new Date();
         let generatedCount = 0;
 
@@ -6710,6 +6811,136 @@ export async function generateCollectionPlaceholdersAction(collectionId: string)
 }
 
 /**
+ * Server action to deploy a Filtered Recently Added Smart Collection to Plex for a library section.
+ * Replaces or overrides Plex's raw un-filtered Recently Added hub so that coming soon trailer placeholders
+ * never appear in users' Recently Added hubs or on the Home Screen.
+ */
+export async function deployFilteredRecentlyAddedHubAction(
+    serverId: string,
+    sectionKey: string
+): Promise<{ success: boolean; message: string; collectionRatingKey?: string }> {
+    await verifyAdmin();
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) {
+            throw new Error(`Cannot connect to Plex server ${serverId}`);
+        }
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const token = resolved.token;
+
+        // Get section details to know whether it is Movies (type=1) or TV (type=2)
+        const sections = await getPlexServerSections(token, serverId, resolved.serverUrl);
+        const section = sections.find(s => String(s.key) === String(sectionKey));
+        const isTv = section?.type === "show" || section?.type === "tv";
+        const mediaTypeNum = isTv ? 2 : 1;
+        const defaultTitle = isTv ? "Recently Added TV" : "Recently Added Movies";
+
+        // Filter URI that excludes placeholders
+        let filterUri = "";
+        if (isTv) {
+            // Filter out episodes titled "Trailer (Placeholder)" or label "trailer-placeholder"
+            const titleFilter = encodeURIComponent("Trailer (Placeholder)");
+            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${titleFilter}&label!=trailer-placeholder`;
+        } else {
+            // Filter out items with label "trailer-placeholder"
+            const labelFilter = encodeURIComponent("trailer-placeholder");
+            filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${labelFilter}`;
+        }
+
+        // Get machineId
+        let machineId = "";
+        for (const cleanBase of urlsToTry) {
+            if (machineId) break;
+            try {
+                const sRes = await fetch(`${cleanBase}/?X-Plex-Token=${encodeURIComponent(token)}`, {
+                    headers: { "Accept": "application/json" },
+                    cache: "no-store"
+                });
+                if (sRes.ok) {
+                    const sData = await sRes.json();
+                    machineId = sData.MediaContainer?.machineIdentifier || "";
+                }
+            } catch {}
+        }
+
+        const fullUri = machineId
+            ? `server://${machineId}/com.plexapp.plugins.library${filterUri}`
+            : filterUri;
+
+        // Check if smart collection already exists
+        const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
+        const existing = existingCollections.find(c => 
+            c.title.toLowerCase() === defaultTitle.toLowerCase() ||
+            c.title.toLowerCase() === "recently added" ||
+            c.title.toLowerCase() === "filtered recently added"
+        );
+
+        let ratingKey = existing?.ratingKey;
+
+        if (existing && existing.smart && !existing.ratingKey.startsWith("hub:")) {
+            // Update existing smart collection URI
+            for (const cleanBase of urlsToTry) {
+                try {
+                    const updateUrl = `${cleanBase}/library/collections/${existing.ratingKey}/items?uri=${encodeURIComponent(fullUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                    await fetch(updateUrl, {
+                        method: "PUT",
+                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    });
+                    break;
+                } catch {}
+            }
+        } else {
+            // Create new smart collection in Plex
+            for (const cleanBase of urlsToTry) {
+                if (ratingKey && !ratingKey.startsWith("hub:")) break;
+                try {
+                    const createUrl = `${cleanBase}/library/collections?type=${mediaTypeNum}&title=${encodeURIComponent(defaultTitle)}&smart=1&uri=${encodeURIComponent(fullUri)}&sectionId=${encodeURIComponent(String(sectionKey))}&X-Plex-Token=${encodeURIComponent(token)}`;
+                    const cRes = await fetch(createUrl, {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Plex-Token": token,
+                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                        }
+                    });
+                    if (cRes.ok) {
+                        const cText = await cRes.text();
+                        try {
+                            const cData = JSON.parse(cText);
+                            const meta = cData.MediaContainer?.Metadata?.[0];
+                            if (meta?.ratingKey) {
+                                ratingKey = meta.ratingKey;
+                            }
+                        } catch {}
+                    }
+                } catch {}
+            }
+        }
+
+        // Promote to Home Screen with top priority
+        if (ratingKey && !ratingKey.startsWith("hub:")) {
+            await updatePlexCollectionPromotionAndOrder(urlsToTry, token, sectionKey, ratingKey, {
+                summary: "Filtered Recently Added collection without coming soon trailer placeholders.",
+                promotedToHome: true,
+                promotedToRecommended: true,
+                promotedToSharedHome: true
+            });
+        }
+
+        logger.addLog("SUCCESS", "PLEX", `Deployed Filtered Recently Added smart collection "${defaultTitle}" to section ${sectionKey} on server "${resolved.serverName}"`);
+
+        return {
+            success: true,
+            collectionRatingKey: ratingKey,
+            message: `Deployed "${defaultTitle}" smart collection to Plex! Placeholders will now be cleanly excluded from Recently Added on Home & Recommended hubs.`
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Failed deploying filtered recently added hub: ${e.message}`);
+        return { success: false, message: e.message };
+    }
+}
+
+/**
  * Server action to fetch all media items for a collection, enriched with real-time Plex library status,
  * Radarr/Sonarr monitored status, release dates, trailers, and smart banner suggestions.
  */
@@ -6726,7 +6957,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
                 if (resolved && resolved.serverUrl) {
                     const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false);
+                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false, true);
                 }
             } catch (err: any) {
                 console.warn("[COLL-PREVIEW] Failed fetching library items:", err.message);

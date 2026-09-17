@@ -91,13 +91,16 @@ import {
     createPlaceholderItemAction,
     getTmdbTrailerAction,
     saveComingSoonSharesAction,
+    saveServerStorageConfigAction,
     validateDirectoryPathAction,
     cleanupAvailablePlaceholdersAction,
     getCurationSettingsAction,
     saveCurationSettingsAction,
     toggleCurationLibrarySectionAction,
     toggleAllCurationServerSectionsAction,
-    runFullCurationSyncAction
+    runFullCurationSyncAction,
+    getArrInstancesListAction,
+    deployFilteredRecentlyAddedHubAction
 } from "@/app/curation-actions";
 import {
     COLLECTION_PRESETS,
@@ -110,13 +113,14 @@ export const AGREGARR_BANNER_PRESETS = [
     { id: "in_sonarr", label: "📺 Monitored in Sonarr", defaultText: "MONITORED IN SONARR", theme: "cinematic-blue", pos: "bottom" as const },
     { id: "digital_release", label: "⚡ Digital Release on {date}", defaultText: "DIGITAL RELEASE ON {date}", theme: "cinematic-blue", pos: "bottom" as const },
     { id: "countdown", label: "⏳ Streaming in {days} Days", defaultText: "STREAMING IN {days} DAYS", theme: "indigo-purple", pos: "bottom" as const },
-    { id: "in_theaters", label: "🍿 In Theaters", defaultText: "IN THEATERS", theme: "amber-gold", pos: "bottom" as const },
+    { id: "in_theaters", label: "🍿 In Theaters ({year})", defaultText: "IN THEATERS ({year})", theme: "amber-gold", pos: "bottom" as const },
+    { id: "streaming_on", label: "✨ Popular on {source}", defaultText: "POPULAR ON {source}", theme: "indigo-purple", pos: "bottom" as const },
     { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const },
     { id: "leaving_days", label: "⚠️ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const },
     { id: "trending_not_requested", label: "🔥 Trending • Not Requested", defaultText: "TRENDING • NOT REQUESTED", theme: "crimson-red", pos: "bottom" as const },
-    { id: "popular_streaming", label: "✨ Popular on {source}", defaultText: "POPULAR ON {source}", theme: "indigo-purple", pos: "bottom" as const },
     { id: "missing_library", label: "❌ Missing from Library", defaultText: "MISSING FROM LIBRARY", theme: "crimson-red", pos: "bottom" as const },
-    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon", pos: "bottom" as const }
+    { id: "quality_edition", label: "💎 {quality} • {edition}", defaultText: "{quality} • {edition}", theme: "cyber-neon", pos: "bottom" as const },
+    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} ({year}) • {status}", theme: "cyber-neon", pos: "bottom" as const }
 ];
 
 interface PlexServerItem {
@@ -250,11 +254,30 @@ export function AgregarrStudio() {
     const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
     const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
     const [simPosterUrl, setSimPosterUrl] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
-    const [templateVarDate, setTemplateVarDate] = useState<string>("6/1/2026");
+    const [templateVarTitle, setTemplateVarTitle] = useState<string>("Sample Media");
+    const [templateVarYear, setTemplateVarYear] = useState<string>("2026");
+    const [templateVarDate, setTemplateVarDate] = useState<string>("10/31/2026");
     const [templateVarDays, setTemplateVarDays] = useState<number>(7);
     const [templateVarSource, setTemplateVarSource] = useState<string>("Netflix");
+    const [templateVarNetwork, setTemplateVarNetwork] = useState<string>("HBO");
     const [templateVarStatus, setTemplateVarStatus] = useState<string>("Downloading Soon");
-    const [templateVarReason, setTemplateVarReason] = useState<string>("Storage Optimization");
+    const [templateVarReason, setTemplateVarReason] = useState<string>("Trending Release");
+    const [templateVarQuality, setTemplateVarQuality] = useState<string>("4K UHD");
+    const [templateVarEdition, setTemplateVarEdition] = useState<string>("Director's Cut");
+    const [templateVarGenre, setTemplateVarGenre] = useState<string>("Sci-Fi");
+    const [savingBannerDefault, setSavingBannerDefault] = useState<boolean>(false);
+    const [bannerDefaultSavedMsg, setBannerDefaultSavedMsg] = useState<string | null>(null);
+
+    // Filtered Recently Added Smart Collection Hub Deployer
+    const [deployingRecentlyAdded, setDeployingRecentlyAdded] = useState<boolean>(false);
+    const [recentlyAddedDeployMsg, setRecentlyAddedDeployMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+    // Multi-Instance Radarr & Sonarr Mapping
+    const [arrInstances, setArrInstances] = useState<{
+        radarr: Array<{ id: string; name: string; type?: string; url?: string; externalUrl?: string }>;
+        sonarr: Array<{ id: string; name: string; type?: string; url?: string; externalUrl?: string }>;
+    }>({ radarr: [], sonarr: [] });
+    const [serverStorageConfig, setServerStorageConfig] = useState<Record<string, { sharePath?: string; radarrId?: string; sonarrId?: string }>>({});
 
     // Coming Soon Shares & Disk Settings
     const [comingSoonShares, setComingSoonShares] = useState<Record<string, string>>({});
@@ -416,7 +439,11 @@ export function AgregarrStudio() {
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
                     if (settingsRes.comingSoonShares) setComingSoonShares(settingsRes.comingSoonShares);
+                    if (settingsRes.serverStorageConfig) setServerStorageConfig(settingsRes.serverStorageConfig);
                     if (settingsRes.placeholderBannerFontSize) setPlaceholderModalBannerFontSize(settingsRes.placeholderBannerFontSize);
+                    if (settingsRes.placeholderBannerPosition) setPlaceholderModalBannerPosition(settingsRes.placeholderBannerPosition as any);
+                    if (settingsRes.placeholderBannerTheme) setPlaceholderModalBannerTheme(settingsRes.placeholderBannerTheme);
+                    if (settingsRes.placeholderCustomText) setPlaceholderModalBannerText(settingsRes.placeholderCustomText);
                     setCurationSyncCollections(settingsRes.curationSyncCollections ?? true);
                     setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
                     setCurationLastRunAt(settingsRes.curationLastRunAt || null);
@@ -424,6 +451,14 @@ export function AgregarrStudio() {
                     if (settingsRes.enabledServersForCollections) {
                         setEnabledServersForCollections(settingsRes.enabledServersForCollections);
                     }
+                }
+
+                const arrRes = await getArrInstancesListAction();
+                if (arrRes.success) {
+                    setArrInstances({
+                        radarr: (arrRes.radarr as any) || [],
+                        sonarr: (arrRes.sonarr as any) || []
+                    });
                 }
             } catch (err) {
                 console.error("Failed loading Agregarr studio data:", err);
@@ -940,7 +975,12 @@ export function AgregarrStudio() {
         days = templateVarDays,
         source = templateVarSource,
         status = templateVarStatus,
-        reason = templateVarReason
+        reason = templateVarReason,
+        year = templateVarYear,
+        edition = templateVarEdition,
+        genre = templateVarGenre,
+        quality = templateVarQuality,
+        network = templateVarNetwork
     ) => {
         setPlaceholderPreviewLoading(true);
         try {
@@ -956,7 +996,12 @@ export function AgregarrStudio() {
                 daysRemaining: days,
                 source,
                 status,
-                reason
+                reason,
+                year,
+                edition,
+                genre,
+                quality,
+                network
             });
             if (res.success && res.dataUrl) {
                 setPlaceholderPreviewDataUrl(res.dataUrl);
@@ -971,6 +1016,17 @@ export function AgregarrStudio() {
     const handleSelectRealPoster = (item: PlexMediaStreamInfo, posterUrl: string) => {
         setSimSelectedRealItem(item);
         setSimPosterUrl(posterUrl);
+        setTemplateVarTitle(item.title || "Sample Media");
+        if (item.year) setTemplateVarYear(String(item.year));
+        if (item.detectedBadges?.resolution || item.media?.[0]?.videoResolution) {
+            setTemplateVarQuality(item.detectedBadges?.resolution || item.media?.[0]?.videoResolution || "4K UHD");
+        }
+        if (item.detectedBadges?.edition) {
+            setTemplateVarEdition(item.detectedBadges.edition);
+        }
+        if (item.genre) {
+            setTemplateVarGenre(Array.isArray(item.genre) ? item.genre.join(", ") : String(item.genre));
+        }
         if (selectedPlaceholderItem) {
             setSelectedPlaceholderItem((prev: any) => ({ ...prev, title: item.title, posterPath: posterUrl }));
         }
@@ -986,7 +1042,12 @@ export function AgregarrStudio() {
             templateVarDays,
             templateVarSource,
             templateVarStatus,
-            templateVarReason
+            templateVarReason,
+            item.year ? String(item.year) : templateVarYear,
+            item.detectedBadges?.edition || templateVarEdition,
+            Array.isArray(item.genre) ? item.genre.join(", ") : (item.genre || templateVarGenre),
+            item.detectedBadges?.resolution || item.media?.[0]?.videoResolution || templateVarQuality,
+            templateVarNetwork
         );
     };
 
@@ -1005,7 +1066,12 @@ export function AgregarrStudio() {
             templateVarDays,
             templateVarSource,
             templateVarStatus,
-            templateVarReason
+            templateVarReason,
+            templateVarYear,
+            templateVarEdition,
+            templateVarGenre,
+            templateVarQuality,
+            templateVarNetwork
         );
     };
 
@@ -1017,7 +1083,7 @@ export function AgregarrStudio() {
             const res = await createPlaceholderItemAction(selectedServerId, selectedSectionKey, {
                 tmdbId: selectedPlaceholderItem.id,
                 title: selectedPlaceholderItem.title,
-                year: selectedPlaceholderItem.year,
+                year: selectedPlaceholderItem.year || (templateVarYear ? parseInt(templateVarYear, 10) : undefined),
                 mediaType: selectedPlaceholderItem.mediaType || "movie",
                 posterPath: selectedPlaceholderItem.posterPath,
                 overview: selectedPlaceholderItem.overview,
@@ -1032,7 +1098,10 @@ export function AgregarrStudio() {
                 daysRemaining: templateVarDays,
                 source: templateVarSource,
                 status: templateVarStatus,
-                reason: templateVarReason
+                reason: templateVarReason,
+                edition: templateVarEdition,
+                genre: templateVarGenre,
+                quality: templateVarQuality
             });
 
             if (res.success) {
@@ -1048,6 +1117,80 @@ export function AgregarrStudio() {
             console.error("Failed creating placeholder:", e);
         } finally {
             setGeneratingPlaceholder(false);
+        }
+    };
+
+    // Save Default Placeholder Banner Template
+    const handleSaveDefaultBannerTemplate = async () => {
+        setSavingBannerDefault(true);
+        setBannerDefaultSavedMsg(null);
+        try {
+            const res = await saveCurationSettingsAction({
+                placeholderBannerPosition: placeholderModalBannerPosition,
+                placeholderBannerTheme: placeholderModalBannerTheme,
+                placeholderBannerFontSize: placeholderModalBannerFontSize,
+                placeholderCustomText: placeholderModalBannerText
+            });
+            if (res.success) {
+                setBannerDefaultSavedMsg("✓ Saved Default Placeholder Banner Template!");
+                setTimeout(() => setBannerDefaultSavedMsg(null), 3500);
+            }
+        } catch (e) {
+            console.error("Failed saving default banner template:", e);
+        } finally {
+            setSavingBannerDefault(false);
+        }
+    };
+
+    // Save Server Mappings & Shares
+    const handleSaveServerMappingsAndShares = async () => {
+        setSavingShares(true);
+        setSharesSavedMsg(false);
+        try {
+            await saveComingSoonSharesAction(comingSoonShares);
+            const updatedConfig: Record<string, any> = { ...serverStorageConfig };
+            for (const srv of servers) {
+                if (!updatedConfig[srv.serverId]) updatedConfig[srv.serverId] = {};
+                updatedConfig[srv.serverId].sharePath = comingSoonShares[srv.serverId] || "";
+            }
+            await saveServerStorageConfigAction(updatedConfig);
+            setServerStorageConfig(updatedConfig);
+            setSharesSavedMsg(true);
+            setTimeout(() => setSharesSavedMsg(false), 3500);
+        } catch (e) {
+            console.error("Failed saving server mappings:", e);
+        } finally {
+            setSavingShares(false);
+        }
+    };
+
+    // Deploy Filtered Recently Added Hub (Smart Collection excluding placeholders)
+    const handleDeployFilteredRecentlyAddedHub = async () => {
+        if (!selectedServerId || !selectedSectionKey) return;
+        setDeployingRecentlyAdded(true);
+        setRecentlyAddedDeployMsg(null);
+        try {
+            const res = await deployFilteredRecentlyAddedHubAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setRecentlyAddedDeployMsg({
+                    success: true,
+                    text: res.message || "✓ Successfully deployed Filtered Recently Added Hub! Placeholders excluded from Home Screen."
+                });
+                loadCollections();
+                setTimeout(() => setRecentlyAddedDeployMsg(null), 5000);
+            } else {
+                setRecentlyAddedDeployMsg({
+                    success: false,
+                    text: res.message || "Failed deploying Filtered Recently Added Hub."
+                });
+            }
+        } catch (err: any) {
+            setRecentlyAddedDeployMsg({
+                success: false,
+                text: err.message || "Error deploying Filtered Recently Added Hub."
+            });
+        } finally {
+            setDeployingRecentlyAdded(false);
         }
     };
 
@@ -1399,6 +1542,18 @@ export function AgregarrStudio() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
+                                disabled={deployingRecentlyAdded}
+                                onClick={handleDeployFilteredRecentlyAddedHub}
+                                className="border-cyan-500/40 hover:bg-cyan-950/40 text-cyan-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                title="Creates a Smart Recently Added Collection in Plex with 'label!=trailer-placeholder', promoted to Plex Home #1 rank to keep placeholder stubs out of user carousels"
+                            >
+                                {deployingRecentlyAdded ? <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" /> : <Clapperboard className="h-3.5 w-3.5 text-cyan-400" />}
+                                <span>Filtered Recently Added Hub</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
                                 disabled={importingPlexCollections}
                                 onClick={handleImportPlexCollections}
                                 className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5"
@@ -1429,6 +1584,15 @@ export function AgregarrStudio() {
                             </Button>
                         </div>
                     </div>
+
+                    {recentlyAddedDeployMsg && (
+                        <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
+                            recentlyAddedDeployMsg.success ? "bg-cyan-950/80 border-cyan-800 text-cyan-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                        }`}>
+                            {recentlyAddedDeployMsg.success ? <CheckCircle2 className="h-4 w-4 text-cyan-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                            <span>{recentlyAddedDeployMsg.text}</span>
+                        </div>
+                    )}
 
                     {orderSavedMsg && (
                         <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in-50">
@@ -2013,53 +2177,131 @@ export function AgregarrStudio() {
 
                     {/* Coming Soon Shares Setup & Simulator */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        {/* Server Shares Setup */}
+                        {/* Server Shares & Arr Instances Mapping Setup */}
                         <div className="lg:col-span-5 space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
                             <div className="space-y-1 border-b border-slate-800/80 pb-3">
                                 <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <HardDrive className="h-4 w-4 text-cyan-400" /> Coming Soon Shares Configuration
+                                    <HardDrive className="h-4 w-4 text-cyan-400" /> Server Storage &amp; Arr Instance Mapping
                                 </h4>
                                 <p className="text-[11px] text-slate-400">
-                                    Specify the disk folder where lightweight placeholder stubs (.strm) and composite banner posters are generated.
+                                    Map each Plex server (e.g. Kids Plex vs Main Plex) to its designated Radarr and Sonarr instances, and configure Coming Soon share folders.
                                 </p>
                             </div>
 
                             {servers.map(srv => {
-                                const currentPath = comingSoonShares[srv.serverId] || "";
+                                const currentPath = comingSoonShares[srv.serverId] || serverStorageConfig[srv.serverId]?.sharePath || "";
                                 const checkStatus = pathCheckResults[srv.serverId];
+                                const currentRadarrId = serverStorageConfig[srv.serverId]?.radarrId || "auto";
+                                const currentSonarrId = serverStorageConfig[srv.serverId]?.sonarrId || "auto";
 
                                 return (
-                                    <div key={srv.serverId} className="space-y-1.5">
-                                        <Label className="text-xs text-slate-300 font-semibold">{srv.serverName} Share Path:</Label>
-                                        <div className="flex gap-2">
-                                            <Input
-                                                placeholder="/mnt/user/media/coming_soon"
-                                                value={currentPath}
-                                                onChange={(e) => {
-                                                    const updated = { ...comingSoonShares, [srv.serverId]: e.target.value };
-                                                    setComingSoonShares(updated);
-                                                }}
-                                                className="text-xs bg-slate-950 border-slate-800 font-mono"
-                                            />
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={async () => {
-                                                    setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: true } }));
-                                                    const res = await validateDirectoryPathAction(currentPath);
-                                                    setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: false, success: res.success, msg: res.message || res.error } }));
-                                                }}
-                                                className="border-slate-700 text-xs shrink-0"
-                                            >
-                                                Validate
-                                            </Button>
+                                    <div key={srv.serverId} className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5">
+                                                <Tv className="h-3.5 w-3.5 text-amber-400" />
+                                                <span className="font-bold text-xs text-white">{srv.serverName}</span>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-400">
+                                                {srv.sections?.length || 0} libraries
+                                            </Badge>
                                         </div>
-                                        {checkStatus && !checkStatus.checking && (
-                                            <p className={`text-[10px] ${checkStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
-                                                {checkStatus.msg}
-                                            </p>
-                                        )}
+
+                                        {/* Share Path */}
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] text-slate-300 font-semibold">Coming Soon Share Path:</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    placeholder="/mnt/user/media/coming_soon"
+                                                    value={currentPath}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setComingSoonShares(prev => ({ ...prev, [srv.serverId]: val }));
+                                                        setServerStorageConfig(prev => ({
+                                                            ...prev,
+                                                            [srv.serverId]: { ...(prev[srv.serverId] || {}), sharePath: val }
+                                                        }));
+                                                    }}
+                                                    className="text-xs bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={async () => {
+                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: true } }));
+                                                        const res = await validateDirectoryPathAction(currentPath);
+                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: false, success: res.success, msg: res.message || res.error } }));
+                                                    }}
+                                                    className="border-slate-700 text-xs shrink-0"
+                                                >
+                                                    Validate
+                                                </Button>
+                                            </div>
+                                            {checkStatus && !checkStatus.checking && (
+                                                <p className={`text-[10px] ${checkStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                    {checkStatus.msg}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Radarr and Sonarr Instance Dropdowns */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-800/60 text-xs">
+                                            {/* Radarr Instance */}
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+                                                    <Film className="h-3 w-3 text-amber-400" /> Mapped Radarr:
+                                                </Label>
+                                                <Select
+                                                    value={currentRadarrId}
+                                                    onValueChange={(val) => {
+                                                        setServerStorageConfig(prev => ({
+                                                            ...prev,
+                                                            [srv.serverId]: { ...(prev[srv.serverId] || {}), radarrId: val }
+                                                        }));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="bg-slate-900 border-slate-800 text-[11px] h-7">
+                                                        <SelectValue placeholder="Select Radarr..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="auto">⚡ Auto (All Radarr)</SelectItem>
+                                                        {arrInstances.radarr.map(r => (
+                                                            <SelectItem key={r.id} value={r.id}>
+                                                                🎬 {r.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {/* Sonarr Instance */}
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+                                                    <Tv className="h-3 w-3 text-sky-400" /> Mapped Sonarr:
+                                                </Label>
+                                                <Select
+                                                    value={currentSonarrId}
+                                                    onValueChange={(val) => {
+                                                        setServerStorageConfig(prev => ({
+                                                            ...prev,
+                                                            [srv.serverId]: { ...(prev[srv.serverId] || {}), sonarrId: val }
+                                                        }));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="bg-slate-900 border-slate-800 text-[11px] h-7">
+                                                        <SelectValue placeholder="Select Sonarr..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="auto">⚡ Auto (All Sonarr)</SelectItem>
+                                                        {arrInstances.sonarr.map(s => (
+                                                            <SelectItem key={s.id} value={s.id}>
+                                                                📺 {s.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -2069,17 +2311,11 @@ export function AgregarrStudio() {
                                     type="button"
                                     size="sm"
                                     disabled={savingShares}
-                                    onClick={async () => {
-                                        setSavingShares(true);
-                                        await saveComingSoonSharesAction(comingSoonShares);
-                                        setSavingShares(false);
-                                        setSharesSavedMsg(true);
-                                        setTimeout(() => setSharesSavedMsg(false), 3000);
-                                    }}
-                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 cursor-pointer"
+                                    onClick={handleSaveServerMappingsAndShares}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 cursor-pointer shadow-md"
                                 >
-                                    <Save className="h-3.5 w-3.5" />
-                                    <span>Save Share Paths</span>
+                                    {savingShares ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                    <span>Save Mappings &amp; Shares</span>
                                 </Button>
 
                                 <Button
@@ -2118,18 +2354,20 @@ export function AgregarrStudio() {
                                         <Sparkles className="h-4 w-4 text-amber-400" /> Agregarr Banner &amp; Poster Live Simulator
                                     </h4>
                                     <p className="text-[11px] text-slate-400">
-                                        Preview dynamic composite banners, variable chips, and pull real posters from your Plex library.
+                                        Variable-driven dynamic banner renderer with TrueType vector glyph bezier typography.
                                     </p>
                                 </div>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setPosterPickerModalOpen(true)}
-                                    className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-950/40 text-amber-200 hover:text-amber-100 shrink-0"
-                                >
-                                    <ImageIcon className="h-3.5 w-3.5 text-amber-400" /> Pull Poster from Plex
-                                </Button>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setPosterPickerModalOpen(true)}
+                                        className="h-7 text-[11px] gap-1.5 border-amber-500/40 hover:bg-amber-950/40 text-amber-200 hover:text-amber-100 shrink-0 cursor-pointer"
+                                    >
+                                        <ImageIcon className="h-3.5 w-3.5 text-amber-400" /> Pull Poster from Plex
+                                    </Button>
+                                </div>
                             </div>
 
                             {/* Real Media Item Telemetry Badge */}
@@ -2162,13 +2400,25 @@ export function AgregarrStudio() {
                                         onClick={() => {
                                             setSimSelectedRealItem(null);
                                             setSimPosterUrl("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+                                            setTemplateVarTitle("Sample Media");
                                             generatePlaceholderPreview(
                                                 "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
                                                 "Sample Media",
                                                 placeholderModalBannerType,
                                                 placeholderModalBannerText,
                                                 placeholderModalBannerTheme,
-                                                placeholderModalBannerPosition
+                                                placeholderModalBannerPosition,
+                                                placeholderModalBannerFontSize,
+                                                templateVarDate,
+                                                templateVarDays,
+                                                templateVarSource,
+                                                templateVarStatus,
+                                                templateVarReason,
+                                                "2026",
+                                                templateVarEdition,
+                                                templateVarGenre,
+                                                templateVarQuality,
+                                                templateVarNetwork
                                             );
                                         }}
                                         className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
@@ -2210,11 +2460,22 @@ export function AgregarrStudio() {
                                                 if (found?.pos) setPlaceholderModalBannerPosition(found.pos);
                                                 generatePlaceholderPreview(
                                                     simSelectedRealItem ? simPosterUrl : null,
-                                                    simSelectedRealItem?.title || "Sample Media",
+                                                    simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                     val,
                                                     nextText,
                                                     found?.theme || placeholderModalBannerTheme,
-                                                    found?.pos || placeholderModalBannerPosition
+                                                    found?.pos || placeholderModalBannerPosition,
+                                                    placeholderModalBannerFontSize,
+                                                    templateVarDate,
+                                                    templateVarDays,
+                                                    templateVarSource,
+                                                    templateVarStatus,
+                                                    templateVarReason,
+                                                    templateVarYear,
+                                                    templateVarEdition,
+                                                    templateVarGenre,
+                                                    templateVarQuality,
+                                                    templateVarNetwork
                                                 );
                                             }}
                                         >
@@ -2241,9 +2502,22 @@ export function AgregarrStudio() {
                                                 setPlaceholderModalBannerText(e.target.value);
                                                 generatePlaceholderPreview(
                                                     simSelectedRealItem ? simPosterUrl : null,
-                                                    simSelectedRealItem?.title || "Sample Media",
+                                                    simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                     placeholderModalBannerType,
-                                                    e.target.value
+                                                    e.target.value,
+                                                    placeholderModalBannerTheme,
+                                                    placeholderModalBannerPosition,
+                                                    placeholderModalBannerFontSize,
+                                                    templateVarDate,
+                                                    templateVarDays,
+                                                    templateVarSource,
+                                                    templateVarStatus,
+                                                    templateVarReason,
+                                                    templateVarYear,
+                                                    templateVarEdition,
+                                                    templateVarGenre,
+                                                    templateVarQuality,
+                                                    templateVarNetwork
                                                 );
                                             }}
                                             className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
@@ -2253,13 +2527,18 @@ export function AgregarrStudio() {
                                         {/* Agregarr Variable Insertion Chips */}
                                         <div className="flex flex-wrap gap-1 pt-1">
                                             {[
+                                                { token: "{title}", label: "+ {title}" },
+                                                { token: "{year}", label: "+ {year}" },
                                                 { token: "{date}", label: "+ {date}" },
                                                 { token: "{days}", label: "+ {days}" },
-                                                { token: "{title}", label: "+ {title}" },
+                                                { token: "{days_until}", label: "+ {days_until}" },
                                                 { token: "{source}", label: "+ {source}" },
+                                                { token: "{network}", label: "+ {network}" },
                                                 { token: "{status}", label: "+ {status}" },
                                                 { token: "{reason}", label: "+ {reason}" },
-                                                { token: "{quality}", label: "+ {quality}" }
+                                                { token: "{quality}", label: "+ {quality}" },
+                                                { token: "{edition}", label: "+ {edition}" },
+                                                { token: "{genre}", label: "+ {genre}" }
                                             ].map(chip => (
                                                 <button
                                                     key={chip.token}
@@ -2283,12 +2562,22 @@ export function AgregarrStudio() {
                                                     setPlaceholderModalBannerTheme(val);
                                                     generatePlaceholderPreview(
                                                         simSelectedRealItem ? simPosterUrl : null,
-                                                        simSelectedRealItem?.title || "Sample Media",
+                                                        simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                         placeholderModalBannerType,
                                                         placeholderModalBannerText,
                                                         val,
                                                         placeholderModalBannerPosition,
-                                                        placeholderModalBannerFontSize
+                                                        placeholderModalBannerFontSize,
+                                                        templateVarDate,
+                                                        templateVarDays,
+                                                        templateVarSource,
+                                                        templateVarStatus,
+                                                        templateVarReason,
+                                                        templateVarYear,
+                                                        templateVarEdition,
+                                                        templateVarGenre,
+                                                        templateVarQuality,
+                                                        templateVarNetwork
                                                     );
                                                 }}
                                             >
@@ -2317,12 +2606,22 @@ export function AgregarrStudio() {
                                                     setPlaceholderModalBannerPosition(val);
                                                     generatePlaceholderPreview(
                                                         simSelectedRealItem ? simPosterUrl : null,
-                                                        simSelectedRealItem?.title || "Sample Media",
+                                                        simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                         placeholderModalBannerType,
                                                         placeholderModalBannerText,
                                                         placeholderModalBannerTheme,
                                                         val,
-                                                        placeholderModalBannerFontSize
+                                                        placeholderModalBannerFontSize,
+                                                        templateVarDate,
+                                                        templateVarDays,
+                                                        templateVarSource,
+                                                        templateVarStatus,
+                                                        templateVarReason,
+                                                        templateVarYear,
+                                                        templateVarEdition,
+                                                        templateVarGenre,
+                                                        templateVarQuality,
+                                                        templateVarNetwork
                                                     );
                                                 }}
                                             >
@@ -2359,12 +2658,22 @@ export function AgregarrStudio() {
                                                     setPlaceholderModalBannerFontSize(val);
                                                     generatePlaceholderPreview(
                                                         simSelectedRealItem ? simPosterUrl : (selectedPlaceholderItem?.posterPath || null),
-                                                        selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                        selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                         placeholderModalBannerType,
                                                         placeholderModalBannerText,
                                                         placeholderModalBannerTheme,
                                                         placeholderModalBannerPosition,
-                                                        val
+                                                        val,
+                                                        templateVarDate,
+                                                        templateVarDays,
+                                                        templateVarSource,
+                                                        templateVarStatus,
+                                                        templateVarReason,
+                                                        templateVarYear,
+                                                        templateVarEdition,
+                                                        templateVarGenre,
+                                                        templateVarQuality,
+                                                        templateVarNetwork
                                                     );
                                                 }}
                                                 className="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
@@ -2385,12 +2694,22 @@ export function AgregarrStudio() {
                                                         setPlaceholderModalBannerFontSize(preset.size);
                                                         generatePlaceholderPreview(
                                                             simSelectedRealItem ? simPosterUrl : (selectedPlaceholderItem?.posterPath || null),
-                                                            selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
+                                                            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                             placeholderModalBannerType,
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
                                                             placeholderModalBannerPosition,
-                                                            preset.size
+                                                            preset.size,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
                                                         );
                                                     }}
                                                     className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all ${
@@ -2408,9 +2727,67 @@ export function AgregarrStudio() {
                                     {/* Live Variable Test Values */}
                                     <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                            Live Test Variables:
+                                            Live Test Variables (Tokens):
                                         </span>
-                                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Title {'{title}'}:</Label>
+                                                <Input
+                                                    value={templateVarTitle}
+                                                    onChange={(e) => {
+                                                        setTemplateVarTitle(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            e.target.value,
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Year {'{year}'}:</Label>
+                                                <Input
+                                                    value={templateVarYear}
+                                                    onChange={(e) => {
+                                                        setTemplateVarYear(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason,
+                                                            e.target.value,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                />
+                                            </div>
                                             <div>
                                                 <Label className="text-[9px] text-slate-500">Date {'{date}'}:</Label>
                                                 <Input
@@ -2419,7 +2796,7 @@ export function AgregarrStudio() {
                                                         setTemplateVarDate(e.target.value);
                                                         generatePlaceholderPreview(
                                                             simSelectedRealItem ? simPosterUrl : null,
-                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                             placeholderModalBannerType,
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
@@ -2429,7 +2806,12 @@ export function AgregarrStudio() {
                                                             templateVarDays,
                                                             templateVarSource,
                                                             templateVarStatus,
-                                                            templateVarReason
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
@@ -2445,7 +2827,7 @@ export function AgregarrStudio() {
                                                         setTemplateVarDays(num);
                                                         generatePlaceholderPreview(
                                                             simSelectedRealItem ? simPosterUrl : null,
-                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                             placeholderModalBannerType,
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
@@ -2455,7 +2837,12 @@ export function AgregarrStudio() {
                                                             num,
                                                             templateVarSource,
                                                             templateVarStatus,
-                                                            templateVarReason
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
@@ -2469,7 +2856,7 @@ export function AgregarrStudio() {
                                                         setTemplateVarSource(e.target.value);
                                                         generatePlaceholderPreview(
                                                             simSelectedRealItem ? simPosterUrl : null,
-                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                             placeholderModalBannerType,
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
@@ -2479,7 +2866,41 @@ export function AgregarrStudio() {
                                                             templateVarDays,
                                                             e.target.value,
                                                             templateVarStatus,
-                                                            templateVarReason
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Network {'{network}'}:</Label>
+                                                <Input
+                                                    value={templateVarNetwork}
+                                                    onChange={(e) => {
+                                                        setTemplateVarNetwork(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            e.target.value
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
@@ -2493,7 +2914,7 @@ export function AgregarrStudio() {
                                                         setTemplateVarStatus(e.target.value);
                                                         generatePlaceholderPreview(
                                                             simSelectedRealItem ? simPosterUrl : null,
-                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
                                                             placeholderModalBannerType,
                                                             placeholderModalBannerText,
                                                             placeholderModalBannerTheme,
@@ -2503,13 +2924,96 @@ export function AgregarrStudio() {
                                                             templateVarDays,
                                                             templateVarSource,
                                                             e.target.value,
-                                                            templateVarReason
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Quality {'{quality}'}:</Label>
+                                                <Input
+                                                    value={templateVarQuality}
+                                                    onChange={(e) => {
+                                                        setTemplateVarQuality(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            templateVarEdition,
+                                                            templateVarGenre,
+                                                            e.target.value,
+                                                            templateVarNetwork
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Edition {'{edition}'}:</Label>
+                                                <Input
+                                                    value={templateVarEdition}
+                                                    onChange={(e) => {
+                                                        setTemplateVarEdition(e.target.value);
+                                                        generatePlaceholderPreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+                                                            placeholderModalBannerType,
+                                                            placeholderModalBannerText,
+                                                            placeholderModalBannerTheme,
+                                                            placeholderModalBannerPosition,
+                                                            placeholderModalBannerFontSize,
+                                                            templateVarDate,
+                                                            templateVarDays,
+                                                            templateVarSource,
+                                                            templateVarStatus,
+                                                            templateVarReason,
+                                                            templateVarYear,
+                                                            e.target.value,
+                                                            templateVarGenre,
+                                                            templateVarQuality,
+                                                            templateVarNetwork
                                                         );
                                                     }}
                                                     className="h-6 text-[10px] bg-slate-900 border-slate-700 font-mono"
                                                 />
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={savingBannerDefault}
+                                            onClick={handleSaveDefaultBannerTemplate}
+                                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 cursor-pointer shadow-md"
+                                        >
+                                            {savingBannerDefault ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                            <span>Save as Default Banner Template</span>
+                                        </Button>
+
+                                        {bannerDefaultSavedMsg && (
+                                            <span className="text-xs text-emerald-400 font-bold animate-in fade-in-50">
+                                                {bannerDefaultSavedMsg}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </div>

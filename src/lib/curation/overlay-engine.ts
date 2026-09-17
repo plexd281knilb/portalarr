@@ -1297,7 +1297,7 @@ function generatePlaceholderBackdropSvg(title: string): string {
 }
 
 /**
- * Interpolates template tokens such as {date}, {days}, {title}, {source}, {status}, {reason}, {quality} in custom banner strings.
+ * Interpolates template tokens such as {date}, {days}, {title}, {year}, {source}, {network}, {status}, {reason}, {quality}, {edition}, {genre} in custom banner strings.
  * Automatically computes target dates and days remaining so banners always render populated text.
  */
 export function interpolateBannerVariables(
@@ -1310,6 +1310,10 @@ export function interpolateBannerVariables(
         status?: string;
         reason?: string;
         quality?: string;
+        year?: number | string;
+        edition?: string;
+        genre?: string;
+        network?: string;
     } = {}
 ): string {
     if (!template) return "";
@@ -1323,9 +1327,11 @@ export function interpolateBannerVariables(
     res = res.replace(/\{date\}/gi, effectiveDate);
     res = res.replace(/\{date_short\}/gi, effectiveDate);
     res = res.replace(/\{date_full\}/gi, effectiveFullDate);
+    res = res.replace(/\{release_date\}/gi, effectiveDate);
     res = res.replace(/\{days\}/gi, String(effectiveDays));
     res = res.replace(/\{days_left\}/gi, String(effectiveDays));
     res = res.replace(/\{days_remaining\}/gi, String(effectiveDays));
+    res = res.replace(/\{days_until\}/gi, String(effectiveDays));
 
     if (vars.title !== undefined && vars.title !== null) {
         res = res.replace(/\{title\}/gi, String(vars.title));
@@ -1333,28 +1339,50 @@ export function interpolateBannerVariables(
         res = res.replace(/\{title\}/gi, "Media");
     }
 
+    if (vars.year !== undefined && vars.year !== null) {
+        res = res.replace(/\{year\}/gi, String(vars.year));
+    } else {
+        res = res.replace(/\{year\}/gi, "2026");
+    }
+
     if (vars.source !== undefined && vars.source !== null) {
         res = res.replace(/\{source\}/gi, String(vars.source));
+        res = res.replace(/\{network\}/gi, String(vars.source));
+        res = res.replace(/\{streaming_service\}/gi, String(vars.source));
     } else {
         res = res.replace(/\{source\}/gi, "Plex");
+        res = res.replace(/\{network\}/gi, "Plex");
+        res = res.replace(/\{streaming_service\}/gi, "Plex");
     }
 
     if (vars.status !== undefined && vars.status !== null) {
         res = res.replace(/\{status\}/gi, String(vars.status));
     } else {
-        res = res.replace(/\{status\}/gi, "Leaving Soon");
+        res = res.replace(/\{status\}/gi, "Coming Soon");
     }
 
     if (vars.reason !== undefined && vars.reason !== null) {
         res = res.replace(/\{reason\}/gi, String(vars.reason));
     } else {
-        res = res.replace(/\{reason\}/gi, "Unwatched Media");
+        res = res.replace(/\{reason\}/gi, "Trending Release");
     }
 
     if (vars.quality !== undefined && vars.quality !== null) {
         res = res.replace(/\{quality\}/gi, String(vars.quality));
     } else {
         res = res.replace(/\{quality\}/gi, "4K UHD");
+    }
+
+    if (vars.edition !== undefined && vars.edition !== null) {
+        res = res.replace(/\{edition\}/gi, String(vars.edition));
+    } else {
+        res = res.replace(/\{edition\}/gi, "Director's Cut");
+    }
+
+    if (vars.genre !== undefined && vars.genre !== null) {
+        res = res.replace(/\{genre\}/gi, String(vars.genre));
+    } else {
+        res = res.replace(/\{genre\}/gi, "Action");
     }
 
     // Clean up any remaining unparsed token artifacts (e.g. {unknown})
@@ -1380,6 +1408,10 @@ export async function generatePlaceholderPosterBuffer(
         source?: string;
         status?: string;
         reason?: string;
+        year?: number | string;
+        edition?: string;
+        genre?: string;
+        quality?: string;
         theme?: "indigo-purple" | "crimson-red" | "emerald-green" | "amber-gold" | "cinematic-blue" | "glass" | "netflix-red" | "slate-frosted" | "cyber-neon" | string;
         position?: "top" | "bottom" | "corner" | "middle" | "lower_third" | "upper_third" | "center" | string;
     } = {}
@@ -1406,7 +1438,11 @@ export async function generatePlaceholderPosterBuffer(
         title,
         source: options.source,
         status: options.status,
-        reason: options.reason
+        reason: options.reason,
+        year: options.year,
+        edition: options.edition,
+        genre: options.genre,
+        quality: options.quality
     }).trim().toUpperCase();
 
     const bannerPos = options.position || "bottom";
