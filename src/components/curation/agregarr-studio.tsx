@@ -242,6 +242,7 @@ export function AgregarrStudio() {
     const [placeholderModalBannerPosition, setPlaceholderModalBannerPosition] = useState<"bottom" | "top" | "corner">("bottom");
     const [placeholderModalBannerFontSize, setPlaceholderModalBannerFontSize] = useState<number>(44);
     const [placeholderDaysThreshold, setPlaceholderDaysThreshold] = useState<number>(90);
+    const [bannerTemplates, setBannerTemplates] = useState<Record<string, { text?: string; theme?: string; pos?: "bottom" | "top" | "corner"; fontSize?: number }>>({});
     const [generatingPlaceholder, setGeneratingPlaceholder] = useState(false);
     const [placeholderPreviewDataUrl, setPlaceholderPreviewDataUrl] = useState<string | null>(null);
     const [placeholderPreviewLoading, setPlaceholderPreviewLoading] = useState<boolean>(false);
@@ -442,6 +443,25 @@ export function AgregarrStudio() {
                     if (settingsRes.placeholderBannerTheme) setPlaceholderModalBannerTheme(settingsRes.placeholderBannerTheme);
                     if (settingsRes.placeholderCustomText) setPlaceholderModalBannerText(settingsRes.placeholderCustomText);
                     if (settingsRes.placeholderDaysThreshold !== undefined) setPlaceholderDaysThreshold(settingsRes.placeholderDaysThreshold);
+                    if (settingsRes.placeholderBannerTemplates) {
+                        try {
+                            const parsed = typeof settingsRes.placeholderBannerTemplates === "string"
+                                ? JSON.parse(settingsRes.placeholderBannerTemplates)
+                                : settingsRes.placeholderBannerTemplates;
+                            if (parsed && typeof parsed === "object") {
+                                setBannerTemplates(parsed);
+                                const currentTpl = parsed[placeholderModalBannerType] || parsed["not_requested_yet"] || parsed["downloading_soon"];
+                                if (currentTpl) {
+                                    if (currentTpl.text !== undefined) setPlaceholderModalBannerText(currentTpl.text);
+                                    if (currentTpl.theme) setPlaceholderModalBannerTheme(currentTpl.theme);
+                                    if (currentTpl.pos) setPlaceholderModalBannerPosition(currentTpl.pos as any);
+                                    if (currentTpl.fontSize) setPlaceholderModalBannerFontSize(currentTpl.fontSize);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn("Failed parsing banner templates:", e);
+                        }
+                    }
                     setCurationSyncCollections(settingsRes.curationSyncCollections ?? true);
                     setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
                     setCurationLastRunAt(settingsRes.curationLastRunAt || null);
@@ -945,20 +965,203 @@ export function AgregarrStudio() {
         }
     };
 
+    // Effective Banner Config Resolver for any Preset ID
+    const getEffectiveBannerConfig = (presetId: string, customTemplates = bannerTemplates) => {
+        const preset = AGREGARR_BANNER_PRESETS.find(p => p.id === presetId);
+        const custom = customTemplates[presetId] || {};
+        return {
+            text: custom.text !== undefined ? custom.text : (preset?.defaultText || "NOT REQUESTED YET"),
+            theme: custom.theme || preset?.theme || "indigo-purple",
+            pos: (custom.pos || preset?.pos || "bottom") as "bottom" | "top" | "corner",
+            fontSize: custom.fontSize || (preset as any)?.fontSize || 44
+        };
+    };
+
+    // Preset Selection Handler
+    const handleSelectBannerPreset = (val: string) => {
+        setPlaceholderModalBannerType(val);
+        const config = getEffectiveBannerConfig(val);
+        setPlaceholderModalBannerText(config.text);
+        setPlaceholderModalBannerTheme(config.theme);
+        setPlaceholderModalBannerPosition(config.pos);
+        setPlaceholderModalBannerFontSize(config.fontSize);
+
+        generatePlaceholderPreview(
+            selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+            val,
+            config.text,
+            config.theme,
+            config.pos,
+            config.fontSize,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason,
+            templateVarYear,
+            templateVarEdition,
+            templateVarGenre,
+            templateVarQuality,
+            templateVarNetwork
+        );
+    };
+
+    // Text Change Handler (updates active preset in bannerTemplates)
+    const handleBannerTextChange = (text: string) => {
+        setPlaceholderModalBannerText(text);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [placeholderModalBannerType]: {
+                ...(prev[placeholderModalBannerType] || {}),
+                text,
+                theme: placeholderModalBannerTheme,
+                pos: placeholderModalBannerPosition,
+                fontSize: placeholderModalBannerFontSize
+            }
+        }));
+        generatePlaceholderPreview(
+            selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+            placeholderModalBannerType,
+            text,
+            placeholderModalBannerTheme,
+            placeholderModalBannerPosition,
+            placeholderModalBannerFontSize,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason,
+            templateVarYear,
+            templateVarEdition,
+            templateVarGenre,
+            templateVarQuality,
+            templateVarNetwork
+        );
+    };
+
+    // Theme Change Handler (updates active preset in bannerTemplates)
+    const handleBannerThemeChange = (theme: string) => {
+        setPlaceholderModalBannerTheme(theme);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [placeholderModalBannerType]: {
+                ...(prev[placeholderModalBannerType] || {}),
+                text: placeholderModalBannerText,
+                theme,
+                pos: placeholderModalBannerPosition,
+                fontSize: placeholderModalBannerFontSize
+            }
+        }));
+        generatePlaceholderPreview(
+            selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+            placeholderModalBannerType,
+            placeholderModalBannerText,
+            theme,
+            placeholderModalBannerPosition,
+            placeholderModalBannerFontSize,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason,
+            templateVarYear,
+            templateVarEdition,
+            templateVarGenre,
+            templateVarQuality,
+            templateVarNetwork
+        );
+    };
+
+    // Position Change Handler (updates active preset in bannerTemplates)
+    const handleBannerPositionChange = (pos: "bottom" | "top" | "corner") => {
+        setPlaceholderModalBannerPosition(pos);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [placeholderModalBannerType]: {
+                ...(prev[placeholderModalBannerType] || {}),
+                text: placeholderModalBannerText,
+                theme: placeholderModalBannerTheme,
+                pos,
+                fontSize: placeholderModalBannerFontSize
+            }
+        }));
+        generatePlaceholderPreview(
+            selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+            placeholderModalBannerType,
+            placeholderModalBannerText,
+            placeholderModalBannerTheme,
+            pos,
+            placeholderModalBannerFontSize,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason,
+            templateVarYear,
+            templateVarEdition,
+            templateVarGenre,
+            templateVarQuality,
+            templateVarNetwork
+        );
+    };
+
+    // Font Size Change Handler (updates active preset in bannerTemplates)
+    const handleBannerFontSizeChange = (fontSize: number) => {
+        setPlaceholderModalBannerFontSize(fontSize);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [placeholderModalBannerType]: {
+                ...(prev[placeholderModalBannerType] || {}),
+                text: placeholderModalBannerText,
+                theme: placeholderModalBannerTheme,
+                pos: placeholderModalBannerPosition,
+                fontSize
+            }
+        }));
+        generatePlaceholderPreview(
+            selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
+            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+            placeholderModalBannerType,
+            placeholderModalBannerText,
+            placeholderModalBannerTheme,
+            placeholderModalBannerPosition,
+            fontSize,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason,
+            templateVarYear,
+            templateVarEdition,
+            templateVarGenre,
+            templateVarQuality,
+            templateVarNetwork
+        );
+    };
+
     // Open Placeholder Creation Modal
     const handleOpenPlaceholderModal = async (item: any) => {
         setSelectedPlaceholderItem(item);
         setPlaceholderSuccessMsg(null);
         setPlaceholderModalOpen(true);
 
-        const bannerText = item.suggestedBannerText || (!item.isMonitored ? "NOT REQUESTED YET" : item.isReleased ? "DOWNLOADING SOON" : "COMING SOON MONITORED");
         const bannerType = item.suggestedBannerType || (!item.isMonitored ? "not_requested_yet" : item.isReleased ? "downloading_soon" : "coming_soon_monitored");
-        const bannerTheme = item.suggestedBannerTheme || (!item.isMonitored ? "crimson-red" : item.isReleased ? "emerald-green" : "amber-gold");
+        const config = getEffectiveBannerConfig(bannerType);
+        const bannerText = item.suggestedBannerText || config.text;
+        const bannerTheme = item.suggestedBannerTheme || config.theme;
+        const bannerPos = config.pos;
+        const bannerFontSize = config.fontSize;
 
         setPlaceholderModalBannerText(bannerText);
         setPlaceholderModalBannerType(bannerType);
         setPlaceholderModalBannerTheme(bannerTheme);
-        generatePlaceholderPreview(item.posterPath, item.title, bannerType, bannerText, bannerTheme, placeholderModalBannerPosition, placeholderModalBannerFontSize);
+        setPlaceholderModalBannerPosition(bannerPos);
+        setPlaceholderModalBannerFontSize(bannerFontSize);
+        generatePlaceholderPreview(item.posterPath, item.title, bannerType, bannerText, bannerTheme, bannerPos, bannerFontSize);
     };
 
     const generatePlaceholderPreview = async (
@@ -1051,26 +1254,7 @@ export function AgregarrStudio() {
 
     const handleInsertToken = (token: string) => {
         const next = placeholderModalBannerText ? `${placeholderModalBannerText} ${token}` : token;
-        setPlaceholderModalBannerText(next);
-        generatePlaceholderPreview(
-            selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
-            selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
-            placeholderModalBannerType,
-            next,
-            placeholderModalBannerTheme,
-            placeholderModalBannerPosition,
-            placeholderModalBannerFontSize,
-            templateVarDate,
-            templateVarDays,
-            templateVarSource,
-            templateVarStatus,
-            templateVarReason,
-            templateVarYear,
-            templateVarEdition,
-            templateVarGenre,
-            templateVarQuality,
-            templateVarNetwork
-        );
+        handleBannerTextChange(next);
     };
 
     const handleCreatePlaceholder = async () => {
@@ -1118,19 +1302,32 @@ export function AgregarrStudio() {
         }
     };
 
-    // Save Default Placeholder Banner Template
+    // Save Current Banner Template Preset
     const handleSaveDefaultBannerTemplate = async () => {
         setSavingBannerDefault(true);
         setBannerDefaultSavedMsg(null);
         try {
+            const updatedTemplates = {
+                ...bannerTemplates,
+                [placeholderModalBannerType]: {
+                    text: placeholderModalBannerText,
+                    theme: placeholderModalBannerTheme,
+                    pos: placeholderModalBannerPosition,
+                    fontSize: placeholderModalBannerFontSize
+                }
+            };
+            setBannerTemplates(updatedTemplates);
+
             const res = await saveCurationSettingsAction({
                 placeholderBannerPosition: placeholderModalBannerPosition,
                 placeholderBannerTheme: placeholderModalBannerTheme,
                 placeholderBannerFontSize: placeholderModalBannerFontSize,
-                placeholderCustomText: placeholderModalBannerText
+                placeholderCustomText: placeholderModalBannerText,
+                placeholderBannerTemplates: JSON.stringify(updatedTemplates)
             });
             if (res.success) {
-                setBannerDefaultSavedMsg("✓ Saved Default Placeholder Banner Template!");
+                const currentPreset = AGREGARR_BANNER_PRESETS.find(p => p.id === placeholderModalBannerType);
+                setBannerDefaultSavedMsg(`✓ Saved Template for "${currentPreset?.label || placeholderModalBannerType}"!`);
                 setTimeout(() => setBannerDefaultSavedMsg(null), 3500);
             }
         } catch (e) {
@@ -1138,6 +1335,54 @@ export function AgregarrStudio() {
         } finally {
             setSavingBannerDefault(false);
         }
+    };
+
+    // Reset Active Preset to Default
+    const handleResetCurrentBannerTemplate = async () => {
+        const preset = AGREGARR_BANNER_PRESETS.find(p => p.id === placeholderModalBannerType);
+        const defaultText = preset?.defaultText || "NOT REQUESTED YET";
+        const defaultTheme = preset?.theme || "indigo-purple";
+        const defaultPos = (preset?.pos || "bottom") as "bottom" | "top" | "corner";
+        const defaultFontSize = 44;
+
+        const updatedTemplates = { ...bannerTemplates };
+        delete updatedTemplates[placeholderModalBannerType];
+        setBannerTemplates(updatedTemplates);
+
+        setPlaceholderModalBannerText(defaultText);
+        setPlaceholderModalBannerTheme(defaultTheme);
+        setPlaceholderModalBannerPosition(defaultPos);
+        setPlaceholderModalBannerFontSize(defaultFontSize);
+
+        try {
+            await saveCurationSettingsAction({
+                placeholderBannerTemplates: JSON.stringify(updatedTemplates)
+            });
+            setBannerDefaultSavedMsg(`✓ Reset "${preset?.label || placeholderModalBannerType}" to preset default!`);
+            setTimeout(() => setBannerDefaultSavedMsg(null), 3500);
+        } catch (e) {
+            console.error("Failed resetting template:", e);
+        }
+
+        generatePlaceholderPreview(
+            simSelectedRealItem ? simPosterUrl : (selectedPlaceholderItem?.posterPath || null),
+            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
+            placeholderModalBannerType,
+            defaultText,
+            defaultTheme,
+            defaultPos,
+            defaultFontSize,
+            templateVarDate,
+            templateVarDays,
+            templateVarSource,
+            templateVarStatus,
+            templateVarReason,
+            templateVarYear,
+            templateVarEdition,
+            templateVarGenre,
+            templateVarQuality,
+            templateVarNetwork
+        );
     };
 
     // Save Server Mappings & Shares
@@ -2630,44 +2875,37 @@ export function AgregarrStudio() {
                                 <div className="sm:col-span-7 space-y-3 text-xs">
                                     {/* Template Presets Selector */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-[11px] text-slate-300 font-semibold">Agregarr Banner Preset:</Label>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[11px] text-slate-300 font-semibold">Agregarr Banner Preset:</Label>
+                                            {bannerTemplates[placeholderModalBannerType] && (
+                                                <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-800/60 flex items-center gap-1">
+                                                    ✨ Custom Template Saved
+                                                </span>
+                                            )}
+                                        </div>
                                         <Select
                                             value={placeholderModalBannerType}
-                                            onValueChange={(val) => {
-                                                const found = AGREGARR_BANNER_PRESETS.find(p => p.id === val);
-                                                setPlaceholderModalBannerType(val);
-                                                const nextText = found?.defaultText || "NOT REQUESTED YET";
-                                                setPlaceholderModalBannerText(nextText);
-                                                if (found?.theme) setPlaceholderModalBannerTheme(found.theme);
-                                                if (found?.pos) setPlaceholderModalBannerPosition(found.pos);
-                                                generatePlaceholderPreview(
-                                                    simSelectedRealItem ? simPosterUrl : null,
-                                                    simSelectedRealItem?.title || templateVarTitle || "Sample Media",
-                                                    val,
-                                                    nextText,
-                                                    found?.theme || placeholderModalBannerTheme,
-                                                    found?.pos || placeholderModalBannerPosition,
-                                                    placeholderModalBannerFontSize,
-                                                    templateVarDate,
-                                                    templateVarDays,
-                                                    templateVarSource,
-                                                    templateVarStatus,
-                                                    templateVarReason,
-                                                    templateVarYear,
-                                                    templateVarEdition,
-                                                    templateVarGenre,
-                                                    templateVarQuality,
-                                                    templateVarNetwork
-                                                );
-                                            }}
+                                            onValueChange={handleSelectBannerPreset}
                                         >
                                             <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="max-h-64">
-                                                {AGREGARR_BANNER_PRESETS.map(p => (
-                                                    <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                                                ))}
+                                                {AGREGARR_BANNER_PRESETS.map(p => {
+                                                    const isCustom = Boolean(bannerTemplates[p.id]);
+                                                    return (
+                                                        <SelectItem key={p.id} value={p.id}>
+                                                            <div className="flex items-center justify-between w-full gap-2">
+                                                                <span>{p.label}</span>
+                                                                {isCustom && (
+                                                                    <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-800/40">
+                                                                        Custom
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -2680,28 +2918,7 @@ export function AgregarrStudio() {
                                         </div>
                                         <Input
                                             value={placeholderModalBannerText}
-                                            onChange={(e) => {
-                                                setPlaceholderModalBannerText(e.target.value);
-                                                generatePlaceholderPreview(
-                                                    simSelectedRealItem ? simPosterUrl : null,
-                                                    simSelectedRealItem?.title || templateVarTitle || "Sample Media",
-                                                    placeholderModalBannerType,
-                                                    e.target.value,
-                                                    placeholderModalBannerTheme,
-                                                    placeholderModalBannerPosition,
-                                                    placeholderModalBannerFontSize,
-                                                    templateVarDate,
-                                                    templateVarDays,
-                                                    templateVarSource,
-                                                    templateVarStatus,
-                                                    templateVarReason,
-                                                    templateVarYear,
-                                                    templateVarEdition,
-                                                    templateVarGenre,
-                                                    templateVarQuality,
-                                                    templateVarNetwork
-                                                );
-                                            }}
+                                            onChange={(e) => handleBannerTextChange(e.target.value)}
                                             className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
                                             placeholder="e.g. DIGITAL RELEASE ON {date}"
                                         />
@@ -2740,28 +2957,7 @@ export function AgregarrStudio() {
                                             <Label className="text-[10px] text-slate-400">Color Theme:</Label>
                                             <Select
                                                 value={placeholderModalBannerTheme}
-                                                onValueChange={(val) => {
-                                                    setPlaceholderModalBannerTheme(val);
-                                                    generatePlaceholderPreview(
-                                                        simSelectedRealItem ? simPosterUrl : null,
-                                                        simSelectedRealItem?.title || templateVarTitle || "Sample Media",
-                                                        placeholderModalBannerType,
-                                                        placeholderModalBannerText,
-                                                        val,
-                                                        placeholderModalBannerPosition,
-                                                        placeholderModalBannerFontSize,
-                                                        templateVarDate,
-                                                        templateVarDays,
-                                                        templateVarSource,
-                                                        templateVarStatus,
-                                                        templateVarReason,
-                                                        templateVarYear,
-                                                        templateVarEdition,
-                                                        templateVarGenre,
-                                                        templateVarQuality,
-                                                        templateVarNetwork
-                                                    );
-                                                }}
+                                                onValueChange={handleBannerThemeChange}
                                             >
                                                 <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
                                                     <SelectValue />
@@ -2784,28 +2980,7 @@ export function AgregarrStudio() {
                                             <Label className="text-[10px] text-slate-400">Position:</Label>
                                             <Select
                                                 value={placeholderModalBannerPosition}
-                                                onValueChange={(val: any) => {
-                                                    setPlaceholderModalBannerPosition(val);
-                                                    generatePlaceholderPreview(
-                                                        simSelectedRealItem ? simPosterUrl : null,
-                                                        simSelectedRealItem?.title || templateVarTitle || "Sample Media",
-                                                        placeholderModalBannerType,
-                                                        placeholderModalBannerText,
-                                                        placeholderModalBannerTheme,
-                                                        val,
-                                                        placeholderModalBannerFontSize,
-                                                        templateVarDate,
-                                                        templateVarDays,
-                                                        templateVarSource,
-                                                        templateVarStatus,
-                                                        templateVarReason,
-                                                        templateVarYear,
-                                                        templateVarEdition,
-                                                        templateVarGenre,
-                                                        templateVarQuality,
-                                                        templateVarNetwork
-                                                    );
-                                                }}
+                                                onValueChange={(val: any) => handleBannerPositionChange(val)}
                                             >
                                                 <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
                                                     <SelectValue />
@@ -2835,29 +3010,7 @@ export function AgregarrStudio() {
                                                 max="72"
                                                 step="2"
                                                 value={placeholderModalBannerFontSize}
-                                                onChange={(e) => {
-                                                    const val = parseInt(e.target.value, 10);
-                                                    setPlaceholderModalBannerFontSize(val);
-                                                    generatePlaceholderPreview(
-                                                        simSelectedRealItem ? simPosterUrl : (selectedPlaceholderItem?.posterPath || null),
-                                                        selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
-                                                        placeholderModalBannerType,
-                                                        placeholderModalBannerText,
-                                                        placeholderModalBannerTheme,
-                                                        placeholderModalBannerPosition,
-                                                        val,
-                                                        templateVarDate,
-                                                        templateVarDays,
-                                                        templateVarSource,
-                                                        templateVarStatus,
-                                                        templateVarReason,
-                                                        templateVarYear,
-                                                        templateVarEdition,
-                                                        templateVarGenre,
-                                                        templateVarQuality,
-                                                        templateVarNetwork
-                                                    );
-                                                }}
+                                                onChange={(e) => handleBannerFontSizeChange(parseInt(e.target.value, 10))}
                                                 className="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
                                             />
                                             <span className="text-[9px] text-slate-500 font-mono">72px</span>
@@ -2872,29 +3025,8 @@ export function AgregarrStudio() {
                                                 <button
                                                     key={preset.size}
                                                     type="button"
-                                                    onClick={() => {
-                                                        setPlaceholderModalBannerFontSize(preset.size);
-                                                        generatePlaceholderPreview(
-                                                            simSelectedRealItem ? simPosterUrl : (selectedPlaceholderItem?.posterPath || null),
-                                                            selectedPlaceholderItem?.title || simSelectedRealItem?.title || templateVarTitle || "Sample Media",
-                                                            placeholderModalBannerType,
-                                                            placeholderModalBannerText,
-                                                            placeholderModalBannerTheme,
-                                                            placeholderModalBannerPosition,
-                                                            preset.size,
-                                                            templateVarDate,
-                                                            templateVarDays,
-                                                            templateVarSource,
-                                                            templateVarStatus,
-                                                            templateVarReason,
-                                                            templateVarYear,
-                                                            templateVarEdition,
-                                                            templateVarGenre,
-                                                            templateVarQuality,
-                                                            templateVarNetwork
-                                                        );
-                                                    }}
-                                                    className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all ${
+                                                    onClick={() => handleBannerFontSizeChange(preset.size)}
+                                                    className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all cursor-pointer ${
                                                         placeholderModalBannerFontSize === preset.size
                                                             ? "bg-amber-600 text-slate-950 border-amber-500 font-bold"
                                                             : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800"
@@ -3180,16 +3312,32 @@ export function AgregarrStudio() {
 
                                     {/* Action Buttons */}
                                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            disabled={savingBannerDefault}
-                                            onClick={handleSaveDefaultBannerTemplate}
-                                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 cursor-pointer shadow-md"
-                                        >
-                                            {savingBannerDefault ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                            <span>Save as Default Banner Template</span>
-                                        </Button>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                disabled={savingBannerDefault}
+                                                onClick={handleSaveDefaultBannerTemplate}
+                                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs gap-1.5 cursor-pointer shadow-md"
+                                            >
+                                                {savingBannerDefault ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                                <span>Save Banner Template</span>
+                                            </Button>
+
+                                            {bannerTemplates[placeholderModalBannerType] && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={handleResetCurrentBannerTemplate}
+                                                    className="border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white text-xs gap-1.5 cursor-pointer"
+                                                    title="Reset this preset to its default text, color theme, and position"
+                                                >
+                                                    <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                                                    <span>Reset to Preset Default</span>
+                                                </Button>
+                                            )}
+                                        </div>
 
                                         {bannerDefaultSavedMsg && (
                                             <span className="text-xs text-emerald-400 font-bold animate-in fade-in-50">
@@ -4255,33 +4403,37 @@ export function AgregarrStudio() {
                             {/* Controls */}
                             <div className="sm:col-span-7 space-y-3">
                                 <div className="space-y-1">
-                                    <Label className="text-xs text-slate-300">Banner Preset:</Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-300">Banner Preset:</Label>
+                                        {bannerTemplates[placeholderModalBannerType] && (
+                                            <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-800/60">
+                                                ✨ Custom Template
+                                            </span>
+                                        )}
+                                    </div>
                                     <Select
                                         value={placeholderModalBannerType}
-                                        onValueChange={(val: any) => {
-                                            const found = AGREGARR_BANNER_PRESETS.find(p => p.id === val);
-                                            setPlaceholderModalBannerType(val);
-                                            const defaultText = found?.defaultText || "NOT REQUESTED YET";
-                                            setPlaceholderModalBannerText(defaultText);
-                                            if (found?.theme) setPlaceholderModalBannerTheme(found.theme);
-                                            if (found?.pos) setPlaceholderModalBannerPosition(found.pos);
-                                            generatePlaceholderPreview(
-                                                selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
-                                                selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
-                                                val,
-                                                defaultText,
-                                                found?.theme || placeholderModalBannerTheme,
-                                                found?.pos || placeholderModalBannerPosition
-                                            );
-                                        }}
+                                        onValueChange={handleSelectBannerPreset}
                                     >
                                         <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="max-h-64">
-                                            {AGREGARR_BANNER_PRESETS.map(p => (
-                                                <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                                            ))}
+                                            {AGREGARR_BANNER_PRESETS.map(p => {
+                                                const isCustom = Boolean(bannerTemplates[p.id]);
+                                                return (
+                                                    <SelectItem key={p.id} value={p.id}>
+                                                        <div className="flex items-center justify-between w-full gap-2">
+                                                            <span>{p.label}</span>
+                                                            {isCustom && (
+                                                                <span className="text-[9px] font-mono text-amber-400 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-800/40">
+                                                                    Custom
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </SelectItem>
+                                                );
+                                            })}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -4293,15 +4445,7 @@ export function AgregarrStudio() {
                                     </div>
                                     <Input
                                         value={placeholderModalBannerText}
-                                        onChange={(e) => {
-                                            setPlaceholderModalBannerText(e.target.value);
-                                            generatePlaceholderPreview(
-                                                selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
-                                                selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
-                                                placeholderModalBannerType,
-                                                e.target.value
-                                            );
-                                        }}
+                                        onChange={(e) => handleBannerTextChange(e.target.value)}
                                         className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
                                         placeholder="e.g. DIGITAL RELEASE ON {date}"
                                     />
@@ -4309,13 +4453,18 @@ export function AgregarrStudio() {
                                     {/* Variable Insertion Chips */}
                                     <div className="flex flex-wrap gap-1 pt-1">
                                         {[
+                                            { token: "{title}", label: "+ {title}" },
+                                            { token: "{year}", label: "+ {year}" },
                                             { token: "{date}", label: "+ {date}" },
                                             { token: "{days}", label: "+ {days}" },
-                                            { token: "{title}", label: "+ {title}" },
+                                            { token: "{days_until}", label: "+ {days_until}" },
                                             { token: "{source}", label: "+ {source}" },
+                                            { token: "{network}", label: "+ {network}" },
                                             { token: "{status}", label: "+ {status}" },
                                             { token: "{reason}", label: "+ {reason}" },
-                                            { token: "{quality}", label: "+ {quality}" }
+                                            { token: "{quality}", label: "+ {quality}" },
+                                            { token: "{edition}", label: "+ {edition}" },
+                                            { token: "{genre}", label: "+ {genre}" }
                                         ].map(chip => (
                                             <button
                                                 key={chip.token}
@@ -4334,16 +4483,7 @@ export function AgregarrStudio() {
                                         <Label className="text-xs text-slate-300">Color Theme:</Label>
                                         <Select
                                             value={placeholderModalBannerTheme}
-                                            onValueChange={(val: any) => {
-                                                setPlaceholderModalBannerTheme(val);
-                                                generatePlaceholderPreview(
-                                                    selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
-                                                    selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
-                                                    placeholderModalBannerType,
-                                                    placeholderModalBannerText,
-                                                    val
-                                                );
-                                            }}
+                                            onValueChange={handleBannerThemeChange}
                                         >
                                             <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
                                                 <SelectValue />
@@ -4366,17 +4506,7 @@ export function AgregarrStudio() {
                                         <Label className="text-xs text-slate-300">Position:</Label>
                                         <Select
                                             value={placeholderModalBannerPosition}
-                                            onValueChange={(val: any) => {
-                                                setPlaceholderModalBannerPosition(val);
-                                                generatePlaceholderPreview(
-                                                    selectedPlaceholderItem?.posterPath || (simSelectedRealItem ? simPosterUrl : null),
-                                                    selectedPlaceholderItem?.title || simSelectedRealItem?.title || "Sample Media",
-                                                    placeholderModalBannerType,
-                                                    placeholderModalBannerText,
-                                                    placeholderModalBannerTheme,
-                                                    val
-                                                );
-                                            }}
+                                            onValueChange={(val: any) => handleBannerPositionChange(val)}
                                         >
                                             <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
                                                 <SelectValue />

@@ -150,6 +150,7 @@ export async function getCurationSettingsAction() {
         placeholderBannerTheme: settings?.placeholderBannerTheme || "indigo-purple",
         placeholderBannerFontSize: settings?.placeholderBannerFontSize ?? 44,
         placeholderCustomText: settings?.placeholderCustomText || "",
+        placeholderBannerTemplates: settings?.placeholderBannerTemplates ? JSON.parse(settings.placeholderBannerTemplates) : {},
         placeholderEnabled: settings?.placeholderEnabled ?? true,
 
         // Pruning Banner Appearance Settings
@@ -440,6 +441,7 @@ export async function saveCurationSettingsAction(data: {
     placeholderBannerTheme?: string;
     placeholderBannerFontSize?: number;
     placeholderCustomText?: string;
+    placeholderBannerTemplates?: string | Record<string, any>;
     placeholderEnabled?: boolean;
     pruneBannerPosition?: string;
     pruneBannerTheme?: string;
@@ -515,6 +517,11 @@ export async function saveCurationSettingsAction(data: {
         if (data.placeholderBannerTheme !== undefined) updatePayload.placeholderBannerTheme = data.placeholderBannerTheme;
         if (data.placeholderBannerFontSize !== undefined) updatePayload.placeholderBannerFontSize = data.placeholderBannerFontSize;
         if (data.placeholderCustomText !== undefined) updatePayload.placeholderCustomText = data.placeholderCustomText;
+        if (data.placeholderBannerTemplates !== undefined) {
+            updatePayload.placeholderBannerTemplates = typeof data.placeholderBannerTemplates === "string"
+                ? data.placeholderBannerTemplates
+                : JSON.stringify(data.placeholderBannerTemplates);
+        }
         if (data.placeholderEnabled !== undefined) updatePayload.placeholderEnabled = data.placeholderEnabled;
 
         if (data.pruneBannerPosition !== undefined) updatePayload.pruneBannerPosition = data.pruneBannerPosition;
@@ -6227,6 +6234,11 @@ export async function getTrendingAndPlaceholderMediaAction(
         // 2. Query Radarr and Sonarr index with server-specific mapping
         const arrIndex = await getArrMonitoredIndex({ targetServerId: serverId });
         const now = new Date();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let bannerTemplates: Record<string, { text?: string; theme?: string; pos?: string; fontSize?: number }> = {};
+        if (settings?.placeholderBannerTemplates) {
+            try { bannerTemplates = JSON.parse(settings.placeholderBannerTemplates); } catch {}
+        }
 
         const formatNiceDate = (dStr?: string) => {
             if (!dStr) return "";
@@ -6256,9 +6268,10 @@ export async function getTrendingAndPlaceholderMediaAction(
             if (inLibrary) inLibraryCount++;
 
             // Radarr / Sonarr matching isolated by section type
-            let arrItem: ArrItemStatus | undefined;
-            if (isTvSection || item.mediaType === "tv") {
-                arrItem = (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+            let arrItem: any = undefined;
+            if (isTvSection) {
+                arrItem = ((item as any).tvdbId ? arrIndex.seriesByTvdb.get(String((item as any).tvdbId)) : undefined) ||
+                          (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
                           (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
             } else {
                 arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
@@ -6329,6 +6342,31 @@ export async function getTrendingAndPlaceholderMediaAction(
                 suggestedBannerTheme = "emerald-green";
                 statusBadgeText = "DOWNLOADING SOON";
                 statusBadgeColor = "emerald";
+            }
+
+            // Apply custom template override if saved
+            const customTpl = bannerTemplates[suggestedBannerType];
+            if (customTpl?.text) {
+                const daysToRel = item.digitalReleaseDate 
+                    ? Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                    : 14;
+                const formattedDate = item.digitalReleaseDate ? formatNiceDate(item.digitalReleaseDate).toUpperCase() : "";
+                suggestedBannerText = customTpl.text
+                    .replace(/\{date\}/gi, formattedDate)
+                    .replace(/\{days\}/gi, String(daysToRel))
+                    .replace(/\{days_until\}/gi, String(daysToRel))
+                    .replace(/\{title\}/gi, item.title)
+                    .replace(/\{year\}/gi, item.releaseDate ? item.releaseDate.split("-")[0] : "")
+                    .replace(/\{source\}/gi, category?.includes("netflix") ? "Netflix" : "Streaming")
+                    .replace(/\{network\}/gi, category?.includes("netflix") ? "Netflix" : "Streaming")
+                    .replace(/\{status\}/gi, "Coming Soon")
+                    .replace(/\{reason\}/gi, "Trending Release")
+                    .replace(/\{quality\}/gi, "4K UHD")
+                    .replace(/\{edition\}/gi, "Director's Cut")
+                    .replace(/\{genre\}/gi, (item as any).genres?.[0] || "Action");
+            }
+            if (customTpl?.theme) {
+                suggestedBannerTheme = customTpl.theme;
             }
 
             const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
@@ -6967,6 +7005,10 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
         const arrIndex = await getArrMonitoredIndex({ targetServerId: collection.serverId });
         const now = new Date();
         const placeholderDaysThreshold = settings?.placeholderDaysThreshold ?? 90;
+        let bannerTemplates: Record<string, { text?: string; theme?: string; pos?: string; fontSize?: number }> = {};
+        if (settings?.placeholderBannerTemplates) {
+            try { bannerTemplates = JSON.parse(settings.placeholderBannerTemplates); } catch {}
+        }
         let generatedCount = 0;
 
         for (const item of itemsToGenerate) {
@@ -7035,6 +7077,29 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     bannerType = "downloading_soon";
                 }
 
+                const customTpl = bannerTemplates[bannerType];
+                if (customTpl?.text) {
+                    const daysToRel = (digDate && digDate > now) ? Math.ceil((digDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 14;
+                    const dateFormatted = digDate ? digDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase() : "";
+                    bannerText = customTpl.text
+                        .replace(/\{date\}/gi, dateFormatted)
+                        .replace(/\{days\}/gi, String(daysToRel))
+                        .replace(/\{days_until\}/gi, String(daysToRel))
+                        .replace(/\{title\}/gi, item.title)
+                        .replace(/\{year\}/gi, relDate ? String(relDate.getFullYear()) : "")
+                        .replace(/\{source\}/gi, collection.sourceQuery?.includes("netflix") ? "Netflix" : "Streaming")
+                        .replace(/\{network\}/gi, collection.sourceQuery?.includes("netflix") ? "Netflix" : "Streaming")
+                        .replace(/\{status\}/gi, "Coming Soon")
+                        .replace(/\{reason\}/gi, "Collection Feature")
+                        .replace(/\{quality\}/gi, "4K UHD")
+                        .replace(/\{edition\}/gi, "Director's Cut");
+                }
+                if (customTpl?.theme) {
+                    bannerTheme = customTpl.theme;
+                }
+                const bannerPosition = (customTpl?.pos || "bottom") as "bottom" | "top" | "corner";
+                const bannerFontSize = customTpl?.fontSize || settings?.placeholderBannerFontSize || 44;
+
                 const year = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
 
                 await createPlaceholderItemInternal(serverId, collection.sectionKey || "", {
@@ -7047,7 +7112,8 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     bannerText,
                     bannerType,
                     bannerTheme,
-                    bannerPosition: "bottom"
+                    bannerPosition,
+                    bannerFontSize
                 });
 
                 generatedCount++;

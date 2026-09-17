@@ -88,6 +88,7 @@ model Settings {
   placeholderBannerTheme           String?   @default("indigo-purple") // "indigo-purple", "emerald-green", "crimson-red", "amber-gold", "glass"
   placeholderBannerFontSize        Int?      @default(44) // Default font size in px
   placeholderCustomText            String?   // Custom subtitle text
+  placeholderBannerTemplates       String?   // JSON map of banner preset ID -> { text, theme, pos, fontSize }
   placeholderEnabled               Boolean   @default(true)
   
   // Prune & Leaving Soon Banner Appearance Controls
