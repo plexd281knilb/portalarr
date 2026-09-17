@@ -1031,7 +1031,6 @@ function generateBannerSvg(
         const size = 420;
         const len = escapedText.length;
         const fontSize = len > 26 ? 20 : len > 20 ? 23 : len > 14 ? 26 : len > 8 ? 30 : 34;
-        const textYOffset = Math.round(fontSize * 0.35);
 
         let polyPoints = "";
         let cx = 210, cy = 210;
@@ -1043,28 +1042,28 @@ function generateBannerSvg(
 
         if (effectivePos === "top-right") {
             polyPoints = "100,0 420,320 420,420 0,0";
-            cx = 245;
+            cx = 235;
             cy = 185;
             rotAngle = 45;
             top = 0;
             left = 1000 - size;
         } else if (effectivePos === "top-left") {
             polyPoints = "320,0 0,320 0,420 420,0";
-            cx = 175;
+            cx = 185;
             cy = 185;
             rotAngle = -45;
             top = 0;
             left = 0;
         } else if (effectivePos === "bottom-right") {
             polyPoints = "0,420 420,0 420,100 100,420";
-            cx = 245;
+            cx = 235;
             cy = 235;
             rotAngle = -45;
             top = 1500 - size;
             left = 1000 - size;
         } else { // bottom-left
             polyPoints = "420,420 0,0 0,100 320,420";
-            cx = 175;
+            cx = 185;
             cy = 235;
             rotAngle = 45;
             top = 1500 - size;
@@ -1078,30 +1077,12 @@ function generateBannerSvg(
                     <stop offset="50%" stop-color="${colors.grad2}" />
                     <stop offset="100%" stop-color="${colors.grad3}" />
                 </linearGradient>
-                <style type="text/css">
-                    .corner-shadow {
-                        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                        font-size: ${fontSize}px;
-                        font-weight: 900;
-                        fill: #000000;
-                        text-anchor: middle;
-                    }
-                    .corner-fg {
-                        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                        font-size: ${fontSize}px;
-                        font-weight: 900;
-                        fill: ${colors.text || '#ffffff'};
-                        stroke: ${colors.accent || '#fca5a5'};
-                        stroke-width: 0.8px;
-                        text-anchor: middle;
-                    }
-                </style>
             </defs>
             <polygon points="${polyPoints}" fill="url(#cornerGrad)" />
             <g transform="rotate(${rotAngle} ${cx} ${cy})">
-                <text x="${cx + 1}" y="${cy + textYOffset + 2}" class="corner-shadow" opacity="0.9">${escapedText}</text>
-                <text x="${cx - 1}" y="${cy + textYOffset + 2}" class="corner-shadow" opacity="0.9">${escapedText}</text>
-                <text x="${cx}" y="${cy + textYOffset}" class="corner-fg">${escapedText}</text>
+                <text x="${cx + 1}" y="${cy + 2}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.95">${escapedText}</text>
+                <text x="${cx - 1}" y="${cy + 2}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.95">${escapedText}</text>
+                <text x="${cx}" y="${cy}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="0.8px">${escapedText}</text>
             </g>
         </svg>`;
 
@@ -1126,7 +1107,7 @@ function generateBannerSvg(
 
     const len = escapedText.length;
     const fontSize = len > 34 ? 32 : len > 22 ? 40 : 46;
-    const textY = Math.round(height / 2 + fontSize * 0.35);
+    const textY = Math.round(height / 2);
 
     const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -1142,24 +1123,6 @@ function generateBannerSvg(
                 <stop offset="75%" stop-color="${colors.accent}" stop-opacity="0.9" />
                 <stop offset="100%" stop-color="${colors.border}" stop-opacity="0.2" />
             </linearGradient>
-            <style type="text/css">
-                .banner-shadow {
-                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                    font-size: ${fontSize}px;
-                    font-weight: 900;
-                    fill: #000000;
-                    text-anchor: middle;
-                }
-                .banner-fg {
-                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                    font-size: ${fontSize}px;
-                    font-weight: 900;
-                    fill: ${colors.text || '#ffffff'};
-                    stroke: ${colors.accent || '#fca5a5'};
-                    stroke-width: 1px;
-                    text-anchor: middle;
-                }
-            </style>
         </defs>
         
         <rect x="0" y="0" width="${width}" height="${height}" fill="url(#bannerGrad)" />
@@ -1173,12 +1136,12 @@ function generateBannerSvg(
         }
 
         <!-- Deep Drop Shadows -->
-        <text x="502" y="${textY + 3}" class="banner-shadow" opacity="0.9">${escapedText}</text>
-        <text x="498" y="${textY + 3}" class="banner-shadow" opacity="0.9">${escapedText}</text>
-        <text x="500" y="${textY + 4}" class="banner-shadow" opacity="0.95">${escapedText}</text>
+        <text x="502" y="${textY + 3}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.9">${escapedText}</text>
+        <text x="498" y="${textY + 3}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.9">${escapedText}</text>
+        <text x="500" y="${textY + 4}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#000000" opacity="0.95">${escapedText}</text>
 
         <!-- Crisp High-Contrast Foreground Text Layer -->
-        <text x="500" y="${textY}" class="banner-fg">${escapedText}</text>
+        <text x="500" y="${textY}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="${fontSize}px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${colors.text || '#ffffff'}" stroke="${colors.accent || '#fca5a5'}" stroke-width="1px">${escapedText}</text>
     </svg>`;
 
     return { svg, width, height, top: topPos, left: 0 };
@@ -1206,23 +1169,6 @@ function generatePlaceholderBackdropSvg(title: string): string {
             <filter id="posterGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#000000" flood-opacity="0.8" />
             </filter>
-            <style type="text/css">
-                .backdrop-title {
-                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                    font-size: 44px;
-                    font-weight: 900;
-                    fill: #f8fafc;
-                    text-anchor: middle;
-                }
-                .backdrop-sub {
-                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                    font-size: 20px;
-                    font-weight: 700;
-                    letter-spacing: 3px;
-                    fill: #94a3b8;
-                    text-anchor: middle;
-                }
-            </style>
         </defs>
         
         <rect width="1000" height="1500" fill="url(#bgGrad)" />
@@ -1238,8 +1184,8 @@ function generatePlaceholderBackdropSvg(title: string): string {
         </g>
 
         <g filter="url(#posterGlow)">
-            <text x="500" y="780" class="backdrop-title">${escapedTitle}</text>
-            <text x="500" y="830" class="backdrop-sub">PORTALARR PREVIEW</text>
+            <text x="500" y="780" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="44px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#f8fafc">${escapedTitle}</text>
+            <text x="500" y="830" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="20px" font-weight="700" letter-spacing="3px" text-anchor="middle" dominant-baseline="central" fill="#94a3b8">PORTALARR PREVIEW</text>
         </g>
     </svg>`;
 }
@@ -1339,7 +1285,7 @@ export async function generatePlaceholderPosterBuffer(
         pipeline = sharp(baseBuffer).resize(width, height, { fit: "cover" });
     } else {
         const bgSvg = generatePlaceholderBackdropSvg(title);
-        pipeline = sharp(Buffer.from(bgSvg)).resize(width, height);
+        pipeline = sharp(Buffer.from(bgSvg)).png().resize(width, height);
     }
 
     const effectiveDays = options.daysRemaining !== undefined && options.daysRemaining !== null ? Number(options.daysRemaining) : 14;
@@ -1359,7 +1305,7 @@ export async function generatePlaceholderPosterBuffer(
     const bannerTheme = options.theme || "indigo-purple";
 
     const bannerInfo = generateBannerSvg(interpolatedText, bannerTheme, bannerPos);
-    const bannerBuffer = await sharp(Buffer.from(bannerInfo.svg)).toBuffer();
+    const bannerBuffer = await sharp(Buffer.from(bannerInfo.svg)).png().toBuffer();
 
     const composites = [
         {
@@ -1416,7 +1362,7 @@ export async function applyOverlaysToPoster(
         const bannerTheme = options.placeholderTheme || "crimson-red";
 
         const bannerInfo = generateBannerSvg(leavingText, bannerTheme, bannerPos as any);
-        const bannerBuf = await sharp(Buffer.from(bannerInfo.svg)).toBuffer();
+        const bannerBuf = await sharp(Buffer.from(bannerInfo.svg)).png().toBuffer();
         overlays.push({
             input: bannerBuf,
             top: Math.round(bannerInfo.top),
@@ -1488,7 +1434,7 @@ export async function applyOverlaysToPoster(
 
                     const bannerTheme = winningTheme === "gold" ? "amber-gold" : winningTheme === "crimson" ? "crimson-red" : winningTheme === "purple" ? "indigo-purple" : "amber-gold";
                     const bannerInfo = generateBannerSvg(ribbonText, bannerTheme, rPos);
-                    const ribbonBuf = await sharp(Buffer.from(bannerInfo.svg)).toBuffer();
+                    const ribbonBuf = await sharp(Buffer.from(bannerInfo.svg)).png().toBuffer();
 
                     overlays.push({
                         input: ribbonBuf,
