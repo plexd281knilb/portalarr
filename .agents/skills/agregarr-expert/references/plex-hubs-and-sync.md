@@ -97,14 +97,42 @@ PUT /hubs/sections/{librarySectionId}/manage/{hubIdentifier}?promotedToRecommend
 
 ---
 
-## 4. Sort Ordering & Priority Prefixes
+## 4. Sort Ordering, Hub Moving & Priority Prefixes
 
 To control the vertical positioning of custom collection hubs on the Plex Home screen:
+
+### Visual Hub Reordering (Drag & Drop)
+Plex natively supports reordering home screen hubs via the `/move` API:
+```http
+PUT /hubs/sections/{librarySectionId}/manage/{hubIdentifier}/move?after={afterHubIdentifier}
+```
+- For the first item at the top of Home, omit the `?after` query parameter.
+- `hubIdentifier`: `custom.collection.{librarySectionId}.{collectionRatingKey}` (for custom collections) or `hub:movie.recentlyadded.1` (for built-in hubs).
+
+### Sort Title Prefixes & Metadata Locking
 - Agregarr and Portalarr apply sort title prefixes to the collection's `titleSort` attribute:
-  - `!01_Trending Movies` (displays at the very top of Home)
-  - `!02_Coming Soon Monitored`
-  - `!03_Top Unwatched`
+  - `!00_Recent` (displays at the very top of Home)
+  - `!01_Released`
+  - `!02_Unwatched`
+  - `!03_Theatres`
+  - `!04_Dynamic`
 - API Call:
   ```http
   PUT /library/metadata/{collectionRatingKey}?type=18&id={collectionRatingKey}&titleSort.value={sortTitle}&titleSort.locked=1
   ```
+
+### Concurrency & Server Action Timeout Prevention
+- When reordering 10–20 hubs, execute database updates and visibility updates concurrently using `Promise.all` with a 4-second timeout per network call.
+- Avoid slow serialized waterfalls or spraying 10+ candidate URLs to prevent Next.js Server Action timeouts (`An unexpected response was received from the server`).
+
+---
+
+## 5. Fast Collection Deletion & Cascade
+
+When deleting a collection from Plex:
+- **Direct API Call**:
+  ```http
+  DELETE /library/metadata/{collectionRatingKey}
+  ```
+- **Internal PMS Cascade**: Plex Media Server automatically removes the collection tag from all associated media items internally in milliseconds.
+- **Rule**: Never download or sweep thousands of library items to untag them individually. Use direct `DELETE` with early exit on success.

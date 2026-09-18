@@ -68,3 +68,8 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
    - Always request 2:3 vertical poster proportions (`width=600&height=900`) on `/photo/:/transcode` to prevent PMS from cropping portrait artwork to landscape dimensions.
 5. **Session Stream Termination Fallback**:
    - When terminating active playback streams, verify user alias permissions and fall back from Tautulli to Direct PMS `DELETE /status/sessions/{sessionId}` if Tautulli is unavailable.
+6. **Fast Collection Deletion via PMS Cascade**:
+   - Deleting a collection via `DELETE /library/metadata/{ratingKey}` automatically unlinks all media items in Plex in ~10ms. Avoid pre-fetching and untagging items individually, as this triggers severe latency and Server Action timeouts.
+7. **Hub Reordering & Visibility Timeouts**:
+   - Use `PUT /hubs/sections/{sectionKey}/manage/{hubId}/move?after={afterHubId}` combined with locked `titleSort` prefixes to reorder hubs. Dispatch hub visibility updates concurrently (`Promise.all`) using 4s timeout guards (`AbortSignal.timeout(4000)`) to ensure Server Action resilience.
+

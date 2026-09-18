@@ -100,3 +100,10 @@ Agregarr manages metadata labels on items:
 4. **Smart Collections Reordering Failure**:
    - Cause: Smart collections in Plex are dynamically populated by Plex search filters. Attempting to call `/move` or `/items` on a smart collection will corrupt or error out.
    - Rule: Always check `isSmartCollection(ratingKey)`. Never call incremental item moves on smart collections.
+5. **Collection Deletion Latency & Server Action Timeouts**:
+   - Cause: Manually fetching and untagging thousands of media items prior to deleting a collection in Plex causes 30-40s latency spikes, resulting in Next.js Server Action timeout errors (*"An unexpected response was received from the server"*).
+   - Rule: Plex Media Server automatically cascades collection deletion to all items tagged with that collection in ~10ms. Always issue direct `DELETE /library/metadata/{ratingKey}` without pre-clearing tags.
+6. **Hub Reordering & Visibility Timeouts**:
+   - Use `PUT /hubs/sections/{sectionKey}/manage/{hubId}/move?after={afterHubId}` alongside locked `titleSort` prefixes for immediate, stable home screen positioning.
+   - Concurrently dispatch visibility updates (`promotedToOwnHome`, `promotedToSharedHome`, `promotedToRecommended`) using `Promise.all` wrapped in 4s timeout guards (`AbortSignal.timeout(4000)`) to prevent single unresponsive endpoints from stalling execution.
+

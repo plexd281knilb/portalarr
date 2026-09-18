@@ -55,6 +55,12 @@ PUT /library/collections/{collectionRatingKey}/items?uri={EncodedFilterUri}&X-Pl
 PUT /library/metadata/{collectionRatingKey}/prefs?collectionFilterBasedOnUser=1&X-Plex-Token={token}
 ```
 
+### Delete Collection (Instant Cascade)
+```http
+DELETE /library/metadata/{collectionRatingKey}?X-Plex-Token={token}
+```
+*Note*: Plex Media Server automatically cascades collection deletion to all member items and removes the collection tag across the entire library in ~10ms. Manual untagging loops across thousands of items are unnecessary and cause severe latency.
+
 ---
 
 ## 3. Home Screen & Recommended Hub Management
@@ -72,3 +78,17 @@ PUT /hubs/sections/{sectionKey}/manage/custom.collection.{sectionKey}.{collectio
 - `promotedToRecommended=1`: Shown in library Recommended view.
 - `promotedToOwnHome=1`: Shown on Server Owner Home screen.
 - `promotedToSharedHome=1`: Shown on Friends & Managed Users Home screens.
+
+### Reorder / Move Hub
+```http
+PUT /hubs/sections/{sectionKey}/manage/{hubIdentifier}/move?after={afterHubIdentifier}&X-Plex-Token={token}
+```
+- `hubIdentifier`: Hub ID to move (e.g. `custom.collection.1.12345` or native hub ID `movie.recentlyadded.1`).
+- `after`: Hub ID after which this hub should be positioned. Pass empty/omit to move to the very top.
+- *Best Practice*: Combine sequential `/move` calls with setting locked `titleSort` prefixes (e.g. `01 - Featured`, `02 - Trending`) on underlying collections to ensure persistent ordering across Plex Web and TV client refreshes.
+
+### Concurrency & Timeout Protection
+When synchronizing hub visibility and ordering across multiple collections:
+- Dispatch individual Plex API hub visibility calls concurrently with `Promise.all`.
+- Wrap requests in a 4-second timeout (`AbortSignal.timeout(4000)`) to prevent single unresponsive endpoints or transient network stalls from blocking Next.js Server Actions.
+
