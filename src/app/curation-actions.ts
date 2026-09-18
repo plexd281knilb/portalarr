@@ -1986,20 +1986,51 @@ export async function reorderPlexCollectionsAction(
     }>
 ) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
+        if (!serverId || !sectionKey) {
+            return { success: false, error: "Please select a Plex server and library section first." };
+        }
+
         const resolved = await resolveWorkingPlexServerConnection(serverId);
-        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
+        if (!resolved || !resolved.serverUrl) {
+            logger.addLog("WARN", "PLEX", `Could not resolve connection for Plex server "${serverId}". Check server URL and token.`);
+            return { success: false, error: "Plex server unreachable or token not configured." };
+        }
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
-
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+
+        logger.addLog("INFO", "PLEX", `Saving hub ordering and visibility for ${orderedCollections.length} collections/hubs on server "${resolved.serverName}" (section: ${sectionKey})...`);
+
         let updatedCount = 0;
 
         for (const item of orderedCollections) {
             const prefix = item.sortPrefix || `!${String(item.orderIndex).padStart(2, '0')}_`;
 
+            // 1. Safe DB lookup - handle if item was deleted or ID shifted
+            let existing = await prisma.mediaCollection.findUnique({
+                where: { id: item.id }
+            });
+
+            if (!existing && item.ratingKey) {
+                existing = await prisma.mediaCollection.findFirst({
+                    where: {
+                        ratingKey: item.ratingKey,
+                        serverId,
+                        sectionKey: String(sectionKey)
+                    }
+                });
+            }
+
+            if (!existing) {
+                logger.addLog("INFO", "PLEX", `Skipping hub order for "${item.ratingKey || item.id}" (not in database or recently dismissed).`);
+                continue;
+            }
+
+            // 2. Safe DB update
             const updated = await prisma.mediaCollection.update({
-                where: { id: item.id },
+                where: { id: existing.id },
                 data: {
                     orderIndex: item.orderIndex,
                     sortPrefix: prefix,
@@ -2010,32 +2041,40 @@ export async function reorderPlexCollectionsAction(
                 }
             });
 
-            if (serverUrl && updated.ratingKey) {
-                const effectiveSortTitle = `${prefix}${updated.sortTitle || updated.title}`;
-                await updatePlexCollectionPromotionAndOrder(
-                    urlsToTry,
-                    token,
-                    sectionKey,
-                    updated.ratingKey,
-                    {
-                        sortTitle: effectiveSortTitle,
-                        promotedToHome: item.promotedToHome ?? true,
-                        promotedToRecommended: item.promotedToRecommended ?? true,
-                        promotedToSharedHome: item.promotedToSharedHome ?? true,
-                        collectionMode: item.collectionMode || "default"
-                    }
-                );
-                updatedCount++;
+            // 3. Push order and visibility to PMS
+            if (updated.ratingKey) {
+                try {
+                    const effectiveSortTitle = `${prefix}${updated.sortTitle || updated.title}`;
+                    await updatePlexCollectionPromotionAndOrder(
+                        urlsToTry,
+                        token,
+                        sectionKey,
+                        updated.ratingKey,
+                        {
+                            sortTitle: effectiveSortTitle,
+                            promotedToHome: item.promotedToHome ?? true,
+                            promotedToRecommended: item.promotedToRecommended ?? true,
+                            promotedToSharedHome: item.promotedToSharedHome ?? true,
+                            collectionMode: item.collectionMode || "default"
+                        }
+                    );
+                    logger.addLog("INFO", "PLEX", `Synced Plex collection/hub "${updated.title}" order (#${item.orderIndex}, prefix: "${prefix}") on server "${resolved.serverName}"`);
+                    updatedCount++;
+                } catch (itemPlexErr: any) {
+                    logger.addLog("WARN", "PLEX", `Could not update Plex promotion for "${updated.title}": ${itemPlexErr.message}`);
+                }
             }
         }
 
-        logger.addLog("SUCCESS", "PLEX", `Reordered ${orderedCollections.length} collections on Plex Home Screen.`);
+        logger.addLog("SUCCESS", "PLEX", `Reordered & synced ${updatedCount} collections/hubs on Plex server "${resolved.serverName}" (section ${sectionKey}).`);
         return {
             success: true,
-            message: `Updated ordering and home visibility for ${orderedCollections.length} collections.`
+            updatedCount,
+            message: `Updated ordering and home visibility for ${updatedCount} collections/hubs.`
         };
     } catch (e: any) {
-        return { success: false, error: e.message };
+        logger.addLog("ERROR", "PLEX", `Failed reordering collections on Plex Home Screen: ${e.message}`);
+        return { success: false, error: e.message || "Failed saving hub ordering." };
     }
 }
 
@@ -2208,6 +2247,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
+        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const enabledServersForCollections: string[] = settings?.enabledServersForCollections
@@ -2217,6 +2257,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         const serverIdCandidates = [serverId, resolved?.serverId, "main"].filter(Boolean) as string[];
         let allCollections = await prisma.mediaCollection.findMany({
             where: {
+                isIgnored: false,
                 ...(serverId ? { serverId: { in: serverIdCandidates } } : {}),
                 ...(sectionKey ? { sectionKey: String(sectionKey) } : {})
             }
@@ -2225,10 +2266,13 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         if (allCollections.length === 0 && serverId) {
             allCollections = await prisma.mediaCollection.findMany({
                 where: {
+                    isIgnored: false,
                     serverId: { in: serverIdCandidates }
                 }
             });
         }
+
+        logger.addLog("INFO", "CURATION", `Starting seasonal & scheduled collection sync for ${allCollections.length} collections on server "${resolved.serverName}"...`);
 
         const now = new Date();
         const curMonth = now.getMonth() + 1; // 1-12
@@ -2315,11 +2359,11 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                         }
                     }
 
-                    if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                    if (coll.ratingKey && coll.sectionKey) {
                         const prefix = coll.sortPrefix || `!02_Schedule_`;
                         const effectiveSort = `${prefix}${coll.sortTitle || coll.title}`;
                         await updatePlexCollectionPromotionAndOrder(
-                            serverUrl,
+                            urlsToTry,
                             token,
                             coll.sectionKey,
                             coll.ratingKey,
@@ -2330,7 +2374,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                                 promotedToSharedHome: coll.promotedToSharedHome,
                                 collectionMode: coll.collectionMode || "default"
                             }
-                        );
+                        ).catch(() => {});
                     } else if (!coll.ratingKey) {
                         // Auto-sync collection if not yet created on Plex
                         await syncCollectionToPlexAction(coll.id).catch(() => {});
@@ -2346,9 +2390,9 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                         data: { promotedToHome: !shouldHide }
                     });
 
-                    if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                    if (coll.ratingKey && coll.sectionKey) {
                         await updatePlexCollectionPromotionAndOrder(
-                            serverUrl,
+                            urlsToTry,
                             token,
                             coll.sectionKey,
                             coll.ratingKey,
@@ -2357,7 +2401,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                                 promotedToRecommended: !shouldHide,
                                 collectionMode: coll.collectionMode || "default"
                             }
-                        );
+                        ).catch(() => {});
                     }
 
                     results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of Schedule/Season)" : "Demoted" });
@@ -2379,10 +2423,10 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                 if (!coll.ratingKey || coll.sourceType !== "plex_native") {
                     // Auto-sync dynamic collection to Plex to refresh contents & ordering
                     await syncCollectionToPlexAction(coll.id).catch(() => {});
-                } else if (serverUrl && coll.ratingKey && coll.sectionKey) {
+                } else if (coll.ratingKey && coll.sectionKey) {
                     const sortTitle = `${coll.sortPrefix || "!00_"}${coll.sortTitle || coll.title}`;
                     await updatePlexCollectionPromotionAndOrder(
-                        serverUrl,
+                        urlsToTry,
                         token,
                         coll.sectionKey,
                         coll.ratingKey,
@@ -2411,7 +2455,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
             console.warn("[CURATION-SYNC] Error in placeholder auto-cleanup:", cleanErr.message);
         }
 
-        logger.addLog("INFO", "CURATION", `Evaluated & synced ${allCollections.length} collections and hubs.`);
+        logger.addLog("SUCCESS", "CURATION", `Evaluated & synced ${allCollections.length} collections and hubs on server "${resolved.serverName}".`);
         return {
             success: true,
             evaluatedCount: allCollections.length,
@@ -2419,6 +2463,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
             message: `Evaluated & synced ${allCollections.length} collections and hubs.`
         };
     } catch (e: any) {
+        logger.addLog("ERROR", "CURATION", `Error syncing seasonal & scheduled collections: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -7981,7 +8026,7 @@ export async function deployFilteredSmartHubAction(
     sectionKey: string,
     subtype: FilteredHubSubtype = "recently_added",
     customTitle?: string
-): Promise<{ success: boolean; message: string; collectionRatingKey?: string }> {
+): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string }> {
     await verifyAdmin();
     await ensureSchemaColumns();
     try {
@@ -8223,26 +8268,26 @@ export async function deployFilteredSmartHubAction(
         };
     } catch (e: any) {
         logger.addLog("ERROR", "PLEX", `Failed deploying filtered smart hub (${subtype}): ${e.message}`);
-        return { success: false, message: e.message };
+        return { success: false, error: e.message, message: e.message };
     }
 }
 
 export async function deployFilteredRecentlyAddedHubAction(
     serverId: string,
     sectionKey: string
-): Promise<{ success: boolean; message: string; collectionRatingKey?: string }> {
+): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string }> {
     return await deployFilteredSmartHubAction(serverId, sectionKey, "recently_added");
 }
 
 export async function deployAllFilteredSmartHubsAction(
     serverId: string,
     sectionKey: string
-): Promise<{ success: boolean; message: string; results: any[] }> {
+): Promise<{ success: boolean; message: string; error?: string; results: any[] }> {
     await verifyAdmin();
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) {
-            return { success: false, message: "Could not connect to Plex server.", results: [] };
+            return { success: false, error: "Could not connect to Plex server.", message: "Could not connect to Plex server.", results: [] };
         }
         const sections = await getPlexServerSections(resolved.token, serverId, resolved.serverUrl);
         const sec = sections.find(s => String(s.key) === String(sectionKey));
@@ -8265,7 +8310,7 @@ export async function deployAllFilteredSmartHubsAction(
             results
         };
     } catch (e: any) {
-        return { success: false, message: e.message, results: [] };
+        return { success: false, error: e.message, message: e.message, results: [] };
     }
 }
 

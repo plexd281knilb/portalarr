@@ -600,6 +600,11 @@ export function AgregarrStudio() {
     };
 
     const handleSaveCollectionOrder = async () => {
+        if (!selectedServerId || !selectedSectionKey) {
+            setOrderSavedMsg("⚠️ Please select a Plex server and library section first.");
+            setTimeout(() => setOrderSavedMsg(null), 4000);
+            return;
+        }
         setSavingOrder(true);
         setOrderSavedMsg(null);
         try {
@@ -619,10 +624,11 @@ export function AgregarrStudio() {
                 setOrderSavedMsg("✓ Plex Home Screen Hub ordering updated successfully!");
                 setTimeout(() => setOrderSavedMsg(null), 4000);
             } else {
-                setOrderSavedMsg(res.error || "Failed saving order.");
+                setOrderSavedMsg(`⚠️ ${res.error || "Failed saving order."}`);
             }
         } catch (e: any) {
-            setOrderSavedMsg(e.message || "Failed saving order.");
+            console.error("Save collection order error:", e);
+            setOrderSavedMsg(`⚠️ ${e.message || "Failed saving order."}`);
         } finally {
             setSavingOrder(false);
         }
@@ -714,9 +720,12 @@ export function AgregarrStudio() {
                     setPlacementModalOpen(false);
                     loadCollections();
                 }, 1000);
+            } else {
+                setPlacementSavedMsg(`⚠️ ${res.error || "Failed saving placement."}`);
             }
         } catch (err: any) {
             console.error("Failed saving placement:", err);
+            setPlacementSavedMsg(`⚠️ ${err.message || "Failed saving placement."}`);
         } finally {
             setSavingPlacement(false);
         }

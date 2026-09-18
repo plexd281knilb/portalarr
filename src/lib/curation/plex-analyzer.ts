@@ -1855,12 +1855,30 @@ export async function updatePlexCollectionPromotionAndOrder(
         collectionMode?: string;
     }
 ): Promise<{ success: boolean; message?: string }> {
-    if (collectionRatingKey.startsWith("hub:")) {
-        return { success: true, message: "Hub promotion setting recorded." };
-    }
-
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastError: any = null;
+
+    if (collectionRatingKey.startsWith("hub:")) {
+        const hubId = collectionRatingKey.replace("hub:", "");
+        const recVal = options.promotedToRecommended ? "1" : "0";
+        const homeVal = options.promotedToHome ? "1" : "0";
+        const sharedVal = options.promotedToSharedHome ? "1" : "0";
+
+        for (const cleanBase of urlsToTry) {
+            try {
+                const hubUrls = [
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(hubId)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?identifier=${encodeURIComponent(hubId)}&promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`,
+                    `${cleanBase}/hubs/promoted/manage?identifier=${encodeURIComponent(hubId)}&promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToHome=${homeVal}&X-Plex-Token=${encodeURIComponent(token)}`
+                ];
+                for (const u of hubUrls) {
+                    await fetch(u, { method: "PUT", headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" } }).catch(() => {});
+                    await fetch(u, { method: "POST", headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" } }).catch(() => {});
+                }
+            } catch {}
+        }
+        return { success: true, message: `Updated Plex Hub "${hubId}" visibility.` };
+    }
 
     for (const cleanBase of urlsToTry) {
         try {
