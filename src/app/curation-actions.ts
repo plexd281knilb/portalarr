@@ -4129,7 +4129,14 @@ export async function applyOverlaysToLibraryInternal(
                 isLeavingSoon: true
             }
         }).catch(() => []);
-        const leavingSoonKeys = new Set(leavingSoonAdvisories.map(a => String(a.ratingKey)));
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        const advisoryMap = new Map(leavingSoonAdvisories.map(a => [String(a.ratingKey), a]));
+        const pruneBannerText = settings?.pruneBannerText || "LEAVING ON {date}";
+        const pruneBannerTheme = settings?.pruneBannerTheme || "crimson-red";
+        const pruneBannerPosition = settings?.pruneBannerPosition || "bottom";
+        const pruneDaysNotice = settings?.pruneDaysNotice ?? 14;
+        const pruneApplyOverlays = settings?.pruneApplyOverlays ?? true;
+        const pruneBannerFontSize = settings?.pruneBannerFontSize ?? 44;
 
         // Retrieve existing artwork backups for this server to track applied hashes and timestamps
         const existingBackups = await prisma.mediaArtBackup.findMany({
@@ -4147,6 +4154,7 @@ export async function applyOverlaysToLibraryInternal(
             isUpgrade: boolean;
             reason: string;
             priority: number;
+            options: OverlayOptions;
         }
 
         const candidatesNeedingUpdate: CandidateItem[] = [];
@@ -4166,14 +4174,49 @@ export async function applyOverlaysToLibraryInternal(
                 continue;
             }
 
-            // Strictly exclude items currently staged as Leaving Soon by Prune Studio so their Leaving Soon banner / countdown is never altered or overwritten
-            if (
-                leavingSoonKeys.has(String(it.ratingKey)) ||
-                it.isLeavingSoon ||
-                it.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) ||
+            const adv = advisoryMap.get(String(it.ratingKey));
+            const isLeaving = Boolean(
+                adv || 
+                it.isLeavingSoon || 
+                it.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || 
                 it.collections?.some(c => /leaving[\s_-]?soon/i.test(c))
-            ) {
-                continue;
+            );
+
+            let itemOverlayOpts: OverlayOptions;
+
+            if (isLeaving) {
+                it.isLeavingSoon = true;
+                if (pruneApplyOverlays) {
+                    const daysLeft = adv?.leavingSoonDate
+                        ? Math.max(1, Math.ceil((new Date(adv.leavingSoonDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+                        : pruneDaysNotice;
+                    const effectiveDateStr = adv?.leavingSoonDate
+                        ? new Date(adv.leavingSoonDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        : new Date(Date.now() + daysLeft * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+                    // Leaving Soon items receive full Kometa media badges PLUS Maintainerr Leaving Soon banner
+                    itemOverlayOpts = {
+                        ...overlayOpts,
+                        showLeavingSoon: true,
+                        leavingSoonDays: daysLeft,
+                        digitalReleaseDate: effectiveDateStr,
+                        placeholderText: pruneBannerText,
+                        placeholderTheme: pruneBannerTheme,
+                        placeholderPosition: pruneBannerPosition,
+                        bannerFontSize: pruneBannerFontSize,
+                        placeholderFontSize: pruneBannerFontSize
+                    };
+                } else {
+                    itemOverlayOpts = {
+                        ...overlayOpts,
+                        showLeavingSoon: false
+                    };
+                }
+            } else {
+                itemOverlayOpts = {
+                    ...overlayOpts,
+                    showLeavingSoon: false
+                };
             }
 
             const hasOverlayOpportunity = Boolean(
@@ -4183,8 +4226,8 @@ export async function applyOverlaysToLibraryInternal(
                 it.detectedBadges?.edition ||
                 it.detectedBadges?.studio ||
                 it.detectedBadges?.contentRating ||
-                overlayOpts.showRibbon ||
-                it.isLeavingSoon ||
+                itemOverlayOpts.showRibbon ||
+                (isLeaving && pruneApplyOverlays) ||
                 activeCustomBadges.length > 0
             );
 
@@ -4192,7 +4235,7 @@ export async function applyOverlaysToLibraryInternal(
                 continue;
             }
 
-            const currentHash = computeMediaOverlayHash(it, overlayOpts);
+            const currentHash = computeMediaOverlayHash(it, itemOverlayOpts);
             const backup = backupMap.get(String(it.ratingKey));
 
             let needsUpdate = false;
@@ -4246,7 +4289,8 @@ export async function applyOverlaysToLibraryInternal(
                     isNew: !backup,
                     isUpgrade: Boolean(backup && backup.mediaHash && backup.mediaHash !== currentHash),
                     reason,
-                    priority
+                    priority,
+                    options: itemOverlayOpts
                 });
             } else {
                 alreadyUpToDateCount++;
@@ -4266,7 +4310,7 @@ export async function applyOverlaysToLibraryInternal(
 
         for (const candidate of batchToProcess) {
             const it = candidate.item;
-            const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, overlayOpts, true);
+            const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, candidate.options, true);
             if (res.success) {
                 successCount++;
                 if (res.upgraded || candidate.isUpgrade) {
