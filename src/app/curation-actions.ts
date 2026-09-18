@@ -9238,15 +9238,8 @@ export async function cleanupAvailablePlaceholdersInternal(
 
                     const cleanTitle = itemTitle.toLowerCase().trim();
                     const titleWithYear = itemYear ? `${cleanTitle} (${itemYear})` : cleanTitle;
-
-                    // 3. Determine if media is now present in the Plex library or is stale legacy backlog
+                    // 3. Determine if media is now present in the Plex library
                     let isAvailable = false;
-                    let isStaleLegacy = false;
-                    const itemYearNum = itemYear ? parseInt(itemYear, 10) : 0;
-                    if (itemYearNum > 0 && itemYearNum < (new Date().getFullYear() - 1)) {
-                        // Stale legacy backlog from previous years (e.g. 2001-2023)
-                        isStaleLegacy = true;
-                    }
 
                     if (itemTmdbId && libraryTmdbIds.has(itemTmdbId)) {
                         isAvailable = true;
@@ -9256,8 +9249,8 @@ export async function cleanupAvailablePlaceholdersInternal(
                         isAvailable = true;
                     }
 
-                    if (isAvailable || isStaleLegacy) {
-                        // Clean up placeholder directory on disk
+                    if (isAvailable) {
+                        // Clean up placeholder directory on disk because real media is now acquired in Plex
                         try {
                             try { fs.chmodSync(folderPath, 0o777); } catch {}
                             setPermissionsRecursive(folderPath, 0o777, 0o666);
@@ -9274,10 +9267,7 @@ export async function cleanupAvailablePlaceholdersInternal(
                                 });
                             }
 
-                            const reasonStr = isAvailable 
-                                ? "full media is now available in Plex" 
-                                : "legacy catalog release year is older than Coming Soon threshold";
-                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because ${reasonStr}.`);
+                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because full media is now available in Plex.`);
                         } catch (rmErr: any) {
                             console.error(`[PLACEHOLDER-CLEANUP] Failed removing folder "${folderPath}":`, rmErr);
                         }
