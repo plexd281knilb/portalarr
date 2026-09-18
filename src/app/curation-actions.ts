@@ -1136,9 +1136,9 @@ export async function importPlexLibraryCollectionsAction(serverId?: string, sect
                         itemCount: pColl.childCount || 0,
                         summary: match.summary || pColl.summary || undefined,
                         posterUrl: match.posterUrl || pColl.thumb || undefined,
-                        promotedToHome: pColl.promotedToHome ?? match.promotedToHome,
-                        promotedToRecommended: pColl.promotedToRecommended ?? match.promotedToRecommended,
-                        promotedToSharedHome: pColl.promotedToSharedHome ?? match.promotedToSharedHome,
+                        promotedToHome: match.promotedToHome ?? pColl.promotedToHome ?? true,
+                        promotedToRecommended: match.promotedToRecommended ?? pColl.promotedToRecommended ?? true,
+                        promotedToSharedHome: match.promotedToSharedHome ?? pColl.promotedToSharedHome ?? true,
                         lastSyncedAt: new Date()
                     }
                 });
