@@ -1282,7 +1282,7 @@ export async function saveMediaCollectionAction(data: {
     }
 }
 
-export async function syncCollectionToPlexAction(collectionId: string): Promise<{
+export async function syncCollectionToPlexInternal(collectionId: string): Promise<{
     success: boolean;
     message?: string;
     error?: string;
@@ -1291,8 +1291,7 @@ export async function syncCollectionToPlexAction(collectionId: string): Promise<
     collectionRatingKey?: string;
 }> {
     try {
-
-        await verifyAdmin();
+        await ensureSchemaColumns();
         const collection = await prisma.mediaCollection.findUnique({
             where: { id: collectionId }
         });
@@ -1311,10 +1310,10 @@ export async function syncCollectionToPlexAction(collectionId: string): Promise<
 
         logger.addLog("INFO", "PLEX", `Syncing collection/hub "${collection.title}" (section: ${collection.sectionKey}, server: "${resolved.serverName}"). Trying endpoints: ${urlsToTry.join(", ")}`);
 
-        // 1. If this is a Smart Hub collection, deploy/update via deployFilteredSmartHubAction
+        // 1. If this is a Smart Hub collection, deploy/update via deployFilteredSmartHubInternal
         if (collection.sourceType === "plex_smart" || collection.category === "Plex Smart") {
             const subtype = (collection.sourceQuery || "recently_added") as any;
-            const deployRes = await deployFilteredSmartHubAction(
+            const deployRes = await deployFilteredSmartHubInternal(
                 collection.serverId || "",
                 collection.sectionKey || "",
                 subtype,
@@ -1732,7 +1731,7 @@ export async function syncCollectionToPlexAction(collectionId: string): Promise<
                 console.warn("[SONARR-COLL-SYNC] Error querying Sonarr:", sErr.message);
             }
         } else if (collection.sourceType === "plex_smart") {
-            const deployRes = await deployFilteredSmartHubAction(
+            const deployRes = await deployFilteredSmartHubInternal(
                 collection.serverId || "",
                 collection.sectionKey || "",
                 (collection.sourceQuery || "recently_added") as any,
@@ -1834,6 +1833,22 @@ export async function syncCollectionToPlexAction(collectionId: string): Promise<
         };
     } catch (e: any) {
         logger.addLog("ERROR", "PLEX", `Sync collection "${collectionId}" failed: ${e.message}`);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function syncCollectionToPlexAction(collectionId: string): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    itemCount?: number;
+    placeholdersGenerated?: number;
+    collectionRatingKey?: string;
+}> {
+    try {
+        await verifyAdmin();
+        return await syncCollectionToPlexInternal(collectionId);
+    } catch (e: any) {
         return { success: false, error: e.message };
     }
 }
@@ -2669,7 +2684,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                         ).catch(() => {});
                     } else if (!coll.ratingKey) {
                         // Auto-sync collection if not yet created on Plex
-                        await syncCollectionToPlexAction(coll.id).catch(() => {});
+                        await syncCollectionToPlexInternal(coll.id).catch(() => {});
                     }
 
                     results.push({ title: coll.title, active: true, action: `Promoted to Plex Home & Recommended (Schedule Active)${placeholderNotes}` });
@@ -2714,7 +2729,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
 
                 if (!coll.ratingKey || coll.sourceType !== "plex_native") {
                     // Auto-sync dynamic collection to Plex to refresh contents & ordering
-                    await syncCollectionToPlexAction(coll.id).catch(() => {});
+                    await syncCollectionToPlexInternal(coll.id).catch(() => {});
                 } else if (coll.ratingKey && coll.sectionKey) {
                     const sortTitle = `${coll.sortPrefix || "!00_"}${coll.sortTitle || coll.title}`;
                     await updatePlexCollectionPromotionAndOrder(
@@ -8475,7 +8490,7 @@ export async function tagAllPlaceholdersInPlexAction(
  */
 export type FilteredHubSubtype = "recently_added" | "recently_released" | "recently_released_episodes" | "top_unwatched";
 
-export async function deployFilteredSmartHubAction(
+export async function deployFilteredSmartHubInternal(
     serverId: string,
     sectionKey: string,
     subtype: FilteredHubSubtype = "recently_added",
@@ -8483,9 +8498,6 @@ export async function deployFilteredSmartHubAction(
     maxItems: number = 25
 ): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string; itemCount?: number }> {
     try {
-
-        await verifyAdmin();
-
         await ensureSchemaColumns();
         // Step 1: Run placeholder sweep to ensure all existing placeholders on this server are tagged with trailer-placeholder label
         try {
@@ -8785,6 +8797,21 @@ export async function deployFilteredSmartHubAction(
     }
 }
 
+export async function deployFilteredSmartHubAction(
+    serverId: string,
+    sectionKey: string,
+    subtype: FilteredHubSubtype = "recently_added",
+    customTitle?: string,
+    maxItems: number = 25
+): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string; itemCount?: number }> {
+    try {
+        await verifyAdmin();
+        return await deployFilteredSmartHubInternal(serverId, sectionKey, subtype, customTitle, maxItems);
+    } catch (e: any) {
+        return { success: false, message: e.message, error: e.message };
+    }
+}
+
 export async function deployFilteredRecentlyAddedHubAction(
     serverId: string,
     sectionKey: string
@@ -8813,7 +8840,7 @@ export async function deployAllFilteredSmartHubsAction(
 
         const results: any[] = [];
         for (const st of subtypes) {
-            const res = await deployFilteredSmartHubAction(serverId, sectionKey, st);
+            const res = await deployFilteredSmartHubInternal(serverId, sectionKey, st);
             results.push({ subtype: st, ...res });
         }
 
