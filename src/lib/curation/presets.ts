@@ -2,11 +2,11 @@ export interface CollectionPreset {
     id: string;
     title: string;
     type: "curated" | "smart" | "schedule" | "dynamic" | "custom" | "seasonal";
-    category: "awards" | "franchise" | "studio" | "decade" | "holiday" | "quality" | "dynamic";
+    category: "awards" | "franchise" | "studio" | "decade" | "holiday" | "quality" | "dynamic" | "arr" | "filtered_hub";
     description: string;
     icon: string;
     defaultPosterUrl?: string;
-    sourceType: "tmdb" | "trakt" | "mdblist" | "plex_query" | "manual";
+    sourceType: "tmdb" | "trakt" | "mdblist" | "plex_query" | "plex_smart" | "radarr" | "sonarr" | "manual";
     sourceQuery?: string;
     mediaType: "movie" | "show" | "both";
     defaultSort?: "release" | "rating" | "title" | "random" | "custom";
@@ -462,6 +462,235 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "release",
         defaultHomeOrder: 3,
         defaultSortPrefix: "!03_NewReleases"
+    },
+
+    // 📡 SERVARR (RADARR & SONARR) MONITORED COMING SOON
+    {
+        id: "radarr-coming-soon",
+        title: "Coming Soon (Radarr Monitored)",
+        type: "dynamic",
+        category: "arr",
+        description: "Upcoming & unreleased movies monitored in Radarr with placeholder trailer stubs and countdown overlays.",
+        icon: "Clock",
+        sourceType: "radarr",
+        sourceQuery: "monitored_missing",
+        mediaType: "movie",
+        defaultSort: "release",
+        defaultIncludePlaceholders: true,
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_ComingSoon"
+    },
+    {
+        id: "sonarr-coming-soon",
+        title: "Coming Soon (Sonarr Monitored)",
+        type: "dynamic",
+        category: "arr",
+        description: "Upcoming & premiering TV series monitored in Sonarr with placeholder stubs and premiere date overlays.",
+        icon: "Tv",
+        sourceType: "sonarr",
+        sourceQuery: "monitored_missing",
+        mediaType: "show",
+        defaultSort: "release",
+        defaultIncludePlaceholders: true,
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_ComingSoon"
+    },
+    {
+        id: "radarr-tag-collection",
+        title: "Radarr Tag Collection",
+        type: "curated",
+        category: "arr",
+        description: "Movies grouped by custom tag configured in Radarr.",
+        icon: "Tag",
+        sourceType: "radarr",
+        sourceQuery: "tag",
+        mediaType: "movie",
+        defaultSort: "release",
+        defaultHomeOrder: 20,
+        defaultSortPrefix: "!20_"
+    },
+    {
+        id: "sonarr-tag-collection",
+        title: "Sonarr Tag Collection",
+        type: "curated",
+        category: "arr",
+        description: "TV series grouped by custom tag configured in Sonarr.",
+        icon: "Tag",
+        sourceType: "sonarr",
+        sourceQuery: "tag",
+        mediaType: "show",
+        defaultSort: "release",
+        defaultHomeOrder: 21,
+        defaultSortPrefix: "!21_"
+    },
+
+    // 🚀 ANTICIPATED & DISCOVERY
+    {
+        id: "trakt-anticipated-movies",
+        title: "Trakt Most Anticipated Movies",
+        type: "dynamic",
+        category: "dynamic",
+        description: "The most anticipated upcoming movies according to global Trakt user watchlists and votes.",
+        icon: "Compass",
+        sourceType: "trakt",
+        sourceQuery: "anticipated",
+        mediaType: "movie",
+        defaultSort: "release",
+        defaultIncludePlaceholders: true,
+        defaultHomeOrder: 3,
+        defaultSortPrefix: "!03_Anticipated"
+    },
+    {
+        id: "trakt-anticipated-tv",
+        title: "Trakt Most Anticipated TV Shows",
+        type: "dynamic",
+        category: "dynamic",
+        description: "The most anticipated upcoming and returning TV shows on Trakt.",
+        icon: "Compass",
+        sourceType: "trakt",
+        sourceQuery: "anticipated",
+        mediaType: "show",
+        defaultSort: "release",
+        defaultIncludePlaceholders: true,
+        defaultHomeOrder: 3,
+        defaultSortPrefix: "!03_Anticipated"
+    },
+    {
+        id: "tmdb-in-theatres",
+        title: "In Theatres & Coming Soon",
+        type: "dynamic",
+        category: "dynamic",
+        description: "New theatrical releases currently in cinemas and upcoming blockbusters with trailers.",
+        icon: "Film",
+        sourceType: "tmdb",
+        sourceQuery: "in_theatres",
+        mediaType: "movie",
+        defaultSort: "release",
+        defaultIncludePlaceholders: true,
+        defaultHomeOrder: 3,
+        defaultSortPrefix: "!03_Theatres"
+    },
+
+    // 🧹 FILTERED SMART HUBS (EXCLUDE PLACEHOLDERS & TRAILERS)
+    {
+        id: "filtered-recently-added-movies",
+        title: "Recently Added Movies (Filtered)",
+        type: "smart",
+        category: "filtered_hub",
+        description: "Plex smart hub replicating Recently Added Movies, strictly excluding trailer placeholders from user carousels.",
+        icon: "Clapperboard",
+        sourceType: "plex_smart",
+        sourceQuery: "recently_added",
+        mediaType: "movie",
+        defaultSort: "release",
+        defaultHomeOrder: 0,
+        defaultSortPrefix: "!00_Recent",
+        defaultExcludedLabels: "trailer-placeholder"
+    },
+    {
+        id: "filtered-recently-added-tv",
+        title: "Recently Added TV (Filtered)",
+        type: "smart",
+        category: "filtered_hub",
+        description: "Plex smart hub replicating Recently Added TV, excluding trailer placeholder episode stubs from user carousels.",
+        icon: "Tv",
+        sourceType: "plex_smart",
+        sourceQuery: "recently_added",
+        mediaType: "show",
+        defaultSort: "release",
+        defaultHomeOrder: 0,
+        defaultSortPrefix: "!00_Recent",
+        defaultExcludedLabels: "trailer-placeholder"
+    },
+    {
+        id: "filtered-recently-released-movies",
+        title: "Recently Released Movies (Filtered)",
+        type: "smart",
+        category: "filtered_hub",
+        description: "Plex smart hub sorting movies by official release date, excluding coming soon placeholders.",
+        icon: "Sparkles",
+        sourceType: "plex_smart",
+        sourceQuery: "recently_released",
+        mediaType: "movie",
+        defaultSort: "release",
+        defaultHomeOrder: 1,
+        defaultSortPrefix: "!01_Released",
+        defaultExcludedLabels: "trailer-placeholder"
+    },
+    {
+        id: "filtered-recently-released-tv",
+        title: "Recently Released Episodes (Filtered)",
+        type: "smart",
+        category: "filtered_hub",
+        description: "Plex smart hub sorting TV series by latest episode air date, excluding trailer placeholder stubs.",
+        icon: "Radio",
+        sourceType: "plex_smart",
+        sourceQuery: "recently_released_episodes",
+        mediaType: "show",
+        defaultSort: "release",
+        defaultHomeOrder: 1,
+        defaultSortPrefix: "!01_Released",
+        defaultExcludedLabels: "trailer-placeholder"
+    },
+    {
+        id: "filtered-top-unwatched-movies",
+        title: "Top Unwatched Movies (Filtered)",
+        type: "smart",
+        category: "filtered_hub",
+        description: "Plex smart collection filtered per-user for unwatched movies, excluding placeholder stubs.",
+        icon: "Eye",
+        sourceType: "plex_smart",
+        sourceQuery: "top_unwatched",
+        mediaType: "movie",
+        defaultSort: "rating",
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_Unwatched",
+        defaultExcludedLabels: "trailer-placeholder"
+    },
+    {
+        id: "filtered-top-unwatched-tv",
+        title: "Top Unwatched TV Shows (Filtered)",
+        type: "smart",
+        category: "filtered_hub",
+        description: "Plex smart collection filtered per-user for shows with unwatched episodes, excluding placeholders.",
+        icon: "Eye",
+        sourceType: "plex_smart",
+        sourceQuery: "top_unwatched",
+        mediaType: "show",
+        defaultSort: "rating",
+        defaultHomeOrder: 2,
+        defaultSortPrefix: "!02_Unwatched",
+        defaultExcludedLabels: "trailer-placeholder"
+    },
+
+    // ⭐ LETTERBOXD & ANIME CHARTS
+    {
+        id: "letterboxd-top-250",
+        title: "Letterboxd Official Top 250 Films",
+        type: "smart",
+        category: "awards",
+        description: "The official top 250 narrative feature films according to cinephile ratings on Letterboxd.",
+        icon: "Star",
+        sourceType: "mdblist",
+        sourceQuery: "top-letterboxd-250",
+        mediaType: "movie",
+        defaultSort: "rating",
+        defaultHomeOrder: 5,
+        defaultSortPrefix: "!05_Letterboxd"
+    },
+    {
+        id: "myanimelist-top-anime",
+        title: "MyAnimeList Top Anime Series",
+        type: "smart",
+        category: "awards",
+        description: "The highest-rated Japanese anime series of all time according to MyAnimeList.",
+        icon: "Sparkles",
+        sourceType: "mdblist",
+        sourceQuery: "top-mal-anime",
+        mediaType: "show",
+        defaultSort: "rating",
+        defaultHomeOrder: 6,
+        defaultSortPrefix: "!06_Anime"
     }
 ];
 

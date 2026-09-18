@@ -136,6 +136,9 @@ model Settings {
   paymentEmailScanInterval         Int?      @default(15) // Minutes interval between auto-scans
   paymentLastScanAt                DateTime?
   paymentLastScanResult            String?   // JSON telemetry summary
+
+  // Dismissed / Ignored Plex Hubs & Collections (Blacklist from Re-import)
+  dismissedHubs                    String?   // JSON array of { ratingKey, title, normalizedTitle, serverId, sectionKey, dismissedAt }
 }
 
 model PlexServer {
@@ -374,6 +377,7 @@ model MediaCollection {
   scheduleEndMonth     Int?      // 1-12 (e.g. 11 for November)
   scheduleEndDay       Int?      // 1-31 (e.g. 5 for 5th)
   seasonalAction       String?   @default("promote_hide") // "promote_hide", "keep_demoted", "create_delete"
+  isIgnored            Boolean   @default(false) // If true, skipped during discovery & auto-sync
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 }

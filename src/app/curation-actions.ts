@@ -716,12 +716,119 @@ export async function getPlexServerSectionsAction(serverId: string) {
     };
 }
 
+export interface DismissedHubItem {
+    id?: string;
+    ratingKey?: string;
+    title: string;
+    normalizedTitle: string;
+    serverId?: string;
+    sectionKey?: string;
+    dismissedAt: string;
+}
+
+export async function getDismissedHubsInternal(): Promise<DismissedHubItem[]> {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings?.dismissedHubs) return [];
+        return JSON.parse(settings.dismissedHubs) as DismissedHubItem[];
+    } catch {
+        return [];
+    }
+}
+
+export async function addDismissedHubInternal(item: { id?: string; ratingKey?: string; title: string; serverId?: string; sectionKey?: string }) {
+    try {
+        const list = await getDismissedHubsInternal();
+        const norm = item.title.trim().toLowerCase();
+        // Check if already in list
+        const exists = list.some(d => 
+            (item.ratingKey && d.ratingKey === item.ratingKey) || 
+            (d.normalizedTitle === norm && (!item.serverId || !d.serverId || d.serverId === item.serverId) && (!item.sectionKey || !d.sectionKey || d.sectionKey === String(item.sectionKey)))
+        );
+        if (!exists) {
+            list.push({
+                id: item.id,
+                ratingKey: item.ratingKey,
+                title: item.title,
+                normalizedTitle: norm,
+                serverId: item.serverId,
+                sectionKey: item.sectionKey ? String(item.sectionKey) : undefined,
+                dismissedAt: new Date().toISOString()
+            });
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { dismissedHubs: JSON.stringify(list) }
+            });
+            logger.addLog("INFO", "PLEX", `Added collection/hub "${item.title}" (${item.ratingKey || 'no-key'}) to Dismissed Hubs ignore list.`);
+        }
+    } catch (e: any) {
+        console.warn("[DISMISS-HUB] Failed adding dismissed hub:", e.message);
+    }
+}
+
+export async function removeDismissedHubInternal(ratingKeyOrTitle: string, serverId?: string, sectionKey?: string) {
+    try {
+        const list = await getDismissedHubsInternal();
+        const targetNorm = ratingKeyOrTitle.trim().toLowerCase();
+        const filtered = list.filter(d => {
+            if (d.ratingKey === ratingKeyOrTitle) return false;
+            if (d.normalizedTitle === targetNorm || d.title.trim().toLowerCase() === targetNorm) {
+                if (!serverId || !d.serverId || d.serverId === serverId) {
+                    if (!sectionKey || !d.sectionKey || d.sectionKey === String(sectionKey)) return false;
+                }
+            }
+            return true;
+        });
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { dismissedHubs: JSON.stringify(filtered) }
+        });
+    } catch (e: any) {
+        console.warn("[DISMISS-HUB] Failed removing dismissed hub:", e.message);
+    }
+}
+
+export async function getDismissedHubsAction() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    const list = await getDismissedHubsInternal();
+    return { success: true, dismissedHubs: list };
+}
+
+export async function unignoreMediaCollectionAction(ratingKeyOrTitle: string, serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    await removeDismissedHubInternal(ratingKeyOrTitle, serverId, sectionKey);
+    logger.addLog("SUCCESS", "PLEX", `Restored / un-ignored collection "${ratingKeyOrTitle}". It can now be re-imported from Plex.`);
+    return { success: true, message: `Restored "${ratingKeyOrTitle}". You can now click 'Import from Plex' to re-import it.` };
+}
+
+export async function clearAllDismissedHubsAction(serverId?: string, sectionKey?: string) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    if (serverId && sectionKey) {
+        const list = await getDismissedHubsInternal();
+        const filtered = list.filter(d => !(d.serverId === serverId && d.sectionKey === String(sectionKey)));
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { dismissedHubs: JSON.stringify(filtered) }
+        });
+    } else {
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { dismissedHubs: JSON.stringify([]) }
+        });
+    }
+    return { success: true, message: "Cleared all dismissed hubs." };
+}
+
 export async function getMediaCollectionsAction(serverId?: string, sectionKey?: string) {
     await verifyAdmin();
     await ensureSchemaColumns();
     try {
         const rawCollections = await prisma.mediaCollection.findMany({
             where: {
+                isIgnored: false,
                 ...(serverId ? { serverId } : {}),
                 ...(sectionKey ? { sectionKey: String(sectionKey) } : {})
             },
@@ -811,16 +918,35 @@ export async function importPlexLibraryCollectionsAction(serverId?: string, sect
             return { success: true, count: 0, message: "No existing collections or hubs found in this Plex library section." };
         }
 
-        // Fetch current DB collections for this server & section
+        // Fetch current DB collections and dismissed hubs for this server & section
         const existingDbCollections = await prisma.mediaCollection.findMany({
             where: { serverId, sectionKey: String(sectionKey) }
         });
+        const dismissedList = await getDismissedHubsInternal();
 
         let maxOrderIndex = existingDbCollections.reduce((max, c) => Math.max(max, c.orderIndex ?? 0), -1);
         let importedCount = 0;
         let updatedCount = 0;
 
         for (const pColl of plexCollections) {
+            const pTitleNorm = pColl.title.trim().toLowerCase();
+
+            // Check if this hub/collection has been dismissed/ignored by the user
+            const isDismissed = dismissedList.some(d => {
+                if (d.ratingKey && pColl.ratingKey && d.ratingKey === pColl.ratingKey) return true;
+                if (d.normalizedTitle && (d.normalizedTitle === pTitleNorm || pTitleNorm.includes(d.normalizedTitle) || d.normalizedTitle.includes(pTitleNorm))) {
+                    if (!d.serverId || d.serverId === serverId) {
+                        if (!d.sectionKey || d.sectionKey === String(sectionKey)) return true;
+                    }
+                }
+                return false;
+            });
+
+            if (isDismissed) {
+                logger.addLog("INFO", "PLEX", `Skipping dismissed collection/hub "${pColl.title}" on section ${sectionKey} (will stay gone)`);
+                continue;
+            }
+
             const match = existingDbCollections.find(
                 c => (c.ratingKey && c.ratingKey === pColl.ratingKey) ||
                      c.title.trim().toLowerCase() === pColl.title.trim().toLowerCase()
@@ -1236,6 +1362,18 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                     (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
                     (it.title && titles.has(it.title.toLowerCase().trim()))
                 ).map(it => it.ratingKey));
+            } else if (collection.sourceQuery === "anticipated") {
+                const anticipated = isTvSection
+                    ? await getTraktAnticipatedShows(40)
+                    : await getTraktAnticipatedMovies(40);
+                const tmdbIds = new Set(anticipated.map((t: any) => String(t.tmdbId)).filter(Boolean));
+                const imdbIds = new Set(anticipated.map((t: any) => String(t.imdbId)).filter(Boolean));
+                const titles = new Set(anticipated.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                ).map(it => it.ratingKey));
             } else if (collection.sourceQuery) {
                 const listData = await getTraktUserList(collection.sourceQuery);
                 if (listData?.items) {
@@ -1296,6 +1434,86 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 if (builtinMatches.length > 0) {
                     matchingRatingKeys.push(...builtinMatches);
                 }
+            }
+        } else if (collection.sourceType === "radarr") {
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("radarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const moviesRes = await arrApiGet(app, "/api/v3/movie");
+                        if (moviesRes.success && Array.isArray(moviesRes.data)) {
+                            let movies = moviesRes.data;
+                            if (collection.sourceQuery === "monitored_missing") {
+                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                            } else if (collection.sourceQuery?.startsWith("tag:")) {
+                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) {
+                                    movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                }
+                            }
+                            const tmdbIds = new Set(movies.map((m: any) => String(m.tmdbId)).filter(Boolean));
+                            const imdbIds = new Set(movies.map((m: any) => String(m.imdbId).toLowerCase()).filter(Boolean));
+                            const titles = new Set(movies.map((m: any) => m.title?.toLowerCase().trim()).filter(Boolean));
+                            const matches = libraryItems.filter(it => 
+                                (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                                (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
+                                (it.title && titles.has(it.title.toLowerCase().trim()))
+                            ).map(it => it.ratingKey);
+                            matchingRatingKeys.push(...matches);
+                        }
+                    }
+                }
+            } catch (rErr: any) {
+                console.warn("[RADARR-COLL-SYNC] Error querying Radarr:", rErr.message);
+            }
+        } else if (collection.sourceType === "sonarr") {
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("sonarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const seriesRes = await arrApiGet(app, "/api/v3/series");
+                        if (seriesRes.success && Array.isArray(seriesRes.data)) {
+                            let series = seriesRes.data;
+                            if (collection.sourceQuery === "monitored_missing") {
+                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                            } else if (collection.sourceQuery?.startsWith("tag:")) {
+                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) {
+                                    series = series.filter((s: any) => s.tags?.includes(tagId));
+                                }
+                            }
+                            const tvdbIds = new Set(series.map((s: any) => String(s.tvdbId)).filter(Boolean));
+                            const imdbIds = new Set(series.map((s: any) => String(s.imdbId).toLowerCase()).filter(Boolean));
+                            const titles = new Set(series.map((s: any) => s.title?.toLowerCase().trim()).filter(Boolean));
+                            const matches = libraryItems.filter(it => 
+                                (it.guids?.tvdb && tvdbIds.has(String(it.guids.tvdb))) ||
+                                (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
+                                (it.title && titles.has(it.title.toLowerCase().trim()))
+                            ).map(it => it.ratingKey);
+                            matchingRatingKeys.push(...matches);
+                        }
+                    }
+                }
+            } catch (sErr: any) {
+                console.warn("[SONARR-COLL-SYNC] Error querying Sonarr:", sErr.message);
+            }
+        } else if (collection.sourceType === "plex_smart") {
+            const deployRes = await deployFilteredSmartHubAction(
+                collection.serverId || "",
+                collection.sectionKey || "",
+                (collection.sourceQuery || "recently_added") as any,
+                collection.title
+            );
+            if (deployRes.success) {
+                return {
+                    success: true,
+                    collectionRatingKey: deployRes.collectionRatingKey,
+                    message: `Synced Filtered Smart Hub "${collection.title}" to Plex!`
+                };
             }
         }
 
@@ -1559,6 +1777,17 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
                     (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
+            } else if (sourceQuery === "in_theatres") {
+                executionMethod = `TMDb Theatrical API: Querying current theatrical and now-playing releases.`;
+                const inTheatres = await getTmdbNowPlayingMovies();
+                const tmdbIds = inTheatres.map(m => String(m.id));
+                const imdbIds = inTheatres.map(m => m.imdbId).filter(Boolean);
+                const titles = inTheatres.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
+                );
             } else {
                 executionMethod = `TMDb Trending (${isTvSection ? "TV" : isMovieSection ? "Movies" : "All"}): ${sourceQuery}`;
                 const trending = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
@@ -1620,7 +1849,101 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
                     (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
+            } else if (sourceQuery === "anticipated") {
+                const anticipated = isTvSection
+                    ? await getTraktAnticipatedShows(50)
+                    : await getTraktAnticipatedMovies(50);
+                const imdbIds = anticipated.map((t: any) => t.imdbId).filter(Boolean);
+                const tmdbIds = anticipated.map((t: any) => String(t.tmdbId)).filter(Boolean);
+                const titles = anticipated.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
+                );
+            } else {
+                const listData = await getTraktUserList(sourceQuery);
+                if (listData?.items) {
+                    const scoped = listData.items.filter(t => {
+                        if (isTvSection && t.mediaType === "movie") return false;
+                        if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
+                        return true;
+                    });
+                    const imdbIds = scoped.map((t: any) => t.imdbId).filter(Boolean);
+                    const tmdbIds = scoped.map((t: any) => String(t.tmdbId)).filter(Boolean);
+                    const titles = scoped.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
+                    matchedItems = libraryItems.filter(it => 
+                        (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                        (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                        (it.title && titles.includes(it.title.toLowerCase().trim()))
+                    );
+                }
             }
+        } else if (sourceType === "radarr") {
+            executionMethod = `Radarr Servarr API: Querying monitored movies (${sourceQuery}).`;
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("radarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const moviesRes = await arrApiGet(app, "/api/v3/movie");
+                        if (moviesRes.success && Array.isArray(moviesRes.data)) {
+                            let movies = moviesRes.data;
+                            if (sourceQuery === "monitored_missing") {
+                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                            } else if (sourceQuery.startsWith("tag:")) {
+                                const targetTag = sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                            }
+                            const tmdbIds = new Set(movies.map((m: any) => String(m.tmdbId)).filter(Boolean));
+                            const imdbIds = new Set(movies.map((m: any) => String(m.imdbId).toLowerCase()).filter(Boolean));
+                            const titles = new Set(movies.map((m: any) => m.title?.toLowerCase().trim()).filter(Boolean));
+                            matchedItems = libraryItems.filter(it => 
+                                (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                                (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
+                                (it.title && titles.has(it.title.toLowerCase().trim()))
+                            );
+                        }
+                    }
+                }
+            } catch (rErr: any) {
+                executionMethod += ` (Error querying Radarr: ${rErr.message})`;
+            }
+        } else if (sourceType === "sonarr") {
+            executionMethod = `Sonarr Servarr API: Querying monitored series (${sourceQuery}).`;
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("sonarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const seriesRes = await arrApiGet(app, "/api/v3/series");
+                        if (seriesRes.success && Array.isArray(seriesRes.data)) {
+                            let series = seriesRes.data;
+                            if (sourceQuery === "monitored_missing") {
+                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                            } else if (sourceQuery.startsWith("tag:")) {
+                                const targetTag = sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) series = series.filter((s: any) => s.tags?.includes(tagId));
+                            }
+                            const tvdbIds = new Set(series.map((s: any) => String(s.tvdbId)).filter(Boolean));
+                            const imdbIds = new Set(series.map((s: any) => String(s.imdbId).toLowerCase()).filter(Boolean));
+                            const titles = new Set(series.map((s: any) => s.title?.toLowerCase().trim()).filter(Boolean));
+                            matchedItems = libraryItems.filter(it => 
+                                (it.guids?.tvdb && tvdbIds.has(String(it.guids.tvdb))) ||
+                                (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
+                                (it.title && titles.has(it.title.toLowerCase().trim()))
+                            );
+                        }
+                    }
+                }
+            } catch (sErr: any) {
+                executionMethod += ` (Error querying Sonarr: ${sErr.message})`;
+            }
+        } else if (sourceType === "plex_smart") {
+            executionMethod = `Plex Filtered Smart Hub: Dynamic filter for ${sourceQuery} (excludes trailer-placeholder stubs).`;
+            matchedItems = libraryItems.slice(0, 30);
         }
 
         const effectiveMatches = (collectionConfig.maxItems && collectionConfig.maxItems > 0)
@@ -2272,8 +2595,9 @@ export async function syncLeavingSoonCollectionHubAction(serverId?: string, sect
     return await syncLeavingSoonCollectionHubInternal(serverId, sectionKey);
 }
 
-export async function deleteMediaCollectionAction(collectionId: string, deleteFromPlex = true) {
+export async function deleteMediaCollectionAction(collectionId: string, deleteFromPlex = true, ignoreReimport = true) {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
         let collection = await prisma.mediaCollection.findUnique({
             where: { id: collectionId }
@@ -2296,6 +2620,17 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
         const collRatingKey = collection?.ratingKey || collectionId;
         const serverId = collection?.serverId;
         const sectionKey = collection?.sectionKey;
+
+        // Register in Dismissed Hubs ignore list so Import from Plex will NOT bring it back
+        if (ignoreReimport && (collTitle || collRatingKey)) {
+            await addDismissedHubInternal({
+                id: collection?.id,
+                ratingKey: collRatingKey,
+                title: collTitle,
+                serverId: serverId || undefined,
+                sectionKey: sectionKey || undefined
+            });
+        }
 
         if (deleteFromPlex) {
             try {
@@ -2323,8 +2658,8 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
             }
         });
 
-        logger.addLog("SUCCESS", "PLEX", `Deleted collection "${collTitle}" from database and Plex.`);
-        return { success: true, message: `Deleted collection "${collTitle}".` };
+        logger.addLog("SUCCESS", "PLEX", `Deleted collection "${collTitle}" from database and Plex (added to Dismissed Hubs).`);
+        return { success: true, message: `Deleted "${collTitle}". It has been added to Dismissed Hubs so it will stay gone when importing from Plex.` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -7133,6 +7468,18 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 candidateItems = isTvSection 
                     ? await getTmdbPopularTv(1)
                     : await getTmdbUpcomingMovies();
+            } else if (collection.sourceQuery === "in_theatres") {
+                const inTheatres = await getTmdbNowPlayingMovies();
+                candidateItems = inTheatres.map(m => ({
+                    id: m.id,
+                    title: m.title,
+                    overview: m.overview,
+                    posterPath: m.posterPath,
+                    backdropPath: m.backdropPath,
+                    mediaType: "movie" as const,
+                    releaseDate: m.releaseDate,
+                    inTheaters: true
+                }));
             } else {
                 candidateItems = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
             }
@@ -7142,6 +7489,17 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     ? await getTraktTrendingShows(40)
                     : await getTraktTrendingMovies(40);
                 candidateItems = trending.map((t: any) => ({
+                    id: t.tmdbId || t.id,
+                    title: t.title,
+                    mediaType: (isTvSection ? "tv" : "movie") as "movie" | "tv",
+                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    imdbId: t.imdbId
+                }));
+            } else if (collection.sourceQuery === "anticipated") {
+                const anticipated = isTvSection
+                    ? await getTraktAnticipatedShows(40)
+                    : await getTraktAnticipatedMovies(40);
+                candidateItems = anticipated.map((t: any) => ({
                     id: t.tmdbId || t.id,
                     title: t.title,
                     mediaType: (isTvSection ? "tv" : "movie") as "movie" | "tv",
@@ -7165,6 +7523,70 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                             imdbId: t.imdbId
                         }));
                 }
+            }
+        } else if (collection.sourceType === "radarr") {
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("radarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const moviesRes = await arrApiGet(app, "/api/v3/movie");
+                        if (moviesRes.success && Array.isArray(moviesRes.data)) {
+                            let movies = moviesRes.data;
+                            if (collection.sourceQuery === "monitored_missing") {
+                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                            } else if (collection.sourceQuery?.startsWith("tag:")) {
+                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                            }
+                            candidateItems.push(...movies.map((m: any) => ({
+                                id: m.tmdbId,
+                                title: m.title,
+                                overview: m.overview,
+                                posterPath: m.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
+                                mediaType: "movie" as const,
+                                releaseDate: m.digitalRelease || m.physicalRelease || m.inCinemas || (m.year ? `${m.year}-01-01` : undefined),
+                                digitalReleaseDate: m.digitalRelease || undefined,
+                                theatricalReleaseDate: m.inCinemas || undefined,
+                                imdbId: m.imdbId
+                            })));
+                        }
+                    }
+                }
+            } catch (rErr: any) {
+                console.warn("[RADARR-PLACEHOLDER] Error fetching movies:", rErr.message);
+            }
+        } else if (collection.sourceType === "sonarr") {
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("sonarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const seriesRes = await arrApiGet(app, "/api/v3/series");
+                        if (seriesRes.success && Array.isArray(seriesRes.data)) {
+                            let series = seriesRes.data;
+                            if (collection.sourceQuery === "monitored_missing") {
+                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                            } else if (collection.sourceQuery?.startsWith("tag:")) {
+                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) series = series.filter((s: any) => s.tags?.includes(tagId));
+                            }
+                            candidateItems.push(...series.map((s: any) => ({
+                                id: s.tvdbId,
+                                title: s.title,
+                                overview: s.overview,
+                                posterPath: s.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
+                                mediaType: "tv" as const,
+                                releaseDate: s.firstAired || (s.year ? `${s.year}-01-01` : undefined),
+                                imdbId: s.imdbId
+                            })));
+                        }
+                    }
+                }
+            } catch (sErr: any) {
+                console.warn("[SONARR-PLACEHOLDER] Error fetching series:", sErr.message);
             }
         } else if (collection.sourceType === "mdblist") {
             if (collection.sourceQuery) {
@@ -7548,21 +7970,26 @@ export async function tagAllPlaceholdersInPlexAction(
 }
 
 /**
- * Server action to deploy a Filtered Recently Added Smart Collection to Plex for a library section.
- * Replaces or overrides Plex's raw un-filtered Recently Added hub so that coming soon trailer placeholders
- * never appear in users' Recently Added hubs or on the Home Screen.
+ * Server action to deploy a Filtered Smart Collection (Recently Added, Recently Released, Top Unwatched)
+ * to Plex for a library section and persist in Active Collections table.
+ * Replaces or overrides Plex's raw un-filtered hubs so coming soon trailer placeholders never appear in carousels.
  */
-export async function deployFilteredRecentlyAddedHubAction(
+export type FilteredHubSubtype = "recently_added" | "recently_released" | "recently_released_episodes" | "top_unwatched";
+
+export async function deployFilteredSmartHubAction(
     serverId: string,
-    sectionKey: string
+    sectionKey: string,
+    subtype: FilteredHubSubtype = "recently_added",
+    customTitle?: string
 ): Promise<{ success: boolean; message: string; collectionRatingKey?: string }> {
     await verifyAdmin();
+    await ensureSchemaColumns();
     try {
         // Step 1: Run placeholder sweep to ensure all existing placeholders on this server are tagged with trailer-placeholder label
         try {
             await tagAllPlaceholdersInPlexInternal(serverId, sectionKey);
         } catch (sweepErr: any) {
-            console.warn(`[RECENTLY-ADDED] Pre-deploy placeholder labeling sweep error:`, sweepErr.message);
+            console.warn(`[FILTERED-HUB] Pre-deploy placeholder labeling sweep error:`, sweepErr.message);
         }
 
         const resolved = await resolveWorkingPlexServerConnection(serverId);
@@ -7577,18 +8004,62 @@ export async function deployFilteredRecentlyAddedHubAction(
         const section = sections.find(s => String(s.key) === String(sectionKey));
         const isTv = section?.type === "show" || section?.type === "tv";
         const mediaTypeNum = isTv ? 2 : 1;
-        const defaultTitle = isTv ? "Recently Added TV" : "Recently Added Movies";
 
-        // Filter URI that excludes placeholders
+        // Validate subtype compatibility
+        if (subtype === "recently_released_episodes" && !isTv) {
+            return { success: false, message: "Recently Released Episodes hub is only supported for TV libraries." };
+        }
+
+        // Determine Default Title
+        let defaultTitle = customTitle || "";
+        let defaultSummary = "Filtered smart collection without trailer placeholders.";
+        let sortPrefix = "!00_Recent";
+
+        if (!defaultTitle) {
+            if (subtype === "recently_added") {
+                defaultTitle = isTv ? "Recently Added TV" : "Recently Added Movies";
+                defaultSummary = "Recently added media excluding coming soon trailer placeholders.";
+                sortPrefix = "!00_Recent";
+            } else if (subtype === "recently_released") {
+                defaultTitle = isTv ? "Recently Released TV" : "Recently Released Movies";
+                defaultSummary = "Recently released media sorted by original release date, excluding placeholder stubs.";
+                sortPrefix = "!01_Released";
+            } else if (subtype === "recently_released_episodes") {
+                defaultTitle = "Recently Released Episodes";
+                defaultSummary = "TV shows sorted by latest episode air date, excluding placeholder stubs.";
+                sortPrefix = "!01_Released";
+            } else if (subtype === "top_unwatched") {
+                defaultTitle = isTv ? "Top Unwatched TV" : "Top Unwatched Movies";
+                defaultSummary = "Top unwatched media personalized per user, excluding placeholder stubs.";
+                sortPrefix = "!02_Unwatched";
+            }
+        }
+
+        // Build Filter URI that excludes placeholders
         let filterUri = "";
-        if (isTv) {
-            // Filter out episodes titled "Trailer (Placeholder)" or label "trailer-placeholder"
-            const titleFilter = encodeURIComponent("Trailer (Placeholder)");
-            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${titleFilter}&label!=trailer-placeholder`;
-        } else {
-            // Filter out items with label "trailer-placeholder" and edition "Trailer"
-            const labelFilter = encodeURIComponent("trailer-placeholder");
-            filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${labelFilter}&editionTitle!=Trailer`;
+        const trailerLabel = encodeURIComponent("trailer-placeholder");
+        const trailerTitle = encodeURIComponent("Trailer (Placeholder)");
+
+        if (subtype === "recently_added") {
+            if (isTv) {
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+            } else {
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${trailerLabel}&editionTitle!=Trailer`;
+            }
+        } else if (subtype === "recently_released") {
+            if (isTv) {
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+            } else {
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&editionTitle!=Trailer`;
+            }
+        } else if (subtype === "recently_released_episodes") {
+            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+        } else if (subtype === "top_unwatched") {
+            if (isTv) {
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+            } else {
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=${trailerLabel}&editionTitle!=Trailer`;
+            }
         }
 
         // Get machineId
@@ -7611,12 +8082,12 @@ export async function deployFilteredRecentlyAddedHubAction(
             ? `server://${machineId}/com.plexapp.plugins.library${filterUri}`
             : filterUri;
 
-        // Check if smart collection already exists
+        // Check if smart collection already exists in Plex
         const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
         const existing = existingCollections.find(c => 
             c.title.toLowerCase() === defaultTitle.toLowerCase() ||
-            c.title.toLowerCase() === "recently added" ||
-            c.title.toLowerCase() === "filtered recently added"
+            (subtype === "recently_added" && (c.title.toLowerCase() === "recently added" || c.title.toLowerCase() === "filtered recently added")) ||
+            (subtype === "recently_released" && (c.title.toLowerCase() === "recently released" || c.title.toLowerCase() === "filtered recently released"))
         );
 
         let ratingKey = existing?.ratingKey;
@@ -7661,26 +8132,140 @@ export async function deployFilteredRecentlyAddedHubAction(
             }
         }
 
-        // Promote to Home Screen with top priority
+        // Set user-based filtering prefs for personalized collections (like top_unwatched)
         if (ratingKey && !ratingKey.startsWith("hub:")) {
+            if (subtype === "top_unwatched") {
+                for (const cleanBase of urlsToTry) {
+                    try {
+                        await fetch(`${cleanBase}/library/metadata/${ratingKey}/prefs?collectionFilterBasedOnUser=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                            method: "PUT",
+                            headers: { "X-Plex-Token": token }
+                        });
+                        break;
+                    } catch {}
+                }
+            }
+
+            // Promote to Home Screen with top priority
             await updatePlexCollectionPromotionAndOrder(urlsToTry, token, sectionKey, ratingKey, {
-                summary: "Filtered Recently Added collection without coming soon trailer placeholders.",
+                summary: defaultSummary,
                 promotedToHome: true,
                 promotedToRecommended: true,
                 promotedToSharedHome: true
             });
         }
 
-        logger.addLog("SUCCESS", "PLEX", `Deployed Filtered Recently Added smart collection "${defaultTitle}" to section ${sectionKey} on server "${resolved.serverName}"`);
+        // CRITICAL: Upsert in local database so it immediately shows up in the Active Collections table!
+        const existingDb = await prisma.mediaCollection.findFirst({
+            where: {
+                serverId,
+                sectionKey: String(sectionKey),
+                OR: [
+                    ...(ratingKey ? [{ ratingKey }] : []),
+                    { title: defaultTitle },
+                    { sourceType: "plex_smart", sourceQuery: subtype }
+                ]
+            }
+        });
+
+        if (existingDb) {
+            await prisma.mediaCollection.update({
+                where: { id: existingDb.id },
+                data: {
+                    title: defaultTitle,
+                    summary: defaultSummary,
+                    ratingKey: ratingKey || existingDb.ratingKey,
+                    sourceType: "plex_smart",
+                    sourceQuery: subtype,
+                    category: "Plex Smart",
+                    type: "smart",
+                    promotedToHome: true,
+                    promotedToRecommended: true,
+                    promotedToSharedHome: true,
+                    sortPrefix: existingDb.sortPrefix || sortPrefix,
+                    excludedLabels: "trailer-placeholder",
+                    isIgnored: false,
+                    lastSyncedAt: new Date()
+                }
+            });
+        } else {
+            await prisma.mediaCollection.create({
+                data: {
+                    title: defaultTitle,
+                    summary: defaultSummary,
+                    sortTitle: defaultTitle,
+                    type: "smart",
+                    category: "Plex Smart",
+                    serverId,
+                    sectionKey: String(sectionKey),
+                    sourceType: "plex_smart",
+                    sourceQuery: subtype,
+                    ratingKey: ratingKey || undefined,
+                    itemCount: 0,
+                    promotedToHome: true,
+                    promotedToRecommended: true,
+                    promotedToSharedHome: true,
+                    orderIndex: 0,
+                    sortPrefix,
+                    excludedLabels: "trailer-placeholder",
+                    isIgnored: false,
+                    lastSyncedAt: new Date()
+                }
+            });
+        }
+
+        logger.addLog("SUCCESS", "PLEX", `Deployed Filtered Smart Collection "${defaultTitle}" (${subtype}) to section ${sectionKey} on server "${resolved.serverName}"`);
 
         return {
             success: true,
             collectionRatingKey: ratingKey,
-            message: `Deployed "${defaultTitle}" smart collection to Plex! Placeholders will now be cleanly excluded from Recently Added on Home & Recommended hubs.`
+            message: `Deployed "${defaultTitle}" smart collection to Plex & saved to Active Collections! Placeholders will now be cleanly excluded from user carousels.`
         };
     } catch (e: any) {
-        logger.addLog("ERROR", "PLEX", `Failed deploying filtered recently added hub: ${e.message}`);
+        logger.addLog("ERROR", "PLEX", `Failed deploying filtered smart hub (${subtype}): ${e.message}`);
         return { success: false, message: e.message };
+    }
+}
+
+export async function deployFilteredRecentlyAddedHubAction(
+    serverId: string,
+    sectionKey: string
+): Promise<{ success: boolean; message: string; collectionRatingKey?: string }> {
+    return await deployFilteredSmartHubAction(serverId, sectionKey, "recently_added");
+}
+
+export async function deployAllFilteredSmartHubsAction(
+    serverId: string,
+    sectionKey: string
+): Promise<{ success: boolean; message: string; results: any[] }> {
+    await verifyAdmin();
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) {
+            return { success: false, message: "Could not connect to Plex server.", results: [] };
+        }
+        const sections = await getPlexServerSections(resolved.token, serverId, resolved.serverUrl);
+        const sec = sections.find(s => String(s.key) === String(sectionKey));
+        const isTv = sec?.type === "show" || sec?.type === "tv";
+
+        const subtypes: ("recently_added" | "recently_released" | "recently_released_episodes" | "top_unwatched")[] = isTv
+            ? ["recently_added", "recently_released", "recently_released_episodes", "top_unwatched"]
+            : ["recently_added", "recently_released", "top_unwatched"];
+
+        const results: any[] = [];
+        for (const st of subtypes) {
+            const res = await deployFilteredSmartHubAction(serverId, sectionKey, st);
+            results.push({ subtype: st, ...res });
+        }
+
+        const successCount = results.filter(r => r.success).length;
+        return {
+            success: successCount > 0,
+            message: `Successfully deployed ${successCount}/${subtypes.length} Filtered Smart Hubs! They are now active in Plex and saved to Active Collections.`,
+            results
+        };
+    } catch (e: any) {
+        return { success: false, message: e.message, results: [] };
     }
 }
 
@@ -7764,6 +8349,17 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
                 candidateItems = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+            } else if (collection.sourceQuery === "in_theatres") {
+                const inTheatres = await getTmdbNowPlayingMovies();
+                candidateItems = inTheatres.map(m => ({
+                    id: m.id,
+                    title: m.title,
+                    overview: m.overview,
+                    posterPath: m.posterPath,
+                    backdropPath: m.backdropPath,
+                    mediaType: "movie" as const,
+                    releaseDate: m.releaseDate
+                }));
             } else if (collection.sourceQuery === "digital_releases") {
                 candidateItems = await getTmdbUpcomingMovies();
             } else {
@@ -7773,6 +8369,15 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
             if (collection.sourceQuery === "trending") {
                 const trending = await getTraktTrendingMovies(40);
                 candidateItems = trending.map((t: any) => ({
+                    id: t.tmdbId || t.id,
+                    title: t.title,
+                    mediaType: "movie" as const,
+                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    imdbId: t.imdbId
+                }));
+            } else if (collection.sourceQuery === "anticipated") {
+                const anticipated = await getTraktAnticipatedMovies(40);
+                candidateItems = anticipated.map((t: any) => ({
                     id: t.tmdbId || t.id,
                     title: t.title,
                     mediaType: "movie" as const,
@@ -7791,6 +8396,79 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                     }));
                 }
             }
+        } else if (collection.sourceType === "radarr") {
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("radarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const moviesRes = await arrApiGet(app, "/api/v3/movie");
+                        if (moviesRes.success && Array.isArray(moviesRes.data)) {
+                            let movies = moviesRes.data;
+                            if (collection.sourceQuery === "monitored_missing") {
+                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                            } else if (collection.sourceQuery?.startsWith("tag:")) {
+                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                            }
+                            candidateItems.push(...movies.map((m: any) => ({
+                                id: m.tmdbId,
+                                title: m.title,
+                                overview: m.overview,
+                                posterPath: m.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
+                                mediaType: "movie" as const,
+                                releaseDate: m.digitalRelease || m.physicalRelease || m.inCinemas || (m.year ? `${m.year}-01-01` : undefined),
+                                digitalReleaseDate: m.digitalRelease || undefined,
+                                theatricalReleaseDate: m.inCinemas || undefined,
+                                imdbId: m.imdbId
+                            })));
+                        }
+                    }
+                }
+            } catch (rErr: any) {
+                console.warn("[RADARR-PREVIEW] Error querying Radarr:", rErr.message);
+            }
+        } else if (collection.sourceType === "sonarr") {
+            try {
+                const arrRes = await getEnabledArrInstancesInternal("sonarr");
+                if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
+                    for (const app of arrRes.data) {
+                        const seriesRes = await arrApiGet(app, "/api/v3/series");
+                        if (seriesRes.success && Array.isArray(seriesRes.data)) {
+                            let series = seriesRes.data;
+                            if (collection.sourceQuery === "monitored_missing") {
+                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                            } else if (collection.sourceQuery?.startsWith("tag:")) {
+                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                                const tagsRes = await arrApiGet(app, "/api/v3/tag");
+                                const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
+                                if (tagId) series = series.filter((s: any) => s.tags?.includes(tagId));
+                            }
+                            candidateItems.push(...series.map((s: any) => ({
+                                id: s.tvdbId,
+                                title: s.title,
+                                overview: s.overview,
+                                posterPath: s.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
+                                mediaType: "tv" as const,
+                                releaseDate: s.firstAired || (s.year ? `${s.year}-01-01` : undefined),
+                                imdbId: s.imdbId
+                            })));
+                        }
+                    }
+                }
+            } catch (sErr: any) {
+                console.warn("[SONARR-PREVIEW] Error querying Sonarr:", sErr.message);
+            }
+        } else if (collection.sourceType === "plex_smart") {
+            candidateItems = libraryItems.slice(0, 30).map(it => ({
+                id: it.ratingKey,
+                title: it.title,
+                overview: it.summary,
+                posterPath: it.thumb,
+                mediaType: it.type === "show" ? "tv" as const : "movie" as const,
+                releaseDate: it.year ? `${it.year}-01-01` : undefined
+            }));
         } else if (collection.sourceType === "mdblist") {
             if (collection.sourceQuery) {
                 const items = await getMdblistItems(collection.sourceQuery);

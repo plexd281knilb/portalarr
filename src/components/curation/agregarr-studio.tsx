@@ -57,7 +57,9 @@ import {
     Play,
     Filter,
     Clapperboard,
-    ListFilter
+    ListFilter,
+    EyeOff,
+    Radio
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,7 +103,12 @@ import {
     toggleAllCurationServerSectionsAction,
     runFullCurationSyncAction,
     getArrInstancesListAction,
+    deployFilteredSmartHubAction,
     deployFilteredRecentlyAddedHubAction,
+    deployAllFilteredSmartHubsAction,
+    getDismissedHubsAction,
+    unignoreMediaCollectionAction,
+    clearAllDismissedHubsAction,
     tagAllPlaceholdersInPlexAction,
     deleteAllPlexCollectionsAction
 } from "@/app/curation-actions";
@@ -271,8 +278,16 @@ export function AgregarrStudio() {
 
     // Filtered Recently Added Smart Collection Hub Deployer
     const [deployingRecentlyAdded, setDeployingRecentlyAdded] = useState<boolean>(false);
+    const [deployingSmartHub, setDeployingSmartHub] = useState<string | null>(null);
+    const [filteredHubsModalOpen, setFilteredHubsModalOpen] = useState<boolean>(false);
     const [taggingPlaceholders, setTaggingPlaceholders] = useState<boolean>(false);
     const [recentlyAddedDeployMsg, setRecentlyAddedDeployMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+    // Dismissed / Ignored Hubs Blacklist Manager
+    const [dismissedHubsModalOpen, setDismissedHubsModalOpen] = useState<boolean>(false);
+    const [dismissedHubsList, setDismissedHubsList] = useState<Array<{ ratingKey?: string; title: string; normalizedTitle?: string; serverId?: string; sectionKey?: string; dismissedAt?: string }>>([]);
+    const [dismissedHubsLoading, setDismissedHubsLoading] = useState<boolean>(false);
+    const [dismissedActionMsg, setDismissedActionMsg] = useState<{ success: boolean; text: string } | null>(null);
 
     // Multi-Instance Radarr & Sonarr Mapping
     const [arrInstances, setArrInstances] = useState<{
@@ -1470,6 +1485,129 @@ export function AgregarrStudio() {
         }
     };
 
+    // Deploy specific Filtered Smart Hub variant
+    const handleDeployFilteredSmartHub = async (subtype: "recently_added" | "recently_released" | "recently_released_episodes" | "top_unwatched") => {
+        if (!selectedServerId || !selectedSectionKey) return;
+        setDeployingSmartHub(subtype);
+        setRecentlyAddedDeployMsg(null);
+        try {
+            const res = await deployFilteredSmartHubAction(selectedServerId, selectedSectionKey, subtype);
+            if (res.success) {
+                setRecentlyAddedDeployMsg({
+                    success: true,
+                    text: res.message || "✓ Successfully deployed Filtered Smart Collection! Added to Active Collections."
+                });
+                loadCollections();
+                setFilteredHubsModalOpen(false);
+                setTimeout(() => setRecentlyAddedDeployMsg(null), 5000);
+            } else {
+                setRecentlyAddedDeployMsg({
+                    success: false,
+                    text: res.message || "Failed deploying smart hub."
+                });
+            }
+        } catch (err: any) {
+            setRecentlyAddedDeployMsg({
+                success: false,
+                text: err.message || "Error deploying smart hub."
+            });
+        } finally {
+            setDeployingSmartHub(null);
+        }
+    };
+
+    // Deploy ALL Filtered Smart Hubs in 1-Click
+    const handleDeployAllFilteredSmartHubs = async () => {
+        if (!selectedServerId || !selectedSectionKey) return;
+        setDeployingSmartHub("all");
+        setRecentlyAddedDeployMsg(null);
+        try {
+            const res = await deployAllFilteredSmartHubsAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setRecentlyAddedDeployMsg({
+                    success: true,
+                    text: res.message || "✓ Successfully deployed all Filtered Smart Hubs! Added to Active Collections."
+                });
+                loadCollections();
+                setFilteredHubsModalOpen(false);
+                setTimeout(() => setRecentlyAddedDeployMsg(null), 5000);
+            } else {
+                setRecentlyAddedDeployMsg({
+                    success: false,
+                    text: res.message || "Failed deploying all smart hubs."
+                });
+            }
+        } catch (err: any) {
+            setRecentlyAddedDeployMsg({
+                success: false,
+                text: err.message || "Error deploying all smart hubs."
+            });
+        } finally {
+            setDeployingSmartHub(null);
+        }
+    };
+
+    // Open Dismissed / Ignored Hubs Manager
+    const handleOpenDismissedHubs = async () => {
+        setDismissedHubsModalOpen(true);
+        setDismissedHubsLoading(true);
+        setDismissedActionMsg(null);
+        try {
+            const res = await getDismissedHubsAction();
+            if (res.success && res.dismissedHubs) {
+                setDismissedHubsList(res.dismissedHubs);
+            }
+        } catch (err) {
+            console.error("Failed loading dismissed hubs:", err);
+        } finally {
+            setDismissedHubsLoading(false);
+        }
+    };
+
+    // Restore / Un-ignore a single dismissed hub
+    const handleRestoreDismissedHub = async (item: { ratingKey?: string; title: string; serverId?: string; sectionKey?: string }) => {
+        setDismissedHubsLoading(true);
+        setDismissedActionMsg(null);
+        try {
+            const res = await unignoreMediaCollectionAction(item.ratingKey || item.title, item.serverId, item.sectionKey);
+            if (res.success) {
+                setDismissedActionMsg({ success: true, text: res.message || `Restored "${item.title}". You can now import it.` });
+                const listRes = await getDismissedHubsAction();
+                if (listRes.success && listRes.dismissedHubs) {
+                    setDismissedHubsList(listRes.dismissedHubs);
+                }
+                loadCollections();
+            } else {
+                setDismissedActionMsg({ success: false, text: res.message || "Failed restoring hub." });
+            }
+        } catch (err: any) {
+            setDismissedActionMsg({ success: false, text: err.message || "Error restoring hub." });
+        } finally {
+            setDismissedHubsLoading(false);
+        }
+    };
+
+    // Clear all dismissed hubs
+    const handleClearAllDismissedHubs = async () => {
+        if (!confirm("Are you sure you want to clear all dismissed hubs? Clicking 'Import from Plex' will allow previously deleted hubs to be re-imported.")) return;
+        setDismissedHubsLoading(true);
+        setDismissedActionMsg(null);
+        try {
+            const res = await clearAllDismissedHubsAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setDismissedActionMsg({ success: true, text: "Cleared all dismissed hubs." });
+                setDismissedHubsList([]);
+                loadCollections();
+            } else {
+                setDismissedActionMsg({ success: false, text: "Failed clearing dismissed hubs." });
+            }
+        } catch (err: any) {
+            setDismissedActionMsg({ success: false, text: err.message || "Error clearing dismissed hubs." });
+        } finally {
+            setDismissedHubsLoading(false);
+        }
+    };
+
     // Tag all placeholder trailers in Plex with trailer-placeholder label
     const handleTagAllPlaceholders = async () => {
         if (!selectedServerId) return;
@@ -1550,12 +1688,15 @@ export function AgregarrStudio() {
     // Preset Blueprints Filtering
     const presetCategories = [
         { id: "all", label: "🌟 All Presets" },
+        { id: "arr", label: "📡 Servarr & Coming Soon" },
+        { id: "filtered_hub", label: "🧹 Filtered Smart Hubs" },
         { id: "awards", label: "🏆 Awards & Charts" },
-        { id: "dynamic", label: "🔥 Trending & Streaming" },
+        { id: "dynamic", label: "🔥 Trending & Discovery" },
         { id: "studio", label: "🏰 Networks & Studios" },
         { id: "franchise", label: "🎬 Franchises & Sagas" },
         { id: "decade", label: "⏳ Decades & Eras" },
-        { id: "holiday", label: "🎃 Seasonal & Holidays" }
+        { id: "holiday", label: "🎃 Seasonal & Holidays" },
+        { id: "quality", label: "💎 4K & Dolby Tech" }
     ];
 
     const filteredPresets = COLLECTION_PRESETS.filter(preset => {
@@ -1891,13 +2032,12 @@ export function AgregarrStudio() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                disabled={deployingRecentlyAdded}
-                                onClick={handleDeployFilteredRecentlyAddedHub}
+                                onClick={() => setFilteredHubsModalOpen(true)}
                                 className="border-cyan-500/40 hover:bg-cyan-950/40 text-cyan-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
-                                title="Creates a Smart Recently Added Collection in Plex with 'label!=trailer-placeholder', promoted to Plex Home #1 rank to keep placeholder stubs out of user carousels"
+                                title="Deploy Filtered Smart Collections (Recently Added, Recently Released, Top Unwatched) with strict placeholder exclusion"
                             >
-                                {deployingRecentlyAdded ? <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" /> : <Clapperboard className="h-3.5 w-3.5 text-cyan-400" />}
-                                <span>Filtered Recently Added Hub</span>
+                                <Clapperboard className="h-3.5 w-3.5 text-cyan-400" />
+                                <span>Filtered Smart Hubs...</span>
                             </Button>
                             <Button
                                 type="button"
@@ -1917,7 +2057,8 @@ export function AgregarrStudio() {
                                 variant="outline"
                                 disabled={importingPlexCollections}
                                 onClick={handleImportPlexCollections}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5"
+                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                title="Import active collections and hubs from Plex (skips dismissed/ignored hubs)"
                             >
                                 {importingPlexCollections ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" /> : <RefreshCw className="h-3.5 w-3.5 text-sky-400" />}
                                 <span>Import from Plex</span>
@@ -1926,9 +2067,20 @@ export function AgregarrStudio() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
+                                onClick={handleOpenDismissedHubs}
+                                className="border-amber-500/30 hover:bg-amber-950/30 text-amber-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                title="View and restore deleted/ignored Plex hubs and collections so they stay gone permanently"
+                            >
+                                <EyeOff className="h-3.5 w-3.5 text-amber-400" />
+                                <span>Ignored Hubs</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
                                 disabled={syncingSeasonal}
                                 onClick={handleSyncSeasonal}
-                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5"
+                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
                             >
                                 {syncingSeasonal ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Calendar className="h-3.5 w-3.5 text-amber-400" />}
                                 <span>Evaluate Seasonal</span>
@@ -2065,6 +2217,17 @@ export function AgregarrStudio() {
                                     >
                                         <RefreshCw className="h-3 w-3 text-sky-400" />
                                         <span>Import from Plex</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleOpenDismissedHubs}
+                                        className="border-amber-500/30 hover:bg-amber-950/30 text-xs h-7 gap-1 text-amber-200 hover:text-amber-100 cursor-pointer"
+                                        title="View deleted and ignored hubs blacklist"
+                                    >
+                                        <EyeOff className="h-3 w-3 text-amber-400" />
+                                        <span>Ignored Hubs</span>
                                     </Button>
                                     {collections.length > 0 && (
                                         <Button
@@ -4776,6 +4939,258 @@ export function AgregarrStudio() {
                 servers={servers}
                 onSelect={handleSelectRealPoster}
             />
+
+            {/* ========================================================================= */}
+            {/* MODAL 8: FILTERED SMART HUBS DEPLOYER MODAL */}
+            {/* ========================================================================= */}
+            <Dialog open={filteredHubsModalOpen} onOpenChange={setFilteredHubsModalOpen}>
+                <DialogContent className="max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-6 overflow-hidden max-h-[90vh] flex flex-col">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between">
+                        <div className="space-y-0.5">
+                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Clapperboard className="h-5 w-5 text-cyan-400" />
+                                <span>Filtered Smart Hubs (Placeholder Exclusion)</span>
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-slate-400">
+                                Deploy Plex Smart Collections that exclude Coming Soon trailer stubs (<span className="font-mono text-cyan-300">label!=trailer-placeholder</span>, <span className="font-mono text-cyan-300">editionTitle!=Trailer</span>, <span className="font-mono text-cyan-300">episode.title!=Trailer (Placeholder)</span>) and display them in your Active Collections list.
+                            </DialogDescription>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="overflow-y-auto py-3 space-y-3 flex-1 pr-1">
+                        {/* Recently Added */}
+                        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <Clapperboard className="h-4 w-4 text-cyan-400" />
+                                    <span className="text-xs font-bold text-white">Recently Added (Filtered)</span>
+                                    <Badge variant="outline" className="text-[9px] border-cyan-800/60 text-cyan-300 bg-cyan-950/40">
+                                        {isTvSection ? "TV Shows" : "Movies"}
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                    Sorts by Date Added (<span className="font-mono text-slate-300">addedAt:desc</span>). Replaces the native un-filtered Plex Recently Added hub on Home &amp; Recommended.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={deployingSmartHub === "recently_added" || deployingSmartHub === "all"}
+                                onClick={() => handleDeployFilteredSmartHub("recently_added")}
+                                className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shrink-0 cursor-pointer shadow-md"
+                            >
+                                {deployingSmartHub === "recently_added" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                <span>Deploy</span>
+                            </Button>
+                        </div>
+
+                        {/* Recently Released */}
+                        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <Sparkles className="h-4 w-4 text-amber-400" />
+                                    <span className="text-xs font-bold text-white">Recently Released (Filtered)</span>
+                                    <Badge variant="outline" className="text-[9px] border-amber-800/60 text-amber-300 bg-amber-950/40">
+                                        {isTvSection ? "TV Series Air Date" : "Movie Release Date"}
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                    Sorts strictly by official release date (<span className="font-mono text-slate-300">originallyAvailableAt:desc</span>) to showcase fresh drops while excluding upcoming placeholders.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={deployingSmartHub === "recently_released" || deployingSmartHub === "all"}
+                                onClick={() => handleDeployFilteredSmartHub("recently_released")}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shrink-0 cursor-pointer shadow-md"
+                            >
+                                {deployingSmartHub === "recently_released" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                <span>Deploy</span>
+                            </Button>
+                        </div>
+
+                        {/* Recently Released Episodes (TV Only) */}
+                        {isTvSection && (
+                            <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <Radio className="h-4 w-4 text-sky-400" />
+                                        <span className="text-xs font-bold text-white">Recently Released Episodes (Filtered)</span>
+                                        <Badge variant="outline" className="text-[9px] border-sky-800/60 text-sky-300 bg-sky-950/40">
+                                            TV Only
+                                        </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400">
+                                        Sorts TV shows by latest episode added (<span className="font-mono text-slate-300">episode.addedAt:desc</span>) while strictly filtering out placeholder episodes.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={deployingSmartHub === "recently_released_episodes" || deployingSmartHub === "all"}
+                                    onClick={() => handleDeployFilteredSmartHub("recently_released_episodes")}
+                                    className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shrink-0 cursor-pointer shadow-md"
+                                >
+                                    {deployingSmartHub === "recently_released_episodes" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                    <span>Deploy</span>
+                                </Button>
+                            </div>
+                        )}
+
+                        {/* Top Unwatched */}
+                        <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <Eye className="h-4 w-4 text-emerald-400" />
+                                    <span className="text-xs font-bold text-white">Top Unwatched (Personalized)</span>
+                                    <Badge variant="outline" className="text-[9px] border-emerald-800/60 text-emerald-300 bg-emerald-950/40">
+                                        Per-User Filter
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                    Configured with <span className="font-mono text-slate-300">collectionFilterBasedOnUser=1</span> so each user only sees movies/shows they haven't watched yet.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={deployingSmartHub === "top_unwatched" || deployingSmartHub === "all"}
+                                onClick={() => handleDeployFilteredSmartHub("top_unwatched")}
+                                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shrink-0 cursor-pointer shadow-md"
+                            >
+                                {deployingSmartHub === "top_unwatched" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                <span>Deploy</span>
+                            </Button>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between sm:justify-between">
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={deployingSmartHub !== null}
+                            onClick={handleDeployAllFilteredSmartHubs}
+                            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs h-8 px-4 gap-1.5 shadow-md cursor-pointer"
+                        >
+                            {deployingSmartHub === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                            <span>Deploy All Filtered Hubs in 1-Click</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFilteredHubsModalOpen(false)}
+                            className="border-slate-800 text-slate-300 hover:text-white"
+                        >
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ========================================================================= */}
+            {/* MODAL 9: IGNORIED & DISMISSED HUBS MANAGER MODAL */}
+            {/* ========================================================================= */}
+            <Dialog open={dismissedHubsModalOpen} onOpenChange={setDismissedHubsModalOpen}>
+                <DialogContent className="max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-6 overflow-hidden max-h-[90vh] flex flex-col">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between">
+                        <div className="space-y-0.5">
+                            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <EyeOff className="h-5 w-5 text-amber-400" />
+                                <span>Ignored &amp; Dismissed Hubs ({dismissedHubsList.length})</span>
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-slate-400">
+                                Collections and Plex-native auto-generated hubs (like <span className="text-slate-300 italic">&quot;Top Movies by Vicky Jenson&quot;</span>) that you deleted. They are blacklisted so clicking <span className="font-bold text-sky-300">Import from Plex</span> will NOT bring them back.
+                            </DialogDescription>
+                        </div>
+                    </DialogHeader>
+
+                    {dismissedActionMsg && (
+                        <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 my-2 ${
+                            dismissedActionMsg.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                        }`}>
+                            {dismissedActionMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                            <span>{dismissedActionMsg.text}</span>
+                        </div>
+                    )}
+
+                    <div className="overflow-y-auto py-2 space-y-2 flex-1 pr-1">
+                        {dismissedHubsLoading ? (
+                            <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-500 text-xs">
+                                <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+                                <span>Loading ignored hubs blacklist...</span>
+                            </div>
+                        ) : dismissedHubsList.length === 0 ? (
+                            <div className="py-12 text-center text-slate-500 space-y-2">
+                                <EyeOff className="h-8 w-8 mx-auto text-slate-700" />
+                                <p className="text-xs font-medium text-slate-400">No hubs or collections are currently blacklisted.</p>
+                                <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                                    When you delete collections or auto-generated Plex hubs in Portalarr, they are registered here so they stay permanently gone.
+                                </p>
+                            </div>
+                        ) : (
+                            dismissedHubsList.map((item, idx) => (
+                                <div
+                                    key={`${item.ratingKey || item.title}_${idx}`}
+                                    className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition-all"
+                                >
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-white">{item.title}</span>
+                                            {item.ratingKey && (
+                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 font-mono">
+                                                    #{item.ratingKey}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                            {item.sectionKey && <span>Library Section #{item.sectionKey}</span>}
+                                            {item.dismissedAt && <span>• Dismissed {new Date(item.dismissedAt).toLocaleDateString()}</span>}
+                                        </div>
+                                    </div>
+
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleRestoreDismissedHub(item)}
+                                        className="border-emerald-700/60 hover:bg-emerald-950/40 text-emerald-300 text-xs h-7 px-2.5 gap-1 shrink-0 cursor-pointer"
+                                        title="Allow this hub to be re-imported from Plex"
+                                    >
+                                        <RefreshCw className="h-3 w-3 text-emerald-400" />
+                                        <span>Restore</span>
+                                    </Button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between sm:justify-between">
+                        {dismissedHubsList.length > 0 ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleClearAllDismissedHubs}
+                                className="border-rose-900/60 hover:bg-rose-950/50 text-rose-300 text-xs h-8 px-3 gap-1 cursor-pointer"
+                            >
+                                <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                                <span>Clear All Ignored</span>
+                            </Button>
+                        ) : <div />}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDismissedHubsModalOpen(false)}
+                            className="border-slate-800 text-slate-300 hover:text-white"
+                        >
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

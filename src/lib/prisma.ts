@@ -404,7 +404,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["paymentEmailAutoScan", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailAutoScan" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["paymentEmailScanInterval", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailScanInterval" INTEGER DEFAULT 15;`],
                 ["paymentLastScanAt", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanAt" DATETIME;`],
-                ["paymentLastScanResult", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanResult" TEXT;`]
+                ["paymentLastScanResult", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanResult" TEXT;`],
+                ["dismissedHubs", `ALTER TABLE "Settings" ADD COLUMN "dismissedHubs" TEXT;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -893,7 +894,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                     ["scheduleStartDay", `ALTER TABLE "MediaCollection" ADD COLUMN "scheduleStartDay" INTEGER;`],
                     ["scheduleEndMonth", `ALTER TABLE "MediaCollection" ADD COLUMN "scheduleEndMonth" INTEGER;`],
                     ["scheduleEndDay", `ALTER TABLE "MediaCollection" ADD COLUMN "scheduleEndDay" INTEGER;`],
-                    ["seasonalAction", `ALTER TABLE "MediaCollection" ADD COLUMN "seasonalAction" TEXT DEFAULT 'promote_hide';`]
+                    ["seasonalAction", `ALTER TABLE "MediaCollection" ADD COLUMN "seasonalAction" TEXT DEFAULT 'promote_hide';`],
+                    ["isIgnored", `ALTER TABLE "MediaCollection" ADD COLUMN "isIgnored" BOOLEAN NOT NULL DEFAULT 0;`]
                 ];
                 for (const [colName, ddl] of collAddCols) {
                     if (!collCols.includes(colName)) {
