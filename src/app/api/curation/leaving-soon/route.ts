@@ -88,18 +88,27 @@ export async function POST(req: NextRequest) {
                 const token = resolved.token;
                 const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
 
+                // Fetch all active leaving soon items for this server
+                const allLeavingRecords = await prisma.mediaContentAdvisory.findMany({
+                    where: { isLeavingSoon: true, serverId: serverId || "default" },
+                    select: { ratingKey: true }
+                });
+                const allLeavingKeys = Array.from(new Set([...allLeavingRecords.map(r => r.ratingKey), ratingKey])).filter(k => !k.startsWith("guid-"));
+
                 // Sync to "Leaving Soon" Plex collection
-                await syncPlexCollection(
-                    urlsToTry,
-                    token,
-                    sectionKey,
-                    "⚠️ Leaving Soon",
-                    [ratingKey],
-                    {
-                        summary: "These items are scheduled to be removed soon to free up disk space. Watch them while you can!",
-                        sortTitle: "!000_LeavingSoon"
-                    }
-                );
+                if (allLeavingKeys.length > 0) {
+                    await syncPlexCollection(
+                        urlsToTry,
+                        token,
+                        sectionKey,
+                        "⚠️ Leaving Soon",
+                        allLeavingKeys,
+                        {
+                            summary: "These items are scheduled to be removed soon to free up disk space. Watch them while you can!",
+                            sortTitle: "!000_LeavingSoon"
+                        }
+                    );
+                }
 
                 // Apply overlay if requested
                 if (applyOverlay) {

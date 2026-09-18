@@ -6714,8 +6714,11 @@ export async function getArrMonitoredIndex(options?: {
 
             for (const app of targetApps) {
                 try {
-                    const movies = await arrApiGet(app, "/api/v3/movie");
-                    if (Array.isArray(movies)) {
+                    const moviesRes = await arrApiGet(app, "/api/v3/movie");
+                    const movies = moviesRes?.success && Array.isArray(moviesRes.data)
+                        ? moviesRes.data
+                        : (Array.isArray(moviesRes) ? moviesRes : []);
+                    if (movies.length > 0) {
                         for (const m of movies) {
                             const digitalDate = m.digitalRelease ? new Date(m.digitalRelease) : null;
                             const physicalDate = m.physicalRelease ? new Date(m.physicalRelease) : null;
@@ -6769,8 +6772,11 @@ export async function getArrMonitoredIndex(options?: {
 
             for (const app of targetApps) {
                 try {
-                    const series = await arrApiGet(app, "/api/v3/series");
-                    if (Array.isArray(series)) {
+                    const seriesRes = await arrApiGet(app, "/api/v3/series");
+                    const series = seriesRes?.success && Array.isArray(seriesRes.data)
+                        ? seriesRes.data
+                        : (Array.isArray(seriesRes) ? seriesRes : []);
+                    if (series.length > 0) {
                         for (const s of series) {
                             const firstAiredDate = s.firstAired ? new Date(s.firstAired) : null;
                             const hasFile = Boolean(s.statistics?.episodeFileCount && s.statistics.episodeFileCount > 0);
@@ -6974,6 +6980,7 @@ export async function getTrendingAndPlaceholderMediaAction(
             let arrItem: any = undefined;
             if (isTvSection) {
                 arrItem = ((item as any).tvdbId ? arrIndex.seriesByTvdb.get(String((item as any).tvdbId)) : undefined) ||
+                          (item.id ? arrIndex.seriesByTvdb.get(String(item.id)) : undefined) ||
                           (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
                           (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
             } else {
@@ -7895,7 +7902,8 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const tmdbStr = String(item.id);
                 let arrItem: ArrItemStatus | undefined;
                 if (item.mediaType === "tv") {
-                    arrItem = (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                    arrItem = (item.id ? arrIndex.seriesByTvdb.get(String(item.id)) : undefined) ||
+                              (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
                               (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
                 } else {
                     arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
@@ -7903,9 +7911,9 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                               (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
                 }
 
-                const inRadarr = arrItem?.appType === "radarr";
-                const inSonarr = arrItem?.appType === "sonarr";
-                const isMonitored = Boolean(arrItem?.monitored);
+                const inRadarr = arrItem?.appType === "radarr" || collection.sourceType === "radarr";
+                const inSonarr = arrItem?.appType === "sonarr" || collection.sourceType === "sonarr";
+                const isMonitored = Boolean(arrItem?.monitored) || collection.sourceType === "radarr" || collection.sourceType === "sonarr";
 
                 const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
                 const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
@@ -8802,7 +8810,8 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
             // Arr status
             let arrItem: ArrItemStatus | undefined;
             if (item.mediaType === "tv") {
-                arrItem = (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                arrItem = (item.id ? arrIndex.seriesByTvdb.get(String(item.id)) : undefined) ||
+                          (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
                           (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
             } else {
                 arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
@@ -8810,9 +8819,9 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                           (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
             }
 
-            const inRadarr = arrItem?.appType === "radarr";
-            const inSonarr = arrItem?.appType === "sonarr";
-            const isMonitored = Boolean(arrItem?.monitored);
+            const inRadarr = arrItem?.appType === "radarr" || collection.sourceType === "radarr";
+            const inSonarr = arrItem?.appType === "sonarr" || collection.sourceType === "sonarr";
+            const isMonitored = Boolean(arrItem?.monitored) || collection.sourceType === "radarr" || collection.sourceType === "sonarr";
 
             const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
             const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;

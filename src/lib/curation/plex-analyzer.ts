@@ -1775,7 +1775,70 @@ export async function removeItemsFromPlexCollection(
 }
 
 /**
- * Creates or updates a Plex collection and populates it with item rating keys.
+ * Resolves the Plex Server Machine Identifier (machineId).
+ */
+export async function getPlexServerMachineIdentifier(
+    serverUrlOrCandidates: string | string[],
+    token: string
+): Promise<string> {
+    const urls = expandCandidateUrls(serverUrlOrCandidates);
+    for (const u of urls) {
+        try {
+            const res = await fetch(`${u}/identity`, {
+                headers: { Accept: "application/json", "X-Plex-Token": token },
+                signal: AbortSignal.timeout(3000)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const mId = data.MediaContainer?.machineIdentifier;
+                if (mId) return mId;
+            }
+        } catch {}
+        try {
+            const res2 = await fetch(`${u}/?X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { Accept: "application/json", "X-Plex-Token": token },
+                signal: AbortSignal.timeout(3000)
+            });
+            if (res2.ok) {
+                const data2 = await res2.json();
+                const mId2 = data2.MediaContainer?.machineIdentifier;
+                if (mId2) return mId2;
+            }
+        } catch {}
+    }
+    return "";
+}
+
+/**
+ * Resolves the section type ('movie' or 'show') for a given library section.
+ */
+export async function getPlexLibrarySectionType(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    sectionKey: string | number
+): Promise<"movie" | "show" | "artist" | "photo" | "unknown"> {
+    const urls = expandCandidateUrls(serverUrlOrCandidates);
+    for (const u of urls) {
+        try {
+            const res = await fetch(`${u}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { Accept: "application/json", "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                signal: AbortSignal.timeout(3000)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const directories = data.MediaContainer?.Directory || [];
+                const list = Array.isArray(directories) ? directories : [directories];
+                const found = list.find((d: any) => String(d.key) === String(sectionKey));
+                if (found?.type) return found.type;
+            }
+        } catch {}
+    }
+    return "movie";
+}
+
+/**
+ * Creates or updates a Plex collection and populates it with item rating keys,
+ * preserving all other collections assigned to those items.
  */
 export async function syncPlexCollection(
     serverUrlOrCandidates: string | string[],
@@ -1802,77 +1865,170 @@ export async function syncPlexCollection(
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let collectionRatingKey: string | undefined;
 
-    // 1. Check if collection already exists
+    // 1. Check if collection already exists in Plex
     const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
     const existing = existingCollections.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
 
     if (existing) {
         collectionRatingKey = existing.ratingKey;
-
-        // Prune stale items that are no longer part of this collection
-        try {
-            const currentKeys = await getPlexCollectionChildRatingKeys(urlsToTry, token, collectionRatingKey);
-            const staleKeys = currentKeys.filter(k => !itemRatingKeys.includes(k));
-            if (staleKeys.length > 0) {
-                await removeItemsFromPlexCollection(urlsToTry, token, collectionTitle, staleKeys, collectionRatingKey);
-            }
-        } catch {}
     } else {
-        // Create collection by tagging the first item
-        const firstKey = itemRatingKeys[0];
+        // Create collection using official Plex POST /library/collections endpoint
+        const secType = await getPlexLibrarySectionType(urlsToTry, token, sectionKey);
+        const typeParam = secType === "show" ? 2 : 1;
+
         for (const cleanBase of urlsToTry) {
             if (collectionRatingKey) break;
             try {
-                // Try direct metadata tagging first (works across both Movies & TV)
-                const directMetaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(firstKey)}?collection%5B0%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
-                const metaRes = await fetch(directMetaUrl, {
-                    method: "PUT",
-                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                const createUrl = `${cleanBase}/library/collections?type=${typeParam}&title=${encodeURIComponent(collectionTitle)}&smart=0&sectionId=${encodeURIComponent(String(sectionKey))}&X-Plex-Token=${encodeURIComponent(token)}`;
+                const createRes = await fetch(createUrl, {
+                    method: "POST",
+                    headers: {
+                        Accept: "application/json",
+                        "X-Plex-Token": token,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    },
+                    signal: AbortSignal.timeout(5000)
                 });
 
-                // Also try section update
-                const secTagUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?id=${encodeURIComponent(firstKey)}&collection%5B0%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
-                await fetch(secTagUrl, {
-                    method: "PUT",
-                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-                }).catch(() => {});
-
-                if (metaRes.ok) {
-                    const refreshed = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
-                    const found = refreshed.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
-                    if (found) {
-                        collectionRatingKey = found.ratingKey;
+                if (createRes.ok) {
+                    const createData = await createRes.json();
+                    const meta = createData.MediaContainer?.Metadata?.[0] || createData.MediaContainer?.Directory?.[0];
+                    if (meta?.ratingKey) {
+                        collectionRatingKey = String(meta.ratingKey);
                         break;
                     }
                 }
-            } catch (e: any) {
-                // Try next URL
+            } catch (e: any) {}
+        }
+
+        // Fallback: If POST didn't return ratingKey, re-query collections
+        if (!collectionRatingKey) {
+            const refreshed = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
+            const found = refreshed.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
+            if (found) {
+                collectionRatingKey = found.ratingKey;
             }
         }
     }
 
-    // 2. Add all items to the collection
     let addedCount = 0;
-    for (const rKey of itemRatingKeys) {
-        let added = false;
-        for (const cleanBase of urlsToTry) {
-            if (added) break;
-            try {
-                const addUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?collection%5B%5D.tag.tag=${encodeURIComponent(collectionTitle)}&X-Plex-Token=${encodeURIComponent(token)}`;
-                const putRes = await fetch(addUrl, {
-                    method: "PUT",
-                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
-                });
-                if (putRes.ok) {
-                    addedCount++;
-                    added = true;
-                }
-            } catch (e) {}
-        }
-    }
-
-    // 3. Update collection summary, sort title, collectionMode, and Home & Recommended Promotion
     if (collectionRatingKey) {
+        // 2. Fetch current child ratingKeys of this collection
+        const currentKeys = await getPlexCollectionChildRatingKeys(urlsToTry, token, collectionRatingKey);
+
+        // 3. Remove stale items that are no longer part of this collection
+        const staleKeys = currentKeys.filter(k => !itemRatingKeys.includes(k));
+        if (staleKeys.length > 0) {
+            await removeItemsFromPlexCollection(urlsToTry, token, collectionTitle, staleKeys, collectionRatingKey);
+        }
+
+        // 4. Add items that are not yet in the collection (using native collection PUT /items?uri=)
+        const keysToAdd = itemRatingKeys.filter(k => !currentKeys.includes(k));
+        if (keysToAdd.length > 0) {
+            const machineId = await getPlexServerMachineIdentifier(urlsToTry, token);
+            const chunkSize = 50;
+
+            for (let i = 0; i < keysToAdd.length; i += chunkSize) {
+                const chunk = keysToAdd.slice(i, i + chunkSize);
+                let chunkAdded = false;
+
+                for (const cleanBase of urlsToTry) {
+                    if (chunkAdded) break;
+                    try {
+                        const ratingKeysParam = chunk.join(",");
+                        const uriParam = machineId
+                            ? `server://${machineId}/com.plexapp.plugins.library/library/metadata/${ratingKeysParam}`
+                            : `library:///item/%2Flibrary%2Fmetadata%2F${ratingKeysParam}`;
+                        const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?uri=${encodeURIComponent(uriParam)}&X-Plex-Token=${encodeURIComponent(token)}`;
+
+                        const putRes = await fetch(addUrl, {
+                            method: "PUT",
+                            headers: {
+                                Accept: "application/json",
+                                "X-Plex-Token": token,
+                                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                            },
+                            signal: AbortSignal.timeout(5000)
+                        });
+
+                        if (putRes.ok) {
+                            addedCount += chunk.length;
+                            chunkAdded = true;
+                        }
+                    } catch {}
+                }
+
+                // If bulk addition failed, fall back to individual addition or metadata merge preserving all collections
+                if (!chunkAdded) {
+                    for (const rKey of chunk) {
+                        let singleAdded = false;
+                        for (const cleanBase of urlsToTry) {
+                            if (singleAdded) break;
+                            try {
+                                const singleUri = machineId
+                                    ? `server://${machineId}/com.plexapp.plugins.library/library/metadata/${rKey}`
+                                    : `library:///item/%2Flibrary%2Fmetadata%2F${rKey}`;
+                                const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?uri=${encodeURIComponent(singleUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                                const sRes = await fetch(addUrl, {
+                                    method: "PUT",
+                                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                                    signal: AbortSignal.timeout(4000)
+                                });
+                                if (sRes.ok) {
+                                    addedCount++;
+                                    singleAdded = true;
+                                    continue;
+                                }
+                            } catch {}
+
+                            // Direct item metadata tagging fallback with multi-collection merge preservation
+                            try {
+                                const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+                                const mRes = await fetch(metaUrl, {
+                                    headers: { Accept: "application/json", "X-Plex-Token": token },
+                                    signal: AbortSignal.timeout(4000)
+                                });
+                                if (mRes.ok) {
+                                    const mData = await mRes.json();
+                                    const metaItem = mData.MediaContainer?.Metadata?.[0] || mData.MediaContainer?.Directory?.[0];
+                                    const existingColls: string[] = [];
+                                    if (Array.isArray(metaItem?.Collection)) {
+                                        for (const c of metaItem.Collection) {
+                                            const name = typeof c === "string" ? c : c?.tag;
+                                            if (name) existingColls.push(name);
+                                        }
+                                    }
+                                    if (!existingColls.some(c => c.toLowerCase() === collectionTitle.toLowerCase())) {
+                                        existingColls.push(collectionTitle);
+                                    }
+                                    const params = new URLSearchParams();
+                                    existingColls.forEach((c, idx) => {
+                                        params.set(`collection[${idx}].tag.tag`, c);
+                                    });
+                                    params.set("collection.locked", "1");
+                                    params.set("X-Plex-Token", token);
+
+                                    const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?${params.toString()}`;
+                                    const putRes = await fetch(putUrl, {
+                                        method: "PUT",
+                                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                                        signal: AbortSignal.timeout(4000)
+                                    });
+                                    if (putRes.ok) {
+                                        addedCount++;
+                                        singleAdded = true;
+                                    }
+                                }
+                            } catch {}
+                        }
+                    }
+                }
+            }
+        } else {
+            addedCount = currentKeys.length;
+        }
+
+        // 5. Update collection summary, sort title, collectionMode, and Home & Recommended Promotion
         await updatePlexCollectionPromotionAndOrder(
             urlsToTry,
             token,
@@ -1887,16 +2043,16 @@ export async function syncPlexCollection(
                 collectionMode: options?.collectionMode || "default"
             }
         );
+
+        // 6. Upload custom collection poster if provided
+        if (options?.posterBuffer) {
+            await uploadPlexItemPoster(urlsToTry, token, collectionRatingKey, options.posterBuffer);
+        } else if (options?.posterUrl) {
+            await uploadPlexItemPosterFromUrl(urlsToTry, token, collectionRatingKey, options.posterUrl);
+        }
     }
 
-    // 4. Upload custom collection poster if provided
-    if (collectionRatingKey && options?.posterBuffer) {
-        await uploadPlexItemPoster(urlsToTry, token, collectionRatingKey, options.posterBuffer);
-    } else if (collectionRatingKey && options?.posterUrl) {
-        await uploadPlexItemPosterFromUrl(urlsToTry, token, collectionRatingKey, options.posterUrl);
-    }
-
-    logger.addLog("SUCCESS", "PLEX", `Synced collection "${collectionTitle}" (${addedCount}/${itemRatingKeys.length} items added) on section ${sectionKey}`);
+    logger.addLog("SUCCESS", "PLEX", `Synced collection "${collectionTitle}" (${addedCount}/${itemRatingKeys.length} items present) on section ${sectionKey}`);
     return {
         success: true,
         collectionRatingKey,
