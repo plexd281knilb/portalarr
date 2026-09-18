@@ -12,6 +12,8 @@ import {
     getPlexLibraryMediaItems, 
     getPlexSingleItemMetadata,
     getPlexLibraryCollections, 
+    getPlexCollectionChildRatingKeys,
+    getPlexServerMachineIdentifier,
     syncPlexCollection, 
     deletePlexCollection, 
     updatePlexCollectionPromotionAndOrder,
@@ -1280,7 +1282,14 @@ export async function saveMediaCollectionAction(data: {
     }
 }
 
-export async function syncCollectionToPlexAction(collectionId: string) {
+export async function syncCollectionToPlexAction(collectionId: string): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    itemCount?: number;
+    placeholdersGenerated?: number;
+    collectionRatingKey?: string;
+}> {
     try {
 
         await verifyAdmin();
@@ -1302,13 +1311,65 @@ export async function syncCollectionToPlexAction(collectionId: string) {
 
         logger.addLog("INFO", "PLEX", `Syncing collection/hub "${collection.title}" (section: ${collection.sectionKey}, server: "${resolved.serverName}"). Trying endpoints: ${urlsToTry.join(", ")}`);
 
-        // If this is an existing Plex-native collection, hub, or already has a ratingKey in PMS:
+        // 1. If this is a Smart Hub collection, deploy/update via deployFilteredSmartHubAction
+        if (collection.sourceType === "plex_smart" || collection.category === "Plex Smart") {
+            const subtype = (collection.sourceQuery || "recently_added") as any;
+            const deployRes = await deployFilteredSmartHubAction(
+                collection.serverId || "",
+                collection.sectionKey || "",
+                subtype,
+                collection.title,
+                collection.maxItems || 25
+            );
+            if (deployRes.success) {
+                let itemCount = 0;
+                if (deployRes.collectionRatingKey) {
+                    const childKeys = await getPlexCollectionChildRatingKeys(urlsToTry, token, deployRes.collectionRatingKey);
+                    itemCount = childKeys.length;
+                    await prisma.mediaCollection.update({
+                        where: { id: collection.id },
+                        data: {
+                            ratingKey: deployRes.collectionRatingKey,
+                            itemCount,
+                            lastSyncedAt: new Date()
+                        }
+                    });
+                }
+                return {
+                    success: true,
+                    itemCount,
+                    collectionRatingKey: deployRes.collectionRatingKey,
+                    message: deployRes.message || `Synced Filtered Smart Hub "${collection.title}" (${itemCount} items) to Plex!`
+                };
+            } else {
+                return {
+                    success: false,
+                    error: deployRes.error || deployRes.message || "Failed deploying Filtered Smart Hub."
+                };
+            }
+        }
+
+        // 2. If this is the Leaving Soon collection, sync via syncLeavingSoonCollectionInternal
+        if (collection.sourceQuery === "tag:leaving-soon" || collection.title.toLowerCase().includes("leaving soon")) {
+            const lRes = await syncLeavingSoonCollectionHubInternal(collection.serverId || undefined, collection.sectionKey || undefined);
+            if (lRes.success) {
+                return {
+                    success: true,
+                    itemCount: lRes.leavingCount ?? 0,
+                    message: lRes.message || `Synced Leaving Soon collection (${lRes.leavingCount ?? 0} items) to Plex!`
+                };
+            }
+            return {
+                success: false,
+                error: lRes.error || "Failed syncing Leaving Soon collection."
+            };
+        }
+
+        // 3. If this is an existing Plex-native collection, hub, or already has a ratingKey in PMS:
         const isNativePlex = collection.sourceType === "plex_native" || 
-                             collection.sourceType === "plex_smart" || 
                              collection.sourceType === "plex_hub" || 
                              collection.category === "Plex" || 
                              collection.category === "Plex Library" || 
-                             collection.category === "Plex Smart" || 
                              collection.category === "Plex Hub" ||
                              collection.ratingKey?.startsWith("hub:") ||
                              (collection.sourceType === "plex_query" && !collection.sourceQuery?.includes("hdr:") && !collection.sourceQuery?.includes("audio:") && !collection.sourceQuery?.includes("1980") && !collection.sourceQuery?.includes("1990") && !collection.sourceQuery?.includes("tag:"));
@@ -1358,7 +1419,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             }
         }
 
-        // 1. Determine Section Media Type (Movie vs TV) to guarantee library and collection isolation
+        // 4. Determine Section Media Type (Movie vs TV) to guarantee library and collection isolation
         let isTvSection = false;
         let isMovieSection = false;
         try {
@@ -1706,22 +1767,26 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         }
 
         if (matchingRatingKeys.length === 0) {
+            await prisma.mediaCollection.update({
+                where: { id: collection.id },
+                data: {
+                    itemCount: 0,
+                    lastSyncedAt: new Date()
+                }
+            });
+
             if (placeholdersGenerated > 0) {
                 return {
                     success: true,
+                    itemCount: 0,
+                    placeholdersGenerated,
                     message: `Generated ${placeholdersGenerated} Coming Soon placeholder(s) in share folder! Plex library scan initiated to add stubs to collection.`
                 };
             }
-            if (collection.includePlaceholders) {
-                return {
-                    success: true,
-                    message: `Collection criteria evaluated (0 items currently in library, candidates checked for Coming Soon stubs).`
-                };
-            }
             return {
-                success: false,
-                error: "No matching library media found for collection query criteria.",
-                message: `No matching library media found for collection criteria (${libraryItems.length} items evaluated).`
+                success: true,
+                itemCount: 0,
+                message: `Collection "${collection.title}" evaluated (0 items currently in library, ${libraryItems.length} media items evaluated).`
             };
         }
 
@@ -2111,8 +2176,35 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 executionMethod += ` (Error querying Sonarr: ${sErr.message})`;
             }
         } else if (sourceType === "plex_smart") {
-            executionMethod = `Plex Filtered Smart Hub: Dynamic filter for ${sourceQuery} (excludes trailer-placeholder stubs).`;
-            matchedItems = libraryItems.slice(0, 30);
+            const subtype = sourceQuery || "recently_added";
+            executionMethod = `Plex Filtered Smart Hub: Dynamic filter for ${subtype} (excludes trailer-placeholder stubs).`;
+            if (subtype === "recently_added") {
+                matchedItems = [...libraryItems].sort((a, b) => {
+                    const tA = a.addedAt ? new Date(a.addedAt).getTime() : (parseInt(a.ratingKey, 10) || 0);
+                    const tB = b.addedAt ? new Date(b.addedAt).getTime() : (parseInt(b.ratingKey, 10) || 0);
+                    return tB - tA;
+                });
+            } else if (subtype === "recently_released") {
+                const twoYearsAgo = new Date();
+                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+                matchedItems = libraryItems.filter(it => {
+                    if (it.originallyAvailableAt) {
+                        return new Date(it.originallyAvailableAt) >= twoYearsAgo;
+                    }
+                    if (it.year) {
+                        return it.year >= twoYearsAgo.getFullYear();
+                    }
+                    return false;
+                }).sort((a, b) => {
+                    const yA = a.originallyAvailableAt ? new Date(a.originallyAvailableAt).getTime() : (a.year ? new Date(a.year, 0, 1).getTime() : 0);
+                    const yB = b.originallyAvailableAt ? new Date(b.originallyAvailableAt).getTime() : (b.year ? new Date(b.year, 0, 1).getTime() : 0);
+                    return yB - yA;
+                });
+            } else if (subtype === "top_unwatched") {
+                matchedItems = libraryItems.filter(it => it.viewCount === 0 || it.unwatched === true || !it.lastViewedAt).sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            } else {
+                matchedItems = libraryItems.slice(0, 30);
+            }
         }
 
         const effectiveMatches = (collectionConfig.maxItems && collectionConfig.maxItems > 0)
@@ -7862,7 +7954,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     id: t.tmdbId || t.id,
                     title: t.title,
                     mediaType: (isTvSection ? "tv" : "movie") as "movie" | "tv",
-                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    releaseDate: t.releaseDate || undefined,
                     imdbId: t.imdbId
                 }));
             } else if (collection.sourceQuery === "anticipated") {
@@ -7873,7 +7965,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     id: t.tmdbId || t.id,
                     title: t.title,
                     mediaType: (isTvSection ? "tv" : "movie") as "movie" | "tv",
-                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    releaseDate: t.releaseDate || undefined,
                     imdbId: t.imdbId
                 }));
             } else if (collection.sourceQuery) {
@@ -7889,7 +7981,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                             id: t.tmdbId || t.id,
                             title: t.title,
                             mediaType: (t.mediaType === "show" || t.mediaType === "tv" ? "tv" : "movie") as "movie" | "tv",
-                            releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                            releaseDate: t.releaseDate || undefined,
                             imdbId: t.imdbId
                         }));
                 }
@@ -7916,7 +8008,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                                 overview: m.overview,
                                 posterPath: m.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
                                 mediaType: "movie" as const,
-                                releaseDate: m.digitalRelease || m.physicalRelease || m.inCinemas || (m.year ? `${m.year}-01-01` : undefined),
+                                releaseDate: m.digitalRelease || m.physicalRelease || m.inCinemas || undefined,
                                 digitalReleaseDate: m.digitalRelease || undefined,
                                 theatricalReleaseDate: m.inCinemas || undefined,
                                 imdbId: m.imdbId
@@ -7949,7 +8041,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                                 overview: s.overview,
                                 posterPath: s.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
                                 mediaType: "tv" as const,
-                                releaseDate: s.firstAired || (s.year ? `${s.year}-01-01` : undefined),
+                                releaseDate: s.firstAired || undefined,
                                 digitalReleaseDate: s.firstAired || undefined,
                                 imdbId: s.imdbId
                             })));
@@ -7973,7 +8065,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                             id: t.tmdbId || t.id,
                             title: t.title,
                             mediaType: (t.mediaType === "show" || t.mediaType === "tv" ? "tv" : "movie") as "movie" | "tv",
-                            releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                            releaseDate: t.releaseDate || undefined,
                             imdbId: t.imdbId
                         }));
                 }
@@ -8384,7 +8476,7 @@ export async function deployFilteredSmartHubAction(
     subtype: FilteredHubSubtype = "recently_added",
     customTitle?: string,
     maxItems: number = 25
-): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string }> {
+): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string; itemCount?: number }> {
     try {
 
         await verifyAdmin();
@@ -8454,9 +8546,9 @@ export async function deployFilteredSmartHubAction(
             }
         } else if (subtype === "recently_released") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.originallyAvailableAt>>=-730d&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&originallyAvailableAt>>=-730d&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released_episodes") {
             filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
@@ -8469,26 +8561,13 @@ export async function deployFilteredSmartHubAction(
         }
 
         // Get machineId
-        let machineId = "";
-        for (const cleanBase of urlsToTry) {
-            if (machineId) break;
-            try {
-                const sRes = await fetch(`${cleanBase}/?X-Plex-Token=${encodeURIComponent(token)}`, {
-                    headers: { "Accept": "application/json" },
-                    cache: "no-store"
-                });
-                if (sRes.ok) {
-                    const sData = await sRes.json();
-                    machineId = sData.MediaContainer?.machineIdentifier || "";
-                }
-            } catch {}
-        }
+        const machineId = await getPlexServerMachineIdentifier(urlsToTry, token);
 
         const fullUri = machineId
             ? `server://${machineId}/com.plexapp.plugins.library${filterUri}`
             : filterUri;
 
-        // Check if smart collection already exists in Plex
+        // Check if collection already exists in Plex
         const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
         const existing = existingCollections.find(c => {
             const titleLower = c.title.toLowerCase();
@@ -8538,7 +8617,8 @@ export async function deployFilteredSmartHubAction(
                     const updateUrl = `${cleanBase}/library/collections/${existing.ratingKey}/items?uri=${encodeURIComponent(fullUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
                     await fetch(updateUrl, {
                         method: "PUT",
-                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                        signal: AbortSignal.timeout(4000)
                     });
                     if (existing.title !== defaultTitle) {
                         await updatePlexItemTitle(urlsToTry, token, existing.ratingKey, defaultTitle);
@@ -8547,6 +8627,12 @@ export async function deployFilteredSmartHubAction(
                 } catch {}
             }
         } else {
+            // If an existing collection exists but is NOT smart (e.g. legacy static collection), delete it first so PMS creates a true smart collection
+            if (existing && !existing.smart && !existing.ratingKey.startsWith("hub:")) {
+                await deletePlexCollection(urlsToTry, token, existing.ratingKey).catch(() => {});
+                ratingKey = undefined;
+            }
+
             // Create new smart collection in Plex
             for (const cleanBase of urlsToTry) {
                 if (ratingKey && !ratingKey.startsWith("hub:")) break;
@@ -8558,21 +8644,36 @@ export async function deployFilteredSmartHubAction(
                             "Accept": "application/json",
                             "X-Plex-Token": token,
                             "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                        }
+                        },
+                        signal: AbortSignal.timeout(5000)
                     });
                     if (cRes.ok) {
                         const cText = await cRes.text();
                         try {
                             const cData = JSON.parse(cText);
-                            const meta = cData.MediaContainer?.Metadata?.[0];
+                            const meta = cData.MediaContainer?.Metadata?.[0] || cData.MediaContainer?.Directory?.[0];
                             if (meta?.ratingKey) {
-                                ratingKey = meta.ratingKey;
+                                ratingKey = String(meta.ratingKey);
                             }
-                        } catch {}
+                        } catch {
+                            const match = cText.match(/ratingKey="([^"]+)"/);
+                            if (match) ratingKey = match[1];
+                        }
                     }
                 } catch {}
             }
         }
+
+        // If ratingKey not found, re-query collections as fallback
+        if (!ratingKey || ratingKey.startsWith("hub:")) {
+            const refreshedColls = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
+            const refFound = refreshedColls.find(c => c.title.toLowerCase() === defaultTitle.toLowerCase() && c.smart);
+            if (refFound) {
+                ratingKey = refFound.ratingKey;
+            }
+        }
+
+        let childItemCount = 0;
 
         // Set user-based filtering prefs for personalized collections (like top_unwatched)
         if (ratingKey && !ratingKey.startsWith("hub:")) {
@@ -8581,7 +8682,8 @@ export async function deployFilteredSmartHubAction(
                     try {
                         await fetch(`${cleanBase}/library/metadata/${ratingKey}/prefs?collectionFilterBasedOnUser=1&X-Plex-Token=${encodeURIComponent(token)}`, {
                             method: "PUT",
-                            headers: { "X-Plex-Token": token }
+                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                            signal: AbortSignal.timeout(4000)
                         });
                         break;
                     } catch {}
@@ -8591,10 +8693,15 @@ export async function deployFilteredSmartHubAction(
             // Promote to Home Screen with top priority
             await updatePlexCollectionPromotionAndOrder(urlsToTry, token, sectionKey, ratingKey, {
                 summary: defaultSummary,
+                sortTitle: `${sortPrefix}${defaultTitle}`,
                 promotedToHome: true,
                 promotedToRecommended: true,
                 promotedToSharedHome: true
             });
+
+            // Fetch actual child count from Plex
+            const childKeys = await getPlexCollectionChildRatingKeys(urlsToTry, token, ratingKey);
+            childItemCount = childKeys.length;
         }
 
         // CRITICAL: Upsert in local database so it immediately shows up in the Active Collections table!
@@ -8621,6 +8728,7 @@ export async function deployFilteredSmartHubAction(
                     sourceQuery: subtype,
                     category: "Plex Smart",
                     type: "smart",
+                    itemCount: childItemCount || existingDb.itemCount,
                     maxItems: maxItems || 25,
                     promotedToHome: true,
                     promotedToRecommended: true,
@@ -8644,7 +8752,7 @@ export async function deployFilteredSmartHubAction(
                     sourceType: "plex_smart",
                     sourceQuery: subtype,
                     ratingKey: ratingKey || undefined,
-                    itemCount: 0,
+                    itemCount: childItemCount,
                     maxItems: maxItems || 25,
                     promotedToHome: true,
                     promotedToRecommended: true,
@@ -8658,12 +8766,13 @@ export async function deployFilteredSmartHubAction(
             });
         }
 
-        logger.addLog("SUCCESS", "PLEX", `Deployed Filtered Smart Collection "${defaultTitle}" (${subtype}) to section ${sectionKey} on server "${resolved.serverName}"`);
+        logger.addLog("SUCCESS", "PLEX", `Deployed Filtered Smart Collection "${defaultTitle}" (${subtype}, ${childItemCount} items) to section ${sectionKey} on server "${resolved.serverName}"`);
 
         return {
             success: true,
             collectionRatingKey: ratingKey,
-            message: `Deployed "${defaultTitle}" smart collection to Plex & saved to Active Collections! Placeholders will now be cleanly excluded from user carousels.`
+            itemCount: childItemCount,
+            message: `Deployed "${defaultTitle}" smart collection (${childItemCount} items) to Plex & saved to Active Collections! Placeholders will now be cleanly excluded from user carousels.`
         };
     } catch (e: any) {
         logger.addLog("ERROR", "PLEX", `Failed deploying filtered smart hub (${subtype}): ${e.message}`);
@@ -8818,7 +8927,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                     id: t.tmdbId || t.id,
                     title: t.title,
                     mediaType: "movie" as const,
-                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    releaseDate: t.releaseDate || undefined,
                     imdbId: t.imdbId
                 }));
             } else if (collection.sourceQuery === "anticipated") {
@@ -8827,7 +8936,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                     id: t.tmdbId || t.id,
                     title: t.title,
                     mediaType: "movie" as const,
-                    releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                    releaseDate: t.releaseDate || undefined,
                     imdbId: t.imdbId
                 }));
             } else if (collection.sourceQuery) {
@@ -8837,7 +8946,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                         id: t.tmdbId || t.id,
                         title: t.title,
                         mediaType: "movie" as const,
-                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
+                        releaseDate: t.releaseDate || undefined,
                         imdbId: t.imdbId
                     }));
                 }
@@ -8864,7 +8973,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                                 overview: m.overview,
                                 posterPath: m.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
                                 mediaType: "movie" as const,
-                                releaseDate: m.digitalRelease || m.physicalRelease || m.inCinemas || (m.year ? `${m.year}-01-01` : undefined),
+                                releaseDate: m.digitalRelease || m.physicalRelease || m.inCinemas || undefined,
                                 digitalReleaseDate: m.digitalRelease || undefined,
                                 theatricalReleaseDate: m.inCinemas || undefined,
                                 imdbId: m.imdbId
@@ -8897,7 +9006,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                                 overview: s.overview,
                                 posterPath: s.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
                                 mediaType: "tv" as const,
-                                releaseDate: s.firstAired || (s.year ? `${s.year}-01-01` : undefined),
+                                releaseDate: s.firstAired || undefined,
                                 digitalReleaseDate: s.firstAired || undefined,
                                 imdbId: s.imdbId
                             })));
@@ -8908,26 +9017,99 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 console.warn("[SONARR-PREVIEW] Error querying Sonarr:", sErr.message);
             }
         } else if (collection.sourceType === "plex_smart") {
-            candidateItems = libraryItems.slice(0, 30).map(it => ({
-                id: it.ratingKey,
+            const subtype = collection.sourceQuery || "recently_added";
+            let filteredLib = [...libraryItems];
+            if (subtype === "recently_added") {
+                filteredLib.sort((a, b) => {
+                    const tA = a.addedAt ? new Date(a.addedAt).getTime() : (parseInt(a.ratingKey, 10) || 0);
+                    const tB = b.addedAt ? new Date(b.addedAt).getTime() : (parseInt(b.ratingKey, 10) || 0);
+                    return tB - tA;
+                });
+            } else if (subtype === "recently_released") {
+                const twoYearsAgo = new Date();
+                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+                filteredLib = libraryItems.filter(it => {
+                    if (it.originallyAvailableAt) {
+                        return new Date(it.originallyAvailableAt) >= twoYearsAgo;
+                    }
+                    if (it.year) {
+                        return it.year >= twoYearsAgo.getFullYear();
+                    }
+                    return false;
+                }).sort((a, b) => {
+                    const yA = a.originallyAvailableAt ? new Date(a.originallyAvailableAt).getTime() : (a.year ? new Date(a.year, 0, 1).getTime() : 0);
+                    const yB = b.originallyAvailableAt ? new Date(b.originallyAvailableAt).getTime() : (b.year ? new Date(b.year, 0, 1).getTime() : 0);
+                    return yB - yA;
+                });
+            } else if (subtype === "top_unwatched") {
+                filteredLib = libraryItems.filter(it => it.viewCount === 0 || it.unwatched === true || !it.lastViewedAt).sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            }
+            candidateItems = filteredLib.slice(0, collection.maxItems || 30).map(it => ({
+                id: it.guids?.tmdb || it.ratingKey,
                 title: it.title,
                 overview: it.summary,
                 posterPath: it.thumb,
                 mediaType: it.type === "show" ? "tv" as const : "movie" as const,
-                releaseDate: it.year ? `${it.year}-01-01` : undefined
+                releaseDate: it.originallyAvailableAt || (it.year ? `${it.year}-01-01` : undefined),
+                imdbId: it.guids?.imdb
             }));
         } else if (collection.sourceType === "mdblist") {
+            const isTv = collection.type === "show" || collection.type === "tv" || collection.title?.toLowerCase().includes("tv") || collection.sourceQuery?.includes("tv") || libraryItems.some(it => it.type === "show");
+            let items: any[] = [];
             if (collection.sourceQuery) {
-                const items = await getMdblistItems(collection.sourceQuery);
-                if (items && items.length > 0) {
-                    candidateItems = items.map((t: any) => ({
-                        id: t.tmdbId || t.id,
-                        title: t.title,
-                        mediaType: "movie" as const,
-                        releaseDate: t.year ? `${t.year}-01-01` : undefined,
-                        imdbId: t.imdbId
+                items = await getMdblistItems(collection.sourceQuery);
+            }
+            if (!items || items.length === 0) {
+                if (collection.title?.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb")) {
+                    const builtinList = getBuiltinImdbTopList(isTv ? "show" : "movie");
+                    items = builtinList.map(b => ({
+                        tmdbId: b.tmdbId,
+                        imdbId: b.imdbId,
+                        title: b.title,
+                        year: b.year,
+                        releaseDate: b.year ? `${b.year}-01-01` : undefined
                     }));
                 }
+            }
+            if (items && items.length > 0) {
+                candidateItems = items.map((t: any) => ({
+                    id: t.tmdbId || t.id,
+                    title: t.title,
+                    mediaType: isTv ? "tv" as const : "movie" as const,
+                    releaseDate: t.releaseDate || undefined,
+                    imdbId: t.imdbId
+                }));
+            }
+        } else if (collection.sourceType === "plex_query") {
+            if (collection.sourceQuery === "tag:leaving-soon" || collection.title?.toLowerCase().includes("leaving soon")) {
+                const leavingSoon = await prisma.mediaContentAdvisory.findMany({ where: { isLeavingSoon: true } });
+                const lKeys = new Set(leavingSoon.map(l => l.ratingKey));
+                const matched = libraryItems.filter(it => lKeys.has(it.ratingKey));
+                candidateItems = matched.map(it => ({
+                    id: it.guids?.tmdb || it.ratingKey,
+                    title: it.title,
+                    overview: it.summary,
+                    posterPath: it.thumb,
+                    mediaType: it.type === "show" ? "tv" as const : "movie" as const,
+                    releaseDate: it.originallyAvailableAt || (it.year ? `${it.year}-01-01` : undefined),
+                    imdbId: it.guids?.imdb
+                }));
+            } else if (collection.sourceQuery?.includes("1980")) {
+                candidateItems = libraryItems.filter(it => it.year && it.year >= 1980 && it.year <= 1989).map(it => ({
+                    id: it.guids?.tmdb || it.ratingKey,
+                    title: it.title,
+                    posterPath: it.thumb,
+                    mediaType: "movie" as const,
+                    releaseDate: it.year ? `${it.year}-01-01` : undefined
+                }));
+            } else if (collection.sourceQuery?.includes("1990")) {
+                candidateItems = libraryItems.filter(it => it.year && it.year >= 1990 && it.year <= 1999).map(it => ({
+                    id: it.guids?.tmdb || it.ratingKey,
+                    title: it.title,
+                    posterPath: it.thumb,
+                    mediaType: "movie" as const,
+                    releaseDate: it.year ? `${it.year}-01-01` : undefined
+                }));
             }
         }
 
@@ -8951,7 +9133,9 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
             const tmdbStr = String(item.id);
             let match = null;
 
-            if (libraryTmdbIds.has(tmdbStr)) {
+            if (item.id && libraryItems.some(it => String(it.ratingKey) === tmdbStr)) {
+                match = libraryItems.find(it => String(it.ratingKey) === tmdbStr);
+            } else if (libraryTmdbIds.has(tmdbStr)) {
                 match = libraryItems.find(it => it.guids?.tmdb === tmdbStr);
             } else if (item.imdbId && libraryImdbIds.has(item.imdbId)) {
                 match = libraryItems.find(it => it.guids?.imdb === item.imdbId);
@@ -9183,6 +9367,9 @@ export async function cleanupAvailablePlaceholdersInternal(
 
         let removedCount = 0;
         const removedItems: string[] = [];
+        const arrIndex = await getArrMonitoredIndex({ targetServerId });
+        const now = new Date();
+        const placeholderDaysThreshold = settings?.placeholderDaysThreshold ?? 90;
 
         // 2. Iterate through each share folder on disk and inspect each placeholder folder
         for (const shareDir of Array.from(shareDirectories)) {
@@ -9254,11 +9441,41 @@ export async function cleanupAvailablePlaceholdersInternal(
                     }
 
                     const parsedYear = itemYear ? parseInt(itemYear, 10) : null;
-                    const currentYear = new Date().getFullYear();
+                    const currentYear = now.getFullYear();
                     const isLegacyCatalogPlaceholder = parsedYear !== null && !isNaN(parsedYear) && parsedYear < currentYear;
 
-                    if (isAvailable || isLegacyCatalogPlaceholder) {
-                        // Clean up placeholder directory on disk because real media is now acquired in Plex OR it is an older catalog title
+                    // Verify if this item is currently monitored and has a concrete release date within the active window
+                    let hasValidComingSoonDate = false;
+                    const tmdbStr = itemTmdbId ? String(itemTmdbId) : "";
+                    const arrItem = (tmdbStr ? arrIndex.moviesByTmdb.get(tmdbStr) : undefined) ||
+                                    (cleanTitle ? arrIndex.moviesByTitle.get(cleanTitle) : undefined) ||
+                                    (cleanTitle ? arrIndex.seriesByTitle.get(cleanTitle) : undefined);
+
+                    if (arrItem) {
+                        const targetDateStr = arrItem.digitalRelease || arrItem.physicalRelease || arrItem.inCinemas || (arrItem as any).firstAired || (arrItem as any).nextAiring || (arrItem as any).airDate;
+                        const targetDate = targetDateStr ? new Date(targetDateStr) : null;
+                        if (targetDate && !isNaN(targetDate.getTime())) {
+                            if (targetDate > now) {
+                                const daysAhead = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                                if (placeholderDaysThreshold <= 0 || daysAhead <= placeholderDaysThreshold) {
+                                    hasValidComingSoonDate = true;
+                                }
+                            } else {
+                                const daysPast = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+                                if (daysPast <= 30) {
+                                    hasValidComingSoonDate = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // A placeholder must be removed if:
+                    // 1. Full real media is acquired in Plex (isAvailable = true)
+                    // 2. It is an older catalog release from a prior year (isLegacyCatalogPlaceholder)
+                    // 3. It lacks a concrete release date within the active Coming Soon window (!hasValidComingSoonDate)
+                    const shouldDelete = isAvailable || isLegacyCatalogPlaceholder || (!isAvailable && !hasValidComingSoonDate);
+
+                    if (shouldDelete) {
                         try {
                             try { fs.chmodSync(folderPath, 0o777); } catch {}
                             setPermissionsRecursive(folderPath, 0o777, 0o666);
@@ -9277,7 +9494,9 @@ export async function cleanupAvailablePlaceholdersInternal(
 
                             const reason = isAvailable 
                                 ? "full media is now available in Plex" 
-                                : `item is an older catalog release (${parsedYear}) and not a valid Coming Soon title`;
+                                : isLegacyCatalogPlaceholder 
+                                    ? `item is an older catalog release (${parsedYear}) and not a valid Coming Soon title`
+                                    : "item does not have a verified release date within the active Coming Soon window";
                             logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because ${reason}.`);
                         } catch (rmErr: any) {
                             console.error(`[PLACEHOLDER-CLEANUP] Failed removing folder "${folderPath}":`, rmErr);

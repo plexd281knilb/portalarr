@@ -1680,18 +1680,52 @@ export async function getPlexCollectionChildRatingKeys(
     token: string,
     collectionRatingKey: string
 ): Promise<string[]> {
+    if (!collectionRatingKey || collectionRatingKey.startsWith("hub:")) return [];
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     for (const cleanBase of urlsToTry) {
+        // 1. Try official collections endpoint
         try {
-            const url = `${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/children?X-Plex-Token=${encodeURIComponent(token)}`;
+            const url = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/children?X-Plex-Token=${encodeURIComponent(token)}`;
             const res = await fetch(url, {
                 headers: { "Accept": "application/json", "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
-                cache: "no-store"
+                cache: "no-store",
+                signal: AbortSignal.timeout(4000)
             });
             if (res.ok) {
-                const data = await res.json();
-                const metadata = data.MediaContainer?.Metadata || [];
-                return metadata.map((m: any) => String(m.ratingKey)).filter(Boolean);
+                const text = await res.text().catch(() => "");
+                try {
+                    const data = JSON.parse(text);
+                    const meta = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || [];
+                    const list = Array.isArray(meta) ? meta : [meta];
+                    const keys = list.map((m: any) => String(m.ratingKey || m.key?.replace("/library/metadata/", "") || "")).filter(Boolean);
+                    if (keys.length > 0) return keys;
+                } catch {
+                    const matches = Array.from(text.matchAll(/ratingKey="([^"]+)"/g)).map(m => m[1]);
+                    if (matches.length > 0) return matches;
+                }
+            }
+        } catch {}
+
+        // 2. Try metadata children endpoint
+        try {
+            const url2 = `${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/children?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res2 = await fetch(url2, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                cache: "no-store",
+                signal: AbortSignal.timeout(4000)
+            });
+            if (res2.ok) {
+                const text2 = await res2.text().catch(() => "");
+                try {
+                    const data2 = JSON.parse(text2);
+                    const meta2 = data2.MediaContainer?.Metadata || data2.MediaContainer?.Directory || [];
+                    const list2 = Array.isArray(meta2) ? meta2 : [meta2];
+                    const keys2 = list2.map((m: any) => String(m.ratingKey || m.key?.replace("/library/metadata/", "") || "")).filter(Boolean);
+                    if (keys2.length > 0) return keys2;
+                } catch {
+                    const matches2 = Array.from(text2.matchAll(/ratingKey="([^"]+)"/g)).map(m => m[1]);
+                    if (matches2.length > 0) return matches2;
+                }
             }
         } catch {}
     }
@@ -1712,28 +1746,27 @@ export async function removeItemsFromPlexCollection(
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let removedCount = 0;
     for (const rKey of ratingKeysToRemove) {
-        let removed = false;
         for (const cleanBase of urlsToTry) {
-            if (removed) break;
             try {
                 // 1. If collectionRatingKey is numeric and valid, use PMS DELETE /library/collections/{collectionRatingKey}/items/{rKey}
                 if (collectionRatingKey && !collectionRatingKey.startsWith("hub:")) {
                     const deleteUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items/${encodeURIComponent(rKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
                     const dRes = await fetch(deleteUrl, {
                         method: "DELETE",
-                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                        signal: AbortSignal.timeout(4000)
                     });
                     if (dRes.ok) {
                         removedCount++;
-                        removed = true;
-                        continue;
+                        break;
                     }
                 }
 
                 // 2. Fallback: Fetch item metadata, remove collectionTitle from collection list, and PUT updated list
                 const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
                 const res = await fetch(metaUrl, {
-                    headers: { Accept: "application/json", "X-Plex-Token": token }
+                    headers: { Accept: "application/json", "X-Plex-Token": token },
+                    signal: AbortSignal.timeout(4000)
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -1748,6 +1781,8 @@ export async function removeItemsFromPlexCollection(
                         }
                     }
                     const params = new URLSearchParams();
+                    if (meta?.type) params.set("type", meta.type === "show" ? "2" : "1");
+                    params.set("id", String(rKey));
                     if (existingColls.length === 0) {
                         params.set("collection[0].tag.tag-", "");
                     } else {
@@ -1761,11 +1796,12 @@ export async function removeItemsFromPlexCollection(
                     const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?${params.toString()}`;
                     const putRes = await fetch(putUrl, {
                         method: "PUT",
-                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                        signal: AbortSignal.timeout(4000)
                     });
                     if (putRes.ok) {
                         removedCount++;
-                        removed = true;
+                        break;
                     }
                 }
             } catch {}
@@ -1789,9 +1825,15 @@ export async function getPlexServerMachineIdentifier(
                 signal: AbortSignal.timeout(3000)
             });
             if (res.ok) {
-                const data = await res.json();
-                const mId = data.MediaContainer?.machineIdentifier;
-                if (mId) return mId;
+                const text = await res.text().catch(() => "");
+                try {
+                    const data = JSON.parse(text);
+                    const mId = data.MediaContainer?.machineIdentifier;
+                    if (mId) return String(mId);
+                } catch {
+                    const match = text.match(/machineIdentifier="([^"]+)"/);
+                    if (match) return match[1];
+                }
             }
         } catch {}
         try {
@@ -1800,9 +1842,15 @@ export async function getPlexServerMachineIdentifier(
                 signal: AbortSignal.timeout(3000)
             });
             if (res2.ok) {
-                const data2 = await res2.json();
-                const mId2 = data2.MediaContainer?.machineIdentifier;
-                if (mId2) return mId2;
+                const text2 = await res2.text().catch(() => "");
+                try {
+                    const data2 = JSON.parse(text2);
+                    const mId2 = data2.MediaContainer?.machineIdentifier;
+                    if (mId2) return String(mId2);
+                } catch {
+                    const match2 = text2.match(/machineIdentifier="([^"]+)"/);
+                    if (match2) return match2[1];
+                }
             }
         } catch {}
     }
@@ -1869,13 +1917,13 @@ export async function syncPlexCollection(
     const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
     const existing = existingCollections.find(c => c.title.toLowerCase() === collectionTitle.toLowerCase());
 
+    const secType = await getPlexLibrarySectionType(urlsToTry, token, sectionKey);
+    const typeParam = secType === "show" ? 2 : 1;
+
     if (existing) {
         collectionRatingKey = existing.ratingKey;
     } else {
         // Create collection using official Plex POST /library/collections endpoint
-        const secType = await getPlexLibrarySectionType(urlsToTry, token, sectionKey);
-        const typeParam = secType === "show" ? 2 : 1;
-
         for (const cleanBase of urlsToTry) {
             if (collectionRatingKey) break;
             try {
@@ -1891,7 +1939,7 @@ export async function syncPlexCollection(
                 });
 
                 if (createRes.ok) {
-                    const createData = await createRes.json();
+                    const createData = await createRes.json().catch(() => ({}));
                     const meta = createData.MediaContainer?.Metadata?.[0] || createData.MediaContainer?.Directory?.[0];
                     if (meta?.ratingKey) {
                         collectionRatingKey = String(meta.ratingKey);
@@ -1941,6 +1989,7 @@ export async function syncPlexCollection(
                             : `library:///item/%2Flibrary%2Fmetadata%2F${ratingKeysParam}`;
                         const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?uri=${encodeURIComponent(uriParam)}&X-Plex-Token=${encodeURIComponent(token)}`;
 
+                        // Try PUT first
                         const putRes = await fetch(addUrl, {
                             method: "PUT",
                             headers: {
@@ -1954,6 +2003,24 @@ export async function syncPlexCollection(
                         if (putRes.ok) {
                             addedCount += chunk.length;
                             chunkAdded = true;
+                            break;
+                        }
+
+                        // Try POST if PUT didn't succeed
+                        const postRes = await fetch(addUrl, {
+                            method: "POST",
+                            headers: {
+                                Accept: "application/json",
+                                "X-Plex-Token": token,
+                                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                            },
+                            signal: AbortSignal.timeout(5000)
+                        });
+
+                        if (postRes.ok) {
+                            addedCount += chunk.length;
+                            chunkAdded = true;
+                            break;
                         }
                     } catch {}
                 }
@@ -2002,6 +2069,8 @@ export async function syncPlexCollection(
                                         existingColls.push(collectionTitle);
                                     }
                                     const params = new URLSearchParams();
+                                    params.set("type", String(typeParam));
+                                    params.set("id", String(rKey));
                                     existingColls.forEach((c, idx) => {
                                         params.set(`collection[${idx}].tag.tag`, c);
                                     });
@@ -2026,6 +2095,18 @@ export async function syncPlexCollection(
             }
         } else {
             addedCount = currentKeys.length;
+        }
+
+        // Set custom collection sort
+        for (const cleanBase of urlsToTry) {
+            try {
+                await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/prefs?collectionSort=2&X-Plex-Token=${encodeURIComponent(token)}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token },
+                    signal: AbortSignal.timeout(3000)
+                });
+                break;
+            } catch {}
         }
 
         // 5. Update collection summary, sort title, collectionMode, and Home & Recommended Promotion
@@ -2063,9 +2144,6 @@ export async function syncPlexCollection(
 /**
  * Updates a Plex collection's sort title, collectionMode, and Home / Recommended / Shared Home visibility flags.
  */
-/**
- * Updates a Plex collection's sort title, collectionMode, and Home / Recommended / Shared Home visibility flags.
- */
 export async function updatePlexCollectionPromotionAndOrder(
     serverUrlOrCandidates: string | string[],
     token: string,
@@ -2081,9 +2159,9 @@ export async function updatePlexCollectionPromotionAndOrder(
     }
 ): Promise<{ success: boolean; message?: string }> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
-    const recVal = options.promotedToRecommended ? "1" : "0";
-    const homeVal = options.promotedToHome ? "1" : "0";
-    const sharedVal = options.promotedToSharedHome ? "1" : "0";
+    const recVal = options.promotedToRecommended === false ? "0" : "1";
+    const homeVal = options.promotedToHome === false ? "0" : "1";
+    const sharedVal = options.promotedToSharedHome === false ? "0" : "1";
 
     // 1. Built-in Plex Hubs (e.g. hub:movie.recentlyadded.1)
     if (collectionRatingKey.startsWith("hub:")) {
@@ -2106,7 +2184,8 @@ export async function updatePlexCollectionPromotionAndOrder(
     }
 
     // 2. Custom or Smart Collections (numeric ratingKey)
-    const hubId = `custom.collection.${sectionKey}.${collectionRatingKey}`;
+    const canonicalHubId = `custom.collection.${sectionKey}.${collectionRatingKey}`;
+    const fallbackHubId = `custom.collection.${collectionRatingKey}`;
     let lastError: any = null;
 
     for (const cleanBase of urlsToTry) {
@@ -2151,30 +2230,23 @@ export async function updatePlexCollectionPromotionAndOrder(
                 signal: AbortSignal.timeout(4000)
             }).catch(() => {});
 
-            // C. Direct hub visibility update on canonical endpoint
-            const hubUrl = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(hubId)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`;
+            // C. Update visibility on canonical hub ID
+            const hubUrl = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(canonicalHubId)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`;
             const hubRes = await fetch(hubUrl, {
                 method: "PUT",
                 headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
                 signal: AbortSignal.timeout(4000)
             }).catch(() => null);
 
-            if (hubRes && hubRes.ok) {
-                return { success: true };
-            }
-
-            // Fallback hub endpoint without sectionKey in ID
-            const fallbackHubRes = await fetch(`${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/custom.collection.${encodeURIComponent(collectionRatingKey)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`, {
+            // D. Fallback visibility update on 3-part hub ID
+            const fallbackHubUrl = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(fallbackHubId)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`;
+            await fetch(fallbackHubUrl, {
                 method: "PUT",
                 headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
                 signal: AbortSignal.timeout(4000)
             }).catch(() => null);
 
-            if (fallbackHubRes && fallbackHubRes.ok) {
-                return { success: true };
-            }
-
-            // Also persist legacy prefs as safety net
+            // E. Also persist legacy prefs as safety net
             await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/prefs?promotedToHome=${homeVal}&promotedToRecommended=${recVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`, {
                 method: "PUT",
                 headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
