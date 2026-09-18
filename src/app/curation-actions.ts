@@ -7922,7 +7922,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, placeholderDaysThreshold || 90, 30));
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -7955,7 +7955,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, placeholderDaysThreshold || 90, 30));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
