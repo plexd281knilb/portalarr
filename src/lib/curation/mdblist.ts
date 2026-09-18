@@ -93,10 +93,10 @@ export async function getMdblistItems(listIdOrUrl: string): Promise<MdblistItem[
     if (!apiKey) return [];
 
     try {
-        let listParam = listIdOrUrl;
-        if (listIdOrUrl.includes("mdblist.com/lists/")) {
-            const match = listIdOrUrl.match(/mdblist\.com\/lists\/([^/?#]+)/i);
-            if (match) listParam = match[1];
+        let listParam = listIdOrUrl.trim();
+        if (listParam.includes("mdblist.com/lists/")) {
+            const match = listParam.match(/mdblist\.com\/lists\/(.+?)(?:[?#]|$)/i);
+            if (match) listParam = match[1].replace(/\/+$/, "");
         }
 
         const query = new URLSearchParams({
@@ -104,9 +104,16 @@ export async function getMdblistItems(listIdOrUrl: string): Promise<MdblistItem[
             l: listParam
         });
 
-        const res = await fetch(`${MDBLIST_BASE_URL}/lists/items?${query.toString()}`, {
+        let res = await fetch(`${MDBLIST_BASE_URL}/lists/items?${query.toString()}`, {
             next: { revalidate: 3600 }
         });
+
+        // If /lists/items?l= did not return ok, fallback to /lists/{listParam}/items/
+        if (!res.ok) {
+            res = await fetch(`https://api.mdblist.com/lists/${encodeURIComponent(listParam)}/items/?apikey=${apiKey}`, {
+                next: { revalidate: 3600 }
+            });
+        }
 
         if (!res.ok) return [];
         const data = await res.json();
