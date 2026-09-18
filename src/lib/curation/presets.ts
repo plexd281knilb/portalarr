@@ -44,6 +44,22 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultPosterUrl: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80"
     },
     {
+        id: "mdblist-popular-movies",
+        title: "Popular Movies",
+        type: "smart",
+        category: "awards",
+        description: "The most popular trending movies right now across streaming and theaters via MDBList.",
+        icon: "Flame",
+        sourceType: "mdblist",
+        sourceQuery: "official/movies/popular",
+        mediaType: "movie",
+        defaultSort: "rating",
+        defaultHomeOrder: 3,
+        defaultSortPrefix: "!03_Popular",
+        defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
+    },
+    {
         id: "imdb-top-250-movies",
         title: "IMDb Top 250 Movies",
         type: "smart",
