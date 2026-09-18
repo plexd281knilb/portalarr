@@ -90,6 +90,7 @@ model Settings {
   placeholderCustomText            String?   // Custom subtitle text
   placeholderBannerTemplates       String?   // JSON map of banner preset ID -> { text, theme, pos, fontSize }
   placeholderEnabled               Boolean   @default(true)
+  skipYoutubeTrailerDownloads      Boolean   @default(false)
   
   // Prune & Leaving Soon Banner Appearance Controls
   pruneBannerPosition              String?   @default("bottom") // "bottom", "lower_third", "middle", "upper_third", "top", "corner"

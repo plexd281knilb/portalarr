@@ -105,7 +105,13 @@ import {
     ParentalSeverity,
     CustomTagRule
 } from "@/lib/curation/parental-guide";
-import { downloadOrCopyTrailerVideo } from "@/lib/curation/trailer-downloader";
+import { 
+    downloadOrCopyTrailerVideo,
+    getYouTubeCookiesStatus,
+    saveYouTubeCookies,
+    getYouTubeCookiesPath,
+    checkYtDlpAvailable
+} from "@/lib/curation/trailer-downloader";
 import {
     parseKometaYamlString,
     convertKometaLibraryToPortalarrOverlay,
@@ -255,6 +261,7 @@ export async function getCurationSettingsAction() {
         placeholderCustomText: settings?.placeholderCustomText || "",
         placeholderBannerTemplates: safeJsonParse(settings?.placeholderBannerTemplates, {}),
         placeholderEnabled: settings?.placeholderEnabled ?? true,
+        skipYoutubeTrailerDownloads: (settings as any)?.skipYoutubeTrailerDownloads ?? false,
 
         // Pruning Banner Appearance Settings
         pruneBannerPosition: settings?.pruneBannerPosition || "bottom",
@@ -556,6 +563,7 @@ export async function saveCurationSettingsAction(data: {
     placeholderCustomText?: string;
     placeholderBannerTemplates?: string | Record<string, any>;
     placeholderEnabled?: boolean;
+    skipYoutubeTrailerDownloads?: boolean;
     pruneBannerPosition?: string;
     pruneBannerTheme?: string;
     pruneBannerText?: string;
@@ -644,6 +652,7 @@ export async function saveCurationSettingsAction(data: {
                 : JSON.stringify(data.placeholderBannerTemplates);
         }
         if (data.placeholderEnabled !== undefined) updatePayload.placeholderEnabled = data.placeholderEnabled;
+        if (data.skipYoutubeTrailerDownloads !== undefined) updatePayload.skipYoutubeTrailerDownloads = data.skipYoutubeTrailerDownloads;
 
         if (data.pruneBannerPosition !== undefined) updatePayload.pruneBannerPosition = data.pruneBannerPosition;
         if (data.pruneBannerTheme !== undefined) updatePayload.pruneBannerTheme = data.pruneBannerTheme;
@@ -7309,6 +7318,7 @@ export async function createPlaceholderItemInternal(
         const bannerTheme = itemData.bannerTheme || "crimson-red";
         const bannerPosition = itemData.bannerPosition || "bottom";
         const bannerFontSize = itemData.bannerFontSize || itemData.fontSize || settings?.placeholderBannerFontSize || 44;
+        const skipYoutubeTrailerDownloads = (settings as any)?.skipYoutubeTrailerDownloads ?? false;
 
         // Lookup official YouTube trailer for the title to write .strm and attach trailer metadata
         let trailerKey = "";
@@ -7384,7 +7394,8 @@ export async function createPlaceholderItemInternal(
                     tmdbId: itemData.tmdbId,
                     mediaType: "tv",
                     trailerUrl,
-                    destinationPath: tvTrailerMp4
+                    destinationPath: tvTrailerMp4,
+                    skipYoutubeTrailerDownloads
                 });
 
                 // Clean up any legacy .strm or .disc files that cause Plex s1001 Network errors
@@ -7418,7 +7429,8 @@ export async function createPlaceholderItemInternal(
                     tmdbId: itemData.tmdbId,
                     mediaType: "movie",
                     trailerUrl,
-                    destinationPath: movieTrailerMp4
+                    destinationPath: movieTrailerMp4,
+                    skipYoutubeTrailerDownloads
                 });
 
                 // Clean up any legacy .strm or .disc files that cause Plex s1001 Network errors
@@ -9630,3 +9642,60 @@ export async function importKometaConfigAction(
         return { success: false, error: e.message || "Failed importing Kometa configuration." };
     }
 }
+
+/**
+ * Returns the status of YouTube cookie configuration (youtube-cookies.txt / youtube.txt / cookies.txt),
+ * file location, size, yt-dlp binary availability, and the skip downloads preference.
+ */
+export async function getYouTubeCookiesStatusAction() {
+    try {
+        await verifyAdmin();
+        const cookiesStatus = await getYouTubeCookiesStatus();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const skipDownloads = (settings as any)?.skipYoutubeTrailerDownloads ?? false;
+        
+        return {
+            success: true,
+            ...cookiesStatus,
+            skipYoutubeTrailerDownloads: skipDownloads
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed getting YouTube cookies status." };
+    }
+}
+
+/**
+ * Saves or updates YouTube Netscape cookies content into the persistent data folder (data/youtube-cookies.txt).
+ */
+export async function saveYouTubeCookiesAction(content: string) {
+    try {
+        await verifyAdmin();
+        if (!content || !content.trim()) {
+            return { success: false, error: "Cookie file content cannot be empty." };
+        }
+        const result = await saveYouTubeCookies(content);
+        return result;
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed saving YouTube cookies." };
+    }
+}
+
+/**
+ * Toggles whether to skip downloading YouTube trailers (falling back immediately to the bundled placeholder.mp4 video).
+ */
+export async function toggleSkipYouTubeTrailerDownloadsAction(skip: boolean) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { skipYoutubeTrailerDownloads: skip } as any,
+            create: { id: "global", skipYoutubeTrailerDownloads: skip } as any
+        });
+        logger.addLog("INFO", "CURATION", `Updated skip YouTube trailer downloads preference: ${skip ? "ENABLED (Skip downloads, use placeholder.mp4)" : "DISABLED (Download official trailers)"}`);
+        return { success: true, skipYoutubeTrailerDownloads: skip };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed updating YouTube trailer download preference." };
+    }
+}
+

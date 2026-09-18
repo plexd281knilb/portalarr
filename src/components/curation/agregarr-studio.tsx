@@ -59,7 +59,12 @@ import {
     Clapperboard,
     ListFilter,
     EyeOff,
-    Radio
+    Radio,
+    FileText,
+    Upload,
+    ExternalLink,
+    Video,
+    AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,7 +115,10 @@ import {
     unignoreMediaCollectionAction,
     clearAllDismissedHubsAction,
     tagAllPlaceholdersInPlexAction,
-    deleteAllPlexCollectionsAction
+    deleteAllPlexCollectionsAction,
+    getYouTubeCookiesStatusAction,
+    saveYouTubeCookiesAction,
+    toggleSkipYouTubeTrailerDownloadsAction
 } from "@/app/curation-actions";
 import {
     COLLECTION_PRESETS,
@@ -304,6 +312,21 @@ export function AgregarrStudio() {
     const [cleaningPlaceholders, setCleaningPlaceholders] = useState(false);
     const [fixingPermissions, setFixingPermissions] = useState(false);
     const [cleanupResultMsg, setCleanupResultMsg] = useState<{ success: boolean; text: string } | null>(null);
+
+    // YouTube Cookies & Trailer Engine States
+    const [youtubeCookiesStatus, setYoutubeCookiesStatus] = useState<{
+        exists: boolean;
+        path: string | null;
+        sizeBytes: number;
+        fileName: string | null;
+        ytDlpAvailable: boolean;
+        skipYoutubeTrailerDownloads?: boolean;
+    } | null>(null);
+    const [cookieModalOpen, setCookieModalOpen] = useState(false);
+    const [cookieContent, setCookieContent] = useState("");
+    const [savingCookies, setSavingCookies] = useState(false);
+    const [cookieActionMsg, setCookieActionMsg] = useState<{ success: boolean; text: string } | null>(null);
+    const [togglingSkipYt, setTogglingSkipYt] = useState(false);
 
     // Automated Schedule & Enabled Library States
     const [curationSyncCollections, setCurationSyncCollections] = useState<boolean>(true);
@@ -518,6 +541,15 @@ export function AgregarrStudio() {
                         sonarr: (arrRes.sonarr as any) || []
                     });
                 }
+
+                try {
+                    const cookieRes = await getYouTubeCookiesStatusAction();
+                    if (cookieRes.success) {
+                        setYoutubeCookiesStatus(cookieRes as any);
+                    }
+                } catch (cErr) {
+                    console.warn("Failed fetching YouTube cookies status:", cErr);
+                }
             } catch (err) {
                 console.error("Failed loading Agregarr studio data:", err);
             } finally {
@@ -527,6 +559,47 @@ export function AgregarrStudio() {
 
         loadInitialData();
     }, []);
+
+    const handleSaveCookies = async () => {
+        if (!cookieContent.trim()) return;
+        setSavingCookies(true);
+        setCookieActionMsg(null);
+        try {
+            const res: any = await saveYouTubeCookiesAction(cookieContent);
+            if (res.success) {
+                setCookieActionMsg({ success: true, text: res.message || "YouTube cookies saved successfully!" });
+                const refreshStatus: any = await getYouTubeCookiesStatusAction();
+                if (refreshStatus.success) {
+                    setYoutubeCookiesStatus(refreshStatus);
+                }
+                setTimeout(() => {
+                    setCookieModalOpen(false);
+                    setCookieActionMsg(null);
+                    setCookieContent("");
+                }, 1500);
+            } else {
+                setCookieActionMsg({ success: false, text: res.error || "Failed saving cookies." });
+            }
+        } catch (e: any) {
+            setCookieActionMsg({ success: false, text: e.message || "Failed saving cookies." });
+        } finally {
+            setSavingCookies(false);
+        }
+    };
+
+    const handleToggleSkipYtDownloads = async (skip: boolean) => {
+        setTogglingSkipYt(true);
+        try {
+            const res = await toggleSkipYouTubeTrailerDownloadsAction(skip);
+            if (res.success) {
+                setYoutubeCookiesStatus(prev => prev ? { ...prev, skipYoutubeTrailerDownloads: skip } : null);
+            }
+        } catch (e) {
+            console.error("Failed toggling skip youtube downloads:", e);
+        } finally {
+            setTogglingSkipYt(false);
+        }
+    };
 
     // Load Collections for Server & Section
     const loadCollections = async (srvId?: string, secKey?: string) => {
@@ -2811,9 +2884,11 @@ export function AgregarrStudio() {
 
                     {/* Coming Soon Shares Setup & Simulator */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        {/* Server Shares & Arr Instances Mapping Setup */}
-                        <div className="lg:col-span-5 space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
-                            <div className="space-y-1 border-b border-slate-800/80 pb-3">
+                        {/* Left Column: Server Shares & YouTube Cookie Engine */}
+                        <div className="lg:col-span-5 space-y-6">
+                            {/* Server Shares & Arr Instances Mapping Setup */}
+                            <div className="space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
+                                <div className="space-y-1 border-b border-slate-800/80 pb-3">
                                 <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                                     <HardDrive className="h-4 w-4 text-cyan-400" /> Server Storage &amp; Arr Instance Mapping
                                 </h4>
@@ -3087,6 +3162,132 @@ export function AgregarrStudio() {
                                 </div>
                             )}
                         </div>
+
+                        {/* YouTube Cookie Configuration & Trailer Engine Card */}
+                        <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+                            <div className="space-y-1 border-b border-slate-800/80 pb-3">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                        <Video className="h-4 w-4 text-red-500" /> YouTube Cookie Configuration &amp; Trailers
+                                    </h4>
+                                    {youtubeCookiesStatus?.exists ? (
+                                        <Badge className="bg-emerald-950 text-emerald-300 border-emerald-800 text-[10px] font-mono">
+                                            ✓ {youtubeCookiesStatus.fileName || "youtube-cookies.txt"} Active
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="border-amber-800/80 text-amber-300 text-[10px] bg-amber-950/40">
+                                            ⚠️ No Cookies Configured
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                    Authenticate <code className="bg-slate-950 px-1 py-0.5 rounded text-red-400 font-mono text-[10px]">yt-dlp</code> with YouTube cookies to bypass bot detection, IP rate limits, and 429 errors when downloading official 1080p trailers for placeholder stubs.
+                                </p>
+                            </div>
+
+                            {/* Cookie Detection Status Banner */}
+                            {youtubeCookiesStatus?.exists ? (
+                                <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                                    youtubeCookiesStatus.skipYoutubeTrailerDownloads
+                                        ? "bg-amber-950/40 border-amber-800/60 text-amber-200"
+                                        : "bg-emerald-950/40 border-emerald-800/60 text-emerald-200"
+                                }`}>
+                                    {youtubeCookiesStatus.skipYoutubeTrailerDownloads ? (
+                                        <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                    ) : (
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                    )}
+                                    <div className="space-y-1 flex-1">
+                                        <p className="font-bold">
+                                            {youtubeCookiesStatus.skipYoutubeTrailerDownloads
+                                                ? "YouTube cookies configured, but trailer downloads are skipped below."
+                                                : `YouTube cookies file (${youtubeCookiesStatus.fileName || "youtube-cookies.txt"}) is ready.`}
+                                        </p>
+                                        <p className="text-[10px] opacity-80 font-mono">
+                                            {youtubeCookiesStatus.skipYoutubeTrailerDownloads
+                                                ? "Placeholders will use the bundled playable placeholder.mp4 video instead of downloading YouTube trailers."
+                                                : `File: ${youtubeCookiesStatus.path} (${Math.round((youtubeCookiesStatus.sizeBytes || 0) / 1024)} KB) • yt-dlp binary: ${youtubeCookiesStatus.ytDlpAvailable ? "✓ Operational" : "⚠️ Not in PATH"}`}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-3 rounded-xl border bg-amber-950/40 border-amber-800/60 text-xs text-amber-200 flex items-start gap-2.5">
+                                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                    <div className="space-y-1 flex-1">
+                                        <p className="font-bold">No YouTube cookies file detected</p>
+                                        <p className="text-[10px] text-amber-300/80 leading-relaxed">
+                                            Without <code className="bg-slate-950 px-1 py-0.2 rounded font-mono text-amber-200">youtube-cookies.txt</code> in your data folder, YouTube trailer downloads may fail due to bot verification. The bundled <code className="bg-slate-950 px-1 py-0.2 rounded font-mono text-amber-200">placeholder.mp4</code> is automatically used as a reliable fallback.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Skip YouTube Trailer Downloads Toggle */}
+                            <div className="flex items-center justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800 gap-3">
+                                <div className="space-y-0.5 flex-1">
+                                    <Label className="text-xs text-slate-200 font-semibold cursor-pointer" onClick={() => handleToggleSkipYtDownloads(!youtubeCookiesStatus?.skipYoutubeTrailerDownloads)}>
+                                        Skip YouTube Trailer Downloads
+                                    </Label>
+                                    <p className="text-[10px] text-slate-400">
+                                        Use only the fast bundled placeholder video instead of downloading YouTube trailers. Dramatically speeds up placeholder generation.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={Boolean(youtubeCookiesStatus?.skipYoutubeTrailerDownloads)}
+                                    disabled={togglingSkipYt}
+                                    onCheckedChange={handleToggleSkipYtDownloads}
+                                />
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => {
+                                        setCookieContent("");
+                                        setCookieActionMsg(null);
+                                        setCookieModalOpen(true);
+                                    }}
+                                    className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs gap-1.5 cursor-pointer shadow-md"
+                                >
+                                    <Upload className="h-3.5 w-3.5" />
+                                    <span>{youtubeCookiesStatus?.exists ? "Update youtube-cookies.txt" : "Paste / Upload Cookies (youtube.txt)"}</span>
+                                </Button>
+                            </div>
+
+                            {/* Step-by-step Setup Instructions */}
+                            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs space-y-2">
+                                <p className="font-bold text-slate-300 text-[11px] flex items-center gap-1.5">
+                                    <FileText className="h-3.5 w-3.5 text-red-400" /> Setup Instructions:
+                                </p>
+                                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-400 pl-1">
+                                    <li>
+                                        Install a browser extension to export cookies:{" "}
+                                        <a
+                                            href="https://addons.mozilla.org/en-US/firefox/addon/export-cookies-txt/"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-amber-400 hover:underline inline-flex items-center gap-0.5 font-semibold"
+                                        >
+                                            Firefox (Export Cookies) <ExternalLink className="h-2.5 w-2.5" />
+                                        </a>{" "}
+                                        or{" "}
+                                        <a
+                                            href="https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-amber-400 hover:underline inline-flex items-center gap-0.5 font-semibold"
+                                        >
+                                            Chrome (Get cookies.txt locally) <ExternalLink className="h-2.5 w-2.5" />
+                                        </a>.
+                                    </li>
+                                    <li>Visit YouTube in your browser while logged into your account.</li>
+                                    <li>Export cookies in Netscape format and click <span className="text-white font-bold">Paste / Upload Cookies</span> above (or save as <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-300">youtube-cookies.txt</code> in your data folder).</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
 
                         {/* Agregarr Banner & Poster Live Simulator Studio */}
                         <div className="lg:col-span-7 space-y-4 p-5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
@@ -5196,6 +5397,70 @@ export function AgregarrStudio() {
                             className="border-slate-800 text-slate-300 hover:text-white"
                         >
                             Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ========================================================================= */}
+            {/* MODAL 10: YOUTUBE COOKIES PASTE / UPLOAD MODAL */}
+            {/* ========================================================================= */}
+            <Dialog open={cookieModalOpen} onOpenChange={setCookieModalOpen}>
+                <DialogContent className="max-w-xl bg-slate-950 border-slate-800 text-slate-100 p-6">
+                    <DialogHeader className="pb-3 border-b border-slate-800">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-red-500" />
+                            <span>Configure YouTube Cookies (youtube-cookies.txt)</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400 leading-relaxed">
+                            Paste the contents of your exported Netscape format cookies text below. Portalarr will save this to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-red-400">data/youtube-cookies.txt</code> and pass it to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-300">yt-dlp --cookies</code> for authenticated 1080p trailer downloads.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-3 space-y-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-300 font-semibold flex items-center justify-between">
+                                <span>Netscape Cookie Text:</span>
+                                <span className="text-[10px] text-slate-400 font-mono">Format: .youtube.com TRUE / ...</span>
+                            </Label>
+                            <Textarea
+                                placeholder={`# Netscape HTTP Cookie File\n# http://curl.haxx.se/rfc/cookie_spec.html\n# This file is generated by cookies.txt extension\n.youtube.com\tTRUE\t/\tTRUE\t1790000000\tPREF\tf4=4000000\n.youtube.com\tTRUE\t/\tTRUE\t1790000000\tSAPISID\t...`}
+                                value={cookieContent}
+                                onChange={(e) => setCookieContent(e.target.value)}
+                                rows={9}
+                                className="font-mono text-[11px] bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600"
+                            />
+                        </div>
+
+                        {cookieActionMsg && (
+                            <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                                cookieActionMsg.success ? "bg-emerald-950/80 border border-emerald-800 text-emerald-300" : "bg-rose-950/80 border border-rose-800 text-rose-300"
+                            }`}>
+                                {cookieActionMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                <span>{cookieActionMsg.text}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCookieModalOpen(false)}
+                            className="border-slate-800 text-slate-300 hover:text-white"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={savingCookies || !cookieContent.trim()}
+                            onClick={handleSaveCookies}
+                            className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs gap-1.5 shadow-md cursor-pointer"
+                        >
+                            {savingCookies ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            <span>Save youtube-cookies.txt</span>
                         </Button>
                     </DialogFooter>
                 </DialogContent>

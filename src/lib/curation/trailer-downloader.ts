@@ -35,6 +35,91 @@ export async function checkYtDlpAvailable(): Promise<boolean> {
 }
 
 /**
+ * Auto-detects YouTube cookies file (youtube-cookies.txt, youtube.txt, cookies.txt)
+ * across data/, config/, app root, and Docker persistent mount directories.
+ */
+export function getYouTubeCookiesPath(): string | null {
+    const candidatePaths = [
+        path.join(process.cwd(), "data", "youtube-cookies.txt"),
+        path.join(process.cwd(), "data", "youtube.txt"),
+        path.join(process.cwd(), "data", "cookies.txt"),
+        path.join(process.cwd(), "config", "youtube-cookies.txt"),
+        path.join(process.cwd(), "config", "youtube.txt"),
+        path.join(process.cwd(), "config", "cookies.txt"),
+        path.join(process.cwd(), "youtube-cookies.txt"),
+        path.join(process.cwd(), "youtube.txt"),
+        path.join(process.cwd(), "cookies.txt"),
+        "/app/data/youtube-cookies.txt",
+        "/app/data/youtube.txt",
+        "/app/data/cookies.txt",
+        "/app/config/youtube-cookies.txt",
+        "/app/config/youtube.txt"
+    ];
+
+    for (const p of candidatePaths) {
+        try {
+            if (fs.existsSync(p) && fs.statSync(p).size > 0) {
+                return p;
+            }
+        } catch {}
+    }
+    return null;
+}
+
+/**
+ * Returns YouTube cookies status and environment readiness.
+ */
+export async function getYouTubeCookiesStatus(): Promise<{
+    exists: boolean;
+    path: string | null;
+    sizeBytes: number;
+    fileName: string | null;
+    ytDlpAvailable: boolean;
+}> {
+    const cookiesPath = getYouTubeCookiesPath();
+    const ytDlpAvailable = await checkYtDlpAvailable();
+    if (cookiesPath) {
+        try {
+            const stat = fs.statSync(cookiesPath);
+            return {
+                exists: true,
+                path: cookiesPath,
+                sizeBytes: stat.size,
+                fileName: path.basename(cookiesPath),
+                ytDlpAvailable
+            };
+        } catch {}
+    }
+    return {
+        exists: false,
+        path: null,
+        sizeBytes: 0,
+        fileName: null,
+        ytDlpAvailable
+    };
+}
+
+/**
+ * Writes or updates the YouTube Netscape cookies.txt file in the persistent data directory.
+ */
+export async function saveYouTubeCookies(content: string): Promise<{ success: boolean; message: string; path?: string }> {
+    try {
+        const targetDir = path.join(process.cwd(), "data");
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        const targetFile = path.join(targetDir, "youtube-cookies.txt");
+        await fsPromises.writeFile(targetFile, content.trim(), "utf-8");
+        try { fs.chmodSync(targetFile, 0o666); } catch {}
+        logger.addLog("INFO", "CURATION", `Saved YouTube cookies file to "${targetFile}" (${content.length} bytes)`);
+        return { success: true, message: `YouTube cookies saved successfully to ${path.basename(targetFile)}!`, path: targetFile };
+    } catch (err: any) {
+        logger.addLog("WARN", "CURATION", `Failed saving YouTube cookies: ${err.message}`);
+        return { success: false, message: `Failed saving cookies: ${err.message}` };
+    }
+}
+
+/**
  * Searches YouTube for an official trailer URL via direct HTTPS query (no external npm dependencies).
  */
 export async function searchYouTubeVideoUrl(title: string, year?: number): Promise<string | null> {
@@ -89,9 +174,10 @@ export async function copyFallbackPlaceholderVideo(outputPath: string): Promise<
 }
 
 /**
- * Downloads a YouTube trailer using yt-dlp binary with 1080p limit and duration filtering (<240s).
+ * Downloads a YouTube trailer using yt-dlp binary with 1080p limit, duration filtering (<240s),
+ * and automatic YouTube cookie authentication (youtube-cookies.txt / youtube.txt).
  */
-export async function downloadWithYtDlp(videoUrl: string, outputPath: string, maxDuration = 240): Promise<boolean> {
+export async function downloadWithYtDlp(videoUrlOrQuery: string, outputPath: string, maxDuration = 240): Promise<boolean> {
     const hasBinary = await checkYtDlpAvailable();
     if (!hasBinary) {
         return false;
@@ -111,11 +197,17 @@ export async function downloadWithYtDlp(videoUrl: string, outputPath: string, ma
             "-f",
             "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]/best",
             "--merge-output-format",
-            "mp4",
-            "-o",
-            outputPath,
-            videoUrl
+            "mp4"
         ];
+
+        // Auto-detect and pass YouTube cookies file if configured
+        const cookiesPath = getYouTubeCookiesPath();
+        if (cookiesPath) {
+            args.push("--cookies", cookiesPath);
+            logger.addLog("INFO", "CURATION", `Using YouTube cookies from "${cookiesPath}" for yt-dlp trailer download`);
+        }
+
+        args.push("-o", outputPath, videoUrlOrQuery);
 
         let ytdlpProcess: any;
         try {
@@ -145,7 +237,7 @@ export async function downloadWithYtDlp(videoUrl: string, outputPath: string, ma
                 logger.addLog("SUCCESS", "CURATION", `Downloaded official YouTube trailer for "${path.basename(outputPath)}" (${Math.round(fs.statSync(outputPath).size / 1024 / 1024 * 10) / 10} MB)`);
                 resolve(true);
             } else {
-                // If rejected by duration filter or unavailable, silently resolve false to trigger fallback
+                // If rejected by duration filter (exit code 101) or unavailable, resolve false to trigger fallback
                 resolve(false);
             }
         });
@@ -162,11 +254,17 @@ export async function downloadOrCopyTrailerVideo(options: {
     mediaType?: "movie" | "tv";
     trailerUrl?: string;
     destinationPath: string;
+    skipYoutubeTrailerDownloads?: boolean;
 }): Promise<{ success: boolean; isOfficialTrailer: boolean; path: string }> {
-    const { title, year, tmdbId, mediaType, trailerUrl, destinationPath } = options;
+    const { title, year, tmdbId, mediaType, trailerUrl, destinationPath, skipYoutubeTrailerDownloads } = options;
     const destDir = path.dirname(destinationPath);
     if (!fs.existsSync(destDir)) {
         fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    if (skipYoutubeTrailerDownloads) {
+        const fallbackOk = await copyFallbackPlaceholderVideo(destinationPath);
+        return { success: fallbackOk, isOfficialTrailer: false, path: destinationPath };
     }
 
     let targetVideoUrl = trailerUrl || "";
@@ -184,7 +282,7 @@ export async function downloadOrCopyTrailerVideo(options: {
         }
     }
 
-    // 2. If still no direct trailer URL, search YouTube
+    // 2. If still no direct trailer URL, search YouTube via HTTPS query
     if (!targetVideoUrl) {
         const searched = await searchYouTubeVideoUrl(title, year);
         if (searched) {
@@ -192,10 +290,19 @@ export async function downloadOrCopyTrailerVideo(options: {
         }
     }
 
-    // 3. Try downloading with yt-dlp if available on the system
+    // 3. Try downloading with yt-dlp (with cookies support) if available on the system
     if (targetVideoUrl) {
         try {
             const downloaded = await downloadWithYtDlp(targetVideoUrl, destinationPath);
+            if (downloaded) {
+                return { success: true, isOfficialTrailer: true, path: destinationPath };
+            }
+        } catch {}
+    } else {
+        // Direct ytsearch fallback with yt-dlp if direct URL search didn't resolve
+        try {
+            const searchQuery = `ytsearch1:${title}${year ? ` ${year}` : ""} official trailer`;
+            const downloaded = await downloadWithYtDlp(searchQuery, destinationPath);
             if (downloaded) {
                 return { success: true, isOfficialTrailer: true, path: destinationPath };
             }
