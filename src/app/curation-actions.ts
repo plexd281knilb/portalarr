@@ -7381,6 +7381,8 @@ export async function createPlaceholderItemInternal(
                 await downloadOrCopyTrailerVideo({
                     title: itemData.title,
                     year: itemData.year,
+                    tmdbId: itemData.tmdbId,
+                    mediaType: "tv",
                     trailerUrl,
                     destinationPath: tvTrailerMp4
                 });
@@ -7413,6 +7415,8 @@ export async function createPlaceholderItemInternal(
                 await downloadOrCopyTrailerVideo({
                     title: itemData.title,
                     year: itemData.year,
+                    tmdbId: itemData.tmdbId,
+                    mediaType: "movie",
                     trailerUrl,
                     destinationPath: movieTrailerMp4
                 });
@@ -9228,6 +9232,7 @@ export async function fixPlaceholderPermissionsAction() {
                             await downloadOrCopyTrailerVideo({
                                 title: showTitle,
                                 year,
+                                mediaType: "tv",
                                 destinationPath: tvTrailerMp4
                             });
 
@@ -9255,6 +9260,8 @@ export async function fixPlaceholderPermissionsAction() {
                             await downloadOrCopyTrailerVideo({
                                 title: movieTitle,
                                 year,
+                                tmdbId,
+                                mediaType: "movie",
                                 destinationPath: movieTrailerMp4
                             });
 

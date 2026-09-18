@@ -3,23 +3,63 @@ import fsPromises from "fs/promises";
 import path from "path";
 import { spawn } from "child_process";
 import { logger } from "@/lib/logger";
+import { getTmdbVideos } from "@/lib/curation/tmdb";
 
-let youtubeSearchModule: any = null;
+let isYtDlpChecked = false;
+let isYtDlpAvailable = false;
 
-async function getYoutubeSearch() {
-    if (!youtubeSearchModule) {
+/**
+ * Checks if the yt-dlp binary is installed and executable on the host system.
+ */
+export async function checkYtDlpAvailable(): Promise<boolean> {
+    if (isYtDlpChecked) return isYtDlpAvailable;
+    return new Promise((resolve) => {
         try {
-            const imported: any = await import("youtube-search-without-api-key");
-            youtubeSearchModule = imported.default || imported;
-        } catch (e: any) {
-            logger.addLog("WARN", "CURATION", `Could not import youtube-search-without-api-key: ${e.message}`);
+            const proc = spawn("yt-dlp", ["--version"]);
+            proc.on("error", () => {
+                isYtDlpChecked = true;
+                isYtDlpAvailable = false;
+                resolve(false);
+            });
+            proc.on("close", (code) => {
+                isYtDlpChecked = true;
+                isYtDlpAvailable = code === 0;
+                resolve(isYtDlpAvailable);
+            });
+        } catch {
+            isYtDlpChecked = true;
+            isYtDlpAvailable = false;
+            resolve(false);
         }
-    }
-    return youtubeSearchModule;
+    });
 }
 
 /**
- * Copies the bundled static fallback placeholder video.
+ * Searches YouTube for an official trailer URL via direct HTTPS query (no external npm dependencies).
+ */
+export async function searchYouTubeVideoUrl(title: string, year?: number): Promise<string | null> {
+    try {
+        const query = `${title}${year ? ` ${year}` : ""} official trailer`;
+        const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9"
+            },
+            signal: AbortSignal.timeout(6000)
+        });
+        if (res.ok) {
+            const html = await res.text();
+            const match = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+            if (match && match[1]) {
+                return `https://www.youtube.com/watch?v=${match[1]}`;
+            }
+        }
+    } catch {}
+    return null;
+}
+
+/**
+ * Copies the bundled static fallback placeholder video (placeholder.mp4).
  */
 export async function copyFallbackPlaceholderVideo(outputPath: string): Promise<boolean> {
     const candidates = [
@@ -37,7 +77,7 @@ export async function copyFallbackPlaceholderVideo(outputPath: string): Promise<
                 }
                 await fsPromises.copyFile(p, outputPath);
                 try { fs.chmodSync(outputPath, 0o666); } catch {}
-                logger.addLog("INFO", "CURATION", `Copied bundled fallback placeholder.mp4 to "${outputPath}"`);
+                logger.addLog("INFO", "CURATION", `Generated playable placeholder video at "${path.basename(outputPath)}"`);
                 return true;
             } catch (err: any) {
                 logger.addLog("WARN", "CURATION", `Failed copying fallback placeholder from "${p}": ${err.message}`);
@@ -52,6 +92,11 @@ export async function copyFallbackPlaceholderVideo(outputPath: string): Promise<
  * Downloads a YouTube trailer using yt-dlp binary with 1080p limit and duration filtering (<240s).
  */
 export async function downloadWithYtDlp(videoUrl: string, outputPath: string, maxDuration = 240): Promise<boolean> {
+    const hasBinary = await checkYtDlpAvailable();
+    if (!hasBinary) {
+        return false;
+    }
+
     return new Promise((resolve) => {
         const parentDir = path.dirname(outputPath);
         if (!fs.existsSync(parentDir)) {
@@ -72,34 +117,35 @@ export async function downloadWithYtDlp(videoUrl: string, outputPath: string, ma
             videoUrl
         ];
 
-        logger.addLog("INFO", "CURATION", `Attempting YouTube trailer download with yt-dlp: ${videoUrl}`);
-
         let ytdlpProcess: any;
         try {
             ytdlpProcess = spawn("yt-dlp", args, { timeout: 90000 });
-        } catch (spawnErr: any) {
-            logger.addLog("WARN", "CURATION", `yt-dlp not found or failed to spawn: ${spawnErr.message}`);
+        } catch {
             return resolve(false);
         }
 
         let stderr = "";
+        let stdout = "";
+
+        ytdlpProcess.stdout?.on("data", (d: any) => {
+            stdout += d.toString();
+        });
 
         ytdlpProcess.stderr?.on("data", (d: any) => {
             stderr += d.toString();
         });
 
-        ytdlpProcess.on("error", (err: any) => {
-            logger.addLog("WARN", "CURATION", `yt-dlp process error: ${err.message}`);
+        ytdlpProcess.on("error", () => {
             resolve(false);
         });
 
         ytdlpProcess.on("close", (code: number) => {
             if (code === 0 && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 100000) {
                 try { fs.chmodSync(outputPath, 0o666); } catch {}
-                logger.addLog("SUCCESS", "CURATION", `Successfully downloaded YouTube trailer to "${outputPath}" (${Math.round(fs.statSync(outputPath).size / 1024 / 1024 * 10) / 10} MB)`);
+                logger.addLog("SUCCESS", "CURATION", `Downloaded official YouTube trailer for "${path.basename(outputPath)}" (${Math.round(fs.statSync(outputPath).size / 1024 / 1024 * 10) / 10} MB)`);
                 resolve(true);
             } else {
-                logger.addLog("WARN", "CURATION", `yt-dlp exited with code ${code}. Stderr: ${stderr.slice(-200)}`);
+                // If rejected by duration filter or unavailable, silently resolve false to trigger fallback
                 resolve(false);
             }
         });
@@ -107,16 +153,17 @@ export async function downloadWithYtDlp(videoUrl: string, outputPath: string, ma
 }
 
 /**
- * Searches YouTube for an official trailer and downloads it to destinationPath.
- * If download fails or yt-dlp is unavailable, falls back to the bundled placeholder.mp4.
+ * Downloads an official YouTube trailer video for a placeholder item or copies the bundled placeholder.mp4.
  */
 export async function downloadOrCopyTrailerVideo(options: {
     title: string;
     year?: number;
+    tmdbId?: number | string;
+    mediaType?: "movie" | "tv";
     trailerUrl?: string;
     destinationPath: string;
 }): Promise<{ success: boolean; isOfficialTrailer: boolean; path: string }> {
-    const { title, year, trailerUrl, destinationPath } = options;
+    const { title, year, tmdbId, mediaType, trailerUrl, destinationPath } = options;
     const destDir = path.dirname(destinationPath);
     if (!fs.existsSync(destDir)) {
         fs.mkdirSync(destDir, { recursive: true });
@@ -124,40 +171,38 @@ export async function downloadOrCopyTrailerVideo(options: {
 
     let targetVideoUrl = trailerUrl || "";
 
-    // 1. If no direct trailer URL, search YouTube
-    if (!targetVideoUrl) {
-        try {
-            const ytSearch = await getYoutubeSearch();
-            if (ytSearch && typeof ytSearch.search === "function") {
-                const query = `${title}${year ? ` ${year}` : ""} official trailer`;
-                const searchResults = await ytSearch.search(query);
-                if (searchResults && searchResults.length > 0) {
-                    const first = searchResults[0];
-                    const videoId = first.id?.videoId || first.videoId || first.id;
-                    if (videoId) {
-                        targetVideoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                        logger.addLog("INFO", "CURATION", `Found YouTube trailer for "${title}": ${first.snippet?.title || videoId} (${targetVideoUrl})`);
-                    }
+    // 1. If tmdbId is provided and no trailerUrl, resolve official trailer from TMDb
+    if (!targetVideoUrl && tmdbId) {
+        const numId = typeof tmdbId === "string" ? parseInt(tmdbId, 10) : tmdbId;
+        if (numId && !isNaN(numId)) {
+            try {
+                const videos = await getTmdbVideos(numId, mediaType || "movie");
+                if (videos.length > 0 && videos[0].url) {
+                    targetVideoUrl = videos[0].url;
                 }
-            }
-        } catch (searchErr: any) {
-            logger.addLog("WARN", "CURATION", `YouTube search error for "${title}": ${searchErr.message}`);
+            } catch {}
         }
     }
 
-    // 2. Try downloading with yt-dlp
+    // 2. If still no direct trailer URL, search YouTube
+    if (!targetVideoUrl) {
+        const searched = await searchYouTubeVideoUrl(title, year);
+        if (searched) {
+            targetVideoUrl = searched;
+        }
+    }
+
+    // 3. Try downloading with yt-dlp if available on the system
     if (targetVideoUrl) {
         try {
             const downloaded = await downloadWithYtDlp(targetVideoUrl, destinationPath);
             if (downloaded) {
                 return { success: true, isOfficialTrailer: true, path: destinationPath };
             }
-        } catch (dlErr: any) {
-            logger.addLog("WARN", "CURATION", `yt-dlp download failed: ${dlErr.message}`);
-        }
+        } catch {}
     }
 
-    // 3. Fallback to bundled playable placeholder.mp4 video
+    // 4. Fallback to bundled playable placeholder.mp4 video
     const fallbackOk = await copyFallbackPlaceholderVideo(destinationPath);
     return {
         success: fallbackOk,
