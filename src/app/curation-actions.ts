@@ -181,38 +181,25 @@ function isRadarrMovieComingSoon(m: any, futureThresholdDays = 90, pastGraceDays
     if (!m.monitored || m.hasFile) return false;
 
     const now = new Date();
-    const currentYear = now.getFullYear();
     const digDate = m.digitalRelease ? new Date(m.digitalRelease) : null;
     const physDate = m.physicalRelease ? new Date(m.physicalRelease) : null;
     const cinDate = m.inCinemas ? new Date(m.inCinemas) : null;
 
-    // 1. If release date is known, strictly enforce the date window
+    // Must have a valid release date
     const targetDate = digDate || physDate || cinDate;
-    if (targetDate && !isNaN(targetDate.getTime())) {
-        if (targetDate > now) {
-            const daysAhead = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
-        } else {
-            // Already released in the past: only include if within recent window (e.g. past 30 days)
-            const daysPast = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
-            return daysPast <= pastGraceDays;
-        }
+    if (!targetDate || isNaN(targetDate.getTime())) {
+        return false; // No concrete release date -> cannot determine if it's "coming soon"
     }
 
-    // 2. If no exact release date, check unreleased status with year safeguard
-    if (m.status === "announced" || m.status === "inCinemas" || m.isAvailable === false) {
-        if (m.year && m.year < currentYear) {
-            return false; // Backlog from prior year that was never fulfilled
-        }
-        return true;
+    if (targetDate > now) {
+        // Future release: must be within futureThresholdDays (default 90 days)
+        const daysAhead = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
+    } else {
+        // Already released: only include if within recent grace window (default 30 days)
+        const daysPast = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+        return daysPast <= pastGraceDays;
     }
-
-    // 3. Fallback on release year
-    if (m.year && m.year >= currentYear) {
-        return true;
-    }
-
-    return false;
 }
 
 /**
@@ -224,35 +211,26 @@ function isSonarrSeriesComingSoon(s: any, futureThresholdDays = 90, pastGraceDay
     if (hasAllFiles) return false;
 
     const now = new Date();
-    const currentYear = now.getFullYear();
     const nextAiring = s.nextAiring ? new Date(s.nextAiring) : null;
     const firstAired = s.firstAired ? new Date(s.firstAired) : null;
 
-    if (nextAiring && !isNaN(nextAiring.getTime())) {
-        if (nextAiring > now) {
-            const daysAhead = Math.ceil((nextAiring.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
-        } else {
-            const daysPast = Math.floor((now.getTime() - nextAiring.getTime()) / (1000 * 60 * 60 * 24));
-            return daysPast <= pastGraceDays;
-        }
+    // Must have a valid airing or release date
+    const targetDate = (nextAiring && !isNaN(nextAiring.getTime())) 
+        ? nextAiring 
+        : (firstAired && !isNaN(firstAired.getTime())) 
+            ? firstAired 
+            : null;
+    if (!targetDate) {
+        return false; // No concrete air date -> cannot determine if it's "coming soon"
     }
 
-    if (firstAired && !isNaN(firstAired.getTime())) {
-        if (firstAired > now) {
-            const daysAhead = Math.ceil((firstAired.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
-        } else {
-            const daysPast = Math.floor((now.getTime() - firstAired.getTime()) / (1000 * 60 * 60 * 24));
-            return daysPast <= pastGraceDays;
-        }
+    if (targetDate > now) {
+        const daysAhead = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
+    } else {
+        const daysPast = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+        return daysPast <= pastGraceDays;
     }
-
-    if (s.status === "upcoming" && (!s.year || s.year >= currentYear)) return true;
-
-    if (s.year && s.year >= currentYear) return true;
-
-    return false;
 }
 
 /**
@@ -8074,33 +8052,27 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
                 const itemYear = item.year || (item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined);
 
-                // Date Window Enforcement: Coming Soon placeholders must be upcoming or recent releases
+                // Date Window Enforcement: Coming Soon placeholders MUST have a concrete release date within the window
                 const effectiveTargetDate = digDate || relDate || theDate;
-                if (effectiveTargetDate && !isNaN(effectiveTargetDate.getTime())) {
-                    if (effectiveTargetDate > now) {
-                        // Future release: verify within placeholderDaysThreshold (default 90 days)
-                        if (placeholderDaysThreshold > 0) {
-                            const daysToRelease = Math.ceil((effectiveTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                            if (daysToRelease > placeholderDaysThreshold) {
-                                continue;
-                            }
-                        }
-                    } else {
-                        // Past release: only allow recent releases (e.g. past 30 days). Exclude older catalog backlog.
-                        const daysSinceRelease = Math.floor((now.getTime() - effectiveTargetDate.getTime()) / (1000 * 60 * 60 * 24));
-                        if (daysSinceRelease > 30) {
+                if (!effectiveTargetDate || isNaN(effectiveTargetDate.getTime())) {
+                    // No concrete release date -> cannot determine if it's "coming soon", skip!
+                    continue;
+                }
+
+                if (effectiveTargetDate > now) {
+                    // Future release: verify within placeholderDaysThreshold (default 90 days)
+                    if (placeholderDaysThreshold > 0) {
+                        const daysToRelease = Math.ceil((effectiveTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        if (daysToRelease > placeholderDaysThreshold) {
                             continue;
                         }
                     }
-                } else if (itemYear) {
-                    // Fallback to year: only current year or future years qualify for Coming Soon placeholders
-                    const currentYear = now.getFullYear();
-                    if (itemYear < currentYear) {
+                } else {
+                    // Past release: only allow recent releases within grace window (default past 30 days)
+                    const daysSinceRelease = Math.floor((now.getTime() - effectiveTargetDate.getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysSinceRelease > 30) {
                         continue;
                     }
-                } else {
-                    // No date or year available - skip unknown legacy items
-                    continue;
                 }
 
                 const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
