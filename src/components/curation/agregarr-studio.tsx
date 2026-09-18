@@ -656,7 +656,9 @@ export function AgregarrStudio() {
     };
 
     // Reorder Collections Handlers
-    const handleMoveCollection = (index: number, direction: "up" | "down") => {
+    const handleMoveCollection = (collectionId: string, direction: "up" | "down") => {
+        const index = collections.findIndex(c => c.id === collectionId);
+        if (index === -1) return;
         const targetIndex = direction === "up" ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= collections.length) return;
 
@@ -2418,7 +2420,7 @@ export function AgregarrStudio() {
                                                     <button
                                                         type="button"
                                                         disabled={idx === 0}
-                                                        onClick={() => handleMoveCollection(idx, "up")}
+                                                        onClick={() => handleMoveCollection(coll.id, "up")}
                                                         className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
                                                         title="Move Up on Home Screen"
                                                     >
@@ -2427,7 +2429,7 @@ export function AgregarrStudio() {
                                                     <button
                                                         type="button"
                                                         disabled={idx === filteredCollections.length - 1}
-                                                        onClick={() => handleMoveCollection(idx, "down")}
+                                                        onClick={() => handleMoveCollection(coll.id, "down")}
                                                         className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
                                                         title="Move Down on Home Screen"
                                                     >

@@ -2213,11 +2213,15 @@ export async function reorderPlexCollectionsAction(
 
                 if (!existing) return null;
 
+                const cleanBaseTitle = (existing.title || existing.sortTitle || "").replace(/^![\d]+_/, "").trim();
+                const effectiveSortTitle = `${prefix}${cleanBaseTitle}`;
+
                 const updated = await prisma.mediaCollection.update({
                     where: { id: existing.id },
                     data: {
                         orderIndex: item.orderIndex,
                         sortPrefix: prefix,
+                        sortTitle: effectiveSortTitle,
                         promotedToHome: item.promotedToHome ?? true,
                         promotedToRecommended: item.promotedToRecommended ?? true,
                         promotedToSharedHome: item.promotedToSharedHome ?? true,
@@ -2238,7 +2242,8 @@ export async function reorderPlexCollectionsAction(
                 if (!targetRatingKey) return;
 
                 const prefix = item.sortPrefix || `!${String(item.orderIndex).padStart(2, '0')}_`;
-                const effectiveSortTitle = `${prefix}${db.sortTitle || db.title}`;
+                const cleanBaseTitle = (db.title || db.sortTitle || "").replace(/^![\d]+_/, "").trim();
+                const effectiveSortTitle = `${prefix}${cleanBaseTitle}`;
 
                 try {
                     await updatePlexCollectionPromotionAndOrder(
@@ -2262,9 +2267,14 @@ export async function reorderPlexCollectionsAction(
         );
 
         // 3. Smart selective Plex hub reordering with anchor positioning (preserves Continue Watching & skips already-ordered hubs)
-        const desiredHubKeys = orderedCollections
-            .map(item => item.ratingKey || item.id)
-            .filter(Boolean) as string[];
+        const desiredHubKeys = (await Promise.all(
+            orderedCollections.map(async (item) => {
+                if (item.ratingKey) return item.ratingKey;
+                const dbRec = await prisma.mediaCollection.findUnique({ where: { id: item.id } });
+                if (dbRec?.ratingKey) return dbRec.ratingKey;
+                return item.id;
+            })
+        )).filter(Boolean) as string[];
 
         // Determine section media type for anchor positioning
         let libraryType: "show" | "movie" = "movie";

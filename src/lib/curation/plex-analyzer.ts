@@ -2248,6 +2248,61 @@ export async function getPlexHubManagement(
 }
 
 /**
+ * Extracts numeric collection ratingKey from a hub identifier.
+ * Supports: custom.collection.1.12345 (4-part) and custom.collection.12345 (3-part)
+ */
+export function extractRatingKeyFromHubIdentifier(hubIdentifier: string): string | null {
+    if (!hubIdentifier || !hubIdentifier.startsWith("custom.collection.")) {
+        return null;
+    }
+    const parts = hubIdentifier.split(".");
+    if (parts.length >= 4) {
+        return parts[3];
+    } else if (parts.length >= 3) {
+        return parts[2];
+    }
+    return null;
+}
+
+/**
+ * Resolves the exact identifier string Plex currently uses for a hub/collection
+ */
+export function resolvePlexHubIdentifier(
+    currentHubs: PlexHubManagementItem[],
+    hubOrRatingKey: string,
+    sectionKey: string | number
+): string {
+    const clean = hubOrRatingKey.startsWith("hub:") ? hubOrRatingKey.replace("hub:", "") : hubOrRatingKey;
+
+    // 1. If clean is numeric (collection rating key)
+    if (/^\d+$/.test(clean)) {
+        const found = currentHubs.find(h => {
+            const rk = extractRatingKeyFromHubIdentifier(h.identifier);
+            return rk === clean || h.identifier === clean;
+        });
+        if (found) return found.identifier;
+        return `custom.collection.${sectionKey}.${clean}`;
+    }
+
+    // 2. If already a custom.collection identifier
+    if (clean.startsWith("custom.collection.")) {
+        const rk = extractRatingKeyFromHubIdentifier(clean);
+        const found = currentHubs.find(h => {
+            if (h.identifier === clean) return true;
+            if (rk && extractRatingKeyFromHubIdentifier(h.identifier) === rk) return true;
+            return false;
+        });
+        if (found) return found.identifier;
+        return clean;
+    }
+
+    // 3. Built-in hub (e.g. movie.recentlyadded, tv.ondeck)
+    const foundBuiltIn = currentHubs.find(h => h.identifier === clean || h.identifier === `hub:${clean}`);
+    if (foundBuiltIn) return foundBuiltIn.identifier;
+    return clean;
+}
+
+/**
  * Selectively reorders Plex hubs on the Home screen using diff-only moves, anchor positioning,
  * and convergence prevention.
  */
@@ -2263,16 +2318,41 @@ export async function reorderPlexHubsSelective(
     }
 
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
-    
-    // 1. Convert desired keys to Plex canonical identifiers
-    const desiredIdentifiers = desiredOrderHubKeys.map(k => {
-        const clean = k.startsWith("hub:") ? k.replace("hub:", "") : k;
-        return /^\d+$/.test(clean) ? `custom.collection.${sectionKey}.${clean}` : clean;
-    });
 
-    // 2. Fetch current hub management from Plex
-    const currentHubs = await getPlexHubManagement(urlsToTry, token, sectionKey);
+    // 1. Fetch current hub management from Plex
+    let currentHubs = await getPlexHubManagement(urlsToTry, token, sectionKey);
+
+    // 2. Ensure all custom collections in desiredOrderHubKeys are initialized in Plex hub management
+    for (const key of desiredOrderHubKeys) {
+        const clean = key.startsWith("hub:") ? key.replace("hub:", "") : key;
+        const ratingKey = /^\d+$/.test(clean) ? clean : extractRatingKeyFromHubIdentifier(clean);
+        if (ratingKey) {
+            const alreadyInHubs = currentHubs.some(h => {
+                const rk = extractRatingKeyFromHubIdentifier(h.identifier);
+                return rk === ratingKey || h.identifier === clean;
+            });
+            if (!alreadyInHubs) {
+                // Initialize hub in Plex
+                for (const cleanBase of urlsToTry) {
+                    if (!cleanBase) continue;
+                    try {
+                        await fetch(`${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?metadataItemId=${encodeURIComponent(ratingKey)}&X-Plex-Token=${encodeURIComponent(token)}`, {
+                            method: "POST",
+                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                            signal: AbortSignal.timeout(4000)
+                        });
+                    } catch {}
+                }
+            }
+        }
+    }
+
+    // Re-fetch current hub management after promotions
+    currentHubs = await getPlexHubManagement(urlsToTry, token, sectionKey);
     const currentOrder = currentHubs.map(h => h.identifier);
+
+    // 3. Resolve exact Plex identifiers in desired order
+    const desiredIdentifiers = desiredOrderHubKeys.map(k => resolvePlexHubIdentifier(currentHubs, k, sectionKey));
 
     // If Plex returned no hubs via manage endpoint, fall back to sequential moves
     if (currentOrder.length === 0) {
@@ -2287,7 +2367,7 @@ export async function reorderPlexHubsSelective(
         return { success: true, movesPerformed: moves };
     }
 
-    // 3. Build complete desired order (managed items first, unmanaged remaining items at end)
+    // 4. Build complete desired order (managed items first, unmanaged remaining items at end)
     const managedSet = new Set(desiredIdentifiers);
     const unmanagedItems = currentOrder.filter(id => !managedSet.has(id));
     const completeDesiredOrder = [...desiredIdentifiers, ...unmanagedItems];
@@ -2327,7 +2407,7 @@ export async function reorderPlexHubsSelective(
         }
     }
 
-    // Check subsequent items: only move if NOT currently placed immediately after expected predecessor
+    // Check subsequent items: move after expected predecessor
     for (let i = 1; i < completeDesiredOrder.length; i++) {
         const currentItem = completeDesiredOrder[i];
         const expectedPredecessor = completeDesiredOrder[i - 1];
@@ -2368,27 +2448,47 @@ export async function movePlexHub(
 ): Promise<boolean> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const cleanHubId = hubId.startsWith("hub:") ? hubId.replace("hub:", "") : hubId;
-    const effectiveHubId = /^\d+$/.test(cleanHubId) 
-        ? `custom.collection.${sectionKey}.${cleanHubId}` 
-        : cleanHubId;
+    
+    // Candidate hub IDs to try (both 4-part and 3-part custom.collection formats, plus raw)
+    const candidateHubIds: string[] = [];
+    if (/^\d+$/.test(cleanHubId)) {
+        candidateHubIds.push(`custom.collection.${sectionKey}.${cleanHubId}`);
+        candidateHubIds.push(`custom.collection.${cleanHubId}`);
+    } else if (cleanHubId.startsWith("custom.collection.")) {
+        candidateHubIds.push(cleanHubId);
+        const rk = extractRatingKeyFromHubIdentifier(cleanHubId);
+        if (rk) {
+            candidateHubIds.push(`custom.collection.${sectionKey}.${rk}`);
+            candidateHubIds.push(`custom.collection.${rk}`);
+        }
+    } else {
+        candidateHubIds.push(cleanHubId);
+    }
 
-    for (const cleanBase of urlsToTry) {
-        if (!cleanBase) continue;
-        try {
-            const url = afterHubId
-                ? `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(effectiveHubId)}/move?after=${encodeURIComponent(afterHubId)}&X-Plex-Token=${encodeURIComponent(token)}`
-                : `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(effectiveHubId)}/move?X-Plex-Token=${encodeURIComponent(token)}`;
+    const uniqueCandidateHubIds = Array.from(new Set(candidateHubIds));
 
-            const res = await fetch(url, {
-                method: "PUT",
-                headers: {
-                    "X-Plex-Token": token,
-                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                },
-                signal: AbortSignal.timeout(4000)
-            });
-            if (res.ok) return true;
-        } catch {}
+    // Normalize afterHubId
+    const cleanAfterId = afterHubId ? (afterHubId.startsWith("hub:") ? afterHubId.replace("hub:", "") : afterHubId) : undefined;
+
+    for (const targetHubId of uniqueCandidateHubIds) {
+        for (const cleanBase of urlsToTry) {
+            if (!cleanBase) continue;
+            try {
+                const url = cleanAfterId
+                    ? `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(targetHubId)}/move?after=${encodeURIComponent(cleanAfterId)}&X-Plex-Token=${encodeURIComponent(token)}`
+                    : `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(targetHubId)}/move?X-Plex-Token=${encodeURIComponent(token)}`;
+
+                const res = await fetch(url, {
+                    method: "PUT",
+                    headers: {
+                        "X-Plex-Token": token,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    },
+                    signal: AbortSignal.timeout(4000)
+                });
+                if (res.ok) return true;
+            } catch {}
+        }
     }
     return false;
 }
