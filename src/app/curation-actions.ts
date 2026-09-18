@@ -15,6 +15,7 @@ import {
     syncPlexCollection, 
     deletePlexCollection, 
     updatePlexCollectionPromotionAndOrder,
+    movePlexHub,
     evaluatePruneCandidatesForServer,
     deleteMediaFromPlexServer,
     searchPlexLibraryItems,
@@ -2050,53 +2051,59 @@ export async function reorderPlexCollectionsAction(
 
         logger.addLog("INFO", "PLEX", `Saving hub ordering and visibility for ${orderedCollections.length} collections/hubs on server "${resolved.serverName}" (section: ${sectionKey})...`);
 
-        let updatedCount = 0;
+        // 1. Batch parallel DB updates
+        const updatedDbRecords = await Promise.all(
+            orderedCollections.map(async (item) => {
+                const prefix = item.sortPrefix || `!${String(item.orderIndex).padStart(2, '0')}_`;
+                let existing = await prisma.mediaCollection.findUnique({
+                    where: { id: item.id }
+                });
 
-        for (const item of orderedCollections) {
-            const prefix = item.sortPrefix || `!${String(item.orderIndex).padStart(2, '0')}_`;
+                if (!existing && item.ratingKey) {
+                    existing = await prisma.mediaCollection.findFirst({
+                        where: {
+                            ratingKey: item.ratingKey,
+                            serverId,
+                            sectionKey: String(sectionKey)
+                        }
+                    });
+                }
 
-            // 1. Safe DB lookup - handle if item was deleted or ID shifted
-            let existing = await prisma.mediaCollection.findUnique({
-                where: { id: item.id }
-            });
+                if (!existing) return null;
 
-            if (!existing && item.ratingKey) {
-                existing = await prisma.mediaCollection.findFirst({
-                    where: {
-                        ratingKey: item.ratingKey,
-                        serverId,
-                        sectionKey: String(sectionKey)
+                const updated = await prisma.mediaCollection.update({
+                    where: { id: existing.id },
+                    data: {
+                        orderIndex: item.orderIndex,
+                        sortPrefix: prefix,
+                        promotedToHome: item.promotedToHome ?? true,
+                        promotedToRecommended: item.promotedToRecommended ?? true,
+                        promotedToSharedHome: item.promotedToSharedHome ?? true,
+                        collectionMode: item.collectionMode || "default"
                     }
                 });
-            }
+                return { item, db: updated };
+            })
+        );
 
-            if (!existing) {
-                logger.addLog("INFO", "PLEX", `Skipping hub order for "${item.ratingKey || item.id}" (not in database or recently dismissed).`);
-                continue;
-            }
+        // 2. Parallel Plex promotion & visibility sync
+        let updatedCount = 0;
+        await Promise.all(
+            updatedDbRecords.filter(Boolean).map(async (entry) => {
+                if (!entry) return;
+                const { item, db } = entry;
+                const targetRatingKey = db.ratingKey || item.ratingKey;
+                if (!targetRatingKey) return;
 
-            // 2. Safe DB update
-            const updated = await prisma.mediaCollection.update({
-                where: { id: existing.id },
-                data: {
-                    orderIndex: item.orderIndex,
-                    sortPrefix: prefix,
-                    promotedToHome: item.promotedToHome ?? true,
-                    promotedToRecommended: item.promotedToRecommended ?? true,
-                    promotedToSharedHome: item.promotedToSharedHome ?? true,
-                    collectionMode: item.collectionMode || "default"
-                }
-            });
+                const prefix = item.sortPrefix || `!${String(item.orderIndex).padStart(2, '0')}_`;
+                const effectiveSortTitle = `${prefix}${db.sortTitle || db.title}`;
 
-            // 3. Push order and visibility to PMS
-            if (updated.ratingKey) {
                 try {
-                    const effectiveSortTitle = `${prefix}${updated.sortTitle || updated.title}`;
                     await updatePlexCollectionPromotionAndOrder(
                         urlsToTry,
                         token,
                         sectionKey,
-                        updated.ratingKey,
+                        targetRatingKey,
                         {
                             sortTitle: effectiveSortTitle,
                             promotedToHome: item.promotedToHome ?? true,
@@ -2105,11 +2112,24 @@ export async function reorderPlexCollectionsAction(
                             collectionMode: item.collectionMode || "default"
                         }
                     );
-                    logger.addLog("INFO", "PLEX", `Synced Plex collection/hub "${updated.title}" order (#${item.orderIndex}, prefix: "${prefix}") on server "${resolved.serverName}"`);
                     updatedCount++;
-                } catch (itemPlexErr: any) {
-                    logger.addLog("WARN", "PLEX", `Could not update Plex promotion for "${updated.title}": ${itemPlexErr.message}`);
+                } catch (plexErr: any) {
+                    logger.addLog("WARN", "PLEX", `Could not update promotion for "${db.title}": ${plexErr.message}`);
                 }
+            })
+        );
+
+        // 3. Fast sequential Plex hub /move calls for instant visual home screen ordering
+        let previousHubId: string | undefined = undefined;
+        for (const item of orderedCollections) {
+            const targetRatingKey = item.ratingKey || item.id;
+            if (targetRatingKey) {
+                try {
+                    await movePlexHub(urlsToTry, token, sectionKey, targetRatingKey, previousHubId);
+                    previousHubId = targetRatingKey.startsWith("hub:")
+                        ? targetRatingKey.replace("hub:", "")
+                        : `custom.collection.${sectionKey}.${targetRatingKey}`;
+                } catch {}
             }
         }
 
@@ -2747,10 +2767,8 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
                 const resolved = await resolveWorkingPlexServerConnection(serverId || undefined);
                 if (resolved && resolved.serverUrl && resolved.token) {
                     const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    await deletePlexCollection(urlsToTry, resolved.token, collRatingKey, sectionKey || undefined);
-                    if (collTitle && collTitle !== collRatingKey) {
-                        await deletePlexCollection(urlsToTry, resolved.token, collTitle, sectionKey || undefined);
-                    }
+                    const targetKey = (collRatingKey && collRatingKey !== collectionId) ? collRatingKey : (collTitle || collectionId);
+                    await deletePlexCollection(urlsToTry, resolved.token, targetKey, sectionKey || undefined);
                 }
             } catch (err: any) {
                 logger.addLog("WARN", "PLEX", `Could not delete collection "${collTitle}" from Plex: ${err.message}`);
