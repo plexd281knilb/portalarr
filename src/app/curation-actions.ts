@@ -131,6 +131,48 @@ async function verifyAdmin() {
 }
 
 /**
+ * Checks if a Plex media item should be excluded based on configured label/tag exclusions.
+ * Supports exact matches, hyphen/underscore normalization, and standard placeholder/leaving-soon aliases.
+ */
+function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null): boolean {
+    if (!excludedLabelsStr || !excludedLabelsStr.trim()) return false;
+    const rawTokens = excludedLabelsStr.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (rawTokens.length === 0) return false;
+
+    const norm = (s: string) => s.toLowerCase().replace(/[-_\s]+/g, "");
+    const normalizedTokens = new Set(rawTokens.map(norm));
+
+    const excludesPlaceholders = rawTokens.some(t => 
+        t.includes("trailer") || t.includes("placeholder") || t.includes("coming")
+    );
+    if (excludesPlaceholders && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+        return true;
+    }
+
+    const excludesLeavingSoon = rawTokens.some(t => t.includes("leaving"));
+    if (excludesLeavingSoon && it.isLeavingSoon) {
+        return true;
+    }
+
+    const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
+    const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
+
+    for (const l of itLabels) {
+        const normL = norm(l);
+        if (rawTokens.includes(l) || normalizedTokens.has(normL)) return true;
+        if (excludesPlaceholders && (normL.includes("trailer") || normL.includes("placeholder") || normL.includes("coming"))) return true;
+        if (excludesLeavingSoon && normL.includes("leaving")) return true;
+    }
+
+    for (const c of itCollections) {
+        const normC = norm(c);
+        if (rawTokens.includes(c) || normalizedTokens.has(normC)) return true;
+    }
+
+    return false;
+}
+
+/**
  * Recursively sets Unraid/Linux/NAS filesystem permissions on directories and files.
  * Default: 0o777 for directories (rwxrwxrwx) and 0o666 for files (rw-rw-rw-).
  */
@@ -1272,11 +1314,6 @@ export async function syncCollectionToPlexAction(collectionId: string) {
 
         // Fetch library media items and filter out any excluded labels, cross-media type noise, and trailer stubs
         const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000, undefined, true, !isPlaceholdersCollection);
-        
-        const excludedList = (collection.excludedLabels || "")
-            .split(",")
-            .map(s => s.trim().toLowerCase())
-            .filter(Boolean);
 
         const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
@@ -1284,12 +1321,8 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
                 return false;
             }
-            if (excludedList.length > 0) {
-                const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
-                const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
-                const isExcluded = itLabels.some((l: string) => excludedList.includes(l)) || 
-                                   itCollections.some((c: string) => excludedList.includes(c));
-                if (isExcluded) return false;
+            if (isPlexItemExcludedByLabels(it, collection.excludedLabels)) {
+                return false;
             }
             return true;
         }));
@@ -1693,6 +1726,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
         mediaType?: string;
         title?: string;
         type?: string;
+        category?: string;
+        includePlaceholders?: boolean;
     }
 ) {
     try {
@@ -1715,22 +1750,19 @@ export async function generateCollectionCandidateItemsPreviewAction(
             isMovieSection = sec?.type === "movie";
         } catch {}
 
-        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 5000);
-
-        const excludedList = (collectionConfig.excludedLabels || "")
-            .split(",")
-            .map(s => s.trim().toLowerCase())
-            .filter(Boolean);
+        const isPlaceholdersCollection = collectionConfig.category === "Coming Soon" || 
+                                          collectionConfig.sourceQuery === "monitored_missing" ||
+                                          Boolean(collectionConfig.includePlaceholders);
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 5000, undefined, true, !isPlaceholdersCollection);
 
         const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
             if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
-            if (excludedList.length > 0) {
-                const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
-                const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
-                const isExcluded = itLabels.some((l: string) => excludedList.includes(l)) || 
-                                   itCollections.some((c: string) => excludedList.includes(c));
-                if (isExcluded) return false;
+            if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+                return false;
+            }
+            if (isPlexItemExcludedByLabels(it, collectionConfig.excludedLabels)) {
+                return false;
             }
             return true;
         }));

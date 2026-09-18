@@ -922,7 +922,7 @@ export function AgregarrStudio() {
         setInspectRecommended(true);
         setInspectMode(preset.defaultCollectionMode || "default");
         setInspectMaxItems(preset.defaultMaxItems || 0);
-        setInspectExcludedLabels(preset.defaultExcludedLabels || "trailers, coming_soon");
+        setInspectExcludedLabels(preset.defaultExcludedLabels || "trailer-placeholder, trailers, coming_soon, leaving-soon");
         setInspectIncludePlaceholders(Boolean(preset.defaultIncludePlaceholders));
         setInspectModalOpen(true);
         setPreviewLoading(true);
@@ -935,7 +935,7 @@ export function AgregarrStudio() {
                 title: preset.title,
                 type: preset.type,
                 maxItems: preset.defaultMaxItems || 0,
-                excludedLabels: preset.defaultExcludedLabels || "trailers, coming_soon"
+                excludedLabels: preset.defaultExcludedLabels || "trailer-placeholder, trailers, coming_soon, leaving-soon"
             });
             if (res.success) {
                 setPreviewData(res as any);
@@ -4465,7 +4465,7 @@ export function AgregarrStudio() {
                             <Input
                                 value={inspectExcludedLabels}
                                 onChange={(e) => setInspectExcludedLabels(e.target.value)}
-                                placeholder="e.g. trailers, coming_soon, leaving_soon, extras"
+                                placeholder="e.g. trailer-placeholder, trailers, coming_soon, leaving-soon, extras"
                                 className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
                             />
                         </div>
@@ -4887,7 +4887,7 @@ export function AgregarrStudio() {
                             <Input
                                 value={placementExcludedLabels}
                                 onChange={(e) => setPlacementExcludedLabels(e.target.value)}
-                                placeholder="e.g. trailers, coming_soon, leaving_soon, extras"
+                                placeholder="e.g. trailer-placeholder, trailers, coming_soon, leaving-soon, extras"
                                 className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
                             />
                         </div>

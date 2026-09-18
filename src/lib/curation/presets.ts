@@ -585,7 +585,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "release",
         defaultHomeOrder: 0,
         defaultSortPrefix: "!00_Recent",
-        defaultExcludedLabels: "trailer-placeholder"
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
     {
         id: "filtered-recently-added-tv",
@@ -600,7 +600,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "release",
         defaultHomeOrder: 0,
         defaultSortPrefix: "!00_Recent",
-        defaultExcludedLabels: "trailer-placeholder"
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
     {
         id: "filtered-recently-released-movies",
@@ -615,7 +615,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "release",
         defaultHomeOrder: 1,
         defaultSortPrefix: "!01_Released",
-        defaultExcludedLabels: "trailer-placeholder"
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
     {
         id: "filtered-recently-released-tv",
@@ -630,7 +630,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "release",
         defaultHomeOrder: 1,
         defaultSortPrefix: "!01_Released",
-        defaultExcludedLabels: "trailer-placeholder"
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
     {
         id: "filtered-top-unwatched-movies",
@@ -645,7 +645,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "rating",
         defaultHomeOrder: 2,
         defaultSortPrefix: "!02_Unwatched",
-        defaultExcludedLabels: "trailer-placeholder"
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
     {
         id: "filtered-top-unwatched-tv",
@@ -660,7 +660,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "rating",
         defaultHomeOrder: 2,
         defaultSortPrefix: "!02_Unwatched",
-        defaultExcludedLabels: "trailer-placeholder"
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
 
     // ⭐ LETTERBOXD & ANIME CHARTS
