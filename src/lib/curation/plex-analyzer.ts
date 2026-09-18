@@ -1218,6 +1218,72 @@ export async function getPlexLibraryCollections(
             lastErrorMsg = formatPlexErrorDetails(e, `${cleanBase}/library/sections/${sectionKey}/all?type=18`);
         }
 
+        // 2.5 Try /hubs/sections/{sectionKey}/manage (Canonical Plex Hub Management endpoint)
+        try {
+            const urlManage = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?X-Plex-Token=${encodeURIComponent(token)}`;
+            const controllerM = new AbortController();
+            const timeoutIdM = setTimeout(() => controllerM.abort(), 10000);
+            const resM = await fetch(urlManage, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: controllerM.signal,
+                cache: "no-store"
+            });
+            clearTimeout(timeoutIdM);
+
+            if (resM.ok) {
+                const textM = await resM.text();
+                const trimmedM = textM.trim();
+                if (trimmedM.startsWith("{") || trimmedM.startsWith("[")) {
+                    try {
+                        const dataM = JSON.parse(trimmedM);
+                        const hubs = dataM.MediaContainer?.Hub || [];
+                        const hubList = Array.isArray(hubs) ? hubs : [hubs];
+                        for (const h of hubList) {
+                            const ident = String(h.identifier || "");
+                            const hubTitle = h.title?.trim() || ident;
+                            if (ident) {
+                                const isCustom = ident.startsWith("custom.collection.");
+                                const ratingKey = isCustom
+                                    ? ident.split(".").pop() || ident
+                                    : `hub:${ident}`;
+                                
+                                const existing = discoveredMap.get(ratingKey);
+                                const isHome = h.promotedToOwnHome === true || h.promotedToOwnHome === "1" || h.promotedToOwnHome === 1;
+                                const isRec = h.promotedToRecommended === true || h.promotedToRecommended === "1" || h.promotedToRecommended === 1;
+                                const isShared = h.promotedToSharedHome === true || h.promotedToSharedHome === "1" || h.promotedToSharedHome === 1;
+
+                                if (existing) {
+                                    existing.promotedToHome = isHome;
+                                    existing.promotedToRecommended = isRec;
+                                    existing.promotedToSharedHome = isShared;
+                                    if (ident) existing.hubIdentifier = ident;
+                                } else if (!isCustom) {
+                                    discoveredMap.set(ratingKey, {
+                                        ratingKey,
+                                        title: hubTitle,
+                                        summary: h.summary || `Plex Built-in Hub: ${hubTitle}`,
+                                        thumb: h.thumb || undefined,
+                                        art: h.art,
+                                        childCount: parseInt(h.size || h.count || "0", 10),
+                                        smart: true,
+                                        isHub: true,
+                                        hubIdentifier: ident,
+                                        promotedToHome: isHome,
+                                        promotedToRecommended: isRec,
+                                        promotedToSharedHome: isShared
+                                    });
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e: any) {}
+
         // 3. Try /library/sections/{sectionKey}/hubs (Section hubs endpoint in modern PMS)
         try {
             const urlHubs1 = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/hubs?count=50&includeFeatured=1&includeStations=1&X-Plex-Token=${encodeURIComponent(token)}`;
@@ -1969,6 +2035,172 @@ export async function updatePlexCollectionPromotionAndOrder(
 }
 
 /**
+ * Represents a hub item from Plex Media Server's /hubs/sections/{sectionId}/manage endpoint
+ */
+export interface PlexHubManagementItem {
+    identifier: string;
+    title: string;
+    type?: string;
+    promotedToRecommended?: boolean;
+    promotedToOwnHome?: boolean;
+    promotedToSharedHome?: boolean;
+}
+
+/**
+ * Fetches the raw hub management configuration from Plex (/hubs/sections/{sectionId}/manage).
+ * Returns the exact visual order and promotion states of all hubs and custom collections.
+ */
+export async function getPlexHubManagement(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    sectionKey: string | number
+): Promise<PlexHubManagementItem[]> {
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const url = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(url, {
+                headers: {
+                    "Accept": "application/json, application/xml, text/xml, */*",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: AbortSignal.timeout(6000),
+                cache: "no-store"
+            });
+            if (res.ok) {
+                const text = await res.text();
+                const trimmed = text.trim();
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                    const data = JSON.parse(trimmed);
+                    const rawHubs = data.MediaContainer?.Hub || [];
+                    const list = Array.isArray(rawHubs) ? rawHubs : [rawHubs];
+                    return list.map((h: any) => ({
+                        identifier: String(h.identifier || h.key || ""),
+                        title: String(h.title || ""),
+                        type: h.type,
+                        promotedToRecommended: h.promotedToRecommended === true || h.promotedToRecommended === "1" || h.promotedToRecommended === 1,
+                        promotedToOwnHome: h.promotedToOwnHome === true || h.promotedToOwnHome === "1" || h.promotedToOwnHome === 1,
+                        promotedToSharedHome: h.promotedToSharedHome === true || h.promotedToSharedHome === "1" || h.promotedToSharedHome === 1
+                    })).filter((h: any) => Boolean(h.identifier));
+                }
+            }
+        } catch {}
+    }
+    return [];
+}
+
+/**
+ * Selectively reorders Plex hubs on the Home screen using diff-only moves, anchor positioning,
+ * and convergence prevention.
+ */
+export async function reorderPlexHubsSelective(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    sectionKey: string | number,
+    desiredOrderHubKeys: string[],
+    libraryType?: "movie" | "show" | "tv"
+): Promise<{ success: boolean; movesPerformed: number; message?: string }> {
+    if (desiredOrderHubKeys.length === 0) {
+        return { success: true, movesPerformed: 0 };
+    }
+
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    
+    // 1. Convert desired keys to Plex canonical identifiers
+    const desiredIdentifiers = desiredOrderHubKeys.map(k => {
+        const clean = k.startsWith("hub:") ? k.replace("hub:", "") : k;
+        return /^\d+$/.test(clean) ? `custom.collection.${sectionKey}.${clean}` : clean;
+    });
+
+    // 2. Fetch current hub management from Plex
+    const currentHubs = await getPlexHubManagement(urlsToTry, token, sectionKey);
+    const currentOrder = currentHubs.map(h => h.identifier);
+
+    // If Plex returned no hubs via manage endpoint, fall back to sequential moves
+    if (currentOrder.length === 0) {
+        let prev: string | undefined = undefined;
+        let moves = 0;
+        for (const itemKey of desiredOrderHubKeys) {
+            const ok = await movePlexHub(urlsToTry, token, sectionKey, itemKey, prev);
+            if (ok) moves++;
+            const clean = itemKey.startsWith("hub:") ? itemKey.replace("hub:", "") : itemKey;
+            prev = /^\d+$/.test(clean) ? `custom.collection.${sectionKey}.${clean}` : clean;
+        }
+        return { success: true, movesPerformed: moves };
+    }
+
+    // 3. Build complete desired order (managed items first, unmanaged remaining items at end)
+    const managedSet = new Set(desiredIdentifiers);
+    const unmanagedItems = currentOrder.filter(id => !managedSet.has(id));
+    const completeDesiredOrder = [...desiredIdentifiers, ...unmanagedItems];
+
+    // If current order already matches desired order, 0 network moves needed!
+    if (JSON.stringify(currentOrder) === JSON.stringify(completeDesiredOrder)) {
+        return { success: true, movesPerformed: 0, message: "Hubs already in desired order." };
+    }
+
+    let moveCount = 0;
+    const workingOrder = [...currentOrder];
+
+    // Determine Anchor for first item (preserves Continue Watching)
+    const isTv = libraryType === "show" || libraryType === "tv";
+    const requiredAnchor = isTv ? "tv.ondeck" : "movie.inprogress";
+    const hasAnchorInCurrent = workingOrder.includes(requiredAnchor);
+
+    // Check if first managed item needs to be positioned
+    if (completeDesiredOrder.length > 0) {
+        const firstDesired = completeDesiredOrder[0];
+        const firstDesiredIdx = workingOrder.indexOf(firstDesired);
+        const anchorIdx = hasAnchorInCurrent ? workingOrder.indexOf(requiredAnchor) : -1;
+        const needsFirstMove = hasAnchorInCurrent 
+            ? (firstDesiredIdx !== anchorIdx + 1)
+            : (firstDesiredIdx !== 0);
+
+        if (needsFirstMove) {
+            const anchorTarget = hasAnchorInCurrent ? requiredAnchor : undefined;
+            const ok = await movePlexHub(urlsToTry, token, sectionKey, firstDesired, anchorTarget);
+            if (ok) {
+                moveCount++;
+                const oldIdx = workingOrder.indexOf(firstDesired);
+                if (oldIdx !== -1) workingOrder.splice(oldIdx, 1);
+                const targetIdx = hasAnchorInCurrent ? (workingOrder.indexOf(requiredAnchor) + 1) : 0;
+                workingOrder.splice(Math.max(0, targetIdx), 0, firstDesired);
+            }
+        }
+    }
+
+    // Check subsequent items: only move if NOT currently placed immediately after expected predecessor
+    for (let i = 1; i < completeDesiredOrder.length; i++) {
+        const currentItem = completeDesiredOrder[i];
+        const expectedPredecessor = completeDesiredOrder[i - 1];
+
+        const currentPos = workingOrder.indexOf(currentItem);
+        const predecessorPos = workingOrder.indexOf(expectedPredecessor);
+
+        const needsMove = predecessorPos === -1 || currentPos !== predecessorPos + 1;
+
+        if (needsMove) {
+            const ok = await movePlexHub(urlsToTry, token, sectionKey, currentItem, expectedPredecessor);
+            if (ok) {
+                moveCount++;
+                const oldIdx = workingOrder.indexOf(currentItem);
+                if (oldIdx !== -1) workingOrder.splice(oldIdx, 1);
+                const predNewIdx = workingOrder.indexOf(expectedPredecessor);
+                workingOrder.splice(predNewIdx + 1, 0, currentItem);
+            }
+        }
+    }
+
+    return {
+        success: true,
+        movesPerformed: moveCount,
+        message: `Selectively moved ${moveCount} hubs to desired order.`
+    };
+}
+
+/**
  * Moves a hub to a new position in the library home screen (instant visual ordering).
  */
 export async function movePlexHub(
@@ -2006,7 +2238,7 @@ export async function movePlexHub(
 }
 
 /**
- * Uploads a poster image buffer directly to a Plex item (Movie, Show, or Collection).
+ * Uploads a poster image buffer directly to a Plex item (Movie, Show, or Collection) and locks it.
  */
 export async function uploadPlexItemPoster(
     serverUrlOrCandidates: string | string[],
@@ -2030,7 +2262,15 @@ export async function uploadPlexItemPoster(
                 body: new Uint8Array(imageBuffer)
             });
 
-            if (res.ok) return true;
+            if (res.ok) {
+                // Lock poster to prevent automated PMS scheduled metadata overwrites
+                fetch(`${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?thumb.locked=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(3000)
+                }).catch(() => {});
+                return true;
+            }
         } catch (e: any) {
             // Try next candidate
         }
@@ -2041,7 +2281,7 @@ export async function uploadPlexItemPoster(
 }
 
 /**
- * Uploads a poster image from a URL to a Plex item.
+ * Uploads a poster image from a URL to a Plex item and locks it.
  */
 export async function uploadPlexItemPosterFromUrl(
     serverUrlOrCandidates: string | string[],
@@ -2062,7 +2302,15 @@ export async function uploadPlexItemPosterFromUrl(
                 }
             });
 
-            if (res.ok) return true;
+            if (res.ok) {
+                // Lock poster to prevent automated PMS scheduled metadata overwrites
+                fetch(`${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?thumb.locked=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(3000)
+                }).catch(() => {});
+                return true;
+            }
         } catch (e) {
             // Try next candidate
         }

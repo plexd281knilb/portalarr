@@ -16,6 +16,8 @@ import {
     deletePlexCollection, 
     updatePlexCollectionPromotionAndOrder,
     movePlexHub,
+    reorderPlexHubsSelective,
+    getPlexHubManagement,
     evaluatePruneCandidatesForServer,
     deleteMediaFromPlexServer,
     searchPlexLibraryItems,
@@ -103,6 +105,7 @@ import {
     ParentalSeverity,
     CustomTagRule
 } from "@/lib/curation/parental-guide";
+import { downloadOrCopyTrailerVideo } from "@/lib/curation/trailer-downloader";
 import {
     parseKometaYamlString,
     convertKometaLibraryToPortalarrOverlay,
@@ -2119,25 +2122,29 @@ export async function reorderPlexCollectionsAction(
             })
         );
 
-        // 3. Fast sequential Plex hub /move calls for instant visual home screen ordering
-        let previousHubId: string | undefined = undefined;
-        for (const item of orderedCollections) {
-            const targetRatingKey = item.ratingKey || item.id;
-            if (targetRatingKey) {
-                try {
-                    await movePlexHub(urlsToTry, token, sectionKey, targetRatingKey, previousHubId);
-                    previousHubId = targetRatingKey.startsWith("hub:")
-                        ? targetRatingKey.replace("hub:", "")
-                        : `custom.collection.${sectionKey}.${targetRatingKey}`;
-                } catch {}
-            }
-        }
+        // 3. Smart selective Plex hub reordering with anchor positioning (preserves Continue Watching & skips already-ordered hubs)
+        const desiredHubKeys = orderedCollections
+            .map(item => item.ratingKey || item.id)
+            .filter(Boolean) as string[];
 
-        logger.addLog("SUCCESS", "PLEX", `Reordered & synced ${updatedCount} collections/hubs on Plex server "${resolved.serverName}" (section ${sectionKey}).`);
+        // Determine section media type for anchor positioning
+        let libraryType: "show" | "movie" = "movie";
+        try {
+            const sections = await getPlexServerSections(token, serverId, resolved.serverUrl);
+            const section = sections.find(s => String(s.key) === String(sectionKey));
+            if (section?.type === "show" || section?.type === "tv") {
+                libraryType = "show";
+            }
+        } catch {}
+
+        const reorderResult = await reorderPlexHubsSelective(urlsToTry, token, sectionKey, desiredHubKeys, libraryType);
+
+        logger.addLog("SUCCESS", "PLEX", `Reordered & synced ${updatedCount} collections/hubs on Plex server "${resolved.serverName}" (section ${sectionKey}) — ${reorderResult.movesPerformed} hub moves performed.`);
         return {
             success: true,
             updatedCount,
-            message: `Updated ordering and home visibility for ${updatedCount} collections/hubs.`
+            movesPerformed: reorderResult.movesPerformed,
+            message: `Updated ordering and home visibility for ${updatedCount} collections/hubs (${reorderResult.movesPerformed} hubs adjusted).`
         };
     } catch (e: any) {
         logger.addLog("ERROR", "PLEX", `Failed reordering collections on Plex Home Screen: ${e.message}`);
@@ -7358,21 +7365,26 @@ export async function createPlaceholderItemInternal(
                 fs.writeFileSync(seasonPoster, posterBuffer);
                 try { fs.chmodSync(seasonPoster, 0o666); } catch {}
 
-                // Save S00E00.Trailer.strm (with YouTube trailer stream URL)
-                if (trailerUrl) {
-                    const strmFile = path.join(season00Dir, "S00E00.Trailer.strm");
-                    fs.writeFileSync(strmFile, trailerUrl);
-                    try { fs.chmodSync(strmFile, 0o666); } catch {}
-                    
-                    const namedStrmFile = path.join(season00Dir, `S00E00 {tmdb-${itemData.tmdbId}} {edition-Trailer}.strm`);
-                    fs.writeFileSync(namedStrmFile, trailerUrl);
-                    try { fs.chmodSync(namedStrmFile, 0o666); } catch {}
-                }
+                // Save actual playable MP4 trailer (downloaded from YouTube via yt-dlp or fallback to placeholder.mp4)
+                const tvTrailerMp4 = path.join(season00Dir, "S00E00.Trailer.mp4");
+                await downloadOrCopyTrailerVideo({
+                    title: itemData.title,
+                    year: itemData.year,
+                    trailerUrl,
+                    destinationPath: tvTrailerMp4
+                });
 
-                // Save lightweight stub file (S00E00 {tmdb-id}.disc)
-                const stubFile = path.join(season00Dir, `S00E00 {tmdb-${itemData.tmdbId}}.disc`);
-                fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
-                try { fs.chmodSync(stubFile, 0o666); } catch {}
+                // Clean up any legacy .strm or .disc files that cause Plex s1001 Network errors
+                const staleTvFiles = [
+                    path.join(season00Dir, "S00E00.Trailer.strm"),
+                    path.join(season00Dir, `S00E00 {tmdb-${itemData.tmdbId}} {edition-Trailer}.strm`),
+                    path.join(season00Dir, `S00E00 {tmdb-${itemData.tmdbId}}.disc`)
+                ];
+                for (const sf of staleTvFiles) {
+                    if (fs.existsSync(sf)) {
+                        try { fs.unlinkSync(sf); } catch {}
+                    }
+                }
 
                 // Immunity markers
                 const showImmunity = path.join(targetDir, ".portalarr-missing");
@@ -7385,17 +7397,25 @@ export async function createPlaceholderItemInternal(
 
                 setPermissionsRecursive(targetDir, 0o777, 0o666);
             } else {
-                // Movies: Create Movie folder with {tmdb-id} {edition-Trailer} files
-                if (trailerUrl) {
-                    const strmFile = path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.strm`);
-                    fs.writeFileSync(strmFile, trailerUrl);
-                    try { fs.chmodSync(strmFile, 0o666); } catch {}
-                }
+                // Movies: Create Movie folder with actual playable MP4 trailer
+                const movieTrailerMp4 = path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.mp4`);
+                await downloadOrCopyTrailerVideo({
+                    title: itemData.title,
+                    year: itemData.year,
+                    trailerUrl,
+                    destinationPath: movieTrailerMp4
+                });
 
-                // Save lightweight stub file ({tmdb-id} {edition-Trailer}.disc)
-                const stubFile = path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.disc`);
-                fs.writeFileSync(stubFile, `[Portalarr Placeholder]\nTitle: ${itemData.title}\nTMDb ID: ${itemData.tmdbId}\nBanner: ${bannerText}\nTrailer: ${trailerUrl || "None"}\nCreated: ${new Date().toISOString()}\n`);
-                try { fs.chmodSync(stubFile, 0o666); } catch {}
+                // Clean up any legacy .strm or .disc files that cause Plex s1001 Network errors
+                const staleMovieFiles = [
+                    path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.strm`),
+                    path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.disc`)
+                ];
+                for (const sf of staleMovieFiles) {
+                    if (fs.existsSync(sf)) {
+                        try { fs.unlinkSync(sf); } catch {}
+                    }
+                }
 
                 // Immunity marker (.portalarr-missing)
                 const immunityMarker = path.join(targetDir, ".portalarr-missing");
@@ -7407,7 +7427,7 @@ export async function createPlaceholderItemInternal(
 
             shareSaved = true;
             createdFolderPath = targetDir;
-            logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}"${trailerUrl ? " with YouTube trailer .strm" : ""}`);
+            logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}" (playable MP4 trailer)`);
         }
 
         // Trigger section refresh & tag label trailer-placeholder in Plex if the item is present
@@ -8198,7 +8218,8 @@ export async function deployFilteredSmartHubAction(
     serverId: string,
     sectionKey: string,
     subtype: FilteredHubSubtype = "recently_added",
-    customTitle?: string
+    customTitle?: string,
+    maxItems: number = 25
 ): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string }> {
     try {
 
@@ -8259,26 +8280,27 @@ export async function deployFilteredSmartHubAction(
         let filterUri = "";
         const trailerLabel = encodeURIComponent("trailer-placeholder");
         const trailerTitle = encodeURIComponent("Trailer (Placeholder)");
+        const limitParam = (maxItems && maxItems > 0) ? `&limit=${maxItems}` : "";
 
         if (subtype === "recently_added") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${trailerLabel}&editionTitle!=Trailer`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&editionTitle!=Trailer`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released_episodes") {
-            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
         } else if (subtype === "top_unwatched") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=${trailerLabel}&editionTitle!=Trailer`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
             }
         }
 
@@ -8435,6 +8457,7 @@ export async function deployFilteredSmartHubAction(
                     sourceQuery: subtype,
                     category: "Plex Smart",
                     type: "smart",
+                    maxItems: maxItems || 25,
                     promotedToHome: true,
                     promotedToRecommended: true,
                     promotedToSharedHome: true,
@@ -8458,6 +8481,7 @@ export async function deployFilteredSmartHubAction(
                     sourceQuery: subtype,
                     ratingKey: ratingKey || undefined,
                     itemCount: 0,
+                    maxItems: maxItems || 25,
                     promotedToHome: true,
                     promotedToRecommended: true,
                     promotedToSharedHome: true,
@@ -9114,6 +9138,7 @@ export async function cleanupAvailablePlaceholdersAction(serverId?: string, sect
 
 /**
  * Server action to recursively fix filesystem permissions (chmod 0777/0666) across all Coming Soon placeholder share folders.
+ * Also upgrades any legacy .strm/.disc placeholders to real playable MP4 trailer videos.
  */
 export async function fixPlaceholderPermissionsAction() {
     try {
@@ -9144,11 +9169,71 @@ export async function fixPlaceholderPermissionsAction() {
         if (fs.existsSync(defaultMovies)) shareDirectories.add(defaultMovies);
 
         let fixedCount = 0;
+        let upgradedCount = 0;
         for (const shareDir of Array.from(shareDirectories)) {
             try {
                 const entries = fs.readdirSync(shareDir, { withFileTypes: true });
                 for (const entry of entries) {
+                    if (!entry.isDirectory()) continue;
                     const folderPath = path.join(shareDir, entry.name);
+                    const files = fs.readdirSync(folderPath);
+
+                    const season00Dir = path.join(folderPath, "Season 00");
+                    const isTv = fs.existsSync(season00Dir);
+
+                    if (isTv) {
+                        const seasonFiles = fs.readdirSync(season00Dir);
+                        const hasMp4 = seasonFiles.some(f => f.endsWith(".mp4") || f.endsWith(".mkv"));
+                        const hasStrmOrDisc = seasonFiles.some(f => f.endsWith(".strm") || f.endsWith(".disc"));
+
+                        if (!hasMp4 || hasStrmOrDisc) {
+                            const tvTrailerMp4 = path.join(season00Dir, "S00E00.Trailer.mp4");
+                            const showTitle = entry.name.replace(/\s*\(\d{4}\)$/, "").trim();
+                            const yearMatch = entry.name.match(/\((\d{4})\)$/);
+                            const year = yearMatch ? parseInt(yearMatch[1], 10) : undefined;
+
+                            await downloadOrCopyTrailerVideo({
+                                title: showTitle,
+                                year,
+                                destinationPath: tvTrailerMp4
+                            });
+
+                            for (const sf of seasonFiles) {
+                                if (sf.endsWith(".strm") || sf.endsWith(".disc")) {
+                                    try { fs.unlinkSync(path.join(season00Dir, sf)); } catch {}
+                                }
+                            }
+                            upgradedCount++;
+                        }
+                    } else {
+                        const hasMp4 = files.some(f => f.endsWith(".mp4") || f.endsWith(".mkv"));
+                        const hasStrmOrDisc = files.some(f => f.endsWith(".strm") || f.endsWith(".disc"));
+
+                        if (!hasMp4 || hasStrmOrDisc) {
+                            const movieTitle = entry.name.replace(/\s*\(\d{4}\)$/, "").trim();
+                            const yearMatch = entry.name.match(/\((\d{4})\)$/);
+                            const year = yearMatch ? parseInt(yearMatch[1], 10) : undefined;
+
+                            const tmdbMatch = files.join(" ").match(/\{tmdb-(\d+)\}/i);
+                            const tmdbId = tmdbMatch ? parseInt(tmdbMatch[1], 10) : undefined;
+                            const tmdbTag = tmdbId ? ` {tmdb-${tmdbId}}` : "";
+
+                            const movieTrailerMp4 = path.join(folderPath, `${entry.name}${tmdbTag} {edition-Trailer}.mp4`);
+                            await downloadOrCopyTrailerVideo({
+                                title: movieTitle,
+                                year,
+                                destinationPath: movieTrailerMp4
+                            });
+
+                            for (const sf of files) {
+                                if (sf.endsWith(".strm") || sf.endsWith(".disc")) {
+                                    try { fs.unlinkSync(path.join(folderPath, sf)); } catch {}
+                                }
+                            }
+                            upgradedCount++;
+                        }
+                    }
+
                     setPermissionsRecursive(folderPath, 0o777, 0o666);
                     fixedCount++;
                 }
@@ -9158,12 +9243,13 @@ export async function fixPlaceholderPermissionsAction() {
             }
         }
 
-        logger.addLog("SUCCESS", "CURATION", `[PERMISSIONS-FIX] Repaired permissions to 0777 / 0666 on ${fixedCount} placeholder items across Coming Soon shares.`);
+        logger.addLog("SUCCESS", "CURATION", `[PERMISSIONS-FIX] Repaired permissions on ${fixedCount} placeholder items across Coming Soon shares (${upgradedCount} upgraded to MP4 trailers).`);
 
         return {
             success: true,
             fixedCount,
-            message: `Permissions updated to 0777 (drwxrwxrwx) across ${fixedCount} placeholder folders & files in your Coming Soon shares!`
+            upgradedCount,
+            message: `Permissions updated to 0777 and ${upgradedCount} placeholders upgraded to playable MP4 trailers across ${fixedCount} folders!`
         };
     } catch (e: any) {
         return {
@@ -9171,6 +9257,13 @@ export async function fixPlaceholderPermissionsAction() {
             message: e.message || "Failed updating placeholder permissions."
         };
     }
+}
+
+/**
+ * Server action to explicitly upgrade all existing placeholder items from .strm to real MP4 video trailers.
+ */
+export async function upgradePlaceholderTrailersAction() {
+    return await fixPlaceholderPermissionsAction();
 }
 
 /**
