@@ -56,7 +56,6 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "rating",
         defaultHomeOrder: 3,
         defaultSortPrefix: "!03_Popular",
-        defaultIncludePlaceholders: true,
         defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
     {

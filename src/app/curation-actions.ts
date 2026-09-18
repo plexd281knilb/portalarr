@@ -181,21 +181,12 @@ function isRadarrMovieComingSoon(m: any, futureThresholdDays = 90, pastGraceDays
     if (!m.monitored || m.hasFile) return false;
 
     const now = new Date();
+    const currentYear = now.getFullYear();
     const digDate = m.digitalRelease ? new Date(m.digitalRelease) : null;
     const physDate = m.physicalRelease ? new Date(m.physicalRelease) : null;
     const cinDate = m.inCinemas ? new Date(m.inCinemas) : null;
 
-    // 1. Explicitly unreleased status
-    if (m.status === "announced" || m.status === "inCinemas" || m.isAvailable === false) {
-        const futureDate = digDate || physDate || cinDate;
-        if (futureDate && !isNaN(futureDate.getTime()) && futureDate > now) {
-            const daysAhead = Math.ceil((futureDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            if (futureThresholdDays > 0 && daysAhead > futureThresholdDays) return false;
-        }
-        return true;
-    }
-
-    // 2. Future release date
+    // 1. If release date is known, strictly enforce the date window
     const targetDate = digDate || physDate || cinDate;
     if (targetDate && !isNaN(targetDate.getTime())) {
         if (targetDate > now) {
@@ -208,11 +199,17 @@ function isRadarrMovieComingSoon(m: any, futureThresholdDays = 90, pastGraceDays
         }
     }
 
+    // 2. If no exact release date, check unreleased status with year safeguard
+    if (m.status === "announced" || m.status === "inCinemas" || m.isAvailable === false) {
+        if (m.year && m.year < currentYear) {
+            return false; // Backlog from prior year that was never fulfilled
+        }
+        return true;
+    }
+
     // 3. Fallback on release year
-    if (m.year) {
-        const currentYear = now.getFullYear();
-        if (m.year >= currentYear) return true;
-        return false;
+    if (m.year && m.year >= currentYear) {
+        return true;
     }
 
     return false;
@@ -227,14 +224,18 @@ function isSonarrSeriesComingSoon(s: any, futureThresholdDays = 90, pastGraceDay
     if (hasAllFiles) return false;
 
     const now = new Date();
+    const currentYear = now.getFullYear();
     const nextAiring = s.nextAiring ? new Date(s.nextAiring) : null;
     const firstAired = s.firstAired ? new Date(s.firstAired) : null;
 
-    if (s.status === "upcoming") return true;
-
-    if (nextAiring && !isNaN(nextAiring.getTime()) && nextAiring > now) {
-        const daysAhead = Math.ceil((nextAiring.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
+    if (nextAiring && !isNaN(nextAiring.getTime())) {
+        if (nextAiring > now) {
+            const daysAhead = Math.ceil((nextAiring.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
+        } else {
+            const daysPast = Math.floor((now.getTime() - nextAiring.getTime()) / (1000 * 60 * 60 * 24));
+            return daysPast <= pastGraceDays;
+        }
     }
 
     if (firstAired && !isNaN(firstAired.getTime())) {
@@ -247,7 +248,9 @@ function isSonarrSeriesComingSoon(s: any, futureThresholdDays = 90, pastGraceDay
         }
     }
 
-    if (s.year && s.year >= now.getFullYear()) return true;
+    if (s.status === "upcoming" && (!s.year || s.year >= currentYear)) return true;
+
+    if (s.year && s.year >= currentYear) return true;
 
     return false;
 }
@@ -8069,14 +8072,35 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
                 const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
                 const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
+                const itemYear = item.year || (item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined);
 
-                // Threshold Check: If release date is further into the future than placeholderDaysThreshold, skip!
-                const futureTargetDate = digDate || relDate || theDate;
-                if (futureTargetDate && futureTargetDate > now && placeholderDaysThreshold > 0) {
-                    const daysToRelease = Math.ceil((futureTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                    if (daysToRelease > placeholderDaysThreshold) {
+                // Date Window Enforcement: Coming Soon placeholders must be upcoming or recent releases
+                const effectiveTargetDate = digDate || relDate || theDate;
+                if (effectiveTargetDate && !isNaN(effectiveTargetDate.getTime())) {
+                    if (effectiveTargetDate > now) {
+                        // Future release: verify within placeholderDaysThreshold (default 90 days)
+                        if (placeholderDaysThreshold > 0) {
+                            const daysToRelease = Math.ceil((effectiveTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                            if (daysToRelease > placeholderDaysThreshold) {
+                                continue;
+                            }
+                        }
+                    } else {
+                        // Past release: only allow recent releases (e.g. past 30 days). Exclude older catalog backlog.
+                        const daysSinceRelease = Math.floor((now.getTime() - effectiveTargetDate.getTime()) / (1000 * 60 * 60 * 24));
+                        if (daysSinceRelease > 30) {
+                            continue;
+                        }
+                    }
+                } else if (itemYear) {
+                    // Fallback to year: only current year or future years qualify for Coming Soon placeholders
+                    const currentYear = now.getFullYear();
+                    if (itemYear < currentYear) {
                         continue;
                     }
+                } else {
+                    // No date or year available - skip unknown legacy items
+                    continue;
                 }
 
                 const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
@@ -9236,6 +9260,14 @@ export async function cleanupAvailablePlaceholdersInternal(
                         }
                     }
 
+                    if (!itemYear) {
+                        const fileMatch = files.find(f => f.match(/\((\d{4})\)/));
+                        if (fileMatch) {
+                            const ym = fileMatch.match(/\((\d{4})\)/);
+                            if (ym) itemYear = ym[1];
+                        }
+                    }
+
                     const cleanTitle = itemTitle.toLowerCase().trim();
                     const titleWithYear = itemYear ? `${cleanTitle} (${itemYear})` : cleanTitle;
                     // 3. Determine if media is now present in the Plex library
@@ -9249,8 +9281,12 @@ export async function cleanupAvailablePlaceholdersInternal(
                         isAvailable = true;
                     }
 
-                    if (isAvailable) {
-                        // Clean up placeholder directory on disk because real media is now acquired in Plex
+                    const parsedYear = itemYear ? parseInt(itemYear, 10) : null;
+                    const currentYear = new Date().getFullYear();
+                    const isLegacyCatalogPlaceholder = parsedYear !== null && !isNaN(parsedYear) && parsedYear < currentYear;
+
+                    if (isAvailable || isLegacyCatalogPlaceholder) {
+                        // Clean up placeholder directory on disk because real media is now acquired in Plex OR it is an older catalog title
                         try {
                             try { fs.chmodSync(folderPath, 0o777); } catch {}
                             setPermissionsRecursive(folderPath, 0o777, 0o666);
@@ -9267,7 +9303,10 @@ export async function cleanupAvailablePlaceholdersInternal(
                                 });
                             }
 
-                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because full media is now available in Plex.`);
+                            const reason = isAvailable 
+                                ? "full media is now available in Plex" 
+                                : `item is an older catalog release (${parsedYear}) and not a valid Coming Soon title`;
+                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because ${reason}.`);
                         } catch (rmErr: any) {
                             console.error(`[PLACEHOLDER-CLEANUP] Failed removing folder "${folderPath}":`, rmErr);
                         }
