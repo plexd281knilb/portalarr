@@ -1516,15 +1516,15 @@ export async function applyOverlaysToPoster(
     const overlays: { input: Buffer | string; top?: number; left?: number }[] = [];
     let renderedRibbonCorner: string | null = null;
 
-    // 1. Leaving Soon Banner / Ribbon
+    // 1. Leaving Soon Banner / Ribbon (Only when explicitly configured by Prune Studio with banner text / days)
     const isItemLeavingSoon = Boolean(
+        options.placeholderText ||
+        options.leavingSoonDays !== undefined ||
         mediaInfo.isLeavingSoon || 
-        options.leavingSoonDays !== undefined || 
-        Boolean(options.placeholderText && options.showLeavingSoon) ||
         mediaInfo.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) || 
         mediaInfo.collections?.some(c => /leaving[\s_-]?soon/i.test(c))
     );
-    if (options.showLeavingSoon && isItemLeavingSoon) {
+    if (options.showLeavingSoon && (options.placeholderText || options.leavingSoonDays !== undefined) && isItemLeavingSoon) {
         const effectiveDays = options.leavingSoonDays !== undefined ? Number(options.leavingSoonDays) : 14;
         const effectiveDate = options.digitalReleaseDate || new Date(Date.now() + effectiveDays * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
@@ -2164,6 +2164,37 @@ export async function backupAndApplyOverlay(
 
     if (!item.thumb) {
         return { success: false, message: "Item has no thumbnail to overlay." };
+    }
+
+    // Guard: strictly exclude trailer placeholders and coming soon stubs from poster overlays
+    if (
+        item.isPlaceholder ||
+        item.editionTitle?.toLowerCase() === "trailer" ||
+        item.detectedBadges?.edition?.toLowerCase() === "trailer" ||
+        item.labels?.some(l => {
+            const low = l.toLowerCase();
+            return low.includes("placeholder") || low.includes("coming soon") || low.includes("trailer");
+        })
+    ) {
+        return {
+            success: true,
+            skipped: true,
+            message: `"${item.title}" is a trailer placeholder stub; skipped poster overlay.`
+        };
+    }
+
+    // Guard: strictly protect items staged as Leaving Soon from generic Kometa overlay modifications
+    const isLeavingSoonItem = Boolean(
+        item.isLeavingSoon ||
+        item.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) ||
+        item.collections?.some(c => /leaving[\s_-]?soon/i.test(c))
+    );
+    if (isLeavingSoonItem && (!options.showLeavingSoon || (!options.placeholderText && options.leavingSoonDays === undefined))) {
+        return {
+            success: true,
+            skipped: true,
+            message: `"${item.title}" is staged as Leaving Soon; skipped generic poster overlay to preserve its Leaving Soon countdown banner.`
+        };
     }
 
     const currentHash = computeMediaOverlayHash(item, options);

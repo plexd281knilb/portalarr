@@ -4026,7 +4026,7 @@ export async function applyOverlaysToLibraryInternal(
                 showStudio: rule.showStudio,
                 showContentRating: rule.showContentRating,
                 showRatings: rule.showRatings,
-                showLeavingSoon: rule.showLeavingSoon,
+                showLeavingSoon: false, // Leaving Soon banners are managed exclusively by Prune Studio
                 position: (rule.position as any) || "top-right",
                 videoPosition: (rule.videoPosition as any) || (rule.position as any) || "top-right",
                 audioPosition: (rule.audioPosition as any) || "top-left",
@@ -4118,9 +4118,9 @@ export async function applyOverlaysToLibraryInternal(
             };
         }
 
-        // Fetch library media items across the whole library section
+        // Fetch library media items across the whole library section, strictly excluding trailer placeholders
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 2500);
+        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 2500, undefined, true, true);
 
         // Map leaving soon flags from content advisories
         const leavingSoonAdvisories = await prisma.mediaContentAdvisory.findMany({
@@ -4153,8 +4153,27 @@ export async function applyOverlaysToLibraryInternal(
         let alreadyUpToDateCount = 0;
 
         for (const it of items) {
-            if (leavingSoonKeys.has(String(it.ratingKey))) {
-                it.isLeavingSoon = true;
+            // Strictly exclude trailer and coming soon placeholder items from poster overlays
+            if (
+                it.isPlaceholder ||
+                it.editionTitle?.toLowerCase() === "trailer" ||
+                it.detectedBadges?.edition?.toLowerCase() === "trailer" ||
+                it.labels?.some(l => {
+                    const low = l.toLowerCase();
+                    return low.includes("placeholder") || low.includes("coming soon") || low.includes("trailer");
+                })
+            ) {
+                continue;
+            }
+
+            // Strictly exclude items currently staged as Leaving Soon by Prune Studio so their Leaving Soon banner / countdown is never altered or overwritten
+            if (
+                leavingSoonKeys.has(String(it.ratingKey)) ||
+                it.isLeavingSoon ||
+                it.labels?.some(l => /leaving[\s_-]?soon/i.test(l)) ||
+                it.collections?.some(c => /leaving[\s_-]?soon/i.test(c))
+            ) {
+                continue;
             }
 
             const hasOverlayOpportunity = Boolean(
@@ -5295,7 +5314,7 @@ export async function getPlexRecentLibraryItemsAction(
 
         for (const url of urlsToTry) {
             try {
-                rawItems = await getPlexLibraryMediaItems(url, resolved.token, secKey, limit, sort);
+                rawItems = await getPlexLibraryMediaItems(url, resolved.token, secKey, limit, sort, true, true);
                 if (rawItems.length > 0) break;
             } catch (e) {}
         }
