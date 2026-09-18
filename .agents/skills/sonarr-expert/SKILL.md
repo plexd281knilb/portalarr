@@ -1,0 +1,74 @@
+---
+name: sonarr-expert
+description: Expert architectural, API, and operational guide for Sonarr (TV series collection manager, episode parser, season pack grabber, and automated file renamer). Activate when integrating with the Sonarr v3/v5 REST API, configuring Torznab indexers, handling anime absolute numbering vs standard TV series types, troubleshooting download queue ingestion, or diagnosing release parsing failures.
+---
+
+# Sonarr Expert Guide
+
+Sonarr is a PVR and television series management application. It monitors multiple indexers and RSS feeds for new and upgraded episodes, coordinates downloads with Usenet and BitTorrent clients (SABnzbd, qBittorrent, Transmission), parses complex release naming strings, maps scene vs TVDb episode numbering, and automatically imports, renames, and organizes episodes into structured season folders.
+
+Primary Reference Repositories & Modules:
+- Directory: [Sonarr-5-develop](file:///C:/Users/Dom/Documents/GitHub/Other_Repos/Sonarr-5-develop)
+- OpenAPI Specification: [openapi.json](file:///C:/Users/Dom/Documents/GitHub/Other_Repos/Sonarr-5-develop/src/Sonarr.Api.V5/openapi.json)
+- API Controllers: [src/Sonarr.Api.V5/](file:///C:/Users/Dom/Documents/GitHub/Other_Repos/Sonarr-5-develop/src/Sonarr.Api.V5)
+- Core Logic: [src/NzbDrone.Core/](file:///C:/Users/Dom/Documents/GitHub/Other_Repos/Sonarr-5-develop/src/NzbDrone.Core)
+- Portalarr Sonarr Actions: [src/app/arr-actions.ts](file:///C:/Users/Dom/Documents/GitHub/portalarr/src/app/arr-actions.ts)
+
+---
+
+## Architecture & Codebase Layout
+
+```text
+Sonarr-5-develop/
+├── src/
+│   ├── Sonarr.Api.V5/               # REST API v5 controllers, schemas, OpenAPI spec
+│   │   ├── Series/                  # Series CRUD, seasons, lookup, bulk editors
+│   │   ├── Episodes/                # Episode listing, monitoring state, file mapping
+│   │   ├── EpisodeFiles/            # File records, media info, quality details
+│   │   ├── Commands/                # Asynchronous task dispatcher (SeriesSearch, Scan)
+│   │   ├── Queue/                   # Download client queue monitoring & manual imports
+│   │   └── Parse/                   # Release title debug parsing endpoint
+│   └── NzbDrone.Core/               # Core business logic and persistence
+│       ├── Tv/                      # SeriesService, EpisodeService, season tracking
+│       ├── Parser/                  # Parsing regexes, quality detection, season packs
+│       ├── DecisionEngine/          # Qualification specs (monitored, cutoff, language)
+│       └── Download/                # Download client drivers & completed download tracker
+└── frontend/                        # React / TypeScript UI
+```
+
+---
+
+## Key Workflows & Runbooks
+
+### 1. REST API Integration (v3 / v5)
+Sonarr exposes an OpenAPI-compliant HTTP API secured by `X-Api-Key`:
+- **Series Search & Add**: `GET /api/v5/series/lookup?term={query}` -> `POST /api/v5/series`.
+- **Monitored Missing Queries**: `GET /api/v5/series` filtered by `s.monitored && (s.statistics.episodeFileCount === 0 || s.statistics.percentOfEpisodes < 100)`.
+- **Tag Collections**: `GET /api/v5/tag` -> filter series where `s.tags.includes(tagId)`.
+- **Episode Management**: `GET /api/v5/episode?seriesId={id}` -> `PUT /api/v5/episode/{id}`.
+- **Commands**: `POST /api/v5/command` (`SeriesSearch`, `SeasonSearch`, `EpisodeSearch`, `DownloadedEpisodesScan`, `RefreshSeries`).
+
+See detailed runbook: [api-v5-endpoints.md](./references/api-v5-endpoints.md).
+
+### 2. Series Types & Release Parsing
+Sonarr accommodates different television formats:
+- **Standard**: Season/Episode (`S01E05`).
+- **Daily**: Date-based (`2024-10-15`).
+- **Anime**: Absolute episode numbering (`542`), dual-audio flags, release group brackets, CRC32 checks.
+- **Scene Mapping (The XEM)**: Automatically resolves discrepancies between scene releases and TVDb metadata.
+
+See detailed runbook: [series-parsing-and-models.md](./references/series-parsing-and-models.md).
+
+---
+
+## Common Gotchas & Troubleshooting
+
+1. **Anime Episodes Failing to Match**:
+   - Cause: The show was configured with `seriesType: "standard"` instead of `"anime"`, preventing Sonarr from parsing absolute episode numbers (e.g. `Show Title - 25.mkv`).
+   - Fix: Update `seriesType` to `"anime"` in the series editor.
+2. **Season Pack Downloads Not Importing**:
+   - Cause: Season pack completed in a sub-folder that the disk scanner cannot resolve, or path mappings differ between the client and Sonarr.
+   - Fix: Ensure **Remote Path Mappings** map the download path correctly, and invoke `DownloadedEpisodesScan` with the sub-folder path.
+3. **Episode Left Unmonitored After Adding Series**:
+   - Cause: The series was added with `addOptions.monitor` set to `"future"` or `"none"`.
+   - Fix: Use `"monitor": "all"` to monitor historical seasons.
