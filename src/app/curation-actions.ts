@@ -26,6 +26,7 @@ import {
     inspectPlexMediaItemFull,
     addLabelToPlexItem,
     removeLabelFromPlexItem,
+    addCollectionToPlexItem,
     updatePlexItemTitle,
     updatePlexItemEdition,
     getPlexItemChildrenMetadata,
@@ -7912,6 +7913,10 @@ export async function createPlaceholderItemInternal(
                     if (match?.ratingKey) {
                         await addLabelToPlexItem(urlsToTry, resolved.token, match.ratingKey, targetLabel);
 
+                        if (itemData.collectionTitle) {
+                            await addCollectionToPlexItem(urlsToTry, resolved.token, match.ratingKey, itemData.collectionTitle);
+                        }
+
                         if (!isTv) {
                             await updatePlexItemEdition(urlsToTry, resolved.token, match.ratingKey, "Trailer");
                         } else {
@@ -7919,6 +7924,9 @@ export async function createPlaceholderItemInternal(
                             const season0 = seasons.find(s => s.index === 0 || s.title?.toLowerCase().includes("specials"));
                             if (season0?.ratingKey) {
                                 await addLabelToPlexItem(urlsToTry, resolved.token, String(season0.ratingKey), targetLabel);
+                                if (itemData.collectionTitle) {
+                                    await addCollectionToPlexItem(urlsToTry, resolved.token, String(season0.ratingKey), itemData.collectionTitle);
+                                }
                                 const episodes = await getPlexItemChildrenMetadata(urlsToTry, resolved.token, String(season0.ratingKey));
                                 const ep0 = episodes.find(e => e.index === 0 || e.title?.toLowerCase().includes("trailer"));
                                 if (ep0?.ratingKey) {
@@ -8391,32 +8399,36 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const inRadarr = arrItem?.appType === "radarr" || collection.sourceType === "radarr";
                 const inSonarr = arrItem?.appType === "sonarr" || collection.sourceType === "sonarr";
                 const isMonitored = Boolean(arrItem?.monitored) || collection.sourceType === "radarr" || collection.sourceType === "sonarr";
+                const isMonitoredPlaceholder = isMonitored && (collection.sourceType === "radarr" || collection.sourceType === "sonarr" || collection.category === "Coming Soon");
 
                 const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
                 const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : (arrItem?.digitalRelease ? new Date(arrItem.digitalRelease) : null);
                 const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : (arrItem?.inCinemas ? new Date(arrItem.inCinemas) : null);
                 const itemYear = item.year || (item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined);
 
-                // Date Window Enforcement: Coming Soon placeholders MUST have a concrete release date within the window
-                const effectiveTargetDate = digDate || relDate || theDate;
-                if (!effectiveTargetDate || isNaN(effectiveTargetDate.getTime())) {
-                    // No concrete release date -> cannot determine if it's "coming soon", skip!
-                    continue;
-                }
+                // Date Window Enforcement: Only applies to Radarr/Sonarr / Coming Soon monitored placeholders!
+                // General collection placeholders (Trending, Studio, Kids, Decades, etc.) generate for ALL missing items in the collection.
+                if (isMonitoredPlaceholder) {
+                    const effectiveTargetDate = digDate || relDate || theDate;
+                    if (!effectiveTargetDate || isNaN(effectiveTargetDate.getTime())) {
+                        // No concrete release date -> cannot determine if it's "coming soon", skip!
+                        continue;
+                    }
 
-                if (effectiveTargetDate > now) {
-                    // Future release: verify within placeholderDaysThreshold (default 90 days)
-                    if (placeholderDaysThreshold > 0) {
-                        const daysToRelease = Math.ceil((effectiveTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                        if (daysToRelease > placeholderDaysThreshold) {
+                    if (effectiveTargetDate > now) {
+                        // Future release: verify within placeholderDaysThreshold (default 90 days)
+                        if (placeholderDaysThreshold > 0) {
+                            const daysToRelease = Math.ceil((effectiveTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                            if (daysToRelease > placeholderDaysThreshold) {
+                                continue;
+                            }
+                        }
+                    } else {
+                        // Past release: only allow recent releases within grace window (default past 30 days)
+                        const daysSinceRelease = Math.floor((now.getTime() - effectiveTargetDate.getTime()) / (1000 * 60 * 60 * 24));
+                        if (daysSinceRelease > 30) {
                             continue;
                         }
-                    }
-                } else {
-                    // Past release: only allow recent releases within grace window (default past 30 days)
-                    const daysSinceRelease = Math.floor((now.getTime() - effectiveTargetDate.getTime()) / (1000 * 60 * 60 * 24));
-                    if (daysSinceRelease > 30) {
-                        continue;
                     }
                 }
 
@@ -8464,8 +8476,6 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 }
                 const bannerPosition = (customTpl?.pos || "bottom") as "bottom" | "top" | "corner";
                 const bannerFontSize = customTpl?.fontSize || settings?.placeholderBannerFontSize || 44;
-
-                const isMonitoredPlaceholder = isMonitored && (collection.sourceType === "radarr" || collection.sourceType === "sonarr" || collection.category === "Coming Soon");
                 const targetLabel = isMonitoredPlaceholder ? "Coming Soon-placeholder" : "trailer-placeholder";
                 const placeholderSource = isMonitoredPlaceholder ? "radarr_monitored" : "collection";
 
@@ -8708,7 +8718,16 @@ export async function tagAllPlaceholdersInPlexInternal(
                             } catch {}
                         }
 
-                        // 4. Upsert advisory tracking record if not present
+                        // 4. If associated with collections, ensure Plex collection tags are applied
+                        if (Array.isArray(advTags.collectionTitles)) {
+                            for (const collName of advTags.collectionTitles) {
+                                if (collName) {
+                                    await addCollectionToPlexItem(urlsToTry, token, item.ratingKey, collName);
+                                }
+                            }
+                        }
+
+                        // 5. Upsert advisory tracking record if not present
                         if (!advInfo && (tmdbIdStr || item.title)) {
                             const placeholderKey = tmdbIdStr ? `placeholder_tmdb_${tmdbIdStr}` : `placeholder_title_${encodeURIComponent(titleLower)}`;
                             const customTagsPayload = JSON.stringify({

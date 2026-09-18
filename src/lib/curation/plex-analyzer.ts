@@ -3511,4 +3511,59 @@ export async function refreshPlexLibrarySection(
     return false;
 }
 
+/**
+ * Adds a collection tag to an item in Plex, preserving all existing collections.
+ */
+export async function addCollectionToPlexItem(
+    urlsToTry: string[],
+    token: string,
+    ratingKey: string,
+    collectionName: string
+): Promise<boolean> {
+    if (!ratingKey || !collectionName) return false;
+    for (const cleanBase of urlsToTry) {
+        if (!cleanBase) continue;
+        try {
+            const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+            const res = await fetch(metaUrl, {
+                headers: {
+                    Accept: "application/json",
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const meta = data.MediaContainer?.Metadata?.[0] || data.MediaContainer?.Directory?.[0];
+            const existingCollections: string[] = [];
+            if (meta?.Collection && Array.isArray(meta.Collection)) {
+                for (const c of meta.Collection) {
+                    if (typeof c === "string") existingCollections.push(c);
+                    else if (c?.tag) existingCollections.push(c.tag);
+                }
+            }
+            if (existingCollections.some(c => c.toLowerCase() === collectionName.toLowerCase())) {
+                return true;
+            }
+            const allCollections = [...existingCollections, collectionName];
+            const params = new URLSearchParams();
+            allCollections.forEach((col, idx) => {
+                params.set(`collection[${idx}].tag.tag`, col);
+            });
+            params.set("collection.locked", "1");
+            params.set("X-Plex-Token", token);
 
+            const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}?${params.toString()}`;
+            const putRes = await fetch(putUrl, {
+                method: "PUT",
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+            });
+            if (putRes.ok) return true;
+        } catch {}
+    }
+    return false;
+}
