@@ -12,24 +12,29 @@ When unreleased media trailers (`edition-Trailer`, `s00e00`, `.disc`, `.strm`) a
 ### The Solution: Dynamic Plex Smart Collections
 By deploying Plex Smart Collections that explicitly filter out placeholder criteria, we replace or augment default Plex hubs with clean, trailer-free hubs.
 
-### Filter Queries by Subtype
+### Filter Queries by Subtype & Default Titles
 
 1. **Recently Added Movies (`recently_added` - Movies)**:
+   - Default Title: `Recently Added Movies (Curated)`
    - Filter URI: `?type=1&label!=trailer-placeholder&editionTitle!=Trailer&sort=addedAt:desc`
    - Excludes items with Plex label `trailer-placeholder` or edition `Trailer`.
 
 2. **Recently Added TV (`recently_added` - TV Shows)**:
+   - Default Title: `Recently Added TV (Curated)`
    - Filter URI: `?type=2&label!=trailer-placeholder&episode.title!=Trailer (Placeholder)&sort=addedAt:desc`
    - Excludes shows whose episodes are marked with `Trailer (Placeholder)`.
 
 3. **Recently Released Movies (`recently_released` - Movies)**:
+   - Default Title: `Recently Released Movies (Curated)`
    - Filter URI: `?type=1&label!=trailer-placeholder&editionTitle!=Trailer&sort=originallyAvailableAt:desc`
    - Orders by premiere/theatrical release date while excluding placeholder trailers.
 
 4. **Recently Released TV / Episodes (`recently_released` / `recently_released_episodes` - TV)**:
+   - Default Title: `Recently Released Episodes (Curated)` (or `Recently Released TV (Curated)`)
    - Filter URI: `?type=2&label!=trailer-placeholder&episode.title!=Trailer (Placeholder)&sort=originallyAvailableAt:desc`
 
 5. **Top Unwatched (Personalized per User) (`top_unwatched`)**:
+   - Default Title: `Top Unwatched Movies (Curated)` (Movies) / `Top Unwatched TV (Curated)` (TV)
    - Filter URI: `?type=1&unwatched=1&sort=rating:desc` (Movies) or `?type=2&unwatched=1&sort=rating:desc` (TV)
    - User Personalization API:
      ```http

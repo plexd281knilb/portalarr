@@ -4972,7 +4972,7 @@ export function AgregarrStudio() {
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <Clapperboard className="h-4 w-4 text-cyan-400" />
-                                    <span className="text-xs font-bold text-white">Recently Added (Filtered)</span>
+                                    <span className="text-xs font-bold text-white">Recently Added (Curated)</span>
                                     <Badge variant="outline" className="text-[9px] border-cyan-800/60 text-cyan-300 bg-cyan-950/40">
                                         {isTvSection ? "TV Shows" : "Movies"}
                                     </Badge>
@@ -4998,7 +4998,7 @@ export function AgregarrStudio() {
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <Sparkles className="h-4 w-4 text-amber-400" />
-                                    <span className="text-xs font-bold text-white">Recently Released (Filtered)</span>
+                                    <span className="text-xs font-bold text-white">Recently Released (Curated)</span>
                                     <Badge variant="outline" className="text-[9px] border-amber-800/60 text-amber-300 bg-amber-950/40">
                                         {isTvSection ? "TV Series Air Date" : "Movie Release Date"}
                                     </Badge>
@@ -5025,7 +5025,7 @@ export function AgregarrStudio() {
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                         <Radio className="h-4 w-4 text-sky-400" />
-                                        <span className="text-xs font-bold text-white">Recently Released Episodes (Filtered)</span>
+                                        <span className="text-xs font-bold text-white">Recently Released Episodes (Curated)</span>
                                         <Badge variant="outline" className="text-[9px] border-sky-800/60 text-sky-300 bg-sky-950/40">
                                             TV Only
                                         </Badge>
@@ -5052,7 +5052,7 @@ export function AgregarrStudio() {
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <Eye className="h-4 w-4 text-emerald-400" />
-                                    <span className="text-xs font-bold text-white">Top Unwatched (Personalized)</span>
+                                    <span className="text-xs font-bold text-white">Top Unwatched (Curated)</span>
                                     <Badge variant="outline" className="text-[9px] border-emerald-800/60 text-emerald-300 bg-emerald-950/40">
                                         Per-User Filter
                                     </Badge>

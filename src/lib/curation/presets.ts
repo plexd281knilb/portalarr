@@ -574,7 +574,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
     // 🧹 FILTERED SMART HUBS (EXCLUDE PLACEHOLDERS & TRAILERS)
     {
         id: "filtered-recently-added-movies",
-        title: "Recently Added Movies (Filtered)",
+        title: "Recently Added Movies (Curated)",
         type: "smart",
         category: "filtered_hub",
         description: "Plex smart hub replicating Recently Added Movies, strictly excluding trailer placeholders from user carousels.",
@@ -589,7 +589,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
     },
     {
         id: "filtered-recently-added-tv",
-        title: "Recently Added TV (Filtered)",
+        title: "Recently Added TV (Curated)",
         type: "smart",
         category: "filtered_hub",
         description: "Plex smart hub replicating Recently Added TV, excluding trailer placeholder episode stubs from user carousels.",
@@ -604,7 +604,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
     },
     {
         id: "filtered-recently-released-movies",
-        title: "Recently Released Movies (Filtered)",
+        title: "Recently Released Movies (Curated)",
         type: "smart",
         category: "filtered_hub",
         description: "Plex smart hub sorting movies by official release date, excluding coming soon placeholders.",
@@ -619,7 +619,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
     },
     {
         id: "filtered-recently-released-tv",
-        title: "Recently Released Episodes (Filtered)",
+        title: "Recently Released Episodes (Curated)",
         type: "smart",
         category: "filtered_hub",
         description: "Plex smart hub sorting TV series by latest episode air date, excluding trailer placeholder stubs.",
@@ -634,7 +634,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
     },
     {
         id: "filtered-top-unwatched-movies",
-        title: "Top Unwatched Movies (Filtered)",
+        title: "Top Unwatched Movies (Curated)",
         type: "smart",
         category: "filtered_hub",
         description: "Plex smart collection filtered per-user for unwatched movies, excluding placeholder stubs.",
@@ -649,7 +649,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
     },
     {
         id: "filtered-top-unwatched-tv",
-        title: "Top Unwatched TV Shows (Filtered)",
+        title: "Top Unwatched TV Shows (Curated)",
         type: "smart",
         category: "filtered_hub",
         description: "Plex smart collection filtered per-user for shows with unwatched episodes, excluding placeholders.",

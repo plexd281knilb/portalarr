@@ -8219,19 +8219,19 @@ export async function deployFilteredSmartHubAction(
 
         if (!defaultTitle) {
             if (subtype === "recently_added") {
-                defaultTitle = isTv ? "Recently Added TV" : "Recently Added Movies";
+                defaultTitle = isTv ? "Recently Added TV (Curated)" : "Recently Added Movies (Curated)";
                 defaultSummary = "Recently added media excluding coming soon trailer placeholders.";
                 sortPrefix = "!00_Recent";
             } else if (subtype === "recently_released") {
-                defaultTitle = isTv ? "Recently Released TV" : "Recently Released Movies";
+                defaultTitle = isTv ? "Recently Released TV (Curated)" : "Recently Released Movies (Curated)";
                 defaultSummary = "Recently released media sorted by original release date, excluding placeholder stubs.";
                 sortPrefix = "!01_Released";
             } else if (subtype === "recently_released_episodes") {
-                defaultTitle = "Recently Released Episodes";
+                defaultTitle = "Recently Released Episodes (Curated)";
                 defaultSummary = "TV shows sorted by latest episode air date, excluding placeholder stubs.";
                 sortPrefix = "!01_Released";
             } else if (subtype === "top_unwatched") {
-                defaultTitle = isTv ? "Top Unwatched TV" : "Top Unwatched Movies";
+                defaultTitle = isTv ? "Top Unwatched TV (Curated)" : "Top Unwatched Movies (Curated)";
                 defaultSummary = "Top unwatched media personalized per user, excluding placeholder stubs.";
                 sortPrefix = "!02_Unwatched";
             }
@@ -8286,16 +8286,49 @@ export async function deployFilteredSmartHubAction(
 
         // Check if smart collection already exists in Plex
         const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
-        const existing = existingCollections.find(c => 
-            c.title.toLowerCase() === defaultTitle.toLowerCase() ||
-            (subtype === "recently_added" && (c.title.toLowerCase() === "recently added" || c.title.toLowerCase() === "filtered recently added")) ||
-            (subtype === "recently_released" && (c.title.toLowerCase() === "recently released" || c.title.toLowerCase() === "filtered recently released"))
-        );
+        const existing = existingCollections.find(c => {
+            const titleLower = c.title.toLowerCase();
+            if (titleLower === defaultTitle.toLowerCase()) return true;
+            if (subtype === "recently_added") {
+                return (
+                    titleLower === (isTv ? "recently added tv (curated)" : "recently added movies (curated)") ||
+                    titleLower === (isTv ? "recently added tv (filtered)" : "recently added movies (filtered)") ||
+                    titleLower === (isTv ? "recently added tv" : "recently added movies") ||
+                    titleLower === "recently added" ||
+                    titleLower === "filtered recently added"
+                );
+            }
+            if (subtype === "recently_released") {
+                return (
+                    titleLower === (isTv ? "recently released tv (curated)" : "recently released movies (curated)") ||
+                    titleLower === (isTv ? "recently released tv (filtered)" : "recently released movies (filtered)") ||
+                    titleLower === (isTv ? "recently released tv" : "recently released movies") ||
+                    titleLower === "recently released" ||
+                    titleLower === "filtered recently released"
+                );
+            }
+            if (subtype === "recently_released_episodes") {
+                return (
+                    titleLower === "recently released episodes (curated)" ||
+                    titleLower === "recently released episodes (filtered)" ||
+                    titleLower === "recently released episodes"
+                );
+            }
+            if (subtype === "top_unwatched") {
+                return (
+                    titleLower === (isTv ? "top unwatched tv (curated)" : "top unwatched movies (curated)") ||
+                    titleLower === (isTv ? "top unwatched tv (filtered)" : "top unwatched movies (filtered)") ||
+                    titleLower === (isTv ? "top unwatched tv" : "top unwatched movies") ||
+                    titleLower === "top unwatched"
+                );
+            }
+            return false;
+        });
 
         let ratingKey = existing?.ratingKey;
 
         if (existing && existing.smart && !existing.ratingKey.startsWith("hub:")) {
-            // Update existing smart collection URI
+            // Update existing smart collection URI and title if needed
             for (const cleanBase of urlsToTry) {
                 try {
                     const updateUrl = `${cleanBase}/library/collections/${existing.ratingKey}/items?uri=${encodeURIComponent(fullUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
@@ -8303,6 +8336,9 @@ export async function deployFilteredSmartHubAction(
                         method: "PUT",
                         headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
                     });
+                    if (existing.title !== defaultTitle) {
+                        await updatePlexItemTitle(urlsToTry, token, existing.ratingKey, defaultTitle);
+                    }
                     break;
                 } catch {}
             }
