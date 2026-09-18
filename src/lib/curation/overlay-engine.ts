@@ -884,7 +884,7 @@ async function resolvePosterBuffer(posterUrl: string | null | undefined, title?:
     // 1. Full HTTP URL
     if (posterUrl.startsWith("http://") || posterUrl.startsWith("https://")) {
         try {
-            const res = await fetch(posterUrl, { signal: AbortSignal.timeout(3000) });
+            const res = await fetch(posterUrl, { signal: AbortSignal.timeout(5000) });
             if (res.ok) {
                 const arrayBuf = await res.arrayBuffer();
                 if (arrayBuf.byteLength > 200) return Buffer.from(arrayBuf);
@@ -892,7 +892,19 @@ async function resolvePosterBuffer(posterUrl: string | null | undefined, title?:
         } catch (e) {}
     }
 
-    // 2. Relative /api/media/image URL or PMS proxy URL
+    // 2. Relative TMDb Poster Path (e.g. "/t6HIu...jpg")
+    if (posterUrl.startsWith("/") && !posterUrl.startsWith("/api/media/image")) {
+        try {
+            const tmdbUrl = `https://image.tmdb.org/t/p/original${posterUrl}`;
+            const res = await fetch(tmdbUrl, { signal: AbortSignal.timeout(5000) });
+            if (res.ok) {
+                const arrayBuf = await res.arrayBuffer();
+                if (arrayBuf.byteLength > 200) return Buffer.from(arrayBuf);
+            }
+        } catch (e) {}
+    }
+
+    // 3. Relative /api/media/image URL or PMS proxy URL
     if (posterUrl.startsWith("/api/media/image") || posterUrl.includes("thumb=") || posterUrl.includes("serverId=")) {
         try {
             const dummyUrl = new URL(posterUrl, "http://localhost:3000");
@@ -909,7 +921,7 @@ async function resolvePosterBuffer(posterUrl: string | null | undefined, title?:
                         const sep = thumb.includes("?") ? "&" : "?";
                         const directUrl = `${cleanBase}${thumb}${sep}X-Plex-Token=${encodeURIComponent(resolved.token)}`;
                         try {
-                            const res = await fetch(directUrl, { headers: { "X-Plex-Token": resolved.token }, signal: AbortSignal.timeout(3000) });
+                            const res = await fetch(directUrl, { headers: { "X-Plex-Token": resolved.token }, signal: AbortSignal.timeout(4000) });
                             if (res.ok) {
                                 const arrayBuf = await res.arrayBuffer();
                                 if (arrayBuf.byteLength > 200) {
@@ -917,6 +929,31 @@ async function resolvePosterBuffer(posterUrl: string | null | undefined, title?:
                                 }
                             }
                         } catch (e) {}
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 4. Fallback search TMDb by Title if posterUrl failed or was missing
+    if (title && title.trim()) {
+        try {
+            const { getTmdbApiKey } = await import("@/lib/curation/tmdb");
+            const apiKey = await getTmdbApiKey();
+            if (apiKey) {
+                const searchRes = await fetch(
+                    `https://api.themoviedb.org/3/search/multi?api_key=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(title.trim())}&page=1`,
+                    { signal: AbortSignal.timeout(4000) }
+                );
+                if (searchRes.ok) {
+                    const searchData = await searchRes.json();
+                    const firstMatch = (searchData.results || []).find((r: any) => r.poster_path);
+                    if (firstMatch?.poster_path) {
+                        const imgRes = await fetch(`https://image.tmdb.org/t/p/original${firstMatch.poster_path}`, { signal: AbortSignal.timeout(5000) });
+                        if (imgRes.ok) {
+                            const arrayBuf = await imgRes.arrayBuffer();
+                            if (arrayBuf.byteLength > 200) return Buffer.from(arrayBuf);
+                        }
                     }
                 }
             }

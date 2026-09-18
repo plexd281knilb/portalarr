@@ -1265,8 +1265,13 @@ export async function syncCollectionToPlexAction(collectionId: string) {
             isMovieSection = sec?.type === "movie";
         } catch {}
 
-        // Fetch library media items and filter out any excluded labels and cross-media type noise
-        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000);
+        const isPlaceholdersCollection = collection.sourceType === "radarr" || 
+                                         collection.sourceType === "sonarr" || 
+                                         collection.category === "Coming Soon" || 
+                                         collection.sourceQuery === "monitored_missing";
+
+        // Fetch library media items and filter out any excluded labels, cross-media type noise, and trailer stubs
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000, undefined, true, !isPlaceholdersCollection);
         
         const excludedList = (collection.excludedLabels || "")
             .split(",")
@@ -1276,6 +1281,9 @@ export async function syncCollectionToPlexAction(collectionId: string) {
         const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
             if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
+            if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+                return false;
+            }
             if (excludedList.length > 0) {
                 const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
                 const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
@@ -1482,10 +1490,20 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                 const builtinTitles = new Set(builtinList.map(b => b.title.toLowerCase().trim()));
 
                 const builtinMatches = libraryItems.filter(it => {
+                    if (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer") {
+                        return false;
+                    }
                     const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
                     const mImdb = it.guids?.imdb && builtinImdbIds.has(String(it.guids.imdb).toLowerCase());
-                    const mTitle = it.title && builtinTitles.has(it.title.toLowerCase().trim());
-                    return mTmdb || mImdb || mTitle;
+                    if (mTmdb || mImdb) return true;
+                    if (it.title && builtinTitles.has(it.title.toLowerCase().trim())) {
+                        const matchEntry = builtinList.find(b => b.title.toLowerCase().trim() === it.title.toLowerCase().trim());
+                        if (matchEntry?.year && it.year) {
+                            return Math.abs(matchEntry.year - it.year) <= 1;
+                        }
+                        return true;
+                    }
+                    return false;
                 }).map(it => it.ratingKey);
 
                 if (builtinMatches.length > 0) {
@@ -8810,7 +8828,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
             candidateItems = candidateItems.slice(0, collection.maxItems);
         }
 
-        const arrIndex = await getArrMonitoredIndex();
+        const arrIndex = await getArrMonitoredIndex({ targetServerId: collection.serverId || undefined });
         const now = new Date();
 
         const formatNiceDate = (dStr?: string) => {
@@ -8860,10 +8878,10 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
             const isReleased = Boolean(item.inTheaters || (relDate && relDate <= now) || (digDate && digDate <= now) || (theDate && theDate <= now) || arrItem?.isReleased);
 
             let arrStatus: "NOT_REQUESTED" | "COMING_SOON" | "MONITORED_RELEASED" | "IN_LIBRARY" | "UPCOMING_UNREQUESTED";
-            let suggestedBannerType = "not_requested";
-            let suggestedBannerText = "NOT REQUESTED";
+            let suggestedBannerType = "not_requested_yet";
+            let suggestedBannerText = "NOT REQUESTED YET";
             let suggestedBannerTheme = collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix") ? "netflix-red" : "crimson-red";
-            let statusBadgeText = "NOT REQUESTED";
+            let statusBadgeText = "NOT REQUESTED YET";
             let statusBadgeColor = "rose";
 
             if (inLibrary) {
@@ -8875,10 +8893,10 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 statusBadgeColor = "emerald";
             } else if (!isMonitored) {
                 arrStatus = "NOT_REQUESTED";
-                suggestedBannerType = "not_requested";
-                suggestedBannerText = "NOT REQUESTED";
+                suggestedBannerType = "not_requested_yet";
+                suggestedBannerText = "NOT REQUESTED YET";
                 suggestedBannerTheme = collection.sourceQuery?.includes("netflix") || collection.title?.toLowerCase().includes("netflix") ? "netflix-red" : "crimson-red";
-                statusBadgeText = "NOT REQUESTED";
+                statusBadgeText = "NOT REQUESTED YET";
                 statusBadgeColor = "rose";
             } else if (!isReleased) {
                 arrStatus = "COMING_SOON";
@@ -8901,14 +8919,14 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                     suggestedBannerText = "COMING SOON MONITORED";
                     suggestedBannerTheme = "amber-gold";
                 }
-                statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON";
+                statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON MONITORED";
                 statusBadgeColor = "amber";
             } else {
                 arrStatus = "MONITORED_RELEASED";
-                suggestedBannerType = "now_streaming";
+                suggestedBannerType = "downloading_soon";
                 suggestedBannerText = "DOWNLOADING SOON";
                 suggestedBannerTheme = "emerald-green";
-                statusBadgeText = inRadarr ? "IN RADARR (DOWNLOADING)" : inSonarr ? "IN SONARR (DOWNLOADING)" : "DOWNLOADING";
+                statusBadgeText = inRadarr ? "IN RADARR (DOWNLOADING)" : inSonarr ? "IN SONARR (DOWNLOADING)" : "DOWNLOADING SOON";
                 statusBadgeColor = "cyan";
             }
 

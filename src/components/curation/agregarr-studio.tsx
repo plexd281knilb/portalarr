@@ -217,6 +217,8 @@ export function AgregarrStudio() {
     const [inspectMaxItems, setInspectMaxItems] = useState<number>(0);
     const [inspectExcludedLabels, setInspectExcludedLabels] = useState<string>("");
     const [inspectIncludePlaceholders, setInspectIncludePlaceholders] = useState<boolean>(false);
+    const [installingPreset, setInstallingPreset] = useState(false);
+    const [installPresetMsg, setInstallPresetMsg] = useState<{ success: boolean; text: string } | null>(null);
 
     // Comprehensive Placement & Visibility Modal States
     const [placementModalOpen, setPlacementModalOpen] = useState(false);
@@ -947,6 +949,8 @@ export function AgregarrStudio() {
 
     // Install Preset Collection
     const handleInstallPreset = async (preset: CollectionPreset) => {
+        setInstallingPreset(true);
+        setInstallPresetMsg(null);
         try {
             const maxOrder = collections.reduce((max, c) => Math.max(max, c.orderIndex || 0), 0);
             const nextOrder = maxOrder + 1;
@@ -982,12 +986,25 @@ export function AgregarrStudio() {
             });
 
             if (res.success && res.collection) {
-                await syncCollectionToPlexAction(res.collection.id);
+                const syncRes = await syncCollectionToPlexAction(res.collection.id);
                 loadCollections();
-                setInspectModalOpen(false);
+                if (syncRes.success) {
+                    setInstallPresetMsg({ success: true, text: `✓ Successfully installed and synced "${preset.title}" to Plex!` });
+                    setTimeout(() => {
+                        setInspectModalOpen(false);
+                        setInstallPresetMsg(null);
+                    }, 1200);
+                } else {
+                    setInstallPresetMsg({ success: false, text: syncRes.error || "Created collection, but sync to Plex returned an error." });
+                }
+            } else {
+                setInstallPresetMsg({ success: false, text: res.error || "Failed creating collection from preset." });
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed installing preset:", e);
+            setInstallPresetMsg({ success: false, text: e.message || "Failed installing preset." });
+        } finally {
+            setInstallingPreset(false);
         }
     };
 
@@ -1087,13 +1104,32 @@ export function AgregarrStudio() {
         }
     };
 
+    // Robust Media Poster and Plex Thumb URL Resolvers
+    const getMediaItemPosterSrc = (posterPath?: string | null) => {
+        if (!posterPath) return null;
+        if (posterPath.startsWith("http://") || posterPath.startsWith("https://") || posterPath.startsWith("data:")) return posterPath;
+        const cleanPath = posterPath.startsWith("/") ? posterPath : `/${posterPath}`;
+        return `https://image.tmdb.org/t/p/w500${cleanPath}`;
+    };
+
+    const getPlexThumbSrc = (thumb?: string | null, serverId?: string) => {
+        if (!thumb) return null;
+        if (thumb.startsWith("http://") || thumb.startsWith("https://") || thumb.startsWith("data:")) return thumb;
+        if (thumb.startsWith("/api/media/image")) return thumb;
+        const sId = serverId || selectedServerId;
+        return `/api/media/image?serverId=${encodeURIComponent(sId)}&thumb=${encodeURIComponent(thumb)}`;
+    };
+
     // Effective Banner Config Resolver for any Preset ID
     const getEffectiveBannerConfig = (presetId: string, customTemplates = bannerTemplates) => {
-        const preset = AGREGARR_BANNER_PRESETS.find(p => p.id === presetId);
-        const custom = customTemplates[presetId] || {};
+        const canonicalId = presetId === "not_requested" ? "not_requested_yet"
+            : (presetId === "now_streaming" || presetId === "released") ? "downloading_soon"
+            : presetId;
+        const preset = AGREGARR_BANNER_PRESETS.find(p => p.id === canonicalId || p.id === presetId);
+        const custom = customTemplates[canonicalId] || customTemplates[presetId] || {};
         return {
-            text: custom.text !== undefined ? custom.text : (preset?.defaultText || "NOT REQUESTED YET"),
-            theme: custom.theme || preset?.theme || "indigo-purple",
+            text: custom.text !== undefined ? custom.text : (preset?.defaultText || (canonicalId === "downloading_soon" ? "DOWNLOADING SOON" : canonicalId === "coming_soon_monitored" ? "COMING SOON MONITORED" : "NOT REQUESTED YET")),
+            theme: custom.theme || preset?.theme || (canonicalId === "downloading_soon" ? "emerald-green" : canonicalId === "coming_soon_monitored" ? "amber-gold" : "crimson-red"),
             pos: (custom.pos || preset?.pos || "bottom") as "bottom" | "top" | "corner",
             fontSize: custom.fontSize || (preset as any)?.fontSize || 44
         };
@@ -4005,11 +4041,23 @@ export function AgregarrStudio() {
                                         >
                                             {/* Poster Image & Smart Status Badge */}
                                             <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
-                                                <img
-                                                    src={item.posterPath ? `https://image.tmdb.org/t/p/w500${item.posterPath}` : "/placeholder-poster.png"}
-                                                    alt={item.title}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                />
+                                                {getMediaItemPosterSrc(item.posterPath) ? (
+                                                    <img
+                                                        src={getMediaItemPosterSrc(item.posterPath)!}
+                                                        alt={item.title}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        onError={(e) => {
+                                                            (e.currentTarget as HTMLElement).style.display = 'none';
+                                                            if (e.currentTarget.nextElementSibling) {
+                                                                (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <div className={`w-full h-full flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/20 text-slate-500 ${getMediaItemPosterSrc(item.posterPath) ? 'hidden' : 'flex'}`}>
+                                                    <Film className="h-8 w-8 text-slate-700 mb-1" />
+                                                    <span className="text-[10px] font-bold text-slate-400 line-clamp-2">{item.title}</span>
+                                                </div>
                                                 <div className="absolute top-2 left-2 z-10">
                                                     <Badge className={`${
                                                         item.arrStatus === "IN_LIBRARY" ? "bg-emerald-600" :
@@ -4020,7 +4068,7 @@ export function AgregarrStudio() {
                                                         {item.arrStatus === "COMING_SOON" && <Clock className="h-2.5 w-2.5" />}
                                                         {item.arrStatus === "MONITORED_RELEASED" && <Zap className="h-2.5 w-2.5" />}
                                                         {item.arrStatus === "NOT_REQUESTED" && <Flame className="h-2.5 w-2.5" />}
-                                                        <span>{item.statusBadgeText || (item.inLibrary ? "✓ IN LIBRARY" : "NOT REQUESTED")}</span>
+                                                        <span>{item.statusBadgeText || (item.inLibrary ? "✓ IN LIBRARY" : "NOT REQUESTED YET")}</span>
                                                     </Badge>
                                                 </div>
                                             </div>
@@ -4277,12 +4325,24 @@ export function AgregarrStudio() {
                                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                                     {previewData.sampleMatches.map((m, idx) => (
                                         <div key={idx} className="space-y-1 text-center">
-                                            <div className="aspect-[2/3] rounded-lg overflow-hidden bg-slate-950 border border-slate-800">
-                                                <img
-                                                    src={m.thumb || "/placeholder-poster.png"}
-                                                    alt={m.title}
-                                                    className="w-full h-full object-cover"
-                                                />
+                                            <div className="aspect-[2/3] rounded-lg overflow-hidden bg-slate-950 border border-slate-800 relative">
+                                                {getPlexThumbSrc(m.thumb, selectedServerId) ? (
+                                                    <img
+                                                        src={getPlexThumbSrc(m.thumb, selectedServerId)!}
+                                                        alt={m.title}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            (e.currentTarget as HTMLElement).style.display = 'none';
+                                                            if (e.currentTarget.nextElementSibling) {
+                                                                (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <div className={`w-full h-full flex flex-col items-center justify-center p-2 text-center bg-slate-900 text-slate-500 ${getPlexThumbSrc(m.thumb, selectedServerId) ? 'hidden' : 'flex'}`}>
+                                                    <Film className="h-6 w-6 text-slate-700 mb-1" />
+                                                    <span className="text-[9px] font-bold text-slate-400 line-clamp-2">{m.title}</span>
+                                                </div>
                                             </div>
                                             <p className="text-[10px] font-medium text-slate-300 truncate" title={m.title}>{m.title}</p>
                                         </div>
@@ -4429,19 +4489,36 @@ export function AgregarrStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setInspectModalOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => inspectingPreset && handleInstallPreset(inspectingPreset)}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
-                        >
-                            <Trophy className="h-3.5 w-3.5" />
-                            <span>Install &amp; Sync Collection to Plex</span>
-                        </Button>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+                        {installPresetMsg ? (
+                            <div className={`text-xs font-bold px-2 py-1 rounded ${installPresetMsg.success ? "text-emerald-400 bg-emerald-950/50 border border-emerald-800/40" : "text-rose-400 bg-rose-950/50 border border-rose-800/40"}`}>
+                                {installPresetMsg.text}
+                            </div>
+                        ) : <div />}
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <Button type="button" variant="ghost" size="sm" disabled={installingPreset} onClick={() => setInspectModalOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={installingPreset || !inspectingPreset}
+                                onClick={() => inspectingPreset && handleInstallPreset(inspectingPreset)}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                            >
+                                {installingPreset ? (
+                                    <>
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" />
+                                        <span>Installing &amp; Syncing to Plex...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trophy className="h-3.5 w-3.5" />
+                                        <span>Install &amp; Sync Collection to Plex</span>
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
