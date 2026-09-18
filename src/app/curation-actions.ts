@@ -173,6 +173,86 @@ function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null):
 }
 
 /**
+ * Evaluates whether a Radarr movie is a valid "Coming Soon" candidate.
+ * Looks ahead up to futureThresholdDays (default 90 days), and looks behind
+ * up to pastGraceDays (default 30 days) so that legacy missing backlog from years ago is excluded.
+ */
+function isRadarrMovieComingSoon(m: any, futureThresholdDays = 90, pastGraceDays = 30): boolean {
+    if (!m.monitored || m.hasFile) return false;
+
+    const now = new Date();
+    const digDate = m.digitalRelease ? new Date(m.digitalRelease) : null;
+    const physDate = m.physicalRelease ? new Date(m.physicalRelease) : null;
+    const cinDate = m.inCinemas ? new Date(m.inCinemas) : null;
+
+    // 1. Explicitly unreleased status
+    if (m.status === "announced" || m.status === "inCinemas" || m.isAvailable === false) {
+        const futureDate = digDate || physDate || cinDate;
+        if (futureDate && !isNaN(futureDate.getTime()) && futureDate > now) {
+            const daysAhead = Math.ceil((futureDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            if (futureThresholdDays > 0 && daysAhead > futureThresholdDays) return false;
+        }
+        return true;
+    }
+
+    // 2. Future release date
+    const targetDate = digDate || physDate || cinDate;
+    if (targetDate && !isNaN(targetDate.getTime())) {
+        if (targetDate > now) {
+            const daysAhead = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
+        } else {
+            // Already released in the past: only include if within recent window (e.g. past 30 days)
+            const daysPast = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+            return daysPast <= pastGraceDays;
+        }
+    }
+
+    // 3. Fallback on release year
+    if (m.year) {
+        const currentYear = now.getFullYear();
+        if (m.year >= currentYear) return true;
+        return false;
+    }
+
+    return false;
+}
+
+/**
+ * Evaluates whether a Sonarr series is a valid "Coming Soon" candidate.
+ */
+function isSonarrSeriesComingSoon(s: any, futureThresholdDays = 90, pastGraceDays = 30): boolean {
+    if (!s.monitored) return false;
+    const hasAllFiles = s.statistics?.episodeFileCount && s.statistics?.totalEpisodeCount && s.statistics.episodeFileCount >= s.statistics.totalEpisodeCount;
+    if (hasAllFiles) return false;
+
+    const now = new Date();
+    const nextAiring = s.nextAiring ? new Date(s.nextAiring) : null;
+    const firstAired = s.firstAired ? new Date(s.firstAired) : null;
+
+    if (s.status === "upcoming") return true;
+
+    if (nextAiring && !isNaN(nextAiring.getTime()) && nextAiring > now) {
+        const daysAhead = Math.ceil((nextAiring.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
+    }
+
+    if (firstAired && !isNaN(firstAired.getTime())) {
+        if (firstAired > now) {
+            const daysAhead = Math.ceil((firstAired.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
+        } else {
+            const daysPast = Math.floor((now.getTime() - firstAired.getTime()) / (1000 * 60 * 60 * 24));
+            return daysPast <= pastGraceDays;
+        }
+    }
+
+    if (s.year && s.year >= now.getFullYear()) return true;
+
+    return false;
+}
+
+/**
  * Recursively sets Unraid/Linux/NAS filesystem permissions on directories and files.
  * Default: 0o777 for directories (rwxrwxrwx) and 0o666 for files (rw-rw-rw-).
  */
@@ -1552,7 +1632,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -1585,7 +1665,7 @@ export async function syncCollectionToPlexAction(collectionId: string) {
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -1997,7 +2077,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
                             } else if (sourceQuery.startsWith("tag:")) {
                                 const targetTag = sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -2028,7 +2108,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
                             } else if (sourceQuery.startsWith("tag:")) {
                                 const targetTag = sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -6747,28 +6827,18 @@ export async function getArrMonitoredIndex(options?: {
 
     const now = new Date();
 
-    let radarrId = options?.targetRadarrId;
-    let sonarrId = options?.targetSonarrId;
-
-    if (options?.targetServerId && (!radarrId || !sonarrId)) {
-        try {
-            const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-            if (settings?.serverStorageConfig) {
-                const parsed = JSON.parse(settings.serverStorageConfig);
-                const srvConfig = parsed[options.targetServerId];
-                if (srvConfig) {
-                    if (!radarrId && srvConfig.radarrId) radarrId = srvConfig.radarrId;
-                    if (!sonarrId && srvConfig.sonarrId) sonarrId = srvConfig.sonarrId;
-                }
-            }
-        } catch {}
-    }
+    const targetRadarrId = options?.targetRadarrId && options.targetRadarrId !== "auto" && options.targetRadarrId !== "all"
+        ? options.targetRadarrId
+        : undefined;
+    const targetSonarrId = options?.targetSonarrId && options.targetSonarrId !== "auto" && options.targetSonarrId !== "all"
+        ? options.targetSonarrId
+        : undefined;
 
     try {
         const radarrRes = await getEnabledArrInstancesInternal("radarr");
         if (radarrRes.success && radarrRes.data) {
-            const targetApps = radarrId && radarrId !== "auto" && radarrId !== "all"
-                ? radarrRes.data.filter(app => app.id === radarrId)
+            const targetApps = targetRadarrId
+                ? radarrRes.data.filter(app => app.id === targetRadarrId)
                 : radarrRes.data;
 
             for (const app of targetApps) {
@@ -6825,8 +6895,8 @@ export async function getArrMonitoredIndex(options?: {
     try {
         const sonarrRes = await getEnabledArrInstancesInternal("sonarr");
         if (sonarrRes.success && sonarrRes.data) {
-            const targetApps = sonarrId && sonarrId !== "auto" && sonarrId !== "all"
-                ? sonarrRes.data.filter(app => app.id === sonarrId)
+            const targetApps = targetSonarrId
+                ? sonarrRes.data.filter(app => app.id === targetSonarrId)
                 : sonarrRes.data;
 
             for (const app of targetApps) {
@@ -7842,7 +7912,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, placeholderDaysThreshold || 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -7875,7 +7945,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, placeholderDaysThreshold || 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -8775,7 +8845,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => m.monitored && !m.hasFile);
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -8808,7 +8878,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => s.monitored && (s.statistics?.episodeFileCount === 0 || s.statistics?.percentOfEpisodes < 100));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
                             } else if (collection.sourceQuery?.startsWith("tag:")) {
                                 const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -9159,8 +9229,15 @@ export async function cleanupAvailablePlaceholdersInternal(
                     const cleanTitle = itemTitle.toLowerCase().trim();
                     const titleWithYear = itemYear ? `${cleanTitle} (${itemYear})` : cleanTitle;
 
-                    // 3. Determine if media is now present in the Plex library
+                    // 3. Determine if media is now present in the Plex library or is stale legacy backlog
                     let isAvailable = false;
+                    let isStaleLegacy = false;
+                    const itemYearNum = itemYear ? parseInt(itemYear, 10) : 0;
+                    if (itemYearNum > 0 && itemYearNum < (new Date().getFullYear() - 1)) {
+                        // Stale legacy backlog from previous years (e.g. 2001-2023)
+                        isStaleLegacy = true;
+                    }
+
                     if (itemTmdbId && libraryTmdbIds.has(itemTmdbId)) {
                         isAvailable = true;
                     } else if (libraryTitleYears.has(titleWithYear)) {
@@ -9169,7 +9246,7 @@ export async function cleanupAvailablePlaceholdersInternal(
                         isAvailable = true;
                     }
 
-                    if (isAvailable) {
+                    if (isAvailable || isStaleLegacy) {
                         // Clean up placeholder directory on disk
                         try {
                             try { fs.chmodSync(folderPath, 0o777); } catch {}
@@ -9187,7 +9264,10 @@ export async function cleanupAvailablePlaceholdersInternal(
                                 });
                             }
 
-                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because full media is now available in Plex.`);
+                            const reasonStr = isAvailable 
+                                ? "full media is now available in Plex" 
+                                : "legacy catalog release year is older than Coming Soon threshold";
+                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because ${reasonStr}.`);
                         } catch (rmErr: any) {
                             console.error(`[PLACEHOLDER-CLEANUP] Failed removing folder "${folderPath}":`, rmErr);
                         }
