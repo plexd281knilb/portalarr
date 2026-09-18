@@ -112,7 +112,9 @@ import { getEnabledArrInstances, getEnabledArrInstancesInternal, arrApiGet } fro
 // Verify admin permissions
 async function verifyAdmin() {
     const user = await getCurrentUser();
-    if (!user || user.role !== "ADMIN") {
+    const role = String(user?.role || "").toUpperCase();
+    const status = String(user?.status || "APPROVED").toUpperCase();
+    if (!user || role !== "ADMIN" || (status !== "APPROVED" && status !== "TRIAL")) {
         throw new Error("Unauthorized: Admin permissions required.");
     }
     return user;
@@ -205,9 +207,10 @@ function safeJsonParse<T>(val: any, fallback: T): T {
 }
 
 export async function getCurationSettingsAction() {
-    await verifyAdmin();
-    await ensureSchemaColumns();
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
     return {
         success: true,
         tmdbApiKey: settings?.tmdbApiKey || "",
@@ -285,6 +288,10 @@ export async function getCurationSettingsAction() {
         curationLastRunAt: settings?.curationLastRunAt ? settings.curationLastRunAt.toISOString() : null,
         curationLastRunStatus: safeJsonParse(settings?.curationLastRunStatus, null)
     };
+    } catch (e: any) {
+        logger.addLog("ERROR", "CURATION", `Failed loading curation settings: ${e.message}`);
+        return { success: false, error: e.message || "Failed loading curation settings." } as any;
+    }
 }
 
 /**
@@ -339,9 +346,11 @@ export async function toggleCurationLibrarySectionAction(
     enabled: boolean,
     allServerSections?: string[]
 ) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const fieldName = pageType === "kometa"
             ? "enabledServersForOverlays"
@@ -443,9 +452,11 @@ export async function toggleAllCurationServerSectionsAction(
     enableAll: boolean,
     allServerSections?: string[]
 ) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const fieldName = pageType === "kometa"
             ? "enabledServersForOverlays"
@@ -571,9 +582,11 @@ export async function saveCurationSettingsAction(data: {
     parentalMinSeverity?: string;
     parentalCategories?: string[];
 }) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const updatePayload: any = {};
         if (data.tmdbApiKey !== undefined) updatePayload.tmdbApiKey = data.tmdbApiKey;
         if (data.traktClientId !== undefined) updatePayload.traktClientId = data.traktClientId;
@@ -688,32 +701,42 @@ export async function saveCurationSettingsAction(data: {
 }
 
 export async function getPlexServersAndSectionsAction(targetServerId?: string) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-    if (!token) return { success: false, error: "Plex token not configured." };
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
 
-    const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, targetServerId);
-    return {
-        success: true,
-        servers: serversWithSections
-    };
+        const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, targetServerId);
+        return {
+            success: true,
+            servers: serversWithSections
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Failed fetching Plex servers & sections: ${e.message}`);
+        return { success: false, error: e.message || "Failed fetching Plex servers & sections.", servers: [] };
+    }
 }
 
 export async function getPlexServerSectionsAction(serverId: string) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-    if (!token) return { success: false, error: "Plex token not configured." };
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) return { success: false, error: "Plex token not configured." };
 
-    const sections = await getPlexServerSections(token, serverId);
-    return {
-        success: true,
-        serverId,
-        sections
-    };
+        const sections = await getPlexServerSections(token, serverId);
+        return {
+            success: true,
+            serverId,
+            sections
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Failed fetching sections for server ${serverId}: ${e.message}`);
+        return { success: false, error: e.message || "Failed fetching Plex library sections.", sections: [] };
+    }
 }
 
 export interface DismissedHubItem {
@@ -789,43 +812,60 @@ export async function removeDismissedHubInternal(ratingKeyOrTitle: string, serve
 }
 
 export async function getDismissedHubsAction() {
-    await verifyAdmin();
-    await ensureSchemaColumns();
-    const list = await getDismissedHubsInternal();
-    return { success: true, dismissedHubs: list };
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const list = await getDismissedHubsInternal();
+        return { success: true, dismissedHubs: list };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Failed fetching dismissed hubs: ${e.message}`);
+        return { success: false, error: e.message || "Failed fetching dismissed hubs.", dismissedHubs: [] };
+    }
 }
 
 export async function unignoreMediaCollectionAction(ratingKeyOrTitle: string, serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
-    await removeDismissedHubInternal(ratingKeyOrTitle, serverId, sectionKey);
-    logger.addLog("SUCCESS", "PLEX", `Restored / un-ignored collection "${ratingKeyOrTitle}". It can now be re-imported from Plex.`);
-    return { success: true, message: `Restored "${ratingKeyOrTitle}". You can now click 'Import from Plex' to re-import it.` };
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        await removeDismissedHubInternal(ratingKeyOrTitle, serverId, sectionKey);
+        logger.addLog("SUCCESS", "PLEX", `Restored / un-ignored collection "${ratingKeyOrTitle}". It can now be re-imported from Plex.`);
+        return { success: true, message: `Restored "${ratingKeyOrTitle}". You can now click 'Import from Plex' to re-import it.` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Failed restoring dismissed collection "${ratingKeyOrTitle}": ${e.message}`);
+        return { success: false, error: e.message || "Failed restoring dismissed collection." };
+    }
 }
 
 export async function clearAllDismissedHubsAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
-    if (serverId && sectionKey) {
-        const list = await getDismissedHubsInternal();
-        const filtered = list.filter(d => !(d.serverId === serverId && d.sectionKey === String(sectionKey)));
-        await prisma.settings.update({
-            where: { id: "global" },
-            data: { dismissedHubs: JSON.stringify(filtered) }
-        });
-    } else {
-        await prisma.settings.update({
-            where: { id: "global" },
-            data: { dismissedHubs: JSON.stringify([]) }
-        });
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        if (serverId && sectionKey) {
+            const list = await getDismissedHubsInternal();
+            const filtered = list.filter(d => !(d.serverId === serverId && d.sectionKey === String(sectionKey)));
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { dismissedHubs: JSON.stringify(filtered) }
+            });
+        } else {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { dismissedHubs: JSON.stringify([]) }
+            });
+        }
+        return { success: true, message: "Cleared all dismissed hubs." };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Failed clearing dismissed hubs: ${e.message}`);
+        return { success: false, error: e.message || "Failed clearing dismissed hubs." };
     }
-    return { success: true, message: "Cleared all dismissed hubs." };
 }
 
 export async function getMediaCollectionsAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const rawCollections = await prisma.mediaCollection.findMany({
             where: {
                 isIgnored: false,
@@ -896,8 +936,9 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
  * Explicitly import / refresh all collections from a Plex library section into Portalarr
  */
 export async function importPlexLibraryCollectionsAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         if (!serverId || !sectionKey) {
             return { success: false, error: "Please select a Plex server and library section first." };
         }
@@ -1046,9 +1087,11 @@ export async function saveMediaCollectionAction(data: {
     scheduleEndDay?: number | null;
     seasonalAction?: string | null;
 }) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const dataPayload = {
             title: data.title,
             summary: data.summary,
@@ -1122,8 +1165,9 @@ export async function saveMediaCollectionAction(data: {
 }
 
 export async function syncCollectionToPlexAction(collectionId: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const collection = await prisma.mediaCollection.findUnique({
             where: { id: collectionId }
         });
@@ -1620,8 +1664,9 @@ export async function generateCollectionCandidateItemsPreviewAction(
         type?: string;
     }
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
@@ -1985,9 +2030,11 @@ export async function reorderPlexCollectionsAction(
         collectionMode?: string;
     }>
 ) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         if (!serverId || !sectionKey) {
             return { success: false, error: "Please select a Plex server and library section first." };
         }
@@ -2086,9 +2133,11 @@ export async function toggleCollectionVisibilityAction(
     target: "home" | "shared" | "recommended" | "mode",
     value: boolean | string
 ) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
         if (!collection) return { success: false, error: "Collection not found." };
 
@@ -2137,9 +2186,11 @@ export async function toggleCollectionVisibilityAction(
  * 1-click toggle for collection placeholder generation
  */
 export async function toggleCollectionPlaceholdersAction(collectionId: string, includePlaceholders: boolean) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
         if (!collection) return { success: false, error: "Collection not found." };
 
@@ -2181,9 +2232,11 @@ export async function updateCollectionPlacementAction(data: {
     scheduleEndDay?: number | null;
     seasonalAction?: string | null;
 }) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const collection = await prisma.mediaCollection.findUnique({ where: { id: data.id } });
         if (!collection) return { success: false, error: "Collection not found." };
 
@@ -2469,8 +2522,13 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
 }
 
 export async function syncSeasonalAndScheduledCollectionsAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
-    return await syncSeasonalAndScheduledCollectionsInternal(serverId, sectionKey);
+    try {
+        await verifyAdmin();
+        return await syncSeasonalAndScheduledCollectionsInternal(serverId, sectionKey);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Seasonal sync failed: ${e.message}`);
+        return { success: false, error: e.message || "Seasonal sync failed" } as any;
+    }
 }
 
 export async function syncLeavingSoonCollectionHubInternal(serverId?: string, sectionKey?: string) {
@@ -2636,14 +2694,21 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
 }
 
 export async function syncLeavingSoonCollectionHubAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
-    return await syncLeavingSoonCollectionHubInternal(serverId, sectionKey);
+    try {
+        await verifyAdmin();
+        return await syncLeavingSoonCollectionHubInternal(serverId, sectionKey);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Leaving soon sync failed: ${e.message}`);
+        return { success: false, error: e.message || "Leaving soon sync failed" } as any;
+    }
 }
 
 export async function deleteMediaCollectionAction(collectionId: string, deleteFromPlex = true, ignoreReimport = true) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         let collection = await prisma.mediaCollection.findUnique({
             where: { id: collectionId }
         });
@@ -2717,8 +2782,9 @@ export async function deleteAllPlexCollectionsAction(
     serverId: string,
     sectionKey: string
 ): Promise<{ success: boolean; deletedCount: number; message: string }> {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl || !resolved.token) {
             return { success: false, deletedCount: 0, message: "Plex server connection unavailable." };
@@ -2817,8 +2883,9 @@ export async function seedDefaultCustomBadgesInternal(): Promise<{ count: number
  * Server action to install / reset all essential custom badges in bulk with 1 click.
  */
 export async function seedDefaultCustomBadgesAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const res = await seedDefaultCustomBadgesInternal();
         const allBadges = await prisma.customBadge.findMany({ orderBy: { createdAt: "desc" } });
         return {
@@ -2838,8 +2905,9 @@ export async function seedDefaultCustomBadgesAction() {
  * directly from the official Kometa repository (Kometa-Team/Kometa/defaults/overlays/images).
  */
 export async function syncOfficialKometaBadgesAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
         if (!fs.existsSync(badgeVaultDir)) {
             fs.mkdirSync(badgeVaultDir, { recursive: true });
@@ -2999,8 +3067,9 @@ export async function syncOfficialKometaBadgesAction() {
  * Server action to upload and install a custom badge file (SVG, PNG, WebP).
  */
 export async function uploadCustomBadgeAction(formData: FormData) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const file = formData.get("file") as File | null;
         const name = (formData.get("name") as string) || "Custom Badge";
         const category = (formData.get("category") as string) || "custom";
@@ -3076,8 +3145,9 @@ export async function uploadCustomBadgeAction(formData: FormData) {
 }
 
 export async function getCustomBadgesAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         let badges = await prisma.customBadge.findMany({
             orderBy: { createdAt: "desc" }
         });
@@ -3133,8 +3203,9 @@ export async function saveCustomBadgeAction(data: {
     enabled?: boolean;
     matchRule?: string;
 }) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const badge = await prisma.customBadge.update({
             where: { id: data.id },
             data: {
@@ -3155,8 +3226,9 @@ export async function saveCustomBadgeAction(data: {
 }
 
 export async function deleteCustomBadgeAction(id: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const badge = await prisma.customBadge.findUnique({ where: { id } });
         if (badge) {
             try {
@@ -3171,8 +3243,9 @@ export async function deleteCustomBadgeAction(id: string) {
 }
 
 export async function deleteMultipleCustomBadgesAction(ids: string[]) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         if (!ids || ids.length === 0) return { success: true, count: 0 };
         let deletedCount = 0;
         const CHUNK_SIZE = 400;
@@ -3205,8 +3278,9 @@ export async function deleteMultipleCustomBadgesAction(ids: string[]) {
  * @param options.keepEssential - If true (default), immediately re-seeds the standard 35 essential high-DPI SVGs. If false, completely wipes all badges (0 badges).
  */
 export async function deleteAllCustomBadgesAction(options?: { keepEssential?: boolean }) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const keepEssential = options?.keepEssential ?? true;
         const badgeVaultDir = path.join(process.cwd(), "data", "custom_badges");
 
@@ -3253,8 +3327,9 @@ export async function deleteAllCustomBadgesAction(options?: { keepEssential?: bo
 }
 
 export async function toggleMultipleCustomBadgesAction(ids: string[], enabled: boolean) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         if (!ids || ids.length === 0) return { success: true, count: 0 };
         let updatedCount = 0;
         const CHUNK_SIZE = 400;
@@ -3275,8 +3350,9 @@ export async function toggleMultipleCustomBadgesAction(ids: string[], enabled: b
 }
 
 export async function toggleCustomBadgeAction(id: string, enabled: boolean) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         await prisma.customBadge.update({
             where: { id },
             data: { enabled }
@@ -3288,8 +3364,9 @@ export async function toggleCustomBadgeAction(id: string, enabled: boolean) {
 }
 
 export async function getOverlayRulesAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         let rules: any[] = [];
         if (serverId && sectionKey) {
             rules = await prisma.mediaOverlayRule.findMany({
@@ -3368,8 +3445,9 @@ export async function saveOverlayRuleAction(data: {
     layerPriorityOrder?: string[] | string | any;
     enabled?: boolean;
 }) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         let serializedLayerOrder: string | null = null;
         if (data.layerPriorityOrder || data.ribbonMode || data.tieredRibbons || data.dovetailResolutionHdr !== undefined) {
             const rawOrder = Array.isArray(data.layerPriorityOrder) 
@@ -3956,13 +4034,19 @@ export async function applyOverlaysToLibraryAction(
         mode?: "incremental" | "daily_recheck" | "weekly_recheck" | "monthly_recheck" | "force_all";
     }
 ) {
-    await verifyAdmin();
-    return await applyOverlaysToLibraryInternal(serverId, sectionKey, ruleId, batchOptions);
+    try {
+        await verifyAdmin();
+        return await applyOverlaysToLibraryInternal(serverId, sectionKey, ruleId, batchOptions);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Apply overlays failed: ${e.message}`);
+        return { success: false, error: e.message || "Apply overlays failed" } as any;
+    }
 }
 
 export async function revertLibraryOverlaysAction(serverId: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
@@ -3974,8 +4058,9 @@ export async function revertLibraryOverlaysAction(serverId: string) {
 }
 
 export async function getLeavingSoonItemsAction(serverId?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const items = await prisma.mediaContentAdvisory.findMany({
             where: {
                 isLeavingSoon: true,
@@ -3997,8 +4082,9 @@ export async function markItemLeavingSoonAction(data: {
     deleteDate?: string;
     reason?: string;
 }) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const effectiveDate = data.deleteDate
             ? new Date(data.deleteDate)
             : new Date(Date.now() + (data.daysRemaining || 7) * 24 * 60 * 60 * 1000);
@@ -4073,8 +4159,9 @@ export async function markItemLeavingSoonAction(data: {
 }
 
 export async function unmarkItemLeavingSoonAction(ratingKey: string, serverId: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         await prisma.mediaContentAdvisory.updateMany({
             where: { ratingKey, serverId },
             data: {
@@ -4172,8 +4259,9 @@ export async function saveUserContentPreferencesAction(preferences: {
 }
 
 export async function testCurationApiKeysAction(tmdbKey?: string, traktKey?: string, mdblistKey?: string) {
-    await verifyAdmin();
-    const results: { tmdb?: boolean; trakt?: boolean; mdblist?: boolean; errors: string[] } = { errors: [] };
+    try {
+        await verifyAdmin();
+        const results: { tmdb?: boolean; trakt?: boolean; mdblist?: boolean; errors: string[] } = { errors: [] };
 
     if (tmdbKey) {
         try {
@@ -4211,11 +4299,16 @@ export async function testCurationApiKeysAction(tmdbKey?: string, traktKey?: str
         success: results.errors.length === 0,
         results
     };
+    } catch (e: any) {
+        logger.addLog("ERROR", "CURATION", `Test API keys failed: ${e.message}`);
+        return { success: false, results: { errors: [e.message || "Failed testing API keys."] } };
+    }
 }
 
 export async function getGlancesDisksAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const instances = await prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } });
         if (!instances || instances.length === 0) {
             return { success: true, disks: [], instances: [] };
@@ -4310,8 +4403,9 @@ export async function getGlancesDisksAction() {
 }
 
 export async function recheckLeavingSoonWatchActivityAction(targetServerId?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) return { success: false, error: "Plex token not configured." };
@@ -4429,8 +4523,9 @@ export async function getPrunePreviewAction(options?: {
         sortBy?: "combined_oldest" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     };
 }) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) return { success: false, error: "Plex token not configured." };
@@ -4577,8 +4672,9 @@ export async function executePruneAction(
         bannerPosition?: string;
     } = {}
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) return { success: false, error: "Plex token not configured." };
@@ -4721,8 +4817,9 @@ export async function executePruneAction(
 }
 
 export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const whereClause = serverId ? { serverId } : {};
 
         // Find all leaving soon items to restore posters
@@ -4771,8 +4868,9 @@ export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
 }
 
 export async function saveComingSoonSharesAction(shares: Record<string, string>) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         await prisma.settings.upsert({
             where: { id: "global" },
             update: { comingSoonShares: JSON.stringify(shares) },
@@ -4785,8 +4883,9 @@ export async function saveComingSoonSharesAction(shares: Record<string, string>)
 }
 
 export async function saveServerStorageConfigAction(storageConfig: Record<string, any>) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         let existingConfig: Record<string, any> = {};
         if (settings?.serverStorageConfig) {
@@ -4805,8 +4904,9 @@ export async function saveServerStorageConfigAction(storageConfig: Record<string
 }
 
 export async function saveSelectedGlancesDiskAction(diskId: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         let currentStorageConfig: Record<string, any> = {};
         if (settings?.serverStorageConfig) {
@@ -4827,9 +4927,9 @@ export async function saveSelectedGlancesDiskAction(diskId: string) {
 }
 
 export async function validateDirectoryPathAction(pathStr: string) {
-    await verifyAdmin();
-    if (!pathStr || !pathStr.trim()) return { success: false, error: "Path is empty." };
     try {
+        await verifyAdmin();
+        if (!pathStr || !pathStr.trim()) return { success: false, error: "Path is empty." };
         const cleanPath = pathStr.trim();
         if (!fs.existsSync(cleanPath)) {
             return { success: false, exists: false, error: `Directory "${cleanPath}" does not exist on disk.` };
@@ -4852,8 +4952,9 @@ export async function validateDirectoryPathAction(pathStr: string) {
 }
 
 export async function getArtBackupAndBadgeStatsAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const backupDir = path.join(process.cwd(), "data", "art_backups");
         const badgeDir = path.join(process.cwd(), "data", "custom_badges");
 
@@ -4908,8 +5009,9 @@ export async function getPlexRecentLibraryItemsAction(
     sort = "addedAt:desc",
     includeBlocked = false
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured.", items: [] };
 
@@ -4971,8 +5073,9 @@ export async function searchPlexLibraryItemsAction(
     includeBlocked = false,
     limit = 100
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         if (!query || query.trim().length === 0) return { success: true, items: [] };
 
         const resolved = await resolveWorkingPlexServerConnection(serverId || undefined);
@@ -5030,8 +5133,9 @@ export async function searchPlexLibraryItemsAction(
  * Retrieves all Server Guard Rail configurations.
  */
 export async function getServerGuardRailsAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const guardRails = await getServerGuardRailsMap();
         return { success: true, guardRails };
     } catch (e: any) {
@@ -5043,8 +5147,9 @@ export async function getServerGuardRailsAction() {
  * Retrieves the Server Guard Rail configuration for a specific server.
  */
 export async function getServerGuardRailConfigAction(serverId: string, fallbackServerName?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const config = await getServerGuardRailConfig(serverId, fallbackServerName);
         return { success: true, config };
     } catch (e: any) {
@@ -5056,8 +5161,9 @@ export async function getServerGuardRailConfigAction(serverId: string, fallbackS
  * Saves a Server Guard Rail configuration for a specific server.
  */
 export async function saveServerGuardRailConfigAction(config: ServerGuardRailConfig) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const res = await saveServerGuardRailConfig(config);
         return res;
     } catch (e: any) {
@@ -5069,8 +5175,9 @@ export async function saveServerGuardRailConfigAction(config: ServerGuardRailCon
  * Saves all Server Guard Rail configurations across all servers.
  */
 export async function saveAllServerGuardRailsAction(configs: Record<string, ServerGuardRailConfig>) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const res = await saveAllServerGuardRails(configs);
         return res;
     } catch (e: any) {
@@ -5085,8 +5192,9 @@ export async function getStoredParentalAdvisoriesForLibraryAction(
     serverId: string,
     sectionKey: string | number
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const res = await getStoredParentalAdvisoriesForLibrary(serverId, sectionKey);
         return { success: true, items: res.items };
     } catch (e: any) {
@@ -5102,8 +5210,9 @@ export async function applyCustomTagRuleAction(
     sectionKey: string | number,
     rule: CustomTagRule
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const res = await applyCustomTagRuleToLibrary(serverId, sectionKey, rule);
         return res;
     } catch (e: any) {
@@ -5120,8 +5229,9 @@ export async function clearCustomTagFromLibraryAction(
     tagName: string,
     field: "label" | "genre" | "collection" = "label"
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const res = await clearCustomTagFromLibrary(serverId, sectionKey, tagName, field);
         return res;
     } catch (e: any) {
@@ -5136,8 +5246,9 @@ export async function getPlexLibraryTagsAuditAction(
     serverId: string,
     sectionKey: string | number
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const res = await getPlexLibraryTagsAudit(serverId, sectionKey);
         return { success: true, ...res };
     } catch (e: any) {
@@ -5149,8 +5260,9 @@ export async function getPlexLibraryTagsAuditAction(
  * Deep inspection of a single Plex media item (full video/audio telemetry, streams, parts, and overlays).
  */
 export async function inspectPlexMediaItemAction(serverId: string, ratingKey: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId || undefined);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
 
@@ -5226,8 +5338,9 @@ export async function applyOverlayToSingleItemAction(
         layerPriorityOrder?: string[];
     }
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
 
@@ -5322,8 +5435,9 @@ export async function applyOverlayToSingleItemAction(
  * Restores original poster artwork for a single item.
  */
 export async function restoreSingleItemPosterAction(serverId: string, ratingKey: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
@@ -5510,8 +5624,9 @@ export async function runFullCurationSyncInternal(): Promise<{
  * Server action to trigger full curation sync on-demand.
  */
 export async function runFullCurationSyncAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         return await runFullCurationSyncInternal();
     } catch (e: any) {
         return {
@@ -5530,8 +5645,9 @@ export async function runFullCurationSyncAction() {
  * Guarantees zero side effects or changes on any other Plex server.
  */
 export async function runServerCurationSyncAction(serverId: string, sectionKey?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) {
             return { 
@@ -5609,28 +5725,35 @@ export async function applyParentalTagsToLibraryAction(
         dryRun?: boolean;
     }
 ) {
-    await verifyAdmin();
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    const mergedOptions: ParentalTaggingOptions = {
-        enabled: settings?.parentalTaggingEnabled ?? true,
-        format: options?.format || (settings?.parentalTagFormat as any) || "prefix_category_severity",
-        prefix: options?.prefix || settings?.parentalTagPrefix || "IMDb",
-        target: options?.target || (settings?.parentalTagTarget as any) || "labels",
-        minSeverity: options?.minSeverity || (settings?.parentalMinSeverity as any) || "Mild",
-        categories: options?.categories || (settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"]),
-        dryRun: options?.dryRun ?? false
-    };
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const mergedOptions: ParentalTaggingOptions = {
+            enabled: settings?.parentalTaggingEnabled ?? true,
+            format: options?.format || (settings?.parentalTagFormat as any) || "prefix_category_severity",
+            prefix: options?.prefix || settings?.parentalTagPrefix || "IMDb",
+            target: options?.target || (settings?.parentalTagTarget as any) || "labels",
+            minSeverity: options?.minSeverity || (settings?.parentalMinSeverity as any) || "Mild",
+            categories: options?.categories || (settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"]),
+            dryRun: options?.dryRun ?? false
+        };
 
-    return await applyParentalTagsToLibrary(serverId, sectionKey, mergedOptions);
+        return await applyParentalTagsToLibrary(serverId, sectionKey, mergedOptions);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Apply parental tags failed: ${e.message}`);
+        return { success: false, error: e.message || "Apply parental tags failed." } as any;
+    }
 }
 
 /**
  * Server action to run automated parental tagging sync across enabled sections or a single server/section.
  */
 export async function runParentalTagsSyncAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const enabledServersForTagging: string[] = settings?.enabledServersForTagging
             ? JSON.parse(settings.enabledServersForTagging)
@@ -5710,10 +5833,15 @@ export async function clearParentalTagsFromLibraryAction(
     sectionKey: string | number,
     prefix?: string
 ) {
-    await verifyAdmin();
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    const tagPrefix = prefix || settings?.parentalTagPrefix || "IMDb";
-    return await clearParentalTagsFromLibrary(serverId, sectionKey, tagPrefix);
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const tagPrefix = prefix || settings?.parentalTagPrefix || "IMDb";
+        return await clearParentalTagsFromLibrary(serverId, sectionKey, tagPrefix);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Clear parental tags failed: ${e.message}`);
+        return { success: false, error: e.message || "Clear parental tags failed." } as any;
+    }
 }
 
 /**
@@ -5730,42 +5858,47 @@ export async function inspectItemParentalAdvisoryAction(
         contentRating?: string;
     }
 ) {
-    await verifyAdmin();
-    if (!metadata || !metadata.title) {
-        const stored = await prisma.mediaContentAdvisory.findFirst({
-            where: { ratingKey, serverId }
-        });
-        if (stored) {
-            return {
-                success: true,
-                advisory: {
-                    nudity: stored.nudityLevel || "None",
-                    violence: stored.violenceLevel || "None",
-                    profanity: stored.profanityLevel || "None",
-                    alcohol: stored.alcoholLevel || "None",
-                    frightening: stored.frighteningLevel || "None",
-                    certificate: stored.mpaaRating,
-                    summary: stored.leavingReason,
-                    source: "cache"
-                }
-            };
+    try {
+        await verifyAdmin();
+        if (!metadata || !metadata.title) {
+            const stored = await prisma.mediaContentAdvisory.findFirst({
+                where: { ratingKey, serverId }
+            });
+            if (stored) {
+                return {
+                    success: true,
+                    advisory: {
+                        nudity: stored.nudityLevel || "None",
+                        violence: stored.violenceLevel || "None",
+                        profanity: stored.profanityLevel || "None",
+                        alcohol: stored.alcoholLevel || "None",
+                        frightening: stored.frighteningLevel || "None",
+                        certificate: stored.mpaaRating,
+                        summary: stored.leavingReason,
+                        source: "cache"
+                    }
+                };
+            }
+            return { success: false, error: "Item metadata required to inspect advisory." };
         }
-        return { success: false, error: "Item metadata required to inspect advisory." };
+
+        const advisory = await resolveParentalAdvisory({
+            ratingKey,
+            title: metadata.title,
+            year: metadata.year,
+            type: metadata.type,
+            imdbId: metadata.imdbId,
+            contentRating: metadata.contentRating
+        }, serverId);
+
+        return {
+            success: true,
+            advisory
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Inspect parental advisory failed: ${e.message}`);
+        return { success: false, error: e.message || "Inspect parental advisory failed." } as any;
     }
-
-    const advisory = await resolveParentalAdvisory({
-        ratingKey,
-        title: metadata.title,
-        year: metadata.year,
-        type: metadata.type,
-        imdbId: metadata.imdbId,
-        contentRating: metadata.contentRating
-    }, serverId);
-
-    return {
-        success: true,
-        advisory
-    };
 }
 
 /**
@@ -5777,9 +5910,14 @@ export async function saveItemParentalAdvisoryAction(
     title: string,
     advisory: any
 ) {
-    await verifyAdmin();
-    await saveParentalAdvisory(ratingKey, serverId, title, advisory);
-    return { success: true };
+    try {
+        await verifyAdmin();
+        await saveParentalAdvisory(ratingKey, serverId, title, advisory);
+        return { success: true };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Save parental advisory failed: ${e.message}`);
+        return { success: false, error: e.message || "Save parental advisory failed." };
+    }
 }
 
 function parseGitHubRepoUrl(input: string): { owner: string; repo: string; branch: string; subpath: string } | null {
@@ -6065,8 +6203,9 @@ export async function getPresetBadgePacksAction() {
  * Server action to discover and scan badge images from any GitHub repository.
  */
 export async function fetchGitHubBadgeRepoAction(repoInput: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const parsed = parseGitHubRepoUrl(repoInput);
         if (!parsed) {
             return {
@@ -6208,12 +6347,12 @@ export async function importGitHubBadgesAction(badges: Array<{
     width?: number;
     height?: number;
 }>) {
-    await verifyAdmin();
-    if (!badges || badges.length === 0) {
-        return { success: false, error: "No badges selected for download." };
-    }
-
     try {
+        await verifyAdmin();
+        if (!badges || badges.length === 0) {
+            return { success: false, error: "No badges selected for download." };
+        }
+
         const badgesDir = path.join(process.cwd(), "data", "custom_badges");
         if (!fs.existsSync(badgesDir)) {
             fs.mkdirSync(badgesDir, { recursive: true });
@@ -6302,8 +6441,9 @@ export async function importGitHubBadgesAction(badges: Array<{
  * Server action to download and install all preset Kometa overlay packs in bulk with 1-click.
  */
 export async function downloadAllKometaPacksAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         let totalImported = 0;
         const results: string[] = [];
 
@@ -6344,8 +6484,9 @@ export async function downloadAllKometaPacksAction() {
  * Server action to import local Kometa overlay assets (e.g. from kometa_assets folder) into the custom badge vault.
  */
 export async function importLocalKometaAssetsAction(folderPath?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const targetDir = folderPath && folderPath.trim() 
             ? folderPath.trim() 
             : path.join(process.cwd(), "kometa_assets");
@@ -6477,8 +6618,9 @@ export interface ArrItemStatus {
  * Server action to list all configured Radarr and Sonarr instances for Agregarr / Curation mapping.
  */
 export async function getArrInstancesListAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const radarrApps = await prisma.mediaApp.findMany({
             where: { type: "radarr" },
             select: { id: true, name: true, type: true, url: true, externalUrl: true }
@@ -6659,8 +6801,9 @@ export async function getTrendingAndPlaceholderMediaAction(
     sectionKey?: string,
     category: "all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical" = "all"
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         // 1. Detect section type (Movies vs TV) if server and section are provided
         let isTvSection = false;
         let isMovieSection = false;
@@ -6980,8 +7123,9 @@ export async function getPlaceholderPreviewDataUrlAction(
         network?: string;
     } = {}
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const buffer = await generatePlaceholderPosterBuffer(posterUrl, title, {
             type: options.bannerType || "not_requested",
             customText: options.bannerText || "NOT REQUESTED",
@@ -7390,8 +7534,13 @@ export async function createPlaceholderItemAction(
         network?: string;
     }
 ) {
-    await verifyAdmin();
-    return await createPlaceholderItemInternal(serverId, sectionKey, itemData);
+    try {
+        await verifyAdmin();
+        return await createPlaceholderItemInternal(serverId, sectionKey, itemData);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Create placeholder failed: ${e.message}`);
+        return { success: false, error: e.message || "Create placeholder failed" } as any;
+    }
 }
 
 /**
@@ -7844,8 +7993,9 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
  * Server action to manually trigger placeholder generation for a collection
  */
 export async function generateCollectionPlaceholdersAction(collectionId: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
         if (!collection) return { success: false, error: "Collection not found.", message: "Collection not found." };
         return await generateCollectionPlaceholdersInternal(collection);
@@ -8010,8 +8160,13 @@ export async function tagAllPlaceholdersInPlexAction(
     serverId?: string,
     sectionKey?: string
 ) {
-    await verifyAdmin();
-    return await tagAllPlaceholdersInPlexInternal(serverId, sectionKey);
+    try {
+        await verifyAdmin();
+        return await tagAllPlaceholdersInPlexInternal(serverId, sectionKey);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Tag placeholders failed: ${e.message}`);
+        return { success: false, error: e.message || "Tag placeholders failed" } as any;
+    }
 }
 
 /**
@@ -8027,9 +8182,11 @@ export async function deployFilteredSmartHubAction(
     subtype: FilteredHubSubtype = "recently_added",
     customTitle?: string
 ): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string }> {
-    await verifyAdmin();
-    await ensureSchemaColumns();
     try {
+
+        await verifyAdmin();
+
+        await ensureSchemaColumns();
         // Step 1: Run placeholder sweep to ensure all existing placeholders on this server are tagged with trailer-placeholder label
         try {
             await tagAllPlaceholdersInPlexInternal(serverId, sectionKey);
@@ -8283,8 +8440,9 @@ export async function deployAllFilteredSmartHubsAction(
     serverId: string,
     sectionKey: string
 ): Promise<{ success: boolean; message: string; error?: string; results: any[] }> {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) {
             return { success: false, error: "Could not connect to Plex server.", message: "Could not connect to Plex server.", results: [] };
@@ -8319,8 +8477,9 @@ export async function deployAllFilteredSmartHubsAction(
  * Radarr/Sonarr monitored status, release dates, trailers, and smart banner suggestions.
  */
 export async function getCollectionMediaPreviewAction(collectionId: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
         if (!collection) return { success: false, error: "Collection not found.", items: [] };
 
@@ -8890,16 +9049,22 @@ export async function cleanupAvailablePlaceholdersInternal(
  * Server action to manually trigger cleanup of placeholders for media that is now available in the library.
  */
 export async function cleanupAvailablePlaceholdersAction(serverId?: string, sectionKey?: string) {
-    await verifyAdmin();
-    return await cleanupAvailablePlaceholdersInternal(serverId, sectionKey);
+    try {
+        await verifyAdmin();
+        return await cleanupAvailablePlaceholdersInternal(serverId, sectionKey);
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `Cleanup placeholders failed: ${e.message}`);
+        return { success: false, error: e.message || "Cleanup placeholders failed" } as any;
+    }
 }
 
 /**
  * Server action to recursively fix filesystem permissions (chmod 0777/0666) across all Coming Soon placeholder share folders.
  */
 export async function fixPlaceholderPermissionsAction() {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const comingSoonShares: Record<string, string> = settings?.comingSoonShares 
             ? JSON.parse(settings.comingSoonShares) 
@@ -8958,8 +9123,9 @@ export async function fixPlaceholderPermissionsAction() {
  * Server action to manually delete a single placeholder folder from disk and remove its advisory record.
  */
 export async function deletePlaceholderFolderAction(folderPath: string, tmdbId?: string | number) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         if (!folderPath || !fs.existsSync(folderPath)) {
             if (tmdbId) {
                 await prisma.mediaContentAdvisory.deleteMany({
@@ -8991,8 +9157,9 @@ export async function deletePlaceholderFolderAction(folderPath: string, tmdbId?:
  * Reads a local Kometa YAML configuration file from disk.
  */
 export async function readLocalKometaConfigAction(customPath?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         const candidatePaths: string[] = [];
         if (customPath && customPath.trim()) {
             candidatePaths.push(customPath.trim());
@@ -9046,8 +9213,9 @@ export async function readLocalKometaConfigAction(customPath?: string) {
  * Inspects and parses a Kometa YAML configuration file (from disk or string).
  */
 export async function inspectKometaConfigFileAction(yamlContent?: string, customPath?: string) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         let content = yamlContent;
         let source = "uploaded_content";
 
@@ -9111,8 +9279,9 @@ export async function importKometaConfigAction(
     paramsOrYaml?: string | ImportKometaConfigOptions,
     targetServerId?: string
 ) {
-    await verifyAdmin();
     try {
+
+        await verifyAdmin();
         let content: string | undefined;
         let customPath: string | undefined;
         let selectedServerId = targetServerId || "main";
