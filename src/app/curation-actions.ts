@@ -6795,6 +6795,7 @@ export async function getArrMonitoredIndex(options?: {
                                 hasFile,
                                 status: s.status,
                                 isReleased,
+                                digitalRelease: s.firstAired || s.nextAiring || undefined,
                                 appType: "sonarr",
                                 appName: app.name
                             };
@@ -7026,15 +7027,18 @@ export async function getTrendingAndPlaceholderMediaAction(
             } else if (!isReleased) {
                 // Requested / monitored in Radarr or Sonarr, but NOT released yet -> COMING SOON MONITORED
                 arrStatus = "COMING_SOON";
-                if (item.digitalReleaseDate) {
-                    const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                const futureDateStr = item.digitalReleaseDate || arrItem?.digitalRelease || item.releaseDate || arrItem?.physicalRelease || item.theatricalReleaseDate || arrItem?.inCinemas;
+                const futureDate = futureDateStr ? new Date(futureDateStr) : null;
+
+                if (futureDate && !isNaN(futureDate.getTime()) && futureDate > now) {
+                    const daysToRel = Math.ceil((futureDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                     if (daysToRel > 0 && daysToRel <= 30) {
                         suggestedBannerType = "countdown";
-                        suggestedBannerText = `STREAMING IN ${daysToRel} DAYS`;
+                        suggestedBannerText = `STREAMING IN ${daysToRel} ${daysToRel === 1 ? 'DAY' : 'DAYS'}`;
                         suggestedBannerTheme = "indigo-purple";
                     } else {
                         suggestedBannerType = "digital_release";
-                        suggestedBannerText = `DIGITAL RELEASE ON ${formatNiceDate(item.digitalReleaseDate).toUpperCase()}`;
+                        suggestedBannerText = `DIGITAL RELEASE ON ${formatNiceDate(futureDateStr).toUpperCase()}`;
                         suggestedBannerTheme = "cinematic-blue";
                     }
                 } else {
@@ -7042,7 +7046,7 @@ export async function getTrendingAndPlaceholderMediaAction(
                     suggestedBannerText = "COMING SOON MONITORED";
                     suggestedBannerTheme = "amber-gold";
                 }
-                statusBadgeText = "COMING SOON MONITORED";
+                statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON MONITORED";
                 statusBadgeColor = "amber";
             } else {
                 // Requested / monitored in Radarr or Sonarr AND already released -> DOWNLOADING SOON
@@ -7819,6 +7823,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                                 posterPath: s.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
                                 mediaType: "tv" as const,
                                 releaseDate: s.firstAired || (s.year ? `${s.year}-01-01` : undefined),
+                                digitalReleaseDate: s.firstAired || undefined,
                                 imdbId: s.imdbId
                             })));
                         }
@@ -7941,14 +7946,17 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     bannerType = "not_requested_yet";
                 } else if (!isReleased) {
                     // Monitored in Radarr/Sonarr, but unreleased -> COMING SOON MONITORED
-                    if (item.digitalReleaseDate) {
-                        const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    const futureDateStr = item.digitalReleaseDate || arrItem?.digitalRelease || item.releaseDate || arrItem?.physicalRelease || item.theatricalReleaseDate || arrItem?.inCinemas;
+                    const futureDate = futureDateStr ? new Date(futureDateStr) : null;
+
+                    if (futureDate && !isNaN(futureDate.getTime()) && futureDate > now) {
+                        const daysToRel = Math.ceil((futureDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                         if (daysToRel > 0 && daysToRel <= 30) {
-                            bannerText = `STREAMING IN ${daysToRel} DAYS`;
+                            bannerText = `STREAMING IN ${daysToRel} ${daysToRel === 1 ? 'DAY' : 'DAYS'}`;
                             bannerTheme = "indigo-purple";
                             bannerType = "countdown";
                         } else {
-                            bannerText = `DIGITAL RELEASE ON ${new Date(item.digitalReleaseDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`;
+                            bannerText = `DIGITAL RELEASE ON ${futureDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}`;
                             bannerTheme = "cinematic-blue";
                             bannerType = "digital_release";
                         }
@@ -7966,8 +7974,14 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
 
                 const customTpl = bannerTemplates[bannerType];
                 if (customTpl?.text) {
-                    const daysToRel = (digDate && digDate > now) ? Math.ceil((digDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 14;
-                    const dateFormatted = digDate ? digDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase() : "";
+                    const futureDateStr = item.digitalReleaseDate || arrItem?.digitalRelease || item.releaseDate || arrItem?.physicalRelease || item.theatricalReleaseDate || arrItem?.inCinemas;
+                    const futureDate = futureDateStr ? new Date(futureDateStr) : null;
+                    const daysToRel = (futureDate && !isNaN(futureDate.getTime()) && futureDate > now)
+                        ? Math.ceil((futureDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                        : 14;
+                    const dateFormatted = (futureDate && !isNaN(futureDate.getTime()))
+                        ? futureDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()
+                        : "";
                     bannerText = customTpl.text
                         .replace(/\{date\}/gi, dateFormatted)
                         .replace(/\{days\}/gi, String(daysToRel))
@@ -8742,6 +8756,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                                 posterPath: s.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null,
                                 mediaType: "tv" as const,
                                 releaseDate: s.firstAired || (s.year ? `${s.year}-01-01` : undefined),
+                                digitalReleaseDate: s.firstAired || undefined,
                                 imdbId: s.imdbId
                             })));
                         }
@@ -8851,16 +8866,25 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 statusBadgeColor = "rose";
             } else if (!isReleased) {
                 arrStatus = "COMING_SOON";
-                suggestedBannerType = "coming_soon";
-                if (item.digitalReleaseDate) {
-                    const daysToRel = Math.ceil((new Date(item.digitalReleaseDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                    suggestedBannerText = daysToRel > 0 && daysToRel <= 30
-                        ? `STREAMING IN ${daysToRel} DAYS`
-                        : `STREAMING ${formatNiceDate(item.digitalReleaseDate).toUpperCase()}`;
+                const futureDateStr = item.digitalReleaseDate || arrItem?.digitalRelease || item.releaseDate || arrItem?.physicalRelease || item.theatricalReleaseDate || arrItem?.inCinemas;
+                const futureDate = futureDateStr ? new Date(futureDateStr) : null;
+
+                if (futureDate && !isNaN(futureDate.getTime()) && futureDate > now) {
+                    const daysToRel = Math.ceil((futureDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysToRel > 0 && daysToRel <= 30) {
+                        suggestedBannerType = "countdown";
+                        suggestedBannerText = `STREAMING IN ${daysToRel} ${daysToRel === 1 ? 'DAY' : 'DAYS'}`;
+                        suggestedBannerTheme = "indigo-purple";
+                    } else {
+                        suggestedBannerType = "digital_release";
+                        suggestedBannerText = `DIGITAL RELEASE ON ${formatNiceDate(futureDateStr).toUpperCase()}`;
+                        suggestedBannerTheme = "cinematic-blue";
+                    }
                 } else {
-                    suggestedBannerText = "COMING SOON";
+                    suggestedBannerType = "coming_soon_monitored";
+                    suggestedBannerText = "COMING SOON MONITORED";
+                    suggestedBannerTheme = "amber-gold";
                 }
-                suggestedBannerTheme = "indigo-purple";
                 statusBadgeText = inRadarr ? "IN RADARR (COMING SOON)" : inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON";
                 statusBadgeColor = "amber";
             } else {
