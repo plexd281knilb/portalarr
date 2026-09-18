@@ -487,7 +487,10 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
     }, 0);
 
     const isPlaceholder = Boolean(
-        extractedLabels.some(l => l.toLowerCase() === "trailer-placeholder" || l.toLowerCase() === "placeholder") ||
+        extractedLabels.some(l => {
+            const low = l.toLowerCase();
+            return low === "trailer-placeholder" || low === "coming soon-placeholder" || low === "coming_soon-placeholder" || low === "coming-soon-placeholder" || low.includes("placeholder");
+        }) ||
         (firstPartFile && (firstPartFile.includes(".portalarr-missing") || firstPartFile.includes("edition-Trailer") || firstPartFile.includes("edition-Placeholder") || firstPartFile.endsWith(".disc") || firstPartFile.endsWith(".strm"))) ||
         (rawEditionTitle && (rawEditionTitle.toLowerCase().includes("trailer") || rawEditionTitle.toLowerCase().includes("placeholder"))) ||
         (metadata.title && metadata.title.toLowerCase().includes("trailer (placeholder)")) ||

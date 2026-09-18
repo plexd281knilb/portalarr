@@ -136,15 +136,18 @@ async function verifyAdmin() {
  * Checks if a Plex media item should be excluded based on configured label/tag exclusions.
  * Supports exact matches, hyphen/underscore normalization, and standard placeholder/leaving-soon aliases.
  */
-function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null): boolean {
+function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null, allowPlaceholders: boolean = false): boolean {
     if (!excludedLabelsStr || !excludedLabelsStr.trim()) return false;
-    const rawTokens = excludedLabelsStr.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    let rawTokens = excludedLabelsStr.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (allowPlaceholders) {
+        rawTokens = rawTokens.filter(t => !t.includes("trailer") && !t.includes("placeholder") && !t.includes("coming"));
+    }
     if (rawTokens.length === 0) return false;
 
     const norm = (s: string) => s.toLowerCase().replace(/[-_\s]+/g, "");
     const normalizedTokens = new Set(rawTokens.map(norm));
 
-    const excludesPlaceholders = rawTokens.some(t => 
+    const excludesPlaceholders = !allowPlaceholders && rawTokens.some(t => 
         t.includes("trailer") || t.includes("placeholder") || t.includes("coming")
     );
     if (excludesPlaceholders && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
@@ -1428,10 +1431,30 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
             isMovieSection = sec?.type === "movie";
         } catch {}
 
+        // 5. If placeholders are enabled for this collection, generate/ensure placeholders first so they are present for library sync
+        let placeholdersGenerated = 0;
+        if (collection.includePlaceholders) {
+            try {
+                const placeholderRes = await generateCollectionPlaceholdersInternal(collection);
+                if (placeholderRes.success) {
+                    placeholdersGenerated = placeholderRes.generatedCount;
+                }
+            } catch (pErr: any) {
+                console.warn("[COLL-SYNC] Error running auto-placeholders:", pErr.message);
+            }
+        } else {
+            try {
+                await cleanupAvailablePlaceholdersInternal(collection.serverId || undefined, collection.sectionKey || undefined);
+            } catch (pErr: any) {
+                console.warn("[COLL-SYNC] Error running placeholder cleanup:", pErr.message);
+            }
+        }
+
         const isPlaceholdersCollection = collection.sourceType === "radarr" || 
                                          collection.sourceType === "sonarr" || 
                                          collection.category === "Coming Soon" || 
-                                         collection.sourceQuery === "monitored_missing";
+                                         collection.sourceQuery === "monitored_missing" ||
+                                         Boolean(collection.includePlaceholders);
 
         // Fetch library media items and filter out any excluded labels, cross-media type noise, and trailer stubs
         const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000, undefined, true, !isPlaceholdersCollection);
@@ -1442,7 +1465,7 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
             if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
                 return false;
             }
-            if (isPlexItemExcludedByLabels(it, collection.excludedLabels)) {
+            if (isPlexItemExcludedByLabels(it, collection.excludedLabels, isPlaceholdersCollection)) {
                 return false;
             }
             return true;
@@ -1644,7 +1667,7 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 const builtinTitles = new Set(builtinList.map(b => b.title.toLowerCase().trim()));
 
                 const builtinMatches = libraryItems.filter(it => {
-                    if (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer") {
+                    if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
                         return false;
                     }
                     const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
@@ -1743,25 +1766,6 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                     collectionRatingKey: deployRes.collectionRatingKey,
                     message: `Synced Filtered Smart Hub "${collection.title}" to Plex!`
                 };
-            }
-        }
-
-        // Run Coming Soon placeholders if enabled
-        let placeholdersGenerated = 0;
-        if (collection.includePlaceholders) {
-            try {
-                const placeholderRes = await generateCollectionPlaceholdersInternal(collection);
-                if (placeholderRes.success) {
-                    placeholdersGenerated = placeholderRes.generatedCount;
-                }
-            } catch (pErr: any) {
-                console.warn("[COLL-SYNC] Error running auto-placeholders:", pErr.message);
-            }
-        } else {
-            try {
-                await cleanupAvailablePlaceholdersInternal(collection.serverId || undefined, collection.sectionKey || undefined);
-            } catch (pErr: any) {
-                console.warn("[COLL-SYNC] Error running placeholder cleanup:", pErr.message);
             }
         }
 
@@ -1893,6 +1897,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
 
         const isPlaceholdersCollection = collectionConfig.category === "Coming Soon" || 
                                           collectionConfig.sourceQuery === "monitored_missing" ||
+                                          collectionConfig.sourceType === "radarr" ||
+                                          collectionConfig.sourceType === "sonarr" ||
                                           Boolean(collectionConfig.includePlaceholders);
         const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 5000, undefined, true, !isPlaceholdersCollection);
 
@@ -1902,7 +1908,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
             if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
                 return false;
             }
-            if (isPlexItemExcludedByLabels(it, collectionConfig.excludedLabels)) {
+            if (isPlexItemExcludedByLabels(it, collectionConfig.excludedLabels, isPlaceholdersCollection)) {
                 return false;
             }
             return true;
@@ -7467,6 +7473,10 @@ export async function createPlaceholderItemInternal(
         genre?: string;
         quality?: string;
         network?: string;
+        sourceType?: "radarr_monitored" | "collection" | string;
+        collectionId?: string;
+        collectionTitle?: string;
+        labelType?: "Coming Soon-placeholder" | "trailer-placeholder" | string;
     }
 ) {
     try {
@@ -7582,6 +7592,11 @@ export async function createPlaceholderItemInternal(
         let shareSaved = false;
         let createdFolderPath = "";
 
+        // Determine effective label type: "Coming Soon-placeholder" for Radarr/Sonarr monitored vs "trailer-placeholder" for collection placeholders
+        const effectiveSourceType = itemData.sourceType || 
+            (itemData.bannerType === "coming_soon_monitored" || itemData.bannerType === "countdown" || itemData.bannerType === "digital_release" || itemData.bannerType === "downloading_soon" || itemData.labelType === "Coming Soon-placeholder" ? "radarr_monitored" : "collection");
+        const targetLabel = itemData.labelType || (effectiveSourceType === "radarr_monitored" ? "Coming Soon-placeholder" : "trailer-placeholder");
+
         // If a coming soon share is configured, write the placeholder folder structure
         if (sharePath && fs.existsSync(sharePath)) {
             const folderName = `${cleanTitle}${yearStr}`;
@@ -7644,7 +7659,7 @@ export async function createPlaceholderItemInternal(
 
                 setPermissionsRecursive(targetDir, 0o777, 0o666);
             } else {
-                // Movies: Create Movie folder with actual playable MP4 trailer
+                // Movies: Create Movie folder with actual playable MP4 trailer and edition-Trailer tag
                 const movieTrailerMp4 = path.join(targetDir, `${cleanTitle}${yearStr} {tmdb-${itemData.tmdbId}} {edition-Trailer}.mp4`);
                 await downloadOrCopyTrailerVideo({
                     title: itemData.title,
@@ -7677,10 +7692,10 @@ export async function createPlaceholderItemInternal(
 
             shareSaved = true;
             createdFolderPath = targetDir;
-            logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}" (playable MP4 trailer)`);
+            logger.addLog("SUCCESS", "CURATION", `Created coming soon placeholder on disk for "${itemData.title}" at "${targetDir}" (${targetLabel})`);
         }
 
-        // Trigger section refresh & tag label trailer-placeholder in Plex if the item is present
+        // Trigger section refresh & tag label (Coming Soon-placeholder vs trailer-placeholder) and edition Trailer in Plex
         try {
             if (serverId && sectionKey) {
                 const resolved = await resolveWorkingPlexServerConnection(serverId);
@@ -7694,7 +7709,7 @@ export async function createPlaceholderItemInternal(
                         it.title.toLowerCase().trim() === itemData.title.toLowerCase().trim()
                     );
                     if (match?.ratingKey) {
-                        await addLabelToPlexItem(urlsToTry, resolved.token, match.ratingKey, "trailer-placeholder");
+                        await addLabelToPlexItem(urlsToTry, resolved.token, match.ratingKey, targetLabel);
 
                         if (!isTv) {
                             await updatePlexItemEdition(urlsToTry, resolved.token, match.ratingKey, "Trailer");
@@ -7702,14 +7717,14 @@ export async function createPlaceholderItemInternal(
                             const seasons = await getPlexItemChildrenMetadata(urlsToTry, resolved.token, match.ratingKey);
                             const season0 = seasons.find(s => s.index === 0 || s.title?.toLowerCase().includes("specials"));
                             if (season0?.ratingKey) {
-                                await addLabelToPlexItem(urlsToTry, resolved.token, String(season0.ratingKey), "trailer-placeholder");
+                                await addLabelToPlexItem(urlsToTry, resolved.token, String(season0.ratingKey), targetLabel);
                                 const episodes = await getPlexItemChildrenMetadata(urlsToTry, resolved.token, String(season0.ratingKey));
                                 const ep0 = episodes.find(e => e.index === 0 || e.title?.toLowerCase().includes("trailer"));
                                 if (ep0?.ratingKey) {
                                     if (ep0.title !== "Trailer (Placeholder)") {
                                         await updatePlexItemTitle(urlsToTry, resolved.token, String(ep0.ratingKey), "Trailer (Placeholder)");
                                     }
-                                    await addLabelToPlexItem(urlsToTry, resolved.token, String(ep0.ratingKey), "trailer-placeholder");
+                                    await addLabelToPlexItem(urlsToTry, resolved.token, String(ep0.ratingKey), targetLabel);
                                 }
                             }
                         }
@@ -7718,8 +7733,46 @@ export async function createPlaceholderItemInternal(
             }
         } catch {}
 
-        // Save record into MediaContentAdvisory for tracking and display
+        // Save record into MediaContentAdvisory for tracking and requirement validation
         const placeholderKey = `placeholder_tmdb_${itemData.tmdbId}`;
+        const existingAdv = await prisma.mediaContentAdvisory.findFirst({
+            where: {
+                ratingKey: placeholderKey,
+                ...(serverId ? { serverId } : {})
+            }
+        });
+        let existingTags: any = {};
+        if (existingAdv?.customTags) {
+            try { existingTags = JSON.parse(existingAdv.customTags); } catch {}
+        }
+
+        const collSet = new Set<string>(existingTags.collections || []);
+        if (itemData.collectionId) collSet.add(itemData.collectionId);
+
+        const collTitleSet = new Set<string>(existingTags.collectionTitles || []);
+        if (itemData.collectionTitle) collTitleSet.add(itemData.collectionTitle);
+
+        const customTagsPayload = JSON.stringify({
+            isPlaceholder: true,
+            placeholderSource: effectiveSourceType,
+            labelType: targetLabel,
+            collections: Array.from(collSet),
+            collectionTitles: Array.from(collTitleSet),
+            bannerText,
+            bannerTheme,
+            bannerPosition,
+            bannerFontSize,
+            bannerType,
+            mediaType: itemData.mediaType,
+            year: itemData.year,
+            posterPath: itemData.posterPath,
+            sharePath: createdFolderPath || existingTags.sharePath || null,
+            trailerKey: trailerKey || existingTags.trailerKey || null,
+            trailerUrl: trailerUrl || existingTags.trailerUrl || null,
+            createdAt: existingTags.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+
         await prisma.mediaContentAdvisory.upsert({
             where: {
                 ratingKey_serverId: {
@@ -7731,21 +7784,7 @@ export async function createPlaceholderItemInternal(
                 title: itemData.title,
                 tmdbId: String(itemData.tmdbId),
                 leavingReason: `Placeholder: ${bannerText}`,
-                customTags: JSON.stringify({
-                    isPlaceholder: true,
-                    bannerText,
-                    bannerTheme,
-                    bannerPosition,
-                    bannerFontSize,
-                    bannerType,
-                    mediaType: itemData.mediaType,
-                    year: itemData.year,
-                    posterPath: itemData.posterPath,
-                    sharePath: createdFolderPath || null,
-                    trailerKey: trailerKey || null,
-                    trailerUrl: trailerUrl || null,
-                    createdAt: new Date().toISOString()
-                })
+                customTags: customTagsPayload
             },
             create: {
                 ratingKey: placeholderKey,
@@ -7753,21 +7792,7 @@ export async function createPlaceholderItemInternal(
                 title: itemData.title,
                 tmdbId: String(itemData.tmdbId),
                 leavingReason: `Placeholder: ${bannerText}`,
-                customTags: JSON.stringify({
-                    isPlaceholder: true,
-                    bannerText,
-                    bannerTheme,
-                    bannerPosition,
-                    bannerFontSize,
-                    bannerType,
-                    mediaType: itemData.mediaType,
-                    year: itemData.year,
-                    posterPath: itemData.posterPath,
-                    sharePath: createdFolderPath || null,
-                    trailerKey: trailerKey || null,
-                    trailerUrl: trailerUrl || null,
-                    createdAt: new Date().toISOString()
-                })
+                customTags: customTagsPayload
             }
         });
 
@@ -8255,12 +8280,14 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const bannerPosition = (customTpl?.pos || "bottom") as "bottom" | "top" | "corner";
                 const bannerFontSize = customTpl?.fontSize || settings?.placeholderBannerFontSize || 44;
 
-                const year = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
+                const isMonitoredPlaceholder = isMonitored && (collection.sourceType === "radarr" || collection.sourceType === "sonarr" || collection.category === "Coming Soon");
+                const targetLabel = isMonitoredPlaceholder ? "Coming Soon-placeholder" : "trailer-placeholder";
+                const placeholderSource = isMonitoredPlaceholder ? "radarr_monitored" : "collection";
 
                 await createPlaceholderItemInternal(serverId, collection.sectionKey || "", {
                     tmdbId: item.id,
                     title: item.title,
-                    year,
+                    year: itemYear,
                     mediaType: item.mediaType || "movie",
                     posterPath: item.posterPath || null,
                     overview: item.overview,
@@ -8268,7 +8295,11 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     bannerType,
                     bannerTheme,
                     bannerPosition,
-                    bannerFontSize
+                    bannerFontSize,
+                    sourceType: placeholderSource,
+                    labelType: targetLabel,
+                    collectionId: collection.id,
+                    collectionTitle: collection.title
                 });
 
                 generatedCount++;
@@ -8320,7 +8351,9 @@ export async function generateCollectionPlaceholdersAction(collectionId: string)
 
 /**
  * Master worker to scan Plex library sections, detect all placeholder items (by file path, edition-Trailer, 
- * Coming Soon share location, or advisory placeholder records), and tag them with Plex label "trailer-placeholder".
+ * Coming Soon share location, or advisory placeholder records), and tag them with Plex label:
+ * - "Coming Soon-placeholder" (with edition: Trailer) for Radarr/Sonarr monitored items.
+ * - "trailer-placeholder" (with edition: Trailer) for collection-driven placeholders.
  * Also ensures TV show placeholder episodes (S00E00) are titled "Trailer (Placeholder)" and tagged.
  */
 export async function tagAllPlaceholdersInPlexInternal(
@@ -8349,11 +8382,25 @@ export async function tagAllPlaceholdersInPlexInternal(
             }
         });
 
+        const advByTmdb = new Map<string, { adv: any; tags: any }>();
+        const advByTitle = new Map<string, { adv: any; tags: any }>();
         const placeholderTmdbSet = new Set<string>();
         const placeholderTitleSet = new Set<string>();
+
         for (const adv of placeholderAdvisories) {
-            if (adv.tmdbId) placeholderTmdbSet.add(String(adv.tmdbId));
-            if (adv.title) placeholderTitleSet.add(adv.title.toLowerCase().trim());
+            let tags: any = {};
+            if (adv.customTags) {
+                try { tags = JSON.parse(adv.customTags); } catch {}
+            }
+            if (adv.tmdbId) {
+                advByTmdb.set(String(adv.tmdbId), { adv, tags });
+                placeholderTmdbSet.add(String(adv.tmdbId));
+            }
+            if (adv.title) {
+                const cleanT = adv.title.toLowerCase().trim();
+                advByTitle.set(cleanT, { adv, tags });
+                placeholderTitleSet.add(cleanT);
+            }
         }
 
         // Gather all share directory paths to identify files in Coming Soon shares
@@ -8366,6 +8413,8 @@ export async function tagAllPlaceholdersInPlexInternal(
             if (cfg.movieSharePath) shareDirPaths.push(path.normalize(cfg.movieSharePath).toLowerCase());
             if (cfg.sharePath) shareDirPaths.push(path.normalize(cfg.sharePath).toLowerCase());
         }
+
+        const arrIndex = await getArrMonitoredIndex({ targetServerId });
 
         const mainToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         const plexServers = mainToken ? await getPlexServers(mainToken) : [];
@@ -8420,11 +8469,31 @@ export async function tagAllPlaceholdersInPlexInternal(
                                               (isKnownTitle && (isInComingSoonShare || hasTrailerName || isStubSize));
 
                     if (isPlaceholderItem) {
-                        // 1. Tag item with trailer-placeholder label in Plex
-                        const hasLabel = item.labels?.some(l => l.toLowerCase() === "trailer-placeholder");
-                        if (!hasLabel) {
-                            const success = await addLabelToPlexItem(urlsToTry, token, item.ratingKey, "trailer-placeholder");
+                        const advInfo = (tmdbIdStr ? advByTmdb.get(tmdbIdStr) : undefined) || advByTitle.get(titleLower);
+                        const advTags = advInfo?.tags || {};
+
+                        const arrMovie = tmdbIdStr ? arrIndex.moviesByTmdb.get(tmdbIdStr) : undefined;
+                        const arrSeries = tmdbIdStr ? arrIndex.seriesByTvdb.get(tmdbIdStr) : undefined;
+                        const arrMatch = arrMovie || arrSeries || (titleLower ? arrIndex.moviesByTitle.get(titleLower) : undefined) || (titleLower ? arrIndex.seriesByTitle.get(titleLower) : undefined);
+
+                        const isMonitoredComingSoon = Boolean(
+                            (arrMatch && arrMatch.monitored) || 
+                            advTags.placeholderSource === "radarr_monitored" ||
+                            advTags.labelType === "Coming Soon-placeholder"
+                        );
+
+                        const targetLabel = isMonitoredComingSoon ? "Coming Soon-placeholder" : "trailer-placeholder";
+                        const obsoleteLabel = isMonitoredComingSoon ? "trailer-placeholder" : "Coming Soon-placeholder";
+
+                        // 1. Tag item with targetLabel in Plex & clean up obsolete label
+                        const itemLabels = (item.labels || []).map((l: string) => l.toLowerCase());
+                        const hasTargetLabel = itemLabels.includes(targetLabel.toLowerCase());
+                        if (!hasTargetLabel) {
+                            const success = await addLabelToPlexItem(urlsToTry, token, item.ratingKey, targetLabel);
                             if (success) totalTagged++;
+                        }
+                        if (itemLabels.includes(obsoleteLabel.toLowerCase())) {
+                            await removeLabelFromPlexItem(urlsToTry, token, item.ratingKey, obsoleteLabel);
                         }
 
                         // 2. If movie: set editionTitle to "Trailer" in Plex
@@ -8438,16 +8507,59 @@ export async function tagAllPlaceholdersInPlexInternal(
                                 const seasons = await getPlexItemChildrenMetadata(urlsToTry, token, item.ratingKey);
                                 const season0 = seasons.find(s => s.index === 0 || s.title?.toLowerCase().includes("specials"));
                                 if (season0?.ratingKey) {
-                                    await addLabelToPlexItem(urlsToTry, token, String(season0.ratingKey), "trailer-placeholder");
+                                    await addLabelToPlexItem(urlsToTry, token, String(season0.ratingKey), targetLabel);
+                                    await removeLabelFromPlexItem(urlsToTry, token, String(season0.ratingKey), obsoleteLabel);
+
                                     const episodes = await getPlexItemChildrenMetadata(urlsToTry, token, String(season0.ratingKey));
                                     const ep0 = episodes.find(e => e.index === 0 || e.title?.toLowerCase().includes("trailer"));
                                     if (ep0?.ratingKey) {
                                         if (ep0.title !== "Trailer (Placeholder)") {
                                             await updatePlexItemTitle(urlsToTry, token, String(ep0.ratingKey), "Trailer (Placeholder)");
                                         }
-                                        await addLabelToPlexItem(urlsToTry, token, String(ep0.ratingKey), "trailer-placeholder");
+                                        await addLabelToPlexItem(urlsToTry, token, String(ep0.ratingKey), targetLabel);
+                                        await removeLabelFromPlexItem(urlsToTry, token, String(ep0.ratingKey), obsoleteLabel);
                                     }
                                 }
+                            } catch {}
+                        }
+
+                        // 4. Upsert advisory tracking record if not present
+                        if (!advInfo && (tmdbIdStr || item.title)) {
+                            const placeholderKey = tmdbIdStr ? `placeholder_tmdb_${tmdbIdStr}` : `placeholder_title_${encodeURIComponent(titleLower)}`;
+                            const customTagsPayload = JSON.stringify({
+                                isPlaceholder: true,
+                                placeholderSource: isMonitoredComingSoon ? "radarr_monitored" : "collection",
+                                labelType: targetLabel,
+                                collections: [],
+                                collectionTitles: [],
+                                mediaType: isTv ? "tv" : "movie",
+                                year: item.year,
+                                sharePath: isInComingSoonShare ? item.filePath : null,
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString()
+                            });
+                            try {
+                                await prisma.mediaContentAdvisory.upsert({
+                                    where: {
+                                        ratingKey_serverId: {
+                                            ratingKey: placeholderKey,
+                                            serverId: srvId
+                                        }
+                                    },
+                                    update: {
+                                        title: item.title,
+                                        tmdbId: tmdbIdStr || undefined,
+                                        customTags: customTagsPayload
+                                    },
+                                    create: {
+                                        ratingKey: placeholderKey,
+                                        serverId: srvId,
+                                        title: item.title,
+                                        tmdbId: tmdbIdStr || undefined,
+                                        leavingReason: `Placeholder: ${targetLabel}`,
+                                        customTags: customTagsPayload
+                                    }
+                                });
                             } catch {}
                         }
                     }
@@ -8455,11 +8567,11 @@ export async function tagAllPlaceholdersInPlexInternal(
             }
         }
 
-        logger.addLog("SUCCESS", "CURATION", `Placeholder sweep completed: verified and tagged ${totalTagged} items with "trailer-placeholder" in Plex.`);
+        logger.addLog("SUCCESS", "CURATION", `Placeholder sweep completed: verified and tagged ${totalTagged} items with dual labels (Coming Soon-placeholder & trailer-placeholder) in Plex.`);
         return {
             success: true,
             taggedCount: totalTagged,
-            message: `Verified and labeled ${totalTagged} placeholder trailers with "trailer-placeholder" in Plex.`
+            message: `Verified and labeled ${totalTagged} placeholder trailers with dual labels in Plex.`
         };
     } catch (e: any) {
         logger.addLog("ERROR", "CURATION", `Error in tagAllPlaceholdersInPlexInternal: ${e.message}`);
@@ -8468,7 +8580,7 @@ export async function tagAllPlaceholdersInPlexInternal(
 }
 
 /**
- * Server action to tag all placeholder items in Plex with "trailer-placeholder"
+ * Server action to tag all placeholder items in Plex with dual labels (Coming Soon-placeholder & trailer-placeholder)
  */
 export async function tagAllPlaceholdersInPlexAction(
     serverId?: string,
@@ -8549,31 +8661,32 @@ export async function deployFilteredSmartHubInternal(
             }
         }
 
-        // Build Filter URI that excludes placeholders
+        // Build Filter URI that excludes placeholders (both trailer-placeholder and Coming Soon-placeholder)
         let filterUri = "";
         const trailerLabel = encodeURIComponent("trailer-placeholder");
+        const comingSoonLabel = encodeURIComponent("Coming Soon-placeholder");
         const trailerTitle = encodeURIComponent("Trailer (Placeholder)");
         const limitParam = (maxItems && maxItems > 0) ? `&limit=${maxItems}` : "";
 
         if (subtype === "recently_added") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${trailerLabel}&label!=${comingSoonLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&label!=${comingSoonLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released_episodes") {
-            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
+            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
         } else if (subtype === "top_unwatched") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=${trailerLabel}&label!=${comingSoonLabel}&editionTitle!=Trailer${limitParam}`;
             }
         }
 
@@ -9387,6 +9500,40 @@ export async function cleanupAvailablePlaceholdersInternal(
             }
         }
 
+        // Load active collections with placeholders enabled
+        const activeCollections = await prisma.mediaCollection.findMany({
+            where: {
+                OR: [
+                    { includePlaceholders: true },
+                    { category: "Coming Soon" },
+                    { sourceType: "radarr" },
+                    { sourceType: "sonarr" }
+                ]
+            }
+        });
+        const activeCollectionIds = new Set(activeCollections.map(c => c.id));
+
+        // Load all placeholder advisories to check collection associations and source types
+        const placeholderAdvisories = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                OR: [
+                    { ratingKey: { startsWith: "placeholder_tmdb_" } },
+                    { leavingReason: { startsWith: "Placeholder:" } },
+                    { customTags: { contains: '"isPlaceholder":true' } }
+                ]
+            }
+        });
+        const advByTmdb = new Map<string, { adv: any; tags: any }>();
+        const advByTitle = new Map<string, { adv: any; tags: any }>();
+        for (const adv of placeholderAdvisories) {
+            let tags: any = {};
+            if (adv.customTags) {
+                try { tags = JSON.parse(adv.customTags); } catch {}
+            }
+            if (adv.tmdbId) advByTmdb.set(String(adv.tmdbId), { adv, tags });
+            if (adv.title) advByTitle.set(adv.title.toLowerCase().trim(), { adv, tags });
+        }
+
         let removedCount = 0;
         const removedItems: string[] = [];
         const arrIndex = await getArrMonitoredIndex({ targetServerId });
@@ -9406,8 +9553,9 @@ export async function cleanupAvailablePlaceholdersInternal(
                     const files = fs.readdirSync(folderPath);
                     const discFile = files.find(f => f.endsWith(".disc"));
                     const strmFile = files.find(f => f.endsWith(".strm"));
+                    const trailerMp4File = files.find(f => f.includes("edition-Trailer") && (f.endsWith(".mp4") || f.endsWith(".mkv")));
 
-                    if (!isMissingMarker && !discFile && !strmFile) {
+                    if (!isMissingMarker && !discFile && !strmFile && !trailerMp4File) {
                         // Not a placeholder created by Portalarr, do not delete
                         continue;
                     }
@@ -9462,6 +9610,12 @@ export async function cleanupAvailablePlaceholdersInternal(
                         isAvailable = true;
                     }
 
+                    const advInfo = (itemTmdbId ? advByTmdb.get(itemTmdbId) : undefined) || advByTitle.get(cleanTitle);
+                    const advTags = advInfo?.tags || {};
+                    const isCollectionPlaceholder = advTags.placeholderSource === "collection" || 
+                                                    advTags.labelType === "trailer-placeholder" || 
+                                                    (Array.isArray(advTags.collections) && advTags.collections.length > 0);
+
                     const parsedYear = itemYear ? parseInt(itemYear, 10) : null;
                     const currentYear = now.getFullYear();
                     const isLegacyCatalogPlaceholder = parsedYear !== null && !isNaN(parsedYear) && parsedYear < currentYear;
@@ -9491,11 +9645,40 @@ export async function cleanupAvailablePlaceholdersInternal(
                         }
                     }
 
-                    // A placeholder must be removed if:
-                    // 1. Full real media is acquired in Plex (isAvailable = true)
-                    // 2. It is an older catalog release from a prior year (isLegacyCatalogPlaceholder)
-                    // 3. It lacks a concrete release date within the active Coming Soon window (!hasValidComingSoonDate)
-                    const shouldDelete = isAvailable || isLegacyCatalogPlaceholder || (!isAvailable && !hasValidComingSoonDate);
+                    // Determine deletion criteria:
+                    // 1. If full real media is acquired in Plex -> ALWAYS delete placeholder immediately.
+                    // 2. If it's a Collection Placeholder (e.g. Trending, Popular, Kids, etc.):
+                    //    - Retain if at least one active collection with includePlaceholders: true still references it.
+                    //    - Delete if no active collections require it.
+                    // 3. If it's a Radarr/Sonarr Coming Soon Monitored Placeholder:
+                    //    - Retain if it has a valid upcoming release date.
+                    //    - Delete if unmonitored, expired, or an older catalog release without an upcoming date.
+                    let shouldDelete = false;
+                    let deleteReason = "";
+
+                    if (isAvailable) {
+                        shouldDelete = true;
+                        deleteReason = "full media is now available in Plex";
+                    } else if (isCollectionPlaceholder) {
+                        const associatedColls: string[] = Array.isArray(advTags.collections) ? advTags.collections : [];
+                        const hasActiveCollection = associatedColls.length === 0
+                            ? activeCollections.some(c => Boolean(c.includePlaceholders))
+                            : associatedColls.some(cid => activeCollectionIds.has(cid));
+
+                        if (!hasActiveCollection) {
+                            shouldDelete = true;
+                            deleteReason = "associated collection has been removed or no longer requires placeholders";
+                        }
+                    } else {
+                        // Radarr/Sonarr Coming Soon Monitored Placeholder
+                        if (isLegacyCatalogPlaceholder) {
+                            shouldDelete = true;
+                            deleteReason = `item is an older catalog release (${parsedYear}) and not an active upcoming title`;
+                        } else if (!hasValidComingSoonDate) {
+                            shouldDelete = true;
+                            deleteReason = "item is no longer monitored or lacks a verified release date within the Coming Soon window";
+                        }
+                    }
 
                     if (shouldDelete) {
                         try {
@@ -9514,12 +9697,7 @@ export async function cleanupAvailablePlaceholdersInternal(
                                 });
                             }
 
-                            const reason = isAvailable 
-                                ? "full media is now available in Plex" 
-                                : isLegacyCatalogPlaceholder 
-                                    ? `item is an older catalog release (${parsedYear}) and not a valid Coming Soon title`
-                                    : "item does not have a verified release date within the active Coming Soon window";
-                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted Coming Soon placeholder for "${itemTitle || entry.name}" at "${folderPath}" because ${reason}.`);
+                            logger.addLog("INFO", "CURATION", `[PLACEHOLDER-CLEANUP] Auto-deleted placeholder for "${itemTitle || entry.name}" at "${folderPath}" because ${deleteReason}.`);
                         } catch (rmErr: any) {
                             console.error(`[PLACEHOLDER-CLEANUP] Failed removing folder "${folderPath}":`, rmErr);
                         }
