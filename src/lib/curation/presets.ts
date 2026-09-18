@@ -447,8 +447,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "tag:leaving-soon",
         mediaType: "both",
         defaultSort: "custom",
-        defaultHomeOrder: 0, // #1 TOP PRIORITY
-        defaultSortPrefix: "!00_LeavingSoon"
+        defaultHomeOrder: 5,
+        defaultSortPrefix: "!05_LeavingSoon"
     },
     {
         id: "trending-this-week",

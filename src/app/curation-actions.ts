@@ -2800,20 +2800,34 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
             }
         });
 
+        // Determine effective order index and sort prefix from collection or settings (defaulting to slot 5 instead of slot 0)
+        const effectiveOrderIndex: number = (collection?.orderIndex != null && collection.orderIndex !== 0)
+            ? Number(collection.orderIndex)
+            : (settings?.leavingSoonHomeOrder != null && settings.leavingSoonHomeOrder !== 0
+                ? Number(settings.leavingSoonHomeOrder)
+                : 5);
+        const sortPrefix = (collection?.sortPrefix && collection.sortPrefix !== "!00_")
+            ? collection.sortPrefix
+            : `!${String(effectiveOrderIndex).padStart(2, '0')}_`;
+        const baseTitle = (collection?.title || "Leaving Soon").replace(/^[!⚠️\d_]+/, "").trim() || "Leaving Soon";
+        const effectiveSortTitle = (collection?.sortTitle && collection.sortTitle !== "!00_LeavingSoon" && !collection.sortTitle.startsWith("!00_"))
+            ? collection.sortTitle
+            : `${sortPrefix}${baseTitle}`;
+
         if (!collection && serverId && sectionKey) {
             collection = await prisma.mediaCollection.create({
                 data: {
                     title: "⚠️ Leaving Soon",
                     summary: "Items scheduled to be removed soon from storage. Watch before they are gone!",
-                    sortTitle: "Leaving Soon",
+                    sortTitle: effectiveSortTitle,
                     type: "dynamic",
                     category: "dynamic",
                     serverId,
                     sectionKey: String(sectionKey),
                     sourceType: "plex_query",
                     sourceQuery: "tag:leaving-soon",
-                    orderIndex: settings?.leavingSoonHomeOrder ?? 0,
-                    sortPrefix: "!00_",
+                    orderIndex: effectiveOrderIndex,
+                    sortPrefix: sortPrefix,
                     promotedToHome: shouldPromote,
                     promotedToRecommended: shouldPromoteRec,
                     promotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true
@@ -2836,7 +2850,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                     leavingRatingKeys,
                     {
                         summary: "Items scheduled to be removed soon from storage. Watch before they are gone!",
-                        sortTitle: "!00_LeavingSoon",
+                        sortTitle: effectiveSortTitle,
                         promotedToHome: shouldPromote,
                         promotedToRecommended: shouldPromoteRec,
                         promotedToSharedHome: settings?.leavingSoonPromotedToSharedHome ?? true,
@@ -2854,7 +2868,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                     secKey,
                     collection.ratingKey,
                     {
-                        sortTitle: "!00_LeavingSoon",
+                        sortTitle: effectiveSortTitle,
                         promotedToHome: shouldPromote,
                         promotedToRecommended: shouldPromoteRec,
                         promotedToSharedHome: false,
@@ -2912,8 +2926,9 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                     itemCount: leavingSoonItems.length,
                     promotedToHome: shouldPromote,
                     promotedToRecommended: shouldPromoteRec,
-                    orderIndex: settings?.leavingSoonHomeOrder ?? 0,
-                    sortPrefix: "!00_",
+                    orderIndex: effectiveOrderIndex,
+                    sortPrefix: sortPrefix,
+                    sortTitle: effectiveSortTitle,
                     ratingKey: syncResultRatingKey,
                     lastSyncedAt: new Date()
                 }
