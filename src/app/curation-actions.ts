@@ -2185,17 +2185,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     return tB - tA;
                 });
             } else if (subtype === "recently_released") {
-                const twoYearsAgo = new Date();
-                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-                matchedItems = libraryItems.filter(it => {
-                    if (it.originallyAvailableAt) {
-                        return new Date(it.originallyAvailableAt) >= twoYearsAgo;
-                    }
-                    if (it.year) {
-                        return it.year >= twoYearsAgo.getFullYear();
-                    }
-                    return false;
-                }).sort((a, b) => {
+                matchedItems = [...libraryItems].sort((a, b) => {
                     const yA = a.originallyAvailableAt ? new Date(a.originallyAvailableAt).getTime() : (a.year ? new Date(a.year, 0, 1).getTime() : 0);
                     const yB = b.originallyAvailableAt ? new Date(b.originallyAvailableAt).getTime() : (b.year ? new Date(b.year, 0, 1).getTime() : 0);
                     return yB - yA;
@@ -8546,9 +8536,9 @@ export async function deployFilteredSmartHubAction(
             }
         } else if (subtype === "recently_released") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.originallyAvailableAt>>=-730d&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
             } else {
-                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&originallyAvailableAt>>=-730d&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released_episodes") {
             filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}${limitParam}`;
@@ -9026,17 +9016,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                     return tB - tA;
                 });
             } else if (subtype === "recently_released") {
-                const twoYearsAgo = new Date();
-                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-                filteredLib = libraryItems.filter(it => {
-                    if (it.originallyAvailableAt) {
-                        return new Date(it.originallyAvailableAt) >= twoYearsAgo;
-                    }
-                    if (it.year) {
-                        return it.year >= twoYearsAgo.getFullYear();
-                    }
-                    return false;
-                }).sort((a, b) => {
+                filteredLib = [...libraryItems].sort((a, b) => {
                     const yA = a.originallyAvailableAt ? new Date(a.originallyAvailableAt).getTime() : (a.year ? new Date(a.year, 0, 1).getTime() : 0);
                     const yB = b.originallyAvailableAt ? new Date(b.originallyAvailableAt).getTime() : (b.year ? new Date(b.year, 0, 1).getTime() : 0);
                     return yB - yA;
