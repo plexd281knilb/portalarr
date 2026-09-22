@@ -100,10 +100,135 @@
     - Clean status overview showing 24-hour, 7-day, and 30-day uptime percentage bars, real-time latency graphs, and historical incident logs.
     - Ability to post scheduled maintenance notices and incident resolution updates directly on the dashboard.
 
+### 7. ⚡ Smart Bandwidth Shaper &       
+  Transcode Governor
 
----
+  Keep your home network responsive and
+  prioritize live streams over background
+  downloads.
+
+  • Dynamic Download Throttling: When
+  active remote Plex streams begin or spike
+  above a threshold (e.g. 80% upload
+  bandwidth), Portalarr automatically
+  throttles qBittorrent and SABnzbd speed
+  limits, ramping them back up once streams
+  end.
+  • Transcode Prioritization & GPU Guard:
+  If hardware NVENC/QuickSync capacity or
+  CPU hits 100%, prioritize direct stream
+  bandwidth or VIP/paying tiers while
+  gracefully notifying standard users to
+  adjust client playback quality.
+  • Direct Play Coach: In-app telemetry
+  alerts users with tips on how to enable
+  Direct Play on their specific client
+  device (saving server power and
+  eliminating buffering).
+
+### 8. 📺 Native IPTV & Live TV Stream   
+  Manager (xTeVe / Threadfin Replacement)
+
+  Seamlessly manage live channels, sports,
+  and news inside Portalarr and Plex.
+  • M3U & XMLTV EPG Aggregator: Import,
+  filter, and organize IPTV playlists into
+  clean channel bouquets with custom logos
+  and official electronic program guides.
+  • Dead Stream Auto-Pruning: Background
+  health-checks periodically test stream
+  URLs, filtering out dead feeds or routing
+  to backup stream sources.
+  • Virtual HDHomeRun Tuner: Emulates a
+  virtual HDHomeRun device so Plex can
+  ingest the curated channels directly into
+  Plex Live TV & DVR.
+
+  ### 9. 🧹 Automated Audio/Video Cleaner &
+  Custom Format Upgrader (Trash Guides     
+  Engine)
+
+  Keep media library files pristine,
+  universally compatible, and space-
+  efficient.
+
+  • TRaSH Guides Scoring Engine:
+  Automatically tags and scores releases,
+  upgrading lower-quality releases to
+  preferred HDR10+/Dolby Vision/properly
+  mastered audio tracks when indexers find
+  upgrades.
+  • Audio Track Normalizer & Compatibility
+  Injector: Scans video files lacking
+  stereo/AAC compatibility tracks and auto-
+  generates a lightweight secondary stereo
+  AAC track to ensure 100% Direct Play on
+  mobile, web, and Smart TVs without
+  transcoding.
+
+  ### 10. ☁️ Disaster Recovery, Automated   
+  Cloud Backups & Migration Wizard
+
+  Never worry about losing server
+  configuration, custom collections, or
+  user records.
+
+  • Automated Database & Config Snapshots:
+  Scheduled encrypted backups of the SQLite
+  database, custom poster artwork, curated
+  collection rules, and user watch
+  histories.
+  • Cloud & Remote Storage Sync: 1-click
+  automated backup export to Google Drive,
+  OneDrive, Nextcloud, AWS S3, Backblaze B2,
+  or local NFS/SMB share.
+  • 1-Click Restore & Migration Assistant:
+  Effortlessly restore or migrate the
+  entire Portalarr deployment onto a new
+  host/Unraid server with zero manual re-
+  entry.
+
+  ### 11. 🌐 Multi-Server Federation & Load-
+  Balanced Failover
+
+  For server owners managing multiple
+  physical or cloud server nodes.
+
+  • Plex Server Failover: If the Primary
+  PMS node goes offline or is undergoing
+  maintenance, Portalarr automatically
+  redirects active users or requests to the
+  Secondary PMS node.
+  • Unified Global Search: Search across
+  multiple connected Plex servers
+  simultaneously with deduplicated search
+  results and unified library status badges.
 
 
 ### 💡 Have an Idea or Need Help?
 
 Got a feature suggestion or noticed an issue? Vote on community suggestions below or submit a support ticket anytime!
+
+ ### 1. 💬 Native Subtitle Engine & Auto- 
+  Sync (Bazarr Replacement)
+
+  Eliminate missing or out-of-sync subtitle
+  frustrations for both users and admins.
+
+  • Automated Multi-Provider Hunting:
+  Automatically grabs missing .srt
+  subtitles across OpenSubtitles, Subscene,
+  Subdl, and Addic7ed based on user
+  language preferences.
+  • AI Audio-Sync / Offset Alignment:
+  Built-in audio waveform & speech-to-text
+  alignment (using lightweight Whisper or
+  audio track sync) to fix out-of-sync
+  subtitles automatically.
+  • User Self-Service "Fix Subtitles": If a
+  user is watching a movie with missing/bad
+  subtitles, they can click a 1-click
+  "Request / Fix Subtitles" button on My
+  Plex Hub; Portalarr downloads, cleans,
+  and injects the .srt directly into Plex
+  within seconds.
