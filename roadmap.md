@@ -67,6 +67,9 @@
       - Direct integration to inspect active and completed downloads in SABnzbd, NZBGet, and qBittorrent.
       - Automatically triggers targeted re-searches and replacement downloads if a user reports wrong audio language (e.g., Spanish-only audio track), out-of-sync audio, or corrupt media files.
       - Diagnoses failed book/audiobook grabs, triggers indexer failover searches, and re-dispatches Send-to-Kindle deliveries.
+    - **1-Click Ticket Escalation with Rich Diagnostic Context:**
+      - If the AI support bot cannot automatically resolve the issue (or if the user requests human intervention), the chat presents an instant **"Submit Support Ticket" (`🎫`)** action.
+      - Automatically bundles and attaches the complete diagnostic payload: chat conversation history, active client/device profile, live stream telemetry snapshot (codecs, transcode decisions, bandwidth), correlated server log snippets, and download client state directly into a new admin support ticket with instant SMTP email notification.
   - **Deep Server Log Analysis & Incident Correlation:**
     - Continuous background log ingestion from Plex Media Server, Tautulli, Transcoder, and Arr applications with persistent indexed storage.
     - Correlates user playback error timestamps directly with raw server log events to identify root causes (transcode buffer starvation, disk I/O bottlenecks, network drops).
