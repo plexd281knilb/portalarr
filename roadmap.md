@@ -55,6 +55,9 @@
   - **Kid Accounts & Shared Living Room Profiles:**
     - Dedicated **Kid Accounts** with automated parental rating filters (G / PG / TV-Y7) and safe library restrictions.
     - Dedicated **Main Living Room / Shared Household Accounts** designed for shared TV displays with customizable family-safe content tags and individual user shelf toggles.
+  - **Granular Notification & Email Preference Controls:**
+    - Complete self-service user customization over all incoming communications and alerts.
+    - Granular toggle preferences for: Media Request Ready alerts, New Content Added digests, Server Announcements & Maintenance notices, Support Ticket replies, Subscription & Billing renewal reminders, and Referral conversion rewards (delivered via Email, Discord DM, or Web Push).
 
 - **🤖 Step 4: Autonomous AI Support Agent & Deep Server Log Diagnostics**
   - **Autonomous AI First-Response Support Agent:**
