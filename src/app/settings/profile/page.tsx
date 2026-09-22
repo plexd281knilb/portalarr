@@ -160,7 +160,7 @@ export default function UserProfilePage() {
     const handleCopyInviteLink = () => {
         if (!referralInfo?.referralCode) return;
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const url = `${origin}/join?ref=${referralInfo.referralCode}`;
+        const url = referralInfo?.inviteUrl || (paymentConfig?.appUrl ? `${paymentConfig.appUrl}/join?ref=${referralInfo.referralCode}` : `${origin}/join?ref=${referralInfo.referralCode}`);
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -177,7 +177,7 @@ export default function UserProfilePage() {
     const isTrial = user?.status === "TRIAL";
     const daysLeft = isTrial && user?.trialEndsAt ? Math.max(0, differenceInDays(new Date(user.trialEndsAt), new Date())) : null;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const inviteUrl = referralInfo?.referralCode ? `${origin}/join?ref=${referralInfo.referralCode}` : "";
+    const inviteUrl = referralInfo?.inviteUrl || (referralInfo?.referralCode ? (paymentConfig?.appUrl ? `${paymentConfig.appUrl}/join?ref=${referralInfo.referralCode}` : `${origin}/join?ref=${referralInfo.referralCode}`) : "");
 
     const cleanKindleInput = kindleEmail.trim().toLowerCase();
     const isKindleDomain = cleanKindleInput.endsWith("@kindle.com") || cleanKindleInput.endsWith("@free.kindle.com");

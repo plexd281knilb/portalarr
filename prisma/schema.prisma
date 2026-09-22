@@ -10,6 +10,7 @@ datasource db {
 
 model Settings {
   id               String    @id @default("global")
+  appUrl           String?   // Canonical public web address (e.g. https://portal.example.com)
   mainPlexUrl      String?
   mainPlexToken    String?
   smtpHost         String?

@@ -631,6 +631,16 @@ export async function saveSettings(formData: FormData) {
   await ensureSchemaColumns();
   const updateData: any = {};
 
+  if (formData.has("appUrl")) {
+    let rawUrl = (formData.get("appUrl") as string || "").trim();
+    if (rawUrl) {
+      if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+        rawUrl = `https://${rawUrl}`;
+      }
+      rawUrl = rawUrl.replace(/\/+$/, "");
+    }
+    updateData.appUrl = rawUrl;
+  }
   if (formData.has("smtpHost")) {
     updateData.smtpHost = formData.get("smtpHost") as string || "";
   }
@@ -681,7 +691,34 @@ export async function saveSettings(formData: FormData) {
     },
   });
   revalidatePath("/settings");
+  revalidatePath("/");
   return { success: true, message: "Settings saved successfully!" };
+}
+
+export async function saveAppUrlAction(formData: FormData): Promise<{ success: boolean; message?: string; appUrl?: string; error?: string }> {
+  try {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    let rawUrl = (formData.get("appUrl") as string || "").trim();
+    if (rawUrl) {
+      if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+        rawUrl = `https://${rawUrl}`;
+      }
+      rawUrl = rawUrl.replace(/\/+$/, "");
+    }
+
+    await prisma.settings.upsert({
+      where: { id: "global" },
+      update: { appUrl: rawUrl },
+      create: { id: "global", appUrl: rawUrl }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/");
+    return { success: true, message: "Public Web Address saved successfully!", appUrl: rawUrl };
+  } catch (err: any) {
+    console.error("Failed to save appUrl:", err);
+    return { success: false, error: err.message || "Failed to save web address." };
+  }
 }
 
 export async function savePlexSettingsAction(formData: FormData) {
@@ -3330,9 +3367,14 @@ export async function getUserReferralInfo() {
         const activeTrials = dbUser.referrals.filter(r => r.status === "TRIAL").length;
         const conversions = dbUser.referrals.filter(r => r.convertedAt).length;
 
+        const appUrl = await getAppUrl();
+        const inviteUrl = `${appUrl}/join?ref=${encodeURIComponent(code)}`;
+
         return {
             success: true,
             referralCode: code,
+            appUrl,
+            inviteUrl,
             totalReferrals,
             activeTrials,
             conversions,
@@ -3547,7 +3589,8 @@ export async function getPublicJoinConfig(refCode?: string) {
                 referrerName,
                 validReferral,
                 proratedBilling,
-                smtpFrom: settings?.smtpFrom || settings?.smtpUser || ""
+                smtpFrom: settings?.smtpFrom || settings?.smtpUser || "",
+                appUrl: await getAppUrl()
             }
         };
     } catch (e: any) {

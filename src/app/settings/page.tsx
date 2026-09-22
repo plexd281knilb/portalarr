@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition, Suspense, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
-    getSettings, saveSettings, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
+    getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
     getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
     getEmailNotificationSettings, saveEmailNotificationSettingsAction,
     getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance,
@@ -33,7 +33,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe
 } from "lucide-react";
 import { 
     Dialog, 
@@ -182,6 +182,10 @@ function SettingsPageContent() {
 
     // Controlled Form State Variables for Unsaved Tracking
     const [alertBannerText, setAlertBannerText] = useState("");
+    const [appUrlInput, setAppUrlInput] = useState("");
+    const [saveAppUrlMsg, setSaveAppUrlMsg] = useState("");
+    const [saveAppUrlErr, setSaveAppUrlErr] = useState("");
+    const [savingAppUrl, setSavingAppUrl] = useState(false);
     const [smtpHostInput, setSmtpHostInput] = useState("");
     const [smtpPortInput, setSmtpPortInput] = useState("");
     const [smtpUserInput, setSmtpUserInput] = useState("");
@@ -226,6 +230,7 @@ function SettingsPageContent() {
     const initialDataRef = useRef<{
         alertBannerEnabled: boolean;
         alertBannerText: string;
+        appUrl: string;
         smtpHost: string;
         smtpPort: string;
         smtpUser: string;
@@ -256,6 +261,10 @@ function SettingsPageContent() {
     const isAlertBannerDirty = initialDataRef.current ? (
         bannerEnabled !== initialDataRef.current.alertBannerEnabled ||
         alertBannerText !== initialDataRef.current.alertBannerText
+    ) : false;
+
+    const isAppUrlDirty = initialDataRef.current ? (
+        appUrlInput !== initialDataRef.current.appUrl
     ) : false;
 
     const isSmtpDirty = initialDataRef.current ? (
@@ -302,6 +311,7 @@ function SettingsPageContent() {
 
     const unsavedSections: string[] = [];
     if (isAlertBannerDirty) unsavedSections.push("System Alert Banner");
+    if (isAppUrlDirty) unsavedSections.push("Public Web Address (Base URL)");
     if (isSmtpDirty) unsavedSections.push("Global SMTP Settings");
     if (isPlexDirty) unsavedSections.push("Plex Server & Admin Token");
     if (isAutomationDirty) unsavedSections.push("Automation & Directory Paths");
@@ -312,7 +322,7 @@ function SettingsPageContent() {
     if (isBetaDirty) unsavedSections.push("Beta Dashboard Intro");
 
     const hasUnsavedChanges = unsavedSections.length > 0;
-    const isGeneralTabDirty = isAlertBannerDirty || isSmtpDirty || isPlexDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
+    const isGeneralTabDirty = isAlertBannerDirty || isAppUrlDirty || isSmtpDirty || isPlexDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
     const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
 
     // Browser-level reload/close protection
@@ -779,6 +789,7 @@ function SettingsPageContent() {
             setBannerEnabled(bannerEnabledVal);
             setAlertBannerText(bannerTextVal);
 
+            const appUrlVal = s?.appUrl || "";
             const smtpHostVal = s?.smtpHost || "";
             const smtpPortVal = s?.smtpPort ? String(s.smtpPort) : "";
             const smtpUserVal = s?.smtpUser || "";
@@ -793,6 +804,7 @@ function SettingsPageContent() {
             const traktKeyVal = s?.traktClientId || "";
             const mdblistKeyVal = s?.mdblistApiKey || "";
 
+            setAppUrlInput(appUrlVal);
             setSmtpHostInput(smtpHostVal);
             setSmtpPortInput(smtpPortVal);
             setSmtpUserInput(smtpUserVal);
@@ -849,6 +861,7 @@ function SettingsPageContent() {
             initialDataRef.current = {
                 alertBannerEnabled: bannerEnabledVal,
                 alertBannerText: bannerTextVal,
+                appUrl: appUrlVal,
                 smtpHost: smtpHostVal,
                 smtpPort: smtpPortVal,
                 smtpUser: smtpUserVal,
@@ -905,6 +918,12 @@ function SettingsPageContent() {
                 formData.append("enabled", bannerEnabled ? "on" : "off");
                 formData.append("text", alertBannerText);
                 promises.push(updateAlertBanner(formData));
+            }
+
+            if (isAppUrlDirty) {
+                const formData = new FormData();
+                formData.append("appUrl", appUrlInput);
+                promises.push(saveAppUrlAction(formData));
             }
 
             if (isSmtpDirty) {
@@ -986,6 +1005,7 @@ function SettingsPageContent() {
         const init = initialDataRef.current;
         setBannerEnabled(init.alertBannerEnabled);
         setAlertBannerText(init.alertBannerText);
+        setAppUrlInput(init.appUrl);
         setSmtpHostInput(init.smtpHost);
         setSmtpPortInput(init.smtpPort);
         setSmtpUserInput(init.smtpUser);
@@ -1197,6 +1217,179 @@ function SettingsPageContent() {
                                 <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-500 font-semibold hover:ring-2 hover:ring-orange-500/40 active:scale-95 transition-all shadow-sm">
                                     Save Alert Banner
                                 </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+
+                    {/* PUBLIC WEB ADDRESS (CANONICAL BASE URL) CARD */}
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                        isAppUrlDirty 
+                            ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                            : "border-primary/40 shadow-primary/10"
+                    }`}>
+                        <CardHeader>
+                            <div className="flex justify-between items-start gap-2">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-primary">
+                                        <Globe className="h-5 w-5 text-primary"/> Public Web Address (Base URL)
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Set the canonical public URL for Portalarr. This base address is used for invite friends referral links, user account approvals, email buttons, and notification links so you don't have to rely on automatic host header detection.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                    {isAppUrlDirty && (
+                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            ● Unsaved Changes
+                                        </Badge>
+                                    )}
+                                    {systemSettings?.appUrl ? (
+                                        <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                            <CheckCircle2 className="h-3 w-3" /> Configured
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">
+                                            Auto-Detecting
+                                        </Badge>
+                                    )}
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <form 
+                                onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    setSavingAppUrl(true);
+                                    setSaveAppUrlMsg("");
+                                    setSaveAppUrlErr("");
+                                    try {
+                                        const formData = new FormData();
+                                        formData.append("appUrl", appUrlInput);
+                                        const res = await saveAppUrlAction(formData);
+                                        if (res.success) {
+                                            setSaveAppUrlMsg(res.message || "Public Web Address saved successfully!");
+                                            setTimeout(() => setSaveAppUrlMsg(""), 4000);
+                                            loadAllData();
+                                        } else {
+                                            setSaveAppUrlErr(res.error || "Failed to save web address.");
+                                        }
+                                    } catch (err: any) {
+                                        setSaveAppUrlErr(err.message || "Error saving web address");
+                                    } finally {
+                                        setSavingAppUrl(false);
+                                    }
+                                }} 
+                                className="space-y-4"
+                                autoComplete="off"
+                            >
+                                {saveAppUrlMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        <span>{saveAppUrlMsg}</span>
+                                    </div>
+                                )}
+                                {saveAppUrlErr && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <XCircle className="h-4 w-4 shrink-0" />
+                                        <span>{saveAppUrlErr}</span>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="appUrlInput" className="text-xs font-semibold">Canonical Web Address</Label>
+                                        <div className="flex gap-1.5">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 px-2 text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                onClick={() => {
+                                                    if (typeof window !== "undefined") {
+                                                        setAppUrlInput(window.location.origin);
+                                                    }
+                                                }}
+                                                title="Set to current browser origin"
+                                            >
+                                                Use Current Browser URL
+                                            </Button>
+                                            {appUrlInput && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => setAppUrlInput("")}
+                                                    title="Clear to use automatic detection"
+                                                >
+                                                    Clear
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <Input 
+                                            id="appUrlInput"
+                                            name="appUrl" 
+                                            value={appUrlInput} 
+                                            onChange={(e) => setAppUrlInput(e.target.value)} 
+                                            placeholder="https://portal.yourdomain.com or http://192.168.1.50:3000" 
+                                            className="font-mono text-xs sm:text-sm h-10 pr-10"
+                                            autoComplete="off" 
+                                            data-1p-ignore="true" 
+                                            data-lpignore="true"
+                                        />
+                                        <Globe className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Example: <code className="text-primary font-mono">https://home.mydomain.com</code> or <code className="text-primary font-mono">http://192.168.1.50:3000</code>. If not specified, Portalarr attempts to auto-detect the domain from incoming request headers.
+                                    </p>
+                                </div>
+
+                                {/* LIVE URL LINK PREVIEW PILLS */}
+                                <div className="p-3.5 rounded-xl bg-background/50 border border-border/50 space-y-2 text-xs">
+                                    <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-primary" /> Generated Links Preview
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+                                        <div className="p-2 rounded-lg bg-black/40 border border-purple-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-purple-400 block tracking-wider font-sans">🎁 Invite Friends</span>
+                                            <span className="text-muted-foreground truncate block">
+                                                {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/join?ref=invite` : "http://localhost:3000/join?ref=invite"}
+                                            </span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-black/40 border border-blue-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-blue-400 block tracking-wider font-sans">📧 Email Login Link</span>
+                                            <span className="text-muted-foreground truncate block">
+                                                {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/login` : "http://localhost:3000/login"}
+                                            </span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-black/40 border border-emerald-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-emerald-400 block tracking-wider font-sans">🛡️ Admin Approvals</span>
+                                            <span className="text-muted-foreground truncate block">
+                                                {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/settings/access` : "http://localhost:3000/settings/access"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-1">
+                                    <Button 
+                                        type="submit" 
+                                        disabled={savingAppUrl}
+                                        className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md text-xs sm:text-sm h-9"
+                                    >
+                                        {savingAppUrl ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving Web Address...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Globe className="h-4 w-4 mr-2" /> Save Web Address
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </form>
                         </CardContent>
                     </Card>

@@ -19,6 +19,7 @@ interface PlexInviteBannerProps {
     totalReferrals?: number;
     activeTrials?: number;
     conversions?: number;
+    appUrl?: string;
 }
 
 export default function PlexInviteBanner({
@@ -27,16 +28,21 @@ export default function PlexInviteBanner({
     username,
     totalReferrals = 0,
     activeTrials = 0,
-    conversions = 0
+    conversions = 0,
+    appUrl
 }: PlexInviteBannerProps) {
     const [copied, setCopied] = useState(false);
-    const [origin, setOrigin] = useState("");
+    const [origin, setOrigin] = useState(appUrl || "");
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [canShare, setCanShare] = useState(false);
 
     useEffect(() => {
-        if (typeof window !== "undefined") {
+        if (appUrl) {
+            setOrigin(appUrl);
+        } else if (typeof window !== "undefined") {
             setOrigin(window.location.origin);
+        }
+        if (typeof window !== "undefined") {
             setCanShare(!!navigator.share);
             
             const savedState = localStorage.getItem("portalarr_invite_banner_collapsed");
@@ -44,7 +50,7 @@ export default function PlexInviteBanner({
                 setIsCollapsed(true);
             }
         }
-    }, []);
+    }, [appUrl]);
 
     const toggleCollapse = () => {
         const nextState = !isCollapsed;

@@ -138,6 +138,7 @@ export default async function UserLandingPage() {
                 totalReferrals={referralInfo?.totalReferrals || 0}
                 activeTrials={referralInfo?.activeTrials || 0}
                 conversions={referralInfo?.conversions || 0}
+                appUrl={referralInfo?.appUrl || joinConfig?.config?.appUrl}
             />
         )}
 

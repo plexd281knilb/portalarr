@@ -12,12 +12,29 @@ export function getEncryptionKey(): string {
 }
 
 export async function getAppUrl(): Promise<string> {
+    try {
+        const { prisma } = await import("@/lib/prisma");
+        const settings = await prisma.settings.findUnique({
+            where: { id: "global" },
+            select: { appUrl: true }
+        });
+        if (settings?.appUrl && settings.appUrl.trim()) {
+            let url = settings.appUrl.trim();
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = `https://${url}`;
+            }
+            return url.replace(/\/+$/, "");
+        }
+    } catch (e) {
+        // Fall back if database is not available yet or query fails
+    }
+
     if (process.env.APP_URL && process.env.APP_URL.trim()) {
         let url = process.env.APP_URL.trim();
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             url = `https://${url}`;
         }
-        return url.replace(/\/$/, "");
+        return url.replace(/\/+$/, "");
     }
 
     try {
@@ -38,5 +55,5 @@ export async function getAppUrl(): Promise<string> {
         }
     }
 
-    return "https://home.domshomelab.com";
+    return "http://localhost:3000";
 }

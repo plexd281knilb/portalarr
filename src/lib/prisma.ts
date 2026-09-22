@@ -187,6 +187,7 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "Settings" (
                     "id" TEXT PRIMARY KEY DEFAULT 'global',
+                    "appUrl" TEXT,
                     "mainPlexUrl" TEXT,
                     "mainPlexToken" TEXT,
                     "smtpHost" TEXT,
@@ -304,6 +305,7 @@ export async function ensureSchemaColumns(): Promise<void> {
             const cols = tableInfo.map((c: any) => c.name);
 
             const settingsAddCols: [string, string][] = [
+                ["appUrl", `ALTER TABLE "Settings" ADD COLUMN "appUrl" TEXT;`],
                 ["smtpFrom", `ALTER TABLE "Settings" ADD COLUMN "smtpFrom" TEXT NOT NULL DEFAULT '';`],
                 ["smtpHost", `ALTER TABLE "Settings" ADD COLUMN "smtpHost" TEXT;`],
                 ["smtpPort", `ALTER TABLE "Settings" ADD COLUMN "smtpPort" INTEGER;`],
