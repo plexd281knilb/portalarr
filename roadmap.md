@@ -87,6 +87,19 @@
     - Automatic multi-track audiobook chapter consolidation, multi-disc folder ingestion (`Disc 01/`, `Disc 02/`), ID3 chapter extraction, and high-definition cover art fetching.
     - Seamless Send-to-Kindle delivery, in-browser EPUB/comic reader with offline caching, and built-in floating HTML5 audio player with chapter reordering.
 
+- **📡 Step 6: Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement)**
+  - **Automated Service Heartbeat & Multi-Protocol Health Checks:**
+    - Continuous background polling and health monitoring for all configured media server stack services (Plex Media Server, Tautulli, Glances, Radarr, Sonarr, Prowlarr, Readarr, SABnzbd, qBittorrent, Overseerr, Bazarr, etc.).
+    - Support for custom external HTTP/HTTPS endpoints, TCP/UDP port pings, DNS resolution checks, and SSL/TLS certificate expiry tracking.
+    - Configurable heartbeat intervals (e.g. 30s / 60s), request timeouts, retry thresholds before alerting, and response latency benchmarking.
+  - **Instant Incident Alerts & Outage Notifications:**
+    - Real-time multi-channel notifications the moment a server, node, or service goes **DOWN** (`🔴`), suffers **DEGRADED** performance / packet loss (`🟡`), or recovers back **UP** (`🟢`).
+    - Multi-channel delivery: Direct SMTP emails to administrators, rich Discord webhook embed alerts with outage duration and error codes, Telegram notifications, and browser Web Push.
+    - Configurable alert debouncing and cooldown rules to eliminate false alarm storms during brief transient network blips.
+  - **Public & Admin Status Dashboard:**
+    - Clean status overview showing 24-hour, 7-day, and 30-day uptime percentage bars, real-time latency graphs, and historical incident logs.
+    - Ability to post scheduled maintenance notices and incident resolution updates directly on the dashboard.
+
 
 ---
 
