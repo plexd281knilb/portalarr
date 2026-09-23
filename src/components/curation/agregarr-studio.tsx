@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useTransition } from "react";
 import {
@@ -2074,6 +2074,171 @@ export function AgregarrStudio() {
                 </Card>
             )}
 
+            {/* Automated Collections & Hubs Schedule & Automation Card */}
+            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <Clock className="h-5 w-5 text-amber-400" />
+                                <CardTitle className="text-base sm:text-lg font-bold text-white">Collections &amp; Smart Hubs Automation Schedule</CardTitle>
+                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                    {curationSyncCollections ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
+                                </Badge>
+                            </div>
+                            <CardDescription className="text-xs text-slate-400">
+                                Automatically synchronizes dynamic TMDb/Trakt collections, evaluates seasonal date schedules, updates Plex Home screen ranking (#1-#99), and creates Coming Soon release placeholders across enabled libraries.
+                            </CardDescription>
+                        </div>
+                        <Button 
+                            size="sm"
+                            onClick={handleSaveSchedule}
+                            disabled={savingSchedule}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer shrink-0"
+                        >
+                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                            {scheduleSavedMsg ? "Saved Schedule!" : "Save Schedule"}
+                        </Button>
+                    </div>
+                </CardHeader>
+
+                <CardContent className="p-5 space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Pillar 1: Dynamic Smart Collections & Home Screen Ranking */}
+                        <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
+                                        <span className="font-bold text-slate-100 text-sm">🌟 Dynamic Collections &amp; Home Hubs</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                            {curationSyncCollections ? `Every ${curationSyncSchedule.replace(/every_/g, '').replace(/_/g, ' ')}` : 'Disabled'}
+                                        </Badge>
+                                        <Switch 
+                                            checked={curationSyncCollections}
+                                            onCheckedChange={checked => setCurationSyncCollections(checked)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Fetches TMDb/Trakt/MDBList trending items, user lists, and applies Plex Home &amp; Recommended hub ordering (#1-#99) across enabled libraries.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
+                                    <Select 
+                                        value={curationSyncSchedule} 
+                                        onValueChange={val => setCurationSyncSchedule(val)}
+                                        disabled={!curationSyncCollections}
+                                    >
+                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
+                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
+                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
+                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
+                                            <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Target Libraries</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-amber-300 font-semibold truncate">
+                                        {enabledServersForCollections.length > 0 ? `${enabledServersForCollections.length} Section(s) Configured` : 'All Enabled Plex Libraries'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <Clock3 className="h-3.5 w-3.5 text-amber-400" />
+                                    Last run: <span className="text-slate-300 font-mono">{curationLastRunAt ? new Date(curationLastRunAt).toLocaleString() : "Never"}</span>
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    onClick={handleRunCollectionSync}
+                                    disabled={runningCollectionSync}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer shrink-0"
+                                >
+                                    {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-slate-950" />}
+                                    <span>Sync Collections Now</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Pillar 2: Seasonal Schedules & Coming Soon Placeholders */}
+                        <div className="bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4 text-sky-400 shrink-0" />
+                                        <span className="font-bold text-slate-100 text-sm">🗓️ Seasonal Dates &amp; Release Placeholders</span>
+                                    </div>
+                                    <Badge variant="outline" className="border-sky-500/40 text-sky-300 bg-sky-950/30 text-[10px] font-semibold px-2 py-0.5">
+                                        Auto-Evaluated
+                                    </Badge>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Promotes seasonal collections during active date windows (e.g. Spooky October, Holiday Spirit) and demotes them off-season. Generates future trailer placeholders.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Seasonal Collections</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
+                                        {collections.filter(c => c.isSeasonal).length} Configured Schedules
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Placeholders &amp; Trailers</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
+                                        Monitored Radarr Queue
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                                    <span>Date Window Sync Active</span>
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    onClick={() => setSubTab("coming_soon")}
+                                    variant="outline"
+                                    className="border-sky-500/40 text-sky-300 hover:text-white hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                >
+                                    <Calendar className="h-3.5 w-3.5" />
+                                    <span>Configure Coming Soon &rarr;</span>
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+
+                {collectionSyncResult && (
+                    <div className={`p-3.5 text-xs border-t ${collectionSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
+                        {collectionSyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
+                        <div className="space-y-0.5">
+                            <span className="font-bold">{collectionSyncResult.text}</span>
+                            {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
+                                <p className="text-[11px] opacity-80">{collectionSyncResult.details.join(" • ")}</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Card>
+
             {/* Agregarr Top Navigation Sub-Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
                 <button
@@ -2830,96 +2995,10 @@ export function AgregarrStudio() {
             )}
 
             {/* ========================================================================= */}
-            {/* SUB-TAB 3: COMING SOON & SETTINGS (Schedule, Shares, Live Simulator) */}
+            {/* SUB-TAB 3: COMING SOON & SETTINGS (Shares, Trailers, Live Simulator) */}
             {/* ========================================================================= */}
             {subTab === "coming_soon" && (
                 <div className="space-y-6">
-                    {/* Automated Collections & Hubs Schedule Card */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                        <CardContent className="p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
-                            <div className="space-y-1 max-w-xl">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <Clock className="h-4 w-4 text-amber-400" />
-                                    <span className="font-bold text-white text-sm">Collections &amp; Hubs Schedule &amp; Automation</span>
-                                    <Badge variant="outline" className={`text-[10px] font-semibold ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                        {curationSyncCollections ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
-                                    </Badge>
-                                </div>
-                                <p className="text-[11px] text-slate-400">
-                                    Automatically updates dynamic smart collections, evaluates seasonal schedules, and updates Home screen rankings on Plex across enabled libraries.
-                                </p>
-                                {curationLastRunAt && (
-                                    <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                                        <Clock3 className="h-3 w-3 text-amber-400" />
-                                        Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
-                                    </p>
-                                )}
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                                <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
-                                    <span className="text-[11px] font-bold text-slate-200">Timer</span>
-                                    <Switch 
-                                        checked={curationSyncCollections}
-                                        onCheckedChange={checked => setCurationSyncCollections(checked)}
-                                    />
-                                </div>
-
-                                <div className="space-y-0.5">
-                                    <Select 
-                                        value={curationSyncSchedule} 
-                                        onValueChange={val => setCurationSyncSchedule(val)}
-                                    >
-                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8 w-[155px]">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
-                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
-                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                            <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
-                                            <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <Button 
-                                    size="sm"
-                                    onClick={handleSaveSchedule}
-                                    disabled={savingSchedule}
-                                    variant="outline"
-                                    className="border-slate-700 text-slate-300 hover:text-white text-xs h-8 px-3 cursor-pointer"
-                                >
-                                    {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-                                    {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
-                                </Button>
-
-                                <Button 
-                                    size="sm"
-                                    onClick={handleRunCollectionSync}
-                                    disabled={runningCollectionSync}
-                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer"
-                                >
-                                    {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                                    <span>Sync Collections Now</span>
-                                </Button>
-                            </div>
-                        </CardContent>
-
-                        {collectionSyncResult && (
-                            <div className={`p-3 text-xs border-t ${collectionSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
-                                {collectionSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
-                                <div className="space-y-0.5">
-                                    <span className="font-bold">{collectionSyncResult.text}</span>
-                                    {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
-                                        <p className="text-[11px] opacity-80">{collectionSyncResult.details.join(" • ")}</p>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </Card>
-
                     {/* Coming Soon Shares Setup & Simulator */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Left Column: Server Shares & YouTube Cookie Engine */}

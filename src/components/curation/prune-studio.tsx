@@ -1511,95 +1511,164 @@ export function PruneStudio() {
 
             {/* Automated Prune & Leaving Soon Schedule & Automation Card */}
             <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                <CardContent className="p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
-                    <div className="space-y-1 max-w-xl">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <Clock className="h-4 w-4 text-rose-400" />
-                            <span className="font-bold text-white text-sm">Prune &amp; Leaving Soon Schedule &amp; Automation</span>
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                {curationSyncPruning ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
-                            </Badge>
-                            {pruneDryRun ? (
-                                <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]">
-                                    🛡️ Dry-Run Safe
+                <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <Clock className="h-5 w-5 text-rose-400" />
+                                <CardTitle className="text-base sm:text-lg font-bold text-white">Media Pruning &amp; Retention Automation Schedule</CardTitle>
+                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                    {curationSyncPruning ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
                                 </Badge>
-                            ) : (
-                                <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px]">
-                                    ⚠️ Live Deletion Mode
-                                </Badge>
-                            )}
+                                {pruneDryRun ? (
+                                    <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                        🛡️ Dry-Run Safe (Simulate Only)
+                                    </Badge>
+                                ) : (
+                                    <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                        ⚠️ Live Deletion Enabled
+                                    </Badge>
+                                )}
+                            </div>
+                            <CardDescription className="text-xs text-slate-400">
+                                Automated recurring evaluation of storage headroom, media watch history, and retention policies across enabled Plex libraries to stage Leaving Soon notices and reclaim disk capacity.
+                            </CardDescription>
                         </div>
-                        <p className="text-[11px] text-slate-400">
-                            Evaluates media pruning rules, tags the '⚠️ Leaving Soon' Plex collection and banner overlays, and cleans up unwatched content across enabled libraries.
-                        </p>
-                        {curationLastRunAt && (
-                            <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                                <Clock3 className="h-3 w-3 text-rose-400" />
-                                Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
-                            <span className="text-[11px] font-bold text-slate-200">Timer</span>
-                            <Switch 
-                                checked={curationSyncPruning}
-                                onCheckedChange={checked => setCurationSyncPruning(checked)}
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
-                            <span className="text-[11px] font-bold text-slate-200">Dry-Run</span>
-                            <Switch 
-                                checked={pruneDryRun}
-                                onCheckedChange={checked => setPruneDryRun(checked)}
-                            />
-                        </div>
-
-                        <div className="space-y-0.5">
-                            <Select 
-                                value={curationSyncSchedule} 
-                                onValueChange={val => setCurationSyncSchedule(val)}
-                            >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-8 w-[155px]">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                    <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                    <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
-                                    <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
                         <Button 
                             size="sm"
                             onClick={handleSaveSchedule}
                             disabled={savingSchedule}
-                            variant="outline"
-                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-8 px-3 cursor-pointer"
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
                         >
-                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
+                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                            {scheduleSavedMsg ? "Saved Schedule!" : "Save Schedule"}
                         </Button>
+                    </div>
+                </CardHeader>
 
-                        <Button 
-                            size="sm"
-                            onClick={handleRunPruneSync}
-                            disabled={runningPruneSync}
-                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer"
-                        >
-                            {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                            <span>Run Prune Evaluation Now</span>
-                        </Button>
+                <CardContent className="p-5 space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Stage 1: Retention & Leaving Soon Staging */}
+                        <div className="bg-slate-950/60 border border-rose-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                                        <span className="font-bold text-slate-100 text-sm">⚠️ Stage 1: Leaving Soon Staging</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                            {curationSyncPruning ? `Every ${curationSyncSchedule.replace(/every_/g, '').replace(/_/g, ' ')}` : 'Disabled'}
+                                        </Badge>
+                                        <Switch 
+                                            checked={curationSyncPruning}
+                                            onCheckedChange={checked => setCurationSyncPruning(checked)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Scans storage usage, identifies unwatched media meeting prune criteria, adds items to the '⚠️ Leaving Soon' collection, and overlays countdown banners.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Evaluation Schedule</label>
+                                    <Select 
+                                        value={curationSyncSchedule} 
+                                        onValueChange={val => setCurationSyncSchedule(val)}
+                                        disabled={!curationSyncPruning}
+                                    >
+                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
+                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
+                                            <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Target Libraries</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-rose-300 font-semibold truncate">
+                                        {enabledServersForPruning.length > 0 ? `${enabledServersForPruning.length} Section(s) Configured` : 'All Enabled Plex Libraries'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <Clock3 className="h-3.5 w-3.5 text-rose-400" />
+                                    Last run: <span className="text-slate-300 font-mono">{curationLastRunAt ? new Date(curationLastRunAt).toLocaleString() : "Never"}</span>
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    onClick={handleRunPruneSync}
+                                    disabled={runningPruneSync}
+                                    className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
+                                >
+                                    {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                    <span>Run Prune Evaluation Now</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Stage 2: Storage Reclamation & Safety Safeguards */}
+                        <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <span className="font-bold text-slate-100 text-sm">🛡️ Stage 2: Reclamation &amp; Safety</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold text-slate-300">Dry-Run Safe:</span>
+                                        <Switch 
+                                            checked={pruneDryRun}
+                                            onCheckedChange={checked => setPruneDryRun(checked)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Enforces the 14-day advance notice window before purging. When Dry-Run is active, deletion actions are simulated with zero disk impact.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Headroom Threshold</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-amber-300 font-semibold truncate">
+                                        Warning: {pruneWarningThresholdPercent}% • Danger: {pruneDangerThresholdPercent}%
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Advance Notice Window</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-emerald-300 font-semibold truncate">
+                                        {pruneDaysNoticeSetting} Days Grace Period
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                                    <span>{pruneDryRun ? 'Simulation Safeguard Active' : '⚠️ Live Deletion Mode Active'}</span>
+                                </div>
+                                <div className="text-[11px] font-semibold text-slate-400">
+                                    Arr Integration: <span className={pruneDeleteFromArrSetting ? 'text-rose-400' : 'text-slate-400'}>{pruneDeleteFromArrSetting ? 'Active' : 'Disabled'}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
 
                 {pruneSyncResult && (
-                    <div className={`p-3 text-xs border-t ${pruneSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
-                        {pruneSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                    <div className={`p-3.5 text-xs border-t ${pruneSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
+                        {pruneSyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
                         <div className="space-y-0.5">
                             <span className="font-bold">{pruneSyncResult.text}</span>
                             {pruneSyncResult.details && pruneSyncResult.details.length > 0 && (
