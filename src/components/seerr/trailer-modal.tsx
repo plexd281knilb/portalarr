@@ -22,7 +22,7 @@ export function TrailerModal({ isOpen, onClose, title, videos }: TrailerModalPro
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="max-w-4xl w-[95vw] bg-[#0c0c10] border-border/60 p-0 overflow-hidden shadow-2xl rounded-2xl">
+            <DialogContent className="w-[95vw] sm:w-[90vw] max-w-5xl sm:max-w-4xl md:max-w-5xl bg-[#0c0c10] border-border/60 p-0 overflow-hidden shadow-2xl rounded-2xl">
                 <div className="p-4 sm:p-5 flex items-center justify-between border-b border-border/40 bg-[#121218]">
                     <div className="flex items-center gap-2.5">
                         <div className="h-8 w-8 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400">

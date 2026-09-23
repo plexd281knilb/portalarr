@@ -8,7 +8,7 @@ import type {
     TmdbMediaDetail,
     TmdbCollectionInfo
 } from "./tmdb-types";
-import { filterKidsSafeMedia } from "./tmdb-types";
+import { filterKidsSafeMedia, filterAllowedMedia, isMediaAllowedGlobally } from "./tmdb-types";
 
 // Built-in public TMDb read-access token & fallback keys
 const DEFAULT_TMDB_API_KEY = "431a8708161bcd1f1fbe7536137e61ed";
@@ -149,9 +149,9 @@ export async function getTmdbTrending(mediaType: "movie" | "tv" | "all" = "all",
     try {
         const data = await tmdbFetch(`/trending/${mediaType}/${timeWindow}`, { page });
         if (!data?.results) return [];
-        return data.results.map((item: any) => 
+        return filterAllowedMedia(data.results.map((item: any) => 
             item.media_type === "tv" ? mapTmdbTv(item) : mapTmdbMovie(item)
-        );
+        ));
     } catch {
         return [];
     }
@@ -163,7 +163,7 @@ export async function getTmdbTrending(mediaType: "movie" | "tv" | "all" = "all",
 export async function getTmdbUpcomingTv(page = 1): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/tv/on_the_air", { page });
-        return (data?.results || []).map(mapTmdbTv);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbTv));
     } catch {
         return [];
     }
@@ -175,7 +175,7 @@ export async function getTmdbUpcomingTv(page = 1): Promise<TmdbMediaItem[]> {
 export async function getTmdbPopularMovies(page = 1): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/popular", { page });
-        return (data?.results || []).map(mapTmdbMovie);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
     } catch {
         return [];
     }
@@ -187,7 +187,7 @@ export async function getTmdbPopularMovies(page = 1): Promise<TmdbMediaItem[]> {
 export async function getTmdbTopRatedMovies(page = 1): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/top_rated", { page });
-        return (data?.results || []).map(mapTmdbMovie);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
     } catch {
         return [];
     }
@@ -199,7 +199,7 @@ export async function getTmdbTopRatedMovies(page = 1): Promise<TmdbMediaItem[]> 
 export async function getTmdbNowPlayingMovies(): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/now_playing", { region: "US" });
-        return (data?.results || []).map(mapTmdbMovie);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
     } catch {
         return [];
     }
@@ -211,7 +211,7 @@ export async function getTmdbNowPlayingMovies(): Promise<TmdbMediaItem[]> {
 export async function getTmdbUpcomingMovies(): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/movie/upcoming", { region: "US" });
-        return (data?.results || []).map(mapTmdbMovie);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
     } catch {
         return [];
     }
@@ -230,7 +230,7 @@ export async function getTmdbCollection(collectionId: number): Promise<TmdbColle
             overview: data.overview || "",
             posterPath: data.poster_path ? `${TMDB_IMAGE_BASE}${data.poster_path}` : null,
             backdropPath: data.backdrop_path ? `${TMDB_IMAGE_BASE}${data.backdrop_path}` : null,
-            parts: (data.parts || []).map(mapTmdbMovie).sort((a: any, b: any) => 
+            parts: filterAllowedMedia((data.parts || []).map(mapTmdbMovie)).sort((a: any, b: any) => 
                 (a.releaseDate || "").localeCompare(b.releaseDate || "")
             )
         };
@@ -249,7 +249,7 @@ export async function getTmdbStudioMovies(companyId: number, minVotes = 50): Pro
             sort_by: "popularity.desc",
             "vote_count.gte": minVotes
         });
-        return (data?.results || []).map(mapTmdbMovie);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
     } catch {
         return [];
     }
@@ -265,7 +265,7 @@ export async function getTmdbNetworkShows(networkId: number, minVotes = 20): Pro
             sort_by: "popularity.desc",
             "vote_count.gte": minVotes
         });
-        return (data?.results || []).map(mapTmdbTv);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbTv));
     } catch {
         return [];
     }
@@ -294,7 +294,7 @@ export async function searchTmdbMovie(title: string, year?: number): Promise<Tmd
         const params: Record<string, string | number> = { query: title };
         if (year) params.primary_release_year = year;
         const data = await tmdbFetch("/search/movie", params);
-        return (data?.results || []).map(mapTmdbMovie);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
     } catch {
         return [];
     }
@@ -308,7 +308,7 @@ export async function searchTmdbTv(title: string, year?: number): Promise<TmdbMe
         const params: Record<string, string | number> = { query: title };
         if (year) params.first_air_date_year = year;
         const data = await tmdbFetch("/search/tv", params);
-        return (data?.results || []).map(mapTmdbTv);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbTv));
     } catch {
         return [];
     }
@@ -395,6 +395,11 @@ export async function getTmdbStreamingProviderMedia(
             if (seenIds.has(item.id)) return false;
             seenIds.add(item.id);
 
+            // Filter out NC-17 or disallowed ratings globally
+            if (!isMediaAllowedGlobally(item)) {
+                return false;
+            }
+
             if (isKids) {
                 const cert = (item.certification || "").toUpperCase().replace(/^US[:\/]/, "").trim();
                 // Explicit rejection of mature or teen certifications
@@ -417,9 +422,9 @@ export async function getTmdbStreamingProviderMedia(
 
         // Sort combined list by popularity descending
         uniqueItems.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-        return uniqueItems;
+        return filterAllowedMedia(uniqueItems);
     } catch {
-        return items;
+        return filterAllowedMedia(items);
     }
 }
 
@@ -429,7 +434,7 @@ export async function getTmdbStreamingProviderMedia(
 export async function getTmdbPopularTv(page = 1): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/tv/popular", { page });
-        return (data?.results || []).map(mapTmdbTv);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbTv));
     } catch {
         return [];
     }
@@ -441,7 +446,7 @@ export async function getTmdbPopularTv(page = 1): Promise<TmdbMediaItem[]> {
 export async function getTmdbTopRatedTv(page = 1): Promise<TmdbMediaItem[]> {
     try {
         const data = await tmdbFetch("/tv/top_rated", { page });
-        return (data?.results || []).map(mapTmdbTv);
+        return filterAllowedMedia((data?.results || []).map(mapTmdbTv));
     } catch {
         return [];
     }
@@ -526,7 +531,7 @@ export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMedi
                 }
             }
         }
-        return items;
+        return filterAllowedMedia(items);
     } catch {
         return [];
     }
@@ -577,9 +582,9 @@ export async function getTmdbMovieDetailsFull(tmdbId: number): Promise<TmdbMedia
             });
 
         // Recommendations
-        const recommendations: TmdbMediaItem[] = (data.recommendations?.results || data.similar?.results || [])
+        const recommendations: TmdbMediaItem[] = filterAllowedMedia((data.recommendations?.results || data.similar?.results || [])
             .slice(0, 15)
-            .map(mapTmdbMovie);
+            .map(mapTmdbMovie));
 
         // Watch Providers (US)
         const usProviders = data["watch/providers"]?.results?.US;
@@ -681,9 +686,9 @@ export async function getTmdbTvDetailsFull(tvId: number): Promise<TmdbMediaDetai
             });
 
         // Recommendations
-        const recommendations: TmdbMediaItem[] = (data.recommendations?.results || data.similar?.results || [])
+        const recommendations: TmdbMediaItem[] = filterAllowedMedia((data.recommendations?.results || data.similar?.results || [])
             .slice(0, 15)
-            .map(mapTmdbTv);
+            .map(mapTmdbTv));
 
         // Networks
         const networks = (data.networks || []).map((n: any) => ({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { TmdbMediaItem } from "@/lib/curation/tmdb-types";
+import { TmdbMediaItem, isNc17OrDisallowedRating } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +106,7 @@ export function HeroSpotlight({
                         </Button>
                     )}
 
-                    {!inLibrary && !isRequested && onRequest && (
+                    {!inLibrary && !isRequested && onRequest && !isNc17OrDisallowedRating(item.certification) && (
                         <Button
                             size="lg"
                             className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center gap-2"

@@ -11,7 +11,7 @@ import {
     getUserRequestQuotaAction, 
     submitMediaRequestAction 
 } from "@/app/seerr-actions";
-import { TmdbMediaDetail, TmdbMediaItem, TmdbEpisodeInfo, isAdultOrMatureRating, isKidsSafeRating } from "@/lib/curation/tmdb-types";
+import { TmdbMediaDetail, TmdbMediaItem, TmdbEpisodeInfo, isAdultOrMatureRating, isKidsSafeRating, isNc17OrDisallowedRating } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { TrailerModal } from "@/components/seerr/trailer-modal";
 import { 
@@ -168,6 +168,10 @@ export function MediaDetailModal({
 
     const handleSubmitRequest = async () => {
         if (!details || !tmdbId) return;
+        if (isNc17OrDisallowedRating(details.certification)) {
+            setRequestErrorMsg("NC-17 and adult-rated titles cannot be requested.");
+            return;
+        }
         setSubmitting(true);
         setRequestSuccessMsg(null);
         setRequestErrorMsg(null);
@@ -221,6 +225,7 @@ export function MediaDetailModal({
     const isRequested = availability?.isRequested;
     const quotaInfo = isTv ? quotaData?.tv : quotaData?.movies;
 
+    const isDisallowed = Boolean(isNc17OrDisallowedRating(details?.certification));
     const isMatureInKids = Boolean(isKids && isAdultOrMatureRating(details?.certification));
     const isPgSafe = Boolean(isKids && isKidsSafeRating(details?.certification));
     const isPg13OrUnrated = Boolean(isKids && !isMatureInKids && !isPgSafe);
@@ -228,7 +233,7 @@ export function MediaDetailModal({
     return (
         <>
             <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-                <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] bg-[#0d0d12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin">
+                <DialogContent className="w-[95vw] sm:w-[92vw] max-w-5xl sm:max-w-4xl md:max-w-5xl max-h-[92vh] bg-[#0d0d12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin">
                     {loading || !details ? (
                         <div className="flex flex-col items-center justify-center p-16 space-y-4">
                             <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -417,7 +422,14 @@ export function MediaDetailModal({
                                         </div>
 
                                         {/* Approval Status Preview Callout */}
-                                        {isMatureInKids ? (
+                                        {isDisallowed ? (
+                                            <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2.5 text-xs">
+                                                <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                                                <div>
+                                                    <strong className="text-rose-200">Restricted Title (Rated {details.certification || "NC-17 / Adult"}):</strong> NC-17 and adult-rated titles cannot be requested.
+                                                </div>
+                                            </div>
+                                        ) : isMatureInKids ? (
                                             <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2.5 text-xs">
                                                 <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
                                                 <div>
@@ -447,7 +459,7 @@ export function MediaDetailModal({
                                         )}
 
                                         {/* TV Show Season Selection */}
-                                        {isTv && details.seasons && details.seasons.length > 0 && !isMatureInKids && (
+                                        {isTv && details.seasons && details.seasons.length > 0 && !isMatureInKids && !isDisallowed && (
                                             <div className="space-y-3 border-t border-border/40 pt-3">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs font-semibold text-muted-foreground">Seasons to Request:</span>
@@ -491,7 +503,7 @@ export function MediaDetailModal({
                                         )}
 
                                         {/* 4K UHD Toggle Option (if allowed) */}
-                                        {quotaData?.canRequest4k && !isMatureInKids && (
+                                        {quotaData?.canRequest4k && !isMatureInKids && !isDisallowed && (
                                             <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
                                                 <div className="flex items-center gap-2">
                                                     <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 border-purple-500/50">
@@ -527,11 +539,16 @@ export function MediaDetailModal({
                                         <Button
                                             size="lg"
                                             className="w-full h-11 text-sm font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                            disabled={submitting || isMatureInKids || (isTv && selectedSeasons.length === 0)}
+                                            disabled={submitting || isDisallowed || isMatureInKids || (isTv && selectedSeasons.length === 0)}
                                             onClick={handleSubmitRequest}
                                         >
                                             {submitting ? (
                                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            ) : isDisallowed ? (
+                                                <>
+                                                    <ShieldAlert className="h-4 w-4" />
+                                                    <span>Restricted (NC-17 / Adult)</span>
+                                                </>
                                             ) : isMatureInKids ? (
                                                 <>
                                                     <ShieldAlert className="h-4 w-4" />

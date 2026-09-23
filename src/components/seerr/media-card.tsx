@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { TmdbMediaItem } from "@/lib/curation/tmdb-types";
+import { TmdbMediaItem, isNc17OrDisallowedRating } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -145,7 +145,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
                         <Info className="h-3.5 w-3.5" />
                         <span>View Details</span>
                     </Button>
-                    {!inLibrary && !isRequested && onRequest && (
+                    {!inLibrary && !isRequested && onRequest && !isNc17OrDisallowedRating(item.certification) && (
                         <Button 
                             size="sm" 
                             variant="secondary"

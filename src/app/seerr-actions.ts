@@ -24,7 +24,10 @@ import {
     getTmdbKidsTopRated,
     isAdultOrMatureRating,
     isKidsSafeRating,
+    isNc17OrDisallowedRating,
+    containsAdultWords,
     filterKidsSafeMedia,
+    filterAllowedMedia,
     TmdbMediaItem,
     TmdbMediaDetail,
     TmdbEpisodeInfo
@@ -241,7 +244,13 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
             return { success: true, items: [], availabilityMap: {} };
         }
 
-        let items = await searchTmdbMulti(query.trim(), page);
+        const cleanQuery = query.trim();
+        if (isKids && containsAdultWords(cleanQuery)) {
+            return { success: true, items: [], availabilityMap: {} };
+        }
+
+        let items = await searchTmdbMulti(cleanQuery, page);
+        items = filterAllowedMedia(items);
         if (isKids) {
             items = filterKidsSafeMedia(items);
         }
@@ -272,6 +281,10 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
 
         if (!details) {
             return { success: false, error: "Media details not found on TMDb" };
+        }
+
+        if (details.certification && isNc17OrDisallowedRating(details.certification)) {
+            return { success: false, error: "NC-17 and adult-rated titles are not permitted in Portalarr." };
         }
 
         const availability = await checkMediaAvailability(
@@ -466,6 +479,11 @@ export async function submitMediaRequestAction(payload: {
 
         const isTrial = user.status === "TRIAL" || (user as any).isTrial === true;
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+
+        // Global NC-17 / Disallowed Rating Guard
+        if (payload.contentRating && isNc17OrDisallowedRating(payload.contentRating)) {
+            throw new Error("NC-17 and adult-rated titles cannot be requested in Portalarr.");
+        }
 
         // Kids Section Verification & Approval Rules
         if (payload.isKids) {
