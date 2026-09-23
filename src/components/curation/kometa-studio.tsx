@@ -408,17 +408,17 @@ export function KometaStudio() {
     const [singleItemMsg, setSingleItemMsg] = useState<{ success: boolean; text: string } | null>(null);
 
     // Poster Overlays Dual Automation Schedules
-    // Schedule 1: Fast Incremental Scan (New Media & Upgrades)
+    // Schedule 1: Fast Incremental Scan (All Changed Items)
     const [overlayIncrementalEnabled, setOverlayIncrementalEnabled] = useState<boolean>(true);
     const [overlayIncrementalSchedule, setOverlayIncrementalSchedule] = useState<string>("every_hour");
-    const [overlayIncrementalBatchSize, setOverlayIncrementalBatchSize] = useState<number>(200);
+    const [overlayIncrementalBatchSize, setOverlayIncrementalBatchSize] = useState<number>(0);
     const [overlayIncrementalLastRunAt, setOverlayIncrementalLastRunAt] = useState<string | null>(null);
 
-    // Schedule 2: Deep Periodic Recheck Scan (Integrity & Expiring Badges)
+    // Schedule 2: Deep Periodic Recheck Scan (All Items Full Library)
     const [overlayRecheckEnabled, setOverlayRecheckEnabled] = useState<boolean>(true);
     const [overlayRecheckSchedule, setOverlayRecheckSchedule] = useState<string>("daily_4am");
-    const [overlayRecheckScope, setOverlayRecheckScope] = useState<string>("daily_recheck");
-    const [overlayRecheckBatchSize, setOverlayRecheckBatchSize] = useState<number>(200);
+    const [overlayRecheckScope, setOverlayRecheckScope] = useState<string>("force_all");
+    const [overlayRecheckBatchSize, setOverlayRecheckBatchSize] = useState<number>(0);
     const [overlayRecheckLastRunAt, setOverlayRecheckLastRunAt] = useState<string | null>(null);
 
     const [enabledServersForOverlays, setEnabledServersForOverlays] = useState<string[]>([]);
@@ -659,13 +659,13 @@ export function KometaStudio() {
                 if (settingsRes.success) {
                     setOverlayIncrementalEnabled(settingsRes.overlayIncrementalEnabled ?? true);
                     setOverlayIncrementalSchedule(settingsRes.overlayIncrementalSchedule || "every_hour");
-                    setOverlayIncrementalBatchSize(settingsRes.overlayIncrementalBatchSize ?? 200);
+                    setOverlayIncrementalBatchSize(settingsRes.overlayIncrementalBatchSize !== undefined ? settingsRes.overlayIncrementalBatchSize : 0);
                     setOverlayIncrementalLastRunAt(settingsRes.overlayIncrementalLastRunAt || null);
 
                     setOverlayRecheckEnabled(settingsRes.overlayRecheckEnabled ?? true);
                     setOverlayRecheckSchedule(settingsRes.overlayRecheckSchedule || "daily_4am");
-                    setOverlayRecheckScope(settingsRes.overlayRecheckScope || "daily_recheck");
-                    setOverlayRecheckBatchSize(settingsRes.overlayRecheckBatchSize ?? 200);
+                    setOverlayRecheckScope(settingsRes.overlayRecheckScope || "force_all");
+                    setOverlayRecheckBatchSize(settingsRes.overlayRecheckBatchSize !== undefined ? settingsRes.overlayRecheckBatchSize : 0);
                     setOverlayRecheckLastRunAt(settingsRes.overlayRecheckLastRunAt || null);
 
                     if (settingsRes.enabledServersForOverlays) {
@@ -3119,7 +3119,7 @@ export function KometaStudio() {
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
                                         <Zap className="h-4 w-4 text-purple-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">⚡ Incremental Scan Schedule</span>
+                                        <span className="font-bold text-slate-100 text-sm">⚡ Incremental Scan (All Changed Items)</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
@@ -3132,7 +3132,7 @@ export function KometaStudio() {
                                     </div>
                                 </div>
                                 <p className="text-xs text-slate-400 leading-relaxed">
-                                    Fast, high-frequency scan that detects newly imported media and quality upgrades to apply badges immediately.
+                                    Fast, high-frequency scan that checks newly added and upgraded media across enabled libraries to apply badges immediately.
                                 </p>
                             </div>
 
@@ -3157,7 +3157,7 @@ export function KometaStudio() {
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Batch Size Limit</label>
+                                    <label className="text-[11px] font-medium text-slate-400">Incremental Scope / Batch</label>
                                     <Select 
                                         value={String(overlayIncrementalBatchSize)} 
                                         onValueChange={val => setOverlayIncrementalBatchSize(Number(val))}
@@ -3167,6 +3167,7 @@ export function KometaStudio() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="0">📦 All Changed Items (Default)</SelectItem>
                                             <SelectItem value="50">📦 50 Items</SelectItem>
                                             <SelectItem value="100">📦 100 Items</SelectItem>
                                             <SelectItem value="200">📦 200 Items</SelectItem>
@@ -3200,7 +3201,7 @@ export function KometaStudio() {
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
                                         <RotateCcw className="h-4 w-4 text-indigo-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">🌙 Deep Recheck Schedule</span>
+                                        <span className="font-bold text-slate-100 text-sm">🌙 Daily Deep Recheck (All Items)</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayRecheckEnabled ? 'border-indigo-500/40 text-indigo-300 bg-indigo-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
@@ -3213,7 +3214,7 @@ export function KometaStudio() {
                                     </div>
                                 </div>
                                 <p className="text-xs text-slate-400 leading-relaxed">
-                                    Comprehensive maintenance job to verify existing badge hashes, update expiring ribbon dates, and refresh rules.
+                                    Comprehensive full-library maintenance sweep that verifies existing badge hashes, updates dynamic ribbon dates, and processes all catalog items.
                                 </p>
                             </div>
 
@@ -3248,10 +3249,10 @@ export function KometaStudio() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="daily_recheck">&gt;24h Old</SelectItem>
-                                            <SelectItem value="weekly_recheck">&gt;7d Old</SelectItem>
-                                            <SelectItem value="monthly_recheck">&gt;30d Old</SelectItem>
-                                            <SelectItem value="force_all">Force All</SelectItem>
+                                            <SelectItem value="force_all">🔄 All Items (Full Library)</SelectItem>
+                                            <SelectItem value="daily_recheck">🌙 &gt;24h Old Items</SelectItem>
+                                            <SelectItem value="weekly_recheck">📅 &gt;7d Old Items</SelectItem>
+                                            <SelectItem value="monthly_recheck">🗓️ &gt;30d Old Items</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -3267,11 +3268,12 @@ export function KometaStudio() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="50">📦 50 Items</SelectItem>
+                                            <SelectItem value="0">📦 All Items (Default)</SelectItem>
                                             <SelectItem value="100">📦 100 Items</SelectItem>
                                             <SelectItem value="200">📦 200 Items</SelectItem>
                                             <SelectItem value="500">📦 500 Items</SelectItem>
                                             <SelectItem value="1000">📦 1000 Items</SelectItem>
+                                            <SelectItem value="2500">📦 2500 Items</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -3360,6 +3362,7 @@ export function KometaStudio() {
                                             <SelectValue placeholder="Size" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="0">All Items</SelectItem>
                                             <SelectItem value="10">10 Items</SelectItem>
                                             <SelectItem value="50">50 Items</SelectItem>
                                             <SelectItem value="100">100 Items</SelectItem>
@@ -3388,7 +3391,7 @@ export function KometaStudio() {
                                     className="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer rounded-lg shrink-0"
                                 >
                                     {applyingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                                    <span>✨ Apply ({manualBatchSize})</span>
+                                    <span>✨ Apply ({manualBatchSize === 0 ? "All" : manualBatchSize})</span>
                                 </Button>
                             </div>
                             <Button

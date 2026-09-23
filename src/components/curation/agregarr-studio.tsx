@@ -332,6 +332,7 @@ export function AgregarrStudio() {
 
     // Automated Schedule & Enabled Library States
     const [curationSyncCollections, setCurationSyncCollections] = useState<boolean>(true);
+    const [curationSyncReleases, setCurationSyncReleases] = useState<boolean>(true);
     const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("every_6_hours");
     const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
     const [curationLastRunStatus, setCurationLastRunStatus] = useState<any | null>(null);
@@ -394,6 +395,7 @@ export function AgregarrStudio() {
         try {
             const res = await saveCurationSettingsAction({
                 curationSyncCollections,
+                curationSyncReleases,
                 curationSyncSchedule
             });
             if (res.success) {
@@ -528,6 +530,7 @@ export function AgregarrStudio() {
                         }
                     }
                     setCurationSyncCollections(settingsRes.curationSyncCollections ?? true);
+                    setCurationSyncReleases(settingsRes.curationSyncReleases ?? true);
                     setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
                     setCurationLastRunAt(settingsRes.curationLastRunAt || null);
                     setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
@@ -2182,44 +2185,56 @@ export function AgregarrStudio() {
                                         <Calendar className="h-4 w-4 text-sky-400 shrink-0" />
                                         <span className="font-bold text-slate-100 text-sm">🗓️ Seasonal Dates &amp; Release Placeholders</span>
                                     </div>
-                                    <Badge variant="outline" className="border-sky-500/40 text-sky-300 bg-sky-950/30 text-[10px] font-semibold px-2 py-0.5">
-                                        Auto-Evaluated
-                                    </Badge>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncReleases ? 'border-sky-500/40 text-sky-300 bg-sky-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                            {curationSyncReleases ? 'Active' : 'Disabled'}
+                                        </Badge>
+                                        <Switch 
+                                            checked={curationSyncReleases}
+                                            onCheckedChange={checked => setCurationSyncReleases(checked)}
+                                        />
+                                    </div>
                                 </div>
                                 <p className="text-xs text-slate-400 leading-relaxed">
-                                    Promotes seasonal collections during active date windows (e.g. Spooky October, Holiday Spirit) and demotes them off-season. Generates future trailer placeholders.
+                                    Evaluates monitored unreleased media from Radarr/Sonarr, generates 1080p dummy video stubs with countdown banner overlays, and automatically cleans up placeholders once downloaded.
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Seasonal Collections</label>
+                                    <label className="text-[11px] font-medium text-slate-400">Seasonal Schedules</label>
                                     <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
-                                        {collections.filter(c => c.isSeasonal).length} Configured Schedules
+                                        {collections.filter(c => c.isSeasonal).length} Active Date Windows
                                     </div>
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Placeholders &amp; Trailers</label>
+                                    <label className="text-[11px] font-medium text-slate-400">Monitored Queue</label>
                                     <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
-                                        Monitored Radarr Queue
+                                        Radarr &amp; Sonarr Monitored
                                     </div>
                                 </div>
                             </div>
 
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-sky-400" />
-                                    <span>Date Window Sync Active</span>
-                                </div>
+                                <Button 
+                                    size="sm"
+                                    onClick={handleCleanupPlaceholders}
+                                    disabled={cleaningPlaceholders}
+                                    variant="outline"
+                                    className="border-sky-500/40 text-sky-300 hover:text-white hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                >
+                                    {cleaningPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderCheck className="h-3.5 w-3.5" />}
+                                    <span>Clean Acquired Placeholders</span>
+                                </Button>
                                 <Button 
                                     size="sm"
                                     onClick={() => setSubTab("coming_soon")}
                                     variant="outline"
-                                    className="border-sky-500/40 text-sky-300 hover:text-white hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                    className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
                                 >
-                                    <Calendar className="h-3.5 w-3.5" />
-                                    <span>Configure Coming Soon &rarr;</span>
+                                    <Calendar className="h-3.5 w-3.5 text-sky-400" />
+                                    <span>Coming Soon Settings &rarr;</span>
                                 </Button>
                             </div>
                         </div>

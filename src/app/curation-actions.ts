@@ -416,12 +416,12 @@ export async function getCurationSettingsAction() {
         // Poster Overlays Dual Automation Schedules
         overlayIncrementalEnabled: settings?.overlayIncrementalEnabled ?? true,
         overlayIncrementalSchedule: settings?.overlayIncrementalSchedule || "every_hour",
-        overlayIncrementalBatchSize: settings?.overlayIncrementalBatchSize ?? 200,
+        overlayIncrementalBatchSize: settings?.overlayIncrementalBatchSize ?? 0, // 0 = all changed items
         overlayIncrementalLastRunAt: settings?.overlayIncrementalLastRunAt ? settings.overlayIncrementalLastRunAt.toISOString() : null,
         overlayRecheckEnabled: settings?.overlayRecheckEnabled ?? true,
         overlayRecheckSchedule: settings?.overlayRecheckSchedule || "daily_4am",
-        overlayRecheckScope: settings?.overlayRecheckScope || "daily_recheck",
-        overlayRecheckBatchSize: settings?.overlayRecheckBatchSize ?? 200,
+        overlayRecheckScope: settings?.overlayRecheckScope || "force_all", // force_all = all items in library
+        overlayRecheckBatchSize: settings?.overlayRecheckBatchSize ?? 0, // 0 = all items
         overlayRecheckLastRunAt: settings?.overlayRecheckLastRunAt ? settings.overlayRecheckLastRunAt.toISOString() : null
     };
     } catch (e: any) {
@@ -4270,7 +4270,7 @@ export async function applyOverlaysToLibraryInternal(
 
         // Fetch library media items across the whole library section, strictly excluding trailer placeholders
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 2500, undefined, true, true);
+        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 10000, undefined, true, true);
 
         // Map leaving soon flags from content advisories
         const leavingSoonAdvisories = await prisma.mediaContentAdvisory.findMany({
@@ -4294,7 +4294,9 @@ export async function applyOverlaysToLibraryInternal(
         }).catch(() => []);
         const backupMap = new Map(existingBackups.map(b => [String(b.ratingKey), b]));
 
-        const batchSize = Math.max(10, Math.min(batchOptions?.batchSize || 200, 500));
+        const requestedBatchSize = batchOptions?.batchSize !== undefined ? batchOptions.batchSize : 0;
+        const isUnlimitedBatch = requestedBatchSize <= 0;
+        const effectiveBatchLimit = isUnlimitedBatch ? Infinity : requestedBatchSize;
         const mode = batchOptions?.mode || "incremental";
 
         // Categorize items
@@ -4450,8 +4452,8 @@ export async function applyOverlaysToLibraryInternal(
         // Sort candidates: Media Upgrades first (highest priority), then New Items, then Recheck items
         candidatesNeedingUpdate.sort((a, b) => a.priority - b.priority);
 
-        // Take only up to batchSize items for this batch execution
-        const batchToProcess = candidatesNeedingUpdate.slice(0, batchSize);
+        // Take items for this batch execution (all candidates if batchSize is 0 / unlimited)
+        const batchToProcess = isUnlimitedBatch ? candidatesNeedingUpdate : candidatesNeedingUpdate.slice(0, effectiveBatchLimit);
         const remainingInQueue = Math.max(0, candidatesNeedingUpdate.length - batchToProcess.length);
 
         let successCount = 0;
@@ -4503,7 +4505,7 @@ export async function applyOverlaysToLibraryInternal(
             skippedCount: alreadyUpToDateCount,
             totalEvaluated: items.length,
             remainingInQueue,
-            batchSize,
+            batchSize: requestedBatchSize,
             mode,
             message
         };
@@ -6306,7 +6308,7 @@ export async function runOverlayIncrementalSyncInternal(targetServerId?: string,
             };
         }
 
-        const batchSize = settings.overlayIncrementalBatchSize || 200;
+        const batchSize: number = settings.overlayIncrementalBatchSize ?? 0; // 0 = all changed items
         const allServers = await getPlexServers(token);
         const enabledServersForOverlays: string[] = settings.enabledServersForOverlays
             ? JSON.parse(settings.enabledServersForOverlays)
@@ -6483,8 +6485,8 @@ export async function runOverlayRecheckSyncInternal(targetServerId?: string, tar
             };
         }
 
-        const batchSize = settings.overlayRecheckBatchSize || 200;
-        const scope = (settings.overlayRecheckScope as any) || "daily_recheck";
+        const batchSize: number = settings.overlayRecheckBatchSize ?? 0; // 0 = all items
+        const scope = (settings.overlayRecheckScope as any) || "force_all"; // force_all = all items in library
         const allServers = await getPlexServers(token);
         const enabledServersForOverlays: string[] = settings.enabledServersForOverlays
             ? JSON.parse(settings.enabledServersForOverlays)
