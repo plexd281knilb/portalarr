@@ -63,14 +63,18 @@ model Settings {
 
   // Seerr & Native Media Request Engine Settings
   seerrAutoApproveAll          Boolean   @default(true) // Global fallback auto-approve
-  seerrDefaultMovieProfileId   Int?
-  seerrDefaultTvProfileId      Int?
-  seerrDefaultMovieRootFolder  String?
-  seerrDefaultTvRootFolder     String?
-  seerrDefaultMovieAppId       String?   // MediaApp ID for standard Radarr
-  seerrDefaultTvAppId          String?   // MediaApp ID for standard Sonarr
+  seerrDefaultMovieAppId       String?   // MediaApp ID for standard Radarr (1080p)
+  seerrDefaultMovieProfileId   Int?      // Quality Profile ID for standard Radarr (1080p)
+  seerrDefaultMovieRootFolder  String?   // Root Folder for standard Radarr (1080p)
   seerrDefaultMovie4kAppId     String?   // MediaApp ID for 4K Radarr
+  seerrDefaultMovie4kProfileId Int?      // Quality Profile ID for 4K Radarr
+  seerrDefaultMovie4kRootFolder String?  // Root Folder for 4K Radarr
+  seerrDefaultTvAppId          String?   // MediaApp ID for standard Sonarr (1080p)
+  seerrDefaultTvProfileId      Int?      // Quality Profile ID for standard Sonarr (1080p)
+  seerrDefaultTvRootFolder     String?   // Root Folder for standard Sonarr (1080p)
   seerrDefaultTv4kAppId        String?   // MediaApp ID for 4K Sonarr
+  seerrDefaultTv4kProfileId    Int?      // Quality Profile ID for 4K Sonarr
+  seerrDefaultTv4kRootFolder   String?   // Root Folder for 4K Sonarr
   seerrQuotaMovies             Int?      @default(10) // Default weekly movie quota
   seerrQuotaTv                 Int?      @default(10) // Default weekly TV show quota
   seerrQuotaDays               Int?      @default(7)  // Quota sliding window in days
@@ -90,12 +94,18 @@ model Settings {
   // Kids Section & Kids Arrs Routing Controls
   seerrKidsAutoApprovePg       Boolean   @default(true) // PG ratings and below auto-approve in kids section
   seerrKidsRequireApprovalPg13 Boolean   @default(true) // PG-13 & Unrated require approval in kids section
-  seerrKidsMovieAppId          String?   // Target Radarr instance for Kids Movies
-  seerrKidsTvAppId             String?   // Target Sonarr instance for Kids TV Shows
-  seerrKidsMovie4kAppId        String?   // Target 4K Radarr instance for Kids Movies
-  seerrKidsTv4kAppId           String?   // Target 4K Sonarr instance for Kids TV Shows
-  seerrKidsMovieRootFolder     String?   // Root folder for kids movies (e.g. /movies/kids)
-  seerrKidsTvRootFolder        String?   // Root folder for kids TV (e.g. /tv/kids)
+  seerrKidsMovieAppId          String?   // Target Radarr instance for Kids Movies (1080p)
+  seerrKidsMovieProfileId      Int?      // Quality Profile ID for Kids Movies (1080p)
+  seerrKidsMovieRootFolder     String?   // Root folder for kids movies (1080p)
+  seerrKidsMovie4kAppId        String?   // Target 4K Radarr instance for Kids Movies (4K)
+  seerrKidsMovie4kProfileId    Int?      // Quality Profile ID for Kids Movies (4K)
+  seerrKidsMovie4kRootFolder   String?   // Root folder for kids movies (4K)
+  seerrKidsTvAppId             String?   // Target Sonarr instance for Kids TV Shows (1080p)
+  seerrKidsTvProfileId         Int?      // Quality Profile ID for Kids TV Shows (1080p)
+  seerrKidsTvRootFolder        String?   // Root folder for kids TV (1080p)
+  seerrKidsTv4kAppId           String?   // Target 4K Sonarr instance for Kids TV Shows (4K)
+  seerrKidsTv4kProfileId       Int?      // Quality Profile ID for Kids TV Shows (4K)
+  seerrKidsTv4kRootFolder      String?   // Root folder for kids TV (4K)
 
   // Dual 4K + 1080p Ingestion
   seerrAutoDual1080pFor4k      Boolean   @default(true) // Auto-add to 1080p Arr when added to 4K Arr

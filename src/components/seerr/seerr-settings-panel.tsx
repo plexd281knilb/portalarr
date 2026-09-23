@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getSeerrSettingsAction, updateSeerrSettingsAction } from "@/app/seerr-actions";
+import { 
+    getSeerrSettingsAction, 
+    updateSeerrSettingsAction, 
+    getArrAppProfilesAndFoldersAction 
+} from "@/app/seerr-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,19 +23,39 @@ import {
     Sparkles, 
     Sliders, 
     Layers, 
-    Check,
     Bell,
     UserCheck,
     Clock,
     Smile,
     ShieldCheck,
     ShieldAlert,
-    CopyCheck
+    CopyCheck,
+    FolderTree,
+    HardDrive,
+    RotateCw
 } from "lucide-react";
+
+interface ArrAppProfile {
+    id: number;
+    name: string;
+}
+
+interface ArrAppFolder {
+    id: number;
+    path: string;
+    freeSpace?: number;
+    freeSpaceFormatted?: string;
+}
+
+interface ArrAppData {
+    profiles: ArrAppProfile[];
+    folders: ArrAppFolder[];
+}
 
 export function SeerrSettingsPanel() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [refreshingAppId, setRefreshingAppId] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -48,33 +72,54 @@ export function SeerrSettingsPanel() {
     const [trialQuotaTv, setTrialQuotaTv] = useState(3);
     const [trialQuotaDays, setTrialQuotaDays] = useState(7);
 
-    // Kids Section & Routing Settings
-    const [kidsAutoApprovePg, setKidsAutoApprovePg] = useState(true);
-    const [kidsRequireApprovalPg13, setKidsRequireApprovalPg13] = useState(true);
-    const [kidsMovieAppId, setKidsMovieAppId] = useState<string>("");
-    const [kidsMovie4kAppId, setKidsMovie4kAppId] = useState<string>("");
-    const [kidsMovieRootFolder, setKidsMovieRootFolder] = useState<string>("");
-    const [kidsTvAppId, setKidsTvAppId] = useState<string>("");
-    const [kidsTv4kAppId, setKidsTv4kAppId] = useState<string>("");
-    const [kidsTvRootFolder, setKidsTvRootFolder] = useState<string>("");
-
     // Dual 4K + 1080p Ingestion
     const [autoDual1080pFor4k, setAutoDual1080pFor4k] = useState(true);
 
     // Notifications
     const [notificationOnAvailable, setNotificationOnAvailable] = useState(true);
 
-    // Main Radarr / Sonarr Routing Defaults
+    // Main Movies (1080p & 4K)
     const [defaultMovieAppId, setDefaultMovieAppId] = useState<string>("");
-    const [defaultMovie4kAppId, setDefaultMovie4kAppId] = useState<string>("");
+    const [defaultMovieProfileId, setDefaultMovieProfileId] = useState<number | null>(null);
     const [defaultMovieRootFolder, setDefaultMovieRootFolder] = useState<string>("");
+
+    const [defaultMovie4kAppId, setDefaultMovie4kAppId] = useState<string>("");
+    const [defaultMovie4kProfileId, setDefaultMovie4kProfileId] = useState<number | null>(null);
+    const [defaultMovie4kRootFolder, setDefaultMovie4kRootFolder] = useState<string>("");
+
+    // Main TV (1080p & 4K)
     const [defaultTvAppId, setDefaultTvAppId] = useState<string>("");
-    const [defaultTv4kAppId, setDefaultTv4kAppId] = useState<string>("");
+    const [defaultTvProfileId, setDefaultTvProfileId] = useState<number | null>(null);
     const [defaultTvRootFolder, setDefaultTvRootFolder] = useState<string>("");
 
-    // Media apps list
+    const [defaultTv4kAppId, setDefaultTv4kAppId] = useState<string>("");
+    const [defaultTv4kProfileId, setDefaultTv4kProfileId] = useState<number | null>(null);
+    const [defaultTv4kRootFolder, setDefaultTv4kRootFolder] = useState<string>("");
+
+    // Kids Section (1080p & 4K Movies & TV)
+    const [kidsAutoApprovePg, setKidsAutoApprovePg] = useState(true);
+    const [kidsRequireApprovalPg13, setKidsRequireApprovalPg13] = useState(true);
+
+    const [kidsMovieAppId, setKidsMovieAppId] = useState<string>("");
+    const [kidsMovieProfileId, setKidsMovieProfileId] = useState<number | null>(null);
+    const [kidsMovieRootFolder, setKidsMovieRootFolder] = useState<string>("");
+
+    const [kidsMovie4kAppId, setKidsMovie4kAppId] = useState<string>("");
+    const [kidsMovie4kProfileId, setKidsMovie4kProfileId] = useState<number | null>(null);
+    const [kidsMovie4kRootFolder, setKidsMovie4kRootFolder] = useState<string>("");
+
+    const [kidsTvAppId, setKidsTvAppId] = useState<string>("");
+    const [kidsTvProfileId, setKidsTvProfileId] = useState<number | null>(null);
+    const [kidsTvRootFolder, setKidsTvRootFolder] = useState<string>("");
+
+    const [kidsTv4kAppId, setKidsTv4kAppId] = useState<string>("");
+    const [kidsTv4kProfileId, setKidsTv4kProfileId] = useState<number | null>(null);
+    const [kidsTv4kRootFolder, setKidsTv4kRootFolder] = useState<string>("");
+
+    // Apps & Cached Profiles/Folders Map
     const [radarrApps, setRadarrApps] = useState<any[]>([]);
     const [sonarrApps, setSonarrApps] = useState<any[]>([]);
+    const [appDataMap, setAppDataMap] = useState<Record<string, ArrAppData>>({});
 
     useEffect(() => {
         loadSettings();
@@ -99,35 +144,77 @@ export function SeerrSettingsPanel() {
                 setTrialQuotaTv(d.seerrTrialQuotaTv ?? 3);
                 setTrialQuotaDays(d.seerrTrialQuotaDays ?? 7);
 
-                // Kids Section
-                setKidsAutoApprovePg(d.seerrKidsAutoApprovePg ?? true);
-                setKidsRequireApprovalPg13(d.seerrKidsRequireApprovalPg13 ?? true);
-                setKidsMovieAppId(d.seerrKidsMovieAppId || "");
-                setKidsMovie4kAppId(d.seerrKidsMovie4kAppId || "");
-                setKidsMovieRootFolder(d.seerrKidsMovieRootFolder || "");
-                setKidsTvAppId(d.seerrKidsTvAppId || "");
-                setKidsTv4kAppId(d.seerrKidsTv4kAppId || "");
-                setKidsTvRootFolder(d.seerrKidsTvRootFolder || "");
-
                 // Dual 1080p Companion
                 setAutoDual1080pFor4k(d.seerrAutoDual1080pFor4k ?? true);
 
                 // Notifications
                 setNotificationOnAvailable(d.seerrNotificationOnAvailable ?? true);
 
-                // Main Defaults
+                // Main Movies
                 setDefaultMovieAppId(d.seerrDefaultMovieAppId || "");
-                setDefaultMovie4kAppId(d.seerrDefaultMovie4kAppId || "");
+                setDefaultMovieProfileId(d.seerrDefaultMovieProfileId ?? null);
                 setDefaultMovieRootFolder(d.seerrDefaultMovieRootFolder || "");
+
+                setDefaultMovie4kAppId(d.seerrDefaultMovie4kAppId || "");
+                setDefaultMovie4kProfileId(d.seerrDefaultMovie4kProfileId ?? null);
+                setDefaultMovie4kRootFolder(d.seerrDefaultMovie4kRootFolder || "");
+
+                // Main TV
                 setDefaultTvAppId(d.seerrDefaultTvAppId || "");
-                setDefaultTv4kAppId(d.seerrDefaultTv4kAppId || "");
+                setDefaultTvProfileId(d.seerrDefaultTvProfileId ?? null);
                 setDefaultTvRootFolder(d.seerrDefaultTvRootFolder || "");
+
+                setDefaultTv4kAppId(d.seerrDefaultTv4kAppId || "");
+                setDefaultTv4kProfileId(d.seerrDefaultTv4kProfileId ?? null);
+                setDefaultTv4kRootFolder(d.seerrDefaultTv4kRootFolder || "");
+
+                // Kids Section
+                setKidsAutoApprovePg(d.seerrKidsAutoApprovePg ?? true);
+                setKidsRequireApprovalPg13(d.seerrKidsRequireApprovalPg13 ?? true);
+
+                setKidsMovieAppId(d.seerrKidsMovieAppId || "");
+                setKidsMovieProfileId(d.seerrKidsMovieProfileId ?? null);
+                setKidsMovieRootFolder(d.seerrKidsMovieRootFolder || "");
+
+                setKidsMovie4kAppId(d.seerrKidsMovie4kAppId || "");
+                setKidsMovie4kProfileId(d.seerrKidsMovie4kProfileId ?? null);
+                setKidsMovie4kRootFolder(d.seerrKidsMovie4kRootFolder || "");
+
+                setKidsTvAppId(d.seerrKidsTvAppId || "");
+                setKidsTvProfileId(d.seerrKidsTvProfileId ?? null);
+                setKidsTvRootFolder(d.seerrKidsTvRootFolder || "");
+
+                setKidsTv4kAppId(d.seerrKidsTv4kAppId || "");
+                setKidsTv4kProfileId(d.seerrKidsTv4kProfileId ?? null);
+                setKidsTv4kRootFolder(d.seerrKidsTv4kRootFolder || "");
 
                 setRadarrApps(d.radarrApps || []);
                 setSonarrApps(d.sonarrApps || []);
+                setAppDataMap(d.appDataMap || {});
             }
         } catch (e) {} finally {
             setLoading(false);
+        }
+    };
+
+    const fetchAppProfilesAndFolders = async (appId: string, force = false) => {
+        if (!appId || appId === "none") return;
+        if (!force && appDataMap[appId]?.profiles?.length > 0) return;
+
+        setRefreshingAppId(appId);
+        try {
+            const res = await getArrAppProfilesAndFoldersAction(appId);
+            if (res.success) {
+                setAppDataMap(prev => ({
+                    ...prev,
+                    [appId]: {
+                        profiles: res.profiles,
+                        folders: res.folders
+                    }
+                }));
+            }
+        } catch (e) {} finally {
+            setRefreshingAppId(null);
         }
     };
 
@@ -154,11 +241,17 @@ export function SeerrSettingsPanel() {
                 seerrKidsAutoApprovePg: kidsAutoApprovePg,
                 seerrKidsRequireApprovalPg13: kidsRequireApprovalPg13,
                 seerrKidsMovieAppId: kidsMovieAppId || null,
-                seerrKidsMovie4kAppId: kidsMovie4kAppId || null,
+                seerrKidsMovieProfileId: kidsMovieProfileId,
                 seerrKidsMovieRootFolder: kidsMovieRootFolder || null,
+                seerrKidsMovie4kAppId: kidsMovie4kAppId || null,
+                seerrKidsMovie4kProfileId: kidsMovie4kProfileId,
+                seerrKidsMovie4kRootFolder: kidsMovie4kRootFolder || null,
                 seerrKidsTvAppId: kidsTvAppId || null,
-                seerrKidsTv4kAppId: kidsTv4kAppId || null,
+                seerrKidsTvProfileId: kidsTvProfileId,
                 seerrKidsTvRootFolder: kidsTvRootFolder || null,
+                seerrKidsTv4kAppId: kidsTv4kAppId || null,
+                seerrKidsTv4kProfileId: kidsTv4kProfileId,
+                seerrKidsTv4kRootFolder: kidsTv4kRootFolder || null,
 
                 // Dual 1080p Companion
                 seerrAutoDual1080pFor4k: autoDual1080pFor4k,
@@ -166,15 +259,21 @@ export function SeerrSettingsPanel() {
                 // Notifications & Main
                 seerrNotificationOnAvailable: notificationOnAvailable,
                 seerrDefaultMovieAppId: defaultMovieAppId || null,
-                seerrDefaultMovie4kAppId: defaultMovie4kAppId || null,
+                seerrDefaultMovieProfileId: defaultMovieProfileId,
                 seerrDefaultMovieRootFolder: defaultMovieRootFolder || null,
+                seerrDefaultMovie4kAppId: defaultMovie4kAppId || null,
+                seerrDefaultMovie4kProfileId: defaultMovie4kProfileId,
+                seerrDefaultMovie4kRootFolder: defaultMovie4kRootFolder || null,
                 seerrDefaultTvAppId: defaultTvAppId || null,
+                seerrDefaultTvProfileId: defaultTvProfileId,
+                seerrDefaultTvRootFolder: defaultTvRootFolder || null,
                 seerrDefaultTv4kAppId: defaultTv4kAppId || null,
-                seerrDefaultTvRootFolder: defaultTvRootFolder || null
+                seerrDefaultTv4kProfileId: defaultTv4kProfileId,
+                seerrDefaultTv4kRootFolder: defaultTv4kRootFolder || null
             });
 
             if (res.success) {
-                setSuccessMsg(res.message || "Settings saved successfully!");
+                setSuccessMsg(res.message || "Request settings saved successfully!");
             } else {
                 setErrorMsg(res.error || "Failed to save settings.");
             }
@@ -183,6 +282,171 @@ export function SeerrSettingsPanel() {
         } finally {
             setSaving(false);
         }
+    };
+
+    /**
+     * Reusable Arr slot selector card with live Quality Profile and Root Folder dropdowns
+     */
+    const renderArrSlotConfig = (options: {
+        title: string;
+        badgeText: string;
+        badgeVariant?: "blue" | "purple" | "cyan" | "orange";
+        icon: React.ReactNode;
+        appsList: any[];
+        selectedAppId: string;
+        onAppChange: (val: string) => void;
+        selectedProfileId: number | null;
+        onProfileChange: (val: number | null) => void;
+        selectedRootFolder: string;
+        onRootFolderChange: (val: string) => void;
+        appPlaceholder?: string;
+    }) => {
+        const {
+            title,
+            badgeText,
+            badgeVariant = "blue",
+            icon,
+            appsList,
+            selectedAppId,
+            onAppChange,
+            selectedProfileId,
+            onProfileChange,
+            selectedRootFolder,
+            onRootFolderChange,
+            appPlaceholder = "Auto-select first server"
+        } = options;
+
+        const currentApp = appsList.find(a => a.id === selectedAppId) || (selectedAppId === "" ? appsList[0] : null);
+        const currentAppData = selectedAppId ? appDataMap[selectedAppId] : (currentApp ? appDataMap[currentApp.id] : undefined);
+        const profiles = currentAppData?.profiles || [];
+        const folders = currentAppData?.folders || [];
+        const isRefreshing = refreshingAppId === selectedAppId || (currentApp && refreshingAppId === currentApp.id);
+
+        const badgeStyles = {
+            blue: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+            purple: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+            cyan: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+            orange: "bg-orange-500/15 text-orange-300 border-orange-500/30"
+        }[badgeVariant];
+
+        return (
+            <div className="p-4 rounded-xl bg-background/40 border border-border/40 hover:border-border/70 transition-all space-y-3.5">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        {icon}
+                        <span className="text-xs font-bold text-foreground">{title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 ${badgeStyles}`}>
+                            {badgeText}
+                        </Badge>
+                        {selectedAppId && selectedAppId !== "none" && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => fetchAppProfilesAndFolders(selectedAppId, true)}
+                                disabled={isRefreshing}
+                                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                title="Re-sync profiles and root folders from this Arr server"
+                            >
+                                <RotateCw className={`h-3 w-3 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* 1. Server Instance Selection */}
+                    <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-muted-foreground">Target Server Instance</Label>
+                        <Select 
+                            value={selectedAppId || "none"} 
+                            onValueChange={(v) => {
+                                const newId = v === "none" ? "" : v;
+                                onAppChange(newId);
+                                if (newId) fetchAppProfilesAndFolders(newId);
+                            }}
+                        >
+                            <SelectTrigger className="h-8 text-xs bg-background/60 border-border/50">
+                                <SelectValue placeholder={appPlaceholder} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">{appPlaceholder}</SelectItem>
+                                {appsList.map(app => (
+                                    <SelectItem key={app.id} value={app.id}>
+                                        {app.name} ({app.url})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* 2. Quality Profile Dropdown (Populated directly from Arr API) */}
+                    <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                            <Sliders className="h-3 w-3 text-primary/70" />
+                            Default Quality Profile
+                        </Label>
+                        <Select 
+                            value={selectedProfileId ? String(selectedProfileId) : "none"} 
+                            onValueChange={(v) => onProfileChange(v === "none" ? null : Number(v))}
+                            disabled={profiles.length === 0}
+                        >
+                            <SelectTrigger className="h-8 text-xs bg-background/60 border-border/50">
+                                <SelectValue placeholder={profiles.length > 0 ? "Select Quality Profile" : (isRefreshing ? "Fetching profiles..." : "No profiles found / Select server")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Auto-select server default</SelectItem>
+                                {profiles.map(p => (
+                                    <SelectItem key={p.id} value={String(p.id)}>
+                                        {p.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* 3. Root Folder Dropdown (Populated directly from Arr API) */}
+                    <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                            <FolderTree className="h-3 w-3 text-emerald-400/70" />
+                            Default Root Folder
+                        </Label>
+                        {folders.length > 0 ? (
+                            <Select 
+                                value={selectedRootFolder || "none"} 
+                                onValueChange={(v) => onRootFolderChange(v === "none" ? "" : v)}
+                            >
+                                <SelectTrigger className="h-8 text-xs bg-background/60 border-border/50">
+                                    <SelectValue placeholder="Select Root Folder" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Auto-select first folder</SelectItem>
+                                    {folders.map(f => (
+                                        <SelectItem key={f.id} value={f.path}>
+                                            <span className="font-mono">{f.path}</span>
+                                            {f.freeSpaceFormatted && (
+                                                <span className="ml-1.5 text-[10px] text-emerald-400/90 font-sans">
+                                                    ({f.freeSpaceFormatted})
+                                                </span>
+                                            )}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <Input
+                                placeholder="/movies or /tv"
+                                value={selectedRootFolder}
+                                onChange={(e) => onRootFolderChange(e.target.value)}
+                                className="h-8 text-xs bg-background/60 border-border/50 font-mono"
+                            />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     if (loading) {
@@ -205,16 +469,243 @@ export function SeerrSettingsPanel() {
                                 Native Media Requests & Seerr Engine
                             </CardTitle>
                             <CardDescription>
-                                Configure Full vs Trial accounts, Kids Section ratings & Arrs routing, and Dual 4K+1080p ingestion rules.
+                                Configure instance routing, quality profiles, root paths, Full vs Trial accounts, and Dual 4K+1080p ingestion rules.
                             </CardDescription>
                         </div>
                         <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 font-bold px-2.5 py-1">
-                            Seerr Engine v3.5
+                            Seerr Engine v3.6
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">
-                    {/* 1. FULL ACCOUNTS CONFIGURATION */}
+                    {/* 1. MAIN MOVIES & TV SHOWS ARRS (1080p & 4K) */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border/40">
+                            <Layers className="h-5 w-5 text-blue-400" />
+                            <div>
+                                <h3 className="text-sm font-bold text-foreground">Main Arrs Dispatch Defaults (1080p & 4K UHD)</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    Quality profiles and root folders are automatically retrieved from each selected Radarr and Sonarr server.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            {/* Standard Movies (1080p) */}
+                            {renderArrSlotConfig({
+                                title: "Standard Movies (1080p)",
+                                badgeText: "1080p",
+                                badgeVariant: "blue",
+                                icon: <Film className="h-4 w-4 text-blue-400" />,
+                                appsList: radarrApps,
+                                selectedAppId: defaultMovieAppId,
+                                onAppChange: setDefaultMovieAppId,
+                                selectedProfileId: defaultMovieProfileId,
+                                onProfileChange: setDefaultMovieProfileId,
+                                selectedRootFolder: defaultMovieRootFolder,
+                                onRootFolderChange: setDefaultMovieRootFolder,
+                                appPlaceholder: "Auto-select first Radarr server"
+                            })}
+
+                            {/* 4K UHD Movies */}
+                            {renderArrSlotConfig({
+                                title: "4K UHD Movies",
+                                badgeText: "4K UHD",
+                                badgeVariant: "purple",
+                                icon: <Film className="h-4 w-4 text-purple-400" />,
+                                appsList: radarrApps,
+                                selectedAppId: defaultMovie4kAppId,
+                                onAppChange: setDefaultMovie4kAppId,
+                                selectedProfileId: defaultMovie4kProfileId,
+                                onProfileChange: setDefaultMovie4kProfileId,
+                                selectedRootFolder: defaultMovie4kRootFolder,
+                                onRootFolderChange: setDefaultMovie4kRootFolder,
+                                appPlaceholder: "Use standard 1080p movie server"
+                            })}
+
+                            {/* Standard TV Shows (1080p) */}
+                            {renderArrSlotConfig({
+                                title: "Standard TV Shows (1080p)",
+                                badgeText: "1080p",
+                                badgeVariant: "cyan",
+                                icon: <Tv className="h-4 w-4 text-cyan-400" />,
+                                appsList: sonarrApps,
+                                selectedAppId: defaultTvAppId,
+                                onAppChange: setDefaultTvAppId,
+                                selectedProfileId: defaultTvProfileId,
+                                onProfileChange: setDefaultTvProfileId,
+                                selectedRootFolder: defaultTvRootFolder,
+                                onRootFolderChange: setDefaultTvRootFolder,
+                                appPlaceholder: "Auto-select first Sonarr server"
+                            })}
+
+                            {/* 4K UHD TV Shows */}
+                            {renderArrSlotConfig({
+                                title: "4K UHD TV Shows",
+                                badgeText: "4K UHD",
+                                badgeVariant: "purple",
+                                icon: <Tv className="h-4 w-4 text-purple-400" />,
+                                appsList: sonarrApps,
+                                selectedAppId: defaultTv4kAppId,
+                                onAppChange: setDefaultTv4kAppId,
+                                selectedProfileId: defaultTv4kProfileId,
+                                onProfileChange: setDefaultTv4kProfileId,
+                                selectedRootFolder: defaultTv4kRootFolder,
+                                onRootFolderChange: setDefaultTv4kRootFolder,
+                                appPlaceholder: "Use standard 1080p TV server"
+                            })}
+                        </div>
+                    </div>
+
+                    {/* 2. KIDS SECTION & DEDICATED KIDS ARRS */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border/40">
+                            <Smile className="h-5 w-5 text-orange-400" />
+                            <div>
+                                <h3 className="text-sm font-bold text-foreground">Kids Section & Dedicated Kids Arrs</h3>
+                                <p className="text-xs text-muted-foreground">Content ratings filtering and dedicated 1080p & 4K Kids Radarr/Sonarr destinations.</p>
+                            </div>
+                        </div>
+
+                        {/* Rating Approval Toggles */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
+                                <div className="space-y-0.5 max-w-xl">
+                                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                                        Auto-Approve PG & Below Ratings
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Automatically approve and dispatch titles rated G, PG, TV-Y, TV-Y7, TV-G, and TV-PG in the Kids section.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={kidsAutoApprovePg}
+                                    onCheckedChange={setKidsAutoApprovePg}
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
+                                <div className="space-y-0.5 max-w-xl">
+                                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                        <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+                                        Require Admin Approval for PG-13 & Unrated
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Hold PG-13, Unrated, and NR requests submitted in the Kids section for administrator review.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={kidsRequireApprovalPg13}
+                                    onCheckedChange={setKidsRequireApprovalPg13}
+                                />
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                                <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400" />
+                                <span><strong>Mature Content Filter:</strong> R, NC-17, TV-MA, and TV-14 content is automatically excluded from Kids discovery and search.</span>
+                            </div>
+                        </div>
+
+                        {/* Dedicated Kids Slots */}
+                        <div className="space-y-3 pt-2">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                Dedicated Kids Instances & Paths (Optional)
+                            </h4>
+
+                            {/* Kids Standard Movies */}
+                            {renderArrSlotConfig({
+                                title: "Kids Movies (1080p)",
+                                badgeText: "Kids 1080p",
+                                badgeVariant: "orange",
+                                icon: <Film className="h-4 w-4 text-orange-400" />,
+                                appsList: radarrApps,
+                                selectedAppId: kidsMovieAppId,
+                                onAppChange: setKidsMovieAppId,
+                                selectedProfileId: kidsMovieProfileId,
+                                onProfileChange: setKidsMovieProfileId,
+                                selectedRootFolder: kidsMovieRootFolder,
+                                onRootFolderChange: setKidsMovieRootFolder,
+                                appPlaceholder: "Use standard 1080p movie server"
+                            })}
+
+                            {/* Kids 4K Movies */}
+                            {renderArrSlotConfig({
+                                title: "Kids 4K UHD Movies",
+                                badgeText: "Kids 4K",
+                                badgeVariant: "purple",
+                                icon: <Film className="h-4 w-4 text-purple-400" />,
+                                appsList: radarrApps,
+                                selectedAppId: kidsMovie4kAppId,
+                                onAppChange: setKidsMovie4kAppId,
+                                selectedProfileId: kidsMovie4kProfileId,
+                                onProfileChange: setKidsMovie4kProfileId,
+                                selectedRootFolder: kidsMovie4kRootFolder,
+                                onRootFolderChange: setKidsMovie4kRootFolder,
+                                appPlaceholder: "Use standard 4K movie server"
+                            })}
+
+                            {/* Kids Standard TV */}
+                            {renderArrSlotConfig({
+                                title: "Kids TV Shows (1080p)",
+                                badgeText: "Kids 1080p",
+                                badgeVariant: "orange",
+                                icon: <Tv className="h-4 w-4 text-orange-400" />,
+                                appsList: sonarrApps,
+                                selectedAppId: kidsTvAppId,
+                                onAppChange: setKidsTvAppId,
+                                selectedProfileId: kidsTvProfileId,
+                                onProfileChange: setKidsTvProfileId,
+                                selectedRootFolder: kidsTvRootFolder,
+                                onRootFolderChange: setKidsTvRootFolder,
+                                appPlaceholder: "Use standard 1080p TV server"
+                            })}
+
+                            {/* Kids 4K TV */}
+                            {renderArrSlotConfig({
+                                title: "Kids 4K UHD TV Shows",
+                                badgeText: "Kids 4K",
+                                badgeVariant: "purple",
+                                icon: <Tv className="h-4 w-4 text-purple-400" />,
+                                appsList: sonarrApps,
+                                selectedAppId: kidsTv4kAppId,
+                                onAppChange: setKidsTv4kAppId,
+                                selectedProfileId: kidsTv4kProfileId,
+                                onProfileChange: setKidsTv4kProfileId,
+                                selectedRootFolder: kidsTv4kRootFolder,
+                                onRootFolderChange: setKidsTv4kRootFolder,
+                                appPlaceholder: "Use standard 4K TV server"
+                            })}
+                        </div>
+                    </div>
+
+                    {/* 3. DUAL 4K + 1080P INGESTION RULE */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border/40">
+                            <CopyCheck className="h-5 w-5 text-purple-400" />
+                            <div>
+                                <h3 className="text-sm font-bold text-foreground">Dual 4K + 1080p Ingestion Rule</h3>
+                                <p className="text-xs text-muted-foreground">Ensure backward compatibility for non-4K streaming devices and remote transcoding.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                            <div className="space-y-0.5 max-w-xl">
+                                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                    Auto-Add 1080p Companion on 4K Request
+                                </Label>
+                                <p className="text-[11px] text-muted-foreground">
+                                    When media is requested or added to a 4K Radarr/Sonarr instance, automatically create and dispatch a companion 1080p request using the configured 1080p Arr server and profile.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={autoDual1080pFor4k}
+                                onCheckedChange={setAutoDual1080pFor4k}
+                            />
+                        </div>
+                    </div>
+
+                    {/* 4. FULL ACCOUNTS CONFIGURATION */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
                             <UserCheck className="h-5 w-5 text-emerald-400" />
@@ -293,7 +784,7 @@ export function SeerrSettingsPanel() {
                         </div>
                     </div>
 
-                    {/* 2. TRIAL ACCOUNTS CONFIGURATION */}
+                    {/* 5. TRIAL ACCOUNTS CONFIGURATION */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
                             <Clock className="h-5 w-5 text-amber-400" />
@@ -353,272 +844,6 @@ export function SeerrSettingsPanel() {
                                     />
                                     <span className="text-[10px] text-muted-foreground">Sliding window in days</span>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 3. KIDS SECTION & DEDICATED KIDS ARRS */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <Smile className="h-5 w-5 text-orange-400" />
-                            <div>
-                                <h3 className="text-sm font-bold text-foreground">Kids Section & Dedicated Kids Arrs</h3>
-                                <p className="text-xs text-muted-foreground">Content ratings filtering and separate Radarr/Sonarr destination routing.</p>
-                            </div>
-                        </div>
-
-                        {/* Rating Approval Toggles */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
-                                <div className="space-y-0.5 max-w-xl">
-                                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                                        Auto-Approve PG & Below Ratings
-                                    </Label>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Automatically approve and dispatch titles rated G, PG, TV-Y, TV-Y7, TV-G, and TV-PG in the Kids section.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={kidsAutoApprovePg}
-                                    onCheckedChange={setKidsAutoApprovePg}
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
-                                <div className="space-y-0.5 max-w-xl">
-                                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                        <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
-                                        Require Admin Approval for PG-13 & Unrated
-                                    </Label>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Hold PG-13, Unrated, and NR requests submitted in the Kids section for administrator review.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={kidsRequireApprovalPg13}
-                                    onCheckedChange={setKidsRequireApprovalPg13}
-                                />
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                                <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400" />
-                                <span><strong>Mature Content Filter:</strong> R, NC-17, TV-MA, and TV-14 content is automatically excluded from Kids discovery and search.</span>
-                            </div>
-                        </div>
-
-                        {/* Dedicated Kids Arrs Routing */}
-                        <div className="space-y-3 pt-2">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                Kids Radarr & Sonarr Routing (Optional)
-                            </h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-foreground">Kids Movies Radarr Instance</Label>
-                                    <Select value={kidsMovieAppId || "none"} onValueChange={(v) => setKidsMovieAppId(v === "none" ? "" : v)}>
-                                        <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                            <SelectValue placeholder="Use Standard Movie Server" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Use Standard Movie Server</SelectItem>
-                                            {radarrApps.map(app => (
-                                                <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-foreground">Kids Movies 4K Radarr Instance</Label>
-                                    <Select value={kidsMovie4kAppId || "none"} onValueChange={(v) => setKidsMovie4kAppId(v === "none" ? "" : v)}>
-                                        <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                            <SelectValue placeholder="Use Standard 4K Server" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Use Standard 4K Server</SelectItem>
-                                            {radarrApps.map(app => (
-                                                <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1.5 sm:col-span-2">
-                                    <Label className="text-xs font-semibold text-foreground">Kids Movies Root Folder</Label>
-                                    <Input
-                                        placeholder="/data/media/kids_movies"
-                                        value={kidsMovieRootFolder}
-                                        onChange={(e) => setKidsMovieRootFolder(e.target.value)}
-                                        className="h-8 text-xs bg-background/50 border-border/50"
-                                    />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-foreground">Kids TV Shows Sonarr Instance</Label>
-                                    <Select value={kidsTvAppId || "none"} onValueChange={(v) => setKidsTvAppId(v === "none" ? "" : v)}>
-                                        <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                            <SelectValue placeholder="Use Standard TV Server" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Use Standard TV Server</SelectItem>
-                                            {sonarrApps.map(app => (
-                                                <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-foreground">Kids TV Shows 4K Sonarr Instance</Label>
-                                    <Select value={kidsTv4kAppId || "none"} onValueChange={(v) => setKidsTv4kAppId(v === "none" ? "" : v)}>
-                                        <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                            <SelectValue placeholder="Use Standard 4K TV Server" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Use Standard 4K TV Server</SelectItem>
-                                            {sonarrApps.map(app => (
-                                                <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1.5 sm:col-span-2">
-                                    <Label className="text-xs font-semibold text-foreground">Kids TV Root Folder</Label>
-                                    <Input
-                                        placeholder="/data/media/kids_tv"
-                                        value={kidsTvRootFolder}
-                                        onChange={(e) => setKidsTvRootFolder(e.target.value)}
-                                        className="h-8 text-xs bg-background/50 border-border/50"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 4. DUAL 4K + 1080P INGESTION RULE */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <CopyCheck className="h-5 w-5 text-purple-400" />
-                            <div>
-                                <h3 className="text-sm font-bold text-foreground">Dual 4K + 1080p Ingestion Rule</h3>
-                                <p className="text-xs text-muted-foreground">Ensure backward compatibility for non-4K streaming devices and remote transcoding.</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
-                            <div className="space-y-0.5 max-w-xl">
-                                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                    Auto-Add 1080p Companion on 4K Request
-                                </Label>
-                                <p className="text-[11px] text-muted-foreground">
-                                    When media is requested or added to a 4K Radarr/Sonarr instance, automatically create and dispatch a companion 1080p request to the standard 1080p Arr as well.
-                                </p>
-                            </div>
-                            <Switch
-                                checked={autoDual1080pFor4k}
-                                onCheckedChange={setAutoDual1080pFor4k}
-                            />
-                        </div>
-                    </div>
-
-                    {/* 5. MAIN / STANDARD ARRS DISPATCH DEFAULTS */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <Layers className="h-5 w-5 text-blue-400" />
-                            <div>
-                                <h3 className="text-sm font-bold text-foreground">Main Arrs Dispatch Defaults</h3>
-                                <p className="text-xs text-muted-foreground">Standard destination servers and default library folder paths.</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
-                                    <Film className="h-3.5 w-3.5 text-blue-400" /> Standard Movie Server (1080p)
-                                </Label>
-                                <Select value={defaultMovieAppId || "none"} onValueChange={(v) => setDefaultMovieAppId(v === "none" ? "" : v)}>
-                                    <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                        <SelectValue placeholder="Auto-select first Radarr server" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Auto-select first Radarr server</SelectItem>
-                                        {radarrApps.map(app => (
-                                            <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
-                                    <Film className="h-3.5 w-3.5 text-purple-400" /> 4K UHD Movie Server
-                                </Label>
-                                <Select value={defaultMovie4kAppId || "none"} onValueChange={(v) => setDefaultMovie4kAppId(v === "none" ? "" : v)}>
-                                    <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                        <SelectValue placeholder="Use standard movie server" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Use standard movie server</SelectItem>
-                                        {radarrApps.map(app => (
-                                            <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1.5 sm:col-span-2">
-                                <Label className="text-xs font-semibold text-foreground">Default Movie Root Folder</Label>
-                                <Input
-                                    placeholder="/movies or /data/media/movies"
-                                    value={defaultMovieRootFolder}
-                                    onChange={(e) => setDefaultMovieRootFolder(e.target.value)}
-                                    className="h-8 text-xs bg-background/50 border-border/50"
-                                />
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
-                                    <Tv className="h-3.5 w-3.5 text-cyan-400" /> Standard TV Server (1080p)
-                                </Label>
-                                <Select value={defaultTvAppId || "none"} onValueChange={(v) => setDefaultTvAppId(v === "none" ? "" : v)}>
-                                    <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                        <SelectValue placeholder="Auto-select first Sonarr server" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Auto-select first Sonarr server</SelectItem>
-                                        {sonarrApps.map(app => (
-                                            <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
-                                    <Tv className="h-3.5 w-3.5 text-purple-400" /> 4K UHD TV Server
-                                </Label>
-                                <Select value={defaultTv4kAppId || "none"} onValueChange={(v) => setDefaultTv4kAppId(v === "none" ? "" : v)}>
-                                    <SelectTrigger className="h-8 text-xs bg-background/50 border-border/50">
-                                        <SelectValue placeholder="Use standard TV server" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Use standard TV server</SelectItem>
-                                        {sonarrApps.map(app => (
-                                            <SelectItem key={app.id} value={app.id}>{app.name} ({app.url})</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1.5 sm:col-span-2">
-                                <Label className="text-xs font-semibold text-foreground">Default TV Root Folder</Label>
-                                <Input
-                                    placeholder="/tv or /data/media/tv"
-                                    value={defaultTvRootFolder}
-                                    onChange={(e) => setDefaultTvRootFolder(e.target.value)}
-                                    className="h-8 text-xs bg-background/50 border-border/50"
-                                />
                             </div>
                         </div>
                     </div>

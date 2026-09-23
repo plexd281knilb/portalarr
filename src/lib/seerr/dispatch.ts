@@ -105,8 +105,15 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
 
     let qualityProfileId = req.qualityProfileId;
     if (!qualityProfileId || !availableProfiles.some((p: any) => p.id === qualityProfileId)) {
-        if (settings?.seerrDefaultMovieProfileId && availableProfiles.some((p: any) => p.id === settings.seerrDefaultMovieProfileId)) {
-            qualityProfileId = settings.seerrDefaultMovieProfileId;
+        let configuredProfileId: number | null | undefined = null;
+        if (req.isKids) {
+            configuredProfileId = req.is4k ? settings?.seerrKidsMovie4kProfileId : settings?.seerrKidsMovieProfileId;
+        }
+        if (!configuredProfileId) {
+            configuredProfileId = req.is4k ? settings?.seerrDefaultMovie4kProfileId : settings?.seerrDefaultMovieProfileId;
+        }
+        if (configuredProfileId && availableProfiles.some((p: any) => p.id === configuredProfileId)) {
+            qualityProfileId = configuredProfileId;
         } else {
             qualityProfileId = availableProfiles[0]?.id || 1;
         }
@@ -114,10 +121,15 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
 
     let rootFolderPath = req.rootFolderPath;
     if (!rootFolderPath || !availableFolders.some((f: any) => f.path === rootFolderPath)) {
-        if (req.isKids && settings?.seerrKidsMovieRootFolder && availableFolders.some((f: any) => f.path === settings.seerrKidsMovieRootFolder)) {
-            rootFolderPath = settings.seerrKidsMovieRootFolder;
-        } else if (settings?.seerrDefaultMovieRootFolder && availableFolders.some((f: any) => f.path === settings.seerrDefaultMovieRootFolder)) {
-            rootFolderPath = settings.seerrDefaultMovieRootFolder;
+        let configuredFolder: string | null | undefined = null;
+        if (req.isKids) {
+            configuredFolder = req.is4k ? settings?.seerrKidsMovie4kRootFolder : settings?.seerrKidsMovieRootFolder;
+        }
+        if (!configuredFolder) {
+            configuredFolder = req.is4k ? settings?.seerrDefaultMovie4kRootFolder : settings?.seerrDefaultMovieRootFolder;
+        }
+        if (configuredFolder && availableFolders.some((f: any) => f.path === configuredFolder)) {
+            rootFolderPath = configuredFolder;
         } else {
             rootFolderPath = availableFolders[0]?.path || "/movies";
         }
@@ -241,8 +253,15 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
 
     let qualityProfileId = req.qualityProfileId;
     if (!qualityProfileId || !availableProfiles.some((p: any) => p.id === qualityProfileId)) {
-        if (settings?.seerrDefaultTvProfileId && availableProfiles.some((p: any) => p.id === settings.seerrDefaultTvProfileId)) {
-            qualityProfileId = settings.seerrDefaultTvProfileId;
+        let configuredProfileId: number | null | undefined = null;
+        if (req.isKids) {
+            configuredProfileId = req.is4k ? settings?.seerrKidsTv4kProfileId : settings?.seerrKidsTvProfileId;
+        }
+        if (!configuredProfileId) {
+            configuredProfileId = req.is4k ? settings?.seerrDefaultTv4kProfileId : settings?.seerrDefaultTvProfileId;
+        }
+        if (configuredProfileId && availableProfiles.some((p: any) => p.id === configuredProfileId)) {
+            qualityProfileId = configuredProfileId;
         } else {
             qualityProfileId = availableProfiles[0]?.id || 1;
         }
@@ -250,10 +269,15 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
 
     let rootFolderPath = req.rootFolderPath;
     if (!rootFolderPath || !availableFolders.some((f: any) => f.path === rootFolderPath)) {
-        if (req.isKids && settings?.seerrKidsTvRootFolder && availableFolders.some((f: any) => f.path === settings.seerrKidsTvRootFolder)) {
-            rootFolderPath = settings.seerrKidsTvRootFolder;
-        } else if (settings?.seerrDefaultTvRootFolder && availableFolders.some((f: any) => f.path === settings.seerrDefaultTvRootFolder)) {
-            rootFolderPath = settings.seerrDefaultTvRootFolder;
+        let configuredFolder: string | null | undefined = null;
+        if (req.isKids) {
+            configuredFolder = req.is4k ? settings?.seerrKidsTv4kRootFolder : settings?.seerrKidsTvRootFolder;
+        }
+        if (!configuredFolder) {
+            configuredFolder = req.is4k ? settings?.seerrDefaultTv4kRootFolder : settings?.seerrDefaultTvRootFolder;
+        }
+        if (configuredFolder && availableFolders.some((f: any) => f.path === configuredFolder)) {
+            rootFolderPath = configuredFolder;
         } else {
             rootFolderPath = availableFolders[0]?.path || "/tv";
         }

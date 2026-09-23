@@ -91,6 +91,64 @@ export async function getEnabledArrInstancesInternal(type: "radarr" | "sonarr") 
     }
 }
 
+export async function getArrProfilesAndFolders(appId: string, type?: "radarr" | "sonarr") {
+    try {
+        if (!appId || appId === "none") {
+            return { success: true, profiles: [], folders: [], data: { profiles: [], folders: [] } };
+        }
+
+        const app = await prisma.mediaApp.findUnique({
+            where: { id: appId }
+        });
+
+        if (!app) {
+            return { success: false, error: "Media app not found", profiles: [], folders: [], data: { profiles: [], folders: [] } };
+        }
+
+        const decryptedApp = {
+            ...app,
+            apiKey: decryptData(app.apiKey || "")
+        };
+
+        const [profilesRes, foldersRes] = await Promise.all([
+            arrApiGet(decryptedApp, "/api/v3/qualityprofile"),
+            arrApiGet(decryptedApp, "/api/v3/rootfolder")
+        ]);
+
+        const profiles: Array<{ id: number; name: string }> = Array.isArray(profilesRes.data)
+            ? profilesRes.data.map((p: any) => ({ id: p.id, name: p.name }))
+            : [];
+
+        const folders: Array<{ id: number; path: string; freeSpace?: number; freeSpaceFormatted?: string }> = Array.isArray(foldersRes.data)
+            ? foldersRes.data.map((f: any) => {
+                let freeFormatted: string | undefined;
+                if (typeof f.freeSpace === "number" && f.freeSpace > 0) {
+                    const gb = f.freeSpace / (1024 * 1024 * 1024);
+                    freeFormatted = gb >= 1000 ? `${(gb / 1024).toFixed(1)} TB free` : `${Math.round(gb)} GB free`;
+                }
+                return {
+                    id: f.id,
+                    path: f.path,
+                    freeSpace: f.freeSpace,
+                    freeSpaceFormatted: freeFormatted
+                };
+            })
+            : [];
+
+        return {
+            success: true,
+            profiles,
+            folders,
+            data: {
+                profiles,
+                folders
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message, profiles: [], folders: [], data: { profiles: [], folders: [] } };
+    }
+}
+
 export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
     try {
         let session = null;
@@ -663,28 +721,3 @@ export async function forceImportSonarrQueueItem(appId: string, downloadId: stri
     }
 }
 
-// Meta fetchers for Quality Profiles and Root Folders
-export async function getArrProfilesAndFolders(appId: string, type: "radarr" | "sonarr") {
-    try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances(type);
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Instance not found or disabled");
-
-        const profilesRes = await arrApiGet(app, "/api/v3/qualityprofile");
-        const foldersRes = await arrApiGet(app, "/api/v3/rootfolder");
-        if (!profilesRes.success || !profilesRes.data) throw new Error(profilesRes.error || "Failed to load profiles");
-        if (!foldersRes.success || !foldersRes.data) throw new Error(foldersRes.error || "Failed to load folders");
-
-        return {
-            success: true,
-            data: {
-                profiles: profilesRes.data.filter((p: any) => app.allowedQualityProfileIds.length === 0 || app.allowedQualityProfileIds.includes(p.id.toString())),
-                folders: foldersRes.data.filter((f: any) => app.allowedRootFolderIds.length === 0 || app.allowedRootFolderIds.includes(f.id.toString()))
-            }
-        };
-    } catch (e: any) {
-        return { success: false, error: e.message };
-    }
-}

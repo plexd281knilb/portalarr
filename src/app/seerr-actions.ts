@@ -36,7 +36,7 @@ import {
     getPlexLibraryGuidIndex
 } from "@/lib/seerr/availability";
 import { dispatchMediaRequest } from "@/lib/seerr/dispatch";
-import { getEnabledArrInstancesInternal, arrApiGet } from "@/app/arr-actions";
+import { getEnabledArrInstancesInternal, arrApiGet, getArrProfilesAndFolders } from "@/app/arr-actions";
 
 interface AuthSession {
     userId: string;
@@ -883,18 +883,48 @@ export async function getSeerrSettingsAction() {
         const radarrAppsRes = await getEnabledArrInstancesInternal("radarr");
         const sonarrAppsRes = await getEnabledArrInstancesInternal("sonarr");
 
+        const radarrApps = radarrAppsRes.success && radarrAppsRes.data ? radarrAppsRes.data : [];
+        const sonarrApps = sonarrAppsRes.success && sonarrAppsRes.data ? sonarrAppsRes.data : [];
+        const allApps = [...radarrApps, ...sonarrApps];
+
+        // Pre-fetch quality profiles and root folders for each enabled instance in parallel
+        const appDataMap: Record<string, { profiles: Array<{ id: number; name: string }>; folders: Array<{ id: number; path: string; freeSpace?: number; freeSpaceFormatted?: string }> }> = {};
+        
+        await Promise.all(
+            allApps.map(async (app) => {
+                try {
+                    const res = await getArrProfilesAndFolders(app.id);
+                    if (res.success) {
+                        appDataMap[app.id] = {
+                            profiles: res.profiles,
+                            folders: res.folders
+                        };
+                    }
+                } catch {}
+            })
+        );
+
         return {
             success: true,
             data: {
                 seerrAutoApproveAll: settings?.seerrAutoApproveAll ?? true,
-                seerrDefaultMovieProfileId: settings?.seerrDefaultMovieProfileId ?? null,
-                seerrDefaultTvProfileId: settings?.seerrDefaultTvProfileId ?? null,
-                seerrDefaultMovieRootFolder: settings?.seerrDefaultMovieRootFolder ?? null,
-                seerrDefaultTvRootFolder: settings?.seerrDefaultTvRootFolder ?? null,
+
+                // Main Movie (1080p & 4K)
                 seerrDefaultMovieAppId: settings?.seerrDefaultMovieAppId ?? null,
-                seerrDefaultTvAppId: settings?.seerrDefaultTvAppId ?? null,
+                seerrDefaultMovieProfileId: settings?.seerrDefaultMovieProfileId ?? null,
+                seerrDefaultMovieRootFolder: settings?.seerrDefaultMovieRootFolder ?? null,
                 seerrDefaultMovie4kAppId: settings?.seerrDefaultMovie4kAppId ?? null,
+                seerrDefaultMovie4kProfileId: settings?.seerrDefaultMovie4kProfileId ?? null,
+                seerrDefaultMovie4kRootFolder: settings?.seerrDefaultMovie4kRootFolder ?? null,
+
+                // Main TV (1080p & 4K)
+                seerrDefaultTvAppId: settings?.seerrDefaultTvAppId ?? null,
+                seerrDefaultTvProfileId: settings?.seerrDefaultTvProfileId ?? null,
+                seerrDefaultTvRootFolder: settings?.seerrDefaultTvRootFolder ?? null,
                 seerrDefaultTv4kAppId: settings?.seerrDefaultTv4kAppId ?? null,
+                seerrDefaultTv4kProfileId: settings?.seerrDefaultTv4kProfileId ?? null,
+                seerrDefaultTv4kRootFolder: settings?.seerrDefaultTv4kRootFolder ?? null,
+
                 seerrQuotaMovies: settings?.seerrQuotaMovies ?? 10,
                 seerrQuotaTv: settings?.seerrQuotaTv ?? 10,
                 seerrQuotaDays: settings?.seerrQuotaDays ?? 7,
@@ -913,21 +943,28 @@ export async function getSeerrSettingsAction() {
                 seerrTrialQuotaTv: settings?.seerrTrialQuotaTv ?? 3,
                 seerrTrialQuotaDays: settings?.seerrTrialQuotaDays ?? 7,
 
-                // Kids Section & Routing Settings
+                // Kids Section & Routing Settings (1080p & 4K)
                 seerrKidsAutoApprovePg: settings?.seerrKidsAutoApprovePg ?? true,
                 seerrKidsRequireApprovalPg13: settings?.seerrKidsRequireApprovalPg13 ?? true,
                 seerrKidsMovieAppId: settings?.seerrKidsMovieAppId ?? null,
-                seerrKidsTvAppId: settings?.seerrKidsTvAppId ?? null,
-                seerrKidsMovie4kAppId: settings?.seerrKidsMovie4kAppId ?? null,
-                seerrKidsTv4kAppId: settings?.seerrKidsTv4kAppId ?? null,
+                seerrKidsMovieProfileId: settings?.seerrKidsMovieProfileId ?? null,
                 seerrKidsMovieRootFolder: settings?.seerrKidsMovieRootFolder ?? null,
+                seerrKidsMovie4kAppId: settings?.seerrKidsMovie4kAppId ?? null,
+                seerrKidsMovie4kProfileId: settings?.seerrKidsMovie4kProfileId ?? null,
+                seerrKidsMovie4kRootFolder: settings?.seerrKidsMovie4kRootFolder ?? null,
+                seerrKidsTvAppId: settings?.seerrKidsTvAppId ?? null,
+                seerrKidsTvProfileId: settings?.seerrKidsTvProfileId ?? null,
                 seerrKidsTvRootFolder: settings?.seerrKidsTvRootFolder ?? null,
+                seerrKidsTv4kAppId: settings?.seerrKidsTv4kAppId ?? null,
+                seerrKidsTv4kProfileId: settings?.seerrKidsTv4kProfileId ?? null,
+                seerrKidsTv4kRootFolder: settings?.seerrKidsTv4kRootFolder ?? null,
 
                 // Dual 4K + 1080p Ingestion
                 seerrAutoDual1080pFor4k: settings?.seerrAutoDual1080pFor4k ?? true,
 
-                radarrApps: radarrAppsRes.success ? radarrAppsRes.data : [],
-                sonarrApps: sonarrAppsRes.success ? sonarrAppsRes.data : []
+                radarrApps,
+                sonarrApps,
+                appDataMap
             }
         };
     } catch (e: any) {
@@ -936,18 +973,34 @@ export async function getSeerrSettingsAction() {
 }
 
 /**
+ * Fetch profiles and folders dynamically for a specific Arr app
+ */
+export async function getArrAppProfilesAndFoldersAction(appId: string) {
+    try {
+        await verifyAdmin();
+        return await getArrProfilesAndFolders(appId);
+    } catch (e: any) {
+        return { success: false, error: e.message, profiles: [], folders: [] };
+    }
+}
+
+/**
  * Update Seerr / Media Request settings
  */
 export async function updateSeerrSettingsAction(payload: {
     seerrAutoApproveAll?: boolean;
-    seerrDefaultMovieProfileId?: number | null;
-    seerrDefaultTvProfileId?: number | null;
-    seerrDefaultMovieRootFolder?: string | null;
-    seerrDefaultTvRootFolder?: string | null;
     seerrDefaultMovieAppId?: string | null;
-    seerrDefaultTvAppId?: string | null;
+    seerrDefaultMovieProfileId?: number | null;
+    seerrDefaultMovieRootFolder?: string | null;
     seerrDefaultMovie4kAppId?: string | null;
+    seerrDefaultMovie4kProfileId?: number | null;
+    seerrDefaultMovie4kRootFolder?: string | null;
+    seerrDefaultTvAppId?: string | null;
+    seerrDefaultTvProfileId?: number | null;
+    seerrDefaultTvRootFolder?: string | null;
     seerrDefaultTv4kAppId?: string | null;
+    seerrDefaultTv4kProfileId?: number | null;
+    seerrDefaultTv4kRootFolder?: string | null;
     seerrQuotaMovies?: number;
     seerrQuotaTv?: number;
     seerrQuotaDays?: number;
@@ -970,11 +1023,17 @@ export async function updateSeerrSettingsAction(payload: {
     seerrKidsAutoApprovePg?: boolean;
     seerrKidsRequireApprovalPg13?: boolean;
     seerrKidsMovieAppId?: string | null;
-    seerrKidsTvAppId?: string | null;
-    seerrKidsMovie4kAppId?: string | null;
-    seerrKidsTv4kAppId?: string | null;
+    seerrKidsMovieProfileId?: number | null;
     seerrKidsMovieRootFolder?: string | null;
+    seerrKidsMovie4kAppId?: string | null;
+    seerrKidsMovie4kProfileId?: number | null;
+    seerrKidsMovie4kRootFolder?: string | null;
+    seerrKidsTvAppId?: string | null;
+    seerrKidsTvProfileId?: number | null;
     seerrKidsTvRootFolder?: string | null;
+    seerrKidsTv4kAppId?: string | null;
+    seerrKidsTv4kProfileId?: number | null;
+    seerrKidsTv4kRootFolder?: string | null;
 
     // Dual 4K + 1080p Ingestion
     seerrAutoDual1080pFor4k?: boolean;
