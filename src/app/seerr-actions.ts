@@ -382,7 +382,7 @@ export async function getUserRequestQuotaAction() {
             movieLimit = 0; // 0 = unlimited
             tvLimit = 0;
         } else if (isTrial) {
-            quotaDays = user.requestLimitDays || settings?.seerrTrialQuotaDays || 7;
+            quotaDays = 0; // Trial accounts are governed by the Access Control trial duration
             movieLimit = user.requestLimitMovies ?? settings?.seerrTrialQuotaMovies ?? 3;
             tvLimit = user.requestLimitTv ?? settings?.seerrTrialQuotaTv ?? 3;
         } else {
@@ -393,7 +393,9 @@ export async function getUserRequestQuotaAction() {
             tvLimit = isUnlimited ? 0 : (user.requestLimitTv ?? settings?.seerrFullQuotaTv ?? 10);
         }
 
-        const windowStartDate = new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
+        const windowStartDate = isTrial
+            ? (user.createdAt ? new Date(user.createdAt) : new Date(0))
+            : new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
 
         // Count user's requests within window
         const [recentMovieCount, recentTvCount] = await Promise.all([
@@ -495,34 +497,45 @@ export async function submitMediaRequestAction(payload: {
 
         // Evaluate user quota if not admin
         if (!isAdmin) {
-            let quotaDays: number;
-            let limit: number;
-
             if (isTrial) {
-                quotaDays = user.requestLimitDays || settings?.seerrTrialQuotaDays || 7;
-                limit = payload.mediaType === "movie"
+                const limit = payload.mediaType === "movie"
                     ? (user.requestLimitMovies ?? settings?.seerrTrialQuotaMovies ?? 3)
                     : (user.requestLimitTv ?? settings?.seerrTrialQuotaTv ?? 3);
+
+                if (limit > 0) {
+                    const windowStartDate = user.createdAt ? new Date(user.createdAt) : new Date(0);
+                    const count = await prisma.mediaRequest.count({
+                        where: {
+                            requestedByUsername: user.username,
+                            mediaType: payload.mediaType,
+                            createdAt: { gte: windowStartDate }
+                        }
+                    });
+
+                    if (count >= limit) {
+                        throw new Error(`You have reached your limit of ${limit} ${payload.mediaType === "movie" ? "movie" : "TV show"} requests for your trial period.`);
+                    }
+                }
             } else {
                 const isUnlimited = settings?.seerrFullUnlimited ?? true;
-                quotaDays = user.requestLimitDays || settings?.seerrFullQuotaDays || 7;
-                limit = isUnlimited ? 0 : (payload.mediaType === "movie"
+                const quotaDays = user.requestLimitDays || settings?.seerrFullQuotaDays || 7;
+                const limit = isUnlimited ? 0 : (payload.mediaType === "movie"
                     ? (user.requestLimitMovies ?? settings?.seerrFullQuotaMovies ?? 10)
                     : (user.requestLimitTv ?? settings?.seerrFullQuotaTv ?? 10));
-            }
 
-            if (limit > 0) {
-                const windowStartDate = new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
-                const count = await prisma.mediaRequest.count({
-                    where: {
-                        requestedByUsername: user.username,
-                        mediaType: payload.mediaType,
-                        createdAt: { gte: windowStartDate }
+                if (limit > 0) {
+                    const windowStartDate = new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
+                    const count = await prisma.mediaRequest.count({
+                        where: {
+                            requestedByUsername: user.username,
+                            mediaType: payload.mediaType,
+                            createdAt: { gte: windowStartDate }
+                        }
+                    });
+
+                    if (count >= limit) {
+                        throw new Error(`You have reached your limit of ${limit} ${payload.mediaType === "movie" ? "movie" : "TV show"} requests for this ${quotaDays}-day period.`);
                     }
-                });
-
-                if (count >= limit) {
-                    throw new Error(`You have reached your limit of ${limit} ${payload.mediaType === "movie" ? "movie" : "TV show"} requests for this ${quotaDays}-day period.`);
                 }
             }
         }
@@ -960,7 +973,6 @@ export async function getSeerrSettingsAction() {
                 seerrTrialAutoApprove: settings?.seerrTrialAutoApprove ?? false,
                 seerrTrialQuotaMovies: settings?.seerrTrialQuotaMovies ?? 3,
                 seerrTrialQuotaTv: settings?.seerrTrialQuotaTv ?? 3,
-                seerrTrialQuotaDays: settings?.seerrTrialQuotaDays ?? 7,
 
                 // Kids Section & Routing Settings (1080p & 4K)
                 seerrKidsAutoApprovePg: settings?.seerrKidsAutoApprovePg ?? true,
@@ -1036,7 +1048,6 @@ export async function updateSeerrSettingsAction(payload: {
     seerrTrialAutoApprove?: boolean;
     seerrTrialQuotaMovies?: number;
     seerrTrialQuotaTv?: number;
-    seerrTrialQuotaDays?: number;
 
     // Kids Section & Routing Settings
     seerrKidsAutoApprovePg?: boolean;

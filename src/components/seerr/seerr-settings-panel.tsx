@@ -70,7 +70,6 @@ export function SeerrSettingsPanel() {
     const [trialAutoApprove, setTrialAutoApprove] = useState(false);
     const [trialQuotaMovies, setTrialQuotaMovies] = useState(3);
     const [trialQuotaTv, setTrialQuotaTv] = useState(3);
-    const [trialQuotaDays, setTrialQuotaDays] = useState(7);
 
     // Dual 4K + 1080p Ingestion
     const [autoDual1080pFor4k, setAutoDual1080pFor4k] = useState(true);
@@ -142,7 +141,6 @@ export function SeerrSettingsPanel() {
                 setTrialAutoApprove(d.seerrTrialAutoApprove ?? false);
                 setTrialQuotaMovies(d.seerrTrialQuotaMovies ?? 3);
                 setTrialQuotaTv(d.seerrTrialQuotaTv ?? 3);
-                setTrialQuotaDays(d.seerrTrialQuotaDays ?? 7);
 
                 // Dual 1080p Companion
                 setAutoDual1080pFor4k(d.seerrAutoDual1080pFor4k ?? true);
@@ -235,7 +233,6 @@ export function SeerrSettingsPanel() {
                 seerrTrialAutoApprove: trialAutoApprove,
                 seerrTrialQuotaMovies: Number(trialQuotaMovies),
                 seerrTrialQuotaTv: Number(trialQuotaTv),
-                seerrTrialQuotaDays: Number(trialQuotaDays),
 
                 // Kids Section
                 seerrKidsAutoApprovePg: kidsAutoApprovePg,
@@ -838,7 +835,7 @@ export function SeerrSettingsPanel() {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-background/30 border border-border/40">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-background/30 border border-border/40">
                                 <div className="space-y-1">
                                     <Label className="text-[11px] font-semibold text-foreground">Trial Movie Limit</Label>
                                     <Input
@@ -848,7 +845,7 @@ export function SeerrSettingsPanel() {
                                         onChange={(e) => setTrialQuotaMovies(parseInt(e.target.value, 10) || 1)}
                                         className="h-8 text-xs bg-background/60"
                                     />
-                                    <span className="text-[10px] text-muted-foreground">Default: 3 movies</span>
+                                    <span className="text-[10px] text-muted-foreground">Default: 3 movies during trial period</span>
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-[11px] font-semibold text-foreground">Trial TV Show Limit</Label>
@@ -859,18 +856,7 @@ export function SeerrSettingsPanel() {
                                         onChange={(e) => setTrialQuotaTv(parseInt(e.target.value, 10) || 1)}
                                         className="h-8 text-xs bg-background/60"
                                     />
-                                    <span className="text-[10px] text-muted-foreground">Default: 3 TV shows</span>
-                                </div>
-                                <div className="space-y-1">
-                                    <Label className="text-[11px] font-semibold text-foreground">Trial Window (Days)</Label>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        value={trialQuotaDays}
-                                        onChange={(e) => setTrialQuotaDays(parseInt(e.target.value, 10) || 7)}
-                                        className="h-8 text-xs bg-background/60"
-                                    />
-                                    <span className="text-[10px] text-muted-foreground">Sliding window in days</span>
+                                    <span className="text-[10px] text-muted-foreground">Default: 3 TV shows during trial period</span>
                                 </div>
                             </div>
                         </div>
