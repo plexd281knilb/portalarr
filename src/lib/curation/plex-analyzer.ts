@@ -486,15 +486,45 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         return acc + parts.reduce((pAcc: number, p: any) => pAcc + (parseInt(p.size || "0", 10)), 0);
     }, 0);
 
+    const durationMs = metadata.duration ? parseInt(metadata.duration, 10) : 0;
     const isPlaceholder = Boolean(
         extractedLabels.some(l => {
             const low = l.toLowerCase();
-            return low === "trailer-placeholder" || low === "coming soon-placeholder" || low === "coming_soon-placeholder" || low === "coming-soon-placeholder" || low.includes("placeholder");
+            return low === "trailer-placeholder" || low === "coming soon-placeholder" || low === "coming_soon-placeholder" || low === "coming-soon-placeholder" || low.includes("placeholder") || low === "trailer" || low === "trailers" || low === "stub" || low === "stubs" || low.includes("coming soon");
         }) ||
-        (firstPartFile && (firstPartFile.includes(".portalarr-missing") || firstPartFile.includes("edition-Trailer") || firstPartFile.includes("edition-Placeholder") || firstPartFile.endsWith(".disc") || firstPartFile.endsWith(".strm"))) ||
-        (rawEditionTitle && (rawEditionTitle.toLowerCase().includes("trailer") || rawEditionTitle.toLowerCase().includes("placeholder"))) ||
-        (metadata.title && metadata.title.toLowerCase().includes("trailer (placeholder)")) ||
-        (metadata.type === "movie" && totalSize > 0 && totalSize < 1000000 && (firstPartFile.endsWith(".mp4") || firstPartFile.endsWith(".mkv")))
+        (firstPartFile && (
+            firstPartFile.includes(".portalarr-missing") ||
+            firstPartFile.includes("edition-Trailer") ||
+            firstPartFile.includes("edition-Placeholder") ||
+            firstPartFile.endsWith(".disc") ||
+            firstPartFile.endsWith(".strm") ||
+            /\b(trailer|placeholder|sample|teaser|stub|stubs)\b/i.test(firstPartFile) ||
+            /-trailer\.\w+$/i.test(firstPartFile) ||
+            /\.trailer\.\w+$/i.test(firstPartFile) ||
+            /-sample\.\w+$/i.test(firstPartFile) ||
+            /\.sample\.\w+$/i.test(firstPartFile)
+        )) ||
+        (rawEditionTitle && (
+            rawEditionTitle.toLowerCase().includes("trailer") ||
+            rawEditionTitle.toLowerCase().includes("placeholder") ||
+            rawEditionTitle.toLowerCase().includes("teaser") ||
+            rawEditionTitle.toLowerCase().includes("sample") ||
+            rawEditionTitle.toLowerCase().includes("stub")
+        )) ||
+        (metadata.title && (
+            metadata.title.toLowerCase().includes("trailer (placeholder)") ||
+            metadata.title.toLowerCase().includes("[trailer]") ||
+            metadata.title.toLowerCase().includes("(trailer)") ||
+            metadata.title.toLowerCase().includes("placeholder") ||
+            metadata.title.toLowerCase().includes("[stub]") ||
+            metadata.title.toLowerCase().includes("(stub)")
+        )) ||
+        // If a feature film has a duration under 15 minutes (900,000 ms), or under 20 minutes with small file size (<300MB), it is a trailer/sample stub
+        (metadata.type === "movie" && (
+            (durationMs > 0 && durationMs < 15 * 60 * 1000) ||
+            (totalSize > 0 && totalSize < 300 * 1024 * 1024 && durationMs < 25 * 60 * 1000) ||
+            (totalSize > 0 && totalSize < 20 * 1024 * 1024)
+        ))
     );
 
     return {

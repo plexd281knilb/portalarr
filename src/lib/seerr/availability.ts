@@ -108,6 +108,10 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
 
                         for (const item of items) {
                             const streamInfo = analyzeMediaStreamInfo(item);
+                            // CRITICAL: Skip placeholders, trailer stubs, and missing stubs so they are not marked as available
+                            if (streamInfo.isPlaceholder) {
+                                continue;
+                            }
                             const ratingKey = String(item.ratingKey);
                             const is4k = streamInfo.detectedBadges.resolution === "4K";
                             const quality = streamInfo.detectedBadges.videoFormatLabel || streamInfo.detectedBadges.resolution || "1080p";
