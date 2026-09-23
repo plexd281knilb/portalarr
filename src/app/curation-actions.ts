@@ -29,6 +29,7 @@ import {
     addCollectionToPlexItem,
     updatePlexItemTitle,
     updatePlexItemEdition,
+    uploadPlexItemPoster,
     getPlexItemChildrenMetadata,
     refreshPlexLibrarySection,
     PlexMediaStreamInfo,
@@ -7396,8 +7397,9 @@ export async function getTrendingAndPlaceholderMediaAction(
                     isTvSection = sec?.type === "show" || sec?.type === "tv";
                     isMovieSection = sec?.type === "movie";
 
-                    const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000);
+                    const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000, undefined, false, true);
                     libraryItems = rawLibraryItems.filter(it => {
+                        if (it.isPlaceholder) return false;
                         if (isTvSection && it.type === "movie") return false;
                         if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
                         return true;
@@ -7980,6 +7982,10 @@ export async function createPlaceholderItemInternal(
                             await addCollectionToPlexItem(urlsToTry, resolved.token, match.ratingKey, itemData.collectionTitle);
                         }
 
+                        if (posterBuffer) {
+                            await uploadPlexItemPoster(urlsToTry, resolved.token, match.ratingKey, posterBuffer).catch(() => {});
+                        }
+
                         if (!isTv) {
                             await updatePlexItemEdition(urlsToTry, resolved.token, match.ratingKey, "Trailer");
                         } else {
@@ -7989,6 +7995,9 @@ export async function createPlaceholderItemInternal(
                                 await addLabelToPlexItem(urlsToTry, resolved.token, String(season0.ratingKey), targetLabel);
                                 if (itemData.collectionTitle) {
                                     await addCollectionToPlexItem(urlsToTry, resolved.token, String(season0.ratingKey), itemData.collectionTitle);
+                                }
+                                if (posterBuffer) {
+                                    await uploadPlexItemPoster(urlsToTry, resolved.token, String(season0.ratingKey), posterBuffer).catch(() => {});
                                 }
                                 const episodes = await getPlexItemChildrenMetadata(urlsToTry, resolved.token, String(season0.ratingKey));
                                 const ep0 = episodes.find(e => e.index === 0 || e.title?.toLowerCase().includes("trailer"));
@@ -8161,8 +8170,9 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     isTvSection = sec?.type === "show" || sec?.type === "tv";
                     isMovieSection = sec?.type === "movie";
 
-                    const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false);
+                    const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false, true);
                     libraryItems = rawLibraryItems.filter(it => {
+                        if (it.isPlaceholder) return false;
                         if (isTvSection && it.type === "movie") return false;
                         if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
                         return true;
