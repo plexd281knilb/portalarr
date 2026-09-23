@@ -248,6 +248,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "pruneDeleteFromDisk" BOOLEAN NOT NULL DEFAULT 0,
                     "pruneDaysNotice" INTEGER DEFAULT 14,
                     "pruneMinAgeDays" INTEGER DEFAULT 90,
+                    "pruneUnwatchedMinAgeDays" INTEGER DEFAULT 90,
+                    "pruneWatchedMinAgeDays" INTEGER DEFAULT 180,
                     "pruneUnwatchedOnly" BOOLEAN NOT NULL DEFAULT 1,
                     "enabledServersForOverlays" TEXT,
                     "enabledServersForCollections" TEXT,
@@ -269,9 +271,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "skipYoutubeTrailerDownloads" BOOLEAN NOT NULL DEFAULT 0,
                     "pruneBannerPosition" TEXT DEFAULT 'bottom',
                     "pruneBannerTheme" TEXT DEFAULT 'crimson-red',
-                    "pruneBannerText" TEXT DEFAULT 'LEAVING ON {date}',
+                    "pruneBannerText" TEXT DEFAULT 'LEAVING SOON',
                     "pruneBannerFontSize" INTEGER DEFAULT 44,
-                    "pruneBannerType" TEXT DEFAULT 'leaving_date',
+                    "pruneBannerType" TEXT DEFAULT 'leaving_soon',
                     "pruneBannerTemplates" TEXT,
                     "pruneSortStrategy" TEXT DEFAULT 'combined_oldest',
                     "pruneOldestLimit" INTEGER DEFAULT 50,
@@ -435,7 +437,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["overlayRecheckSchedule", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckSchedule" TEXT DEFAULT 'daily_4am';`],
                 ["overlayRecheckScope", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckScope" TEXT DEFAULT 'daily_recheck';`],
                 ["overlayRecheckBatchSize", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckBatchSize" INTEGER DEFAULT 200;`],
-                ["overlayRecheckLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckLastRunAt" DATETIME;`]
+                ["overlayRecheckLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckLastRunAt" DATETIME;`],
+                ["pruneUnwatchedMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneUnwatchedMinAgeDays" INTEGER DEFAULT 90;`],
+                ["pruneWatchedMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneWatchedMinAgeDays" INTEGER DEFAULT 180;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {

@@ -81,6 +81,8 @@ export interface MaintainerrRulePreset {
     description: string;
     icon: string;
     minAgeDays: number;
+    unwatchedMinAgeDays?: number;
+    watchedMinAgeDays?: number;
     gracePeriodDays: number;
     unwatchedOnly: boolean;
     sortStrategy: "combined_oldest" | "oldest_added" | "oldest_watched" | "oldest_modified" | "largest_size" | "least_plays";
@@ -92,27 +94,45 @@ export interface MaintainerrRulePreset {
 export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
     {
         id: "standard_90d_unwatched",
-        name: "Standard 90d Unwatched",
-        description: "Flags media unwatched for 90+ days with 14-day notice",
+        name: "Standard Dual-Lane Cascade",
+        description: "Priority: Never watched 90d+ dead weight first, then oldest watched 180d+ cold storage",
         icon: "📦",
         minAgeDays: 90,
+        unwatchedMinAgeDays: 90,
+        watchedMinAgeDays: 180,
+        gracePeriodDays: 14,
+        unwatchedOnly: false,
+        sortStrategy: "combined_oldest",
+        oldestLimit: 50,
+        bannerType: "leaving_soon"
+    },
+    {
+        id: "strict_unwatched_only",
+        name: "Strict Unwatched Only",
+        description: "Flags strictly unwatched media older than 90 days with 14-day notice",
+        icon: "🚫",
+        minAgeDays: 90,
+        unwatchedMinAgeDays: 90,
+        watchedMinAgeDays: 180,
         gracePeriodDays: 14,
         unwatchedOnly: true,
         sortStrategy: "combined_oldest",
         oldestLimit: 50,
-        bannerType: "leaving_date"
+        bannerType: "leaving_soon"
     },
     {
         id: "extended_180d_grace",
-        name: "Extended 180d Grace",
-        description: "Gentle 6-month retention policy with 30-day notice period",
+        name: "Extended 180d/365d Grace",
+        description: "Gentle retention: 180d+ unwatched or 365d+ watched with 30-day notice period",
         icon: "⏳",
         minAgeDays: 180,
+        unwatchedMinAgeDays: 180,
+        watchedMinAgeDays: 365,
         gracePeriodDays: 30,
-        unwatchedOnly: true,
+        unwatchedOnly: false,
         sortStrategy: "oldest_watched",
         oldestLimit: 50,
-        bannerType: "upper_third"
+        bannerType: "leaving_soon"
     },
     {
         id: "emergency_low_disk",
@@ -120,11 +140,13 @@ export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
         description: "Target large 4K/Remux files over 30 days old with 7-day notice",
         icon: "🚨",
         minAgeDays: 30,
+        unwatchedMinAgeDays: 30,
+        watchedMinAgeDays: 90,
         gracePeriodDays: 7,
-        unwatchedOnly: true,
+        unwatchedOnly: false,
         sortStrategy: "largest_size",
         oldestLimit: 25,
-        bannerType: "top_banner"
+        bannerType: "leaving_soon"
     },
     {
         id: "one_play_abandoned",
@@ -132,11 +154,13 @@ export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
         description: "Media added 1+ year ago with low lifetime plays",
         icon: "📉",
         minAgeDays: 365,
+        unwatchedMinAgeDays: 365,
+        watchedMinAgeDays: 365,
         gracePeriodDays: 21,
         unwatchedOnly: false,
         sortStrategy: "least_plays",
         oldestLimit: 50,
-        bannerType: "unwatched_warning"
+        bannerType: "leaving_soon"
     },
     {
         id: "dormant_clean",
@@ -144,11 +168,13 @@ export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
         description: "Oldest unmodified files sitting idle on disk for 180+ days",
         icon: "🧹",
         minAgeDays: 180,
+        unwatchedMinAgeDays: 180,
+        watchedMinAgeDays: 180,
         gracePeriodDays: 14,
         unwatchedOnly: true,
         sortStrategy: "oldest_modified",
         oldestLimit: 50,
-        bannerType: "middle_banner"
+        bannerType: "leaving_soon"
     },
     {
         id: "aggressive_45d_prune",
@@ -156,6 +182,8 @@ export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
         description: "Fast storage reclamation targeting large files with 7-day notice",
         icon: "⚡",
         minAgeDays: 45,
+        unwatchedMinAgeDays: 45,
+        watchedMinAgeDays: 90,
         gracePeriodDays: 7,
         unwatchedOnly: false,
         sortStrategy: "largest_size",
@@ -165,9 +193,9 @@ export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
 ];
 
 export const PRUNE_BANNER_PRESETS = [
+    { id: "leaving_soon", label: "⚠️ Leaving Soon", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
     { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
     { id: "leaving_days", label: "⏳ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
-    { id: "leaving_soon", label: "⚠️ Leaving Soon", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
     { id: "middle_banner", label: "⚠️ Leaving Soon & Days Left", defaultText: "LEAVING SOON • {days} DAYS LEFT", theme: "crimson-red", pos: "middle" as const, fontSize: 44 },
     { id: "upper_third", label: "⏳ Prune Warning", defaultText: "UNWATCHED • LEAVING SOON", theme: "amber-gold", pos: "upper_third" as const, fontSize: 44 },
     { id: "top_banner", label: "📦 Storage Cleanup", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple", pos: "top" as const, fontSize: 44 },
@@ -217,6 +245,8 @@ export function PruneStudio() {
     const [pruneEvaluateSeasonsSetting, setPruneEvaluateSeasonsSetting] = useState<boolean>(true);
     const [pruneDeleteFromArrSetting, setPruneDeleteFromArrSetting] = useState<boolean>(false);
     const [pruneMinAgeDaysSetting, setPruneMinAgeDaysSetting] = useState<number>(90);
+    const [pruneUnwatchedMinAgeDaysSetting, setPruneUnwatchedMinAgeDaysSetting] = useState<number>(90);
+    const [pruneWatchedMinAgeDaysSetting, setPruneWatchedMinAgeDaysSetting] = useState<number>(180);
     const [pruneDaysNoticeSetting, setPruneDaysNoticeSetting] = useState<number>(14);
     const [pruneUnwatchedOnlySetting, setPruneUnwatchedOnlySetting] = useState<boolean>(true);
     const [savingThresholds, setSavingThresholds] = useState<boolean>(false);
@@ -235,6 +265,8 @@ export function PruneStudio() {
                 pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
                 pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
                 pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
                 pruneDaysNotice: Number(pruneDaysNoticeSetting),
                 pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
             });
@@ -248,6 +280,8 @@ export function PruneStudio() {
                     pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
                     pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
                     pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                    pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                    pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
                     pruneDaysNotice: Number(pruneDaysNoticeSetting),
                     pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
                 }));
@@ -447,7 +481,9 @@ export function PruneStudio() {
     const [simGracePeriodDays, setSimGracePeriodDays] = useState<number>(14);
     const [simFilterSearch, setSimFilterSearch] = useState<string>("");
     const [simMinAgeDays, setSimMinAgeDays] = useState(90);
-    const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(true);
+    const [simUnwatchedMinAgeDays, setSimUnwatchedMinAgeDays] = useState<number>(90);
+    const [simWatchedMinAgeDays, setSimWatchedMinAgeDays] = useState<number>(180);
+    const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(false);
     const [simEvaluateSeasons, setSimEvaluateSeasons] = useState(true);
     const [simulatingPrune, setSimulatingPrune] = useState(false);
     const [selectedRulePresetId, setSelectedRulePresetId] = useState<string>("standard_90d_unwatched");
@@ -479,14 +515,14 @@ export function PruneStudio() {
     const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
     const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
     const [simPosterUrl, setSimPosterUrl] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
-    const [simBannerType, setSimBannerType] = useState<string>("leaving_date");
-    const [simBannerText, setSimBannerText] = useState<string>("LEAVING ON {date}");
+    const [simBannerType, setSimBannerType] = useState<string>("leaving_soon");
+    const [simBannerText, setSimBannerText] = useState<string>("LEAVING SOON");
     const [simBannerTheme, setSimBannerTheme] = useState<string>("crimson-red");
     const [simBannerPosition, setSimBannerPosition] = useState<"bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner">("bottom");
     const [simBannerFontSize, setSimBannerFontSize] = useState<number>(44);
     const [simTemplateDate, setSimTemplateDate] = useState<string>("10/31/2026");
     const [simTemplateDays, setSimTemplateDays] = useState<number>(14);
-    const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 180+ Days");
+    const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 90+ Days");
     const [simTemplateStatus, setSimTemplateStatus] = useState<string>("Leaving Soon");
     const [bannerTemplates, setBannerTemplates] = useState<Record<string, { text?: string; theme?: string; pos?: "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner"; fontSize?: number }>>({});
     const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
@@ -499,7 +535,7 @@ export function PruneStudio() {
         const preset = PRUNE_BANNER_PRESETS.find(p => p.id === presetId);
         const custom = customTemplates[presetId] || {};
         return {
-            text: custom.text !== undefined ? custom.text : (preset?.defaultText || "LEAVING ON {date}"),
+            text: custom.text !== undefined ? custom.text : (preset?.defaultText || "LEAVING SOON"),
             theme: custom.theme || preset?.theme || "crimson-red",
             pos: (custom.pos || preset?.pos || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner",
             fontSize: custom.fontSize || (preset as any)?.fontSize || 44
@@ -645,7 +681,11 @@ export function PruneStudio() {
     // Apply a Maintainerr Rule Preset
     const handleApplyRulePreset = (preset: MaintainerrRulePreset) => {
         setSelectedRulePresetId(preset.id);
+        const unwatchedDays = preset.unwatchedMinAgeDays ?? preset.minAgeDays;
+        const watchedDays = preset.watchedMinAgeDays ?? 180;
         setSimMinAgeDays(preset.minAgeDays);
+        setSimUnwatchedMinAgeDays(unwatchedDays);
+        setSimWatchedMinAgeDays(watchedDays);
         setSimGracePeriodDays(preset.gracePeriodDays);
         setSimUnwatchedOnly(preset.unwatchedOnly);
         setSimSortBy(preset.sortStrategy);
@@ -653,6 +693,8 @@ export function PruneStudio() {
 
         // Also sync to storage settings tab state
         setPruneMinAgeDaysSetting(preset.minAgeDays);
+        setPruneUnwatchedMinAgeDaysSetting(unwatchedDays);
+        setPruneWatchedMinAgeDaysSetting(watchedDays);
         setPruneDaysNoticeSetting(preset.gracePeriodDays);
         setPruneUnwatchedOnlySetting(preset.unwatchedOnly);
 
@@ -668,6 +710,8 @@ export function PruneStudio() {
         try {
             const res = await saveCurationSettingsAction({
                 pruneMinAgeDays: Number(simMinAgeDays),
+                pruneUnwatchedMinAgeDays: Number(simUnwatchedMinAgeDays),
+                pruneWatchedMinAgeDays: Number(simWatchedMinAgeDays),
                 pruneDaysNotice: Number(simGracePeriodDays),
                 pruneUnwatchedOnly: Boolean(simUnwatchedOnly),
                 pruneSortStrategy: simSortBy,
@@ -680,6 +724,8 @@ export function PruneStudio() {
             });
             if (res.success) {
                 setPruneMinAgeDaysSetting(simMinAgeDays);
+                setPruneUnwatchedMinAgeDaysSetting(simUnwatchedMinAgeDays);
+                setPruneWatchedMinAgeDaysSetting(simWatchedMinAgeDays);
                 setPruneDaysNoticeSetting(simGracePeriodDays);
                 setPruneUnwatchedOnlySetting(simUnwatchedOnly);
                 setRuleDefaultSavedMsg("✓ Saved as Global Default Pruning Rule!");
@@ -779,7 +825,7 @@ export function PruneStudio() {
     // Reset Active Preset to Default
     const handleResetCurrentPruneBannerTemplate = async () => {
         const preset = PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType);
-        const defaultText = preset?.defaultText || "LEAVING ON {date}";
+        const defaultText = preset?.defaultText || "LEAVING SOON";
         const defaultTheme = preset?.theme || "crimson-red";
         const defaultPos = (preset?.pos || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner";
         const defaultFontSize = (preset as any)?.fontSize || 44;
@@ -961,6 +1007,17 @@ export function PruneStudio() {
                         setPruneMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
                         setSimMinAgeDays(settingsRes.pruneMinAgeDays);
                     }
+                    if (settingsRes.pruneUnwatchedMinAgeDays !== undefined) {
+                        setPruneUnwatchedMinAgeDaysSetting(settingsRes.pruneUnwatchedMinAgeDays);
+                        setSimUnwatchedMinAgeDays(settingsRes.pruneUnwatchedMinAgeDays);
+                    } else if (settingsRes.pruneMinAgeDays !== undefined) {
+                        setPruneUnwatchedMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
+                        setSimUnwatchedMinAgeDays(settingsRes.pruneMinAgeDays);
+                    }
+                    if (settingsRes.pruneWatchedMinAgeDays !== undefined) {
+                        setPruneWatchedMinAgeDaysSetting(settingsRes.pruneWatchedMinAgeDays);
+                        setSimWatchedMinAgeDays(settingsRes.pruneWatchedMinAgeDays);
+                    }
                     if (settingsRes.pruneDaysNotice !== undefined) {
                         setPruneDaysNoticeSetting(settingsRes.pruneDaysNotice);
                         setSimGracePeriodDays(settingsRes.pruneDaysNotice);
@@ -989,10 +1046,10 @@ export function PruneStudio() {
                         }
                     }
 
-                    let activeBannerType = settingsRes.pruneBannerType || "leaving_date";
+                    let activeBannerType = settingsRes.pruneBannerType || "leaving_soon";
                     let initPos = (settingsRes.pruneBannerPosition || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner";
                     let initTheme = settingsRes.pruneBannerTheme || "crimson-red";
-                    let initText = settingsRes.pruneBannerText || "LEAVING ON {date}";
+                    let initText = settingsRes.pruneBannerText || "LEAVING SOON";
                     let initFontSize = settingsRes.pruneBannerFontSize || 44;
 
                     if (settingsRes.pruneBannerTemplates) {
@@ -1194,6 +1251,8 @@ export function PruneStudio() {
         try {
             const res = await runPruneSimulationAction(selectedServerId, {
                 minAgeDays: simMinAgeDays,
+                unwatchedMinAgeDays: simUnwatchedMinAgeDays,
+                watchedMinAgeDays: simWatchedMinAgeDays,
                 unwatchedOnly: simUnwatchedOnly,
                 maxCandidates: simOldestLimit === 0 ? 500 : simOldestLimit,
                 evaluateSeasons: simEvaluateSeasons,
@@ -2478,7 +2537,7 @@ export function PruneStudio() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs">
                             {/* Sort / Discovery Mode */}
                             <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
                                 <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
@@ -2493,7 +2552,7 @@ export function PruneStudio() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="combined_oldest">⚡ Combined (Oldest Added, Watched &amp; Modified)</SelectItem>
+                                        <SelectItem value="combined_oldest">⚡ Dual-Lane Cascade (Never Watched → Oldest Watched)</SelectItem>
                                         <SelectItem value="oldest_added">📅 Oldest Added to Library</SelectItem>
                                         <SelectItem value="oldest_watched">👁️ Oldest Last Watched</SelectItem>
                                         <SelectItem value="oldest_modified">📝 Oldest Modified on Disk</SelectItem>
@@ -2507,7 +2566,7 @@ export function PruneStudio() {
                             <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
                                 <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
                                     <Filter className="h-3.5 w-3.5 text-sky-400" />
-                                    <span>Show Oldest Amount:</span>
+                                    <span>Candidate Limit:</span>
                                 </Label>
                                 <Select
                                     value={String(simOldestLimit)}
@@ -2517,32 +2576,55 @@ export function PruneStudio() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="10">Show Oldest 10 Files</SelectItem>
-                                        <SelectItem value="25">Show Oldest 25 Files</SelectItem>
-                                        <SelectItem value="50">Show Oldest 50 Files</SelectItem>
-                                        <SelectItem value="100">Show Oldest 100 Files</SelectItem>
-                                        <SelectItem value="200">Show Oldest 200 Files</SelectItem>
-                                        <SelectItem value="0">Show All Matching Candidates</SelectItem>
+                                        <SelectItem value="10">Show 10 Files</SelectItem>
+                                        <SelectItem value="25">Show 25 Files</SelectItem>
+                                        <SelectItem value="50">Show 50 Files</SelectItem>
+                                        <SelectItem value="100">Show 100 Files</SelectItem>
+                                        <SelectItem value="200">Show 200 Files</SelectItem>
+                                        <SelectItem value="0">All Matches</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            {/* Minimum Age in Days */}
+                            {/* Lane 2: Never Watched Min Age */}
                             <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
                                 <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
-                                    <Calendar className="h-3.5 w-3.5 text-amber-400" />
-                                    <span>Minimum Age (Days):</span>
+                                    <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+                                    <span>Lane 2: Unwatched:</span>
                                 </Label>
                                 <div className="flex items-center gap-2">
                                     <Input
                                         type="number"
                                         min="0"
                                         max="3650"
-                                        value={simMinAgeDays}
-                                        onChange={(e) => setSimMinAgeDays(parseInt(e.target.value, 10) || 0)}
+                                        value={simUnwatchedMinAgeDays}
+                                        onChange={(e) => {
+                                            const v = parseInt(e.target.value, 10) || 0;
+                                            setSimUnwatchedMinAgeDays(v);
+                                            setSimMinAgeDays(v);
+                                        }}
                                         className="bg-slate-900 border-slate-700 h-8 text-xs font-mono"
                                     />
-                                    <span className="text-slate-400 text-xs shrink-0">days old</span>
+                                    <span className="text-slate-400 text-xs shrink-0">days</span>
+                                </div>
+                            </div>
+
+                            {/* Lane 1: Oldest Watched Min Age */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                                    <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                    <span>Lane 1: Watched:</span>
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        max="3650"
+                                        value={simWatchedMinAgeDays}
+                                        onChange={(e) => setSimWatchedMinAgeDays(parseInt(e.target.value, 10) || 0)}
+                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono"
+                                    />
+                                    <span className="text-slate-400 text-xs shrink-0">days</span>
                                 </div>
                             </div>
 
@@ -2551,12 +2633,12 @@ export function PruneStudio() {
                                 <div className="flex items-center justify-between">
                                     <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
                                         <Tv className="h-3.5 w-3.5 text-indigo-400" />
-                                        <span>Season-Level TV:</span>
+                                        <span>TV Seasons:</span>
                                     </Label>
                                     <Switch checked={simEvaluateSeasons} onCheckedChange={setSimEvaluateSeasons} />
                                 </div>
                                 <p className="text-[10px] text-slate-400">
-                                    {simEvaluateSeasons ? "Evaluate individual TV seasons" : "Evaluate whole TV series"}
+                                    {simEvaluateSeasons ? "Evaluate individual seasons" : "Evaluate whole series"}
                                 </p>
                             </div>
 
@@ -2567,7 +2649,7 @@ export function PruneStudio() {
                                     <Switch checked={simUnwatchedOnly} onCheckedChange={setSimUnwatchedOnly} />
                                 </div>
                                 <p className="text-[10px] text-slate-400">
-                                    {simUnwatchedOnly ? "Only items with 0 plays" : "Include watched & unwatched"}
+                                    {simUnwatchedOnly ? "Skip Lane 1 watched media" : "Cascade Lane 2 → Lane 1"}
                                 </p>
                             </div>
                         </div>
@@ -2775,6 +2857,15 @@ export function PruneStudio() {
                                                                         <span className="font-bold text-white text-xs sm:text-sm truncate">
                                                                             {c.parentTitle || c.title}
                                                                         </span>
+                                                                        {c.lane === "unwatched" ? (
+                                                                            <Badge className="bg-cyan-950 text-cyan-300 border-cyan-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                                📦 Lane 2: Never Watched
+                                                                            </Badge>
+                                                                        ) : c.lane === "watched" ? (
+                                                                            <Badge className="bg-amber-950 text-amber-300 border-amber-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                                👁️ Lane 1: Oldest Watched
+                                                                            </Badge>
+                                                                        ) : null}
                                                                         {c.seasonNumber !== undefined && (
                                                                             <Badge className="bg-indigo-950 text-indigo-300 border-indigo-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
                                                                                 Season {c.seasonNumber}
@@ -3172,15 +3263,41 @@ export function PruneStudio() {
                                     />
                                 </div>
 
-                                {/* Default Minimum Media Age */}
+                                {/* Dual-Lane Ingestion Pipeline & Priority Cascade Callout */}
+                                <div className="p-3 bg-gradient-to-br from-cyan-950/30 via-slate-950 to-amber-950/20 rounded-xl border border-cyan-800/40 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Layers className="h-4 w-4 text-cyan-400" />
+                                            <span className="text-xs font-bold text-slate-100">Dual-Lane Ingestion Pipeline</span>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] bg-cyan-950/60 text-cyan-300 border-cyan-700/50 font-mono">
+                                            Option A Cascade
+                                        </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                                        Target reclamation headroom (<strong className="text-emerald-300">{pruneTargetHeadroomGb} GB</strong>) is filled from <strong className="text-cyan-300">Lane 2 (Never Watched)</strong> first. If additional headroom is needed, items are drawn from <strong className="text-amber-300">Lane 1 (Oldest Watched)</strong>.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                        <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-800/40">
+                                            <span className="text-[10px] font-bold text-cyan-300 block uppercase tracking-wider">Priority 1 • Lane 2</span>
+                                            <span className="text-[11px] text-slate-300">Never Watched Dead Weight</span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-800/40">
+                                            <span className="text-[10px] font-bold text-amber-300 block uppercase tracking-wider">Priority 2 • Lane 1</span>
+                                            <span className="text-[11px] text-slate-300">Oldest Watched Cold Storage</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Lane 2: Never Watched Media Age Threshold */}
                                 <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
                                     <div className="flex items-center justify-between">
                                         <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
-                                            <Calendar className="h-3.5 w-3.5 text-amber-400" />
-                                            <span>Minimum Media Age Threshold:</span>
+                                            <FolderOpen className="h-3.5 w-3.5 text-cyan-400" />
+                                            <span>Lane 2: Never Watched Minimum Age:</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-bold text-amber-300">
-                                            {pruneMinAgeDaysSetting} Days
+                                        <span className="font-mono text-xs font-bold text-cyan-300">
+                                            {pruneUnwatchedMinAgeDaysSetting} Days
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-3 pt-1">
@@ -3188,12 +3305,38 @@ export function PruneStudio() {
                                             type="number"
                                             min="0"
                                             max="3650"
-                                            value={pruneMinAgeDaysSetting}
-                                            onChange={(e) => setPruneMinAgeDaysSetting(parseInt(e.target.value, 10) || 90)}
+                                            value={pruneUnwatchedMinAgeDaysSetting}
+                                            onChange={(e) => setPruneUnwatchedMinAgeDaysSetting(parseInt(e.target.value, 10) || 90)}
                                             className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
                                         />
                                         <p className="text-[11px] text-slate-400">
-                                            Media must be at least <strong className="text-white">{pruneMinAgeDaysSetting} days old</strong> to qualify.
+                                            Media with <strong className="text-cyan-300">0 plays</strong> must be at least <strong className="text-white">{pruneUnwatchedMinAgeDaysSetting} days old</strong> to qualify.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Lane 1: Oldest Watched Media Stale Threshold */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                            <span>Lane 1: Oldest Watched Inactivity Threshold:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-amber-300">
+                                            {pruneWatchedMinAgeDaysSetting} Days
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="3650"
+                                            value={pruneWatchedMinAgeDaysSetting}
+                                            onChange={(e) => setPruneWatchedMinAgeDaysSetting(parseInt(e.target.value, 10) || 180)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Watched media must not have been played for at least <strong className="text-white">{pruneWatchedMinAgeDaysSetting} days</strong> to qualify.
                                         </p>
                                     </div>
                                 </div>
@@ -3229,7 +3372,7 @@ export function PruneStudio() {
                                     <div className="space-y-0.5">
                                         <span className="text-xs font-bold text-slate-200 block">Unwatched Only Policy</span>
                                         <p className="text-[10px] text-slate-400">
-                                            {pruneUnwatchedOnlySetting ? "Only media with 0 total plays can be pruned." : "Both watched and unwatched media are evaluated."}
+                                            {pruneUnwatchedOnlySetting ? "Strict Mode: Only media with 0 total plays (Lane 2) will ever be staged." : "Dual-Lane Mode: Lane 2 is prioritized first, then Lane 1 is staged if headroom remains."}
                                         </p>
                                     </div>
                                     <Switch

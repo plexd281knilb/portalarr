@@ -351,6 +351,8 @@ export async function getCurationSettingsAction() {
         pruneDeleteFromDisk: settings?.pruneDeleteFromDisk ?? false,
         pruneDaysNotice: settings?.pruneDaysNotice ?? 14,
         pruneMinAgeDays: settings?.pruneMinAgeDays ?? 90,
+        pruneUnwatchedMinAgeDays: (settings as any)?.pruneUnwatchedMinAgeDays ?? settings?.pruneMinAgeDays ?? 90,
+        pruneWatchedMinAgeDays: (settings as any)?.pruneWatchedMinAgeDays ?? 180,
         pruneUnwatchedOnly: settings?.pruneUnwatchedOnly ?? true,
         pruneSortStrategy: settings?.pruneSortStrategy || "combined_oldest",
         pruneOldestLimit: settings?.pruneOldestLimit ?? 50,
@@ -380,9 +382,9 @@ export async function getCurationSettingsAction() {
         // Pruning Banner Appearance Settings
         pruneBannerPosition: settings?.pruneBannerPosition || "bottom",
         pruneBannerTheme: settings?.pruneBannerTheme || "crimson-red",
-        pruneBannerText: settings?.pruneBannerText || "LEAVING ON {date}",
+        pruneBannerText: settings?.pruneBannerText || "LEAVING SOON",
         pruneBannerFontSize: settings?.pruneBannerFontSize ?? 44,
-        pruneBannerType: (settings as any)?.pruneBannerType || "leaving_date",
+        pruneBannerType: (settings as any)?.pruneBannerType || "leaving_soon",
         pruneBannerTemplates: safeJsonParse((settings as any)?.pruneBannerTemplates, {}),
 
         // Leaving Soon Home Hub & Schedule Settings
@@ -673,6 +675,8 @@ export async function saveCurationSettingsAction(data: {
     pruneDeleteFromDisk?: boolean;
     pruneDaysNotice?: number;
     pruneMinAgeDays?: number;
+    pruneUnwatchedMinAgeDays?: number;
+    pruneWatchedMinAgeDays?: number;
     pruneUnwatchedOnly?: boolean;
     enabledServersForOverlays?: string[];
     enabledServersForCollections?: string[];
@@ -754,6 +758,8 @@ export async function saveCurationSettingsAction(data: {
         if (data.pruneDeleteFromDisk !== undefined) updatePayload.pruneDeleteFromDisk = data.pruneDeleteFromDisk;
         if (data.pruneDaysNotice !== undefined) updatePayload.pruneDaysNotice = data.pruneDaysNotice;
         if (data.pruneMinAgeDays !== undefined) updatePayload.pruneMinAgeDays = data.pruneMinAgeDays;
+        if (data.pruneUnwatchedMinAgeDays !== undefined) updatePayload.pruneUnwatchedMinAgeDays = data.pruneUnwatchedMinAgeDays;
+        if (data.pruneWatchedMinAgeDays !== undefined) updatePayload.pruneWatchedMinAgeDays = data.pruneWatchedMinAgeDays;
         if (data.pruneUnwatchedOnly !== undefined) updatePayload.pruneUnwatchedOnly = data.pruneUnwatchedOnly;
         if (data.enabledServersForOverlays !== undefined) updatePayload.enabledServersForOverlays = JSON.stringify(data.enabledServersForOverlays);
         if (data.enabledServersForCollections !== undefined) updatePayload.enabledServersForCollections = JSON.stringify(data.enabledServersForCollections);
@@ -2883,8 +2889,10 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
 
                 const candidateRes = await evaluatePruneCandidatesForServer(serverUrl, token, targetServerId, resolved.serverName, {
                     minAgeDays: settings?.pruneMinAgeDays ?? 90,
+                    unwatchedMinAgeDays: (settings as any)?.pruneUnwatchedMinAgeDays ?? settings?.pruneMinAgeDays ?? 90,
+                    watchedMinAgeDays: (settings as any)?.pruneWatchedMinAgeDays ?? 180,
                     unwatchedOnly: settings?.pruneUnwatchedOnly ?? false,
-                    maxCandidates: 50,
+                    maxCandidates: 100,
                     sortBy: (settings?.pruneSortStrategy as any) || "combined_oldest",
                     evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true,
                     sectionKeys: eligibleSections.map(s => String(s.key))
@@ -2905,13 +2913,16 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
 
                         if (!existing || !existing.isLeavingSoon) {
                             const formattedTitle = cand.parentTitle ? `${cand.parentTitle} (Season ${cand.seasonNumber})` : (cand.title || "Media Item");
+                            const laneInfo = cand.laneLabel ? `[${cand.laneLabel}] ` : "";
+                            const leavingReason = `Storage Capacity Warning: Disk at ${diskUsagePercent}% used • ${laneInfo}${cand.reason} (Auto-staging towards ${targetHeadroomGb} GB headroom)`;
+
                             await prisma.mediaContentAdvisory.upsert({
                                 where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } },
                                 update: {
                                     title: formattedTitle,
                                     isLeavingSoon: true,
                                     leavingSoonDate: effectiveDate,
-                                    leavingReason: `Storage Capacity Warning: Disk at ${diskUsagePercent}% used (Auto-staging towards ${targetHeadroomGb} GB headroom)`
+                                    leavingReason
                                 },
                                 create: {
                                     ratingKey: cand.ratingKey,
@@ -2919,7 +2930,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                                     title: formattedTitle,
                                     isLeavingSoon: true,
                                     leavingSoonDate: effectiveDate,
-                                    leavingReason: `Storage Capacity Warning: Disk at ${diskUsagePercent}% used (Auto-staging towards ${targetHeadroomGb} GB headroom)`
+                                    leavingReason
                                 }
                             });
                             stagedCount++;
@@ -3056,7 +3067,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
             // Apply Leaving Soon banner overlays to all active items in Plex
             if (serverUrl && token && leavingSoonItems.length > 0) {
                 const targetServerId = serverId || resolved.serverId || "main";
-                const bannerText = settings?.pruneBannerText || "LEAVING ON {date}";
+                const bannerText = settings?.pruneBannerText || "LEAVING SOON";
                 const bannerTheme = settings?.pruneBannerTheme || "crimson-red";
                 const bannerPosition = settings?.pruneBannerPosition || "bottom";
 
@@ -4100,7 +4111,7 @@ export async function getActiveOverlayOptionsHelper(
         })),
         placeholderPosition: settings?.pruneBannerPosition || "bottom",
         placeholderTheme: settings?.pruneBannerTheme || "crimson-red",
-        placeholderText: settings?.pruneBannerText || "LEAVING ON {date}",
+        placeholderText: settings?.pruneBannerText || "LEAVING SOON",
         bannerFontSize: settings?.pruneBannerFontSize ?? 44,
         placeholderFontSize: settings?.pruneBannerFontSize ?? 44
     };
@@ -4286,7 +4297,7 @@ export async function applyOverlaysToLibraryInternal(
         }).catch(() => []);
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
         const advisoryMap = new Map(leavingSoonAdvisories.map(a => [String(a.ratingKey), a]));
-        const pruneBannerText = settings?.pruneBannerText || "LEAVING ON {date}";
+        const pruneBannerText = settings?.pruneBannerText || "LEAVING SOON";
         const pruneBannerTheme = settings?.pruneBannerTheme || "crimson-red";
         const pruneBannerPosition = settings?.pruneBannerPosition || "bottom";
         const pruneDaysNotice = settings?.pruneDaysNotice ?? 14;
@@ -4616,7 +4627,7 @@ export async function markItemLeavingSoonAction(data: {
                     matched.isLeavingSoon = true;
                     const daysLeft = data.daysRemaining || Math.max(1, Math.ceil((effectiveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
                     const effectiveDateStr = effectiveDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                    const bannerText = settings?.pruneBannerText || "LEAVING ON {date}";
+                    const bannerText = settings?.pruneBannerText || "LEAVING SOON";
                     const bannerTheme = settings?.pruneBannerTheme || "crimson-red";
                     const bannerPosition = settings?.pruneBannerPosition || "bottom";
 
@@ -5035,10 +5046,12 @@ export async function getPrunePreviewAction(options?: {
     targetSectionKey?: string;
     criteria?: {
         minAgeDays?: number;
+        unwatchedMinAgeDays?: number;
+        watchedMinAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
         evaluateSeasons?: boolean;
-        sortBy?: "combined_oldest" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
+        sortBy?: "combined_oldest" | "dual_lane_cascade" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     };
 }) {
     try {
@@ -5074,7 +5087,7 @@ export async function getPrunePreviewAction(options?: {
             };
         }
 
-        const allCandidates: PruneCandidateItem[] = [];
+        let allCandidates: PruneCandidateItem[] = [];
         let totalRecoverable = 0;
         let totalEvaluated = 0;
 
@@ -5103,6 +5116,8 @@ export async function getPrunePreviewAction(options?: {
 
             const res = await evaluatePruneCandidatesForServer(resolved.serverUrl, resolved.token, s.clientIdentifier, s.name, {
                 minAgeDays: criteria?.minAgeDays ?? settings?.pruneMinAgeDays ?? 90,
+                unwatchedMinAgeDays: (criteria as any)?.unwatchedMinAgeDays ?? (settings as any)?.pruneUnwatchedMinAgeDays ?? settings?.pruneMinAgeDays ?? 90,
+                watchedMinAgeDays: (criteria as any)?.watchedMinAgeDays ?? (settings as any)?.pruneWatchedMinAgeDays ?? 180,
                 unwatchedOnly: criteria?.unwatchedOnly ?? settings?.pruneUnwatchedOnly ?? false,
                 maxCandidates: criteria?.maxCandidates ?? 50,
                 sortBy: criteria?.sortBy ?? "combined_oldest",
@@ -5115,14 +5130,25 @@ export async function getPrunePreviewAction(options?: {
             totalEvaluated += res.evaluatedCount;
         }
 
-        // Sort candidates with Unified Activity Timestamp Engine (Max-Date Rule)
+        // Sort candidates with Priority Cascade (Option A): Lane 2 (Never Watched) -> Lane 1 (Oldest Watched)
         const sortBy = criteria?.sortBy ?? "combined_oldest";
-        if (sortBy === "combined_oldest" || (sortBy as any) === "combined_activity") {
-            allCandidates.sort((a, b) => {
-                const diff = (a.lastActivityDate || 0) - (b.lastActivityDate || 0);
+        if (sortBy === "combined_oldest" || (sortBy as any) === "dual_lane_cascade" || (sortBy as any) === "combined_activity") {
+            const lane2Unwatched = allCandidates.filter(c => c.lane === "unwatched");
+            const lane1Watched = allCandidates.filter(c => c.lane === "watched");
+
+            lane2Unwatched.sort((a, b) => {
+                const diff = (a.addedAt || 0) - (b.addedAt || 0);
                 if (diff !== 0) return diff;
                 return (b.fileSizeGb || 0) - (a.fileSizeGb || 0);
             });
+
+            lane1Watched.sort((a, b) => {
+                const diff = (a.lastViewedAt || a.addedAt || 0) - (b.lastViewedAt || b.addedAt || 0);
+                if (diff !== 0) return diff;
+                return (b.fileSizeGb || 0) - (a.fileSizeGb || 0);
+            });
+
+            allCandidates = [...lane2Unwatched, ...lane1Watched];
         } else if (sortBy === "oldest_watched") {
             allCandidates.sort((a, b) => {
                 if (!a.lastViewedAt && !b.lastViewedAt) return (a.addedAt || 0) - (b.addedAt || 0);
@@ -5159,10 +5185,12 @@ export async function runPruneSimulationAction(
     targetServerId?: string,
     criteria?: {
         minAgeDays?: number;
+        unwatchedMinAgeDays?: number;
+        watchedMinAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
         evaluateSeasons?: boolean;
-        sortBy?: "combined_oldest" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
+        sortBy?: "combined_oldest" | "dual_lane_cascade" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     },
     targetSectionKey?: string
 ) {
@@ -5200,7 +5228,7 @@ export async function executePruneAction(
         const shouldApplyOverlay = options.applyOverlay ?? settings?.pruneApplyOverlays ?? true;
         const daysNotice = options.daysNotice ?? settings?.pruneDaysNotice ?? 14;
         const reason = options.reason || `Storage capacity optimization (${daysNotice}-day notice)`;
-        const bannerText = options.bannerText || settings?.pruneBannerText || "LEAVING ON {date}";
+        const bannerText = options.bannerText || settings?.pruneBannerText || "LEAVING SOON";
         const bannerTheme = options.bannerTheme || settings?.pruneBannerTheme || "crimson-red";
         const bannerPosition = options.bannerPosition || settings?.pruneBannerPosition || "bottom";
 

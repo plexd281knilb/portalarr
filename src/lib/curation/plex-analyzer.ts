@@ -2801,6 +2801,8 @@ export interface PruneCandidateItem {
     tmdbId?: string;
     reason: string;
     daysOld: number;
+    lane?: "unwatched" | "watched";
+    laneLabel?: string;
 }
 
 /**
@@ -2866,20 +2868,23 @@ export async function evaluatePruneCandidatesForServer(
     serverName: string,
     options: {
         minAgeDays?: number;
+        unwatchedMinAgeDays?: number;
+        watchedMinAgeDays?: number;
         unwatchedOnly?: boolean;
         targetFreeGb?: number;
         maxCandidates?: number;
         sectionKeys?: string[];
         enabledSectionKeys?: string[];
         evaluateSeasons?: boolean;
-        sortBy?: "combined_oldest" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
+        sortBy?: "combined_oldest" | "dual_lane_cascade" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     } = {}
 ): Promise<{
     candidates: PruneCandidateItem[];
     totalRecoverableGb: number;
     evaluatedCount: number;
 }> {
-    const minAgeDays = options.minAgeDays ?? 90;
+    const unwatchedMinAgeDays = options.unwatchedMinAgeDays ?? options.minAgeDays ?? 90;
+    const watchedMinAgeDays = options.watchedMinAgeDays ?? 180;
     const unwatchedOnly = options.unwatchedOnly ?? false;
     const maxCandidates = options.maxCandidates ?? 50;
     const sortBy = options.sortBy ?? "combined_oldest";
@@ -2939,18 +2944,28 @@ export async function evaluatePruneCandidatesForServer(
                         const seasonLastActivityDate = Math.max(seasonAddedAt, seasonLastViewedAt || 0, seasonUpdatedAt || 0);
                         const seasonDaysInactive = Math.max(0, Math.floor((nowMs - seasonLastActivityDate) / (24 * 60 * 60 * 1000)));
                         const seasonDaysOld = Math.max(0, Math.floor((nowMs - seasonAddedAt) / (24 * 60 * 60 * 1000)));
+                        const isSeasonWatched = (season.viewedLeafCount || 0) > 0 || (seasonLastViewedAt !== undefined && seasonLastViewedAt > 0);
 
-                        // Filter by minimum inactivity age
-                        if (seasonDaysInactive < minAgeDays) continue;
+                        let seasonLane: "unwatched" | "watched";
+                        let seasonLaneLabel: string;
+                        let seasonReason: string;
 
-                        // Unwatched only filter: Skip if season has plays watched in last 180 days
-                        if (unwatchedOnly) {
-                            if (season.viewedLeafCount > 0 && seasonLastViewedAt) {
-                                const daysSinceWatched = Math.max(0, Math.floor((nowMs - seasonLastViewedAt) / (24 * 60 * 60 * 1000)));
-                                if (daysSinceWatched < 180) continue;
-                            } else if (season.viewedLeafCount > 0 && season.leafCount > 0 && season.viewedLeafCount === season.leafCount) {
-                                if (seasonDaysInactive < 180) continue;
-                            }
+                        if (!isSeasonWatched) {
+                            // Lane 2: Never Watched (Dead Weight)
+                            if (seasonDaysOld < unwatchedMinAgeDays && seasonDaysInactive < unwatchedMinAgeDays) continue;
+                            seasonLane = "unwatched";
+                            seasonLaneLabel = "Lane 2: Never Watched";
+                            seasonReason = `Season ${season.index} (${season.leafCount} eps) • Never Watched (Added ${seasonDaysOld}d ago • Inactive ${seasonDaysInactive}d)`;
+                        } else {
+                            // Lane 1: Oldest Watched (Cold Storage)
+                            if (unwatchedOnly) continue; // Skip watched if unwatchedOnly is ON
+                            const daysSinceWatched = seasonLastViewedAt
+                                ? Math.max(0, Math.floor((nowMs - seasonLastViewedAt) / (24 * 60 * 60 * 1000)))
+                                : seasonDaysInactive;
+                            if (daysSinceWatched < watchedMinAgeDays) continue;
+                            seasonLane = "watched";
+                            seasonLaneLabel = "Lane 1: Oldest Watched";
+                            seasonReason = `Season ${season.index} (${season.leafCount} eps) • Watched ${daysSinceWatched}d ago (${season.viewedLeafCount}/${season.leafCount} viewed • Inactive ${seasonDaysInactive}d)`;
                         }
 
                         // Approximate season file size based on episode count
@@ -2962,11 +2977,6 @@ export async function evaluatePruneCandidatesForServer(
                         } else {
                             seasonSizeGb = parseFloat(((season.leafCount || 8) * 1.4).toFixed(2));
                         }
-
-                        const isSeasonWatched = season.viewedLeafCount > 0;
-                        let reason = isSeasonWatched
-                            ? `Season ${season.index} (${season.leafCount} eps) • Watched ${seasonDaysInactive}d ago (${season.viewedLeafCount}/${season.leafCount} viewed)`
-                            : `Season ${season.index} (${season.leafCount} eps) • Inactive ${seasonDaysInactive}d (Never Watched)`;
 
                         allCandidates.push({
                             ratingKey: season.ratingKey,
@@ -2995,8 +3005,10 @@ export async function evaluatePruneCandidatesForServer(
                             audio: item.detectedBadges?.audio,
                             imdbId: item.guids?.imdb,
                             tmdbId: item.guids?.tmdb,
-                            reason,
-                            daysOld: seasonDaysOld
+                            reason: seasonReason,
+                            daysOld: seasonDaysOld,
+                            lane: seasonLane,
+                            laneLabel: seasonLaneLabel
                         });
                     }
                     continue; // Skip evaluating top-level show if seasons were evaluated
@@ -3008,30 +3020,33 @@ export async function evaluatePruneCandidatesForServer(
             const lastActivityDate = Math.max(addedAtMs, lastViewedAtMs || 0, updatedAtMs || 0);
             const daysInactive = Math.max(0, Math.floor((nowMs - lastActivityDate) / (24 * 60 * 60 * 1000)));
             const daysOld = Math.floor(Math.max(0, nowMs - addedAtMs) / (24 * 60 * 60 * 1000));
-
-            // Filter out items inactive for less than minAgeDays
-            if (daysInactive < minAgeDays) continue;
-
             const viewCount = item.viewCount || 0;
+            const isItemWatched = viewCount > 0 || (lastViewedAtMs !== undefined && lastViewedAtMs > 0);
 
-            // Filter out items that have been watched recently if unwatchedOnly is true
-            if (unwatchedOnly) {
-                if (viewCount > 0 && lastViewedAtMs) {
-                    const daysSinceViewed = Math.max(0, Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000)));
-                    if (daysSinceViewed < 180) continue; // Watched in last 6 months
-                }
+            let lane: "unwatched" | "watched";
+            let laneLabel: string;
+            let reason: string;
+
+            if (!isItemWatched) {
+                // Lane 2: Never Watched (Dead Weight)
+                if (daysOld < unwatchedMinAgeDays && daysInactive < unwatchedMinAgeDays) continue;
+                lane = "unwatched";
+                laneLabel = "Lane 2: Never Watched";
+                reason = `Never Watched • Inactive ${daysInactive}d (Added ${daysOld}d ago)`;
+            } else {
+                // Lane 1: Oldest Watched (Cold Storage)
+                if (unwatchedOnly) continue; // Skip watched if unwatchedOnly is ON
+                const daysSinceViewed = lastViewedAtMs
+                    ? Math.max(0, Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000)))
+                    : daysInactive;
+                if (daysSinceViewed < watchedMinAgeDays) continue;
+                lane = "watched";
+                laneLabel = "Lane 1: Oldest Watched";
+                reason = `Watched ${daysSinceViewed}d ago • ${viewCount} ${viewCount === 1 ? 'play' : 'plays'} (Inactive ${daysInactive}d)`;
             }
 
             const sizeBytes = item.fileSize || 0;
             const sizeGb = parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(2));
-
-            let reason = `Inactive ${daysInactive}d (Added ${daysOld}d ago • Never Watched)`;
-            if (viewCount > 0 && lastViewedAtMs) {
-                const daysSinceViewed = Math.max(0, Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000)));
-                reason = `Inactive ${daysInactive}d (Last watched ${daysSinceViewed}d ago • ${viewCount} ${viewCount === 1 ? 'play' : 'plays'})`;
-            } else if (viewCount > 0) {
-                reason = `Inactive ${daysInactive}d • ${viewCount} plays`;
-            }
 
             allCandidates.push({
                 ratingKey: item.ratingKey,
@@ -3058,19 +3073,35 @@ export async function evaluatePruneCandidatesForServer(
                 imdbId: item.guids?.imdb,
                 tmdbId: item.guids?.tmdb,
                 reason,
-                daysOld
+                daysOld,
+                lane,
+                laneLabel
             });
         }
     }
 
     // Sort candidates according to specified sort option
-    if (sortBy === "combined_oldest" || sortBy === "combined_activity") {
-        // Unified Activity Timestamp Engine: Primary sort by true longest inactive date (lastActivityDate ascending), secondary by fileSizeGb descending
-        allCandidates.sort((a, b) => {
-            const diff = (a.lastActivityDate || 0) - (b.lastActivityDate || 0);
+    // Priority Cascade (Option A): Lane 2 (Never Watched, sorted oldest added) -> Lane 1 (Oldest Watched, sorted oldest watched)
+    if (sortBy === "combined_oldest" || sortBy === "dual_lane_cascade" || (sortBy as any) === "combined_activity") {
+        const lane2Unwatched = allCandidates.filter(c => c.lane === "unwatched");
+        const lane1Watched = allCandidates.filter(c => c.lane === "watched");
+
+        // Lane 2: Oldest added date first, tiebreak by largest size
+        lane2Unwatched.sort((a, b) => {
+            const diff = (a.addedAt || 0) - (b.addedAt || 0);
             if (diff !== 0) return diff;
             return (b.fileSizeGb || 0) - (a.fileSizeGb || 0);
         });
+
+        // Lane 1: Oldest last watched date first, tiebreak by largest size
+        lane1Watched.sort((a, b) => {
+            const diff = (a.lastViewedAt || a.addedAt || 0) - (b.lastViewedAt || b.addedAt || 0);
+            if (diff !== 0) return diff;
+            return (b.fileSizeGb || 0) - (a.fileSizeGb || 0);
+        });
+
+        allCandidates.length = 0;
+        allCandidates.push(...lane2Unwatched, ...lane1Watched);
     } else if (sortBy === "oldest_watched") {
         allCandidates.sort((a, b) => {
             if (!a.lastViewedAt && !b.lastViewedAt) return (a.addedAt || 0) - (b.addedAt || 0);

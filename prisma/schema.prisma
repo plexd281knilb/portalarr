@@ -74,7 +74,9 @@ model Settings {
   pruneDeleteFromArr          Boolean   @default(false) // Trigger deletion in Radarr/Sonarr
   pruneDeleteFromDisk         Boolean   @default(false) // Trigger direct disk deletion
   pruneDaysNotice             Int?      @default(14) // Days of advance notice before deletion
-  pruneMinAgeDays             Int?      @default(90) // Min days item must exist before pruning eligibility
+  pruneMinAgeDays             Int?      @default(90) // Min days item must exist before pruning eligibility (legacy fallback)
+  pruneUnwatchedMinAgeDays    Int?      @default(90) // Lane 2: Min days since added for never watched media
+  pruneWatchedMinAgeDays      Int?      @default(180) // Lane 1: Min days since last watched for watched media
   pruneUnwatchedOnly          Boolean   @default(true) // Only prune items with 0 plays or unwatched
   enabledServersForOverlays   String?   // JSON array of server clientIdentifiers
   enabledServersForCollections String?  // JSON array of server clientIdentifiers
@@ -100,9 +102,9 @@ model Settings {
   // Prune & Leaving Soon Banner Appearance Controls
   pruneBannerPosition              String?   @default("bottom") // "bottom", "lower_third", "middle", "upper_third", "top", "corner"
   pruneBannerTheme                 String?   @default("crimson-red")
-  pruneBannerText                  String?   @default("LEAVING ON {date}")
+  pruneBannerText                  String?   @default("LEAVING SOON")
   pruneBannerFontSize              Int?      @default(44) // Default font size in px
-  pruneBannerType                  String?   @default("leaving_date")
+  pruneBannerType                  String?   @default("leaving_soon")
   pruneBannerTemplates             String?   // JSON map of banner preset ID -> { text, theme, pos, fontSize }
   pruneSortStrategy                String?   @default("combined_oldest")
   pruneOldestLimit                 Int?      @default(50)
