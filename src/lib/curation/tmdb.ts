@@ -287,6 +287,56 @@ export async function getTmdbMovieDetails(tmdbId: number): Promise<TmdbMediaItem
 }
 
 /**
+ * Fetch detailed certification for a Movie or TV show directly from TMDb
+ */
+export async function fetchMediaCertification(id: number, mediaType: "movie" | "tv"): Promise<string | undefined> {
+    try {
+        const endpoint = mediaType === "movie" ? `/movie/${id}/release_dates` : `/tv/${id}/content_ratings`;
+        const data = await tmdbFetch(endpoint);
+        if (!data?.results || !Array.isArray(data.results)) return undefined;
+
+        if (mediaType === "movie") {
+            const usRelease = data.results.find((r: any) => r.iso_3166_1 === "US") || data.results[0];
+            if (usRelease?.release_dates && Array.isArray(usRelease.release_dates)) {
+                for (const rel of usRelease.release_dates) {
+                    if (rel.certification && typeof rel.certification === "string" && rel.certification.trim()) {
+                        return rel.certification.trim();
+                    }
+                }
+            }
+        } else {
+            const usRating = data.results.find((r: any) => r.iso_3166_1 === "US") || data.results[0];
+            if (usRating?.rating && typeof usRating.rating === "string" && usRating.rating.trim()) {
+                return usRating.rating.trim();
+            }
+        }
+    } catch {
+        return undefined;
+    }
+    return undefined;
+}
+
+/**
+ * Enriches a list of media items with US content certification ratings in parallel
+ */
+export async function enrichItemsWithCertifications(items: TmdbMediaItem[]): Promise<TmdbMediaItem[]> {
+    if (!items || items.length === 0) return [];
+    try {
+        const enriched = await Promise.all(items.map(async (item) => {
+            if (item.certification && item.certification.trim()) return item;
+            const cert = await fetchMediaCertification(item.id, item.mediaType);
+            if (cert) {
+                return { ...item, certification: cert };
+            }
+            return item;
+        }));
+        return enriched;
+    } catch {
+        return items;
+    }
+}
+
+/**
  * Search TMDb by title and release year for movie matching
  */
 export async function searchTmdbMovie(title: string, year?: number): Promise<TmdbMediaItem[]> {
@@ -294,7 +344,9 @@ export async function searchTmdbMovie(title: string, year?: number): Promise<Tmd
         const params: Record<string, string | number> = { query: title };
         if (year) params.primary_release_year = year;
         const data = await tmdbFetch("/search/movie", params);
-        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
+        const mapped = (data?.results || []).map(mapTmdbMovie);
+        const enriched = await enrichItemsWithCertifications(mapped);
+        return filterAllowedMedia(enriched);
     } catch {
         return [];
     }
@@ -308,7 +360,9 @@ export async function searchTmdbTv(title: string, year?: number): Promise<TmdbMe
         const params: Record<string, string | number> = { query: title };
         if (year) params.first_air_date_year = year;
         const data = await tmdbFetch("/search/tv", params);
-        return filterAllowedMedia((data?.results || []).map(mapTmdbTv));
+        const mapped = (data?.results || []).map(mapTmdbTv);
+        const enriched = await enrichItemsWithCertifications(mapped);
+        return filterAllowedMedia(enriched);
     } catch {
         return [];
     }
@@ -531,7 +585,9 @@ export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMedi
                 }
             }
         }
-        return filterAllowedMedia(items);
+        // Enrich search items with certification ratings in parallel
+        const enriched = await enrichItemsWithCertifications(items);
+        return filterAllowedMedia(enriched);
     } catch {
         return [];
     }
@@ -762,7 +818,9 @@ export async function getTmdbKidsTrending(mediaType: "movie" | "tv" | "all" = "a
                 "certification.lte": "PG",
                 sort_by: "popularity.desc"
             });
-            return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+            const mapped = (data?.results || []).map(mapTmdbMovie);
+            const enriched = await enrichItemsWithCertifications(mapped);
+            return filterKidsSafeMedia(enriched);
         } else if (mediaType === "tv") {
             const data = await tmdbFetch("/discover/tv", {
                 page,
@@ -771,7 +829,9 @@ export async function getTmdbKidsTrending(mediaType: "movie" | "tv" | "all" = "a
                 "certification.lte": "TV-PG",
                 sort_by: "popularity.desc"
             });
-            return filterKidsSafeMedia((data?.results || []).map(mapTmdbTv));
+            const mapped = (data?.results || []).map(mapTmdbTv);
+            const enriched = await enrichItemsWithCertifications(mapped);
+            return filterKidsSafeMedia(enriched);
         } else {
             const [movies, tv] = await Promise.all([
                 getTmdbKidsTrending("movie", page),
@@ -797,7 +857,9 @@ export async function getTmdbKidsPopular(mediaType: "movie" | "tv" = "movie", pa
                 "certification.lte": "PG",
                 sort_by: "popularity.desc"
             });
-            return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+            const mapped = (data?.results || []).map(mapTmdbMovie);
+            const enriched = await enrichItemsWithCertifications(mapped);
+            return filterKidsSafeMedia(enriched);
         } else {
             const data = await tmdbFetch("/discover/tv", {
                 page,
@@ -806,7 +868,9 @@ export async function getTmdbKidsPopular(mediaType: "movie" | "tv" = "movie", pa
                 "certification.lte": "TV-PG",
                 sort_by: "popularity.desc"
             });
-            return filterKidsSafeMedia((data?.results || []).map(mapTmdbTv));
+            const mapped = (data?.results || []).map(mapTmdbTv);
+            const enriched = await enrichItemsWithCertifications(mapped);
+            return filterKidsSafeMedia(enriched);
         }
     } catch {
         return [];
@@ -825,7 +889,9 @@ export async function getTmdbDisneyPixar(page = 1): Promise<TmdbMediaItem[]> {
             "certification.lte": "PG",
             sort_by: "popularity.desc"
         });
-        return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+        const mapped = (data?.results || []).map(mapTmdbMovie);
+        const enriched = await enrichItemsWithCertifications(mapped);
+        return filterKidsSafeMedia(enriched);
     } catch {
         return [];
     }
@@ -845,7 +911,9 @@ export async function getTmdbKidsTopRated(mediaType: "movie" | "tv" = "movie", p
                 "certification.lte": "PG",
                 sort_by: "vote_average.desc"
             });
-            return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+            const mapped = (data?.results || []).map(mapTmdbMovie);
+            const enriched = await enrichItemsWithCertifications(mapped);
+            return filterKidsSafeMedia(enriched);
         } else {
             const data = await tmdbFetch("/discover/tv", {
                 page,
@@ -855,7 +923,9 @@ export async function getTmdbKidsTopRated(mediaType: "movie" | "tv" = "movie", p
                 "certification.lte": "TV-PG",
                 sort_by: "vote_average.desc"
             });
-            return filterKidsSafeMedia((data?.results || []).map(mapTmdbTv));
+            const mapped = (data?.results || []).map(mapTmdbTv);
+            const enriched = await enrichItemsWithCertifications(mapped);
+            return filterKidsSafeMedia(enriched);
         }
     } catch {
         return [];

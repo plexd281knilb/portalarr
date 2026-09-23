@@ -134,38 +134,43 @@ export function filterAllowedMedia(items: TmdbMediaItem[]): TmdbMediaItem[] {
 
 export function isKidsSectionEligible(item: TmdbMediaItem): boolean {
     if (!item) return false;
+    
+    // 1. Strictly exclude NC-17, Adult, X-rated globally
     if (isNc17OrDisallowedRating(item.certification)) return false;
+    
+    // 2. Strictly exclude R, TV-MA, TV-14, 18+, 16+ from Kids section
     if (isAdultOrMatureRating(item.certification)) return false;
 
-    // Reject any item where title, original title, or overview mentions explicit adult/mature themes
+    // 3. Reject explicit adult / sexual / violence keywords in title, original title, or overview
     if (containsAdultWords(item.title) || containsAdultWords(item.originalTitle) || containsAdultWords(item.overview)) {
         return false;
     }
 
     const genreIds = item.genreIds || [];
 
-    // Strictly exclude mature/dark genres from Kids section
-    const matureGenreIds = [
-        27,    // Horror
-        80,    // Crime
-        53,    // Thriller
-        10768, // War & Politics (TV)
-        10752, // War (Movie)
-        10766  // Soap (TV)
-    ];
-    if (genreIds.some(id => matureGenreIds.includes(id))) {
+    // 4. Strictly exclude Horror (27)
+    if (genreIds.includes(27)) {
         return false;
     }
 
-    // If explicit kids-safe certification is present, verify it doesn't violate mature genres
+    // 5. If certification is known and is kids-safe (G, PG, TV-Y, TV-Y7, TV-G, TV-PG) -> Allowed!
     if (isKidsSafeRating(item.certification)) {
         return true;
     }
 
-    // Require Family (10751), Kids (10762), or Animation (16)
-    const isFamilyOrKidsGenre = genreIds.includes(10751) || genreIds.includes(10762) || genreIds.includes(16);
-    if (!isFamilyOrKidsGenre) {
-        return false;
+    // 6. If certification is PG-13, NR, Unrated -> Allowed in Kids section (requires admin review)
+    if (item.certification) {
+        const cleanCert = item.certification.toUpperCase().replace(/^US[:\/]/, "").trim();
+        if (cleanCert === "PG-13" || cleanCert === "NR" || cleanCert === "UNRATED" || cleanCert === "NOT RATED") {
+            return true;
+        }
+    }
+
+    // 7. If no certification was found on TMDb, allow standard non-mature genres (Family, Kids, Animation, Adventure, Sci-Fi, Comedy, Fantasy)
+    // Exclude Crime (80) or Soap (10766) unless paired with Family/Kids
+    if (genreIds.includes(80) || genreIds.includes(10766)) {
+        const hasKidsTag = genreIds.includes(10751) || genreIds.includes(10762) || genreIds.includes(16);
+        if (!hasKidsTag) return false;
     }
 
     return true;
