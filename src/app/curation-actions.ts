@@ -2839,10 +2839,15 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
+        const targetServerId = serverId || resolved.serverId || "main";
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
 
+        // 0. Auto-unflag items that users have watched while staged in Leaving Soon
+        await recheckLeavingSoonWatchActivityInternal(targetServerId, false).catch(err => {
+            console.warn(`[PRUNE-SYNC] Error checking watch activity for Leaving Soon on ${resolved.serverName}:`, err.message);
+        });
+
         // 1. Automated Two-Tier Storage Headroom Capacity Evaluation
-        const targetServerId = serverId || resolved.serverId || "main";
         const warningThreshold = (settings as any)?.pruneWarningThresholdPercent ?? 85;
         const dangerThreshold = (settings as any)?.pruneDangerThresholdPercent ?? 95;
         const targetHeadroomGb = (settings as any)?.pruneTargetHeadroomGb ?? 100;
@@ -4905,10 +4910,8 @@ export async function getGlancesDisksAction() {
     }
 }
 
-export async function recheckLeavingSoonWatchActivityAction(targetServerId?: string) {
+export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: string, syncHub = true) {
     try {
-
-        await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) return { success: false, error: "Plex token not configured." };
@@ -4996,8 +4999,10 @@ export async function recheckLeavingSoonWatchActivityAction(targetServerId?: str
         }
 
         if (unflaggedItems.length > 0) {
-            for (const sId of Object.keys(byServer)) {
-                await syncLeavingSoonCollectionHubInternal(sId).catch(() => {});
+            if (syncHub) {
+                for (const sId of Object.keys(byServer)) {
+                    await syncLeavingSoonCollectionHubInternal(sId).catch(() => {});
+                }
             }
             logger.addLog("SUCCESS", "CURATION", `🎉 Unflagged ${unflaggedItems.length} items from Leaving Soon due to detected watch activity!`, unflaggedItems.map(i => `${i.title} (${i.reason})`).join(" • "));
         }
@@ -5011,6 +5016,15 @@ export async function recheckLeavingSoonWatchActivityAction(targetServerId?: str
                 ? `Successfully verified ${leavingSoonRecords.length} items: unflagged and restored ${unflaggedItems.length} watched ${unflaggedItems.length === 1 ? 'title' : 'titles'}!`
                 : `Verified ${leavingSoonRecords.length} items: no new watch activity detected.`
         };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function recheckLeavingSoonWatchActivityAction(targetServerId?: string) {
+    try {
+        await verifyAdmin();
+        return await recheckLeavingSoonWatchActivityInternal(targetServerId, true);
     } catch (e: any) {
         return { success: false, error: e.message };
     }
