@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { TmdbMediaItem } from "@/lib/curation/tmdb";
+import { TmdbMediaItem } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { TmdbVideoItem } from "@/lib/curation/tmdb";
+import { TmdbVideoItem } from "@/lib/curation/tmdb-types";
 import { Play, Film, X } from "lucide-react";
 
 interface TrailerModalProps {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { TmdbMediaItem } from "@/lib/curation/tmdb";
+import { TmdbMediaItem } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

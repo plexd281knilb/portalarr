@@ -7,7 +7,7 @@ import {
     searchMediaAction,
     submitMediaRequestAction 
 } from "@/app/seerr-actions";
-import { TmdbMediaItem } from "@/lib/curation/tmdb";
+import { TmdbMediaItem } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { HeroSpotlight } from "@/components/seerr/hero-spotlight";
 import { MediaCarousel } from "@/components/seerr/media-carousel";

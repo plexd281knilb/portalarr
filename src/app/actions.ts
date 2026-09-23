@@ -25,7 +25,8 @@ import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 import type { AiAssistantResponse, UserDiagnosticSnapshot } from "@/lib/ai-server-assistant-types";
 
-import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
+import { getJwtSecret } from "@/lib/auth-secret";
+import { getAppUrl } from "@/lib/app-url";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { logger, maskToken } from "@/lib/logger";

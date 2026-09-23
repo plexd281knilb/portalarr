@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { TmdbMediaItem } from "@/lib/curation/tmdb";
+import { TmdbMediaItem } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { MediaCard } from "@/components/seerr/media-card";
 import { Button } from "@/components/ui/button";

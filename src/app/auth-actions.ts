@@ -9,7 +9,8 @@ import { decryptData, encryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
-import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
+import { getJwtSecret } from "@/lib/auth-secret";
+import { getAppUrl } from "@/lib/app-url";
 import { renderEmailTemplate } from "@/lib/email-templates";
 
 // --- 1. SETUP CHECK ---

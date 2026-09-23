@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getAppUrl } from "@/lib/auth-secret";
+import { getAppUrl } from "@/lib/app-url";
 
 export interface TemplateVariableInfo {
     key: string;

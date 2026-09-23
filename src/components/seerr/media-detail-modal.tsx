@@ -11,7 +11,7 @@ import {
     getUserRequestQuotaAction, 
     submitMediaRequestAction 
 } from "@/app/seerr-actions";
-import { TmdbMediaDetail, TmdbMediaItem, TmdbEpisodeInfo, isAdultOrMatureRating, isKidsSafeRating } from "@/lib/curation/tmdb";
+import { TmdbMediaDetail, TmdbMediaItem, TmdbEpisodeInfo, isAdultOrMatureRating, isKidsSafeRating } from "@/lib/curation/tmdb-types";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { TrailerModal } from "@/components/seerr/trailer-modal";
 import { 
