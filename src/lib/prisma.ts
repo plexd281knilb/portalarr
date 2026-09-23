@@ -246,6 +246,24 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "seerrQuotaTv" INTEGER DEFAULT 10,
                     "seerrQuotaDays" INTEGER DEFAULT 7,
                     "seerrNotificationOnAvailable" BOOLEAN NOT NULL DEFAULT 1,
+                    "seerrFullAutoApprove" BOOLEAN NOT NULL DEFAULT 1,
+                    "seerrFullUnlimited" BOOLEAN NOT NULL DEFAULT 1,
+                    "seerrFullQuotaMovies" INTEGER DEFAULT 0,
+                    "seerrFullQuotaTv" INTEGER DEFAULT 0,
+                    "seerrFullQuotaDays" INTEGER DEFAULT 7,
+                    "seerrTrialAutoApprove" BOOLEAN NOT NULL DEFAULT 0,
+                    "seerrTrialQuotaMovies" INTEGER DEFAULT 3,
+                    "seerrTrialQuotaTv" INTEGER DEFAULT 3,
+                    "seerrTrialQuotaDays" INTEGER DEFAULT 7,
+                    "seerrKidsAutoApprovePg" BOOLEAN NOT NULL DEFAULT 1,
+                    "seerrKidsRequireApprovalPg13" BOOLEAN NOT NULL DEFAULT 1,
+                    "seerrKidsMovieAppId" TEXT,
+                    "seerrKidsTvAppId" TEXT,
+                    "seerrKidsMovie4kAppId" TEXT,
+                    "seerrKidsTv4kAppId" TEXT,
+                    "seerrKidsMovieRootFolder" TEXT,
+                    "seerrKidsTvRootFolder" TEXT,
+                    "seerrAutoDual1080pFor4k" BOOLEAN NOT NULL DEFAULT 1,
                     "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1,
                     "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1,
                     "leavingSoonDiskThreshold" INTEGER DEFAULT 15,
@@ -465,7 +483,25 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["seerrQuotaMovies", `ALTER TABLE "Settings" ADD COLUMN "seerrQuotaMovies" INTEGER DEFAULT 10;`],
                 ["seerrQuotaTv", `ALTER TABLE "Settings" ADD COLUMN "seerrQuotaTv" INTEGER DEFAULT 10;`],
                 ["seerrQuotaDays", `ALTER TABLE "Settings" ADD COLUMN "seerrQuotaDays" INTEGER DEFAULT 7;`],
-                ["seerrNotificationOnAvailable", `ALTER TABLE "Settings" ADD COLUMN "seerrNotificationOnAvailable" BOOLEAN NOT NULL DEFAULT 1;`]
+                ["seerrNotificationOnAvailable", `ALTER TABLE "Settings" ADD COLUMN "seerrNotificationOnAvailable" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["seerrFullAutoApprove", `ALTER TABLE "Settings" ADD COLUMN "seerrFullAutoApprove" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["seerrFullUnlimited", `ALTER TABLE "Settings" ADD COLUMN "seerrFullUnlimited" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["seerrFullQuotaMovies", `ALTER TABLE "Settings" ADD COLUMN "seerrFullQuotaMovies" INTEGER DEFAULT 0;`],
+                ["seerrFullQuotaTv", `ALTER TABLE "Settings" ADD COLUMN "seerrFullQuotaTv" INTEGER DEFAULT 0;`],
+                ["seerrFullQuotaDays", `ALTER TABLE "Settings" ADD COLUMN "seerrFullQuotaDays" INTEGER DEFAULT 7;`],
+                ["seerrTrialAutoApprove", `ALTER TABLE "Settings" ADD COLUMN "seerrTrialAutoApprove" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["seerrTrialQuotaMovies", `ALTER TABLE "Settings" ADD COLUMN "seerrTrialQuotaMovies" INTEGER DEFAULT 3;`],
+                ["seerrTrialQuotaTv", `ALTER TABLE "Settings" ADD COLUMN "seerrTrialQuotaTv" INTEGER DEFAULT 3;`],
+                ["seerrTrialQuotaDays", `ALTER TABLE "Settings" ADD COLUMN "seerrTrialQuotaDays" INTEGER DEFAULT 7;`],
+                ["seerrKidsAutoApprovePg", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsAutoApprovePg" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["seerrKidsRequireApprovalPg13", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsRequireApprovalPg13" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["seerrKidsMovieAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsMovieAppId" TEXT;`],
+                ["seerrKidsTvAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsTvAppId" TEXT;`],
+                ["seerrKidsMovie4kAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsMovie4kAppId" TEXT;`],
+                ["seerrKidsTv4kAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsTv4kAppId" TEXT;`],
+                ["seerrKidsMovieRootFolder", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsMovieRootFolder" TEXT;`],
+                ["seerrKidsTvRootFolder", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsTvRootFolder" TEXT;`],
+                ["seerrAutoDual1080pFor4k", `ALTER TABLE "Settings" ADD COLUMN "seerrAutoDual1080pFor4k" BOOLEAN NOT NULL DEFAULT 1;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -1248,6 +1284,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "status" TEXT NOT NULL DEFAULT 'PENDING',
                     "status4k" TEXT,
                     "is4k" BOOLEAN NOT NULL DEFAULT 0,
+                    "isKids" BOOLEAN NOT NULL DEFAULT 0,
+                    "contentRating" TEXT,
+                    "isDual1080pChild" BOOLEAN NOT NULL DEFAULT 0,
+                    "parent4kRequestId" TEXT,
                     "requestedByUserId" TEXT,
                     "requestedByUsername" TEXT NOT NULL,
                     "seasons" TEXT,
@@ -1263,6 +1303,20 @@ export async function ensureSchemaColumns(): Promise<void> {
                     FOREIGN KEY ("requestedByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
                 );
             `);
+
+            const reqTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaRequest");`);
+            const reqCols = reqTableInfo.map((c: any) => c.name);
+            const reqAddCols: [string, string][] = [
+                ["isKids", `ALTER TABLE "MediaRequest" ADD COLUMN "isKids" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["contentRating", `ALTER TABLE "MediaRequest" ADD COLUMN "contentRating" TEXT;`],
+                ["isDual1080pChild", `ALTER TABLE "MediaRequest" ADD COLUMN "isDual1080pChild" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["parent4kRequestId", `ALTER TABLE "MediaRequest" ADD COLUMN "parent4kRequestId" TEXT;`]
+            ];
+            for (const [colName, ddl] of reqAddCols) {
+                if (!reqCols.includes(colName)) {
+                    try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                }
+            }
 
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MediaRequest_tmdbId_mediaType_idx" ON "MediaRequest"("tmdbId", "mediaType");`).catch(() => {});
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MediaRequest_status_idx" ON "MediaRequest"("status");`).catch(() => {});

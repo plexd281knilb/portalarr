@@ -11,7 +11,7 @@ import {
     getUserRequestQuotaAction, 
     submitMediaRequestAction 
 } from "@/app/seerr-actions";
-import { TmdbMediaDetail, TmdbMediaItem, TmdbEpisodeInfo } from "@/lib/curation/tmdb";
+import { TmdbMediaDetail, TmdbMediaItem, TmdbEpisodeInfo, isAdultOrMatureRating, isKidsSafeRating } from "@/lib/curation/tmdb";
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { TrailerModal } from "@/components/seerr/trailer-modal";
 import { 
@@ -31,7 +31,10 @@ import {
     User as UserIcon,
     ChevronDown,
     ChevronUp,
-    Check
+    Check,
+    Smile,
+    ShieldAlert,
+    ShieldCheck
 } from "lucide-react";
 
 interface MediaDetailModalProps {
@@ -39,6 +42,7 @@ interface MediaDetailModalProps {
     onClose: () => void;
     tmdbId: number | null;
     mediaType: "movie" | "tv";
+    isKids?: boolean;
     initialAvailability?: MediaAvailabilityStatus;
     onRequestSubmitted?: () => void;
 }
@@ -48,6 +52,7 @@ export function MediaDetailModal({
     onClose,
     tmdbId,
     mediaType,
+    isKids = false,
     initialAvailability,
     onRequestSubmitted
 }: MediaDetailModalProps) {
@@ -179,6 +184,8 @@ export function MediaDetailModal({
                 backdropPath: details.backdropPath || undefined,
                 overview: details.overview,
                 is4k,
+                isKids: Boolean(isKids),
+                contentRating: details.certification,
                 seasons: mediaType === "tv" ? (selectAllSeasons ? "all" : selectedSeasons) : undefined
             });
 
@@ -213,6 +220,10 @@ export function MediaDetailModal({
     const inLibrary = availability?.inLibrary;
     const isRequested = availability?.isRequested;
     const quotaInfo = isTv ? quotaData?.tv : quotaData?.movies;
+
+    const isMatureInKids = Boolean(isKids && isAdultOrMatureRating(details?.certification));
+    const isPgSafe = Boolean(isKids && isKidsSafeRating(details?.certification));
+    const isPg13OrUnrated = Boolean(isKids && !isMatureInKids && !isPgSafe);
 
     return (
         <>
@@ -282,7 +293,13 @@ export function MediaDetailModal({
                                                 </div>
                                             )}
                                             {details.certification && (
-                                                <span className="px-1.5 py-0.5 rounded bg-muted/60 border border-border/50 text-[10px] font-semibold text-muted-foreground uppercase backdrop-blur-md">
+                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase backdrop-blur-md border ${
+                                                    isAdultOrMatureRating(details.certification)
+                                                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                                        : isKidsSafeRating(details.certification)
+                                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                                        : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                                }`}>
                                                     {details.certification}
                                                 </span>
                                             )}
@@ -369,20 +386,68 @@ export function MediaDetailModal({
                                 {/* Request Submission Panel (If not already in library) */}
                                 {!inLibrary && !isRequested && (
                                     <div className="p-4 sm:p-5 rounded-2xl bg-[#121218] border border-border/60 space-y-4">
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                             <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                                                 <Plus className="h-4 w-4 text-primary" />
                                                 Submit Media Request
                                             </h4>
-                                            {quotaInfo && (
-                                                <span className="text-xs text-muted-foreground font-medium">
-                                                    Quota: <strong className="text-foreground">{quotaInfo.remaining}</strong> of {quotaInfo.limit === 0 ? "Unlimited" : quotaInfo.limit} remaining
-                                                </span>
-                                            )}
+                                            
+                                            {/* Account Tier & Quota Label */}
+                                            <div className="flex items-center gap-2">
+                                                {quotaData?.accountTier === "TRIAL" ? (
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                                        Trial Account
+                                                    </Badge>
+                                                ) : quotaData?.accountTier === "FULL" ? (
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                                        Full Account
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-blue-500/15 text-blue-300 border-blue-500/30">
+                                                        Admin
+                                                    </Badge>
+                                                )}
+
+                                                {quotaInfo && (
+                                                    <span className="text-xs text-muted-foreground font-medium">
+                                                        Quota: <strong className="text-foreground">{quotaInfo.remaining}</strong> of {quotaInfo.limit === 0 ? "Unlimited" : quotaInfo.limit}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
+                                        {/* Approval Status Preview Callout */}
+                                        {isMatureInKids ? (
+                                            <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2.5 text-xs">
+                                                <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                                                <div>
+                                                    <strong className="text-rose-200">Blocked in Kids Section:</strong> Rated {details.certification || "Mature"} — This title contains mature content and cannot be requested via Kids & Family mode. Switch to Main Discovery to request.
+                                                </div>
+                                            </div>
+                                        ) : isPgSafe ? (
+                                            <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs">
+                                                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+                                                <span><strong>Kids Auto-Approval:</strong> Rated {details.certification || "PG Safe"} — Instant auto-approval directly into Kids Arrs.</span>
+                                            </div>
+                                        ) : isPg13OrUnrated ? (
+                                            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
+                                                <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                                                <span><strong>Requires Admin Review:</strong> Rated {details.certification || "PG-13 / Unrated"} — Submitted for administrator approval before downloading.</span>
+                                            </div>
+                                        ) : quotaData?.accountTier === "TRIAL" ? (
+                                            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
+                                                <Clock className="h-4 w-4 shrink-0 text-amber-400" />
+                                                <span><strong>Trial Account:</strong> Requests require administrator approval before downloading to library.</span>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center gap-2 text-xs">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                                <span><strong>Instant Auto-Approval:</strong> Full Account requests are immediately dispatched to download clients.</span>
+                                            </div>
+                                        )}
+
                                         {/* TV Show Season Selection */}
-                                        {isTv && details.seasons && details.seasons.length > 0 && (
+                                        {isTv && details.seasons && details.seasons.length > 0 && !isMatureInKids && (
                                             <div className="space-y-3 border-t border-border/40 pt-3">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs font-semibold text-muted-foreground">Seasons to Request:</span>
@@ -426,7 +491,7 @@ export function MediaDetailModal({
                                         )}
 
                                         {/* 4K UHD Toggle Option (if allowed) */}
-                                        {quotaData?.canRequest4k && (
+                                        {quotaData?.canRequest4k && !isMatureInKids && (
                                             <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
                                                 <div className="flex items-center gap-2">
                                                     <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 border-purple-500/50">
@@ -434,7 +499,7 @@ export function MediaDetailModal({
                                                     </Badge>
                                                     <div>
                                                         <h5 className="text-xs font-bold text-foreground">Request 4K UHD Quality</h5>
-                                                        <p className="text-[11px] text-muted-foreground">Routes to 4K Ultra HD download profile</p>
+                                                        <p className="text-[11px] text-muted-foreground">Routes to 4K Ultra HD profile (auto-adds 1080p companion)</p>
                                                     </div>
                                                 </div>
                                                 <Checkbox
@@ -462,11 +527,16 @@ export function MediaDetailModal({
                                         <Button
                                             size="lg"
                                             className="w-full h-11 text-sm font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                            disabled={submitting || (isTv && selectedSeasons.length === 0)}
+                                            disabled={submitting || isMatureInKids || (isTv && selectedSeasons.length === 0)}
                                             onClick={handleSubmitRequest}
                                         >
                                             {submitting ? (
                                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            ) : isMatureInKids ? (
+                                                <>
+                                                    <ShieldAlert className="h-4 w-4" />
+                                                    <span>Unavailable in Kids Mode</span>
+                                                </>
                                             ) : (
                                                 <>
                                                     <Plus className="h-4 w-4" />

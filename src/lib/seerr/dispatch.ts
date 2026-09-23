@@ -25,13 +25,21 @@ export async function dispatchMediaRequest(requestId: string): Promise<DispatchR
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
 
+        let res: DispatchResult;
         if (req.mediaType === "movie") {
-            return await dispatchMovieRequest(req, settings);
+            res = await dispatchMovieRequest(req, settings);
         } else if (req.mediaType === "tv") {
-            return await dispatchTvRequest(req, settings);
+            res = await dispatchTvRequest(req, settings);
         } else {
             return { success: false, error: `Unsupported media type: ${req.mediaType}` };
         }
+
+        // Dual 4K + 1080p Ingestion Rule: When 4K is dispatched, auto-dispatch companion 1080p request
+        if (res.success && req.is4k && !req.isDual1080pChild && (settings?.seerrAutoDual1080pFor4k ?? true)) {
+            dispatchDual1080pCompanion(req, settings).catch(() => {});
+        }
+
+        return res;
     } catch (e: any) {
         logger.addLog("ERROR", "SEERR", `Dispatch failed for request ${requestId}: ${e.message}`);
         await prisma.mediaRequest.update({
@@ -58,6 +66,14 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
     let targetApp = null;
     if (req.servarrAppId) {
         targetApp = radarrAppsRes.data.find(a => a.id === req.servarrAppId);
+    }
+    if (!targetApp) {
+        if (req.isKids) {
+            const preferredId = req.is4k ? settings?.seerrKidsMovie4kAppId : settings?.seerrKidsMovieAppId;
+            if (preferredId) {
+                targetApp = radarrAppsRes.data.find(a => a.id === preferredId);
+            }
+        }
     }
     if (!targetApp) {
         const preferredId = req.is4k ? settings?.seerrDefaultMovie4kAppId : settings?.seerrDefaultMovieAppId;
@@ -98,7 +114,9 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
 
     let rootFolderPath = req.rootFolderPath;
     if (!rootFolderPath || !availableFolders.some((f: any) => f.path === rootFolderPath)) {
-        if (settings?.seerrDefaultMovieRootFolder && availableFolders.some((f: any) => f.path === settings.seerrDefaultMovieRootFolder)) {
+        if (req.isKids && settings?.seerrKidsMovieRootFolder && availableFolders.some((f: any) => f.path === settings.seerrKidsMovieRootFolder)) {
+            rootFolderPath = settings.seerrKidsMovieRootFolder;
+        } else if (settings?.seerrDefaultMovieRootFolder && availableFolders.some((f: any) => f.path === settings.seerrDefaultMovieRootFolder)) {
             rootFolderPath = settings.seerrDefaultMovieRootFolder;
         } else {
             rootFolderPath = availableFolders[0]?.path || "/movies";
@@ -186,6 +204,14 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
         targetApp = sonarrAppsRes.data.find(a => a.id === req.servarrAppId);
     }
     if (!targetApp) {
+        if (req.isKids) {
+            const preferredId = req.is4k ? settings?.seerrKidsTv4kAppId : settings?.seerrKidsTvAppId;
+            if (preferredId) {
+                targetApp = sonarrAppsRes.data.find(a => a.id === preferredId);
+            }
+        }
+    }
+    if (!targetApp) {
         const preferredId = req.is4k ? settings?.seerrDefaultTv4kAppId : settings?.seerrDefaultTvAppId;
         if (preferredId) {
             targetApp = sonarrAppsRes.data.find(a => a.id === preferredId);
@@ -224,7 +250,9 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
 
     let rootFolderPath = req.rootFolderPath;
     if (!rootFolderPath || !availableFolders.some((f: any) => f.path === rootFolderPath)) {
-        if (settings?.seerrDefaultTvRootFolder && availableFolders.some((f: any) => f.path === settings.seerrDefaultTvRootFolder)) {
+        if (req.isKids && settings?.seerrKidsTvRootFolder && availableFolders.some((f: any) => f.path === settings.seerrKidsTvRootFolder)) {
+            rootFolderPath = settings.seerrKidsTvRootFolder;
+        } else if (settings?.seerrDefaultTvRootFolder && availableFolders.some((f: any) => f.path === settings.seerrDefaultTvRootFolder)) {
             rootFolderPath = settings.seerrDefaultTvRootFolder;
         } else {
             rootFolderPath = availableFolders[0]?.path || "/tv";
@@ -332,3 +360,59 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
     logger.addLog("INFO", "SEERR", `Successfully dispatched TV request "${req.title}" (TVDb: ${req.tvdbId}) to Sonarr (${targetApp.name}) with ID ${servarrId}`);
     return { success: true, servarrId, servarrAppId: targetApp.id };
 }
+
+/**
+ * Automatically creates and dispatches a companion 1080p request when a 4K request is processed
+ */
+async function dispatchDual1080pCompanion(req: any, settings: any) {
+    try {
+        if (!req.is4k || req.isDual1080pChild) return;
+        if (settings?.seerrAutoDual1080pFor4k === false) return;
+
+        // Check if a standard 1080p request already exists for this TMDb ID
+        const existing1080p = await prisma.mediaRequest.findFirst({
+            where: {
+                tmdbId: req.tmdbId,
+                mediaType: req.mediaType,
+                is4k: false
+            }
+        });
+
+        if (existing1080p) {
+            if (existing1080p.status === "PENDING" || existing1080p.status === "APPROVED") {
+                await dispatchMediaRequest(existing1080p.id);
+            }
+            return;
+        }
+
+        // Create companion standard 1080p request
+        const companion = await prisma.mediaRequest.create({
+            data: {
+                mediaType: req.mediaType,
+                tmdbId: req.tmdbId,
+                tvdbId: req.tvdbId,
+                imdbId: req.imdbId,
+                title: req.title,
+                releaseYear: req.releaseYear,
+                posterPath: req.posterPath,
+                backdropPath: req.backdropPath,
+                overview: req.overview,
+                status: "APPROVED",
+                is4k: false,
+                isKids: req.isKids ?? false,
+                contentRating: req.contentRating,
+                isDual1080pChild: true,
+                parent4kRequestId: req.id,
+                requestedByUserId: req.requestedByUserId,
+                requestedByUsername: req.requestedByUsername,
+                seasons: req.seasons
+            }
+        });
+
+        logger.addLog("INFO", "SEERR", `Dual Ingestion: Automatically created and dispatching 1080p companion request for "${req.title}" (TMDb: ${req.tmdbId})`);
+        await dispatchMediaRequest(companion.id);
+    } catch (e: any) {
+        logger.addLog("WARN", "SEERR", `Dual Ingestion companion dispatch notice for "${req.title}": ${e.message}`);
+    }
+}
+

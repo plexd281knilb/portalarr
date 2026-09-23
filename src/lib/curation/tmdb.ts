@@ -827,3 +827,143 @@ export async function getTmdbTvSeasonDetails(tvId: number, seasonNumber: number)
     }
 }
 
+/**
+ * Rating Evaluation Helpers
+ */
+export function isAdultOrMatureRating(rating?: string | null): boolean {
+    if (!rating) return false;
+    const clean = rating.trim().toUpperCase();
+    return clean === "R" || clean === "NC-17" || clean === "TV-MA" || clean === "TV-14" || clean === "X" || clean === "18+" || clean === "16+";
+}
+
+export function isKidsSafeRating(rating?: string | null): boolean {
+    if (!rating) return false;
+    const clean = rating.trim().toUpperCase();
+    return clean === "G" || clean === "PG" || clean === "TV-Y" || clean === "TV-Y7" || clean === "TV-G" || clean === "TV-PG" || clean === "ALL" || clean === "EC" || clean === "E";
+}
+
+export function isKidsSectionEligible(item: TmdbMediaItem): boolean {
+    if (isAdultOrMatureRating(item.certification)) return false;
+    // Exclude Horror (27)
+    if (item.genreIds?.includes(27)) return false;
+    return true;
+}
+
+export function filterKidsSafeMedia(items: TmdbMediaItem[]): TmdbMediaItem[] {
+    return items.filter(isKidsSectionEligible);
+}
+
+/**
+ * Get Kids & Family Trending Movies or TV Shows
+ */
+export async function getTmdbKidsTrending(mediaType: "movie" | "tv" | "all" = "all", page = 1): Promise<TmdbMediaItem[]> {
+    try {
+        if (mediaType === "movie") {
+            const data = await tmdbFetch("/discover/movie", {
+                page,
+                with_genres: "10751,16", // Family, Animation
+                certification_country: "US",
+                "certification.lte": "PG",
+                sort_by: "popularity.desc"
+            });
+            return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+        } else if (mediaType === "tv") {
+            const data = await tmdbFetch("/discover/tv", {
+                page,
+                with_genres: "10762,16,10751", // Kids, Animation, Family
+                certification_country: "US",
+                "certification.lte": "TV-PG",
+                sort_by: "popularity.desc"
+            });
+            return filterKidsSafeMedia((data?.results || []).map(mapTmdbTv));
+        } else {
+            const [movies, tv] = await Promise.all([
+                getTmdbKidsTrending("movie", page),
+                getTmdbKidsTrending("tv", page)
+            ]);
+            return [...movies, ...tv].sort((a, b) => b.popularity - a.popularity);
+        }
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Get Kids Popular Movies or TV Series
+ */
+export async function getTmdbKidsPopular(mediaType: "movie" | "tv" = "movie", page = 1): Promise<TmdbMediaItem[]> {
+    try {
+        if (mediaType === "movie") {
+            const data = await tmdbFetch("/discover/movie", {
+                page,
+                with_genres: "10751", // Family
+                certification_country: "US",
+                "certification.lte": "PG",
+                sort_by: "popularity.desc"
+            });
+            return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+        } else {
+            const data = await tmdbFetch("/discover/tv", {
+                page,
+                with_genres: "10762,10751", // Kids, Family
+                certification_country: "US",
+                "certification.lte": "TV-PG",
+                sort_by: "popularity.desc"
+            });
+            return filterKidsSafeMedia((data?.results || []).map(mapTmdbTv));
+        }
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Get Disney & Pixar Hits
+ */
+export async function getTmdbDisneyPixar(page = 1): Promise<TmdbMediaItem[]> {
+    try {
+        const data = await tmdbFetch("/discover/movie", {
+            page,
+            with_companies: "2|3|6125", // Disney, Pixar, Disney Animation
+            certification_country: "US",
+            "certification.lte": "PG",
+            sort_by: "popularity.desc"
+        });
+        return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Get Top Rated Family Movies
+ */
+export async function getTmdbKidsTopRated(mediaType: "movie" | "tv" = "movie", page = 1): Promise<TmdbMediaItem[]> {
+    try {
+        if (mediaType === "movie") {
+            const data = await tmdbFetch("/discover/movie", {
+                page,
+                with_genres: "10751,16",
+                "vote_count.gte": 100,
+                certification_country: "US",
+                "certification.lte": "PG",
+                sort_by: "vote_average.desc"
+            });
+            return filterKidsSafeMedia((data?.results || []).map(mapTmdbMovie));
+        } else {
+            const data = await tmdbFetch("/discover/tv", {
+                page,
+                with_genres: "10762,10751",
+                "vote_count.gte": 50,
+                certification_country: "US",
+                "certification.lte": "TV-PG",
+                sort_by: "vote_average.desc"
+            });
+            return filterKidsSafeMedia((data?.results || []).map(mapTmdbTv));
+        }
+    } catch {
+        return [];
+    }
+}
+
+

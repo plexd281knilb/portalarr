@@ -62,7 +62,7 @@ model Settings {
   mdblistApiKey               String?
 
   // Seerr & Native Media Request Engine Settings
-  seerrAutoApproveAll          Boolean   @default(true) // Auto-approve all requests by default
+  seerrAutoApproveAll          Boolean   @default(true) // Global fallback auto-approve
   seerrDefaultMovieProfileId   Int?
   seerrDefaultTvProfileId      Int?
   seerrDefaultMovieRootFolder  String?
@@ -75,6 +75,30 @@ model Settings {
   seerrQuotaTv                 Int?      @default(10) // Default weekly TV show quota
   seerrQuotaDays               Int?      @default(7)  // Quota sliding window in days
   seerrNotificationOnAvailable Boolean   @default(true)
+
+  // Full vs Trial Accounts Request Controls
+  seerrFullAutoApprove         Boolean   @default(true) // Full accounts auto-approve in main arrs
+  seerrFullUnlimited           Boolean   @default(true) // Full accounts have no limits
+  seerrFullQuotaMovies         Int?      @default(0)    // 0 = unlimited
+  seerrFullQuotaTv             Int?      @default(0)    // 0 = unlimited
+  seerrFullQuotaDays           Int?      @default(7)
+  seerrTrialAutoApprove        Boolean   @default(false) // Trial accounts always need approval
+  seerrTrialQuotaMovies        Int?      @default(3)    // Default 3 movies limit for trial
+  seerrTrialQuotaTv            Int?      @default(3)    // Default 3 TV shows limit for trial
+  seerrTrialQuotaDays          Int?      @default(7)
+
+  // Kids Section & Kids Arrs Routing Controls
+  seerrKidsAutoApprovePg       Boolean   @default(true) // PG ratings and below auto-approve in kids section
+  seerrKidsRequireApprovalPg13 Boolean   @default(true) // PG-13 & Unrated require approval in kids section
+  seerrKidsMovieAppId          String?   // Target Radarr instance for Kids Movies
+  seerrKidsTvAppId             String?   // Target Sonarr instance for Kids TV Shows
+  seerrKidsMovie4kAppId        String?   // Target 4K Radarr instance for Kids Movies
+  seerrKidsTv4kAppId           String?   // Target 4K Sonarr instance for Kids TV Shows
+  seerrKidsMovieRootFolder     String?   // Root folder for kids movies (e.g. /movies/kids)
+  seerrKidsTvRootFolder        String?   // Root folder for kids TV (e.g. /tv/kids)
+
+  // Dual 4K + 1080p Ingestion
+  seerrAutoDual1080pFor4k      Boolean   @default(true) // Auto-add to 1080p Arr when added to 4K Arr
   autoOverlaySync             Boolean   @default(true)
   autoCollectionSync          Boolean   @default(true)
   leavingSoonDiskThreshold    Int?      @default(15) // % free space threshold to flag leaving soon
@@ -609,6 +633,10 @@ model MediaRequest {
   status              String    @default("PENDING") // "PENDING", "APPROVED", "DECLINED", "PROCESSING", "PARTIALLY_AVAILABLE", "AVAILABLE", "FAILED"
   status4k            String?   // Independent 4K state e.g. "PENDING", "AVAILABLE"
   is4k                Boolean   @default(false)
+  isKids              Boolean   @default(false)
+  contentRating       String?   // e.g. "G", "PG", "PG-13", "TV-Y7", "R"
+  isDual1080pChild    Boolean   @default(false) // Companion standard 1080p copy spawned for a 4K request
+  parent4kRequestId   String?   // Reference to the parent 4K request if this is a dual copy
   
   // User Association
   requestedByUserId   String?

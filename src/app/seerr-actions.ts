@@ -18,6 +18,13 @@ import {
     getTmdbMovieDetailsFull,
     getTmdbTvDetailsFull,
     getTmdbTvSeasonDetails,
+    getTmdbKidsTrending,
+    getTmdbKidsPopular,
+    getTmdbDisneyPixar,
+    getTmdbKidsTopRated,
+    isAdultOrMatureRating,
+    isKidsSafeRating,
+    filterKidsSafeMedia,
     TmdbMediaItem,
     TmdbMediaDetail,
     TmdbEpisodeInfo
@@ -61,9 +68,56 @@ async function verifyAdmin(): Promise<AuthSession> {
 
 /**
  * Loads Discovery Home with Hero spotlight and multiple curated carousels
+ * Supports "main" (General / Adult) and "kids" (Family / Child-friendly) sections
  */
-export async function getDiscoverHomeAction() {
+export async function getDiscoverHomeAction(section: "main" | "kids" = "main") {
     try {
+        if (section === "kids") {
+            const [
+                kidsTrendingMovies,
+                kidsTrendingTv,
+                disneyPixar,
+                popularKidsTv,
+                topRatedFamily
+            ] = await Promise.all([
+                getTmdbKidsTrending("movie", 1).catch(() => []),
+                getTmdbKidsTrending("tv", 1).catch(() => []),
+                getTmdbDisneyPixar(1).catch(() => []),
+                getTmdbKidsPopular("tv", 1).catch(() => []),
+                getTmdbKidsTopRated("movie", 1).catch(() => [])
+            ]);
+
+            // Select top trending kids movie or show for hero spotlight
+            const heroCandidates = [...kidsTrendingMovies, ...kidsTrendingTv, ...disneyPixar].filter(item => Boolean(item.backdropPath && item.overview));
+            const heroItem = heroCandidates.length > 0 ? heroCandidates[0] : (kidsTrendingMovies[0] || null);
+
+            const allItems = [
+                ...(heroItem ? [heroItem] : []),
+                ...kidsTrendingMovies,
+                ...kidsTrendingTv,
+                ...disneyPixar,
+                ...popularKidsTv,
+                ...topRatedFamily
+            ];
+
+            const availabilityMap = await batchCheckMediaAvailability(allItems);
+
+            return {
+                success: true,
+                section: "kids",
+                heroItem,
+                sections: [
+                    { id: "kids-trending-movies", title: "Trending Family & Kids", icon: "Flame", mediaType: "movie", items: kidsTrendingMovies },
+                    { id: "disney-pixar", title: "Disney & Pixar Hits", icon: "Sparkles", mediaType: "movie", items: disneyPixar },
+                    { id: "kids-trending-tv", title: "Popular Kids Shows", icon: "Tv", mediaType: "tv", items: kidsTrendingTv },
+                    { id: "popular-kids-tv", title: "Family Favorites Series", icon: "TrendingUp", mediaType: "tv", items: popularKidsTv },
+                    { id: "top-rated-family", title: "Top Rated Family Movies", icon: "Star", mediaType: "movie", items: topRatedFamily }
+                ],
+                availabilityMap
+            };
+        }
+
+        // Default: Main Discovery
         const [
             trendingMovies,
             trendingTv,
@@ -96,6 +150,7 @@ export async function getDiscoverHomeAction() {
 
         return {
             success: true,
+            section: "main",
             heroItem,
             sections: [
                 { id: "trending-movies", title: "Trending Movies", icon: "Flame", mediaType: "movie", items: trendingMovies },
@@ -118,28 +173,49 @@ export async function getDiscoverHomeAction() {
 export async function getDiscoverMediaAction(
     category: "trending" | "popular" | "upcoming" | "top_rated" | "in_theaters" | "disney" | "netflix",
     mediaType: "movie" | "tv" | "all" = "all",
-    page = 1
+    page = 1,
+    isKids = false
 ) {
     try {
         let items: TmdbMediaItem[] = [];
 
-        if (category === "trending") {
-            items = await getTmdbTrending(mediaType, "week", page);
-        } else if (category === "popular") {
-            if (mediaType === "tv") items = await getTmdbPopularTv(page);
-            else items = await getTmdbPopularMovies(page);
-        } else if (category === "upcoming") {
-            if (mediaType === "tv") items = await getTmdbUpcomingTv(page);
-            else items = await getTmdbUpcomingMovies();
-        } else if (category === "top_rated") {
-            if (mediaType === "tv") items = await getTmdbTopRatedTv(page);
-            else items = await getTmdbTopRatedMovies(page);
-        } else if (category === "in_theaters") {
-            items = await getTmdbNowPlayingMovies();
-        } else if (category === "disney") {
-            items = await getDisneyTrending(false, page, mediaType === "all" ? "both" : mediaType);
-        } else if (category === "netflix") {
-            items = await getNetflixTrending(false, page, mediaType === "all" ? "both" : mediaType);
+        if (isKids) {
+            if (category === "trending") {
+                items = await getTmdbKidsTrending(mediaType, page);
+            } else if (category === "popular") {
+                items = await getTmdbKidsPopular(mediaType === "tv" ? "tv" : "movie", page);
+            } else if (category === "upcoming") {
+                items = await getTmdbDisneyPixar(page);
+            } else if (category === "top_rated") {
+                items = await getTmdbKidsTopRated(mediaType === "tv" ? "tv" : "movie", page);
+            } else if (category === "in_theaters") {
+                const nowPlaying = await getTmdbNowPlayingMovies();
+                items = filterKidsSafeMedia(nowPlaying);
+            } else if (category === "disney") {
+                items = await getDisneyTrending(true, page, mediaType === "all" ? "both" : mediaType);
+            } else if (category === "netflix") {
+                items = await getNetflixTrending(true, page, mediaType === "all" ? "both" : mediaType);
+            }
+            items = filterKidsSafeMedia(items);
+        } else {
+            if (category === "trending") {
+                items = await getTmdbTrending(mediaType, "week", page);
+            } else if (category === "popular") {
+                if (mediaType === "tv") items = await getTmdbPopularTv(page);
+                else items = await getTmdbPopularMovies(page);
+            } else if (category === "upcoming") {
+                if (mediaType === "tv") items = await getTmdbUpcomingTv(page);
+                else items = await getTmdbUpcomingMovies();
+            } else if (category === "top_rated") {
+                if (mediaType === "tv") items = await getTmdbTopRatedTv(page);
+                else items = await getTmdbTopRatedMovies(page);
+            } else if (category === "in_theaters") {
+                items = await getTmdbNowPlayingMovies();
+            } else if (category === "disney") {
+                items = await getDisneyTrending(false, page, mediaType === "all" ? "both" : mediaType);
+            } else if (category === "netflix") {
+                items = await getNetflixTrending(false, page, mediaType === "all" ? "both" : mediaType);
+            }
         }
 
         const availabilityMap = await batchCheckMediaAvailability(items);
@@ -157,14 +233,18 @@ export async function getDiscoverMediaAction(
 
 /**
  * Search across Movies & TV Shows with instant availability lookup
+ * Supports filtering out mature ratings in Kids mode
  */
-export async function searchMediaAction(query: string, page = 1) {
+export async function searchMediaAction(query: string, page = 1, isKids = false) {
     try {
         if (!query || !query.trim()) {
             return { success: true, items: [], availabilityMap: {} };
         }
 
-        const items = await searchTmdbMulti(query.trim(), page);
+        let items = await searchTmdbMulti(query.trim(), page);
+        if (isKids) {
+            items = filterKidsSafeMedia(items);
+        }
         const availabilityMap = await batchCheckMediaAvailability(items);
 
         return {
@@ -233,6 +313,7 @@ export async function getTvSeasonEpisodesAction(tvId: number, seasonNumber: numb
 
 /**
  * Get the current user's request quota and permissions
+ * Differentiates Full Accounts (unlimited / auto-approved) vs Trial Accounts (limited / approval required)
  */
 export async function getUserRequestQuotaAction() {
     try {
@@ -248,15 +329,56 @@ export async function getUserRequestQuotaAction() {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
 
         const isAdmin = user.role === "ADMIN" || user.role === "SUPER_USER";
+        const isTrial = user.status === "TRIAL" || (user as any).isTrial === true;
+        const accountTier: "ADMIN" | "FULL" | "TRIAL" = isAdmin ? "ADMIN" : isTrial ? "TRIAL" : "FULL";
+
         const canRequest = user.canRequest ?? true;
         const canRequest4k = isAdmin || (user.canRequest4k ?? false);
 
         // Auto approval determination
-        const autoApproveMovies = isAdmin || (settings?.seerrAutoApproveAll ?? true) || user.autoApproveMovies;
-        const autoApproveTv = isAdmin || (settings?.seerrAutoApproveAll ?? true) || user.autoApproveTv;
+        let autoApproveMovies: boolean;
+        let autoApproveTv: boolean;
 
-        // Quota window (days)
-        const quotaDays = user.requestLimitDays || settings?.seerrQuotaDays || 7;
+        if (isAdmin) {
+            autoApproveMovies = true;
+            autoApproveTv = true;
+        } else if (isTrial) {
+            autoApproveMovies = settings?.seerrTrialAutoApprove ?? false;
+            autoApproveTv = settings?.seerrTrialAutoApprove ?? false;
+        } else {
+            // Full Account
+            autoApproveMovies = settings?.seerrFullAutoApprove ?? (settings?.seerrAutoApproveAll ?? true);
+            autoApproveTv = settings?.seerrFullAutoApprove ?? (settings?.seerrAutoApproveAll ?? true);
+        }
+
+        if (user.autoApproveMovies !== undefined && user.autoApproveMovies !== null) {
+            autoApproveMovies = user.autoApproveMovies;
+        }
+        if (user.autoApproveTv !== undefined && user.autoApproveTv !== null) {
+            autoApproveTv = user.autoApproveTv;
+        }
+
+        // Quota window (days) and limits
+        let quotaDays: number;
+        let movieLimit: number;
+        let tvLimit: number;
+
+        if (isAdmin) {
+            quotaDays = 7;
+            movieLimit = 0; // 0 = unlimited
+            tvLimit = 0;
+        } else if (isTrial) {
+            quotaDays = user.requestLimitDays || settings?.seerrTrialQuotaDays || 7;
+            movieLimit = user.requestLimitMovies ?? settings?.seerrTrialQuotaMovies ?? 3;
+            tvLimit = user.requestLimitTv ?? settings?.seerrTrialQuotaTv ?? 3;
+        } else {
+            // Full Account
+            const isUnlimited = settings?.seerrFullUnlimited ?? true;
+            quotaDays = user.requestLimitDays || settings?.seerrFullQuotaDays || 7;
+            movieLimit = isUnlimited ? 0 : (user.requestLimitMovies ?? settings?.seerrFullQuotaMovies ?? 10);
+            tvLimit = isUnlimited ? 0 : (user.requestLimitTv ?? settings?.seerrFullQuotaTv ?? 10);
+        }
+
         const windowStartDate = new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
 
         // Count user's requests within window
@@ -277,12 +399,10 @@ export async function getUserRequestQuotaAction() {
             })
         ]);
 
-        const movieLimit = isAdmin ? 0 : (user.requestLimitMovies ?? settings?.seerrQuotaMovies ?? 10);
-        const tvLimit = isAdmin ? 0 : (user.requestLimitTv ?? settings?.seerrQuotaTv ?? 10);
-
         return {
             success: true,
             data: {
+                accountTier,
                 canRequest,
                 canRequest4k,
                 autoApproveMovies,
@@ -307,6 +427,7 @@ export async function getUserRequestQuotaAction() {
 
 /**
  * Submit a Media Request for a Movie or TV Show
+ * Supports Kids rating rules, Full vs Trial limits, and 4K companion ingestion
  */
 export async function submitMediaRequestAction(payload: {
     mediaType: "movie" | "tv";
@@ -319,6 +440,8 @@ export async function submitMediaRequestAction(payload: {
     backdropPath?: string;
     overview?: string;
     is4k?: boolean;
+    isKids?: boolean;
+    contentRating?: string;
     seasons?: number[] | "all";
     servarrAppId?: string;
     qualityProfileId?: number;
@@ -341,27 +464,47 @@ export async function submitMediaRequestAction(payload: {
             throw new Error("You do not have permission to request 4K UHD media.");
         }
 
+        const isTrial = user.status === "TRIAL" || (user as any).isTrial === true;
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+
+        // Kids Section Verification & Approval Rules
+        if (payload.isKids) {
+            if (isAdultOrMatureRating(payload.contentRating)) {
+                throw new Error(`This title contains mature content (rated ${payload.contentRating || "R/TV-MA"}) and cannot be requested in the Kids section.`);
+            }
+        }
 
         // Evaluate user quota if not admin
         if (!isAdmin) {
-            const quotaDays = user.requestLimitDays || settings?.seerrQuotaDays || 7;
-            const windowStartDate = new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
+            let quotaDays: number;
+            let limit: number;
 
-            const count = await prisma.mediaRequest.count({
-                where: {
-                    requestedByUsername: user.username,
-                    mediaType: payload.mediaType,
-                    createdAt: { gte: windowStartDate }
+            if (isTrial) {
+                quotaDays = user.requestLimitDays || settings?.seerrTrialQuotaDays || 7;
+                limit = payload.mediaType === "movie"
+                    ? (user.requestLimitMovies ?? settings?.seerrTrialQuotaMovies ?? 3)
+                    : (user.requestLimitTv ?? settings?.seerrTrialQuotaTv ?? 3);
+            } else {
+                const isUnlimited = settings?.seerrFullUnlimited ?? true;
+                quotaDays = user.requestLimitDays || settings?.seerrFullQuotaDays || 7;
+                limit = isUnlimited ? 0 : (payload.mediaType === "movie"
+                    ? (user.requestLimitMovies ?? settings?.seerrFullQuotaMovies ?? 10)
+                    : (user.requestLimitTv ?? settings?.seerrFullQuotaTv ?? 10));
+            }
+
+            if (limit > 0) {
+                const windowStartDate = new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
+                const count = await prisma.mediaRequest.count({
+                    where: {
+                        requestedByUsername: user.username,
+                        mediaType: payload.mediaType,
+                        createdAt: { gte: windowStartDate }
+                    }
+                });
+
+                if (count >= limit) {
+                    throw new Error(`You have reached your limit of ${limit} ${payload.mediaType === "movie" ? "movie" : "TV show"} requests for this ${quotaDays}-day period.`);
                 }
-            });
-
-            const limit = payload.mediaType === "movie" 
-                ? (user.requestLimitMovies ?? settings?.seerrQuotaMovies ?? 10)
-                : (user.requestLimitTv ?? settings?.seerrQuotaTv ?? 10);
-
-            if (limit > 0 && count >= limit) {
-                throw new Error(`You have reached your limit of ${limit} ${payload.mediaType === "movie" ? "movie" : "TV show"} requests for this ${quotaDays}-day period.`);
             }
         }
 
@@ -369,7 +512,8 @@ export async function submitMediaRequestAction(payload: {
         const existing = await prisma.mediaRequest.findFirst({
             where: {
                 tmdbId: payload.tmdbId,
-                mediaType: payload.mediaType
+                mediaType: payload.mediaType,
+                is4k: Boolean(payload.is4k)
             }
         });
 
@@ -382,8 +526,34 @@ export async function submitMediaRequestAction(payload: {
             };
         }
 
-        // Determine approval status
-        const autoApprove = isAdmin || (settings?.seerrAutoApproveAll ?? true) || (payload.mediaType === "movie" ? user.autoApproveMovies : user.autoApproveTv);
+        // Determine approval status based on Section, Rating, and Account Tier
+        let autoApprove = false;
+
+        if (isAdmin) {
+            autoApprove = true;
+        } else if (payload.isKids) {
+            const isSafeRating = isKidsSafeRating(payload.contentRating);
+            if (isSafeRating) {
+                // PG, G, TV-Y, TV-Y7, TV-G, TV-PG auto-approved if setting enabled
+                autoApprove = settings?.seerrKidsAutoApprovePg ?? true;
+            } else {
+                // PG-13, Unrated, NR require approval
+                autoApprove = !(settings?.seerrKidsRequireApprovalPg13 ?? true);
+            }
+        } else if (isTrial) {
+            // Trial accounts always require approval unless explicit trial auto-approve setting enabled
+            autoApprove = settings?.seerrTrialAutoApprove ?? false;
+        } else {
+            // Full accounts: auto-approved by default in Main Arrs
+            autoApprove = settings?.seerrFullAutoApprove ?? (settings?.seerrAutoApproveAll ?? true);
+            if (payload.mediaType === "movie" && user.autoApproveMovies !== undefined) {
+                autoApprove = user.autoApproveMovies;
+            }
+            if (payload.mediaType === "tv" && user.autoApproveTv !== undefined) {
+                autoApprove = user.autoApproveTv;
+            }
+        }
+
         const initialStatus = autoApprove ? "APPROVED" : "PENDING";
 
         // Create request in database
@@ -404,6 +574,8 @@ export async function submitMediaRequestAction(payload: {
                 overview: payload.overview,
                 status: initialStatus,
                 is4k: Boolean(payload.is4k),
+                isKids: Boolean(payload.isKids),
+                contentRating: payload.contentRating,
                 requestedByUserId: user.id,
                 requestedByUsername: user.username,
                 seasons: seasonsJson,
@@ -413,7 +585,7 @@ export async function submitMediaRequestAction(payload: {
             }
         });
 
-        logger.addLog("INFO", "SEERR", `User ${user.username} submitted request for "${payload.title}" (${payload.mediaType.toUpperCase()}) - Status: ${initialStatus}`);
+        logger.addLog("INFO", "SEERR", `User ${user.username} (${isTrial ? "Trial" : "Full"}) submitted request for "${payload.title}" (${payload.mediaType.toUpperCase()}${payload.isKids ? " - Kids" : ""}) - Status: ${initialStatus}`);
 
         // If auto-approved, trigger immediate Servarr dispatch
         if (autoApprove) {
@@ -727,6 +899,33 @@ export async function getSeerrSettingsAction() {
                 seerrQuotaTv: settings?.seerrQuotaTv ?? 10,
                 seerrQuotaDays: settings?.seerrQuotaDays ?? 7,
                 seerrNotificationOnAvailable: settings?.seerrNotificationOnAvailable ?? true,
+
+                // Full Accounts Settings
+                seerrFullAutoApprove: settings?.seerrFullAutoApprove ?? true,
+                seerrFullUnlimited: settings?.seerrFullUnlimited ?? true,
+                seerrFullQuotaMovies: settings?.seerrFullQuotaMovies ?? 0,
+                seerrFullQuotaTv: settings?.seerrFullQuotaTv ?? 0,
+                seerrFullQuotaDays: settings?.seerrFullQuotaDays ?? 7,
+
+                // Trial Accounts Settings
+                seerrTrialAutoApprove: settings?.seerrTrialAutoApprove ?? false,
+                seerrTrialQuotaMovies: settings?.seerrTrialQuotaMovies ?? 3,
+                seerrTrialQuotaTv: settings?.seerrTrialQuotaTv ?? 3,
+                seerrTrialQuotaDays: settings?.seerrTrialQuotaDays ?? 7,
+
+                // Kids Section & Routing Settings
+                seerrKidsAutoApprovePg: settings?.seerrKidsAutoApprovePg ?? true,
+                seerrKidsRequireApprovalPg13: settings?.seerrKidsRequireApprovalPg13 ?? true,
+                seerrKidsMovieAppId: settings?.seerrKidsMovieAppId ?? null,
+                seerrKidsTvAppId: settings?.seerrKidsTvAppId ?? null,
+                seerrKidsMovie4kAppId: settings?.seerrKidsMovie4kAppId ?? null,
+                seerrKidsTv4kAppId: settings?.seerrKidsTv4kAppId ?? null,
+                seerrKidsMovieRootFolder: settings?.seerrKidsMovieRootFolder ?? null,
+                seerrKidsTvRootFolder: settings?.seerrKidsTvRootFolder ?? null,
+
+                // Dual 4K + 1080p Ingestion
+                seerrAutoDual1080pFor4k: settings?.seerrAutoDual1080pFor4k ?? true,
+
                 radarrApps: radarrAppsRes.success ? radarrAppsRes.data : [],
                 sonarrApps: sonarrAppsRes.success ? sonarrAppsRes.data : []
             }
@@ -753,6 +952,32 @@ export async function updateSeerrSettingsAction(payload: {
     seerrQuotaTv?: number;
     seerrQuotaDays?: number;
     seerrNotificationOnAvailable?: boolean;
+
+    // Full Accounts Settings
+    seerrFullAutoApprove?: boolean;
+    seerrFullUnlimited?: boolean;
+    seerrFullQuotaMovies?: number;
+    seerrFullQuotaTv?: number;
+    seerrFullQuotaDays?: number;
+
+    // Trial Accounts Settings
+    seerrTrialAutoApprove?: boolean;
+    seerrTrialQuotaMovies?: number;
+    seerrTrialQuotaTv?: number;
+    seerrTrialQuotaDays?: number;
+
+    // Kids Section & Routing Settings
+    seerrKidsAutoApprovePg?: boolean;
+    seerrKidsRequireApprovalPg13?: boolean;
+    seerrKidsMovieAppId?: string | null;
+    seerrKidsTvAppId?: string | null;
+    seerrKidsMovie4kAppId?: string | null;
+    seerrKidsTv4kAppId?: string | null;
+    seerrKidsMovieRootFolder?: string | null;
+    seerrKidsTvRootFolder?: string | null;
+
+    // Dual 4K + 1080p Ingestion
+    seerrAutoDual1080pFor4k?: boolean;
 }) {
     try {
         await verifyAdmin();
