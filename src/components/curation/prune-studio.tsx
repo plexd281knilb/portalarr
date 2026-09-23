@@ -2823,8 +2823,6 @@ export function PruneStudio() {
                                                 };
                                                 const addedMs = toSafeMs(c.addedAt);
                                                 const addedDateStr = addedMs ? new Date(addedMs).toLocaleDateString() : "Unknown";
-                                                const modifiedMs = toSafeMs(c.updatedAt) || addedMs;
-                                                const modifiedDateStr = modifiedMs ? new Date(modifiedMs).toLocaleDateString() : "Unknown";
                                                 const lastWatchedMs = toSafeMs(c.lastViewedAt);
                                                 const lastWatchedDateStr = lastWatchedMs ? new Date(lastWatchedMs).toLocaleDateString() : null;
                                                 const daysSinceViewed = lastWatchedMs ? Math.max(0, Math.floor((Date.now() - lastWatchedMs) / (1000 * 60 * 60 * 24))) : null;
@@ -2912,36 +2910,30 @@ export function PruneStudio() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Verification Telemetry Grid: Added, Last Modified, Last Watched, Inactive Days */}
-                                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono">
+                                                        {/* Verification Telemetry Grid: Added, Last Watched, Play Count & Status */}
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono">
                                                             {/* Added to Library */}
                                                             <div className="flex items-center gap-1.5 text-slate-300">
                                                                 <Calendar className="h-3 w-3 text-sky-400 shrink-0" />
                                                                 <span>Added: <strong className="text-white">{addedDateStr}</strong> ({c.daysOld ?? c.ageDays}d ago)</span>
                                                             </div>
 
-                                                            {/* Last Modified Date */}
-                                                            <div className="flex items-center gap-1.5 text-slate-300">
-                                                                <Clock3 className="h-3 w-3 text-purple-400 shrink-0" />
-                                                                <span>Modified: <strong className="text-white">{modifiedDateStr}</strong></span>
-                                                            </div>
-
-                                                            {/* Last Watched Date & Plays */}
+                                                            {/* Last Watched Date */}
                                                             <div className="flex items-center gap-1.5 text-slate-300">
                                                                 <Eye className="h-3 w-3 text-amber-400 shrink-0" />
                                                                 {c.viewCount > 0 && lastWatchedDateStr ? (
                                                                     <span>Watched: <strong className="text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)</span>
                                                                 ) : (
-                                                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] py-0 px-1.5">
-                                                                        Never Watched
+                                                                    <Badge className="bg-cyan-950/80 text-cyan-300 border-cyan-600/40 text-[10px] py-0 px-1.5">
+                                                                        Never Watched (0 plays)
                                                                     </Badge>
                                                                 )}
                                                             </div>
 
-                                                            {/* Unified Activity & Plays */}
+                                                            {/* Total Plays & Lane Classification */}
                                                             <div className="flex items-center gap-1.5 text-slate-300">
                                                                 <Clock className="h-3 w-3 text-rose-400 shrink-0" />
-                                                                <span>Inactive: <strong className="text-rose-300">{c.daysInactive ?? daysSinceViewed ?? (c.daysOld ?? c.ageDays)}d</strong> ({c.viewCount || 0} {c.viewCount === 1 ? "play" : "plays"})</span>
+                                                                <span>Plays: <strong className="text-white">{c.viewCount || 0}</strong> • <strong className={c.lane === "unwatched" ? "text-cyan-300" : "text-amber-300"}>{c.lane === "unwatched" ? "Lane 2 Dead Weight" : "Lane 1 Cold Storage"}</strong></span>
                                                             </div>
                                                         </div>
 
