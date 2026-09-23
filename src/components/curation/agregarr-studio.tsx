@@ -337,6 +337,7 @@ export function AgregarrStudio() {
     const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
     const [curationLastRunStatus, setCurationLastRunStatus] = useState<any | null>(null);
     const [enabledServersForCollections, setEnabledServersForCollections] = useState<string[]>([]);
+    const [manageLibrariesModalOpen, setManageLibrariesModalOpen] = useState(false);
     const [savingSchedule, setSavingSchedule] = useState(false);
     const [scheduleSavedMsg, setScheduleSavedMsg] = useState(false);
     const [runningCollectionSync, setRunningCollectionSync] = useState(false);
@@ -357,15 +358,15 @@ export function AgregarrStudio() {
         return true;
     };
 
-    // Toggle a section enabled/disabled for collections
-    const handleToggleSection = async (secKey: string) => {
-        const currentlyEnabled = isSectionEnabled(selectedServerId, secKey);
+    // Toggle a specific section enabled/disabled on any server
+    const handleToggleSpecificSection = async (srvId: string, secKey: string) => {
+        const currentlyEnabled = isSectionEnabled(srvId, secKey);
         const nextEnabled = !currentlyEnabled;
-        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+        const currentSections = servers.find(s => s.serverId === srvId)?.sections || [];
         const allSecKeys = currentSections.map(s => String(s.key));
 
         try {
-            const res = await toggleCurationLibrarySectionAction("agregarr", selectedServerId, secKey, nextEnabled, allSecKeys);
+            const res = await toggleCurationLibrarySectionAction("agregarr", srvId, secKey, nextEnabled, allSecKeys);
             if (res.success && res.enabledList) {
                 setEnabledServersForCollections(res.enabledList);
             }
@@ -374,18 +375,28 @@ export function AgregarrStudio() {
         }
     };
 
-    // Toggle ALL sections on the selected server for Agregarr
-    const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
-        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+    // Toggle ALL sections on a specific server for Collections (Enable All / Disable All)
+    const handleToggleAllSectionsForSpecificServer = async (srvId: string, enableAll: boolean) => {
+        const currentSections = servers.find(s => s.serverId === srvId)?.sections || [];
         const allSecKeys = currentSections.map(s => String(s.key));
         try {
-            const res = await toggleAllCurationServerSectionsAction("agregarr", selectedServerId, enableAll, allSecKeys);
+            const res = await toggleAllCurationServerSectionsAction("agregarr", srvId, enableAll, allSecKeys);
             if (res.success && res.enabledList) {
                 setEnabledServersForCollections(res.enabledList);
             }
         } catch (e) {
             console.error("Failed toggling all server sections for collections:", e);
         }
+    };
+
+    // Toggle a section enabled/disabled for collections
+    const handleToggleSection = async (secKey: string) => {
+        return handleToggleSpecificSection(selectedServerId, secKey);
+    };
+
+    // Toggle ALL sections on the selected server for Agregarr
+    const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
+        return handleToggleAllSectionsForSpecificServer(selectedServerId, enableAll);
     };
 
     // Save schedule settings
@@ -1863,6 +1874,21 @@ export function AgregarrStudio() {
         return true;
     });
 
+    // Target Library Section Computations
+    const allServerSectionsList = servers.flatMap(srv => 
+        (srv.sections || []).map(sec => ({
+            serverId: srv.serverId,
+            serverName: srv.serverName,
+            sectionKey: String(sec.key),
+            title: sec.title,
+            type: sec.type,
+            isEnabled: isSectionEnabled(srv.serverId, String(sec.key))
+        }))
+    );
+
+    const activeEnabledSections = allServerSectionsList.filter(s => s.isEnabled);
+    const excludedSections = allServerSectionsList.filter(s => !s.isEnabled);
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
@@ -2130,7 +2156,7 @@ export function AgregarrStudio() {
                                 </p>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                            <div className="space-y-3 pt-1">
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
                                     <Select 
@@ -2152,10 +2178,48 @@ export function AgregarrStudio() {
                                     </Select>
                                 </div>
 
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Target Libraries</label>
-                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-amber-300 font-semibold truncate">
-                                        {enabledServersForCollections.length > 0 ? `${enabledServersForCollections.length} Section(s) Configured` : 'All Enabled Plex Libraries'}
+                                {/* Target Libraries Banner */}
+                                <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                                            <Layers className="h-3 w-3 text-amber-400" />
+                                            <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setManageLibrariesModalOpen(true)}
+                                            className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
+                                        >
+                                            Manage All &rarr;
+                                        </button>
+                                    </div>
+                                    <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                        {activeEnabledSections.length > 0 ? (
+                                            activeEnabledSections.map(sec => (
+                                                <Badge 
+                                                    key={`${sec.serverId}-${sec.sectionKey}`}
+                                                    className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                    onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
+                                                    title={`Click to disable/exclude "${sec.title}" from collections`}
+                                                >
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                                    {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
+                                                    <span>{sec.title}</span>
+                                                    {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                </Badge>
+                                            ))
+                                        ) : (
+                                            <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Collections paused)</span>
+                                        )}
+                                        {excludedSections.length > 0 && (
+                                            <Badge
+                                                variant="outline"
+                                                onClick={() => setManageLibrariesModalOpen(true)}
+                                                className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                            >
+                                                +{excludedSections.length} excluded
+                                            </Badge>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -5634,6 +5698,115 @@ export function AgregarrStudio() {
                         >
                             {savingCookies ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                             <span>Save youtube-cookies.txt</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Manage Target Library Sections Modal */}
+            <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
+                <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-slate-100 p-6 space-y-4">
+                    <DialogHeader className="pb-2 border-b border-slate-800">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-amber-400" />
+                            <span>Configure Target Collection Libraries</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Select which Plex library sections should receive automated collections, smart hubs, and seasonal playlists. Excluded sections are completely protected and will be skipped.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                        {servers.map(srv => {
+                            const srvSections = srv.sections || [];
+                            return (
+                                <div key={srv.serverId} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                        <div className="flex items-center gap-2">
+                                            <HardDrive className="h-4 w-4 text-cyan-400" />
+                                            <span className="text-xs font-bold text-white">{srv.serverName}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, true)}
+                                                className="h-6 text-[10px] px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                                            >
+                                                Enable All
+                                            </Button>
+                                            <span className="text-slate-600">•</span>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, false)}
+                                                className="h-6 text-[10px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                                            >
+                                                Disable All
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {srvSections.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {srvSections.map(sec => {
+                                                const enabled = isSectionEnabled(srv.serverId, String(sec.key));
+                                                return (
+                                                    <div
+                                                        key={String(sec.key)}
+                                                        className={`p-2.5 rounded-lg border flex items-center justify-between transition-all ${
+                                                            enabled
+                                                                ? "bg-emerald-950/20 border-emerald-600/40 text-emerald-200"
+                                                                : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            {sec.type === "movie" ? (
+                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                            ) : (
+                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                            )}
+                                                            <div className="min-w-0">
+                                                                <span className="text-xs font-bold text-white block truncate">{sec.title}</span>
+                                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                                    Section #{sec.key} • {sec.type === "movie" ? "Movies" : "TV Shows"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <Badge className={`text-[10px] font-bold ${
+                                                                enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                            }`}>
+                                                                {enabled ? "🟢 ACTIVE" : "⚪ EXCLUDED"}
+                                                            </Badge>
+                                                            <Switch
+                                                                checked={enabled}
+                                                                onCheckedChange={() => handleToggleSpecificSection(srv.serverId, String(sec.key))}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-500 italic py-1">No library sections loaded for this server.</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <DialogFooter className="pt-2 border-t border-slate-800">
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => setManageLibrariesModalOpen(false)}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs"
+                        >
+                            Done
                         </Button>
                     </DialogFooter>
                 </DialogContent>

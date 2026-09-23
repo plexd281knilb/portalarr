@@ -31,7 +31,8 @@ import {
     CalendarClock,
     SlidersHorizontal,
     Settings2,
-    Save
+    Save,
+    HardDrive
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
 import {
     getPlexServersAndSectionsAction,
@@ -148,6 +150,7 @@ export function TaggingStudio() {
         totalItems: number;
     }>({ labels: [], genres: [], collections: [], totalItems: 0 });
     const [auditLoading, setAuditLoading] = useState(false);
+    const [manageLibrariesModalOpen, setManageLibrariesModalOpen] = useState(false);
 
     // Check if a section is enabled for tagging
     const isSectionEnabled = (srvId: string, secKey: string): boolean => {
@@ -164,15 +167,15 @@ export function TaggingStudio() {
         return true;
     };
 
-    // Toggle a section enabled/disabled for tagging
-    const handleToggleSection = async (secKey: string) => {
-        const currentlyEnabled = isSectionEnabled(selectedServerId, secKey);
+    // Toggle a specific section enabled/disabled on any server
+    const handleToggleSpecificSection = async (srvId: string, secKey: string) => {
+        const currentlyEnabled = isSectionEnabled(srvId, secKey);
         const nextEnabled = !currentlyEnabled;
-        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+        const currentSections = servers.find(s => s.serverId === srvId)?.sections || [];
         const allSecKeys = currentSections.map(s => String(s.key));
 
         try {
-            const res = await toggleCurationLibrarySectionAction("tagging", selectedServerId, secKey, nextEnabled, allSecKeys);
+            const res = await toggleCurationLibrarySectionAction("tagging", srvId, secKey, nextEnabled, allSecKeys);
             if (res.success && res.enabledList) {
                 setEnabledServersForTagging(res.enabledList);
             }
@@ -181,18 +184,28 @@ export function TaggingStudio() {
         }
     };
 
-    // Toggle ALL sections on the selected server for Tagging (Enable All / Disable All)
-    const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
-        const currentSections = servers.find(s => s.serverId === selectedServerId)?.sections || [];
+    // Toggle ALL sections on a specific server for Tagging (Enable All / Disable All)
+    const handleToggleAllSectionsForSpecificServer = async (srvId: string, enableAll: boolean) => {
+        const currentSections = servers.find(s => s.serverId === srvId)?.sections || [];
         const allSecKeys = currentSections.map(s => String(s.key));
         try {
-            const res = await toggleAllCurationServerSectionsAction("tagging", selectedServerId, enableAll, allSecKeys);
+            const res = await toggleAllCurationServerSectionsAction("tagging", srvId, enableAll, allSecKeys);
             if (res.success && res.enabledList) {
                 setEnabledServersForTagging(res.enabledList);
             }
         } catch (e) {
             console.error("Failed toggling all server sections for tagging:", e);
         }
+    };
+
+    // Toggle a section enabled/disabled for tagging on selected server
+    const handleToggleSection = async (secKey: string) => {
+        return handleToggleSpecificSection(selectedServerId, secKey);
+    };
+
+    // Toggle ALL sections on the selected server for Tagging (Enable All / Disable All)
+    const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
+        return handleToggleAllSectionsForSpecificServer(selectedServerId, enableAll);
     };
 
     // Save schedule settings
@@ -486,6 +499,21 @@ export function TaggingStudio() {
         item.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    // Target Library Section Computations
+    const allServerSectionsList = servers.flatMap(srv => 
+        (srv.sections || []).map(sec => ({
+            serverId: srv.serverId,
+            serverName: srv.serverName,
+            sectionKey: String(sec.key),
+            title: sec.title,
+            type: sec.type,
+            isEnabled: isSectionEnabled(srv.serverId, String(sec.key))
+        }))
+    );
+
+    const activeEnabledSections = allServerSectionsList.filter(s => s.isEnabled);
+    const excludedSections = allServerSectionsList.filter(s => !s.isEnabled);
+
     return (
         <div className="space-y-6">
             {/* Nav Header */}
@@ -748,7 +776,7 @@ export function TaggingStudio() {
                                 </p>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                            <div className="space-y-3 pt-1">
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-slate-400">Sync Frequency</label>
                                     <Select 
@@ -770,10 +798,48 @@ export function TaggingStudio() {
                                     </Select>
                                 </div>
 
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Target Libraries</label>
-                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-emerald-300 font-semibold truncate">
-                                        {enabledServersForTagging.length > 0 ? `${enabledServersForTagging.length} Section(s) Configured` : 'All Enabled Plex Libraries'}
+                                {/* Target Libraries Banner */}
+                                <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                                            <Layers className="h-3 w-3 text-emerald-400" />
+                                            <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setManageLibrariesModalOpen(true)}
+                                            className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                                        >
+                                            Manage All &rarr;
+                                        </button>
+                                    </div>
+                                    <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                        {activeEnabledSections.length > 0 ? (
+                                            activeEnabledSections.map(sec => (
+                                                <Badge 
+                                                    key={`${sec.serverId}-${sec.sectionKey}`}
+                                                    className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                    onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
+                                                    title={`Click to disable/exclude "${sec.title}" from tagging`}
+                                                >
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                                    {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
+                                                    <span>{sec.title}</span>
+                                                    {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                </Badge>
+                                            ))
+                                        ) : (
+                                            <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Tagging paused)</span>
+                                        )}
+                                        {excludedSections.length > 0 && (
+                                            <Badge
+                                                variant="outline"
+                                                onClick={() => setManageLibrariesModalOpen(true)}
+                                                className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                            >
+                                                +{excludedSections.length} excluded
+                                            </Badge>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1562,6 +1628,115 @@ export function TaggingStudio() {
                     </Card>
                 </div>
             )}
+
+            {/* Manage Target Library Sections Modal */}
+            <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
+                <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-slate-100 p-6 space-y-4">
+                    <DialogHeader className="pb-2 border-b border-slate-800">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-emerald-400" />
+                            <span>Configure Target Tagging Libraries</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Select which Plex library sections should receive automated content advisory labels, parental guide tags, and custom tag rules. Excluded sections are completely protected and will be skipped.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                        {servers.map(srv => {
+                            const srvSections = srv.sections || [];
+                            return (
+                                <div key={srv.serverId} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                        <div className="flex items-center gap-2">
+                                            <HardDrive className="h-4 w-4 text-cyan-400" />
+                                            <span className="text-xs font-bold text-white">{srv.serverName}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, true)}
+                                                className="h-6 text-[10px] px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                                            >
+                                                Enable All
+                                            </Button>
+                                            <span className="text-slate-600">•</span>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, false)}
+                                                className="h-6 text-[10px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                                            >
+                                                Disable All
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {srvSections.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {srvSections.map(sec => {
+                                                const enabled = isSectionEnabled(srv.serverId, String(sec.key));
+                                                return (
+                                                    <div
+                                                        key={String(sec.key)}
+                                                        className={`p-2.5 rounded-lg border flex items-center justify-between transition-all ${
+                                                            enabled
+                                                                ? "bg-emerald-950/20 border-emerald-600/40 text-emerald-200"
+                                                                : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            {sec.type === "movie" ? (
+                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                            ) : (
+                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                            )}
+                                                            <div className="min-w-0">
+                                                                <span className="text-xs font-bold text-white block truncate">{sec.title}</span>
+                                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                                    Section #{sec.key} • {sec.type === "movie" ? "Movies" : "TV Shows"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <Badge className={`text-[10px] font-bold ${
+                                                                enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                            }`}>
+                                                                {enabled ? "🟢 ACTIVE" : "⚪ EXCLUDED"}
+                                                            </Badge>
+                                                            <Switch
+                                                                checked={enabled}
+                                                                onCheckedChange={() => handleToggleSpecificSection(srv.serverId, String(sec.key))}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-500 italic py-1">No library sections loaded for this server.</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <DialogFooter className="pt-2 border-t border-slate-800">
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => setManageLibrariesModalOpen(false)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                        >
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
