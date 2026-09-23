@@ -1359,18 +1359,129 @@ return schemaPatchPromise;
 
 ensureSchemaColumns().catch(() => {});
 
+// --- UNIVERSAL SCHEDULE HELPER ---
+export function isScheduleDue(
+  schedule: string | null | undefined,
+  lastRunAt: Date | string | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!schedule || schedule === "disabled" || schedule === "never" || schedule === "off") {
+    return false;
+  }
+
+  const lastRun = lastRunAt ? new Date(lastRunAt) : null;
+  const elapsedMs = lastRun && !isNaN(lastRun.getTime()) ? now.getTime() - lastRun.getTime() : Infinity;
+  const s = schedule.toLowerCase().trim();
+
+  // Hourly / Interval based (using slight buffer to prevent 1-min setInterval jitter from skipping)
+  if (s === "every_hour" || s === "hourly" || s === "1h") {
+    return elapsedMs >= 55 * 60 * 1000;
+  }
+  if (s === "every_2_hours" || s === "2h") {
+    return elapsedMs >= (2 * 60 - 5) * 60 * 1000;
+  }
+  if (s === "every_3_hours" || s === "3h") {
+    return elapsedMs >= (3 * 60 - 5) * 60 * 1000;
+  }
+  if (s === "every_4_hours" || s === "4h") {
+    return elapsedMs >= (4 * 60 - 5) * 60 * 1000;
+  }
+  if (s === "every_6_hours" || s === "6h") {
+    return elapsedMs >= (6 * 60 - 5) * 60 * 1000;
+  }
+  if (s === "every_12_hours" || s === "12h") {
+    return elapsedMs >= (12 * 60 - 5) * 60 * 1000;
+  }
+  if (s === "every_24_hours" || s === "24h" || s === "daily_interval") {
+    return elapsedMs >= (24 * 60 - 5) * 60 * 1000;
+  }
+
+  // Daily fixed hour (e.g. daily_3am, daily_4am, daily_5am, or daily_HH)
+  let targetDailyHour: number | null = null;
+  if (s === "daily_3am" || s === "3am") targetDailyHour = 3;
+  else if (s === "daily_4am" || s === "4am") targetDailyHour = 4;
+  else if (s === "daily_5am" || s === "5am") targetDailyHour = 5;
+  else if (s.startsWith("daily_")) {
+    const match = s.match(/daily_(\d+)(am|pm)?/);
+    if (match) {
+      let h = parseInt(match[1], 10);
+      if (match[2] === "pm" && h < 12) h += 12;
+      if (match[2] === "am" && h === 12) h = 0;
+      targetDailyHour = h;
+    }
+  }
+
+  if (targetDailyHour !== null) {
+    const isTargetHour = now.getHours() === targetDailyHour;
+    const isDifferentDay = !lastRun || lastRun.toDateString() !== now.toDateString();
+    const hasBeenAtLeast12Hours = elapsedMs >= 12 * 60 * 60 * 1000;
+
+    // Trigger during target hour window if not already run today
+    if (isTargetHour && isDifferentDay && hasBeenAtLeast12Hours) {
+      return true;
+    }
+    // Catch-up if server was offline during the target hour and hasn't run in >28 hours
+    if (elapsedMs >= 28 * 60 * 60 * 1000) {
+      return true;
+    }
+    return false;
+  }
+
+  // Weekly Sunday (default at 4:00 AM)
+  if (s === "weekly_sun" || s === "weekly") {
+    const isSunday = now.getDay() === 0;
+    const isTargetHour = now.getHours() === 4;
+    const isDifferentDay = !lastRun || lastRun.toDateString() !== now.toDateString();
+    const hasBeenAtLeast4Days = elapsedMs >= 4 * 24 * 60 * 60 * 1000;
+
+    if (isSunday && isTargetHour && isDifferentDay && hasBeenAtLeast4Days) {
+      return true;
+    }
+    // Catch-up if missed and >8 days
+    if (elapsedMs >= 8 * 24 * 60 * 60 * 1000) {
+      return true;
+    }
+    return false;
+  }
+
+  // Monthly 1st (default at 4:00 AM)
+  if (s === "monthly_1st" || s === "monthly") {
+    const isFirstOfMonth = now.getDate() === 1;
+    const isTargetHour = now.getHours() === 4;
+    const isDifferentDay = !lastRun || lastRun.toDateString() !== now.toDateString();
+    const hasBeenAtLeast20Days = elapsedMs >= 20 * 24 * 60 * 60 * 1000;
+
+    if (isFirstOfMonth && isTargetHour && isDifferentDay && hasBeenAtLeast20Days) {
+      return true;
+    }
+    // Catch-up if missed and >35 days
+    if (elapsedMs >= 35 * 24 * 60 * 60 * 1000) {
+      return true;
+    }
+    return false;
+  }
+
+  // Fallback: check if integer minutes or hours
+  const num = parseInt(s, 10);
+  if (!isNaN(num) && num > 0) {
+    return elapsedMs >= (num * 60 - 5) * 1000;
+  }
+
+  return false;
+}
+
 // --- BACKGROUND SCHEDULER ---
-const globalForScheduler = global as unknown as { schedulerInitialized?: boolean };
+const globalForScheduler = global as unknown as { schedulerInitialized?: boolean; lastSeerrSyncTime?: number };
 
 if (!globalForScheduler.schedulerInitialized) {
   globalForScheduler.schedulerInitialized = true;
 
-  // Let Next.js boot finish before running the first check
+  // Let Next.js boot finish before running initial checks
   setTimeout(async () => {
     await ensureSchemaColumns();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     const intervalMinutes = settings?.autoSyncInterval || 5;
-    console.log(`[BACKGROUND-JOB] Initializing library auto-scan job (Interval: ${intervalMinutes}m)...`);
+    console.log(`[BACKGROUND-SCHEDULER] Initializing Portalarr background scheduler (Interval: ${intervalMinutes}m)...`);
     console.log(`[PORTALARR] Server is fully booted, ready, and listening on http://0.0.0.0:3000`);
 
     // Auto-expire elapsed trials and subscriptions on boot
@@ -1378,313 +1489,321 @@ if (!globalForScheduler.schedulerInitialized) {
       const { expireDueTrialsAndSubscriptionsInternal } = await import("../app/actions");
       await expireDueTrialsAndSubscriptionsInternal();
     } catch (expErr: any) {
-      console.warn("[BACKGROUND-JOB] Boot trial expiration check error:", expErr.message || expErr);
+      console.warn("[BACKGROUND-SCHEDULER] Boot trial expiration check error:", expErr.message || expErr);
     }
 
-    // Trigger instant initial library scan on boot
+    // Trigger initial boot scan for all libraries
     try {
       const { scanLibraryInternal } = await import("../app/actions");
-      console.log(`[BACKGROUND-JOB] Triggering instant initial boot scan for all libraries...`);
+      console.log(`[BACKGROUND-SCHEDULER] Triggering instant initial boot scan for all libraries...`);
       const libraries = await prisma.library.findMany();
       for (const lib of libraries) {
         try {
-          console.log(`[BACKGROUND-JOB] Initial boot scan for "${lib.name}"...`);
+          console.log(`[BACKGROUND-SCHEDULER] Initial boot scan for "${lib.name}"...`);
           await scanLibraryInternal(lib.id);
         } catch (libErr: any) {
-          console.error(`[BACKGROUND-JOB] Boot scan error for "${lib.name}":`, libErr.message || libErr);
+          console.error(`[BACKGROUND-SCHEDULER] Boot scan error for "${lib.name}":`, libErr.message || libErr);
         }
       }
     } catch (bootErr: any) {
-      console.error(`[BACKGROUND-JOB] Boot scan failed:`, bootErr.message || bootErr);
+      console.error(`[BACKGROUND-SCHEDULER] Boot scan failed:`, bootErr.message || bootErr);
     }
     
-    // Check every minute if periodic scan or trial expirations are due
+    // Main periodic scheduler loop: checks every 60 seconds
     setInterval(async () => {
       await ensureSchemaColumns().catch(() => {});
+      const now = new Date();
+      let settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
 
-      // Evaluate expired trials and subscriptions every minute down to the minute
+      // 1. Trial & Subscription Expiration (Evaluated every minute)
       try {
         const { expireDueTrialsAndSubscriptionsInternal } = await import("../app/actions");
         await expireDueTrialsAndSubscriptionsInternal();
       } catch (trialExpErr: any) {
-        console.warn("[BACKGROUND-JOB] 1-minute trial expiration check error:", trialExpErr.message || trialExpErr);
+        console.warn("[BACKGROUND-SCHEDULER] 1-minute trial expiration check error:", trialExpErr.message || trialExpErr);
       }
 
-      if ((global as any).__PORTALARR_SYNC_IN_PROGRESS) {
-        return;
-      }
-      try {
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
-        const intervalMinutes = settings?.autoSyncInterval || 5; // Default to 5 minutes
-        
-        const lastSync = settings?.lastAutoSync;
-        const now = new Date();
-        
-        if (!lastSync || (now.getTime() - lastSync.getTime()) >= intervalMinutes * 60 * 1000) {
-          (global as any).__PORTALARR_SYNC_IN_PROGRESS = true;
-          console.log(`[BACKGROUND-JOB] Starting scheduled library scan and Plex friends sync (Interval: ${intervalMinutes}m)...`);
-          
-          const { scanLibraryInternal, syncPlexFriendsInternal } = await import("../app/actions");
+      // 2. Poster Overlays Incremental Scan
+      if (!(global as any).__PORTALARR_OVERLAY_INC_RUNNING) {
+        const incEnabled = settings?.overlayIncrementalEnabled ?? true;
+        const incSchedule = settings?.overlayIncrementalSchedule || "every_hour";
+        const lastIncRun = settings?.overlayIncrementalLastRunAt;
 
-          // Sync Plex Friends list and user accounts
-          try {
-            console.log(`[BACKGROUND-JOB] Syncing Plex friends...`);
-            await syncPlexFriendsInternal();
-          } catch (plexErr: any) {
-            console.error(`[BACKGROUND-JOB] Error syncing Plex friends:`, plexErr.message || plexErr);
-          }
-          
-          const libraries = await prisma.library.findMany();
-          for (const lib of libraries) {
+        if (incEnabled && isScheduleDue(incSchedule, lastIncRun, now)) {
+          (global as any).__PORTALARR_OVERLAY_INC_RUNNING = true;
+          (async () => {
             try {
-              console.log(`[BACKGROUND-JOB] Scanning library "${lib.name}"...`);
-              await scanLibraryInternal(lib.id);
-            } catch (libErr: any) {
-              console.error(`[BACKGROUND-JOB] Error scanning library "${lib.name}":`, libErr.message || libErr);
+              console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
+              const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
+              await runOverlayIncrementalSyncInternal();
+            } catch (err: any) {
+              console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
+            } finally {
+              (global as any).__PORTALARR_OVERLAY_INC_RUNNING = false;
             }
-          }
+          })();
+        }
+      }
 
-          // Check for failed requests that are older than 5 days to auto-retry
-          try {
-            const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-            const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-            
-            const failedRequests = await prisma.bookRequest.findMany({
-              where: {
-                OR: [
-                  { status: { startsWith: "Failed" }, updatedAt: { lte: fiveDaysAgo } },
-                  { status: { in: ["Downloading", "Searching"] }, updatedAt: { lte: twelveHoursAgo } },
-                    { status: "Approved", updatedAt: { lte: new Date(now.getTime() - 2 * 60 * 1000) } }
-                ]
-              }
-            });
-            
-            if (failedRequests.length > 0) {
-              console.log(`[BACKGROUND-JOB] Found ${failedRequests.length} stuck/failed request(s). Auto-retrying...`);
-              const { autoDownloadBookRequest } = await import("../app/actions");
-              for (const req of failedRequests) {
-                try {
-                  await prisma.bookRequest.update({
-                    where: { id: req.id },
-                    data: { status: "Approved (Retrying)" }
-                    });
-                    
-                    autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
-                    console.error(`[AUTO-DOWNLOAD-RETRY-BG] Failed for request "${req.title}":`, err.message || err);
-                  });
-                } catch (reqErr: any) {
-                  console.error(`[BACKGROUND-JOB] Error auto-retrying request "${req.title}":`, reqErr.message || reqErr);
-                }
-              }
+      // 3. Poster Overlays Deep Library Recheck Scan
+      if (!(global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING) {
+        const recheckEnabled = settings?.overlayRecheckEnabled ?? true;
+        const recheckSchedule = settings?.overlayRecheckSchedule || "daily_4am";
+        const lastRecheckRun = settings?.overlayRecheckLastRunAt;
+
+        if (recheckEnabled && isScheduleDue(recheckSchedule, lastRecheckRun, now)) {
+          (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = true;
+          (async () => {
+            try {
+              console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
+              const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
+              await runOverlayRecheckSyncInternal();
+            } catch (err: any) {
+              console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
+            } finally {
+              (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = false;
             }
-          } catch (retryErr: any) {
-            console.error("[BACKGROUND-JOB] Error in scheduled auto-retry runner:", retryErr.message || retryErr);
-          }
-          
-          // Auto-approve and download any existing "Pending" requests
-          try {
-            const pendingRequests = await prisma.bookRequest.findMany({
-              where: { status: "Pending" }
-            });
-            
-            if (pendingRequests.length > 0) {
-              console.log(`[BACKGROUND-JOB] Found ${pendingRequests.length} Pending request(s). Auto-approving and downloading...`);
-              const { autoDownloadBookRequest } = await import("../app/actions");
-              for (const req of pendingRequests) {
-                try {
-                  await prisma.bookRequest.update({
-                    where: { id: req.id },
-                    data: { status: "Approved" }
-                  });
-                  
-                  autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
-                    console.error(`[AUTO-DOWNLOAD-PENDING-BG] Failed for request "${req.title}":`, err.message || err);
-                  });
-                } catch (reqErr: any) {
-                  console.error(`[BACKGROUND-JOB] Error auto-approving request "${req.title}":`, reqErr.message || reqErr);
-                }
-              }
+          })();
+        }
+      }
+
+      // 4. Agregarr Curation & Parental Tagging Sync
+      if (!(global as any).__PORTALARR_CURATION_RUNNING) {
+        const curationEnabled = settings?.curationSyncEnabled ?? true;
+        const curationSchedule = settings?.curationSyncSchedule || "every_6_hours";
+        const lastCurationRun = settings?.curationLastRunAt;
+
+        if (curationEnabled && isScheduleDue(curationSchedule, lastCurationRun, now)) {
+          (global as any).__PORTALARR_CURATION_RUNNING = true;
+          (async () => {
+            try {
+              console.log(`[CURATION-TIMER] Triggering scheduled curation sync (${curationSchedule})...`);
+              const { runFullCurationSyncInternal } = await import("../app/curation-actions");
+              await runFullCurationSyncInternal();
+            } catch (cErr: any) {
+              console.error("[CURATION-TIMER] Error in curation background runner:", cErr.message || cErr);
+            } finally {
+              (global as any).__PORTALARR_CURATION_RUNNING = false;
             }
-          } catch (pendingErr: any) {
-            console.error("[BACKGROUND-JOB] Error in auto-approving pending requests:", pendingErr.message || pendingErr);
-          }
+          })();
+        }
+      }
 
-          // Auto-discover missing installments for monitored series
-          try {
-            const monitoredRequests = await prisma.bookRequest.findMany({
-              where: { monitorSeries: true }
-            });
+      // 5. Payment Email Scraper Scan
+      if (!(global as any).__PORTALARR_PAYMENT_SCAN_RUNNING) {
+        const paymentAutoScan = settings?.paymentEmailAutoScan ?? true;
+        if (paymentAutoScan) {
+          const scanIntervalMin = settings?.paymentEmailScanInterval || 15;
+          const requiredIntervalMs = (scanIntervalMin * 60 - 5) * 1000;
+          const lastScan = settings?.paymentLastScanAt;
 
-            if (monitoredRequests.length > 0) {
-              const { findMissingBooksInSeries, autoDownloadBookRequest } = await import("../app/actions");
-              const handledSeries = new Set<string>();
-
-              for (const mReq of monitoredRequests) {
-                const seriesKey = `${mReq.series || mReq.title}-${mReq.author || ""}`.toLowerCase();
-                if (handledSeries.has(seriesKey)) continue;
-                handledSeries.add(seriesKey);
-
-                try {
-                  const res = await findMissingBooksInSeries(mReq.series || mReq.title, mReq.author || "Unknown Author");
-                  if (res && res.success && Array.isArray(res.data)) {
-                    for (const missingBook of res.data) {
-                      // Check if already requested or exists
-                      const existing = await prisma.bookRequest.findFirst({
-                        where: {
-                          title: missingBook.title,
-                          mediaType: mReq.mediaType || "ebook"
-                        }
-                      });
-
-                      if (!existing) {
-                        console.log(`[SERIES-MONITOR] Auto-requesting new installment "${missingBook.title}" in series "${mReq.series || mReq.title}" for ${mReq.requestedBy}...`);
-                        const newReq = await prisma.bookRequest.create({
-                          data: {
-                            title: missingBook.title,
-                            author: missingBook.author || mReq.author || "Unknown Author",
-                            series: mReq.series || mReq.title,
-                            volumeNumber: (missingBook as any).volumeNumber ? String((missingBook as any).volumeNumber) : null,
-                            coverUrl: missingBook.coverUrl || null,
-                            publishYear: (missingBook as any).year ? String((missingBook as any).year) : null,
-                            requestedBy: mReq.requestedBy,
-                            type: "book",
-                            mediaType: mReq.mediaType || "ebook",
-                            status: "Approved",
-                            monitorSeries: true
-                          }
-                        });
-
-                        autoDownloadBookRequest(newReq.id, newReq.title, newReq.author || "").catch(err => {
-                          console.error(`[SERIES-MONITOR-DOWNLOAD] Failed for "${newReq.title}":`, err.message || err);
-                        });
-                      }
-                    }
-                  }
-                } catch (seriesScanErr: any) {
-                  console.warn(`[SERIES-MONITOR] Failed series scan for "${mReq.series || mReq.title}":`, seriesScanErr.message || seriesScanErr);
-                }
-              }
-            }
-          } catch (seriesErr: any) {
-            console.error("[BACKGROUND-JOB] Error in series auto-monitor runner:", seriesErr.message || seriesErr);
-          }
-
-          // Auto-run automated Curation & Overlay Studio timer job
-          try {
-            const curationEnabled = settings?.curationSyncEnabled ?? true;
-            if (curationEnabled) {
-              const scheduleType = settings?.curationSyncSchedule || "every_6_hours";
-              let requiredIntervalMs = 6 * 60 * 60 * 1000; // Default 6 hours
-
-              if (scheduleType === "every_hour") requiredIntervalMs = 60 * 60 * 1000;
-              else if (scheduleType === "every_3_hours") requiredIntervalMs = 3 * 60 * 60 * 1000;
-              else if (scheduleType === "every_6_hours") requiredIntervalMs = 6 * 60 * 60 * 1000;
-              else if (scheduleType === "every_12_hours") requiredIntervalMs = 12 * 60 * 60 * 1000;
-              else if (scheduleType === "daily_3am") {
-                const curHour = now.getHours();
-                requiredIntervalMs = curHour === 3 ? 20 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-              }
-
-              const lastCurationRun = settings?.curationLastRunAt;
-              if (!lastCurationRun || (now.getTime() - lastCurationRun.getTime()) >= requiredIntervalMs) {
-                console.log(`[CURATION-TIMER] Triggering scheduled curation sync (${scheduleType})...`);
-                const { runFullCurationSyncInternal } = await import("../app/curation-actions");
-                await runFullCurationSyncInternal().catch(cErr => {
-                  console.error("[CURATION-TIMER] Error in curation background runner:", cErr.message || cErr);
-                });
-              }
-            }
-          } catch (curationErr: any) {
-            console.error("[BACKGROUND-JOB] Error in curation timer runner:", curationErr.message || curationErr);
-          }
-
-          // Auto-run automated Incremental Poster Overlay scan
-          try {
-            const incEnabled = settings?.overlayIncrementalEnabled ?? true;
-            if (incEnabled) {
-              const incSchedule = settings?.overlayIncrementalSchedule || "every_hour";
-              let incIntervalMs = 60 * 60 * 1000; // Default 1 hour
-              if (incSchedule === "every_hour") incIntervalMs = 60 * 60 * 1000;
-              else if (incSchedule === "every_3_hours") incIntervalMs = 3 * 60 * 60 * 1000;
-              else if (incSchedule === "every_6_hours") incIntervalMs = 6 * 60 * 60 * 1000;
-              else if (incSchedule === "every_12_hours") incIntervalMs = 12 * 60 * 60 * 1000;
-
-              const lastIncRun = settings?.overlayIncrementalLastRunAt;
-              if (!lastIncRun || (now.getTime() - lastIncRun.getTime()) >= incIntervalMs) {
-                console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
-                const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
-                await runOverlayIncrementalSyncInternal().catch(err => {
-                  console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
-                });
-              }
-            }
-          } catch (incErr: any) {
-            console.error("[BACKGROUND-JOB] Error checking incremental overlay timer:", incErr.message || incErr);
-          }
-
-          // Auto-run automated Deep Library Recheck scan
-          try {
-            const recheckEnabled = settings?.overlayRecheckEnabled ?? true;
-            if (recheckEnabled) {
-              const recheckSchedule = settings?.overlayRecheckSchedule || "daily_4am";
-              let recheckIntervalMs = 24 * 60 * 60 * 1000; // Default daily
-              if (recheckSchedule === "daily_4am") {
-                const curHour = now.getHours();
-                recheckIntervalMs = curHour === 4 ? 20 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-              } else if (recheckSchedule === "every_12_hours") {
-                recheckIntervalMs = 12 * 60 * 60 * 1000;
-              } else if (recheckSchedule === "weekly_sun") {
-                recheckIntervalMs = 7 * 24 * 60 * 60 * 1000;
-              } else if (recheckSchedule === "monthly_1st") {
-                recheckIntervalMs = 30 * 24 * 60 * 60 * 1000;
-              }
-
-              const lastRecheckRun = settings?.overlayRecheckLastRunAt;
-              if (!lastRecheckRun || (now.getTime() - lastRecheckRun.getTime()) >= recheckIntervalMs) {
-                console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
-                const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
-                await runOverlayRecheckSyncInternal().catch(err => {
-                  console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
-                });
-              }
-            }
-          } catch (recErr: any) {
-            console.error("[BACKGROUND-JOB] Error checking deep recheck timer:", recErr.message || recErr);
-          }
-
-          // Auto-run automated Payment Email Scraper timer job
-          try {
-            const paymentAutoScan = settings?.paymentEmailAutoScan ?? true;
-            if (paymentAutoScan) {
-              const scanIntervalMin = settings?.paymentEmailScanInterval || 15;
-              const requiredIntervalMs = scanIntervalMin * 60 * 1000;
-              const lastScan = settings?.paymentLastScanAt;
-              if (!lastScan || (now.getTime() - lastScan.getTime()) >= requiredIntervalMs) {
+          if (!lastScan || (now.getTime() - lastScan.getTime()) >= requiredIntervalMs) {
+            (global as any).__PORTALARR_PAYMENT_SCAN_RUNNING = true;
+            (async () => {
+              try {
                 console.log(`[PAYMENT-TIMER] Triggering scheduled payment email scan (every ${scanIntervalMin}m)...`);
                 const { scanPaymentEmailsInternal } = await import("./payment-email-scraper");
-                await scanPaymentEmailsInternal().catch(pErr => {
-                  console.error("[PAYMENT-TIMER] Error in payment email scraper background runner:", pErr.message || pErr);
-                });
+                await scanPaymentEmailsInternal();
+              } catch (pErr: any) {
+                console.error("[PAYMENT-TIMER] Error in payment email scraper background runner:", pErr.message || pErr);
+              } finally {
+                (global as any).__PORTALARR_PAYMENT_SCAN_RUNNING = false;
               }
-            }
-          } catch (payJobErr: any) {
-            console.error("[BACKGROUND-JOB] Error in payment scraper checker:", payJobErr.message || payJobErr);
+            })();
           }
-
-          await prisma.settings.upsert({
-            where: { id: "global" },
-            update: { lastAutoSync: new Date() },
-            create: { id: "global", lastAutoSync: new Date() }
-          });
-          
-          console.log("[BACKGROUND-JOB] Scheduled library scan completed.");
         }
-      } catch (err: any) {
-        console.error("[BACKGROUND-JOB] Error in scheduled job runner:", err.message || err);
-      } finally {
-        (global as any).__PORTALARR_SYNC_IN_PROGRESS = false;
       }
-    }, 60 * 1000); // 1 minute check
+
+      // 6. Media Requests (Seerr) Queue & Availability Background Sync (every 2 minutes)
+      if (!(global as any).__PORTALARR_SEERR_SYNC_RUNNING) {
+        const lastSeerrTime = globalForScheduler.lastSeerrSyncTime || 0;
+        if (now.getTime() - lastSeerrTime >= 2 * 60 * 1000) {
+          globalForScheduler.lastSeerrSyncTime = now.getTime();
+          (global as any).__PORTALARR_SEERR_SYNC_RUNNING = true;
+          (async () => {
+            try {
+              const { syncMediaRequestsQueueAndAvailabilityInternal } = await import("../app/seerr-actions");
+              await syncMediaRequestsQueueAndAvailabilityInternal();
+            } catch (seerrErr: any) {
+              console.error("[SEERR-SYNC-TIMER] Error in media requests queue sync:", seerrErr.message || seerrErr);
+            } finally {
+              (global as any).__PORTALARR_SEERR_SYNC_RUNNING = false;
+            }
+          })();
+        }
+      }
+
+      // 7. Library Auto-Scan, Plex Friends Sync, and Book Requests Retry
+      if (!(global as any).__PORTALARR_LIBRARY_SCAN_RUNNING) {
+        const intervalMinutes = settings?.autoSyncInterval || 5;
+        const lastSync = settings?.lastAutoSync;
+
+        if (!lastSync || (now.getTime() - lastSync.getTime()) >= (intervalMinutes * 60 - 5) * 1000) {
+          (global as any).__PORTALARR_LIBRARY_SCAN_RUNNING = true;
+          (async () => {
+            try {
+              console.log(`[BACKGROUND-SCHEDULER] Starting scheduled library scan and Plex friends sync (Interval: ${intervalMinutes}m)...`);
+              const { scanLibraryInternal, syncPlexFriendsInternal } = await import("../app/actions");
+
+              // Sync Plex Friends list and user accounts
+              try {
+                console.log(`[BACKGROUND-SCHEDULER] Syncing Plex friends...`);
+                await syncPlexFriendsInternal();
+              } catch (plexErr: any) {
+                console.error(`[BACKGROUND-SCHEDULER] Error syncing Plex friends:`, plexErr.message || plexErr);
+              }
+
+              // Scan configured libraries
+              const libraries = await prisma.library.findMany();
+              for (const lib of libraries) {
+                try {
+                  console.log(`[BACKGROUND-SCHEDULER] Scanning library "${lib.name}"...`);
+                  await scanLibraryInternal(lib.id);
+                } catch (libErr: any) {
+                  console.error(`[BACKGROUND-SCHEDULER] Error scanning library "${lib.name}":`, libErr.message || libErr);
+                }
+              }
+
+              // Check for failed/stuck requests to auto-retry
+              try {
+                const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+                const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+
+                const failedRequests = await prisma.bookRequest.findMany({
+                  where: {
+                    OR: [
+                      { status: { startsWith: "Failed" }, updatedAt: { lte: fiveDaysAgo } },
+                      { status: { in: ["Downloading", "Searching"] }, updatedAt: { lte: twelveHoursAgo } },
+                      { status: "Approved", updatedAt: { lte: new Date(now.getTime() - 2 * 60 * 1000) } }
+                    ]
+                  }
+                });
+
+                if (failedRequests.length > 0) {
+                  console.log(`[BACKGROUND-SCHEDULER] Found ${failedRequests.length} stuck/failed request(s). Auto-retrying...`);
+                  const { autoDownloadBookRequest } = await import("../app/actions");
+                  for (const req of failedRequests) {
+                    try {
+                      await prisma.bookRequest.update({
+                        where: { id: req.id },
+                        data: { status: "Approved (Retrying)" }
+                      });
+
+                      autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                        console.error(`[AUTO-DOWNLOAD-RETRY-BG] Failed for request "${req.title}":`, err.message || err);
+                      });
+                    } catch (reqErr: any) {
+                      console.error(`[BACKGROUND-SCHEDULER] Error auto-retrying request "${req.title}":`, reqErr.message || reqErr);
+                    }
+                  }
+                }
+              } catch (retryErr: any) {
+                console.error("[BACKGROUND-SCHEDULER] Error in scheduled auto-retry runner:", retryErr.message || retryErr);
+              }
+
+              // Auto-approve and download any existing "Pending" requests
+              try {
+                const pendingRequests = await prisma.bookRequest.findMany({
+                  where: { status: "Pending" }
+                });
+
+                if (pendingRequests.length > 0) {
+                  console.log(`[BACKGROUND-SCHEDULER] Found ${pendingRequests.length} Pending request(s). Auto-approving and downloading...`);
+                  const { autoDownloadBookRequest } = await import("../app/actions");
+                  for (const req of pendingRequests) {
+                    try {
+                      await prisma.bookRequest.update({
+                        where: { id: req.id },
+                        data: { status: "Approved" }
+                      });
+
+                      autoDownloadBookRequest(req.id, req.title, req.author || "").catch(err => {
+                        console.error(`[AUTO-DOWNLOAD-PENDING-BG] Failed for request "${req.title}":`, err.message || err);
+                      });
+                    } catch (reqErr: any) {
+                      console.error(`[BACKGROUND-SCHEDULER] Error auto-approving request "${req.title}":`, reqErr.message || reqErr);
+                    }
+                  }
+                }
+              } catch (pendingErr: any) {
+                console.error("[BACKGROUND-SCHEDULER] Error in auto-approving pending requests:", pendingErr.message || pendingErr);
+              }
+
+              // Auto-discover missing installments for monitored series
+              try {
+                const monitoredRequests = await prisma.bookRequest.findMany({
+                  where: { monitorSeries: true }
+                });
+
+                if (monitoredRequests.length > 0) {
+                  const { findMissingBooksInSeries, autoDownloadBookRequest } = await import("../app/actions");
+                  const handledSeries = new Set<string>();
+
+                  for (const mReq of monitoredRequests) {
+                    const seriesKey = `${mReq.series || mReq.title}-${mReq.author || ""}`.toLowerCase();
+                    if (handledSeries.has(seriesKey)) continue;
+                    handledSeries.add(seriesKey);
+
+                    try {
+                      const res = await findMissingBooksInSeries(mReq.series || mReq.title, mReq.author || "Unknown Author");
+                      if (res && res.success && Array.isArray(res.data)) {
+                        for (const missingBook of res.data) {
+                          const existing = await prisma.bookRequest.findFirst({
+                            where: {
+                              title: missingBook.title,
+                              mediaType: mReq.mediaType || "ebook"
+                            }
+                          });
+
+                          if (!existing) {
+                            console.log(`[SERIES-MONITOR] Auto-requesting new installment "${missingBook.title}" in series "${mReq.series || mReq.title}" for ${mReq.requestedBy}...`);
+                            const newReq = await prisma.bookRequest.create({
+                              data: {
+                                title: missingBook.title,
+                                author: missingBook.author || mReq.author || "Unknown Author",
+                                series: mReq.series || mReq.title,
+                                volumeNumber: (missingBook as any).volumeNumber ? String((missingBook as any).volumeNumber) : null,
+                                coverUrl: missingBook.coverUrl || null,
+                                publishYear: (missingBook as any).year ? String((missingBook as any).year) : null,
+                                requestedBy: mReq.requestedBy,
+                                type: "book",
+                                mediaType: mReq.mediaType || "ebook",
+                                status: "Approved",
+                                monitorSeries: true
+                              }
+                            });
+
+                            autoDownloadBookRequest(newReq.id, newReq.title, newReq.author || "").catch(err => {
+                              console.error(`[SERIES-MONITOR-DOWNLOAD] Failed for "${newReq.title}":`, err.message || err);
+                            });
+                          }
+                        }
+                      }
+                    } catch (seriesScanErr: any) {
+                      console.warn(`[SERIES-MONITOR] Failed series scan for "${mReq.series || mReq.title}":`, seriesScanErr.message || seriesScanErr);
+                    }
+                  }
+                }
+              } catch (seriesErr: any) {
+                console.error("[BACKGROUND-SCHEDULER] Error in series auto-monitor runner:", seriesErr.message || seriesErr);
+              }
+
+              await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { lastAutoSync: new Date() },
+                create: { id: "global", lastAutoSync: new Date() }
+              });
+
+              console.log("[BACKGROUND-SCHEDULER] Scheduled library scan completed.");
+            } catch (err: any) {
+              console.error("[BACKGROUND-SCHEDULER] Error in scheduled library scan runner:", err.message || err);
+            } finally {
+              (global as any).__PORTALARR_LIBRARY_SCAN_RUNNING = false;
+            }
+          })();
+        }
+      }
+    }, 60 * 1000); // 1 minute ticker
   }, 10000); // Wait 10s after server starts
 }
 

@@ -804,12 +804,10 @@ export async function deleteMediaRequestAction(requestId: string) {
 }
 
 /**
- * Synchronize request download progress from Radarr/Sonarr queues and reconcile Plex availability
+ * Internal runner to synchronize request download progress from Radarr/Sonarr queues and reconcile Plex availability
  */
-export async function syncMediaRequestsQueueAndAvailabilityAction() {
+export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
     try {
-        await verifyAuth();
-
         const activeRequests = await prisma.mediaRequest.findMany({
             where: {
                 status: { in: ["PROCESSING", "APPROVED", "PENDING"] }
@@ -900,6 +898,18 @@ export async function syncMediaRequestsQueueAndAvailabilityAction() {
         }
 
         return { success: true, updatedCount };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Synchronize request download progress from Radarr/Sonarr queues and reconcile Plex availability (User Action)
+ */
+export async function syncMediaRequestsQueueAndAvailabilityAction() {
+    try {
+        await verifyAuth();
+        return await syncMediaRequestsQueueAndAvailabilityInternal();
     } catch (e: any) {
         return { success: false, error: e.message };
     }
