@@ -536,6 +536,26 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
     const errors: string[] = [];
 
     if (sources.length === 0) {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: {
+                paymentLastScanAt: new Date(),
+                paymentLastScanResult: JSON.stringify({
+                    scannedAt: new Date().toISOString(),
+                    totalSources: 0,
+                    scannedMessages: 0,
+                    newPaymentsFound: 0,
+                    autoAttributed: 0,
+                    unmatched: 0,
+                    errors: []
+                })
+            },
+            create: {
+                id: "global",
+                paymentLastScanAt: new Date()
+            }
+        }).catch(() => {});
+
         return {
             success: true,
             totalSources: 0,

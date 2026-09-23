@@ -1601,7 +1601,10 @@ if (!globalForScheduler.schedulerInitialized) {
             (global as any).__PORTALARR_PAYMENT_SCAN_RUNNING = true;
             (async () => {
               try {
-                console.log(`[PAYMENT-TIMER] Triggering scheduled payment email scan (every ${scanIntervalMin}m)...`);
+                const activeSourcesCount = await prisma.paymentEmailSource.count({ where: { enabled: true } }).catch(() => 0);
+                if (activeSourcesCount > 0) {
+                  console.log(`[PAYMENT-TIMER] Triggering scheduled payment email scan for ${activeSourcesCount} source(s) (every ${scanIntervalMin}m)...`);
+                }
                 const { scanPaymentEmailsInternal } = await import("./payment-email-scraper");
                 await scanPaymentEmailsInternal();
               } catch (pErr: any) {

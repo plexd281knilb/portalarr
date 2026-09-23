@@ -6126,6 +6126,10 @@ export async function runFullCurationSyncInternal(): Promise<{
 
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { curationLastRunAt: new Date() }
+            }).catch(() => {});
             return { success: false, seasonalCount: 0, overlaysAppliedCount: 0, leavingSoonCount: 0, timestamp: new Date().toISOString(), details: ["No Plex token configured"] };
         }
 
@@ -6404,6 +6408,10 @@ export async function runOverlayIncrementalSyncInternal(targetServerId?: string,
 
         const token = settings.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { overlayIncrementalLastRunAt: new Date() }
+            }).catch(() => {});
             return {
                 success: false,
                 overlaysAppliedCount: 0,
@@ -6581,6 +6589,10 @@ export async function runOverlayRecheckSyncInternal(targetServerId?: string, tar
 
         const token = settings.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
         if (!token) {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { overlayRecheckLastRunAt: new Date() }
+            }).catch(() => {});
             return {
                 success: false,
                 overlaysAppliedCount: 0,
