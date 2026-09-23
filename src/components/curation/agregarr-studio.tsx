@@ -343,6 +343,26 @@ export function AgregarrStudio() {
     const [runningCollectionSync, setRunningCollectionSync] = useState(false);
     const [collectionSyncResult, setCollectionSyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
 
+    // Baseline Snapshot for Tracking Unsaved Changes
+    const [baselineSettings, setBaselineSettings] = useState<{
+        curationSyncCollections: boolean;
+        curationSyncReleases: boolean;
+        curationSyncSchedule: string;
+    } | null>(null);
+    const [isSavingAll, setIsSavingAll] = useState(false);
+
+    const isScheduleDirty = Boolean(
+        baselineSettings && (
+            curationSyncCollections !== baselineSettings.curationSyncCollections ||
+            curationSyncReleases !== baselineSettings.curationSyncReleases ||
+            curationSyncSchedule !== baselineSettings.curationSyncSchedule
+        )
+    );
+
+    const unsavedSections: string[] = [];
+    if (isScheduleDirty) unsavedSections.push("Collections & Hubs Automation Schedule");
+    const hasUnsavedChanges = unsavedSections.length > 0;
+
     // Check if a section is enabled for collections
     const isSectionEnabled = (srvId: string, secKey: string): boolean => {
         if (!enabledServersForCollections || enabledServersForCollections.length === 0) return true;
@@ -410,6 +430,12 @@ export function AgregarrStudio() {
                 curationSyncSchedule
             });
             if (res.success) {
+                setBaselineSettings(prev => prev ? ({
+                    ...prev,
+                    curationSyncCollections,
+                    curationSyncReleases,
+                    curationSyncSchedule
+                }) : null);
                 setScheduleSavedMsg(true);
                 setTimeout(() => setScheduleSavedMsg(false), 3000);
             }
@@ -418,6 +444,39 @@ export function AgregarrStudio() {
         } finally {
             setSavingSchedule(false);
         }
+    };
+
+    // Save all unsaved changes
+    const handleSaveAllDirty = async () => {
+        setIsSavingAll(true);
+        try {
+            const res = await saveCurationSettingsAction({
+                curationSyncCollections,
+                curationSyncReleases,
+                curationSyncSchedule
+            });
+            if (res.success) {
+                setBaselineSettings({
+                    curationSyncCollections,
+                    curationSyncReleases,
+                    curationSyncSchedule
+                });
+                setScheduleSavedMsg(true);
+                setTimeout(() => setScheduleSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving Agregarr settings:", e);
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
+    // Discard all unsaved changes
+    const handleDiscardAllDirty = () => {
+        if (!baselineSettings) return;
+        setCurationSyncCollections(baselineSettings.curationSyncCollections);
+        setCurationSyncReleases(baselineSettings.curationSyncReleases);
+        setCurationSyncSchedule(baselineSettings.curationSyncSchedule);
     };
 
     // Run collection sync job now
@@ -540,9 +599,19 @@ export function AgregarrStudio() {
                             console.warn("Failed parsing banner templates:", e);
                         }
                     }
-                    setCurationSyncCollections(settingsRes.curationSyncCollections ?? true);
-                    setCurationSyncReleases(settingsRes.curationSyncReleases ?? true);
-                    setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
+                    const loadedSyncColls = settingsRes.curationSyncCollections ?? true;
+                    const loadedSyncReleases = settingsRes.curationSyncReleases ?? true;
+                    const loadedSchedule = settingsRes.curationSyncSchedule || "every_6_hours";
+
+                    setCurationSyncCollections(loadedSyncColls);
+                    setCurationSyncReleases(loadedSyncReleases);
+                    setCurationSyncSchedule(loadedSchedule);
+                    setBaselineSettings({
+                        curationSyncCollections: loadedSyncColls,
+                        curationSyncReleases: loadedSyncReleases,
+                        curationSyncSchedule: loadedSchedule
+                    });
+
                     setCurationLastRunAt(settingsRes.curationLastRunAt || null);
                     setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
                     if (settingsRes.enabledServersForCollections) {
@@ -2104,7 +2173,7 @@ export function AgregarrStudio() {
             )}
 
             {/* Automated Collections & Hubs Schedule & Automation Card */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
                 <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="space-y-1">
@@ -2114,6 +2183,11 @@ export function AgregarrStudio() {
                                 <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
                                     {curationSyncCollections ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
                                 </Badge>
+                                {isScheduleDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </div>
                             <CardDescription className="text-xs text-slate-400">
                                 Automatically synchronizes dynamic TMDb/Trakt collections, evaluates seasonal date schedules, updates Plex Home screen ranking (#1-#99), and creates Coming Soon release placeholders across enabled libraries.
@@ -2123,10 +2197,14 @@ export function AgregarrStudio() {
                             size="sm"
                             onClick={handleSaveSchedule}
                             disabled={savingSchedule}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer shrink-0"
+                            className={`font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                isScheduleDirty
+                                    ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 animate-pulse"
+                                    : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-950/40"
+                            }`}
                         >
                             {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedule!" : "Save Schedule"}
+                            {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule (Unsaved)" : "Save Schedule"}
                         </Button>
                     </div>
                 </CardHeader>
@@ -2160,12 +2238,12 @@ export function AgregarrStudio() {
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
                                     <Select 
-                                        value={curationSyncSchedule} 
+                                        value={curationSyncSchedule || "every_6_hours"} 
                                         onValueChange={val => setCurationSyncSchedule(val)}
                                         disabled={!curationSyncCollections}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Frequency" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
                                             <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
@@ -2173,6 +2251,8 @@ export function AgregarrStudio() {
                                             <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
                                             <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
                                             <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
+                                            <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
+                                            <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
                                             <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -2821,11 +2901,11 @@ export function AgregarrStudio() {
                                                     <div className="flex items-center gap-1 pl-1 border-l border-slate-800" title="Library Tab Display Mode">
                                                         <span className="text-[10px] text-slate-400 font-semibold px-1">Lib:</span>
                                                         <Select
-                                                            value={currentMode}
+                                                            value={currentMode || "default"}
                                                             onValueChange={(val) => handleUpdateCollectionMode(coll.id, val)}
                                                         >
                                                             <SelectTrigger className="h-6 text-[10px] font-medium bg-slate-950 border-slate-800 px-2 py-0 w-24 text-slate-200">
-                                                                <SelectValue />
+                                                                <SelectValue placeholder="Default" />
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 <SelectItem value="default">Default</SelectItem>
@@ -5811,6 +5891,48 @@ export function AgregarrStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* FLOATING UNSAVED CHANGES BAR */}
+            {hasUnsavedChanges && (
+                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <div className="text-xs">
+                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
+                                    {unsavedSections.join(", ")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleDiscardAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 cursor-pointer"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save All Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -430,6 +430,34 @@ export function KometaStudio() {
     const [runningOverlaySync, setRunningOverlaySync] = useState(false);
     const [overlaySyncResult, setOverlaySyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
 
+    // Baseline Snapshot for Tracking Unsaved Changes
+    const [baselineSettings, setBaselineSettings] = useState<{
+        overlayIncrementalEnabled: boolean;
+        overlayIncrementalSchedule: string;
+        overlayIncrementalBatchSize: number;
+        overlayRecheckEnabled: boolean;
+        overlayRecheckSchedule: string;
+        overlayRecheckScope: string;
+        overlayRecheckBatchSize: number;
+    } | null>(null);
+    const [isSavingAll, setIsSavingAll] = useState(false);
+
+    const isScheduleDirty = Boolean(
+        baselineSettings && (
+            overlayIncrementalEnabled !== baselineSettings.overlayIncrementalEnabled ||
+            overlayIncrementalSchedule !== baselineSettings.overlayIncrementalSchedule ||
+            overlayIncrementalBatchSize !== baselineSettings.overlayIncrementalBatchSize ||
+            overlayRecheckEnabled !== baselineSettings.overlayRecheckEnabled ||
+            overlayRecheckSchedule !== baselineSettings.overlayRecheckSchedule ||
+            overlayRecheckScope !== baselineSettings.overlayRecheckScope ||
+            overlayRecheckBatchSize !== baselineSettings.overlayRecheckBatchSize
+        )
+    );
+
+    const unsavedSections: string[] = [];
+    if (isScheduleDirty) unsavedSections.push("Poster Overlays Dual Automation Schedules");
+    const hasUnsavedChanges = unsavedSections.length > 0;
+
     // Check if a section is enabled for overlays
     const isSectionEnabled = (srvId: string, secKey: string): boolean => {
         if (!enabledServersForOverlays || enabledServersForOverlays.length === 0) return true;
@@ -501,6 +529,15 @@ export function KometaStudio() {
                 overlayRecheckBatchSize
             });
             if (res.success) {
+                setBaselineSettings({
+                    overlayIncrementalEnabled,
+                    overlayIncrementalSchedule,
+                    overlayIncrementalBatchSize,
+                    overlayRecheckEnabled,
+                    overlayRecheckSchedule,
+                    overlayRecheckScope,
+                    overlayRecheckBatchSize
+                });
                 setScheduleSavedMsg(true);
                 setTimeout(() => setScheduleSavedMsg(false), 3000);
             }
@@ -508,6 +545,50 @@ export function KometaStudio() {
             console.error("Failed saving schedule:", e);
         } finally {
             setSavingSchedule(false);
+        }
+    };
+
+    // Discard all unsaved changes across all cards back to baseline
+    const handleDiscardAllDirty = () => {
+        if (!baselineSettings) return;
+        setOverlayIncrementalEnabled(baselineSettings.overlayIncrementalEnabled);
+        setOverlayIncrementalSchedule(baselineSettings.overlayIncrementalSchedule);
+        setOverlayIncrementalBatchSize(baselineSettings.overlayIncrementalBatchSize);
+        setOverlayRecheckEnabled(baselineSettings.overlayRecheckEnabled);
+        setOverlayRecheckSchedule(baselineSettings.overlayRecheckSchedule);
+        setOverlayRecheckScope(baselineSettings.overlayRecheckScope);
+        setOverlayRecheckBatchSize(baselineSettings.overlayRecheckBatchSize);
+    };
+
+    // Save all unsaved changes across all cards in a single batch
+    const handleSaveAllDirty = async () => {
+        if (!hasUnsavedChanges) return;
+        setIsSavingAll(true);
+        try {
+            await saveCurationSettingsAction({
+                overlayIncrementalEnabled,
+                overlayIncrementalSchedule,
+                overlayIncrementalBatchSize,
+                overlayRecheckEnabled,
+                overlayRecheckSchedule,
+                overlayRecheckScope,
+                overlayRecheckBatchSize
+            });
+            setBaselineSettings({
+                overlayIncrementalEnabled,
+                overlayIncrementalSchedule,
+                overlayIncrementalBatchSize,
+                overlayRecheckEnabled,
+                overlayRecheckSchedule,
+                overlayRecheckScope,
+                overlayRecheckBatchSize
+            });
+            setScheduleSavedMsg(true);
+            setTimeout(() => setScheduleSavedMsg(false), 3000);
+        } catch (e) {
+            console.error("Failed saving all unsaved Kometa changes:", e);
+        } finally {
+            setIsSavingAll(false);
         }
     };
 
@@ -682,6 +763,16 @@ export function KometaStudio() {
                     if (settingsRes.enabledServersForOverlays) {
                         setEnabledServersForOverlays(settingsRes.enabledServersForOverlays);
                     }
+
+                    setBaselineSettings({
+                        overlayIncrementalEnabled: settingsRes.overlayIncrementalEnabled ?? true,
+                        overlayIncrementalSchedule: settingsRes.overlayIncrementalSchedule || "every_hour",
+                        overlayIncrementalBatchSize: settingsRes.overlayIncrementalBatchSize !== undefined ? settingsRes.overlayIncrementalBatchSize : 0,
+                        overlayRecheckEnabled: settingsRes.overlayRecheckEnabled ?? true,
+                        overlayRecheckSchedule: settingsRes.overlayRecheckSchedule || "daily_4am",
+                        overlayRecheckScope: settingsRes.overlayRecheckScope || "force_all",
+                        overlayRecheckBatchSize: settingsRes.overlayRecheckBatchSize !== undefined ? settingsRes.overlayRecheckBatchSize : 0
+                    });
                 }
             } catch (err) {
                 console.error("Failed loading Kometa studio data:", err);
@@ -3109,13 +3200,22 @@ export function KometaStudio() {
             )}
 
             {/* Automated Periodic Timer Job & Sync Runner */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                isScheduleDirty 
+                    ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                    : "border-slate-800"
+            }`}>
                 <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="space-y-1">
                             <div className="flex items-center gap-2.5 flex-wrap">
                                 <Clock className="h-5 w-5 text-purple-400" />
                                 <CardTitle className="text-base sm:text-lg font-bold text-white">Poster Overlays Dual Automation Schedules</CardTitle>
+                                {isScheduleDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                                 <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled || overlayRecheckEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
                                     {overlayIncrementalEnabled && overlayRecheckEnabled ? 'Dual Schedules Active' : overlayIncrementalEnabled ? 'Incremental Active' : overlayRecheckEnabled ? 'Recheck Active' : 'Schedules Paused'}
                                 </Badge>
@@ -3128,10 +3228,14 @@ export function KometaStudio() {
                             size="sm"
                             onClick={handleSaveSchedule}
                             disabled={savingSchedule}
-                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer shrink-0"
+                            className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                isScheduleDirty 
+                                    ? "bg-amber-500 hover:bg-amber-400 text-black font-bold animate-pulse shadow-amber-500/20" 
+                                    : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-950/40"
+                            }`}
                         >
                             {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedules!" : "Save Schedules"}
+                            {scheduleSavedMsg ? "Saved Schedules!" : isScheduleDirty ? "Save Schedules *" : "Save Schedules"}
                         </Button>
                     </div>
                 </CardHeader>
@@ -3170,13 +3274,17 @@ export function KometaStudio() {
                                         disabled={!overlayIncrementalEnabled}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Frequency" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
                                             <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
                                             <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
                                             <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
                                             <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="daily_3am">🌙 Daily (3:00 AM)</SelectItem>
+                                            <SelectItem value="daily_4am">🌙 Daily (4:00 AM)</SelectItem>
+                                            <SelectItem value="daily_5am">🌙 Daily (5:00 AM)</SelectItem>
+                                            <SelectItem value="weekly_sun">📅 Weekly (Sunday)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -3189,7 +3297,7 @@ export function KometaStudio() {
                                         disabled={!overlayIncrementalEnabled}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-purple-300 font-semibold">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Batch Size" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
                                             <SelectItem value="0">📦 All Changed Items (Default)</SelectItem>
@@ -3252,11 +3360,16 @@ export function KometaStudio() {
                                         disabled={!overlayRecheckEnabled}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Frequency" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="daily_4am">🌙 Daily (4:00 AM)</SelectItem>
+                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
+                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
+                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
                                             <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="daily_3am">🌙 Daily (3:00 AM)</SelectItem>
+                                            <SelectItem value="daily_4am">🌙 Daily (4:00 AM)</SelectItem>
+                                            <SelectItem value="daily_5am">🌙 Daily (5:00 AM)</SelectItem>
                                             <SelectItem value="weekly_sun">📅 Weekly (Sunday)</SelectItem>
                                             <SelectItem value="monthly_1st">🗓️ Monthly (1st)</SelectItem>
                                         </SelectContent>
@@ -3271,7 +3384,7 @@ export function KometaStudio() {
                                         disabled={!overlayRecheckEnabled}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Recheck Scope" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
                                             <SelectItem value="force_all">🔄 All Items (Full Library)</SelectItem>
@@ -3290,7 +3403,7 @@ export function KometaStudio() {
                                         disabled={!overlayRecheckEnabled}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-indigo-300 font-semibold">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Batch Size" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
                                             <SelectItem value="0">📦 All Items (Default)</SelectItem>
@@ -5837,6 +5950,48 @@ export function KometaStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* FLOATING UNSAVED CHANGES BAR */}
+            {hasUnsavedChanges && (
+                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <div className="text-xs">
+                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
+                                    {unsavedSections.join(", ")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleDiscardAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 cursor-pointer"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save All Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

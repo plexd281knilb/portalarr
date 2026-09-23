@@ -32,6 +32,7 @@ import {
     SlidersHorizontal,
     Settings2,
     Save,
+    RotateCcw,
     HardDrive
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,36 @@ export function TaggingStudio() {
         appliedTagsSummary?: Record<string, number>;
         clearedCount?: number;
     } | null>(null);
+
+    // Baseline Snapshot for Tracking Unsaved Changes
+    const [baselineSettings, setBaselineSettings] = useState<{
+        curationSyncParentalTags: boolean;
+        curationSyncSchedule: string;
+        parentalOptions: ParentalTaggingOptions;
+    } | null>(null);
+    const [isSavingAll, setIsSavingAll] = useState(false);
+
+    const isScheduleDirty = Boolean(
+        baselineSettings && (
+            curationSyncParentalTags !== baselineSettings.curationSyncParentalTags ||
+            curationSyncSchedule !== baselineSettings.curationSyncSchedule
+        )
+    );
+
+    const isParentalConfigDirty = Boolean(
+        baselineSettings && (
+            parentalOptions.minSeverity !== baselineSettings.parentalOptions.minSeverity ||
+            parentalOptions.format !== baselineSettings.parentalOptions.format ||
+            parentalOptions.prefix !== baselineSettings.parentalOptions.prefix ||
+            parentalOptions.target !== baselineSettings.parentalOptions.target ||
+            JSON.stringify(parentalOptions.categories?.slice().sort()) !== JSON.stringify(baselineSettings.parentalOptions.categories?.slice().sort())
+        )
+    );
+
+    const unsavedSections: string[] = [];
+    if (isScheduleDirty) unsavedSections.push("Automated Tagging Schedule");
+    if (isParentalConfigDirty) unsavedSections.push("IMDb Parental Advisory Rules");
+    const hasUnsavedChanges = unsavedSections.length > 0;
 
     // Library Advisory Items
     const [advisoryItems, setAdvisoryItems] = useState<Array<{
@@ -218,6 +249,11 @@ export function TaggingStudio() {
                 curationSyncSchedule
             });
             if (res.success) {
+                setBaselineSettings(prev => prev ? ({
+                    ...prev,
+                    curationSyncParentalTags,
+                    curationSyncSchedule
+                }) : null);
                 setScheduleSavedMsg(true);
                 setTimeout(() => setScheduleSavedMsg(false), 3000);
             }
@@ -226,6 +262,44 @@ export function TaggingStudio() {
         } finally {
             setSavingSchedule(false);
         }
+    };
+
+    // Save all unsaved changes across tagging settings
+    const handleSaveAllDirty = async () => {
+        setIsSavingAll(true);
+        try {
+            const res = await saveCurationSettingsAction({
+                curationSyncParentalTags,
+                curationSyncSchedule,
+                parentalTaggingEnabled: curationSyncParentalTags,
+                parentalTagFormat: parentalOptions.format,
+                parentalTagPrefix: parentalOptions.prefix,
+                parentalTagTarget: parentalOptions.target,
+                parentalMinSeverity: parentalOptions.minSeverity,
+                parentalCategories: parentalOptions.categories
+            });
+            if (res.success) {
+                setBaselineSettings({
+                    curationSyncParentalTags,
+                    curationSyncSchedule,
+                    parentalOptions: { ...parentalOptions }
+                });
+                setScheduleSavedMsg(true);
+                setTimeout(() => setScheduleSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving tagging settings:", e);
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
+    // Discard all unsaved changes
+    const handleDiscardAllDirty = () => {
+        if (!baselineSettings) return;
+        setCurationSyncParentalTags(baselineSettings.curationSyncParentalTags);
+        setCurationSyncSchedule(baselineSettings.curationSyncSchedule);
+        setParentalOptions({ ...baselineSettings.parentalOptions });
     };
 
     // Run Tagging Sync Now
@@ -277,8 +351,25 @@ export function TaggingStudio() {
 
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
-                    setCurationSyncParentalTags(settingsRes.parentalTaggingEnabled ?? true);
-                    setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
+                    const loadedSyncTags = settingsRes.curationSyncParentalTags ?? settingsRes.parentalTaggingEnabled ?? true;
+                    const loadedSchedule = settingsRes.curationSyncSchedule || "every_6_hours";
+                    const loadedParentalOpts: ParentalTaggingOptions = {
+                        minSeverity: (settingsRes.parentalMinSeverity as any) || "Mild",
+                        format: (settingsRes.parentalTagFormat as any) || "prefix_category_severity",
+                        prefix: settingsRes.parentalTagPrefix || (settingsRes as any).parentalPrefix || "IMDb",
+                        target: (settingsRes.parentalTagTarget as any) || "labels",
+                        categories: settingsRes.parentalCategories || ["nudity", "violence", "profanity", "alcohol", "frightening"]
+                    };
+
+                    setCurationSyncParentalTags(loadedSyncTags);
+                    setCurationSyncSchedule(loadedSchedule);
+                    setParentalOptions(loadedParentalOpts);
+                    setBaselineSettings({
+                        curationSyncParentalTags: loadedSyncTags,
+                        curationSyncSchedule: loadedSchedule,
+                        parentalOptions: loadedParentalOpts
+                    });
+
                     setCurationLastRunAt(settingsRes.curationLastRunAt || null);
                     setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
                     if (settingsRes.enabledServersForTagging) {
@@ -721,7 +812,7 @@ export function TaggingStudio() {
             )}
 
             {/* Automated Tagging & Parental Guides Schedule & Automation Card */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
                 <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="space-y-1">
@@ -734,6 +825,11 @@ export function TaggingStudio() {
                                 <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
                                     Target: {parentalOptions.target === "labels" ? "Plex Sharing Labels" : "Plex Genres"}
                                 </Badge>
+                                {isScheduleDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </div>
                             <CardDescription className="text-xs text-slate-400">
                                 Automatically fetches IMDb parental guide advisories and synchronizes content rating labels, genres, and custom tags across enabled Plex libraries on a recurring schedule.
@@ -743,10 +839,14 @@ export function TaggingStudio() {
                             size="sm"
                             onClick={handleSaveSchedule}
                             disabled={savingSchedule}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md shadow-emerald-950/40 cursor-pointer shrink-0"
+                            className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                isScheduleDirty 
+                                    ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 animate-pulse" 
+                                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40"
+                            }`}
                         >
                             {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedule!" : "Save Schedule"}
+                            {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule (Unsaved)" : "Save Schedule"}
                         </Button>
                     </div>
                 </CardHeader>
@@ -780,19 +880,21 @@ export function TaggingStudio() {
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-slate-400">Sync Frequency</label>
                                     <Select 
-                                        value={curationSyncSchedule} 
+                                        value={curationSyncSchedule || "every_6_hours"} 
                                         onValueChange={val => setCurationSyncSchedule(val)}
                                         disabled={!curationSyncParentalTags}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Frequency" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
                                             <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
                                             <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
                                             <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
                                             <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
                                             <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
+                                            <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
                                             <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -969,17 +1071,22 @@ export function TaggingStudio() {
             {subTab === "parental" && (
                 <div className="space-y-6">
                     {/* Action & Configuration Card */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl">
+                    <Card className={`bg-slate-900/90 shadow-xl transition-all duration-300 ${isParentalConfigDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
                         <CardHeader className="pb-4 border-b border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                 <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                             <Shield className="h-5 w-5" />
                                         </div>
                                         <CardTitle className="text-lg font-bold text-white">
                                             IMDb Content Advisory &amp; Parental Tagging
                                         </CardTitle>
+                                        {isParentalConfigDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
                                     </div>
                                     <CardDescription className="text-xs text-slate-400">
                                         Scan media items, query IMDb parental ratings via AI/TMDb, and tag items with standardized content advisory labels.
@@ -987,6 +1094,19 @@ export function TaggingStudio() {
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-start sm:justify-end">
+                                    {isParentalConfigDirty && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={handleSaveAllDirty}
+                                            disabled={isSavingAll}
+                                            className="h-9 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold shadow-md shadow-amber-500/20 animate-pulse cursor-pointer"
+                                        >
+                                            {isSavingAll ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                                            Save Settings
+                                        </Button>
+                                    )}
+
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -1033,7 +1153,7 @@ export function TaggingStudio() {
                                         onValueChange={(val: any) => setParentalOptions(prev => ({ ...prev, minSeverity: val }))}
                                     >
                                         <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Severity" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
                                             <SelectItem value="Mild" className="text-xs">Mild+ (Mild, Moderate, Severe)</SelectItem>
@@ -1052,7 +1172,7 @@ export function TaggingStudio() {
                                         onValueChange={(val: any) => setParentalOptions(prev => ({ ...prev, target: val }))}
                                     >
                                         <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Destination" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
                                             <SelectItem value="labels" className="text-xs">Plex Labels (For Account Restrictions)</SelectItem>
@@ -1071,7 +1191,7 @@ export function TaggingStudio() {
                                         onValueChange={(val: any) => setParentalOptions(prev => ({ ...prev, format: val }))}
                                     >
                                         <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-xs font-semibold text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Format" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
                                             <SelectItem value="prefix_category_severity" className="text-xs">IMDb: Nudity [Severe]</SelectItem>
@@ -1737,6 +1857,48 @@ export function TaggingStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* FLOATING UNSAVED CHANGES BAR */}
+            {hasUnsavedChanges && (
+                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <div className="text-xs">
+                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
+                                    {unsavedSections.join(", ")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleDiscardAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 cursor-pointer"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save All Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

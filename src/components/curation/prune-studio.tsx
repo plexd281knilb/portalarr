@@ -286,6 +286,20 @@ export function PruneStudio() {
                     pruneDaysNotice: Number(pruneDaysNoticeSetting),
                     pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
                 }));
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                    pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                    pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                    pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                    pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                    pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
+                    pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                    pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                    pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
+                    pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                    pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
+                } : null);
                 setThresholdsSavedMsg(true);
                 setTimeout(() => setThresholdsSavedMsg(false), 3000);
             }
@@ -364,6 +378,13 @@ export function PruneStudio() {
                 enableAutoPruneDeletion
             });
             if (res.success) {
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    curationSyncPruning,
+                    curationSyncSchedule,
+                    pruneDryRun,
+                    enableAutoPruneDeletion
+                } : null);
                 setScheduleSavedMsg(true);
                 setTimeout(() => setScheduleSavedMsg(false), 3000);
             }
@@ -371,6 +392,114 @@ export function PruneStudio() {
             console.error("Failed saving schedule:", e);
         } finally {
             setSavingSchedule(false);
+        }
+    };
+
+    // Discard all unsaved changes across all cards back to baseline
+    const handleDiscardAllDirty = () => {
+        if (!baselineSettings) return;
+        setCurationSyncPruning(baselineSettings.curationSyncPruning);
+        setCurationSyncSchedule(baselineSettings.curationSyncSchedule);
+        setPruneDryRun(baselineSettings.pruneDryRun);
+        setEnableAutoPruneDeletion(baselineSettings.enableAutoPruneDeletion);
+
+        setLeavingSoonDiskThreshold(baselineSettings.leavingSoonDiskThreshold);
+        setPruneWarningThresholdPercent(baselineSettings.pruneWarningThresholdPercent);
+        setPruneDangerThresholdPercent(baselineSettings.pruneDangerThresholdPercent);
+        setPruneTargetHeadroomGb(baselineSettings.pruneTargetHeadroomGb);
+        setPruneEvaluateSeasonsSetting(baselineSettings.pruneEvaluateSeasons);
+        setPruneDeleteFromArrSetting(baselineSettings.pruneDeleteFromArr);
+        setPruneMinAgeDaysSetting(baselineSettings.pruneMinAgeDays);
+        setPruneUnwatchedMinAgeDaysSetting(baselineSettings.pruneUnwatchedMinAgeDays);
+        setPruneWatchedMinAgeDaysSetting(baselineSettings.pruneWatchedMinAgeDays);
+        setPruneDaysNoticeSetting(baselineSettings.pruneDaysNotice);
+        setPruneUnwatchedOnlySetting(baselineSettings.pruneUnwatchedOnly);
+
+        setSimBannerType(baselineSettings.simBannerType);
+        setSimBannerText(baselineSettings.simBannerText);
+        setSimBannerTheme(baselineSettings.simBannerTheme);
+        setSimBannerPosition(baselineSettings.simBannerPosition as any);
+        setSimBannerFontSize(baselineSettings.simBannerFontSize);
+        setBannerTemplates(baselineSettings.bannerTemplates);
+
+        if (baselineSettings.selectedGlancesDiskId) {
+            setSelectedGlancesDiskId(baselineSettings.selectedGlancesDiskId);
+        }
+    };
+
+    // Save all unsaved changes across all cards in a single batch
+    const handleSaveAllDirty = async () => {
+        if (!hasUnsavedChanges) return;
+        setIsSavingAll(true);
+        try {
+            const payload: any = {};
+            if (isScheduleDirty) {
+                payload.curationSyncPruning = curationSyncPruning;
+                payload.curationSyncSchedule = curationSyncSchedule;
+                payload.pruneDryRun = pruneDryRun;
+                payload.enableAutoPruneDeletion = enableAutoPruneDeletion;
+            }
+            if (isThresholdsDirty) {
+                payload.leavingSoonDiskThreshold = Number(leavingSoonDiskThreshold);
+                payload.pruneWarningThresholdPercent = Number(pruneWarningThresholdPercent);
+                payload.pruneDangerThresholdPercent = Number(pruneDangerThresholdPercent);
+                payload.pruneTargetHeadroomGb = Number(pruneTargetHeadroomGb);
+                payload.pruneEvaluateSeasons = Boolean(pruneEvaluateSeasonsSetting);
+                payload.pruneDeleteFromArr = Boolean(pruneDeleteFromArrSetting);
+                payload.pruneMinAgeDays = Number(pruneMinAgeDaysSetting);
+                payload.pruneUnwatchedMinAgeDays = Number(pruneUnwatchedMinAgeDaysSetting);
+                payload.pruneWatchedMinAgeDays = Number(pruneWatchedMinAgeDaysSetting);
+                payload.pruneDaysNotice = Number(pruneDaysNoticeSetting);
+                payload.pruneUnwatchedOnly = Boolean(pruneUnwatchedOnlySetting);
+            }
+            if (isBannersDirty) {
+                payload.pruneBannerType = simBannerType;
+                payload.pruneBannerPosition = simBannerPosition;
+                payload.pruneBannerTheme = simBannerTheme;
+                payload.pruneBannerText = simBannerText;
+                payload.pruneBannerFontSize = simBannerFontSize;
+                payload.pruneBannerTemplates = JSON.stringify(bannerTemplates);
+            }
+            if (Object.keys(payload).length > 0) {
+                await saveCurationSettingsAction(payload);
+            }
+            if (isGlancesDiskDirty && selectedGlancesDiskId) {
+                await saveSelectedGlancesDiskAction(selectedGlancesDiskId);
+            }
+            setBaselineSettings({
+                curationSyncPruning,
+                curationSyncSchedule,
+                pruneDryRun,
+                enableAutoPruneDeletion,
+                leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
+                pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
+                pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting),
+                simBannerType,
+                simBannerText,
+                simBannerTheme,
+                simBannerPosition,
+                simBannerFontSize,
+                bannerTemplates,
+                selectedGlancesDiskId
+            });
+            setScheduleSavedMsg(true);
+            setThresholdsSavedMsg(true);
+            setTimeout(() => {
+                setScheduleSavedMsg(false);
+                setThresholdsSavedMsg(false);
+            }, 3000);
+        } catch (e) {
+            console.error("Failed saving all unsaved prune changes:", e);
+        } finally {
+            setIsSavingAll(false);
         }
     };
 
@@ -540,6 +669,81 @@ export function PruneStudio() {
     const [simPreviewLoading, setSimPreviewLoading] = useState<boolean>(false);
     const [savingBannerConfig, setSavingBannerConfig] = useState<boolean>(false);
     const [bannerConfigSavedMsg, setBannerConfigSavedMsg] = useState<string | null>(null);
+
+    // Baseline Snapshot for Tracking Unsaved Changes
+    const [baselineSettings, setBaselineSettings] = useState<{
+        curationSyncPruning: boolean;
+        curationSyncSchedule: string;
+        pruneDryRun: boolean;
+        enableAutoPruneDeletion: boolean;
+        leavingSoonDiskThreshold: number;
+        pruneWarningThresholdPercent: number;
+        pruneDangerThresholdPercent: number;
+        pruneTargetHeadroomGb: number;
+        pruneEvaluateSeasons: boolean;
+        pruneDeleteFromArr: boolean;
+        pruneMinAgeDays: number;
+        pruneUnwatchedMinAgeDays: number;
+        pruneWatchedMinAgeDays: number;
+        pruneDaysNotice: number;
+        pruneUnwatchedOnly: boolean;
+        simBannerType: string;
+        simBannerText: string;
+        simBannerTheme: string;
+        simBannerPosition: string;
+        simBannerFontSize: number;
+        bannerTemplates: Record<string, any>;
+        selectedGlancesDiskId: string;
+    } | null>(null);
+    const [isSavingAll, setIsSavingAll] = useState(false);
+
+    const isScheduleDirty = Boolean(
+        baselineSettings && (
+            curationSyncPruning !== baselineSettings.curationSyncPruning ||
+            curationSyncSchedule !== baselineSettings.curationSyncSchedule ||
+            pruneDryRun !== baselineSettings.pruneDryRun ||
+            enableAutoPruneDeletion !== baselineSettings.enableAutoPruneDeletion
+        )
+    );
+
+    const isThresholdsDirty = Boolean(
+        baselineSettings && (
+            Number(leavingSoonDiskThreshold) !== baselineSettings.leavingSoonDiskThreshold ||
+            Number(pruneWarningThresholdPercent) !== baselineSettings.pruneWarningThresholdPercent ||
+            Number(pruneDangerThresholdPercent) !== baselineSettings.pruneDangerThresholdPercent ||
+            Number(pruneTargetHeadroomGb) !== baselineSettings.pruneTargetHeadroomGb ||
+            Boolean(pruneEvaluateSeasonsSetting) !== baselineSettings.pruneEvaluateSeasons ||
+            Boolean(pruneDeleteFromArrSetting) !== baselineSettings.pruneDeleteFromArr ||
+            Number(pruneMinAgeDaysSetting) !== baselineSettings.pruneMinAgeDays ||
+            Number(pruneUnwatchedMinAgeDaysSetting) !== baselineSettings.pruneUnwatchedMinAgeDays ||
+            Number(pruneWatchedMinAgeDaysSetting) !== baselineSettings.pruneWatchedMinAgeDays ||
+            Number(pruneDaysNoticeSetting) !== baselineSettings.pruneDaysNotice ||
+            Boolean(pruneUnwatchedOnlySetting) !== baselineSettings.pruneUnwatchedOnly
+        )
+    );
+
+    const isBannersDirty = Boolean(
+        baselineSettings && (
+            simBannerType !== baselineSettings.simBannerType ||
+            simBannerText !== baselineSettings.simBannerText ||
+            simBannerTheme !== baselineSettings.simBannerTheme ||
+            simBannerPosition !== baselineSettings.simBannerPosition ||
+            simBannerFontSize !== baselineSettings.simBannerFontSize ||
+            JSON.stringify(bannerTemplates) !== JSON.stringify(baselineSettings.bannerTemplates)
+        )
+    );
+
+    const isGlancesDiskDirty = Boolean(
+        baselineSettings && selectedGlancesDiskId &&
+        selectedGlancesDiskId !== baselineSettings.selectedGlancesDiskId
+    );
+
+    const unsavedSections: string[] = [];
+    if (isScheduleDirty) unsavedSections.push("Automated Pruning Schedule");
+    if (isThresholdsDirty) unsavedSections.push("Headroom & Retention Thresholds");
+    if (isBannersDirty) unsavedSections.push("Leaving Soon Banner Template");
+    if (isGlancesDiskDirty) unsavedSections.push("Glances Storage Disk");
+    const hasUnsavedChanges = unsavedSections.length > 0;
 
     // Effective Banner Config Resolver for any Preset ID
     const getEffectivePruneBannerConfig = (presetId: string, customTemplates = bannerTemplates) => {
@@ -822,6 +1026,15 @@ export function PruneStudio() {
                 pruneBannerTemplates: JSON.stringify(updatedTemplates)
             });
             if (res.success) {
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    simBannerType,
+                    simBannerText,
+                    simBannerTheme,
+                    simBannerPosition,
+                    simBannerFontSize,
+                    bannerTemplates: updatedTemplates
+                } : null);
                 const currentPreset = PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType);
                 setBannerConfigSavedMsg(`✓ Saved Template for "${currentPreset?.label || simBannerType}"!`);
                 setTimeout(() => setBannerConfigSavedMsg(null), 3500);
@@ -1102,6 +1315,39 @@ export function PruneStudio() {
                         simTemplateReason,
                         simTemplateStatus
                     );
+
+                    let parsedTemplates: any = {};
+                    if (settingsRes.pruneBannerTemplates) {
+                        try {
+                            parsedTemplates = typeof settingsRes.pruneBannerTemplates === "string"
+                                ? JSON.parse(settingsRes.pruneBannerTemplates)
+                                : settingsRes.pruneBannerTemplates;
+                        } catch {}
+                    }
+                    setBaselineSettings({
+                        curationSyncPruning: settingsRes.curationSyncPruning ?? true,
+                        curationSyncSchedule: settingsRes.curationSyncSchedule || "daily_5am",
+                        pruneDryRun: settingsRes.pruneDryRun ?? true,
+                        enableAutoPruneDeletion: settingsRes.enableAutoPruneDeletion ?? false,
+                        leavingSoonDiskThreshold: settingsRes.leavingSoonDiskThreshold ?? 15,
+                        pruneWarningThresholdPercent: settingsRes.pruneWarningThresholdPercent ?? 85,
+                        pruneDangerThresholdPercent: settingsRes.pruneDangerThresholdPercent ?? 95,
+                        pruneTargetHeadroomGb: settingsRes.pruneTargetHeadroomGb ?? 100,
+                        pruneEvaluateSeasons: settingsRes.pruneEvaluateSeasons ?? true,
+                        pruneDeleteFromArr: settingsRes.pruneDeleteFromArr ?? false,
+                        pruneMinAgeDays: settingsRes.pruneMinAgeDays ?? 90,
+                        pruneUnwatchedMinAgeDays: settingsRes.pruneUnwatchedMinAgeDays ?? settingsRes.pruneMinAgeDays ?? 90,
+                        pruneWatchedMinAgeDays: settingsRes.pruneWatchedMinAgeDays ?? 180,
+                        pruneDaysNotice: settingsRes.pruneDaysNotice ?? 14,
+                        pruneUnwatchedOnly: settingsRes.pruneUnwatchedOnly ?? true,
+                        simBannerType: activeBannerType,
+                        simBannerText: initText,
+                        simBannerTheme: initTheme,
+                        simBannerPosition: initPos,
+                        simBannerFontSize: initFontSize,
+                        bannerTemplates: parsedTemplates || {},
+                        selectedGlancesDiskId: savedDiskId || ""
+                    });
                 }
 
                 const vaultRes = await getArtBackupAndBadgeStatsAction();
@@ -1150,6 +1396,10 @@ export function PruneStudio() {
         try {
             const res = await saveSelectedGlancesDiskAction(selectedGlancesDiskId);
             if (res.success) {
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    selectedGlancesDiskId
+                } : null);
                 setGlancesDiskSavedMsg(true);
                 setTimeout(() => setGlancesDiskSavedMsg(false), 3000);
             }
@@ -1594,13 +1844,22 @@ export function PruneStudio() {
             )}
 
             {/* Automated Prune & Leaving Soon Schedule & Automation Card */}
-            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                isScheduleDirty 
+                    ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                    : "border-slate-800"
+            }`}>
                 <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="space-y-1">
                             <div className="flex items-center gap-2.5 flex-wrap">
                                 <Clock className="h-5 w-5 text-rose-400" />
                                 <CardTitle className="text-base sm:text-lg font-bold text-white">Media Pruning &amp; Retention Automation Schedule</CardTitle>
+                                {isScheduleDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                                 <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
                                     {curationSyncPruning ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
                                 </Badge>
@@ -1622,10 +1881,14 @@ export function PruneStudio() {
                             size="sm"
                             onClick={handleSaveSchedule}
                             disabled={savingSchedule}
-                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
+                            className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                isScheduleDirty 
+                                    ? "bg-amber-500 hover:bg-amber-400 text-black font-bold animate-pulse shadow-amber-500/20" 
+                                    : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40"
+                            }`}
                         >
                             {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedule!" : "Save Schedule"}
+                            {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule *" : "Save Schedule"}
                         </Button>
                     </div>
                 </CardHeader>
@@ -1664,11 +1927,15 @@ export function PruneStudio() {
                                         disabled={!curationSyncPruning}
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select Frequency" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="every_hour">⚡ Every Hour</SelectItem>
+                                            <SelectItem value="every_3_hours">🔄 Every 3 Hours</SelectItem>
                                             <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
                                             <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
+                                            <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
                                             <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
                                             <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
                                         </SelectContent>
@@ -2117,14 +2384,25 @@ export function PruneStudio() {
                     </Card>
 
                     {/* Leaving Soon Banner & Poster Live Simulator */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                        isBannersDirty 
+                            ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                            : "border-slate-800"
+                    }`}>
                         <CardHeader className="p-4 border-b border-slate-800/80">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <div className="space-y-0.5">
-                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                        <Sparkles className="h-4 w-4 text-rose-400" />
-                                        <span>Leaving Soon Banner &amp; Poster Live Simulator</span>
-                                    </CardTitle>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                            <Sparkles className="h-4 w-4 text-rose-400" />
+                                            <span>Leaving Soon Banner &amp; Poster Live Simulator</span>
+                                        </CardTitle>
+                                        {isBannersDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
                                     <CardDescription className="text-xs text-slate-400">
                                         Customize overlay ribbons and banners applied to items in the Leaving Soon collection, test dynamic template variables, or test on real media from your Plex libraries.
                                     </CardDescription>
@@ -2234,7 +2512,7 @@ export function PruneStudio() {
                                             onValueChange={handleSelectPruneBannerPreset}
                                         >
                                             <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
-                                                <SelectValue />
+                                                <SelectValue placeholder="Select Preset" />
                                             </SelectTrigger>
                                             <SelectContent className="max-h-64">
                                                 {PRUNE_BANNER_PRESETS.map(p => {
@@ -2300,7 +2578,7 @@ export function PruneStudio() {
                                                 onValueChange={handlePruneBannerThemeChange}
                                             >
                                                 <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
-                                                    <SelectValue />
+                                                    <SelectValue placeholder="Select Theme" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="crimson-red">🔴 Crimson Red</SelectItem>
@@ -2322,7 +2600,7 @@ export function PruneStudio() {
                                                 onValueChange={(val: any) => handlePruneBannerPositionChange(val)}
                                             >
                                                 <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
-                                                    <SelectValue />
+                                                    <SelectValue placeholder="Select Position" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="bottom">Bottom Overlay</SelectItem>
@@ -2488,10 +2766,14 @@ export function PruneStudio() {
                                                 size="sm"
                                                 disabled={savingBannerConfig}
                                                 onClick={handleSaveDefaultPruneBannerTemplate}
-                                                className="h-8 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold gap-1.5 shadow-md shadow-rose-950/50 cursor-pointer"
+                                                className={`h-8 text-xs font-bold gap-1.5 shadow-md cursor-pointer transition-all ${
+                                                    isBannersDirty
+                                                        ? "bg-amber-500 hover:bg-amber-400 text-black animate-pulse shadow-amber-500/20"
+                                                        : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/50"
+                                                }`}
                                             >
                                                 {savingBannerConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                                <span>Save Banner Template</span>
+                                                <span>{isBannersDirty ? "Save Banner Template *" : "Save Banner Template"}</span>
                                             </Button>
                                         </div>
                                     </div>
@@ -2611,7 +2893,7 @@ export function PruneStudio() {
                                     onValueChange={(val: any) => setSimSortBy(val)}
                                 >
                                     <SelectTrigger className="bg-slate-900 border-slate-700 h-8 text-xs text-slate-200">
-                                        <SelectValue />
+                                        <SelectValue placeholder="Select Sort Strategy" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="combined_oldest">⚡ Dual-Lane Cascade (Never Watched → Oldest Watched)</SelectItem>
@@ -2635,7 +2917,7 @@ export function PruneStudio() {
                                     onValueChange={(val) => setSimOldestLimit(parseInt(val, 10))}
                                 >
                                     <SelectTrigger className="bg-slate-900 border-slate-700 h-8 text-xs font-mono text-slate-200">
-                                        <SelectValue />
+                                        <SelectValue placeholder="Limit" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="10">Show 10 Files</SelectItem>
@@ -2817,7 +3099,7 @@ export function PruneStudio() {
                                                     onValueChange={(val) => setSimGracePeriodDays(parseInt(val, 10))}
                                                 >
                                                     <SelectTrigger className="bg-transparent border-0 h-6 text-xs font-mono font-bold text-amber-300 p-0 focus:ring-0 w-[80px]">
-                                                        <SelectValue />
+                                                        <SelectValue placeholder="Grace Period" />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="7">7 Days</SelectItem>
@@ -3204,11 +3486,22 @@ export function PruneStudio() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Storage Thresholds & Pruning Policy */}
-                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Sliders className="h-5 w-5 text-rose-400" />
-                                <span>Storage &amp; Auto-Pruning Thresholds</span>
-                            </CardTitle>
+                        <Card className={`bg-slate-900/90 shadow-xl p-6 space-y-4 transition-all duration-300 ${
+                            isThresholdsDirty 
+                                ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                                : "border-slate-800"
+                        }`}>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                    <Sliders className="h-5 w-5 text-rose-400" />
+                                    <span>Storage &amp; Auto-Pruning Thresholds</span>
+                                </CardTitle>
+                                {isThresholdsDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
                             <p className="text-xs text-slate-400">
                                 Configure two-tier capacity thresholds (Warning vs Danger), target reclamation headroom, and automated pruning retention policies.
                             </p>
@@ -3448,10 +3741,14 @@ export function PruneStudio() {
                                         size="sm"
                                         disabled={savingThresholds}
                                         onClick={handleSaveThresholds}
-                                        className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5 shadow-md shadow-rose-950/30 cursor-pointer"
+                                        className={`font-bold text-xs gap-1.5 shadow-md cursor-pointer transition-all ${
+                                            isThresholdsDirty
+                                                ? "bg-amber-500 hover:bg-amber-400 text-black animate-pulse shadow-amber-500/20"
+                                                : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/30"
+                                        }`}
                                     >
                                         {savingThresholds ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                        <span>Save Thresholds</span>
+                                        <span>{isThresholdsDirty ? "Save Thresholds *" : "Save Thresholds"}</span>
                                     </Button>
                                     {thresholdsSavedMsg && <span className="text-xs text-emerald-400 font-bold">✓ Saved!</span>}
                                 </div>
@@ -3833,6 +4130,48 @@ export function PruneStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* FLOATING UNSAVED CHANGES BAR */}
+            {hasUnsavedChanges && (
+                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <div className="text-xs">
+                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
+                                    {unsavedSections.join(", ")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleDiscardAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 cursor-pointer"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save All Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
