@@ -233,6 +233,19 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "tmdbApiKey" TEXT,
                     "traktClientId" TEXT,
                     "mdblistApiKey" TEXT,
+                    "seerrAutoApproveAll" BOOLEAN NOT NULL DEFAULT 1,
+                    "seerrDefaultMovieProfileId" INTEGER,
+                    "seerrDefaultTvProfileId" INTEGER,
+                    "seerrDefaultMovieRootFolder" TEXT,
+                    "seerrDefaultTvRootFolder" TEXT,
+                    "seerrDefaultMovieAppId" TEXT,
+                    "seerrDefaultTvAppId" TEXT,
+                    "seerrDefaultMovie4kAppId" TEXT,
+                    "seerrDefaultTv4kAppId" TEXT,
+                    "seerrQuotaMovies" INTEGER DEFAULT 10,
+                    "seerrQuotaTv" INTEGER DEFAULT 10,
+                    "seerrQuotaDays" INTEGER DEFAULT 7,
+                    "seerrNotificationOnAvailable" BOOLEAN NOT NULL DEFAULT 1,
                     "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1,
                     "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1,
                     "leavingSoonDiskThreshold" INTEGER DEFAULT 15,
@@ -439,7 +452,20 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["overlayRecheckBatchSize", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckBatchSize" INTEGER DEFAULT 200;`],
                 ["overlayRecheckLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckLastRunAt" DATETIME;`],
                 ["pruneUnwatchedMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneUnwatchedMinAgeDays" INTEGER DEFAULT 90;`],
-                ["pruneWatchedMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneWatchedMinAgeDays" INTEGER DEFAULT 180;`]
+                ["pruneWatchedMinAgeDays", `ALTER TABLE "Settings" ADD COLUMN "pruneWatchedMinAgeDays" INTEGER DEFAULT 180;`],
+                ["seerrAutoApproveAll", `ALTER TABLE "Settings" ADD COLUMN "seerrAutoApproveAll" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["seerrDefaultMovieProfileId", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultMovieProfileId" INTEGER;`],
+                ["seerrDefaultTvProfileId", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultTvProfileId" INTEGER;`],
+                ["seerrDefaultMovieRootFolder", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultMovieRootFolder" TEXT;`],
+                ["seerrDefaultTvRootFolder", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultTvRootFolder" TEXT;`],
+                ["seerrDefaultMovieAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultMovieAppId" TEXT;`],
+                ["seerrDefaultTvAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultTvAppId" TEXT;`],
+                ["seerrDefaultMovie4kAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultMovie4kAppId" TEXT;`],
+                ["seerrDefaultTv4kAppId", `ALTER TABLE "Settings" ADD COLUMN "seerrDefaultTv4kAppId" TEXT;`],
+                ["seerrQuotaMovies", `ALTER TABLE "Settings" ADD COLUMN "seerrQuotaMovies" INTEGER DEFAULT 10;`],
+                ["seerrQuotaTv", `ALTER TABLE "Settings" ADD COLUMN "seerrQuotaTv" INTEGER DEFAULT 10;`],
+                ["seerrQuotaDays", `ALTER TABLE "Settings" ADD COLUMN "seerrQuotaDays" INTEGER DEFAULT 7;`],
+                ["seerrNotificationOnAvailable", `ALTER TABLE "Settings" ADD COLUMN "seerrNotificationOnAvailable" BOOLEAN NOT NULL DEFAULT 1;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -483,7 +509,14 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["referralCode", `ALTER TABLE "User" ADD COLUMN "referralCode" TEXT;`],
                 ["referredByUserId", `ALTER TABLE "User" ADD COLUMN "referredByUserId" TEXT;`],
                 ["convertedAt", `ALTER TABLE "User" ADD COLUMN "convertedAt" DATETIME;`],
-                ["lastLogin", `ALTER TABLE "User" ADD COLUMN "lastLogin" DATETIME;`]
+                ["lastLogin", `ALTER TABLE "User" ADD COLUMN "lastLogin" DATETIME;`],
+                ["canRequest", `ALTER TABLE "User" ADD COLUMN "canRequest" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["canRequest4k", `ALTER TABLE "User" ADD COLUMN "canRequest4k" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["autoApproveMovies", `ALTER TABLE "User" ADD COLUMN "autoApproveMovies" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["autoApproveTv", `ALTER TABLE "User" ADD COLUMN "autoApproveTv" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["requestLimitMovies", `ALTER TABLE "User" ADD COLUMN "requestLimitMovies" INTEGER DEFAULT 10;`],
+                ["requestLimitTv", `ALTER TABLE "User" ADD COLUMN "requestLimitTv" INTEGER DEFAULT 10;`],
+                ["requestLimitDays", `ALTER TABLE "User" ADD COLUMN "requestLimitDays" INTEGER DEFAULT 7;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {
@@ -1196,6 +1229,47 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PaymentTransaction_emailDate_idx" ON "PaymentTransaction"("emailDate");`).catch(() => {});
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Payment tables check error:", e.message || e);
+        }
+
+        // --- 12. MEDIA REQUESTS (SEERR REPLACEMENT) TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "MediaRequest" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "mediaType" TEXT NOT NULL,
+                    "tmdbId" INTEGER NOT NULL,
+                    "tvdbId" INTEGER,
+                    "imdbId" TEXT,
+                    "title" TEXT NOT NULL,
+                    "releaseYear" TEXT,
+                    "posterPath" TEXT,
+                    "backdropPath" TEXT,
+                    "overview" TEXT,
+                    "status" TEXT NOT NULL DEFAULT 'PENDING',
+                    "status4k" TEXT,
+                    "is4k" BOOLEAN NOT NULL DEFAULT 0,
+                    "requestedByUserId" TEXT,
+                    "requestedByUsername" TEXT NOT NULL,
+                    "seasons" TEXT,
+                    "servarrAppId" TEXT,
+                    "qualityProfileId" INTEGER,
+                    "rootFolderPath" TEXT,
+                    "servarrId" INTEGER,
+                    "errorMessage" TEXT,
+                    "downloadProgress" REAL,
+                    "availableAt" DATETIME,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("requestedByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MediaRequest_tmdbId_mediaType_idx" ON "MediaRequest"("tmdbId", "mediaType");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MediaRequest_status_idx" ON "MediaRequest"("status");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MediaRequest_requestedByUsername_idx" ON "MediaRequest"("requestedByUsername");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MediaRequest_requestedByUserId_idx" ON "MediaRequest"("requestedByUserId");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] MediaRequest table check error:", e.message || e);
         }
 
         schemaPatchCompleted = true;
