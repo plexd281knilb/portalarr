@@ -31,8 +31,14 @@ function getLocalIps() {
 const { results: allowedOrigins, rawIps } = getLocalIps();
 console.log("✅ Allowed Origins Auto-Detected:", allowedOrigins);
 
+const buildTimestamp = new Date().toISOString();
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  env: {
+    PORTALARR_BUILD_TIMESTAMP: buildTimestamp,
+    PORTALARR_BUILD_VERSION: "3.0.0-beta.1",
+  },
   
   // --- THE FIX FROM YOUR CONSOLE LOGS ---
   // Tells Next.js to stop blocking your local network IP

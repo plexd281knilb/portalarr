@@ -1907,6 +1907,7 @@ export async function syncPlexCollection(
         promotedToSharedHome?: boolean;
         collectionMode?: string;
         orderIndex?: number;
+        serverName?: string;
     }
 ): Promise<{ success: boolean; collectionRatingKey?: string; message?: string }> {
     if (!collectionTitle || itemRatingKeys.length === 0) {
@@ -2136,7 +2137,8 @@ export async function syncPlexCollection(
         }
     }
 
-    logger.addLog("SUCCESS", "PLEX", `Synced collection "${collectionTitle}" (${addedCount}/${itemRatingKeys.length} items present) on section ${sectionKey}`);
+    const srvSuffix = options?.serverName ? ` on Plex server "${options.serverName}"` : "";
+    logger.addLog("SUCCESS", "PLEX", `Synced collection "${collectionTitle}" (${addedCount}/${itemRatingKeys.length} items present) on section ${sectionKey}${srvSuffix}`);
     return {
         success: true,
         collectionRatingKey,
@@ -2779,9 +2781,14 @@ export interface PruneCandidateItem {
     sectionTitle?: string;
     serverId: string;
     serverName?: string;
+    parentTitle?: string;
+    seasonNumber?: number;
+    episodeCount?: number;
     addedAt?: number;
     updatedAt?: number;
     lastViewedAt?: number;
+    lastActivityDate?: number;
+    daysInactive?: number;
     viewCount: number;
     fileSizeGb: number;
     filePath?: string;
@@ -2797,7 +2804,60 @@ export interface PruneCandidateItem {
 }
 
 /**
+ * Fetches the seasons of a Plex TV show with play counts and timestamps for season-level pruning.
+ */
+export async function getPlexShowSeasons(
+    serverUrl: string,
+    token: string,
+    showRatingKey: string
+): Promise<Array<{
+    ratingKey: string;
+    parentRatingKey?: string;
+    parentTitle?: string;
+    title: string;
+    index: number;
+    leafCount: number;
+    viewedLeafCount: number;
+    addedAt?: number;
+    updatedAt?: number;
+    lastViewedAt?: number;
+    thumb?: string;
+    art?: string;
+}>> {
+    const cleanBase = serverUrl.replace(/\/+$/, "");
+    const url = `${cleanBase}/library/metadata/${encodeURIComponent(showRatingKey)}/children?X-Plex-Token=${encodeURIComponent(token)}`;
+    try {
+        const res = await fetch(url, {
+            headers: { "Accept": "application/json", "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+            cache: "no-store",
+            signal: AbortSignal.timeout(6000)
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        const directories = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || [];
+        const seasons = Array.isArray(directories) ? directories : [directories];
+        return seasons.map((s: any) => ({
+            ratingKey: String(s.ratingKey || ""),
+            parentRatingKey: String(s.parentRatingKey || showRatingKey),
+            parentTitle: s.parentTitle,
+            title: s.title || `Season ${s.index}`,
+            index: typeof s.index === "number" ? s.index : parseInt(s.index || "0", 10),
+            leafCount: typeof s.leafCount === "number" ? s.leafCount : parseInt(s.leafCount || "0", 10),
+            viewedLeafCount: typeof s.viewedLeafCount === "number" ? s.viewedLeafCount : parseInt(s.viewedLeafCount || "0", 10),
+            addedAt: s.addedAt ? (s.addedAt < 1e11 ? s.addedAt * 1000 : s.addedAt) : undefined,
+            updatedAt: s.updatedAt ? (s.updatedAt < 1e11 ? s.updatedAt * 1000 : s.updatedAt) : undefined,
+            lastViewedAt: s.lastViewedAt ? (s.lastViewedAt < 1e11 ? s.lastViewedAt * 1000 : s.lastViewedAt) : undefined,
+            thumb: s.thumb,
+            art: s.art
+        })).filter((s: any) => Boolean(s.ratingKey));
+    } catch (e) {
+        return [];
+    }
+}
+
+/**
  * Evaluates oldest and unwatched media items across sections for a server to simulate or execute capacity pruning.
+ * Implements Unified Activity Timestamp Engine (max(addedAt, updatedAt, lastWatchedAt)) and Season-Level TV Pruning.
  */
 export async function evaluatePruneCandidatesForServer(
     serverUrl: string,
@@ -2811,6 +2871,7 @@ export async function evaluatePruneCandidatesForServer(
         maxCandidates?: number;
         sectionKeys?: string[];
         enabledSectionKeys?: string[];
+        evaluateSeasons?: boolean;
         sortBy?: "combined_oldest" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     } = {}
 ): Promise<{
@@ -2822,6 +2883,7 @@ export async function evaluatePruneCandidatesForServer(
     const unwatchedOnly = options.unwatchedOnly ?? false;
     const maxCandidates = options.maxCandidates ?? 50;
     const sortBy = options.sortBy ?? "combined_oldest";
+    const evaluateSeasons = options.evaluateSeasons ?? true;
 
     const cleanBase = serverUrl.replace(/\/+$/, "");
     const sectionsUrl = `${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`;
@@ -2859,17 +2921,98 @@ export async function evaluatePruneCandidatesForServer(
         for (const item of items) {
             const rawAddedAt = item.addedAt;
             const addedAtMs = rawAddedAt ? (rawAddedAt < 1e11 ? rawAddedAt * 1000 : rawAddedAt) : nowMs;
-            const ageMs = Math.max(0, nowMs - addedAtMs);
-            const daysOld = Math.floor(ageMs / (24 * 60 * 60 * 1000));
-
-            // Filter out items younger than minAgeDays
-            if (daysOld < minAgeDays) continue;
-
-            const viewCount = item.viewCount || 0;
             const rawLastViewedAt = item.lastViewedAt;
             const lastViewedAtMs = rawLastViewedAt ? (rawLastViewedAt < 1e11 ? rawLastViewedAt * 1000 : rawLastViewedAt) : undefined;
             const rawUpdatedAt = item.updatedAt;
             const updatedAtMs = rawUpdatedAt ? (rawUpdatedAt < 1e11 ? rawUpdatedAt * 1000 : rawUpdatedAt) : addedAtMs;
+
+            // --- TV SHOW SEASON-LEVEL EVALUATION ---
+            if (sec.type === "show" && evaluateSeasons) {
+                const seasons = await getPlexShowSeasons(serverUrl, token, item.ratingKey);
+                if (seasons.length > 0) {
+                    for (const season of seasons) {
+                        const seasonAddedAt = season.addedAt || addedAtMs;
+                        const seasonUpdatedAt = season.updatedAt || updatedAtMs;
+                        const seasonLastViewedAt = season.lastViewedAt;
+                        
+                        // Unified Activity Timestamp Engine (Max-Date Rule)
+                        const seasonLastActivityDate = Math.max(seasonAddedAt, seasonLastViewedAt || 0, seasonUpdatedAt || 0);
+                        const seasonDaysInactive = Math.max(0, Math.floor((nowMs - seasonLastActivityDate) / (24 * 60 * 60 * 1000)));
+                        const seasonDaysOld = Math.max(0, Math.floor((nowMs - seasonAddedAt) / (24 * 60 * 60 * 1000)));
+
+                        // Filter by minimum inactivity age
+                        if (seasonDaysInactive < minAgeDays) continue;
+
+                        // Unwatched only filter: Skip if season has plays watched in last 180 days
+                        if (unwatchedOnly) {
+                            if (season.viewedLeafCount > 0 && seasonLastViewedAt) {
+                                const daysSinceWatched = Math.max(0, Math.floor((nowMs - seasonLastViewedAt) / (24 * 60 * 60 * 1000)));
+                                if (daysSinceWatched < 180) continue;
+                            } else if (season.viewedLeafCount > 0 && season.leafCount > 0 && season.viewedLeafCount === season.leafCount) {
+                                if (seasonDaysInactive < 180) continue;
+                            }
+                        }
+
+                        // Approximate season file size based on episode count
+                        const totalShowSizeGb = item.fileSize ? parseFloat((item.fileSize / (1024 * 1024 * 1024)).toFixed(2)) : 0;
+                        const totalLeaves = seasons.reduce((sum, s) => sum + (s.leafCount || 0), 0);
+                        let seasonSizeGb = 0;
+                        if (totalShowSizeGb > 0 && totalLeaves > 0 && season.leafCount > 0) {
+                            seasonSizeGb = parseFloat(((totalShowSizeGb / totalLeaves) * season.leafCount).toFixed(2));
+                        } else {
+                            seasonSizeGb = parseFloat(((season.leafCount || 8) * 1.4).toFixed(2));
+                        }
+
+                        const isSeasonWatched = season.viewedLeafCount > 0;
+                        let reason = isSeasonWatched
+                            ? `Season ${season.index} (${season.leafCount} eps) • Watched ${seasonDaysInactive}d ago (${season.viewedLeafCount}/${season.leafCount} viewed)`
+                            : `Season ${season.index} (${season.leafCount} eps) • Inactive ${seasonDaysInactive}d (Never Watched)`;
+
+                        allCandidates.push({
+                            ratingKey: season.ratingKey,
+                            title: `${item.title} - ${season.title}`,
+                            parentTitle: item.title,
+                            seasonNumber: season.index,
+                            episodeCount: season.leafCount,
+                            year: item.year,
+                            type: "season",
+                            sectionKey: sec.key,
+                            sectionTitle: sec.title,
+                            serverId,
+                            serverName,
+                            addedAt: seasonAddedAt,
+                            updatedAt: seasonUpdatedAt,
+                            lastViewedAt: seasonLastViewedAt,
+                            lastActivityDate: seasonLastActivityDate,
+                            daysInactive: seasonDaysInactive,
+                            viewCount: season.viewedLeafCount || 0,
+                            fileSizeGb: Math.max(0.5, seasonSizeGb),
+                            filePath: item.filePath,
+                            thumb: season.thumb || item.thumb,
+                            resolution: item.detectedBadges?.resolution,
+                            hdr: item.detectedBadges?.hdr,
+                            videoFormatLabel: item.detectedBadges?.videoFormatLabel,
+                            audio: item.detectedBadges?.audio,
+                            imdbId: item.guids?.imdb,
+                            tmdbId: item.guids?.tmdb,
+                            reason,
+                            daysOld: seasonDaysOld
+                        });
+                    }
+                    continue; // Skip evaluating top-level show if seasons were evaluated
+                }
+            }
+
+            // --- MOVIE OR WHOLE TV SHOW EVALUATION ---
+            // Unified Activity Timestamp Engine (Max-Date Rule)
+            const lastActivityDate = Math.max(addedAtMs, lastViewedAtMs || 0, updatedAtMs || 0);
+            const daysInactive = Math.max(0, Math.floor((nowMs - lastActivityDate) / (24 * 60 * 60 * 1000)));
+            const daysOld = Math.floor(Math.max(0, nowMs - addedAtMs) / (24 * 60 * 60 * 1000));
+
+            // Filter out items inactive for less than minAgeDays
+            if (daysInactive < minAgeDays) continue;
+
+            const viewCount = item.viewCount || 0;
 
             // Filter out items that have been watched recently if unwatchedOnly is true
             if (unwatchedOnly) {
@@ -2882,12 +3025,12 @@ export async function evaluatePruneCandidatesForServer(
             const sizeBytes = item.fileSize || 0;
             const sizeGb = parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(2));
 
-            let reason = `Added ${daysOld} days ago (Never Watched)`;
+            let reason = `Inactive ${daysInactive}d (Added ${daysOld}d ago • Never Watched)`;
             if (viewCount > 0 && lastViewedAtMs) {
                 const daysSinceViewed = Math.max(0, Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000)));
-                reason = `Last watched ${daysSinceViewed} days ago (${viewCount} total ${viewCount === 1 ? 'play' : 'plays'})`;
+                reason = `Inactive ${daysInactive}d (Last watched ${daysSinceViewed}d ago • ${viewCount} ${viewCount === 1 ? 'play' : 'plays'})`;
             } else if (viewCount > 0) {
-                reason = `View count: ${viewCount} plays`;
+                reason = `Inactive ${daysInactive}d • ${viewCount} plays`;
             }
 
             allCandidates.push({
@@ -2902,6 +3045,8 @@ export async function evaluatePruneCandidatesForServer(
                 addedAt: addedAtMs,
                 updatedAt: updatedAtMs,
                 lastViewedAt: lastViewedAtMs,
+                lastActivityDate,
+                daysInactive,
                 viewCount,
                 fileSizeGb: sizeGb > 0 ? sizeGb : (item.type === "movie" ? 4.5 : 12.0),
                 filePath: item.filePath,
@@ -2920,16 +3065,11 @@ export async function evaluatePruneCandidatesForServer(
 
     // Sort candidates according to specified sort option
     if (sortBy === "combined_oldest" || sortBy === "combined_activity") {
-        // Combined Oldest Activity Strategy: Evaluates oldest addedAt, oldest lastViewedAt, and oldest updatedAt
+        // Unified Activity Timestamp Engine: Primary sort by true longest inactive date (lastActivityDate ascending), secondary by fileSizeGb descending
         allCandidates.sort((a, b) => {
-            const getScore = (c: PruneCandidateItem) => {
-                const added = c.addedAt || nowMs;
-                const watched = c.lastViewedAt || (c.viewCount === 0 ? 0 : added);
-                const modified = c.updatedAt || added;
-                // Weighted composite activity: older added (35%), older/unwatched (45%), older modified (20%)
-                return (added * 0.35) + (watched * 0.45) + (modified * 0.20);
-            };
-            return getScore(a) - getScore(b);
+            const diff = (a.lastActivityDate || 0) - (b.lastActivityDate || 0);
+            if (diff !== 0) return diff;
+            return (b.fileSizeGb || 0) - (a.fileSizeGb || 0);
         });
     } else if (sortBy === "oldest_watched") {
         allCandidates.sort((a, b) => {
@@ -2941,7 +3081,7 @@ export async function evaluatePruneCandidatesForServer(
     } else if (sortBy === "largest_size") {
         allCandidates.sort((a, b) => b.fileSizeGb - a.fileSizeGb);
     } else if (sortBy === "least_plays") {
-        allCandidates.sort((a, b) => a.viewCount - b.viewCount || (a.addedAt || 0) - (b.addedAt || 0));
+        allCandidates.sort((a, b) => a.viewCount - b.viewCount || (a.lastActivityDate || 0) - (b.lastActivityDate || 0));
     } else if (sortBy === "oldest_modified") {
         allCandidates.sort((a, b) => (a.updatedAt || a.addedAt || 0) - (b.updatedAt || b.addedAt || 0));
     } else {
@@ -3231,7 +3371,8 @@ export async function inspectPlexMediaItemFull(
 export async function deleteMediaFromPlexServer(
     serverUrl: string,
     token: string,
-    ratingKey: string
+    ratingKey: string,
+    serverName?: string
 ): Promise<{ success: boolean; message?: string }> {
     try {
         const cleanBase = serverUrl.replace(/\/+$/, "");
@@ -3245,15 +3386,15 @@ export async function deleteMediaFromPlexServer(
         });
 
         if (res.ok) {
-            logger.addLog("SUCCESS", "PLEX", `Deleted media ratingKey "${ratingKey}" from Plex.`);
+            logger.addLog("SUCCESS", "PLEX", `Deleted media ratingKey "${ratingKey}"${serverName ? ` on Plex server "${serverName}"` : " from Plex"}.`);
             return { success: true, message: `Deleted item from Plex.` };
         } else {
             const txt = await res.text();
-            logger.addLog("WARN", "PLEX", `Failed to delete ratingKey "${ratingKey}" from Plex (${res.status}): ${txt}`);
+            logger.addLog("WARN", "PLEX", `Failed to delete ratingKey "${ratingKey}"${serverName ? ` on Plex server "${serverName}"` : " from Plex"} (${res.status}): ${txt}`);
             return { success: false, message: `Plex returned HTTP ${res.status}` };
         }
     } catch (e: any) {
-        logger.addLog("ERROR", "PLEX", `Exception deleting media from Plex: ${e.message}`);
+        logger.addLog("ERROR", "PLEX", `Exception deleting media ratingKey "${ratingKey}"${serverName ? ` on Plex server "${serverName}"` : " from Plex"}: ${e.message}`);
         return { success: false, message: e.message };
     }
 }

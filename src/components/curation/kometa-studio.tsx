@@ -93,7 +93,9 @@ import {
     toggleCurationLibrarySectionAction,
     toggleAllCurationServerSectionsAction,
     runFullCurationSyncAction,
-    runServerCurationSyncAction
+    runServerCurationSyncAction,
+    runOverlayIncrementalSyncAction,
+    runOverlayRecheckSyncAction
 } from "@/app/curation-actions";
 
 interface PlexServerItem {
@@ -236,9 +238,9 @@ export function KometaStudio() {
     const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
     const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
 
-    // Batch Processing & Recheck Cadence States
-    const [overlayBatchSize, setOverlayBatchSize] = useState<number>(200);
-    const [overlayBatchMode, setOverlayBatchMode] = useState<"incremental" | "daily_recheck" | "weekly_recheck" | "monthly_recheck" | "force_all">("incremental");
+    // Manual Section Action Bar States (Live Simulator Header)
+    const [manualBatchSize, setManualBatchSize] = useState<number>(200);
+    const [manualBatchMode, setManualBatchMode] = useState<"incremental" | "daily_recheck" | "weekly_recheck" | "monthly_recheck" | "force_all">("incremental");
     const [inspectorLimit, setInspectorLimit] = useState<number>(50);
 
     const handleSelectRealPoster = (item: PlexMediaStreamInfo, posterUrl: string) => {
@@ -405,14 +407,25 @@ export function KometaStudio() {
     const [revertingSingleOverlay, setRevertingSingleOverlay] = useState(false);
     const [singleItemMsg, setSingleItemMsg] = useState<{ success: boolean; text: string } | null>(null);
 
-    // Automated Schedule & Enabled Library States
-    const [curationSyncOverlays, setCurationSyncOverlays] = useState<boolean>(true);
-    const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("every_6_hours");
-    const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
-    const [curationLastRunStatus, setCurationLastRunStatus] = useState<any | null>(null);
+    // Poster Overlays Dual Automation Schedules
+    // Schedule 1: Fast Incremental Scan (New Media & Upgrades)
+    const [overlayIncrementalEnabled, setOverlayIncrementalEnabled] = useState<boolean>(true);
+    const [overlayIncrementalSchedule, setOverlayIncrementalSchedule] = useState<string>("every_hour");
+    const [overlayIncrementalBatchSize, setOverlayIncrementalBatchSize] = useState<number>(200);
+    const [overlayIncrementalLastRunAt, setOverlayIncrementalLastRunAt] = useState<string | null>(null);
+
+    // Schedule 2: Deep Periodic Recheck Scan (Integrity & Expiring Badges)
+    const [overlayRecheckEnabled, setOverlayRecheckEnabled] = useState<boolean>(true);
+    const [overlayRecheckSchedule, setOverlayRecheckSchedule] = useState<string>("daily_4am");
+    const [overlayRecheckScope, setOverlayRecheckScope] = useState<string>("daily_recheck");
+    const [overlayRecheckBatchSize, setOverlayRecheckBatchSize] = useState<number>(200);
+    const [overlayRecheckLastRunAt, setOverlayRecheckLastRunAt] = useState<string | null>(null);
+
     const [enabledServersForOverlays, setEnabledServersForOverlays] = useState<string[]>([]);
     const [savingSchedule, setSavingSchedule] = useState(false);
     const [scheduleSavedMsg, setScheduleSavedMsg] = useState(false);
+    const [runningIncrementalSync, setRunningIncrementalSync] = useState(false);
+    const [runningRecheckSync, setRunningRecheckSync] = useState(false);
     const [runningOverlaySync, setRunningOverlaySync] = useState(false);
     const [overlaySyncResult, setOverlaySyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
 
@@ -462,14 +475,19 @@ export function KometaStudio() {
         }
     };
 
-    // Save schedule settings
+    // Save dual automation schedule settings
     const handleSaveSchedule = async () => {
         setSavingSchedule(true);
         setScheduleSavedMsg(false);
         try {
             const res = await saveCurationSettingsAction({
-                curationSyncOverlays,
-                curationSyncSchedule
+                overlayIncrementalEnabled,
+                overlayIncrementalSchedule,
+                overlayIncrementalBatchSize,
+                overlayRecheckEnabled,
+                overlayRecheckSchedule,
+                overlayRecheckScope,
+                overlayRecheckBatchSize
             });
             if (res.success) {
                 setScheduleSavedMsg(true);
@@ -482,7 +500,67 @@ export function KometaStudio() {
         }
     };
 
-    // Run overlay sync job now (strictly scoped to selected server)
+    // Run incremental sync job now
+    const handleRunIncrementalSync = async () => {
+        setRunningIncrementalSync(true);
+        setOverlaySyncResult(null);
+        try {
+            const res = await runOverlayIncrementalSyncAction(selectedServerId || undefined, selectedSectionKey || undefined);
+            if (res.success) {
+                setOverlaySyncResult({
+                    success: true,
+                    text: `⚡ Incremental Scan Completed: ${res.overlaysAppliedCount ?? 0} posters updated (${res.newBadgedCount ?? 0} new, ${res.upgradedCount ?? 0} upgraded, ${res.skippedCount ?? 0} up-to-date skipped).`,
+                    details: res.details
+                });
+                setOverlayIncrementalLastRunAt(new Date().toISOString());
+            } else {
+                setOverlaySyncResult({
+                    success: false,
+                    text: res.message || res.error || "Incremental scan encountered an error.",
+                    details: res.details
+                });
+            }
+        } catch (e: any) {
+            setOverlaySyncResult({
+                success: false,
+                text: e.message || "An error occurred during incremental sync."
+            });
+        } finally {
+            setRunningIncrementalSync(false);
+        }
+    };
+
+    // Run deep recheck sync job now
+    const handleRunRecheckSync = async () => {
+        setRunningRecheckSync(true);
+        setOverlaySyncResult(null);
+        try {
+            const res = await runOverlayRecheckSyncAction(selectedServerId || undefined, selectedSectionKey || undefined);
+            if (res.success) {
+                setOverlaySyncResult({
+                    success: true,
+                    text: `🌙 Deep Recheck Completed: ${res.overlaysAppliedCount ?? 0} posters updated (${res.newBadgedCount ?? 0} new, ${res.upgradedCount ?? 0} upgraded, ${res.skippedCount ?? 0} up-to-date skipped).`,
+                    details: res.details
+                });
+                setOverlayRecheckLastRunAt(new Date().toISOString());
+            } else {
+                setOverlaySyncResult({
+                    success: false,
+                    text: res.message || res.error || "Deep recheck encountered an error.",
+                    details: res.details
+                });
+            }
+        } catch (e: any) {
+            setOverlaySyncResult({
+                success: false,
+                text: e.message || "An error occurred during deep recheck."
+            });
+        } finally {
+            setRunningRecheckSync(false);
+        }
+    };
+
+    // Run overlay sync job now (strictly scoped to selected server or section)
     const handleRunOverlaySync = async () => {
         setRunningOverlaySync(true);
         setOverlaySyncResult(null);
@@ -490,8 +568,8 @@ export function KometaStudio() {
             let res: any;
             if (selectedServerId && selectedSectionKey) {
                 res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey, undefined, {
-                    batchSize: overlayBatchSize,
-                    mode: overlayBatchMode
+                    batchSize: manualBatchSize,
+                    mode: manualBatchMode
                 });
                 if (res.success) {
                     setOverlaySyncResult({
@@ -579,10 +657,17 @@ export function KometaStudio() {
 
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
-                    setCurationSyncOverlays(settingsRes.curationSyncOverlays ?? true);
-                    setCurationSyncSchedule(settingsRes.curationSyncSchedule || "every_6_hours");
-                    setCurationLastRunAt(settingsRes.curationLastRunAt || null);
-                    setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
+                    setOverlayIncrementalEnabled(settingsRes.overlayIncrementalEnabled ?? true);
+                    setOverlayIncrementalSchedule(settingsRes.overlayIncrementalSchedule || "every_hour");
+                    setOverlayIncrementalBatchSize(settingsRes.overlayIncrementalBatchSize ?? 200);
+                    setOverlayIncrementalLastRunAt(settingsRes.overlayIncrementalLastRunAt || null);
+
+                    setOverlayRecheckEnabled(settingsRes.overlayRecheckEnabled ?? true);
+                    setOverlayRecheckSchedule(settingsRes.overlayRecheckSchedule || "daily_4am");
+                    setOverlayRecheckScope(settingsRes.overlayRecheckScope || "daily_recheck");
+                    setOverlayRecheckBatchSize(settingsRes.overlayRecheckBatchSize ?? 200);
+                    setOverlayRecheckLastRunAt(settingsRes.overlayRecheckLastRunAt || null);
+
                     if (settingsRes.enabledServersForOverlays) {
                         setEnabledServersForOverlays(settingsRes.enabledServersForOverlays);
                     }
@@ -2205,8 +2290,8 @@ export function KometaStudio() {
             const savedRuleId = saveRes.rule?.id || existingId;
 
             const res = await applyOverlaysToLibraryAction(selectedServerId, selectedSectionKey, savedRuleId, {
-                batchSize: overlayBatchSize,
-                mode: overlayBatchMode
+                batchSize: manualBatchSize,
+                mode: manualBatchMode
             });
             if (res.success) {
                 setOverlayMessage({ success: true, text: res.message || "Overlays applied to library successfully!" });
@@ -3000,112 +3085,215 @@ export function KometaStudio() {
 
             {/* Automated Periodic Timer Job & Sync Runner */}
             <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                <CardContent className="p-5 sm:p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 text-xs">
-                    <div className="space-y-1.5 max-w-xl">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                            <Clock className="h-4.5 w-4.5 text-purple-400" />
-                            <span className="font-bold text-white text-sm sm:text-base">Poster Overlays Schedule &amp; Automation</span>
-                            <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncOverlays ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                {curationSyncOverlays ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
-                            </Badge>
+                <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <Clock className="h-5 w-5 text-purple-400" />
+                                <CardTitle className="text-base sm:text-lg font-bold text-white">Poster Overlays Dual Automation Schedules</CardTitle>
+                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled || overlayRecheckEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                    {overlayIncrementalEnabled && overlayRecheckEnabled ? 'Dual Schedules Active' : overlayIncrementalEnabled ? 'Incremental Active' : overlayRecheckEnabled ? 'Recheck Active' : 'Schedules Paused'}
+                                </Badge>
+                            </div>
+                            <CardDescription className="text-xs text-slate-400">
+                                Automatically scans for new media imports and performs periodic library rechecks on independent schedules across enabled Plex libraries.
+                            </CardDescription>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            Automatically scans for new and updated library items on a recurring schedule to apply 4K UHD, HDR, Dolby Vision, audio codecs, and custom badges across enabled libraries.
-                        </p>
-                        {curationLastRunAt && (
-                            <p className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-0.5">
-                                <Clock3 className="h-3.5 w-3.5 text-purple-400" />
-                                Last automated run: <span className="text-slate-300 font-mono">{new Date(curationLastRunAt).toLocaleString()}</span>
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-                        <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
-                            <span className="text-xs font-bold text-slate-200">Timer</span>
-                            <Switch 
-                                checked={curationSyncOverlays}
-                                onCheckedChange={checked => setCurationSyncOverlays(checked)}
-                            />
-                        </div>
-
-                        {/* Frequency Schedule */}
-                        <div className="space-y-0.5">
-                            <Select 
-                                value={curationSyncSchedule} 
-                                onValueChange={val => setCurationSyncSchedule(val)}
-                            >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[155px]" title="Timer Trigger Frequency">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
-                                    <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
-                                    <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                    <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                    <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
-                                    <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Batch Size Selector */}
-                        <div className="space-y-0.5">
-                            <Select 
-                                value={String(overlayBatchSize)} 
-                                onValueChange={val => setOverlayBatchSize(Number(val))}
-                            >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[120px] text-purple-300 font-semibold" title="Batch Size Limit">
-                                    <SelectValue placeholder="Batch Size" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="10">📦 10 Items</SelectItem>
-                                    <SelectItem value="50">📦 50 Items</SelectItem>
-                                    <SelectItem value="100">📦 100 Items</SelectItem>
-                                    <SelectItem value="200">📦 200 Items</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Cadence Mode Selector */}
-                        <div className="space-y-0.5">
-                            <Select 
-                                value={overlayBatchMode} 
-                                onValueChange={(val: any) => setOverlayBatchMode(val)}
-                            >
-                                <SelectTrigger className="bg-slate-800 border-slate-700 text-xs h-9 w-[185px] text-slate-200" title="Scan Scope & Recheck Policy">
-                                    <SelectValue placeholder="Scan Mode" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="incremental">⚡ Incremental (New &amp; Upgrades)</SelectItem>
-                                    <SelectItem value="daily_recheck">🌙 Daily Recheck (&gt;24h Old)</SelectItem>
-                                    <SelectItem value="weekly_recheck">📅 Weekly Recheck (&gt;7d Old)</SelectItem>
-                                    <SelectItem value="monthly_recheck">🗓️ Monthly Recheck (&gt;30d Old)</SelectItem>
-                                    <SelectItem value="force_all">🔄 Force Recheck (All Items)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
                         <Button 
                             size="sm"
                             onClick={handleSaveSchedule}
                             disabled={savingSchedule}
-                            variant="outline"
-                            className="border-slate-700 text-slate-300 hover:text-white text-xs h-9 px-3 cursor-pointer"
+                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer shrink-0"
                         >
-                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved!" : "Save Schedule"}
+                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                            {scheduleSavedMsg ? "Saved Schedules!" : "Save Schedules"}
                         </Button>
+                    </div>
+                </CardHeader>
 
-                        <Button 
-                            size="sm"
-                            onClick={handleRunOverlaySync}
-                            disabled={runningOverlaySync}
-                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-9 px-3.5 gap-1.5 shadow-md shadow-purple-950/40 cursor-pointer"
-                        >
-                            {runningOverlaySync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                            <span>Run Batch Sync Now</span>
-                        </Button>
+                <CardContent className="p-5 space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Schedule 1: Incremental Scan */}
+                        <div className="bg-slate-950/60 border border-purple-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Zap className="h-4 w-4 text-purple-400 shrink-0" />
+                                        <span className="font-bold text-slate-100 text-sm">⚡ Incremental Scan Schedule</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                            {overlayIncrementalEnabled ? `Active (${overlayIncrementalSchedule.replace(/_/g, ' ')})` : 'Disabled'}
+                                        </Badge>
+                                        <Switch 
+                                            checked={overlayIncrementalEnabled}
+                                            onCheckedChange={checked => setOverlayIncrementalEnabled(checked)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Fast, high-frequency scan that detects newly imported media and quality upgrades to apply badges immediately.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
+                                    <Select 
+                                        value={overlayIncrementalSchedule} 
+                                        onValueChange={val => setOverlayIncrementalSchedule(val)}
+                                        disabled={!overlayIncrementalEnabled}
+                                    >
+                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
+                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
+                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
+                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Batch Size Limit</label>
+                                    <Select 
+                                        value={String(overlayIncrementalBatchSize)} 
+                                        onValueChange={val => setOverlayIncrementalBatchSize(Number(val))}
+                                        disabled={!overlayIncrementalEnabled}
+                                    >
+                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-purple-300 font-semibold">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="50">📦 50 Items</SelectItem>
+                                            <SelectItem value="100">📦 100 Items</SelectItem>
+                                            <SelectItem value="200">📦 200 Items</SelectItem>
+                                            <SelectItem value="500">📦 500 Items</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <Clock3 className="h-3.5 w-3.5 text-purple-400" />
+                                    Last run: <span className="text-slate-300 font-mono">{overlayIncrementalLastRunAt ? new Date(overlayIncrementalLastRunAt).toLocaleString() : "Never"}</span>
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    onClick={handleRunIncrementalSync}
+                                    disabled={runningIncrementalSync}
+                                    variant="outline"
+                                    className="border-purple-500/40 text-purple-300 hover:text-white hover:bg-purple-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                >
+                                    {runningIncrementalSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                    <span>Run Incremental Now</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Schedule 2: Deep Periodic Recheck */}
+                        <div className="bg-slate-950/60 border border-indigo-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <RotateCcw className="h-4 w-4 text-indigo-400 shrink-0" />
+                                        <span className="font-bold text-slate-100 text-sm">🌙 Deep Recheck Schedule</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayRecheckEnabled ? 'border-indigo-500/40 text-indigo-300 bg-indigo-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                            {overlayRecheckEnabled ? `Active (${overlayRecheckSchedule.replace(/_/g, ' ')})` : 'Disabled'}
+                                        </Badge>
+                                        <Switch 
+                                            checked={overlayRecheckEnabled}
+                                            onCheckedChange={checked => setOverlayRecheckEnabled(checked)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Comprehensive maintenance job to verify existing badge hashes, update expiring ribbon dates, and refresh rules.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Schedule</label>
+                                    <Select 
+                                        value={overlayRecheckSchedule} 
+                                        onValueChange={val => setOverlayRecheckSchedule(val)}
+                                        disabled={!overlayRecheckEnabled}
+                                    >
+                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="daily_4am">🌙 Daily (4:00 AM)</SelectItem>
+                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
+                                            <SelectItem value="weekly_sun">📅 Weekly (Sunday)</SelectItem>
+                                            <SelectItem value="monthly_1st">🗓️ Monthly (1st)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Recheck Scope</label>
+                                    <Select 
+                                        value={overlayRecheckScope} 
+                                        onValueChange={val => setOverlayRecheckScope(val)}
+                                        disabled={!overlayRecheckEnabled}
+                                    >
+                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="daily_recheck">&gt;24h Old</SelectItem>
+                                            <SelectItem value="weekly_recheck">&gt;7d Old</SelectItem>
+                                            <SelectItem value="monthly_recheck">&gt;30d Old</SelectItem>
+                                            <SelectItem value="force_all">Force All</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Batch Size</label>
+                                    <Select 
+                                        value={String(overlayRecheckBatchSize)} 
+                                        onValueChange={val => setOverlayRecheckBatchSize(Number(val))}
+                                        disabled={!overlayRecheckEnabled}
+                                    >
+                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-indigo-300 font-semibold">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                            <SelectItem value="50">📦 50 Items</SelectItem>
+                                            <SelectItem value="100">📦 100 Items</SelectItem>
+                                            <SelectItem value="200">📦 200 Items</SelectItem>
+                                            <SelectItem value="500">📦 500 Items</SelectItem>
+                                            <SelectItem value="1000">📦 1000 Items</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <Clock3 className="h-3.5 w-3.5 text-indigo-400" />
+                                    Last run: <span className="text-slate-300 font-mono">{overlayRecheckLastRunAt ? new Date(overlayRecheckLastRunAt).toLocaleString() : "Never"}</span>
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    onClick={handleRunRecheckSync}
+                                    disabled={runningRecheckSync}
+                                    variant="outline"
+                                    className="border-indigo-500/40 text-indigo-300 hover:text-white hover:bg-indigo-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                >
+                                    {runningRecheckSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                                    <span>Run Recheck Now</span>
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </CardContent>
 
@@ -3167,7 +3355,7 @@ export function KometaStudio() {
                             </Button>
                             <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 bg-slate-950/80 p-1 sm:p-0.5 rounded-xl border border-slate-800 w-full sm:w-auto">
                                 <div className="flex items-center gap-1 w-full sm:w-auto">
-                                    <Select value={String(overlayBatchSize)} onValueChange={val => setOverlayBatchSize(Number(val))}>
+                                    <Select value={String(manualBatchSize)} onValueChange={val => setManualBatchSize(Number(val))}>
                                         <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[95px] text-purple-300 font-bold focus:ring-0">
                                             <SelectValue placeholder="Size" />
                                         </SelectTrigger>
@@ -3176,9 +3364,10 @@ export function KometaStudio() {
                                             <SelectItem value="50">50 Items</SelectItem>
                                             <SelectItem value="100">100 Items</SelectItem>
                                             <SelectItem value="200">200 Items</SelectItem>
+                                            <SelectItem value="500">500 Items</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    <Select value={overlayBatchMode} onValueChange={(val: any) => setOverlayBatchMode(val)}>
+                                    <Select value={manualBatchMode} onValueChange={(val: any) => setManualBatchMode(val)}>
                                         <SelectTrigger className="h-8 bg-transparent border-0 text-xs flex-1 sm:w-[145px] text-slate-300 font-medium focus:ring-0" title="Scan Mode & Recheck Scope">
                                             <SelectValue placeholder="Mode" />
                                         </SelectTrigger>
@@ -3199,7 +3388,7 @@ export function KometaStudio() {
                                     className="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs h-8 px-3 gap-1.5 shadow-md cursor-pointer rounded-lg shrink-0"
                                 >
                                     {applyingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                                    <span>✨ Apply ({overlayBatchSize})</span>
+                                    <span>✨ Apply ({manualBatchSize})</span>
                                 </Button>
                             </div>
                             <Button

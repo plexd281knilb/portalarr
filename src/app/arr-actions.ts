@@ -224,6 +224,28 @@ export async function arrApiPut(app: any, endpoint: string, body: any) {
     }
 }
 
+export async function arrApiDelete(app: any, endpoint: string) {
+    try {
+        const targetUrl = resolveArrEndpoint(app.url, endpoint);
+        const res = await fetch(targetUrl, {
+            method: "DELETE",
+            headers: { 
+                "X-Api-Key": app.apiKey,
+                "Accept": "application/json"
+            },
+            cache: "no-store"
+        });
+        if (!res.ok && res.status !== 204) {
+            const text = await res.text();
+            throw new Error(`API DELETE ${endpoint} failed: ${res.statusText} - ${text}`);
+        }
+        return { success: true };
+    } catch (e: any) {
+        logger.addLog("ERROR", "API", `[arrApiDelete] Failed DELETE to ${endpoint}: ${e.message}`);
+        return { success: false, error: e.message };
+    }
+}
+
 // ---- RADARR ----
 
 export async function searchRadarrMovies(appId: string, term: string) {

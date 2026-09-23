@@ -236,6 +236,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1,
                     "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1,
                     "leavingSoonDiskThreshold" INTEGER DEFAULT 15,
+                    "pruneWarningThresholdPercent" INTEGER DEFAULT 85,
+                    "pruneDangerThresholdPercent" INTEGER DEFAULT 95,
+                    "pruneTargetHeadroomGb" INTEGER DEFAULT 100,
+                    "pruneEvaluateSeasons" BOOLEAN NOT NULL DEFAULT 1,
                     "enableAutoPruneDeletion" BOOLEAN NOT NULL DEFAULT 0,
                     "pruneDryRun" BOOLEAN NOT NULL DEFAULT 1,
                     "pruneTagCollection" BOOLEAN NOT NULL DEFAULT 1,
@@ -282,6 +286,15 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "curationSyncSchedule" TEXT DEFAULT 'every_6_hours',
                     "curationSyncCron" TEXT,
                     "curationSyncOverlays" BOOLEAN NOT NULL DEFAULT 1,
+                    "overlayIncrementalEnabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "overlayIncrementalSchedule" TEXT DEFAULT 'every_hour',
+                    "overlayIncrementalBatchSize" INTEGER DEFAULT 200,
+                    "overlayIncrementalLastRunAt" DATETIME,
+                    "overlayRecheckEnabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "overlayRecheckSchedule" TEXT DEFAULT 'daily_4am',
+                    "overlayRecheckScope" TEXT DEFAULT 'daily_recheck',
+                    "overlayRecheckBatchSize" INTEGER DEFAULT 200,
+                    "overlayRecheckLastRunAt" DATETIME,
                     "curationSyncCollections" BOOLEAN NOT NULL DEFAULT 1,
                     "curationSyncReleases" BOOLEAN NOT NULL DEFAULT 1,
                     "curationSyncPruning" BOOLEAN NOT NULL DEFAULT 1,
@@ -346,6 +359,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["autoOverlaySync", `ALTER TABLE "Settings" ADD COLUMN "autoOverlaySync" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["autoCollectionSync", `ALTER TABLE "Settings" ADD COLUMN "autoCollectionSync" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["leavingSoonDiskThreshold", `ALTER TABLE "Settings" ADD COLUMN "leavingSoonDiskThreshold" INTEGER DEFAULT 15;`],
+                ["pruneWarningThresholdPercent", `ALTER TABLE "Settings" ADD COLUMN "pruneWarningThresholdPercent" INTEGER DEFAULT 85;`],
+                ["pruneDangerThresholdPercent", `ALTER TABLE "Settings" ADD COLUMN "pruneDangerThresholdPercent" INTEGER DEFAULT 95;`],
+                ["pruneTargetHeadroomGb", `ALTER TABLE "Settings" ADD COLUMN "pruneTargetHeadroomGb" INTEGER DEFAULT 100;`],
+                ["pruneEvaluateSeasons", `ALTER TABLE "Settings" ADD COLUMN "pruneEvaluateSeasons" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["enableAutoPruneDeletion", `ALTER TABLE "Settings" ADD COLUMN "enableAutoPruneDeletion" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["pruneDryRun", `ALTER TABLE "Settings" ADD COLUMN "pruneDryRun" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["pruneTagCollection", `ALTER TABLE "Settings" ADD COLUMN "pruneTagCollection" BOOLEAN NOT NULL DEFAULT 1;`],
@@ -409,7 +426,16 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["paymentEmailScanInterval", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailScanInterval" INTEGER DEFAULT 15;`],
                 ["paymentLastScanAt", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanAt" DATETIME;`],
                 ["paymentLastScanResult", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanResult" TEXT;`],
-                ["dismissedHubs", `ALTER TABLE "Settings" ADD COLUMN "dismissedHubs" TEXT;`]
+                ["dismissedHubs", `ALTER TABLE "Settings" ADD COLUMN "dismissedHubs" TEXT;`],
+                ["overlayIncrementalEnabled", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["overlayIncrementalSchedule", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalSchedule" TEXT DEFAULT 'every_hour';`],
+                ["overlayIncrementalBatchSize", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalBatchSize" INTEGER DEFAULT 200;`],
+                ["overlayIncrementalLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalLastRunAt" DATETIME;`],
+                ["overlayRecheckEnabled", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["overlayRecheckSchedule", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckSchedule" TEXT DEFAULT 'daily_4am';`],
+                ["overlayRecheckScope", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckScope" TEXT DEFAULT 'daily_recheck';`],
+                ["overlayRecheckBatchSize", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckBatchSize" INTEGER DEFAULT 200;`],
+                ["overlayRecheckLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "overlayRecheckLastRunAt" DATETIME;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -1418,6 +1444,60 @@ if (!globalForScheduler.schedulerInitialized) {
             }
           } catch (curationErr: any) {
             console.error("[BACKGROUND-JOB] Error in curation timer runner:", curationErr.message || curationErr);
+          }
+
+          // Auto-run automated Incremental Poster Overlay scan
+          try {
+            const incEnabled = settings?.overlayIncrementalEnabled ?? true;
+            if (incEnabled) {
+              const incSchedule = settings?.overlayIncrementalSchedule || "every_hour";
+              let incIntervalMs = 60 * 60 * 1000; // Default 1 hour
+              if (incSchedule === "every_hour") incIntervalMs = 60 * 60 * 1000;
+              else if (incSchedule === "every_3_hours") incIntervalMs = 3 * 60 * 60 * 1000;
+              else if (incSchedule === "every_6_hours") incIntervalMs = 6 * 60 * 60 * 1000;
+              else if (incSchedule === "every_12_hours") incIntervalMs = 12 * 60 * 60 * 1000;
+
+              const lastIncRun = settings?.overlayIncrementalLastRunAt;
+              if (!lastIncRun || (now.getTime() - lastIncRun.getTime()) >= incIntervalMs) {
+                console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
+                const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
+                await runOverlayIncrementalSyncInternal().catch(err => {
+                  console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
+                });
+              }
+            }
+          } catch (incErr: any) {
+            console.error("[BACKGROUND-JOB] Error checking incremental overlay timer:", incErr.message || incErr);
+          }
+
+          // Auto-run automated Deep Library Recheck scan
+          try {
+            const recheckEnabled = settings?.overlayRecheckEnabled ?? true;
+            if (recheckEnabled) {
+              const recheckSchedule = settings?.overlayRecheckSchedule || "daily_4am";
+              let recheckIntervalMs = 24 * 60 * 60 * 1000; // Default daily
+              if (recheckSchedule === "daily_4am") {
+                const curHour = now.getHours();
+                recheckIntervalMs = curHour === 4 ? 20 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+              } else if (recheckSchedule === "every_12_hours") {
+                recheckIntervalMs = 12 * 60 * 60 * 1000;
+              } else if (recheckSchedule === "weekly_sun") {
+                recheckIntervalMs = 7 * 24 * 60 * 60 * 1000;
+              } else if (recheckSchedule === "monthly_1st") {
+                recheckIntervalMs = 30 * 24 * 60 * 60 * 1000;
+              }
+
+              const lastRecheckRun = settings?.overlayRecheckLastRunAt;
+              if (!lastRecheckRun || (now.getTime() - lastRecheckRun.getTime()) >= recheckIntervalMs) {
+                console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
+                const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
+                await runOverlayRecheckSyncInternal().catch(err => {
+                  console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
+                });
+              }
+            }
+          } catch (recErr: any) {
+            console.error("[BACKGROUND-JOB] Error checking deep recheck timer:", recErr.message || recErr);
           }
 
           // Auto-run automated Payment Email Scraper timer job

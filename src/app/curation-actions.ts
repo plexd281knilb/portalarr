@@ -121,7 +121,7 @@ import {
     convertKometaLibraryToPortalarrOverlay,
     ParsedKometaConfig
 } from "@/lib/curation/kometa-importer";
-import { getEnabledArrInstances, getEnabledArrInstancesInternal, arrApiGet } from "@/app/arr-actions";
+import { getEnabledArrInstances, getEnabledArrInstancesInternal, arrApiGet, arrApiDelete } from "@/app/arr-actions";
 
 // Verify admin permissions
 async function verifyAdmin() {
@@ -339,6 +339,10 @@ export async function getCurationSettingsAction() {
         autoOverlaySync: settings?.autoOverlaySync ?? true,
         autoCollectionSync: settings?.autoCollectionSync ?? true,
         leavingSoonDiskThreshold: settings?.leavingSoonDiskThreshold ?? 15,
+        pruneWarningThresholdPercent: (settings as any)?.pruneWarningThresholdPercent ?? 85,
+        pruneDangerThresholdPercent: (settings as any)?.pruneDangerThresholdPercent ?? 95,
+        pruneTargetHeadroomGb: (settings as any)?.pruneTargetHeadroomGb ?? 100,
+        pruneEvaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true,
         enableAutoPruneDeletion: settings?.enableAutoPruneDeletion ?? false,
         pruneDryRun: settings?.pruneDryRun ?? true,
         pruneTagCollection: settings?.pruneTagCollection ?? true,
@@ -407,7 +411,18 @@ export async function getCurationSettingsAction() {
         curationSyncReleases: settings?.curationSyncReleases ?? true,
         curationSyncPruning: settings?.curationSyncPruning ?? true,
         curationLastRunAt: settings?.curationLastRunAt ? settings.curationLastRunAt.toISOString() : null,
-        curationLastRunStatus: safeJsonParse(settings?.curationLastRunStatus, null)
+        curationLastRunStatus: safeJsonParse(settings?.curationLastRunStatus, null),
+
+        // Poster Overlays Dual Automation Schedules
+        overlayIncrementalEnabled: settings?.overlayIncrementalEnabled ?? true,
+        overlayIncrementalSchedule: settings?.overlayIncrementalSchedule || "every_hour",
+        overlayIncrementalBatchSize: settings?.overlayIncrementalBatchSize ?? 200,
+        overlayIncrementalLastRunAt: settings?.overlayIncrementalLastRunAt ? settings.overlayIncrementalLastRunAt.toISOString() : null,
+        overlayRecheckEnabled: settings?.overlayRecheckEnabled ?? true,
+        overlayRecheckSchedule: settings?.overlayRecheckSchedule || "daily_4am",
+        overlayRecheckScope: settings?.overlayRecheckScope || "daily_recheck",
+        overlayRecheckBatchSize: settings?.overlayRecheckBatchSize ?? 200,
+        overlayRecheckLastRunAt: settings?.overlayRecheckLastRunAt ? settings.overlayRecheckLastRunAt.toISOString() : null
     };
     } catch (e: any) {
         logger.addLog("ERROR", "CURATION", `Failed loading curation settings: ${e.message}`);
@@ -646,6 +661,10 @@ export async function saveCurationSettingsAction(data: {
     autoOverlaySync?: boolean;
     autoCollectionSync?: boolean;
     leavingSoonDiskThreshold?: number;
+    pruneWarningThresholdPercent?: number;
+    pruneDangerThresholdPercent?: number;
+    pruneTargetHeadroomGb?: number;
+    pruneEvaluateSeasons?: boolean;
     enableAutoPruneDeletion?: boolean;
     pruneDryRun?: boolean;
     pruneTagCollection?: boolean;
@@ -697,6 +716,13 @@ export async function saveCurationSettingsAction(data: {
     curationSyncReleases?: boolean;
     curationSyncPruning?: boolean;
     curationSyncParentalTags?: boolean;
+    overlayIncrementalEnabled?: boolean;
+    overlayIncrementalSchedule?: string;
+    overlayIncrementalBatchSize?: number;
+    overlayRecheckEnabled?: boolean;
+    overlayRecheckSchedule?: string;
+    overlayRecheckScope?: string;
+    overlayRecheckBatchSize?: number;
     parentalTaggingEnabled?: boolean;
     parentalTagFormat?: string;
     parentalTagPrefix?: string;
@@ -716,6 +742,10 @@ export async function saveCurationSettingsAction(data: {
         if (data.autoOverlaySync !== undefined) updatePayload.autoOverlaySync = data.autoOverlaySync;
         if (data.autoCollectionSync !== undefined) updatePayload.autoCollectionSync = data.autoCollectionSync;
         if (data.leavingSoonDiskThreshold !== undefined) updatePayload.leavingSoonDiskThreshold = data.leavingSoonDiskThreshold;
+        if (data.pruneWarningThresholdPercent !== undefined) updatePayload.pruneWarningThresholdPercent = data.pruneWarningThresholdPercent;
+        if (data.pruneDangerThresholdPercent !== undefined) updatePayload.pruneDangerThresholdPercent = data.pruneDangerThresholdPercent;
+        if (data.pruneTargetHeadroomGb !== undefined) updatePayload.pruneTargetHeadroomGb = data.pruneTargetHeadroomGb;
+        if (data.pruneEvaluateSeasons !== undefined) updatePayload.pruneEvaluateSeasons = data.pruneEvaluateSeasons;
         if (data.enableAutoPruneDeletion !== undefined) updatePayload.enableAutoPruneDeletion = data.enableAutoPruneDeletion;
         if (data.pruneDryRun !== undefined) updatePayload.pruneDryRun = data.pruneDryRun;
         if (data.pruneTagCollection !== undefined) updatePayload.pruneTagCollection = data.pruneTagCollection;
@@ -798,6 +828,15 @@ export async function saveCurationSettingsAction(data: {
         if (data.curationSyncReleases !== undefined) updatePayload.curationSyncReleases = data.curationSyncReleases;
         if (data.curationSyncPruning !== undefined) updatePayload.curationSyncPruning = data.curationSyncPruning;
         if (data.curationSyncParentalTags !== undefined) updatePayload.curationSyncParentalTags = data.curationSyncParentalTags;
+
+        // Poster Overlays Dual Automation Schedules
+        if (data.overlayIncrementalEnabled !== undefined) updatePayload.overlayIncrementalEnabled = data.overlayIncrementalEnabled;
+        if (data.overlayIncrementalSchedule !== undefined) updatePayload.overlayIncrementalSchedule = data.overlayIncrementalSchedule;
+        if (data.overlayIncrementalBatchSize !== undefined) updatePayload.overlayIncrementalBatchSize = data.overlayIncrementalBatchSize;
+        if (data.overlayRecheckEnabled !== undefined) updatePayload.overlayRecheckEnabled = data.overlayRecheckEnabled;
+        if (data.overlayRecheckSchedule !== undefined) updatePayload.overlayRecheckSchedule = data.overlayRecheckSchedule;
+        if (data.overlayRecheckScope !== undefined) updatePayload.overlayRecheckScope = data.overlayRecheckScope;
+        if (data.overlayRecheckBatchSize !== undefined) updatePayload.overlayRecheckBatchSize = data.overlayRecheckBatchSize;
 
         // IMDb Parental Advisory Tagging Settings
         if (data.parentalTaggingEnabled !== undefined) updatePayload.parentalTaggingEnabled = data.parentalTaggingEnabled;
@@ -2802,7 +2841,116 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         const token = resolved.token;
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
 
-        // Query active leaving soon items
+        // 1. Automated Two-Tier Storage Headroom Capacity Evaluation
+        const targetServerId = serverId || resolved.serverId || "main";
+        const warningThreshold = (settings as any)?.pruneWarningThresholdPercent ?? 85;
+        const dangerThreshold = (settings as any)?.pruneDangerThresholdPercent ?? 95;
+        const targetHeadroomGb = (settings as any)?.pruneTargetHeadroomGb ?? 100;
+        const legacyThreshold = settings?.leavingSoonDiskThreshold ?? 15; // percent free
+
+        // Check Glances disk capacity metrics
+        const glancesResult = await getGlancesDisksInternal().catch(() => null);
+        const disks = glancesResult?.disks || [];
+        const selectedDiskId = (settings as any)?.selectedGlancesDiskId;
+        const matchedDisk = disks.find(d => selectedDiskId ? d.id === selectedDiskId : d.percent > 0);
+
+        let capacityWarningTriggered = false;
+        let capacityDangerTriggered = false;
+        let diskUsagePercent = 0;
+
+        if (matchedDisk) {
+            diskUsagePercent = matchedDisk.percent;
+            if (matchedDisk.percent >= warningThreshold || (100 - matchedDisk.percent) <= legacyThreshold) {
+                capacityWarningTriggered = true;
+            }
+            if (matchedDisk.percent >= dangerThreshold) {
+                capacityDangerTriggered = true;
+            }
+        }
+
+        // Auto-stage prune candidates if storage warning threshold is breached
+        if (capacityWarningTriggered && serverUrl && token) {
+            try {
+                const srvSections = await getPlexServerSections(token, targetServerId);
+                const eligibleSections = sectionKey 
+                    ? srvSections.filter(s => String(s.key) === String(sectionKey))
+                    : srvSections;
+
+                const candidateRes = await evaluatePruneCandidatesForServer(serverUrl, token, targetServerId, resolved.serverName, {
+                    minAgeDays: settings?.pruneMinAgeDays ?? 90,
+                    unwatchedOnly: settings?.pruneUnwatchedOnly ?? false,
+                    maxCandidates: 50,
+                    sortBy: (settings?.pruneSortStrategy as any) || "combined_oldest",
+                    evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true,
+                    sectionKeys: eligibleSections.map(s => String(s.key))
+                });
+
+                if (candidateRes.candidates && candidateRes.candidates.length > 0) {
+                    let accumulatedGb = 0;
+                    let stagedCount = 0;
+                    const daysNotice = settings?.pruneDaysNotice ?? 14;
+                    const effectiveDate = new Date(Date.now() + daysNotice * 86400000);
+
+                    for (const cand of candidateRes.candidates) {
+                        if (accumulatedGb >= targetHeadroomGb) break;
+
+                        const existing = await prisma.mediaContentAdvisory.findUnique({
+                            where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } }
+                        });
+
+                        if (!existing || !existing.isLeavingSoon) {
+                            const formattedTitle = cand.parentTitle ? `${cand.parentTitle} (Season ${cand.seasonNumber})` : (cand.title || "Media Item");
+                            await prisma.mediaContentAdvisory.upsert({
+                                where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } },
+                                update: {
+                                    title: formattedTitle,
+                                    isLeavingSoon: true,
+                                    leavingSoonDate: effectiveDate,
+                                    leavingReason: `Storage Capacity Warning: Disk at ${diskUsagePercent}% used (Auto-staging towards ${targetHeadroomGb} GB headroom)`
+                                },
+                                create: {
+                                    ratingKey: cand.ratingKey,
+                                    serverId: targetServerId,
+                                    title: formattedTitle,
+                                    isLeavingSoon: true,
+                                    leavingSoonDate: effectiveDate,
+                                    leavingReason: `Storage Capacity Warning: Disk at ${diskUsagePercent}% used (Auto-staging towards ${targetHeadroomGb} GB headroom)`
+                                }
+                            });
+                            stagedCount++;
+                        }
+                        accumulatedGb += (cand.fileSizeGb || 0);
+                    }
+
+                    if (stagedCount > 0) {
+                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] Storage capacity warning reached (${diskUsagePercent}% used). Auto-staged ${stagedCount} items (${accumulatedGb.toFixed(1)} GB) to Leaving Soon.`);
+                    }
+                }
+            } catch (autoStageErr: any) {
+                console.warn(`[CURATION] Auto-staging prune candidates error on ${resolved.serverName}:`, autoStageErr.message);
+            }
+        }
+
+        // 2. Active Reclamation for Expired Items (if Master Deletion ON & Dry Run OFF)
+        if (settings?.enableAutoPruneDeletion && !settings?.pruneDryRun) {
+            const expiredItems = await prisma.mediaContentAdvisory.findMany({
+                where: {
+                    isLeavingSoon: true,
+                    leavingSoonDate: { lte: new Date() },
+                    ...(serverId ? { serverId } : {})
+                }
+            });
+
+            if (expiredItems.length > 0) {
+                logger.addLog("WARN", "CURATION", `[${resolved.serverName}] Auto-pruning ${expiredItems.length} expired Leaving Soon items.`);
+                await executePruneAction(
+                    expiredItems.map(it => ({ ratingKey: it.ratingKey, serverId: it.serverId || targetServerId, title: it.title || undefined })),
+                    { forceLiveDelete: true }
+                );
+            }
+        }
+
+        // 3. Query active leaving soon items
         const leavingSoonItems = await prisma.mediaContentAdvisory.findMany({
             where: {
                 isLeavingSoon: true,
@@ -2934,7 +3082,8 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                                 targetServerId,
                                 matched,
                                 overlayOpts,
-                                true
+                                true,
+                                resolved.serverName
                             );
                         }
                     } catch (itemErr: any) {
@@ -4311,7 +4460,7 @@ export async function applyOverlaysToLibraryInternal(
 
         for (const candidate of batchToProcess) {
             const it = candidate.item;
-            const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, candidate.options, true);
+            const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, candidate.options, true, resolved.serverName);
             if (res.success) {
                 successCount++;
                 if (res.upgraded || candidate.isUpgrade) {
@@ -4342,7 +4491,7 @@ export async function applyOverlaysToLibraryInternal(
                         ? "Monthly Recheck"
                         : "Full Library Recheck";
 
-        const message = `[${modeLabel}] Updated ${successCount} item(s) (${newBadgedCount} new, ${upgradedCount} upgraded/swapped). ${alreadyUpToDateCount} items already up to date.${remainingInQueue > 0 ? ` ${remainingInQueue} remaining to process in next batch run.` : ""}`;
+        const message = `[${modeLabel}] Updated ${successCount} item(s) (${newBadgedCount} new, ${upgradedCount} upgraded/swapped) on Plex server "${resolved.serverName}". ${alreadyUpToDateCount} items already up to date.${remainingInQueue > 0 ? ` ${remainingInQueue} remaining to process in next batch run.` : ""}`;
 
         logger.addLog("INFO", "CURATION", message);
 
@@ -4388,7 +4537,7 @@ export async function revertLibraryOverlaysAction(serverId: string) {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
-        const result = await restoreAllOriginalArtworks(resolved.serverUrl, resolved.token, resolved.serverId);
+        const result = await restoreAllOriginalArtworks(resolved.serverUrl, resolved.token, resolved.serverId, resolved.serverName);
         return result;
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -4479,7 +4628,8 @@ export async function markItemLeavingSoonAction(data: {
                         data.serverId,
                         matched,
                         overlayOpts,
-                        true
+                        true,
+                        resolved.serverName
                     );
                 }
             }
@@ -4490,7 +4640,10 @@ export async function markItemLeavingSoonAction(data: {
         // Sync Leaving Soon collection & home hub
         await syncLeavingSoonCollectionHubInternal(data.serverId).catch(() => {});
 
-        return { success: true, advisory, message: `Flagged "${data.title}" as leaving soon and applied banner overlay!` };
+        const targetServerLabel = (await resolveWorkingPlexServerConnection(data.serverId))?.serverName || data.serverId;
+        logger.addLog("WARN", "CURATION", `Flagged "${data.title}" as LEAVING SOON on Plex server "${targetServerLabel}" and applied countdown banner overlay.`);
+
+        return { success: true, advisory, message: `Flagged "${data.title}" as leaving soon and applied banner overlay on Plex server "${targetServerLabel}"!` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -4512,13 +4665,16 @@ export async function unmarkItemLeavingSoonAction(ratingKey: string, serverId: s
         // Revert poster art if backed up
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (resolved?.serverUrl) {
-            await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey).catch(() => {});
+            await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey, resolved.serverName).catch(() => {});
         }
 
         // Sync Leaving Soon collection & home hub
         await syncLeavingSoonCollectionHubInternal(serverId).catch(() => {});
 
-        return { success: true, message: "Removed leaving soon flag." };
+        const targetServerLabel = resolved?.serverName || serverId;
+        logger.addLog("INFO", "CURATION", `Unmarked leaving soon flag for ratingKey "${ratingKey}" on Plex server "${targetServerLabel}".`);
+
+        return { success: true, message: `Removed leaving soon flag on Plex server "${targetServerLabel}".` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -4643,10 +4799,8 @@ export async function testCurationApiKeysAction(tmdbKey?: string, traktKey?: str
     }
 }
 
-export async function getGlancesDisksAction() {
+export async function getGlancesDisksInternal() {
     try {
-
-        await verifyAdmin();
         const instances = await prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } });
         if (!instances || instances.length === 0) {
             return { success: true, disks: [], instances: [] };
@@ -4735,6 +4889,15 @@ export async function getGlancesDisksAction() {
             disks: allDisks,
             instances: instances.map(i => ({ id: i.id, name: i.name, url: i.url }))
         };
+    } catch (e: any) {
+        return { success: false, error: e.message, disks: [], instances: [] };
+    }
+}
+
+export async function getGlancesDisksAction() {
+    try {
+        await verifyAdmin();
+        return await getGlancesDisksInternal();
     } catch (e: any) {
         return { success: false, error: e.message, disks: [], instances: [] };
     }
@@ -4858,6 +5021,7 @@ export async function getPrunePreviewAction(options?: {
         minAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
+        evaluateSeasons?: boolean;
         sortBy?: "combined_oldest" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     };
 }) {
@@ -4925,7 +5089,8 @@ export async function getPrunePreviewAction(options?: {
                 minAgeDays: criteria?.minAgeDays ?? settings?.pruneMinAgeDays ?? 90,
                 unwatchedOnly: criteria?.unwatchedOnly ?? settings?.pruneUnwatchedOnly ?? false,
                 maxCandidates: criteria?.maxCandidates ?? 50,
-                sortBy: criteria?.sortBy ?? "oldest_added",
+                sortBy: criteria?.sortBy ?? "combined_oldest",
+                evaluateSeasons: criteria?.evaluateSeasons ?? (settings as any)?.pruneEvaluateSeasons ?? true,
                 sectionKeys: eligibleSectionKeys
             });
 
@@ -4934,19 +5099,13 @@ export async function getPrunePreviewAction(options?: {
             totalEvaluated += res.evaluatedCount;
         }
 
-        // Sort candidates
+        // Sort candidates with Unified Activity Timestamp Engine (Max-Date Rule)
         const sortBy = criteria?.sortBy ?? "combined_oldest";
         if (sortBy === "combined_oldest" || (sortBy as any) === "combined_activity") {
-            const nowMs = Date.now();
             allCandidates.sort((a, b) => {
-                const getScore = (c: any) => {
-                    const added = c.addedAt || nowMs;
-                    const watched = c.lastViewedAt || (c.viewCount === 0 ? 0 : added);
-                    const modified = c.updatedAt || added;
-                    // Weighted composite activity: older added (35%), older/unwatched (45%), older modified (20%)
-                    return (added * 0.35) + (watched * 0.45) + (modified * 0.20);
-                };
-                return getScore(a) - getScore(b);
+                const diff = (a.lastActivityDate || 0) - (b.lastActivityDate || 0);
+                if (diff !== 0) return diff;
+                return (b.fileSizeGb || 0) - (a.fileSizeGb || 0);
             });
         } else if (sortBy === "oldest_watched") {
             allCandidates.sort((a, b) => {
@@ -4958,7 +5117,7 @@ export async function getPrunePreviewAction(options?: {
         } else if (sortBy === "largest_size") {
             allCandidates.sort((a, b) => b.fileSizeGb - a.fileSizeGb);
         } else if (sortBy === "least_plays") {
-            allCandidates.sort((a, b) => a.viewCount - b.viewCount || (a.addedAt || 0) - (b.addedAt || 0));
+            allCandidates.sort((a, b) => a.viewCount - b.viewCount || (a.lastActivityDate || 0) - (b.lastActivityDate || 0));
         } else if (sortBy === "oldest_modified") {
             allCandidates.sort((a, b) => (a.updatedAt || a.addedAt || 0) - (b.updatedAt || b.addedAt || 0));
         } else {
@@ -4986,6 +5145,7 @@ export async function runPruneSimulationAction(
         minAgeDays?: number;
         unwatchedOnly?: boolean;
         maxCandidates?: number;
+        evaluateSeasons?: boolean;
         sortBy?: "combined_oldest" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     },
     targetSectionKey?: string
@@ -5095,7 +5255,8 @@ export async function executePruneAction(
                             it.serverId,
                             matched,
                             overlayOpts,
-                            true
+                            true,
+                            serverName
                         );
                     }
                 }
@@ -5104,16 +5265,52 @@ export async function executePruneAction(
                     ratingKey: it.ratingKey,
                     title: it.title || it.ratingKey,
                     serverName,
-                    action: `Staged with ${daysNotice}-day Leaving Soon notice (Simulation / Safe Mode)`,
+                    action: `Staged with ${daysNotice}-day Leaving Soon notice on Plex server "${serverName}" (Simulation / Safe Mode)`,
                     success: true
                 });
             } else {
                 // 2. LIVE DELETION MODE (Master Switch ON + Dry Run OFF / Explicit Force Delete)
                 let deleted = false;
+                let arrDeleted = false;
 
                 if (serverUrl) {
-                    const plexDelRes = await deleteMediaFromPlexServer(serverUrl, serverToken, it.ratingKey);
+                    const plexDelRes = await deleteMediaFromPlexServer(serverUrl, serverToken, it.ratingKey, serverName);
                     deleted = plexDelRes.success;
+                }
+
+                // If pruneDeleteFromArr is enabled, also unmonitor and delete from Radarr / Sonarr
+                if (settings?.pruneDeleteFromArr && it.title) {
+                    try {
+                        const cleanTitle = it.title.replace(/\s*\(\d{4}\).*$/, "").replace(/\s*-\s*Season\s*\d+.*$/i, "").trim();
+                        const radarrRes = await getEnabledArrInstancesInternal("radarr");
+                        if (radarrRes.success && radarrRes.data) {
+                            for (const app of radarrRes.data) {
+                                const lookupRes = await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(cleanTitle)}`);
+                                if (lookupRes.success && Array.isArray(lookupRes.data)) {
+                                    const match = lookupRes.data.find((m: any) => m.title?.toLowerCase() === cleanTitle.toLowerCase() && m.id);
+                                    if (match && match.id) {
+                                        const delRes = await arrApiDelete(app, `/api/v3/movie/${match.id}?deleteFiles=true&addImportExclusion=false`);
+                                        if (delRes.success) arrDeleted = true;
+                                    }
+                                }
+                            }
+                        }
+                        const sonarrRes = await getEnabledArrInstancesInternal("sonarr");
+                        if (sonarrRes.success && sonarrRes.data) {
+                            for (const app of sonarrRes.data) {
+                                const seriesRes = await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(cleanTitle)}`);
+                                if (seriesRes.success && Array.isArray(seriesRes.data)) {
+                                    const match = seriesRes.data.find((s: any) => s.title?.toLowerCase() === cleanTitle.toLowerCase() && s.id);
+                                    if (match && match.id) {
+                                        const delRes = await arrApiDelete(app, `/api/v3/series/${match.id}?deleteFiles=true&addImportExclusion=false`);
+                                        if (delRes.success) arrDeleted = true;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (arrErr: any) {
+                        console.warn("[PRUNE-ARR-DELETE] Failed unmonitoring/deleting from Arr:", arrErr.message);
+                    }
                 }
 
                 await prisma.mediaContentAdvisory.deleteMany({
@@ -5124,7 +5321,9 @@ export async function executePruneAction(
                     ratingKey: it.ratingKey,
                     title: it.title || it.ratingKey,
                     serverName,
-                    action: deleted ? "Permanently deleted from disk & Plex library" : "Failed to delete from Plex",
+                    action: deleted
+                        ? `Permanently deleted from disk & Plex library${arrDeleted ? " and unmonitored from Servarr" : ""}`
+                        : "Failed to delete from Plex",
                     success: deleted
                 });
             }
@@ -5180,7 +5379,7 @@ export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
                 const resolved = await resolveWorkingPlexServerConnection(srvId);
                 if (resolved?.serverUrl) {
                     for (const rKey of rKeys) {
-                        await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, rKey).catch(() => {});
+                        await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, rKey, resolved.serverName).catch(() => {});
                     }
                 }
             } catch (err) {}
@@ -5757,12 +5956,14 @@ export async function applyOverlayToSingleItemAction(
                     height: cb.height,
                     opacity: cb.opacity
                 }))
-            }
+            },
+            false,
+            resolved.serverName
         );
 
         return {
             success: res.success,
-            message: res.success ? `Applied overlays to "${inspection.item.title}" successfully!` : res.message
+            message: res.success ? `Applied overlays to "${inspection.item.title}" on Plex server "${resolved.serverName}" successfully!` : res.message
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -5779,10 +5980,10 @@ export async function restoreSingleItemPosterAction(serverId: string, ratingKey:
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
-        const res = await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey);
+        const res = await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey, resolved.serverName);
         return {
             success: res.success,
-            message: res.success ? "Restored original pristine poster!" : (res.message || "Artwork not found in backup vault.")
+            message: res.success ? `Restored original pristine poster on Plex server "${resolved.serverName}"!` : (res.message || "Artwork not found in backup vault.")
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -6002,9 +6203,9 @@ export async function runServerCurationSyncAction(serverId: string, sectionKey?:
             const res = await applyOverlaysToLibraryInternal(serverId, sectionKey);
             if (res.success && res.appliedCount) {
                 overlaysAppliedCount = res.appliedCount;
-                details.push(`Applied overlays to ${res.appliedCount} items in library section ${sectionKey}.`);
+                details.push(`Applied overlays to ${res.appliedCount} items in library section ${sectionKey} on Plex server "${resolved.serverName}".`);
             } else if (!res.success) {
-                details.push(`Library ${sectionKey} error: ${res.error || "Failed applying overlays"}`);
+                details.push(`Library ${sectionKey} error on Plex server "${resolved.serverName}": ${res.error || "Failed applying overlays"}`);
             }
         } else {
             const settings = await prisma.settings.findFirst({ where: { id: "global" } });
@@ -6016,17 +6217,17 @@ export async function runServerCurationSyncAction(serverId: string, sectionKey?:
             for (const sec of sections) {
                 const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, serverId, String(sec.key));
                 if (!isSecEnabled) {
-                    details.push(`Skipped "${sec.title}" (Section is DISABLED for overlays).`);
+                    details.push(`Skipped "${sec.title}" on Plex server "${resolved.serverName}" (Section is DISABLED for overlays).`);
                     continue;
                 }
                 try {
                     const res = await applyOverlaysToLibraryInternal(serverId, String(sec.key));
                     if (res.success && res.appliedCount) {
                         overlaysAppliedCount += res.appliedCount;
-                        details.push(`Applied overlays to ${res.appliedCount} items in "${sec.title}".`);
+                        details.push(`Applied overlays to ${res.appliedCount} items in "${sec.title}" on Plex server "${resolved.serverName}".`);
                     }
                 } catch (e: any) {
-                    details.push(`Section "${sec.title}" error: ${e.message}`);
+                    details.push(`Section "${sec.title}" error on Plex server "${resolved.serverName}": ${e.message}`);
                 }
             }
         }
@@ -6044,6 +6245,362 @@ export async function runServerCurationSyncAction(serverId: string, sectionKey?:
             success: false, 
             error: e.message, 
             details: [e.message] 
+        };
+    }
+}
+
+/**
+ * Executes an automated or on-demand incremental overlay sync across enabled servers and sections
+ * (or scoped to a target server/section).
+ */
+export async function runOverlayIncrementalSyncInternal(targetServerId?: string, targetSectionKey?: string): Promise<{
+    success: boolean;
+    overlaysAppliedCount: number;
+    newBadgedCount: number;
+    upgradedCount: number;
+    skippedCount: number;
+    totalEvaluated: number;
+    details: string[];
+    timestamp: string;
+    message: string;
+    error?: string;
+}> {
+    const details: string[] = [];
+    let overlaysAppliedCount = 0;
+    let totalNewBadged = 0;
+    let totalUpgraded = 0;
+    let totalSkipped = 0;
+    let totalEvaluated = 0;
+
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings) {
+            return {
+                success: false,
+                overlaysAppliedCount: 0,
+                newBadgedCount: 0,
+                upgradedCount: 0,
+                skippedCount: 0,
+                totalEvaluated: 0,
+                details: ["No global settings configured."],
+                timestamp: new Date().toISOString(),
+                message: "No global settings configured.",
+                error: "No global settings configured."
+            };
+        }
+
+        const token = settings.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) {
+            return {
+                success: false,
+                overlaysAppliedCount: 0,
+                newBadgedCount: 0,
+                upgradedCount: 0,
+                skippedCount: 0,
+                totalEvaluated: 0,
+                details: ["No Plex token configured."],
+                timestamp: new Date().toISOString(),
+                message: "No Plex token configured.",
+                error: "No Plex token configured."
+            };
+        }
+
+        const batchSize = settings.overlayIncrementalBatchSize || 200;
+        const allServers = await getPlexServers(token);
+        const enabledServersForOverlays: string[] = settings.enabledServersForOverlays
+            ? JSON.parse(settings.enabledServersForOverlays)
+            : [];
+
+        const serversToProcess = targetServerId
+            ? allServers.filter(s => s.clientIdentifier === targetServerId)
+            : (enabledServersForOverlays.length > 0
+                ? allServers.filter(s => enabledServersForOverlays.some(k => k === s.clientIdentifier || k.startsWith(`${s.clientIdentifier}:`)))
+                : allServers);
+
+        if (serversToProcess.length === 0 && targetServerId) {
+            serversToProcess.push({ name: "Plex Server", clientIdentifier: targetServerId, url: "" } as any);
+        }
+
+        for (const srv of serversToProcess) {
+            const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
+            if (!resolved || !resolved.serverUrl) {
+                details.push(`Server "${srv.name || srv.clientIdentifier}" unreachable.`);
+                continue;
+            }
+
+            const sections = targetSectionKey
+                ? [{ key: targetSectionKey, title: `Section #${targetSectionKey}` }]
+                : await getPlexServerSections(resolved.token, srv.clientIdentifier);
+
+            for (const sec of sections) {
+                if (!targetSectionKey) {
+                    const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, srv.clientIdentifier, String(sec.key));
+                    if (!isSecEnabled) {
+                        continue;
+                    }
+                }
+
+                try {
+                    const res = await applyOverlaysToLibraryInternal(srv.clientIdentifier, String(sec.key), undefined, {
+                        batchSize,
+                        mode: "incremental"
+                    });
+
+                    if (res.success) {
+                        overlaysAppliedCount += res.appliedCount || 0;
+                        totalNewBadged += res.newBadgedCount || 0;
+                        totalUpgraded += res.upgradedCount || 0;
+                        totalSkipped += res.skippedCount || 0;
+                        totalEvaluated += res.totalEvaluated || 0;
+                        if (res.appliedCount && res.appliedCount > 0) {
+                            details.push(`[${resolved.serverName}] "${sec.title || sec.key}": ${res.appliedCount} updated (${res.newBadgedCount || 0} new, ${res.upgradedCount || 0} upgraded).`);
+                        }
+                    } else {
+                        details.push(`[${resolved.serverName}] "${sec.title || sec.key}" error: ${res.error || "Unknown error"}`);
+                    }
+                } catch (secErr: any) {
+                    details.push(`[${resolved.serverName}] "${sec.title || sec.key}" failed: ${secErr.message}`);
+                }
+            }
+        }
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                overlayIncrementalLastRunAt: new Date()
+            }
+        });
+
+        const msg = `⚡ Incremental Scan completed: ${overlaysAppliedCount} posters updated (${totalNewBadged} new, ${totalUpgraded} upgraded), ${totalSkipped} skipped.`;
+        logger.addLog("INFO", "CURATION", msg);
+
+        return {
+            success: true,
+            overlaysAppliedCount,
+            newBadgedCount: totalNewBadged,
+            upgradedCount: totalUpgraded,
+            skippedCount: totalSkipped,
+            totalEvaluated,
+            details,
+            timestamp: new Date().toISOString(),
+            message: msg
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "CURATION", `Incremental overlay sync failed: ${e.message}`);
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: [e.message],
+            timestamp: new Date().toISOString(),
+            message: e.message,
+            error: e.message
+        };
+    }
+}
+
+/**
+ * Server action to trigger Incremental Overlay Sync.
+ */
+export async function runOverlayIncrementalSyncAction(targetServerId?: string, targetSectionKey?: string) {
+    try {
+        await verifyAdmin();
+        return await runOverlayIncrementalSyncInternal(targetServerId, targetSectionKey);
+    } catch (e: any) {
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: [e.message],
+            timestamp: new Date().toISOString(),
+            message: e.message,
+            error: e.message
+        };
+    }
+}
+
+/**
+ * Executes an automated or on-demand deep library recheck sync across enabled servers and sections
+ * (or scoped to a target server/section).
+ */
+export async function runOverlayRecheckSyncInternal(targetServerId?: string, targetSectionKey?: string): Promise<{
+    success: boolean;
+    overlaysAppliedCount: number;
+    newBadgedCount: number;
+    upgradedCount: number;
+    skippedCount: number;
+    totalEvaluated: number;
+    details: string[];
+    timestamp: string;
+    message: string;
+    error?: string;
+}> {
+    const details: string[] = [];
+    let overlaysAppliedCount = 0;
+    let totalNewBadged = 0;
+    let totalUpgraded = 0;
+    let totalSkipped = 0;
+    let totalEvaluated = 0;
+
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings) {
+            return {
+                success: false,
+                overlaysAppliedCount: 0,
+                newBadgedCount: 0,
+                upgradedCount: 0,
+                skippedCount: 0,
+                totalEvaluated: 0,
+                details: ["No global settings configured."],
+                timestamp: new Date().toISOString(),
+                message: "No global settings configured.",
+                error: "No global settings configured."
+            };
+        }
+
+        const token = settings.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) {
+            return {
+                success: false,
+                overlaysAppliedCount: 0,
+                newBadgedCount: 0,
+                upgradedCount: 0,
+                skippedCount: 0,
+                totalEvaluated: 0,
+                details: ["No Plex token configured."],
+                timestamp: new Date().toISOString(),
+                message: "No Plex token configured.",
+                error: "No Plex token configured."
+            };
+        }
+
+        const batchSize = settings.overlayRecheckBatchSize || 200;
+        const scope = (settings.overlayRecheckScope as any) || "daily_recheck";
+        const allServers = await getPlexServers(token);
+        const enabledServersForOverlays: string[] = settings.enabledServersForOverlays
+            ? JSON.parse(settings.enabledServersForOverlays)
+            : [];
+
+        const serversToProcess = targetServerId
+            ? allServers.filter(s => s.clientIdentifier === targetServerId)
+            : (enabledServersForOverlays.length > 0
+                ? allServers.filter(s => enabledServersForOverlays.some(k => k === s.clientIdentifier || k.startsWith(`${s.clientIdentifier}:`)))
+                : allServers);
+
+        if (serversToProcess.length === 0 && targetServerId) {
+            serversToProcess.push({ name: "Plex Server", clientIdentifier: targetServerId, url: "" } as any);
+        }
+
+        for (const srv of serversToProcess) {
+            const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
+            if (!resolved || !resolved.serverUrl) {
+                details.push(`Server "${srv.name || srv.clientIdentifier}" unreachable.`);
+                continue;
+            }
+
+            const sections = targetSectionKey
+                ? [{ key: targetSectionKey, title: `Section #${targetSectionKey}` }]
+                : await getPlexServerSections(resolved.token, srv.clientIdentifier);
+
+            for (const sec of sections) {
+                if (!targetSectionKey) {
+                    const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, srv.clientIdentifier, String(sec.key));
+                    if (!isSecEnabled) {
+                        continue;
+                    }
+                }
+
+                try {
+                    const res = await applyOverlaysToLibraryInternal(srv.clientIdentifier, String(sec.key), undefined, {
+                        batchSize,
+                        mode: scope
+                    });
+
+                    if (res.success) {
+                        overlaysAppliedCount += res.appliedCount || 0;
+                        totalNewBadged += res.newBadgedCount || 0;
+                        totalUpgraded += res.upgradedCount || 0;
+                        totalSkipped += res.skippedCount || 0;
+                        totalEvaluated += res.totalEvaluated || 0;
+                        if (res.appliedCount && res.appliedCount > 0) {
+                            details.push(`[${resolved.serverName}] "${sec.title || sec.key}": ${res.appliedCount} updated (${res.newBadgedCount || 0} new, ${res.upgradedCount || 0} upgraded).`);
+                        }
+                    } else {
+                        details.push(`[${resolved.serverName}] "${sec.title || sec.key}" error: ${res.error || "Unknown error"}`);
+                    }
+                } catch (secErr: any) {
+                    details.push(`[${resolved.serverName}] "${sec.title || sec.key}" failed: ${secErr.message}`);
+                }
+            }
+        }
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                overlayRecheckLastRunAt: new Date()
+            }
+        });
+
+        const scopeLabel = scope === "daily_recheck" ? "Daily Recheck (>24h)" : scope === "weekly_recheck" ? "Weekly Recheck (>7d)" : scope === "monthly_recheck" ? "Monthly Recheck (>30d)" : "Force Recheck (All)";
+        const msg = `🌙 Deep Recheck (${scopeLabel}) completed: ${overlaysAppliedCount} posters updated (${totalNewBadged} new, ${totalUpgraded} upgraded), ${totalSkipped} skipped.`;
+        logger.addLog("INFO", "CURATION", msg);
+
+        return {
+            success: true,
+            overlaysAppliedCount,
+            newBadgedCount: totalNewBadged,
+            upgradedCount: totalUpgraded,
+            skippedCount: totalSkipped,
+            totalEvaluated,
+            details,
+            timestamp: new Date().toISOString(),
+            message: msg
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "CURATION", `Deep recheck overlay sync failed: ${e.message}`);
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: [e.message],
+            timestamp: new Date().toISOString(),
+            message: e.message,
+            error: e.message
+        };
+    }
+}
+
+/**
+ * Server action to trigger Deep Library Recheck Sync.
+ */
+export async function runOverlayRecheckSyncAction(targetServerId?: string, targetSectionKey?: string) {
+    try {
+        await verifyAdmin();
+        return await runOverlayRecheckSyncInternal(targetServerId, targetSectionKey);
+    } catch (e: any) {
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: [e.message],
+            timestamp: new Date().toISOString(),
+            message: e.message,
+            error: e.message
         };
     }
 }

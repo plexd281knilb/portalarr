@@ -5,6 +5,7 @@ import crypto from "crypto";
 import * as opentype from "opentype.js";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { fetchPlexPosterBuffer, uploadPlexItemPoster, PlexMediaStreamInfo } from "./plex-analyzer";
 
 export interface TieredRibbonItem {
@@ -2151,6 +2152,16 @@ export function computeMediaOverlayHash(
     return crypto.createHash("md5").update(JSON.stringify(keyData)).digest("hex");
 }
 
+async function resolveServerNameHelper(serverId?: string, fallbackName?: string): Promise<string> {
+    if (fallbackName && fallbackName !== "Plex") return fallbackName;
+    if (!serverId) return fallbackName || "Plex";
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (resolved?.serverName) return resolved.serverName;
+    } catch (e) {}
+    return fallbackName || serverId || "Plex";
+}
+
 /**
  * Backs up pristine original artwork and applies overlay to a Plex item.
  * Automatically tracks mediaHash so unchanged items are skipped on incremental runs,
@@ -2162,13 +2173,16 @@ export async function backupAndApplyOverlay(
     serverId: string,
     item: PlexMediaStreamInfo,
     options: OverlayOptions = {},
-    forceReapply = false
+    forceReapply = false,
+    serverName?: string
 ): Promise<{ success: boolean; skipped?: boolean; upgraded?: boolean; applied?: boolean; message?: string }> {
     ensureBackupDir();
 
     if (!item.thumb) {
         return { success: false, message: "Item has no thumbnail to overlay." };
     }
+
+    const targetServerName = await resolveServerNameHelper(serverId, serverName);
 
     // Guard: strictly exclude trailer placeholders and coming soon stubs from poster overlays
     if (
@@ -2226,7 +2240,7 @@ export async function backupAndApplyOverlay(
         return {
             success: true,
             skipped: true,
-            message: `"${item.title}" is already up to date with matching overlays.`
+            message: `"${item.title}" is already up to date with matching overlays on Plex server "${targetServerName}".`
         };
     }
 
@@ -2256,7 +2270,7 @@ export async function backupAndApplyOverlay(
                 appliedBadges: badgeSummary
             }
         });
-        logger.addLog("INFO", "CURATION", `Backed up pristine original poster for "${item.title}" (RatingKey: ${item.ratingKey})`);
+        logger.addLog("INFO", "CURATION", `Backed up pristine original poster for "${item.title}" (RatingKey: ${item.ratingKey}) on Plex server "${targetServerName}".`);
     }
 
     const overlayBuffer = await applyOverlaysToPoster(
@@ -2280,15 +2294,15 @@ export async function backupAndApplyOverlay(
         }
 
         const actionType = isUpgrade ? "Upgraded" : "Applied";
-        logger.addLog("SUCCESS", "CURATION", `${actionType} overlay badges to "${item.title}" on Plex.`);
+        logger.addLog("SUCCESS", "CURATION", `${actionType} overlay badges to "${item.title}" on Plex server "${targetServerName}".`);
         return { 
             success: true, 
             upgraded: isUpgrade, 
             applied: !isUpgrade,
-            message: `${actionType} overlay to "${item.title}".` 
+            message: `${actionType} overlay to "${item.title}" on Plex server "${targetServerName}".` 
         };
     } else {
-        return { success: false, message: "Failed to upload overlay poster to Plex." };
+        return { success: false, message: `Failed to upload overlay poster to Plex server "${targetServerName}".` };
     }
 }
 
@@ -2299,8 +2313,11 @@ export async function restoreItemOriginalArtwork(
     serverUrl: string,
     token: string,
     serverId: string,
-    ratingKey: string
+    ratingKey: string,
+    serverName?: string
 ): Promise<{ success: boolean; message?: string }> {
+    const targetServerName = await resolveServerNameHelper(serverId, serverName);
+
     const backup = await prisma.mediaArtBackup.findUnique({
         where: {
             serverId_ratingKey: {
@@ -2311,7 +2328,7 @@ export async function restoreItemOriginalArtwork(
     });
 
     if (!backup) {
-        return { success: false, message: "No backup found for this item." };
+        return { success: false, message: `No backup found for this item on Plex server "${targetServerName}".` };
     }
 
     if (fs.existsSync(backup.backupFilePath)) {
@@ -2322,12 +2339,12 @@ export async function restoreItemOriginalArtwork(
             try { fs.unlinkSync(backup.backupFilePath); } catch (e) {}
             await prisma.mediaArtBackup.delete({ where: { id: backup.id } });
 
-            logger.addLog("SUCCESS", "CURATION", `Restored pristine original poster for RatingKey: ${ratingKey}`);
-            return { success: true, message: "Original poster restored successfully." };
+            logger.addLog("SUCCESS", "CURATION", `Restored pristine original poster for RatingKey: ${ratingKey} on Plex server "${targetServerName}".`);
+            return { success: true, message: `Original poster restored successfully on Plex server "${targetServerName}".` };
         }
     }
 
-    return { success: false, message: "Failed to restore poster file." };
+    return { success: false, message: `Failed to restore poster file on Plex server "${targetServerName}".` };
 }
 
 /**
@@ -2336,21 +2353,26 @@ export async function restoreItemOriginalArtwork(
 export async function restoreAllOriginalArtworks(
     serverUrl: string,
     token: string,
-    serverId: string
+    serverId: string,
+    serverName?: string
 ): Promise<{ success: boolean; restoredCount: number; message?: string }> {
+    const targetServerName = await resolveServerNameHelper(serverId, serverName);
+
     const backups = await prisma.mediaArtBackup.findMany({
         where: { serverId }
     });
 
     let restoredCount = 0;
     for (const b of backups) {
-        const res = await restoreItemOriginalArtwork(serverUrl, token, serverId, b.ratingKey);
+        const res = await restoreItemOriginalArtwork(serverUrl, token, serverId, b.ratingKey, targetServerName);
         if (res.success) restoredCount++;
     }
+
+    logger.addLog("SUCCESS", "CURATION", `Restored ${restoredCount} original posters back to Plex server "${targetServerName}".`);
 
     return {
         success: true,
         restoredCount,
-        message: `Restored ${restoredCount} original posters back to Plex.`
+        message: `Restored ${restoredCount} original posters back to Plex server "${targetServerName}".`
     };
 }

@@ -63,6 +63,10 @@ model Settings {
   autoOverlaySync             Boolean   @default(true)
   autoCollectionSync          Boolean   @default(true)
   leavingSoonDiskThreshold    Int?      @default(15) // % free space threshold to flag leaving soon
+  pruneWarningThresholdPercent Int?      @default(85) // % disk used threshold to begin staging leaving soon
+  pruneDangerThresholdPercent  Int?      @default(95) // % disk used threshold to trigger active reclamation
+  pruneTargetHeadroomGb        Int?      @default(100) // Target free space headroom in GB
+  pruneEvaluateSeasons         Boolean   @default(true) // Evaluate TV shows at individual season level
   enableAutoPruneDeletion     Boolean   @default(false) // Safety master switch - OFF by default
   pruneDryRun                 Boolean   @default(true) // Dry run simulation mode - ON by default
   pruneTagCollection          Boolean   @default(true) // Tag '⚠️ Leaving Soon' Plex collection
@@ -123,6 +127,17 @@ model Settings {
   curationSyncParentalTags         Boolean   @default(true) // Auto-apply IMDb parental rating tags
   curationLastRunAt                DateTime?
   curationLastRunStatus            String?   // JSON telemetry summary of last execution
+
+  // Poster Overlays Dual Automation Schedules (Incremental vs Deep Rechecks)
+  overlayIncrementalEnabled        Boolean   @default(true) // Fast incremental scan for new media & upgrades
+  overlayIncrementalSchedule       String?   @default("every_hour") // "every_hour", "every_3_hours", "every_6_hours", "every_12_hours"
+  overlayIncrementalBatchSize      Int?      @default(200) // Max items per incremental scan
+  overlayIncrementalLastRunAt      DateTime?
+  overlayRecheckEnabled            Boolean   @default(true) // Deep periodic recheck scan
+  overlayRecheckSchedule           String?   @default("daily_4am") // "daily_4am", "every_12_hours", "weekly_sun", "monthly_1st"
+  overlayRecheckScope              String?   @default("daily_recheck") // "daily_recheck" (>24h), "weekly_recheck" (>7d), "monthly_recheck" (>30d), "force_all"
+  overlayRecheckBatchSize          Int?      @default(200) // Max items per recheck scan
+  overlayRecheckLastRunAt          DateTime?
 
   // IMDb Parental Advisory & Rating Tagging Controls
   parentalTaggingEnabled           Boolean   @default(true)

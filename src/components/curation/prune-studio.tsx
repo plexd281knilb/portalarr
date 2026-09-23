@@ -211,6 +211,11 @@ export function PruneStudio() {
 
     // Global Prune & Storage Free Space Threshold States
     const [leavingSoonDiskThreshold, setLeavingSoonDiskThreshold] = useState<number>(15);
+    const [pruneWarningThresholdPercent, setPruneWarningThresholdPercent] = useState<number>(85);
+    const [pruneDangerThresholdPercent, setPruneDangerThresholdPercent] = useState<number>(95);
+    const [pruneTargetHeadroomGb, setPruneTargetHeadroomGb] = useState<number>(100);
+    const [pruneEvaluateSeasonsSetting, setPruneEvaluateSeasonsSetting] = useState<boolean>(true);
+    const [pruneDeleteFromArrSetting, setPruneDeleteFromArrSetting] = useState<boolean>(false);
     const [pruneMinAgeDaysSetting, setPruneMinAgeDaysSetting] = useState<number>(90);
     const [pruneDaysNoticeSetting, setPruneDaysNoticeSetting] = useState<number>(14);
     const [pruneUnwatchedOnlySetting, setPruneUnwatchedOnlySetting] = useState<boolean>(true);
@@ -224,6 +229,11 @@ export function PruneStudio() {
         try {
             const res = await saveCurationSettingsAction({
                 leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
                 pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
                 pruneDaysNotice: Number(pruneDaysNoticeSetting),
                 pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
@@ -232,6 +242,11 @@ export function PruneStudio() {
                 setSettings((prev: any) => ({
                     ...prev,
                     leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                    pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                    pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                    pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                    pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                    pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
                     pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
                     pruneDaysNotice: Number(pruneDaysNoticeSetting),
                     pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
@@ -433,6 +448,7 @@ export function PruneStudio() {
     const [simFilterSearch, setSimFilterSearch] = useState<string>("");
     const [simMinAgeDays, setSimMinAgeDays] = useState(90);
     const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(true);
+    const [simEvaluateSeasons, setSimEvaluateSeasons] = useState(true);
     const [simulatingPrune, setSimulatingPrune] = useState(false);
     const [selectedRulePresetId, setSelectedRulePresetId] = useState<string>("standard_90d_unwatched");
     const [customRulePresets, setCustomRulePresets] = useState<MaintainerrRulePreset[]>([]);
@@ -931,6 +947,16 @@ export function PruneStudio() {
                         setEnabledServersForPruning(settingsRes.enabledServersForPruning);
                     }
                     if (settingsRes.leavingSoonDiskThreshold !== undefined) setLeavingSoonDiskThreshold(settingsRes.leavingSoonDiskThreshold);
+                    if (settingsRes.pruneWarningThresholdPercent !== undefined) setPruneWarningThresholdPercent(settingsRes.pruneWarningThresholdPercent);
+                    if (settingsRes.pruneDangerThresholdPercent !== undefined) setPruneDangerThresholdPercent(settingsRes.pruneDangerThresholdPercent);
+                    if (settingsRes.pruneTargetHeadroomGb !== undefined) setPruneTargetHeadroomGb(settingsRes.pruneTargetHeadroomGb);
+                    if (settingsRes.pruneEvaluateSeasons !== undefined) {
+                        setPruneEvaluateSeasonsSetting(settingsRes.pruneEvaluateSeasons);
+                        setSimEvaluateSeasons(settingsRes.pruneEvaluateSeasons);
+                    }
+                    if (settingsRes.pruneDeleteFromArr !== undefined) {
+                        setPruneDeleteFromArrSetting(settingsRes.pruneDeleteFromArr);
+                    }
                     if (settingsRes.pruneMinAgeDays !== undefined) {
                         setPruneMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
                         setSimMinAgeDays(settingsRes.pruneMinAgeDays);
@@ -1170,6 +1196,7 @@ export function PruneStudio() {
                 minAgeDays: simMinAgeDays,
                 unwatchedOnly: simUnwatchedOnly,
                 maxCandidates: simOldestLimit === 0 ? 500 : simOldestLimit,
+                evaluateSeasons: simEvaluateSeasons,
                 sortBy: simSortBy
             }, selectedSectionKey || undefined);
 
@@ -2382,7 +2409,7 @@ export function PruneStudio() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
                             {/* Sort / Discovery Mode */}
                             <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
                                 <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
@@ -2448,6 +2475,20 @@ export function PruneStudio() {
                                     />
                                     <span className="text-slate-400 text-xs shrink-0">days old</span>
                                 </div>
+                            </div>
+
+                            {/* Season-Level TV Pruning Toggle */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                                        <Tv className="h-3.5 w-3.5 text-indigo-400" />
+                                        <span>Season-Level TV:</span>
+                                    </Label>
+                                    <Switch checked={simEvaluateSeasons} onCheckedChange={setSimEvaluateSeasons} />
+                                </div>
+                                <p className="text-[10px] text-slate-400">
+                                    {simEvaluateSeasons ? "Evaluate individual TV seasons" : "Evaluate whole TV series"}
+                                </p>
                             </div>
 
                             {/* Unwatched Only Toggle */}
@@ -2663,8 +2704,18 @@ export function PruneStudio() {
                                                                 <div className="min-w-0">
                                                                     <div className="flex items-center gap-2 flex-wrap">
                                                                         <span className="font-bold text-white text-xs sm:text-sm truncate">
-                                                                            {c.title}
+                                                                            {c.parentTitle || c.title}
                                                                         </span>
+                                                                        {c.seasonNumber !== undefined && (
+                                                                            <Badge className="bg-indigo-950 text-indigo-300 border-indigo-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                                Season {c.seasonNumber}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.episodeCount !== undefined && (
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-indigo-700/50 text-indigo-300 bg-indigo-950/20">
+                                                                                {c.episodeCount} eps
+                                                                            </Badge>
+                                                                        )}
                                                                         {c.year && (
                                                                             <span className="text-xs text-slate-400 font-mono">
                                                                                 ({c.year})
@@ -2701,7 +2752,7 @@ export function PruneStudio() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Verification Telemetry Grid: Added, Last Modified, Last Watched, Play Count */}
+                                                        {/* Verification Telemetry Grid: Added, Last Modified, Last Watched, Inactive Days */}
                                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono">
                                                             {/* Added to Library */}
                                                             <div className="flex items-center gap-1.5 text-slate-300">
@@ -2727,10 +2778,10 @@ export function PruneStudio() {
                                                                 )}
                                                             </div>
 
-                                                            {/* Play Count */}
+                                                            {/* Unified Activity & Plays */}
                                                             <div className="flex items-center gap-1.5 text-slate-300">
-                                                                <Play className="h-3 w-3 text-emerald-400 shrink-0" />
-                                                                <span>Plays: <strong className="text-white">{c.viewCount || 0}</strong> {c.viewCount === 1 ? "play" : "plays"}</span>
+                                                                <Clock className="h-3 w-3 text-rose-400 shrink-0" />
+                                                                <span>Inactive: <strong className="text-rose-300">{c.daysInactive ?? daysSinceViewed ?? (c.daysOld ?? c.ageDays)}d</strong> ({c.viewCount || 0} {c.viewCount === 1 ? "play" : "plays"})</span>
                                                             </div>
                                                         </div>
 
@@ -2773,7 +2824,7 @@ export function PruneStudio() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                         {/* Master Deletion Switch */}
                         <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
                             <div className="flex items-center justify-between">
@@ -2809,6 +2860,26 @@ export function PruneStudio() {
                             </div>
                             <p className="text-[11px] text-slate-400">
                                 Dry run mode simulates file cleanup without physically touching media on disk.
+                            </p>
+                        </div>
+
+                        {/* Servarr Synchronized Deletion & Queue Cleanup */}
+                        <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-white text-xs flex items-center gap-2">
+                                    <Trash2 className="h-4 w-4 text-amber-400" /> Servarr Arr Cleanup
+                                </span>
+                                <Switch
+                                    checked={settings.pruneDeleteFromArr ?? false}
+                                    onCheckedChange={async (checked) => {
+                                        setSettings((prev: any) => ({ ...prev, pruneDeleteFromArr: checked }));
+                                        setPruneDeleteFromArrSetting(checked);
+                                        await saveCurationSettingsAction({ pruneDeleteFromArr: checked });
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                When enabled, live media deletions unmonitor and remove files from Radarr and Sonarr.
                             </p>
                         </div>
                     </div>
@@ -2918,34 +2989,118 @@ export function PruneStudio() {
                                 <span>Storage &amp; Auto-Pruning Thresholds</span>
                             </CardTitle>
                             <p className="text-xs text-slate-400">
-                                Configure the disk capacity trigger threshold and media age limits that govern automated pruning evaluations.
+                                Configure two-tier capacity thresholds (Warning vs Danger), target reclamation headroom, and automated pruning retention policies.
                             </p>
 
                             <div className="space-y-3.5 text-xs">
-                                {/* Disk Free Space Trigger Threshold */}
+                                {/* Warning / Staging Threshold (% Used) */}
                                 <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
                                     <div className="flex items-center justify-between">
                                         <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
                                             <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
-                                            <span>Free Space Trigger Threshold (% Free):</span>
+                                            <span>Warning / Staging Threshold (% Used):</span>
                                         </Label>
-                                        <span className="font-mono text-xs font-black text-rose-400">
-                                            {leavingSoonDiskThreshold}% Free
+                                        <span className="font-mono text-xs font-bold text-amber-400">
+                                            {pruneWarningThresholdPercent}% Used ({100 - pruneWarningThresholdPercent}% Free)
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-3 pt-1">
                                         <Input
                                             type="number"
-                                            min="1"
-                                            max="50"
-                                            value={leavingSoonDiskThreshold}
-                                            onChange={(e) => setLeavingSoonDiskThreshold(parseInt(e.target.value, 10) || 15)}
+                                            min="50"
+                                            max="99"
+                                            value={pruneWarningThresholdPercent}
+                                            onChange={(e) => setPruneWarningThresholdPercent(parseInt(e.target.value, 10) || 85)}
                                             className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
                                         />
                                         <p className="text-[11px] text-slate-400">
-                                            Auto-pruning evaluates when array free space is below <strong className="text-white">{leavingSoonDiskThreshold}%</strong>.
+                                            Auto-stages candidate items to Leaving Soon when array reaches <strong className="text-white">{pruneWarningThresholdPercent}% used</strong>.
                                         </p>
                                     </div>
+                                </div>
+
+                                {/* Danger / Active Reclamation Threshold (% Used) */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>Danger / Active Reclamation (% Used):</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-black text-rose-400">
+                                            {pruneDangerThresholdPercent}% Used
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="70"
+                                            max="100"
+                                            value={pruneDangerThresholdPercent}
+                                            onChange={(e) => setPruneDangerThresholdPercent(parseInt(e.target.value, 10) || 95)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Triggers live deletion of expired Leaving Soon items when disk hits <strong className="text-white">{pruneDangerThresholdPercent}% used</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Target Headroom Capacity (GB) */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Archive className="h-3.5 w-3.5 text-emerald-400" />
+                                            <span>Target Reclamation Headroom:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-emerald-300">
+                                            {pruneTargetHeadroomGb} GB
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="10"
+                                            max="10000"
+                                            value={pruneTargetHeadroomGb}
+                                            onChange={(e) => setPruneTargetHeadroomGb(parseInt(e.target.value, 10) || 100)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-24"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Target storage volume to reclaim and maintain as free buffer headroom.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Season-Level TV Pruning Policy */}
+                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
+                                            <Tv className="h-3.5 w-3.5 text-indigo-400" /> Season-Level TV Pruning
+                                        </span>
+                                        <p className="text-[10px] text-slate-400">
+                                            {pruneEvaluateSeasonsSetting ? "Evaluates and stages individual inactive TV seasons instead of wiping whole series." : "Evaluates TV series at the whole show level."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={pruneEvaluateSeasonsSetting}
+                                        onCheckedChange={setPruneEvaluateSeasonsSetting}
+                                    />
+                                </div>
+
+                                {/* Servarr Synchronized Deletion */}
+                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
+                                            <Trash2 className="h-3.5 w-3.5 text-amber-400" /> Servarr Arr Cleanup
+                                        </span>
+                                        <p className="text-[10px] text-slate-400">
+                                            {pruneDeleteFromArrSetting ? "Unmonitors and removes files from Radarr and Sonarr during live prune deletions." : "Deletes files strictly from Plex disk storage without modifying Arr instances."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={pruneDeleteFromArrSetting}
+                                        onCheckedChange={setPruneDeleteFromArrSetting}
+                                    />
                                 </div>
 
                                 {/* Default Minimum Media Age */}

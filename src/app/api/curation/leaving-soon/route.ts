@@ -82,11 +82,15 @@ export async function POST(req: NextRequest) {
         });
 
         // If server credentials exist, update Plex collection and overlay
+        let resolved: any = null;
+        if (serverId) {
+            resolved = await resolveWorkingPlexServerConnection(serverId).catch(() => null);
+        }
+
         if (serverId && ratingKey && sectionKey) {
-            const resolved = await resolveWorkingPlexServerConnection(serverId);
             if (resolved && resolved.serverUrl && resolved.token) {
                 const token = resolved.token;
-                const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter((u: string) => u !== resolved.serverUrl)];
 
                 // Fetch all active leaving soon items for this server
                 const allLeavingRecords = await prisma.mediaContentAdvisory.findMany({
@@ -105,7 +109,8 @@ export async function POST(req: NextRequest) {
                         allLeavingKeys,
                         {
                             summary: "These items are scheduled to be removed soon to free up disk space. Watch them while you can!",
-                            sortTitle: "!000_LeavingSoon"
+                            sortTitle: "!000_LeavingSoon",
+                            serverName: resolved.serverName
                         }
                     );
                 }
@@ -129,19 +134,22 @@ export async function POST(req: NextRequest) {
                                 placeholderTheme: "crimson-red",
                                 placeholderPosition: "bottom",
                                 position: "bottom-center"
-                            }
+                            },
+                            true,
+                            resolved.serverName
                         );
                     }
                 }
             }
         }
 
-        logger.addLog("WARN", "CURATION", `Marked "${title || ratingKey}" as LEAVING SOON (Scheduled for ${effectiveDate.toLocaleDateString()})`, `Reason: ${reason || 'Storage pruning'}`);
+        const targetServerLabel = resolved?.serverName || serverId || "Plex";
+        logger.addLog("WARN", "CURATION", `Marked "${title || ratingKey}" as LEAVING SOON on Plex server "${targetServerLabel}" (Scheduled for ${effectiveDate.toLocaleDateString()})`, `Reason: ${reason || 'Storage pruning'}`);
 
         return NextResponse.json({
             success: true,
             advisory,
-            message: `Flagged "${title || ratingKey}" as leaving soon.`
+            message: `Flagged "${title || ratingKey}" as leaving soon on Plex server "${targetServerLabel}".`
         });
     } catch (e: any) {
         logger.addLog("ERROR", "CURATION", `Failed to flag leaving soon: ${e.message}`);

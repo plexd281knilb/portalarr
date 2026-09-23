@@ -1208,7 +1208,7 @@ export async function applyCustomTagRuleToLibrary(
         }
     }
 
-    logger.addLog("SUCCESS", "CURATION", `Applied custom tag "${rule.tagName}" to ${taggedCount} items (${skippedCount} skipped).`);
+    logger.addLog("SUCCESS", "CURATION", `Applied custom tag "${rule.tagName}" to ${taggedCount} items (${skippedCount} skipped) on Plex server "${serverName}".`);
 
     return {
         success: true,
@@ -1301,7 +1301,7 @@ export async function clearCustomTagFromLibrary(
         }
     }
 
-    logger.addLog("SUCCESS", "CURATION", `Removed custom tag "${tagName}" from ${clearedCount} items.`);
+    logger.addLog("SUCCESS", "CURATION", `Removed custom tag "${tagName}" from ${clearedCount} items on Plex server "${serverName}".`);
 
     return { success: true, clearedCount };
 }

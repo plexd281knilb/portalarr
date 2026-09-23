@@ -40,19 +40,71 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const getLogFilePath = () => {
+const getDataDir = (): string => {
     const dataDir = path.join(process.cwd(), 'data');
     if (!fs.existsSync(dataDir)) {
         try {
             fs.mkdirSync(dataDir, { recursive: true });
         } catch (e) {
             // Read-only filesystem or restricted environment: fall back to tmpdir
-            return path.join(os.tmpdir(), 'portalarr_system_logs.jsonl');
+            return os.tmpdir();
         }
     }
-    return path.join(dataDir, 'system_logs.jsonl');
+    return dataDir;
 };
-const logFilePath = getLogFilePath();
+
+const dataDir = getDataDir();
+const logFilePath = path.join(dataDir, 'system_logs.jsonl');
+const buildMarkerFilePath = path.join(dataDir, '.portalarr_build_id');
+
+function getCurrentBuildIdentifier(): string {
+    // 1. Next.js statically baked build timestamp from next.config.ts
+    if (process.env.PORTALARR_BUILD_TIMESTAMP) {
+        return `v${process.env.PORTALARR_BUILD_VERSION || '3.0'}_${process.env.PORTALARR_BUILD_TIMESTAMP}`;
+    }
+
+    // 2. Custom build ID env (if injected by Docker or CI/CD)
+    if (process.env.PORTALARR_BUILD_ID) {
+        return process.env.PORTALARR_BUILD_ID.trim();
+    }
+
+    // 3. Next.js standalone .next/BUILD_ID file
+    try {
+        const buildIdPath = path.join(process.cwd(), '.next', 'BUILD_ID');
+        if (fs.existsSync(buildIdPath)) {
+            const id = fs.readFileSync(buildIdPath, 'utf8').trim();
+            if (id) return `build_${id}`;
+        }
+    } catch (e) {}
+
+    // 4. Git commit hash if running in a Git repository
+    try {
+        const gitHeadPath = path.join(process.cwd(), '.git', 'HEAD');
+        if (fs.existsSync(gitHeadPath)) {
+            const headRef = fs.readFileSync(gitHeadPath, 'utf8').trim();
+            if (headRef.startsWith('ref:')) {
+                const refPath = path.join(process.cwd(), '.git', headRef.replace(/^ref:\s*/, ''));
+                if (fs.existsSync(refPath)) {
+                    return `git_${fs.readFileSync(refPath, 'utf8').trim().substring(0, 10)}`;
+                }
+            } else if (headRef) {
+                return `git_${headRef.substring(0, 10)}`;
+            }
+        }
+    } catch (e) {}
+
+    // 5. Package.json version + file stat mtime
+    try {
+        const pkgPath = path.join(process.cwd(), 'package.json');
+        if (fs.existsSync(pkgPath)) {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            const stat = fs.statSync(pkgPath);
+            return `pkg_${pkg.version || '1.0.0'}_${Math.floor(stat.mtimeMs)}`;
+        }
+    } catch (e) {}
+
+    return 'portalarr_dev';
+}
 
 class SystemLogger {
     private logs: SystemLogEntry[] = [];
@@ -70,7 +122,44 @@ class SystemLogger {
     private loadRecentLogsFromDisk() {
         if (this.diskLoaded) return;
         this.diskLoaded = true;
+
+        const currentBuildId = getCurrentBuildIdentifier();
+
         try {
+            let previousBuildId: string | null = null;
+            if (fs.existsSync(buildMarkerFilePath)) {
+                try {
+                    previousBuildId = fs.readFileSync(buildMarkerFilePath, 'utf8').trim();
+                } catch (e) {}
+            }
+
+            // CRITICAL: If a new update was pushed or a new container image was deployed
+            // (i.e. previous build marker exists and differs from current build ID),
+            // reset/clear previous container logs fresh for the new version.
+            if (previousBuildId && previousBuildId !== currentBuildId) {
+                this.logs = [];
+                try {
+                    fs.writeFileSync(logFilePath, '');
+                    fs.writeFileSync(buildMarkerFilePath, currentBuildId);
+                } catch (e) {}
+
+                this.addLog(
+                    "SYSTEM",
+                    "SYSTEM",
+                    `🚀 Portalarr updated to new release (${currentBuildId}). Previous container logs were cleared for the fresh deployment.`,
+                    undefined,
+                    false
+                );
+                return;
+            }
+
+            // Record current build ID if not set yet
+            if (!previousBuildId || previousBuildId !== currentBuildId) {
+                try {
+                    fs.writeFileSync(buildMarkerFilePath, currentBuildId);
+                } catch (e) {}
+            }
+
             if (fs.existsSync(logFilePath)) {
                 const lines = fs.readFileSync(logFilePath, 'utf8').trim().split('\n').filter(Boolean);
                 const recent = lines.slice(-this.maxLogs);
