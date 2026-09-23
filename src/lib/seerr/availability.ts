@@ -1,12 +1,14 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
-import { getPlexServers, getPlexServerSections } from "@/lib/plex";
+import { getPlexServers } from "@/lib/plex";
 import { analyzeMediaStreamInfo } from "@/lib/curation/plex-analyzer";
-import { getEnabledArrInstancesInternal, arrApiGet } from "@/app/arr-actions";
 import { logger } from "@/lib/logger";
 
 export interface MediaAvailabilityStatus {
     inLibrary: boolean;
+    inMainLibraryOnly?: boolean;
+    mainLibrarySection?: string;
+    plexSectionName?: string;
     has4k?: boolean;
     plexRatingKey?: string;
     plexServerName?: string;
@@ -22,24 +24,45 @@ export interface MediaAvailabilityStatus {
     servarrStatus?: string;
 }
 
+export interface PlexGuidEntry {
+    ratingKey: string;
+    serverName: string;
+    sectionKey: string;
+    sectionTitle: string;
+    isKidsSection: boolean;
+    quality?: string;
+    is4k?: boolean;
+    type: string;
+    title: string;
+    year?: number;
+}
+
 // In-memory cache for fast availability checking (TTL: 2 minutes)
 let plexLibraryGuidCache: {
     timestamp: number;
-    guids: Map<string, { ratingKey: string; serverName: string; quality?: string; is4k?: boolean; type: string; title: string; year?: number }>;
+    guids: Map<string, PlexGuidEntry[]>;
 } | null = null;
 
 const CACHE_TTL_MS = 2 * 60 * 1000;
 
+function addGuidEntry(map: Map<string, PlexGuidEntry[]>, key: string, entry: PlexGuidEntry) {
+    const existing = map.get(key) || [];
+    if (!existing.some(e => e.ratingKey === entry.ratingKey && e.serverName === entry.serverName && e.sectionKey === entry.sectionKey)) {
+        existing.push(entry);
+    }
+    map.set(key, existing);
+}
+
 /**
  * Builds or retrieves the Plex GUID lookup cache across all configured servers
  */
-export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map<string, { ratingKey: string; serverName: string; quality?: string; is4k?: boolean; type: string; title: string; year?: number }>> {
+export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map<string, PlexGuidEntry[]>> {
     const now = Date.now();
     if (!forceRefresh && plexLibraryGuidCache && (now - plexLibraryGuidCache.timestamp < CACHE_TTL_MS)) {
         return plexLibraryGuidCache.guids;
     }
 
-    const index = new Map<string, { ratingKey: string; serverName: string; quality?: string; is4k?: boolean; type: string; title: string; year?: number }>();
+    const index = new Map<string, PlexGuidEntry[]>();
 
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
@@ -70,6 +93,9 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
                     const secType = sec.type;
                     if (secType !== "movie" && secType !== "show") return;
 
+                    const secTitle = String(sec.title || "");
+                    const isKidsSection = /kids|children|family|cartoon|disney|junior|youth/i.test(secTitle);
+
                     try {
                         const itemsRes = await fetch(`${base}/library/sections/${sec.key}/all?includeGuids=1&X-Plex-Token=${encodeURIComponent(sToken)}`, {
                             headers: { "Accept": "application/json" },
@@ -85,9 +111,12 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
                             const ratingKey = String(item.ratingKey);
                             const is4k = streamInfo.detectedBadges.resolution === "4K";
                             const quality = streamInfo.detectedBadges.videoFormatLabel || streamInfo.detectedBadges.resolution || "1080p";
-                            const record = {
+                            const record: PlexGuidEntry = {
                                 ratingKey,
                                 serverName: srv.name,
+                                sectionKey: String(sec.key),
+                                sectionTitle: secTitle || (secType === "show" ? "TV Shows" : "Movies"),
+                                isKidsSection,
                                 quality,
                                 is4k,
                                 type: secType === "show" ? "tv" : "movie",
@@ -97,20 +126,20 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
 
                             // Index by TMDb GUID
                             if (streamInfo.guids.tmdb) {
-                                index.set(`tmdb:${secType === "show" ? "tv" : "movie"}:${streamInfo.guids.tmdb}`, record);
+                                addGuidEntry(index, `tmdb:${secType === "show" ? "tv" : "movie"}:${streamInfo.guids.tmdb}`, record);
                             }
                             // Index by IMDb GUID
                             if (streamInfo.guids.imdb) {
-                                index.set(`imdb:${streamInfo.guids.imdb}`, record);
+                                addGuidEntry(index, `imdb:${streamInfo.guids.imdb}`, record);
                             }
                             // Index by TVDb GUID
                             if (streamInfo.guids.tvdb) {
-                                index.set(`tvdb:${streamInfo.guids.tvdb}`, record);
+                                addGuidEntry(index, `tvdb:${streamInfo.guids.tvdb}`, record);
                             }
                             // Index by normalized title + year
                             if (item.title) {
                                 const normTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                                index.set(`title:${secType === "show" ? "tv" : "movie"}:${normTitle}:${item.year || ""}`, record);
+                                addGuidEntry(index, `title:${secType === "show" ? "tv" : "movie"}:${normTitle}:${item.year || ""}`, record);
                             }
                         }
                     } catch (e) {}
@@ -138,7 +167,8 @@ export async function checkMediaAvailability(
     imdbId?: string,
     tvdbId?: number,
     title?: string,
-    year?: number | string
+    year?: number | string,
+    isKids = false
 ): Promise<MediaAvailabilityStatus> {
     const result: MediaAvailabilityStatus = {
         inLibrary: false,
@@ -148,10 +178,9 @@ export async function checkMediaAvailability(
     try {
         // 1. Check existing requests in SQLite
         const existingRequest = await prisma.mediaRequest.findFirst({
-            where: {
-                tmdbId,
-                mediaType
-            },
+            where: isKids
+                ? { tmdbId, mediaType, isKids: true }
+                : { tmdbId, mediaType },
             orderBy: { createdAt: "desc" }
         });
 
@@ -171,23 +200,49 @@ export async function checkMediaAvailability(
         // 2. Check Plex GUID index
         const guidIndex = await getPlexLibraryGuidIndex();
         
-        let match = guidIndex.get(`tmdb:${mediaType}:${tmdbId}`);
-        if (!match && imdbId) match = guidIndex.get(`imdb:${imdbId}`);
-        if (!match && tvdbId) match = guidIndex.get(`tvdb:${tvdbId}`);
-        if (!match && title) {
+        let matches = guidIndex.get(`tmdb:${mediaType}:${tmdbId}`) || [];
+        if (matches.length === 0 && imdbId) matches = guidIndex.get(`imdb:${imdbId}`) || [];
+        if (matches.length === 0 && tvdbId) matches = guidIndex.get(`tvdb:${tvdbId}`) || [];
+        if (matches.length === 0 && title) {
             const normTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-            match = guidIndex.get(`title:${mediaType}:${normTitle}:${year || ""}`);
+            matches = guidIndex.get(`title:${mediaType}:${normTitle}:${year || ""}`) || [];
         }
 
-        if (match) {
-            result.inLibrary = true;
-            result.plexRatingKey = match.ratingKey;
-            result.plexServerName = match.serverName;
-            result.quality = match.quality;
-            result.has4k = match.is4k;
+        if (matches.length > 0) {
+            if (isKids) {
+                // In Kids mode: only mark as inLibrary if present in a Kids-specific section
+                const kidsMatch = matches.find(m => m.isKidsSection);
+                if (kidsMatch) {
+                    result.inLibrary = true;
+                    result.plexRatingKey = kidsMatch.ratingKey;
+                    result.plexServerName = kidsMatch.serverName;
+                    result.plexSectionName = kidsMatch.sectionTitle;
+                    result.quality = kidsMatch.quality;
+                    result.has4k = kidsMatch.is4k;
+                } else {
+                    // Exists in main / non-kids library only
+                    const mainMatch = matches.find(m => !m.isKidsSection) || matches[0];
+                    result.inLibrary = false;
+                    result.inMainLibraryOnly = true;
+                    result.mainLibrarySection = mainMatch.sectionTitle;
+                    result.plexRatingKey = mainMatch.ratingKey;
+                    result.plexServerName = mainMatch.serverName;
+                    result.quality = mainMatch.quality;
+                    result.has4k = mainMatch.is4k;
+                }
+            } else {
+                // In Main mode: any match counts as in library
+                const primaryMatch = matches.find(m => !m.isKidsSection) || matches[0];
+                result.inLibrary = true;
+                result.plexRatingKey = primaryMatch.ratingKey;
+                result.plexServerName = primaryMatch.serverName;
+                result.plexSectionName = primaryMatch.sectionTitle;
+                result.quality = primaryMatch.quality;
+                result.has4k = primaryMatch.is4k;
+            }
 
-            // If request exists and was pending/processing, auto-upgrade request to AVAILABLE
-            if (existingRequest && existingRequest.status !== "AVAILABLE" && existingRequest.status !== "DECLINED") {
+            // If request exists and was pending/processing, auto-upgrade request to AVAILABLE if in library
+            if (result.inLibrary && existingRequest && existingRequest.status !== "AVAILABLE" && existingRequest.status !== "DECLINED") {
                 await prisma.mediaRequest.update({
                     where: { id: existingRequest.id },
                     data: {
@@ -209,18 +264,18 @@ export async function checkMediaAvailability(
  * Batch checks media availability for a list of TMDb items for fast carousel and grid rendering
  */
 export async function batchCheckMediaAvailability(
-    items: { id: number; mediaType: "movie" | "tv"; imdbId?: string; tvdbId?: number; title?: string; releaseDate?: string }[]
+    items: { id: number; mediaType: "movie" | "tv"; imdbId?: string; tvdbId?: number; title?: string; releaseDate?: string }[],
+    isKids = false
 ): Promise<Record<number, MediaAvailabilityStatus>> {
     const results: Record<number, MediaAvailabilityStatus> = {};
     if (!items || items.length === 0) return results;
 
     try {
-        // Fetch all active requests for these TMDb IDs in 1 single fast query
         const tmdbIds = items.map(i => i.id);
         const existingRequests = await prisma.mediaRequest.findMany({
-            where: {
-                tmdbId: { in: tmdbIds }
-            }
+            where: isKids
+                ? { tmdbId: { in: tmdbIds }, isKids: true }
+                : { tmdbId: { in: tmdbIds } }
         });
 
         const requestMap = new Map<string, any>();
@@ -228,7 +283,7 @@ export async function batchCheckMediaAvailability(
             requestMap.set(`${req.mediaType}:${req.tmdbId}`, req);
         }
 
-        const guidIndex = await getPlexLibraryGuidIndex().catch(() => new Map());
+        const guidIndex: Map<string, PlexGuidEntry[]> = await getPlexLibraryGuidIndex().catch(() => new Map<string, PlexGuidEntry[]>());
 
         for (const item of items) {
             const req = requestMap.get(`${item.mediaType}:${item.id}`);
@@ -249,22 +304,46 @@ export async function batchCheckMediaAvailability(
             }
 
             // Check Plex Match
-            let match = guidIndex.get(`tmdb:${item.mediaType}:${item.id}`);
-            if (!match && item.imdbId) match = guidIndex.get(`imdb:${item.imdbId}`);
-            if (!match && item.tvdbId) match = guidIndex.get(`tvdb:${item.tvdbId}`);
-            if (!match && item.title) {
+            let matches = guidIndex.get(`tmdb:${item.mediaType}:${item.id}`) || [];
+            if (matches.length === 0 && item.imdbId) matches = guidIndex.get(`imdb:${item.imdbId}`) || [];
+            if (matches.length === 0 && item.tvdbId) matches = guidIndex.get(`tvdb:${item.tvdbId}`) || [];
+            if (matches.length === 0 && item.title) {
                 const normTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const year = item.releaseDate ? item.releaseDate.split("-")[0] : "";
-                match = guidIndex.get(`title:${item.mediaType}:${normTitle}:${year}`);
+                matches = guidIndex.get(`title:${item.mediaType}:${normTitle}:${year}`) || [];
             }
 
-            if (match) {
-                status.inLibrary = true;
-                status.plexRatingKey = match.ratingKey;
-                status.plexServerName = match.serverName;
-                status.quality = match.quality;
-                status.has4k = match.is4k;
-                if (req && req.status !== "AVAILABLE" && req.status !== "DECLINED") {
+            if (matches.length > 0) {
+                if (isKids) {
+                    const kidsMatch = matches.find(m => m.isKidsSection);
+                    if (kidsMatch) {
+                        status.inLibrary = true;
+                        status.plexRatingKey = kidsMatch.ratingKey;
+                        status.plexServerName = kidsMatch.serverName;
+                        status.plexSectionName = kidsMatch.sectionTitle;
+                        status.quality = kidsMatch.quality;
+                        status.has4k = kidsMatch.is4k;
+                    } else {
+                        const mainMatch = matches.find(m => !m.isKidsSection) || matches[0];
+                        status.inLibrary = false;
+                        status.inMainLibraryOnly = true;
+                        status.mainLibrarySection = mainMatch.sectionTitle;
+                        status.plexRatingKey = mainMatch.ratingKey;
+                        status.plexServerName = mainMatch.serverName;
+                        status.quality = mainMatch.quality;
+                        status.has4k = mainMatch.is4k;
+                    }
+                } else {
+                    const primaryMatch = matches.find(m => !m.isKidsSection) || matches[0];
+                    status.inLibrary = true;
+                    status.plexRatingKey = primaryMatch.ratingKey;
+                    status.plexServerName = primaryMatch.serverName;
+                    status.plexSectionName = primaryMatch.sectionTitle;
+                    status.quality = primaryMatch.quality;
+                    status.has4k = primaryMatch.is4k;
+                }
+
+                if (status.inLibrary && req && req.status !== "AVAILABLE" && req.status !== "DECLINED") {
                     status.requestStatus = "AVAILABLE";
                 }
             }

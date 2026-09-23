@@ -37,6 +37,13 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
                 </div>
             );
         }
+        if (availability?.inMainLibraryOnly) {
+            return (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <span>Main Library</span>
+                </div>
+            );
+        }
         if (isRequested) {
             if (requestStatus === "PROCESSING" || requestStatus === "DOWNLOADING") {
                 return (

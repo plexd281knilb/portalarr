@@ -35,8 +35,6 @@ import {
     Layers, 
     AlertCircle, 
     User as UserIcon,
-    ChevronDown,
-    ChevronUp,
     ShieldAlert,
     ShieldCheck,
     X,
@@ -113,14 +111,14 @@ export function MediaDetailModal({
             setSeasonEpisodes({});
             setSelectedSeasonNumber(1);
         }
-    }, [isOpen, tmdbId, mediaType]);
+    }, [isOpen, tmdbId, mediaType, isKids]);
 
     const loadMediaData = async (id: number, type: "movie" | "tv") => {
         setLoading(true);
         setRequestSuccessMsg(null);
         setRequestErrorMsg(null);
         try {
-            const res = await getMediaDetailsAction(id, type);
+            const res = await getMediaDetailsAction(id, type, Boolean(isKids));
             if (res.success && res.details) {
                 setDetails(res.details);
                 setAvailability(res.availability);
@@ -231,6 +229,7 @@ export function MediaDetailModal({
                 setRequestSuccessMsg(res.message || "Request submitted successfully!");
                 setAvailability({
                     inLibrary: false,
+                    inMainLibraryOnly: false,
                     isRequested: true,
                     requestStatus: res.request?.status || "APPROVED",
                     requestedBy: res.request?.requestedByUsername
@@ -255,6 +254,7 @@ export function MediaDetailModal({
     const trailers = details?.videos || [];
 
     const inLibrary = availability?.inLibrary;
+    const inMainOnly = availability?.inMainLibraryOnly;
     const isRequested = availability?.isRequested;
     const quotaInfo = isTv ? quotaData?.tv : quotaData?.movies;
 
@@ -265,7 +265,7 @@ export function MediaDetailModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] max-w-5xl max-h-[92vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[96vw] sm:w-[94vw] md:w-[92vw] max-w-6xl max-h-[94vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
                 {loading || !details ? (
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -280,7 +280,7 @@ export function MediaDetailModal({
                         {/* ========================================================================= */}
                         {isPlayingTrailer && trailers.length > 0 ? (
                             /* INLINE TRAILER PLAYER VIEW */
-                            <div className="relative w-full bg-black p-4 sm:p-6 border-b border-border/40 space-y-3">
+                            <div className="relative w-full bg-black p-4 sm:p-5 border-b border-border/40 space-y-2.5">
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         <div className="h-7 w-7 rounded-lg bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-500 shrink-0">
@@ -291,7 +291,7 @@ export function MediaDetailModal({
                                                 {trailers[activeTrailerIndex]?.name || "Official Trailer"}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground truncate">
-                                                {details.title} • YouTube
+                                                {details.title} • YouTube HD
                                             </p>
                                         </div>
                                     </div>
@@ -307,7 +307,7 @@ export function MediaDetailModal({
                                 </div>
 
                                 {/* 16:9 Video Box */}
-                                <div className="relative w-full aspect-video rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10">
+                                <div className="relative w-full aspect-video max-h-[55vh] rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10 mx-auto">
                                     <iframe
                                         key={trailers[activeTrailerIndex]?.key || activeTrailerIndex}
                                         src={`${trailers[activeTrailerIndex]?.embedUrl}?autoplay=1&rel=0&modestbranding=1`}
@@ -345,7 +345,7 @@ export function MediaDetailModal({
                             </div>
                         ) : (
                             /* COMPACT 2-COLUMN HERO HEADER (Zero Wasted Space) */
-                            <div className="relative w-full bg-[#0e0e16] p-4 sm:p-6 md:p-7 border-b border-border/40 overflow-hidden">
+                            <div className="relative w-full bg-[#0e0e16] p-4 sm:p-5 md:p-6 border-b border-border/40 overflow-hidden">
                                 {/* Ambient Blurred Backdrop Layer */}
                                 {details.backdropPath && (
                                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -359,9 +359,9 @@ export function MediaDetailModal({
                                     </div>
                                 )}
 
-                                <div className="relative z-10 flex flex-col sm:flex-row gap-5 md:gap-6 items-start">
+                                <div className="relative z-10 flex flex-col sm:flex-row gap-4 sm:gap-5 md:gap-6 items-start">
                                     {/* Left Column: 2:3 Vertical Poster Card */}
-                                    <div className="w-32 sm:w-40 md:w-48 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0 bg-[#14141c] mx-auto sm:mx-0 relative group">
+                                    <div className="w-28 sm:w-36 md:w-44 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0 bg-[#14141c] mx-auto sm:mx-0 relative group">
                                         {details.posterPath ? (
                                             <img
                                                 src={details.posterPath}
@@ -378,8 +378,8 @@ export function MediaDetailModal({
                                                 onClick={() => setIsPlayingTrailer(true)}
                                                 className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-white backdrop-blur-[2px]"
                                             >
-                                                <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center shadow-lg">
-                                                    <Play className="h-5 w-5 fill-current ml-0.5" />
+                                                <div className="w-9 h-9 rounded-full bg-red-600 flex items-center justify-center shadow-lg">
+                                                    <Play className="h-4 w-4 fill-current ml-0.5" />
                                                 </div>
                                                 <span className="text-[11px] font-bold">Watch Trailer</span>
                                             </button>
@@ -387,7 +387,7 @@ export function MediaDetailModal({
                                     </div>
 
                                     {/* Right Column: Title, Metadata, Actions, Synopsis */}
-                                    <div className="space-y-2.5 flex-1 min-w-0">
+                                    <div className="space-y-2 flex-1 min-w-0">
                                         {/* Row 1: Badges */}
                                         <div className="flex flex-wrap items-center gap-2">
                                             <Badge variant="outline" className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full backdrop-blur-md ${
@@ -441,21 +441,21 @@ export function MediaDetailModal({
                                             )}
                                         </div>
 
-                                        {/* Row 2: Title */}
-                                        <DialogTitle className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-tight">
-                                            {details.title}
-                                        </DialogTitle>
+                                        {/* Row 2: Title & Tagline */}
+                                        <div>
+                                            <DialogTitle className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-tight">
+                                                {details.title}
+                                            </DialogTitle>
+                                            {details.tagline && (
+                                                <p className="text-xs sm:text-sm text-gray-400 italic mt-0.5">
+                                                    "{details.tagline}"
+                                                </p>
+                                            )}
+                                        </div>
 
-                                        {/* Row 3: Tagline */}
-                                        {details.tagline && (
-                                            <p className="text-xs sm:text-sm text-gray-400 italic">
-                                                "{details.tagline}"
-                                            </p>
-                                        )}
-
-                                        {/* Row 4: Genres */}
+                                        {/* Row 3: Genres */}
                                         {details.genres && details.genres.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                            <div className="flex flex-wrap gap-1.5">
                                                 {details.genres.map(g => (
                                                     <span key={g} className="px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/10 text-[11px] font-medium text-gray-300">
                                                         {g}
@@ -464,12 +464,12 @@ export function MediaDetailModal({
                                             </div>
                                         )}
 
-                                        {/* Row 5: Action Buttons */}
-                                        <div className="flex flex-wrap items-center gap-2.5 pt-1.5">
+                                        {/* Row 4: Action Buttons */}
+                                        <div className="flex flex-wrap items-center gap-2 pt-1">
                                             {trailers.length > 0 && (
                                                 <Button
                                                     size="sm"
-                                                    className="h-9 px-4 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 active:scale-95 transition-all flex items-center gap-2"
+                                                    className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
                                                     onClick={() => setIsPlayingTrailer(true)}
                                                 >
                                                     <Play className="h-3.5 w-3.5 fill-current" />
@@ -478,29 +478,54 @@ export function MediaDetailModal({
                                             )}
 
                                             {inLibrary ? (
-                                                <div className="h-9 px-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs font-bold">
-                                                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                                                    <span>In Library ({availability?.quality || "1080p"})</span>
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                    <span>In {isKids ? "Kids " : ""}Library ({availability?.quality || "1080p"})</span>
                                                 </div>
+                                            ) : inMainOnly ? (
+                                                <>
+                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center gap-1.5 text-xs font-bold">
+                                                        <Info className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                                        <span>In Main Library Only ({availability?.quality || "1080p"})</span>
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
+                                                        disabled={submitting}
+                                                        onClick={() => {
+                                                            if (isTv) setActiveTab("request");
+                                                            else handleSubmitRequest();
+                                                        }}
+                                                    >
+                                                        {submitting ? (
+                                                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Plus className="h-3.5 w-3.5" />
+                                                                <span>Request for Kids Library</span>
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </>
                                             ) : isRequested ? (
-                                                <div className="h-9 px-3.5 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-300 flex items-center gap-2 text-xs font-bold">
-                                                    <Clock className="h-4 w-4 text-blue-400 shrink-0" />
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                                                     <span>{availability?.requestStatus === "PROCESSING" ? "Downloading" : "Requested"}</span>
                                                 </div>
                                             ) : isDisallowed ? (
-                                                <div className="h-9 px-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-2 text-xs font-bold">
-                                                    <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0" />
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <ShieldAlert className="h-3.5 w-3.5 text-rose-400 shrink-0" />
                                                     <span>Restricted (NC-17)</span>
                                                 </div>
                                             ) : isMatureInKids ? (
-                                                <div className="h-9 px-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-2 text-xs font-bold">
-                                                    <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0" />
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <ShieldAlert className="h-3.5 w-3.5 text-rose-400 shrink-0" />
                                                     <span>Unavailable in Kids Mode</span>
                                                 </div>
                                             ) : (
                                                 <Button
                                                     size="sm"
-                                                    className="h-9 px-4 rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 active:scale-95 transition-all flex items-center gap-2"
+                                                    className="h-8 sm:h-9 px-4 rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
                                                     disabled={submitting}
                                                     onClick={() => {
                                                         if (isTv) {
@@ -511,19 +536,19 @@ export function MediaDetailModal({
                                                     }}
                                                 >
                                                     {submitting ? (
-                                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                                     ) : (
                                                         <>
-                                                            <Plus className="h-4 w-4" />
-                                                            <span>{isTv ? "Request Series" : "Request Movie"}</span>
+                                                            <Plus className="h-3.5 w-3.5" />
+                                                            <span>{isTv ? "Configure & Request" : "Request Movie"}</span>
                                                         </>
                                                     )}
                                                 </Button>
                                             )}
                                         </div>
 
-                                        {/* Row 6: Overview Synopsis */}
-                                        <div className="pt-1">
+                                        {/* Row 5: Overview Synopsis */}
+                                        <div className="pt-0.5">
                                             <p className="text-xs sm:text-sm text-gray-300 leading-relaxed line-clamp-3 md:line-clamp-4">
                                                 {details.overview || "No overview available for this title."}
                                             </p>
@@ -536,7 +561,7 @@ export function MediaDetailModal({
                         {/* ========================================================================= */}
                         {/* NAVIGATION TABS BAR                                                      */}
                         {/* ========================================================================= */}
-                        <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2.5 border-b border-border/40 overflow-x-auto bg-[#0d0d14] sticky top-0 z-20 scrollbar-none">
+                        <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2 border-b border-border/40 overflow-x-auto bg-[#0d0d14] sticky top-0 z-20 scrollbar-none">
                             <Button
                                 size="sm"
                                 variant="ghost"
@@ -619,20 +644,20 @@ export function MediaDetailModal({
                         {/* ========================================================================= */}
                         {/* TAB BODY CONTENTS                                                         */}
                         {/* ========================================================================= */}
-                        <div className="p-4 sm:p-6 space-y-6 flex-1">
+                        <div className="p-4 sm:p-5 md:p-6 space-y-4 flex-1">
                             {/* TAB 1: REQUEST & DETAILS */}
                             {activeTab === "request" && (
-                                <div className="space-y-5">
+                                <div className="space-y-4">
                                     {/* Availability Status Banners */}
                                     {inLibrary && (
-                                        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 text-emerald-400">
+                                        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 text-emerald-400">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-9 w-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                                                    <CheckCircle2 className="h-5 w-5" />
+                                                <div className="h-8 w-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                                                    <CheckCircle2 className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-sm font-bold text-emerald-300">Available in Plex Library</h4>
-                                                    <p className="text-xs text-emerald-400/80">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-emerald-300">Available in Plex Library ({availability?.plexSectionName || "Movies"})</h4>
+                                                    <p className="text-[11px] text-emerald-400/80">
                                                         Server: {availability?.plexServerName || "Plex Server"} • Quality: {availability?.quality || "1080p"}
                                                     </p>
                                                 </div>
@@ -640,17 +665,33 @@ export function MediaDetailModal({
                                         </div>
                                     )}
 
-                                    {isRequested && !inLibrary && (
-                                        <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 text-blue-300">
+                                    {inMainOnly && (
+                                        <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-between gap-3 text-indigo-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-9 w-9 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
-                                                    <Clock className="h-5 w-5" />
+                                                <div className="h-8 w-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+                                                    <Info className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-sm font-bold text-blue-200">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-indigo-200">Available in Main Library ({availability?.mainLibrarySection || "Movies"})</h4>
+                                                    <p className="text-[11px] text-indigo-300/80">
+                                                        Server: {availability?.plexServerName || "Plex Server"} • Quality: {availability?.quality || "1080p"} • Not yet in Kids Library. Submit a request below to add it directly to the Kids collection.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isRequested && !inLibrary && (
+                                        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 text-blue-300">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                                                    <Clock className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-xs sm:text-sm font-bold text-blue-200">
                                                         {availability?.requestStatus === "PROCESSING" ? "Downloading to Library" : "Request Approved"}
                                                     </h4>
-                                                    <p className="text-xs text-blue-300/80">
+                                                    <p className="text-[11px] text-blue-300/80">
                                                         Requested by: {availability?.requestedBy || "You"}
                                                         {availability?.downloadProgress ? ` • Progress: ${availability.downloadProgress}%` : ""}
                                                     </p>
@@ -660,12 +701,12 @@ export function MediaDetailModal({
                                     )}
 
                                     {/* Request Submission Form (If not in library & not requested) */}
-                                    {!inLibrary && !isRequested && (
-                                        <div className="p-4 sm:p-5 rounded-2xl bg-[#121218] border border-border/60 space-y-4">
+                                    {(!inLibrary || inMainOnly) && !isRequested && (
+                                        <div className="p-4 sm:p-5 rounded-2xl bg-[#121218] border border-border/60 space-y-3.5">
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                 <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                                                     <Plus className="h-4 w-4 text-primary" />
-                                                    Submit Media Request
+                                                    {inMainOnly ? "Add to Kids Library" : "Submit Media Request"}
                                                 </h4>
                                                 
                                                 {/* Account Tier & Quota Label */}
@@ -694,36 +735,36 @@ export function MediaDetailModal({
 
                                             {/* Approval Status Callout */}
                                             {isDisallowed ? (
-                                                <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2.5 text-xs">
+                                                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2 text-xs">
                                                     <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
                                                     <div>
                                                         <strong className="text-rose-200">Restricted Title:</strong> NC-17 and adult-rated titles cannot be requested.
                                                     </div>
                                                 </div>
                                             ) : isMatureInKids ? (
-                                                <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2.5 text-xs">
+                                                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2 text-xs">
                                                     <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
                                                     <div>
                                                         <strong className="text-rose-200">Blocked in Kids Mode:</strong> Rated {details.certification || "Mature"} — Contains mature themes. Switch to Main Discovery to request.
                                                     </div>
                                                 </div>
                                             ) : isPgSafe ? (
-                                                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs">
+                                                <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs">
                                                     <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
-                                                    <span><strong>Kids Auto-Approval:</strong> Rated {details.certification || "PG"} — Instant auto-approval into library download queue.</span>
+                                                    <span><strong>Kids Auto-Approval:</strong> Rated {details.certification || "PG"} — Instant auto-approval into kids download queue.</span>
                                                 </div>
                                             ) : isPg13OrUnrated ? (
-                                                <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
+                                                <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
                                                     <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
-                                                    <span><strong>Requires Admin Review:</strong> Rated {details.certification || "PG-13 / Unrated"} — Submitted for administrator approval before downloading.</span>
+                                                    <span><strong>Requires Admin Review:</strong> Rated {details.certification || "PG-13 / Unrated"} — Submitted for administrator review before downloading.</span>
                                                 </div>
                                             ) : quotaData?.accountTier === "TRIAL" ? (
-                                                <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
+                                                <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
                                                     <Clock className="h-4 w-4 shrink-0 text-amber-400" />
                                                     <span><strong>Trial Account:</strong> Requests require administrator review before downloading.</span>
                                                 </div>
                                             ) : (
-                                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center gap-2 text-xs">
+                                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center gap-2 text-xs">
                                                     <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
                                                     <span><strong>Instant Auto-Approval:</strong> Full Account requests are immediately dispatched to download clients.</span>
                                                 </div>
@@ -731,7 +772,7 @@ export function MediaDetailModal({
 
                                             {/* TV Show Season Selection Checklist */}
                                             {isTv && details.seasons && details.seasons.length > 0 && !isMatureInKids && !isDisallowed && (
-                                                <div className="space-y-3 border-t border-border/40 pt-3">
+                                                <div className="space-y-2.5 border-t border-border/40 pt-2.5">
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-xs font-semibold text-muted-foreground">Select Seasons to Download:</span>
                                                         <div className="flex items-center gap-2">
@@ -751,8 +792,8 @@ export function MediaDetailModal({
                                                             <div
                                                                 key={s.id}
                                                                 onClick={() => handleToggleSeasonSelect(s.seasonNumber)}
-                                                                className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                                                                    selectedSeasons.includes(s.seasonNumber)
+                                                                className={`p-2 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                                                                  selectedSeasons.includes(s.seasonNumber)
                                                                         ? "bg-primary/15 border-primary/50 text-foreground shadow-sm"
                                                                         : "bg-muted/10 border-border/40 text-muted-foreground hover:bg-muted/20"
                                                                 }`}
@@ -775,7 +816,7 @@ export function MediaDetailModal({
 
                                             {/* 4K UHD Quality Toggle Option */}
                                             {quotaData?.canRequest4k && !isMatureInKids && !isDisallowed && (
-                                                <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                                                <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
                                                     <div className="flex items-center gap-2">
                                                         <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 border-purple-500/50">
                                                             4K UHD
@@ -794,13 +835,13 @@ export function MediaDetailModal({
 
                                             {/* Feedback Messages */}
                                             {requestSuccessMsg && (
-                                                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
+                                                <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
                                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                     <span>{requestSuccessMsg}</span>
                                                 </div>
                                             )}
                                             {requestErrorMsg && (
-                                                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
+                                                <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
                                                     <AlertCircle className="h-4 w-4 shrink-0" />
                                                     <span>{requestErrorMsg}</span>
                                                 </div>
@@ -809,12 +850,12 @@ export function MediaDetailModal({
                                             {/* Primary Submit Button */}
                                             <Button
                                                 size="lg"
-                                                className="w-full h-11 text-sm font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                className="w-full h-10 text-sm font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95 flex items-center justify-center gap-2"
                                                 disabled={submitting || isDisallowed || isMatureInKids || (isTv && selectedSeasons.length === 0)}
                                                 onClick={handleSubmitRequest}
                                             >
                                                 {submitting ? (
-                                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                                 ) : isDisallowed ? (
                                                     <>
                                                         <ShieldAlert className="h-4 w-4" />
@@ -824,6 +865,11 @@ export function MediaDetailModal({
                                                     <>
                                                         <ShieldAlert className="h-4 w-4" />
                                                         <span>Unavailable in Kids Mode</span>
+                                                    </>
+                                                ) : inMainOnly ? (
+                                                    <>
+                                                        <Plus className="h-4 w-4" />
+                                                        <span>Request for Kids Library</span>
                                                     </>
                                                 ) : (
                                                     <>
@@ -836,11 +882,11 @@ export function MediaDetailModal({
                                     )}
 
                                     {/* Production Info & External Links */}
-                                    <div className="p-4 rounded-xl bg-muted/20 border border-border/40 space-y-3">
+                                    <div className="p-3.5 rounded-xl bg-muted/20 border border-border/40 space-y-2.5">
                                         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                             Metadata & External Links
                                         </h4>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                                             <div>
                                                 <div className="text-muted-foreground text-[11px]">Original Language</div>
                                                 <div className="font-semibold text-foreground">English (US)</div>
@@ -874,16 +920,16 @@ export function MediaDetailModal({
 
                             {/* TAB 2: TV EPISODE GUIDE */}
                             {activeTab === "episodes" && isTv && details.seasons && (
-                                <div className="space-y-4">
+                                <div className="space-y-3.5">
                                     {/* Season Selector Tabs */}
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
                                         {details.seasons.filter(s => s.seasonNumber > 0).map(s => (
                                             <Button
                                                 key={s.id}
                                                 size="sm"
                                                 variant={selectedSeasonNumber === s.seasonNumber ? "default" : "outline"}
                                                 onClick={() => handleSeasonTabChange(s.seasonNumber)}
-                                                className={`h-8 px-3 rounded-xl text-xs font-bold shrink-0 transition-all ${
+                                                className={`h-7 px-3 rounded-xl text-xs font-bold shrink-0 transition-all ${
                                                     selectedSeasonNumber === s.seasonNumber
                                                         ? "bg-primary text-primary-foreground"
                                                         : "bg-muted/20 border-border/50 text-muted-foreground hover:text-foreground"
@@ -896,22 +942,22 @@ export function MediaDetailModal({
 
                                     {/* Episodes List */}
                                     {loadingEpisodes ? (
-                                        <div className="p-12 text-center space-y-2">
-                                            <div className="w-7 h-7 border-3 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+                                        <div className="p-10 text-center space-y-2">
+                                            <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
                                             <p className="text-xs text-muted-foreground animate-pulse">Loading Season {selectedSeasonNumber} episodes...</p>
                                         </div>
                                     ) : seasonEpisodes[selectedSeasonNumber] && seasonEpisodes[selectedSeasonNumber].length > 0 ? (
-                                        <div className="space-y-2.5">
+                                        <div className="space-y-2">
                                             {seasonEpisodes[selectedSeasonNumber].map(ep => (
-                                                <div key={ep.id} className="p-3 rounded-xl border border-border/40 bg-[#121218] flex flex-col sm:flex-row gap-3 items-start hover:bg-muted/15 transition-colors">
+                                                <div key={ep.id} className="p-2.5 rounded-xl border border-border/40 bg-[#121218] flex flex-col sm:flex-row gap-3 items-start hover:bg-muted/15 transition-colors">
                                                     {ep.stillPath && (
                                                         <img
                                                             src={ep.stillPath}
                                                             alt={ep.name}
-                                                            className="w-full sm:w-36 aspect-video rounded-lg object-cover shrink-0 bg-muted/20 border border-white/5"
+                                                            className="w-full sm:w-32 aspect-video rounded-lg object-cover shrink-0 bg-muted/20 border border-white/5"
                                                         />
                                                     )}
-                                                    <div className="space-y-1 flex-1 min-w-0">
+                                                    <div className="space-y-0.5 flex-1 min-w-0">
                                                         <div className="flex items-center justify-between text-xs font-bold text-foreground">
                                                             <span className="line-clamp-1">{ep.episodeNumber}. {ep.name}</span>
                                                             {ep.airDate && <span className="text-[10px] text-muted-foreground shrink-0 ml-2">{ep.airDate}</span>}
@@ -924,7 +970,7 @@ export function MediaDetailModal({
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="p-8 text-center text-xs text-muted-foreground">
+                                        <div className="p-6 text-center text-xs text-muted-foreground">
                                             No episode details available for this season.
                                         </div>
                                     )}
@@ -933,19 +979,19 @@ export function MediaDetailModal({
 
                             {/* TAB 3: CAST & CREW */}
                             {activeTab === "cast" && details.cast && (
-                                <div className="space-y-4">
+                                <div className="space-y-3.5">
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                         Top Cast Members
                                     </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
                                         {details.cast.map(c => (
-                                            <div key={c.id} className="p-3 rounded-xl bg-[#121218] border border-border/40 space-y-2 text-center">
-                                                <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-full overflow-hidden border border-border/50 bg-muted/20 shadow-md">
+                                            <div key={c.id} className="p-2.5 rounded-xl bg-[#121218] border border-border/40 space-y-1.5 text-center">
+                                                <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full overflow-hidden border border-border/50 bg-muted/20 shadow-md">
                                                     {c.profilePath ? (
                                                         <img src={c.profilePath} alt={c.name} className="w-full h-full object-cover" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                                            <UserIcon className="h-6 w-6 opacity-40" />
+                                                            <UserIcon className="h-5 w-5 opacity-40" />
                                                         </div>
                                                     )}
                                                 </div>
@@ -963,16 +1009,16 @@ export function MediaDetailModal({
 
                             {/* TAB 4: WHERE TO WATCH */}
                             {activeTab === "providers" && details.watchProviders && (
-                                <div className="space-y-5">
+                                <div className="space-y-4">
                                     {details.watchProviders.stream && details.watchProviders.stream.length > 0 && (
-                                        <div className="space-y-2.5">
+                                        <div className="space-y-2">
                                             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                                 Subscription Streaming (US)
                                             </h4>
-                                            <div className="flex flex-wrap gap-2.5">
+                                            <div className="flex flex-wrap gap-2">
                                                 {details.watchProviders.stream.map(p => (
-                                                    <div key={p.providerId} className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#121218] border border-border/40">
-                                                        {p.logoPath && <img src={p.logoPath} alt={p.providerName} className="w-6 h-6 rounded-lg shadow" />}
+                                                    <div key={p.providerId} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#121218] border border-border/40">
+                                                        {p.logoPath && <img src={p.logoPath} alt={p.providerName} className="w-5 h-5 rounded-lg shadow" />}
                                                         <span className="text-xs font-semibold text-foreground">{p.providerName}</span>
                                                     </div>
                                                 ))}
@@ -981,14 +1027,14 @@ export function MediaDetailModal({
                                     )}
 
                                     {details.watchProviders.rent && details.watchProviders.rent.length > 0 && (
-                                        <div className="space-y-2.5">
+                                        <div className="space-y-2">
                                             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                                 Digital Rental Options
                                             </h4>
-                                            <div className="flex flex-wrap gap-2.5">
+                                            <div className="flex flex-wrap gap-2">
                                                 {details.watchProviders.rent.map(p => (
-                                                    <div key={p.providerId} className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#121218] border border-border/40">
-                                                        {p.logoPath && <img src={p.logoPath} alt={p.providerName} className="w-6 h-6 rounded-lg shadow" />}
+                                                    <div key={p.providerId} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#121218] border border-border/40">
+                                                        {p.logoPath && <img src={p.logoPath} alt={p.providerName} className="w-5 h-5 rounded-lg shadow" />}
                                                         <span className="text-xs font-semibold text-foreground">{p.providerName}</span>
                                                     </div>
                                                 ))}
@@ -1000,11 +1046,11 @@ export function MediaDetailModal({
 
                             {/* TAB 5: SIMILAR TITLES & RECOMMENDATIONS */}
                             {activeTab === "recommendations" && details.recommendations && (
-                                <div className="space-y-4">
+                                <div className="space-y-3.5">
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                         Titles You May Also Like
                                     </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
                                         {details.recommendations.map(rec => (
                                             <div
                                                 key={rec.id}
@@ -1031,7 +1077,7 @@ export function MediaDetailModal({
                                                         {rec.title}
                                                     </div>
                                                     <div className="text-[10px] text-muted-foreground">
-                                                        {rec.releaseDate ? rec.releaseDate.split("-")[0] : ""} • {rec.mediaType === "tv" ? "TV Series" : "Movie"}
+                                                        {rec.releaseDate ? rec.releaseDate.split("-")[0] : ""} • {rec.mediaType === "tv" ? "TV" : "Movie"}
                                                     </div>
                                                 </div>
                                             </div>

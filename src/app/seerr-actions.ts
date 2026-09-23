@@ -103,7 +103,7 @@ export async function getDiscoverHomeAction(section: "main" | "kids" = "main") {
                 ...topRatedFamily
             ];
 
-            const availabilityMap = await batchCheckMediaAvailability(allItems);
+            const availabilityMap = await batchCheckMediaAvailability(allItems, true);
 
             return {
                 success: true,
@@ -221,7 +221,7 @@ export async function getDiscoverMediaAction(
             }
         }
 
-        const availabilityMap = await batchCheckMediaAvailability(items);
+        const availabilityMap = await batchCheckMediaAvailability(items, Boolean(isKids));
 
         return {
             success: true,
@@ -254,7 +254,7 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
         if (isKids) {
             items = filterKidsSafeMedia(items);
         }
-        const availabilityMap = await batchCheckMediaAvailability(items);
+        const availabilityMap = await batchCheckMediaAvailability(items, Boolean(isKids));
 
         return {
             success: true,
@@ -269,7 +269,7 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
 /**
  * Fetch detailed metadata, cast, videos, and availability for a single Movie or TV Show
  */
-export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" | "tv") {
+export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" | "tv", isKids = false) {
     try {
         let details: TmdbMediaDetail | null = null;
 
@@ -293,12 +293,13 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
             details.imdbId,
             details.tvdbId,
             details.title,
-            details.releaseDate ? details.releaseDate.split("-")[0] : undefined
+            details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
+            Boolean(isKids)
         );
 
         // Fetch recommendations availability
         const recAvailability = details.recommendations && details.recommendations.length > 0
-            ? await batchCheckMediaAvailability(details.recommendations)
+            ? await batchCheckMediaAvailability(details.recommendations, Boolean(isKids))
             : {};
 
         return {
