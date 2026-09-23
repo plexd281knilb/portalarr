@@ -156,7 +156,7 @@ export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
             session = await getSession();
         } catch {}
 
-        if (session && (session.role === "ADMIN" || session.role === "SUPER_USER")) {
+        if (session && session.role === "ADMIN") {
             return await getEnabledArrInstancesInternal(type);
         }
 

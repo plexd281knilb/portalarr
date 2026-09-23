@@ -70,15 +70,23 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
     if (!targetApp) {
         if (req.isKids) {
             const preferredId = req.is4k ? settings?.seerrKidsMovie4kAppId : settings?.seerrKidsMovieAppId;
-            if (preferredId) {
+            if (preferredId && preferredId !== "none") {
                 targetApp = radarrAppsRes.data.find(a => a.id === preferredId);
+            }
+            // Fall back to kids 1080p instance if 4k is disabled or not found
+            if (!targetApp && req.is4k && settings?.seerrKidsMovieAppId && settings.seerrKidsMovieAppId !== "none") {
+                targetApp = radarrAppsRes.data.find(a => a.id === settings.seerrKidsMovieAppId);
             }
         }
     }
     if (!targetApp) {
         const preferredId = req.is4k ? settings?.seerrDefaultMovie4kAppId : settings?.seerrDefaultMovieAppId;
-        if (preferredId) {
+        if (preferredId && preferredId !== "none") {
             targetApp = radarrAppsRes.data.find(a => a.id === preferredId);
+        }
+        // Fall back to default 1080p instance if 4k is disabled or not found
+        if (!targetApp && req.is4k && settings?.seerrDefaultMovieAppId && settings.seerrDefaultMovieAppId !== "none") {
+            targetApp = radarrAppsRes.data.find(a => a.id === settings.seerrDefaultMovieAppId);
         }
     }
     if (!targetApp) {
@@ -108,9 +116,15 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
         let configuredProfileId: number | null | undefined = null;
         if (req.isKids) {
             configuredProfileId = req.is4k ? settings?.seerrKidsMovie4kProfileId : settings?.seerrKidsMovieProfileId;
+            if (!configuredProfileId && req.is4k) {
+                configuredProfileId = settings?.seerrKidsMovieProfileId;
+            }
         }
         if (!configuredProfileId) {
             configuredProfileId = req.is4k ? settings?.seerrDefaultMovie4kProfileId : settings?.seerrDefaultMovieProfileId;
+            if (!configuredProfileId && req.is4k) {
+                configuredProfileId = settings?.seerrDefaultMovieProfileId;
+            }
         }
         if (configuredProfileId && availableProfiles.some((p: any) => p.id === configuredProfileId)) {
             qualityProfileId = configuredProfileId;
@@ -124,9 +138,15 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
         let configuredFolder: string | null | undefined = null;
         if (req.isKids) {
             configuredFolder = req.is4k ? settings?.seerrKidsMovie4kRootFolder : settings?.seerrKidsMovieRootFolder;
+            if (!configuredFolder && req.is4k) {
+                configuredFolder = settings?.seerrKidsMovieRootFolder;
+            }
         }
         if (!configuredFolder) {
             configuredFolder = req.is4k ? settings?.seerrDefaultMovie4kRootFolder : settings?.seerrDefaultMovieRootFolder;
+            if (!configuredFolder && req.is4k) {
+                configuredFolder = settings?.seerrDefaultMovieRootFolder;
+            }
         }
         if (configuredFolder && availableFolders.some((f: any) => f.path === configuredFolder)) {
             rootFolderPath = configuredFolder;
@@ -218,15 +238,23 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
     if (!targetApp) {
         if (req.isKids) {
             const preferredId = req.is4k ? settings?.seerrKidsTv4kAppId : settings?.seerrKidsTvAppId;
-            if (preferredId) {
+            if (preferredId && preferredId !== "none") {
                 targetApp = sonarrAppsRes.data.find(a => a.id === preferredId);
+            }
+            // Fall back to kids 1080p instance if 4k is disabled or not found
+            if (!targetApp && req.is4k && settings?.seerrKidsTvAppId && settings.seerrKidsTvAppId !== "none") {
+                targetApp = sonarrAppsRes.data.find(a => a.id === settings.seerrKidsTvAppId);
             }
         }
     }
     if (!targetApp) {
         const preferredId = req.is4k ? settings?.seerrDefaultTv4kAppId : settings?.seerrDefaultTvAppId;
-        if (preferredId) {
+        if (preferredId && preferredId !== "none") {
             targetApp = sonarrAppsRes.data.find(a => a.id === preferredId);
+        }
+        // Fall back to default 1080p instance if 4k is disabled or not found
+        if (!targetApp && req.is4k && settings?.seerrDefaultTvAppId && settings.seerrDefaultTvAppId !== "none") {
+            targetApp = sonarrAppsRes.data.find(a => a.id === settings.seerrDefaultTvAppId);
         }
     }
     if (!targetApp) {
@@ -256,9 +284,15 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
         let configuredProfileId: number | null | undefined = null;
         if (req.isKids) {
             configuredProfileId = req.is4k ? settings?.seerrKidsTv4kProfileId : settings?.seerrKidsTvProfileId;
+            if (!configuredProfileId && req.is4k) {
+                configuredProfileId = settings?.seerrKidsTvProfileId;
+            }
         }
         if (!configuredProfileId) {
             configuredProfileId = req.is4k ? settings?.seerrDefaultTv4kProfileId : settings?.seerrDefaultTvProfileId;
+            if (!configuredProfileId && req.is4k) {
+                configuredProfileId = settings?.seerrDefaultTvProfileId;
+            }
         }
         if (configuredProfileId && availableProfiles.some((p: any) => p.id === configuredProfileId)) {
             qualityProfileId = configuredProfileId;
@@ -272,9 +306,15 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
         let configuredFolder: string | null | undefined = null;
         if (req.isKids) {
             configuredFolder = req.is4k ? settings?.seerrKidsTv4kRootFolder : settings?.seerrKidsTvRootFolder;
+            if (!configuredFolder && req.is4k) {
+                configuredFolder = settings?.seerrKidsTvRootFolder;
+            }
         }
         if (!configuredFolder) {
             configuredFolder = req.is4k ? settings?.seerrDefaultTv4kRootFolder : settings?.seerrDefaultTvRootFolder;
+            if (!configuredFolder && req.is4k) {
+                configuredFolder = settings?.seerrDefaultTvRootFolder;
+            }
         }
         if (configuredFolder && availableFolders.some((f: any) => f.path === configuredFolder)) {
             rootFolderPath = configuredFolder;

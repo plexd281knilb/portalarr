@@ -300,6 +300,7 @@ export function SeerrSettingsPanel() {
         selectedRootFolder: string;
         onRootFolderChange: (val: string) => void;
         appPlaceholder?: string;
+        allowDisabled?: boolean;
     }) => {
         const {
             title,
@@ -313,14 +314,16 @@ export function SeerrSettingsPanel() {
             onProfileChange,
             selectedRootFolder,
             onRootFolderChange,
-            appPlaceholder = "Auto-select first server"
+            appPlaceholder = "Auto-select first server",
+            allowDisabled = false
         } = options;
 
-        const currentApp = appsList.find(a => a.id === selectedAppId) || (selectedAppId === "" ? appsList[0] : null);
-        const currentAppData = selectedAppId ? appDataMap[selectedAppId] : (currentApp ? appDataMap[currentApp.id] : undefined);
+        const isExplicitlyDisabled = selectedAppId === "none" || (allowDisabled && (!selectedAppId || selectedAppId === ""));
+        const currentApp = isExplicitlyDisabled ? null : (appsList.find(a => a.id === selectedAppId) || (!allowDisabled && selectedAppId === "" ? appsList[0] : null));
+        const currentAppData = currentApp ? appDataMap[currentApp.id] : undefined;
         const profiles = currentAppData?.profiles || [];
         const folders = currentAppData?.folders || [];
-        const isRefreshing = refreshingAppId === selectedAppId || (currentApp && refreshingAppId === currentApp.id);
+        const isRefreshing = currentApp ? refreshingAppId === currentApp.id : false;
 
         const badgeStyles = {
             blue: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -330,7 +333,7 @@ export function SeerrSettingsPanel() {
         }[badgeVariant];
 
         return (
-            <div className="p-4 rounded-xl bg-background/40 border border-border/40 hover:border-border/70 transition-all space-y-3.5">
+            <div className={`p-4 rounded-xl transition-all space-y-3.5 ${isExplicitlyDisabled ? 'bg-background/20 border border-border/30 opacity-75' : 'bg-background/40 border border-border/40 hover:border-border/70'}`}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         {icon}
@@ -340,12 +343,12 @@ export function SeerrSettingsPanel() {
                         <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 ${badgeStyles}`}>
                             {badgeText}
                         </Badge>
-                        {selectedAppId && selectedAppId !== "none" && (
+                        {currentApp && (
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => fetchAppProfilesAndFolders(selectedAppId, true)}
+                                onClick={() => fetchAppProfilesAndFolders(currentApp.id, true)}
                                 disabled={isRefreshing}
                                 className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                                 title="Re-sync profiles and root folders from this Arr server"
@@ -365,14 +368,21 @@ export function SeerrSettingsPanel() {
                             onValueChange={(v) => {
                                 const newId = v === "none" ? "" : v;
                                 onAppChange(newId);
-                                if (newId) fetchAppProfilesAndFolders(newId);
+                                if (newId && newId !== "none") {
+                                    fetchAppProfilesAndFolders(newId);
+                                } else {
+                                    onProfileChange(null);
+                                    onRootFolderChange("");
+                                }
                             }}
                         >
                             <SelectTrigger className="h-8 text-xs bg-background/60 border-border/50">
                                 <SelectValue placeholder={appPlaceholder} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="none">{appPlaceholder}</SelectItem>
+                                <SelectItem value="none">
+                                    {allowDisabled ? (appPlaceholder.startsWith("Disabled") ? appPlaceholder : `Disabled (${appPlaceholder})`) : appPlaceholder}
+                                </SelectItem>
                                 {appsList.map(app => (
                                     <SelectItem key={app.id} value={app.id}>
                                         {app.name} ({app.url})
@@ -388,23 +398,29 @@ export function SeerrSettingsPanel() {
                             <Sliders className="h-3 w-3 text-primary/70" />
                             Default Quality Profile
                         </Label>
-                        <Select 
-                            value={selectedProfileId ? String(selectedProfileId) : "none"} 
-                            onValueChange={(v) => onProfileChange(v === "none" ? null : Number(v))}
-                            disabled={profiles.length === 0}
-                        >
-                            <SelectTrigger className="h-8 text-xs bg-background/60 border-border/50">
-                                <SelectValue placeholder={profiles.length > 0 ? "Select Quality Profile" : (isRefreshing ? "Fetching profiles..." : "No profiles found / Select server")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none">Auto-select server default</SelectItem>
-                                {profiles.map(p => (
-                                    <SelectItem key={p.id} value={String(p.id)}>
-                                        {p.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        {isExplicitlyDisabled ? (
+                            <div className="h-8 px-3 py-1.5 rounded-md bg-muted/20 border border-border/40 text-muted-foreground text-xs flex items-center">
+                                Disabled / Don't Use
+                            </div>
+                        ) : (
+                            <Select 
+                                value={selectedProfileId ? String(selectedProfileId) : "none"} 
+                                onValueChange={(v) => onProfileChange(v === "none" ? null : Number(v))}
+                                disabled={!currentApp || profiles.length === 0}
+                            >
+                                <SelectTrigger className="h-8 text-xs bg-background/60 border-border/50">
+                                    <SelectValue placeholder={profiles.length > 0 ? "Select Quality Profile" : (isRefreshing ? "Fetching profiles..." : "No profiles found / Select server")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Auto-select server default</SelectItem>
+                                    {profiles.map(p => (
+                                        <SelectItem key={p.id} value={String(p.id)}>
+                                            {p.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                     </div>
 
                     {/* 3. Root Folder Dropdown (Populated directly from Arr API) */}
@@ -413,10 +429,15 @@ export function SeerrSettingsPanel() {
                             <FolderTree className="h-3 w-3 text-emerald-400/70" />
                             Default Root Folder
                         </Label>
-                        {folders.length > 0 ? (
+                        {isExplicitlyDisabled ? (
+                            <div className="h-8 px-3 py-1.5 rounded-md bg-muted/20 border border-border/40 text-muted-foreground text-xs flex items-center">
+                                Disabled / Don't Use
+                            </div>
+                        ) : folders.length > 0 ? (
                             <Select 
                                 value={selectedRootFolder || "none"} 
                                 onValueChange={(v) => onRootFolderChange(v === "none" ? "" : v)}
+                                disabled={!currentApp}
                             >
                                 <SelectTrigger className="h-8 text-xs bg-background/60 border-border/50">
                                     <SelectValue placeholder="Select Root Folder" />
@@ -440,6 +461,7 @@ export function SeerrSettingsPanel() {
                                 placeholder="/movies or /tv"
                                 value={selectedRootFolder}
                                 onChange={(e) => onRootFolderChange(e.target.value)}
+                                disabled={!currentApp}
                                 className="h-8 text-xs bg-background/60 border-border/50 font-mono"
                             />
                         )}
@@ -520,7 +542,8 @@ export function SeerrSettingsPanel() {
                                 onProfileChange: setDefaultMovie4kProfileId,
                                 selectedRootFolder: defaultMovie4kRootFolder,
                                 onRootFolderChange: setDefaultMovie4kRootFolder,
-                                appPlaceholder: "Use standard 1080p movie server"
+                                appPlaceholder: "Disabled / Don't Use",
+                                allowDisabled: true
                             })}
 
                             {/* Standard TV Shows (1080p) */}
@@ -552,7 +575,8 @@ export function SeerrSettingsPanel() {
                                 onProfileChange: setDefaultTv4kProfileId,
                                 selectedRootFolder: defaultTv4kRootFolder,
                                 onRootFolderChange: setDefaultTv4kRootFolder,
-                                appPlaceholder: "Use standard 1080p TV server"
+                                appPlaceholder: "Disabled / Don't Use",
+                                allowDisabled: true
                             })}
                         </div>
                     </div>
@@ -626,7 +650,8 @@ export function SeerrSettingsPanel() {
                                 onProfileChange: setKidsMovieProfileId,
                                 selectedRootFolder: kidsMovieRootFolder,
                                 onRootFolderChange: setKidsMovieRootFolder,
-                                appPlaceholder: "Use standard 1080p movie server"
+                                appPlaceholder: "Use standard 1080p movie server",
+                                allowDisabled: true
                             })}
 
                             {/* Kids 4K Movies */}
@@ -642,7 +667,8 @@ export function SeerrSettingsPanel() {
                                 onProfileChange: setKidsMovie4kProfileId,
                                 selectedRootFolder: kidsMovie4kRootFolder,
                                 onRootFolderChange: setKidsMovie4kRootFolder,
-                                appPlaceholder: "Use standard 4K movie server"
+                                appPlaceholder: "Disabled / Don't Use",
+                                allowDisabled: true
                             })}
 
                             {/* Kids Standard TV */}
@@ -658,7 +684,8 @@ export function SeerrSettingsPanel() {
                                 onProfileChange: setKidsTvProfileId,
                                 selectedRootFolder: kidsTvRootFolder,
                                 onRootFolderChange: setKidsTvRootFolder,
-                                appPlaceholder: "Use standard 1080p TV server"
+                                appPlaceholder: "Use standard 1080p TV server",
+                                allowDisabled: true
                             })}
 
                             {/* Kids 4K TV */}
@@ -674,7 +701,8 @@ export function SeerrSettingsPanel() {
                                 onProfileChange: setKidsTv4kProfileId,
                                 selectedRootFolder: kidsTv4kRootFolder,
                                 onRootFolderChange: setKidsTv4kRootFolder,
-                                appPlaceholder: "Use standard 4K TV server"
+                                appPlaceholder: "Disabled / Don't Use",
+                                allowDisabled: true
                             })}
                         </div>
                     </div>

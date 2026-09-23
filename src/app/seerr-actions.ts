@@ -1059,12 +1059,18 @@ export async function updateSeerrSettingsAction(payload: {
 }) {
     try {
         await verifyAdmin();
+        const cleanedPayload: any = { ...payload };
+        for (const [key, val] of Object.entries(cleanedPayload)) {
+            if (val === "none" || val === "") {
+                cleanedPayload[key] = null;
+            }
+        }
         await prisma.settings.upsert({
             where: { id: "global" },
-            update: payload,
+            update: cleanedPayload,
             create: {
                 id: "global",
-                ...payload
+                ...cleanedPayload
             }
         });
         return { success: true, message: "Media request settings updated successfully." };
