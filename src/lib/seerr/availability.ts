@@ -82,7 +82,7 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
                 // Fetch library sections
                 const secRes = await fetch(`${base}/library/sections?X-Plex-Token=${encodeURIComponent(sToken)}`, {
                     headers: { "Accept": "application/json" },
-                    next: { revalidate: 300 }
+                    cache: "no-store"
                 });
                 if (!secRes.ok) return;
 
@@ -99,7 +99,7 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
                     try {
                         const itemsRes = await fetch(`${base}/library/sections/${sec.key}/all?includeGuids=1&X-Plex-Token=${encodeURIComponent(sToken)}`, {
                             headers: { "Accept": "application/json" },
-                            next: { revalidate: 180 }
+                            cache: "no-store"
                         });
                         if (!itemsRes.ok) return;
 
