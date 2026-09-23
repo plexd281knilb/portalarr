@@ -13,7 +13,6 @@ import { HeroSpotlight } from "@/components/seerr/hero-spotlight";
 import { MediaCarousel } from "@/components/seerr/media-carousel";
 import { MediaCard } from "@/components/seerr/media-card";
 import { MediaDetailModal } from "@/components/seerr/media-detail-modal";
-import { TrailerModal } from "@/components/seerr/trailer-modal";
 import { RequestManager } from "@/components/seerr/request-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,9 +68,6 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
 
     // Selected item for Detail Modal
     const [selectedMedia, setSelectedMedia] = useState<{ id: number; type: "movie" | "tv"; certification?: string } | null>(null);
-
-    // Selected trailer for Trailer Modal
-    const [trailerMedia, setTrailerMedia] = useState<{ title: string; videos: any[] } | null>(null);
 
     useEffect(() => {
         if (activeTab === "discover") {
