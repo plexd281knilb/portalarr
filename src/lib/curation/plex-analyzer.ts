@@ -2803,6 +2803,268 @@ export interface PruneCandidateItem {
     daysOld: number;
     lane?: "unwatched" | "watched";
     laneLabel?: string;
+    serverSources?: Array<{
+        serverId: string;
+        serverName: string;
+        viewCount: number;
+        lastViewedAt?: number;
+    }>;
+    watchedOnServerName?: string;
+}
+
+export interface CrossServerMediaActivity {
+    totalViewCount: number;
+    maxLastViewedAt?: number;
+    maxAddedAt?: number;
+    maxUpdatedAt?: number;
+    serverSources: Array<{
+        serverId: string;
+        serverName: string;
+        viewCount: number;
+        lastViewedAt?: number;
+    }>;
+    mostActiveServerName?: string;
+    lastWatchedServerName?: string;
+}
+
+export type CrossServerActivityMap = Map<string, CrossServerMediaActivity>;
+
+/**
+ * Normalizes file paths and generates candidate index keys.
+ */
+function normalizePathForMatching(filePath?: string): string[] {
+    if (!filePath) return [];
+    const normalized = filePath.replace(/\\/g, '/').toLowerCase().trim();
+    const basename = normalized.split('/').pop() || '';
+    const keys: string[] = [];
+    if (normalized) keys.push(`path:${normalized}`);
+    if (basename && basename.length > 3) keys.push(`file:${basename}`);
+    return keys;
+}
+
+/**
+ * Generates universal matching keys for cross-server media deduplication & watch synchronization.
+ */
+export function generateCrossServerMediaKeys(item: {
+    title?: string;
+    year?: number;
+    type?: string;
+    filePath?: string;
+    seasonNumber?: number;
+    guids?: { tmdb?: string; imdb?: string; tvdb?: string };
+    imdbId?: string;
+    tmdbId?: string;
+}): string[] {
+    const keys: string[] = [];
+    
+    // 1. File path and filename keys
+    keys.push(...normalizePathForMatching(item.filePath));
+
+    // 2. GUID keys
+    const tmdb = item.guids?.tmdb || item.tmdbId;
+    const imdb = item.guids?.imdb || item.imdbId;
+    const tvdb = item.guids?.tvdb;
+
+    if (item.seasonNumber !== undefined) {
+        if (tmdb) keys.push(`tmdb:${tmdb}_s${item.seasonNumber}`);
+        if (imdb) keys.push(`imdb:${imdb}_s${item.seasonNumber}`);
+        if (tvdb) keys.push(`tvdb:${tvdb}_s${item.seasonNumber}`);
+        if (item.title) {
+            const cleanTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+            keys.push(`title:${cleanTitle}_s${item.seasonNumber}`);
+        }
+    } else {
+        if (tmdb) keys.push(`tmdb:${tmdb}`);
+        if (imdb) keys.push(`imdb:${imdb}`);
+        if (tvdb) keys.push(`tvdb:${tvdb}`);
+        if (item.title) {
+            const cleanTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const yr = item.year ? `_${item.year}` : '';
+            keys.push(`title:${cleanTitle}${yr}`);
+        }
+    }
+
+    return keys;
+}
+
+function recordActivityForKeys(
+    activityMap: CrossServerActivityMap,
+    keys: string[],
+    record: {
+        serverId: string;
+        serverName: string;
+        viewCount: number;
+        lastViewedAt?: number;
+        addedAt?: number;
+        updatedAt?: number;
+    }
+) {
+    if (keys.length === 0) return;
+
+    let existingActivity: CrossServerMediaActivity | undefined;
+    for (const k of keys) {
+        if (activityMap.has(k)) {
+            existingActivity = activityMap.get(k);
+            break;
+        }
+    }
+
+    if (!existingActivity) {
+        existingActivity = {
+            totalViewCount: 0,
+            serverSources: [],
+            maxLastViewedAt: undefined,
+            maxAddedAt: undefined,
+            maxUpdatedAt: undefined,
+            lastWatchedServerName: undefined,
+            mostActiveServerName: undefined
+        };
+    }
+
+    const existingSourceIndex = existingActivity.serverSources.findIndex(s => s.serverId === record.serverId);
+    if (existingSourceIndex >= 0) {
+        const src = existingActivity.serverSources[existingSourceIndex];
+        src.viewCount = Math.max(src.viewCount, record.viewCount);
+        if (record.lastViewedAt) {
+            src.lastViewedAt = Math.max(src.lastViewedAt || 0, record.lastViewedAt);
+        }
+    } else {
+        existingActivity.serverSources.push({
+            serverId: record.serverId,
+            serverName: record.serverName,
+            viewCount: record.viewCount,
+            lastViewedAt: record.lastViewedAt
+        });
+    }
+
+    existingActivity.totalViewCount = existingActivity.serverSources.reduce((sum, s) => sum + s.viewCount, 0);
+    const validViews = existingActivity.serverSources
+        .filter(s => s.lastViewedAt && s.lastViewedAt > 0)
+        .sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0));
+
+    if (validViews.length > 0) {
+        existingActivity.maxLastViewedAt = validViews[0].lastViewedAt;
+        existingActivity.lastWatchedServerName = validViews[0].serverName;
+    }
+
+    if (record.addedAt) {
+        existingActivity.maxAddedAt = Math.max(existingActivity.maxAddedAt || 0, record.addedAt);
+    }
+    if (record.updatedAt) {
+        existingActivity.maxUpdatedAt = Math.max(existingActivity.maxUpdatedAt || 0, record.updatedAt);
+    }
+
+    for (const k of keys) {
+        activityMap.set(k, existingActivity);
+    }
+}
+
+/**
+ * Looks up unified playback activity across all connected servers for a media item.
+ */
+export function lookupCrossServerActivity(
+    item: {
+        title?: string;
+        year?: number;
+        type?: string;
+        filePath?: string;
+        seasonNumber?: number;
+        guids?: { tmdb?: string; imdb?: string; tvdb?: string };
+        imdbId?: string;
+        tmdbId?: string;
+    },
+    activityMap?: CrossServerActivityMap
+): CrossServerMediaActivity | undefined {
+    if (!activityMap || activityMap.size === 0) return undefined;
+    const keys = generateCrossServerMediaKeys(item);
+    for (const k of keys) {
+        if (activityMap.has(k)) {
+            return activityMap.get(k);
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Scans all provided Plex servers to build a unified playback activity index.
+ * Matches items across servers using file paths, filenames, TMDb/IMDb GUIDs, and normalized titles.
+ */
+export async function buildCrossServerPlaybackIndex(
+    servers: Array<{ serverId: string; serverName: string; serverUrl: string; token: string }>,
+    options: { evaluateSeasons?: boolean } = {}
+): Promise<CrossServerActivityMap> {
+    const activityMap: CrossServerActivityMap = new Map();
+    const evaluateSeasons = options.evaluateSeasons ?? true;
+
+    await Promise.all(
+        servers.map(async (srv) => {
+            try {
+                const cleanBase = srv.serverUrl.replace(/\/+$/, "");
+                const sectionsUrl = `${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(srv.token)}`;
+                const secRes = await fetch(sectionsUrl, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": srv.token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    cache: "no-store",
+                    signal: AbortSignal.timeout(8000)
+                });
+                if (!secRes.ok) return;
+                const secData = await secRes.json();
+                const directories = secData.MediaContainer?.Directory || [];
+                const sections = (Array.isArray(directories) ? directories : [directories])
+                    .filter((d: any) => d.type === "movie" || d.type === "show");
+
+                for (const sec of sections) {
+                    const items = await getPlexLibraryMediaItems(srv.serverUrl, srv.token, sec.key, 2500);
+
+                    for (const item of items) {
+                        const rawLastViewedAt = item.lastViewedAt;
+                        const lastViewedAtMs = rawLastViewedAt ? (rawLastViewedAt < 1e11 ? rawLastViewedAt * 1000 : rawLastViewedAt) : undefined;
+                        const viewCount = item.viewCount || 0;
+
+                        if (sec.type === "show" && evaluateSeasons) {
+                            const seasons = await getPlexShowSeasons(srv.serverUrl, srv.token, item.ratingKey);
+                            for (const season of seasons) {
+                                const seasonLastViewed = season.lastViewedAt;
+                                const seasonViews = season.viewedLeafCount || 0;
+                                const seasonKeys = generateCrossServerMediaKeys({
+                                    title: item.title,
+                                    year: item.year,
+                                    type: "season",
+                                    seasonNumber: season.index,
+                                    filePath: item.filePath,
+                                    guids: item.guids,
+                                    imdbId: item.guids?.imdb,
+                                    tmdbId: item.guids?.tmdb
+                                });
+
+                                recordActivityForKeys(activityMap, seasonKeys, {
+                                    serverId: srv.serverId,
+                                    serverName: srv.serverName,
+                                    viewCount: seasonViews,
+                                    lastViewedAt: seasonLastViewed,
+                                    addedAt: season.addedAt,
+                                    updatedAt: season.updatedAt
+                                });
+                            }
+                        }
+
+                        const keys = generateCrossServerMediaKeys(item);
+                        recordActivityForKeys(activityMap, keys, {
+                            serverId: srv.serverId,
+                            serverName: srv.serverName,
+                            viewCount,
+                            lastViewedAt: lastViewedAtMs,
+                            addedAt: item.addedAt,
+                            updatedAt: item.updatedAt
+                        });
+                    }
+                }
+            } catch (err) {
+                // Silently skip any unresponsive server
+            }
+        })
+    );
+
+    return activityMap;
 }
 
 /**
@@ -2859,7 +3121,7 @@ export async function getPlexShowSeasons(
 
 /**
  * Evaluates oldest and unwatched media items across sections for a server to simulate or execute capacity pruning.
- * Implements Unified Activity Timestamp Engine (max(addedAt, updatedAt, lastWatchedAt)) and Season-Level TV Pruning.
+ * Implements Unified Activity Timestamp Engine (max(addedAt, updatedAt, lastWatchedAt)), Cross-Server Playback Unification, and Season-Level TV Pruning.
  */
 export async function evaluatePruneCandidatesForServer(
     serverUrl: string,
@@ -2876,6 +3138,7 @@ export async function evaluatePruneCandidatesForServer(
         sectionKeys?: string[];
         enabledSectionKeys?: string[];
         evaluateSeasons?: boolean;
+        crossServerActivityMap?: CrossServerActivityMap;
         sortBy?: "combined_oldest" | "dual_lane_cascade" | "combined_activity" | "oldest_added" | "oldest_watched" | "largest_size" | "least_plays" | "oldest_modified";
     } = {}
 ): Promise<{
@@ -2939,7 +3202,24 @@ export async function evaluatePruneCandidatesForServer(
                         const seasonAddedAt = season.addedAt || addedAtMs;
                         const seasonLastViewedAt = season.lastViewedAt;
                         const seasonDaysOld = Math.max(0, Math.floor((nowMs - seasonAddedAt) / (24 * 60 * 60 * 1000)));
-                        const isSeasonWatched = (season.viewedLeafCount || 0) > 0 || (seasonLastViewedAt !== undefined && seasonLastViewedAt > 0);
+
+                        // Check cross-server activity map for multi-server playback history
+                        const crossActivity = lookupCrossServerActivity({
+                            title: item.title,
+                            year: item.year,
+                            type: "season",
+                            seasonNumber: season.index,
+                            filePath: item.filePath,
+                            guids: item.guids,
+                            imdbId: item.guids?.imdb,
+                            tmdbId: item.guids?.tmdb
+                        }, options.crossServerActivityMap);
+
+                        const effectiveSeasonViews = Math.max(season.viewedLeafCount || 0, crossActivity?.totalViewCount || 0);
+                        const effectiveSeasonLastViewed = Math.max(seasonLastViewedAt || 0, crossActivity?.maxLastViewedAt || 0) || undefined;
+                        const isSeasonWatched = effectiveSeasonViews > 0 || (effectiveSeasonLastViewed !== undefined && effectiveSeasonLastViewed > 0);
+                        const watchedOnServer = crossActivity?.lastWatchedServerName || serverName;
+                        const linkedServersCount = crossActivity?.serverSources.length || 1;
 
                         let seasonLane: "unwatched" | "watched";
                         let seasonLaneLabel: string;
@@ -2954,13 +3234,16 @@ export async function evaluatePruneCandidatesForServer(
                         } else {
                             // Lane 1: Oldest Watched (Cold Storage)
                             if (unwatchedOnly) continue; // Skip watched if unwatchedOnly is ON
-                            const daysSinceWatched = seasonLastViewedAt
-                                ? Math.max(0, Math.floor((nowMs - seasonLastViewedAt) / (24 * 60 * 60 * 1000)))
+                            const daysSinceWatched = effectiveSeasonLastViewed
+                                ? Math.max(0, Math.floor((nowMs - effectiveSeasonLastViewed) / (24 * 60 * 60 * 1000)))
                                 : seasonDaysOld;
                             if (daysSinceWatched < watchedMinAgeDays) continue;
                             seasonLane = "watched";
                             seasonLaneLabel = "Lane 1: Oldest Watched";
-                            seasonReason = `Season ${season.index} (${season.leafCount} eps) • Watched ${daysSinceWatched}d ago (${season.viewedLeafCount}/${season.leafCount} viewed • Added ${seasonDaysOld}d ago)`;
+                            const serverAttribution = crossActivity && crossActivity.serverSources.length > 1 && crossActivity.lastWatchedServerName
+                                ? ` on ${crossActivity.lastWatchedServerName}`
+                                : '';
+                            seasonReason = `Season ${season.index} (${season.leafCount} eps) • Watched ${daysSinceWatched}d ago${serverAttribution} (${effectiveSeasonViews}/${season.leafCount} viewed across ${linkedServersCount} ${linkedServersCount === 1 ? 'server' : 'servers'} • Added ${seasonDaysOld}d ago)`;
                         }
 
                         // Approximate season file size based on episode count
@@ -2986,9 +3269,9 @@ export async function evaluatePruneCandidatesForServer(
                             serverId,
                             serverName,
                             addedAt: seasonAddedAt,
-                            lastViewedAt: seasonLastViewedAt,
-                            lastActivityDate: seasonLastViewedAt || seasonAddedAt,
-                            viewCount: season.viewedLeafCount || 0,
+                            lastViewedAt: effectiveSeasonLastViewed,
+                            lastActivityDate: effectiveSeasonLastViewed || seasonAddedAt,
+                            viewCount: effectiveSeasonViews,
                             fileSizeGb: Math.max(0.5, seasonSizeGb),
                             filePath: item.filePath,
                             thumb: season.thumb || item.thumb,
@@ -3001,7 +3284,9 @@ export async function evaluatePruneCandidatesForServer(
                             reason: seasonReason,
                             daysOld: seasonDaysOld,
                             lane: seasonLane,
-                            laneLabel: seasonLaneLabel
+                            laneLabel: seasonLaneLabel,
+                            serverSources: crossActivity?.serverSources,
+                            watchedOnServerName: crossActivity?.lastWatchedServerName
                         });
                     }
                     continue; // Skip evaluating top-level show if seasons were evaluated
@@ -3011,7 +3296,22 @@ export async function evaluatePruneCandidatesForServer(
             // --- MOVIE OR WHOLE TV SHOW EVALUATION ---
             const daysOld = Math.floor(Math.max(0, nowMs - addedAtMs) / (24 * 60 * 60 * 1000));
             const viewCount = item.viewCount || 0;
-            const isItemWatched = viewCount > 0 || (lastViewedAtMs !== undefined && lastViewedAtMs > 0);
+
+            // Check cross-server activity map for multi-server playback history
+            const crossActivity = lookupCrossServerActivity({
+                title: item.title,
+                year: item.year,
+                type: item.type,
+                filePath: item.filePath,
+                guids: item.guids,
+                imdbId: item.guids?.imdb,
+                tmdbId: item.guids?.tmdb
+            }, options.crossServerActivityMap);
+
+            const effectiveViewCount = Math.max(viewCount, crossActivity?.totalViewCount || 0);
+            const effectiveLastViewedAt = Math.max(lastViewedAtMs || 0, crossActivity?.maxLastViewedAt || 0) || undefined;
+            const isItemWatched = effectiveViewCount > 0 || (effectiveLastViewedAt !== undefined && effectiveLastViewedAt > 0);
+            const linkedServersCount = crossActivity?.serverSources.length || 1;
 
             let lane: "unwatched" | "watched";
             let laneLabel: string;
@@ -3022,17 +3322,20 @@ export async function evaluatePruneCandidatesForServer(
                 if (daysOld < unwatchedMinAgeDays) continue;
                 lane = "unwatched";
                 laneLabel = "Lane 2: Never Watched";
-                reason = `Never Watched • Added ${daysOld}d ago (0 plays)`;
+                reason = `Never Watched • Added ${daysOld}d ago (0 plays across ${linkedServersCount} ${linkedServersCount === 1 ? 'server' : 'servers'})`;
             } else {
                 // Lane 1: Oldest Watched (Cold Storage)
                 if (unwatchedOnly) continue; // Skip watched if unwatchedOnly is ON
-                const daysSinceViewed = lastViewedAtMs
-                    ? Math.max(0, Math.floor((nowMs - lastViewedAtMs) / (24 * 60 * 60 * 1000)))
+                const daysSinceViewed = effectiveLastViewedAt
+                    ? Math.max(0, Math.floor((nowMs - effectiveLastViewedAt) / (24 * 60 * 60 * 1000)))
                     : daysOld;
                 if (daysSinceViewed < watchedMinAgeDays) continue;
                 lane = "watched";
                 laneLabel = "Lane 1: Oldest Watched";
-                reason = `Watched ${daysSinceViewed}d ago • ${viewCount} ${viewCount === 1 ? 'play' : 'plays'} (Added ${daysOld}d ago)`;
+                const serverAttribution = crossActivity && crossActivity.serverSources.length > 1 && crossActivity.lastWatchedServerName
+                    ? ` on ${crossActivity.lastWatchedServerName}`
+                    : '';
+                reason = `Watched ${daysSinceViewed}d ago${serverAttribution} • ${effectiveViewCount} ${effectiveViewCount === 1 ? 'play' : 'plays'} across ${linkedServersCount} ${linkedServersCount === 1 ? 'server' : 'servers'} (Added ${daysOld}d ago)`;
             }
 
             const sizeBytes = item.fileSize || 0;
@@ -3048,9 +3351,9 @@ export async function evaluatePruneCandidatesForServer(
                 serverId,
                 serverName,
                 addedAt: addedAtMs,
-                lastViewedAt: lastViewedAtMs,
-                lastActivityDate: lastViewedAtMs || addedAtMs,
-                viewCount,
+                lastViewedAt: effectiveLastViewedAt,
+                lastActivityDate: effectiveLastViewedAt || addedAtMs,
+                viewCount: effectiveViewCount,
                 fileSizeGb: sizeGb > 0 ? sizeGb : (item.type === "movie" ? 4.5 : 12.0),
                 filePath: item.filePath,
                 thumb: item.thumb,
@@ -3063,7 +3366,9 @@ export async function evaluatePruneCandidatesForServer(
                 reason,
                 daysOld,
                 lane,
-                laneLabel
+                laneLabel,
+                serverSources: crossActivity?.serverSources,
+                watchedOnServerName: crossActivity?.lastWatchedServerName
             });
         }
     }

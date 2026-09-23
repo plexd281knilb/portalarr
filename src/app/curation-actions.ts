@@ -33,7 +33,10 @@ import {
     getPlexItemChildrenMetadata,
     refreshPlexLibrarySection,
     PlexMediaStreamInfo,
-    PruneCandidateItem
+    PruneCandidateItem,
+    buildCrossServerPlaybackIndex,
+    CrossServerActivityMap,
+    generateCrossServerMediaKeys
 } from "@/lib/curation/plex-analyzer";
 import { 
     backupAndApplyOverlay, 
@@ -2882,6 +2885,26 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         // Auto-stage prune candidates if storage warning threshold is breached
         if (capacityWarningTriggered && serverUrl && token) {
             try {
+                const allPlexServers = await getPlexServers(token).catch(() => []);
+                const allResolvedServers: Array<{ serverId: string; serverName: string; serverUrl: string; token: string }> = [];
+                for (const s of allPlexServers) {
+                    const r = await resolveWorkingPlexServerConnection(s.clientIdentifier);
+                    if (r && r.serverUrl) {
+                        allResolvedServers.push({
+                            serverId: s.clientIdentifier,
+                            serverName: s.name,
+                            serverUrl: r.serverUrl,
+                            token: r.token
+                        });
+                    }
+                }
+
+                const crossServerActivityMap = allResolvedServers.length > 1
+                    ? await buildCrossServerPlaybackIndex(allResolvedServers, {
+                        evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true
+                    })
+                    : undefined;
+
                 const srvSections = await getPlexServerSections(token, targetServerId);
                 const eligibleSections = sectionKey 
                     ? srvSections.filter(s => String(s.key) === String(sectionKey))
@@ -2895,6 +2918,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
                     maxCandidates: 100,
                     sortBy: (settings?.pruneSortStrategy as any) || "combined_oldest",
                     evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true,
+                    crossServerActivityMap,
                     sectionKeys: eligibleSections.map(s => String(s.key))
                 });
 
@@ -5087,6 +5111,26 @@ export async function getPrunePreviewAction(options?: {
             };
         }
 
+        const allResolvedServers: Array<{ serverId: string; serverName: string; serverUrl: string; token: string }> = [];
+        for (const s of servers) {
+            const r = await resolveWorkingPlexServerConnection(s.clientIdentifier);
+            if (r && r.serverUrl) {
+                allResolvedServers.push({
+                    serverId: s.clientIdentifier,
+                    serverName: s.name,
+                    serverUrl: r.serverUrl,
+                    token: r.token
+                });
+            }
+        }
+
+        // Build unified cross-server playback activity index
+        const crossServerActivityMap = allResolvedServers.length > 1
+            ? await buildCrossServerPlaybackIndex(allResolvedServers, {
+                evaluateSeasons: criteria?.evaluateSeasons ?? (settings as any)?.pruneEvaluateSeasons ?? true
+            })
+            : undefined;
+
         let allCandidates: PruneCandidateItem[] = [];
         let totalRecoverable = 0;
         let totalEvaluated = 0;
@@ -5122,6 +5166,7 @@ export async function getPrunePreviewAction(options?: {
                 maxCandidates: criteria?.maxCandidates ?? 50,
                 sortBy: criteria?.sortBy ?? "combined_oldest",
                 evaluateSeasons: criteria?.evaluateSeasons ?? (settings as any)?.pruneEvaluateSeasons ?? true,
+                crossServerActivityMap,
                 sectionKeys: eligibleSectionKeys
             });
 
@@ -5129,6 +5174,29 @@ export async function getPrunePreviewAction(options?: {
             totalRecoverable += res.totalRecoverableGb;
             totalEvaluated += res.evaluatedCount;
         }
+
+        // Deduplicate candidates across servers if same physical file exists on multiple servers
+        const deduplicatedCandidatesMap = new Map<string, PruneCandidateItem>();
+        for (const cand of allCandidates) {
+            const normPath = cand.filePath ? cand.filePath.replace(/\\/g, '/').toLowerCase().trim() : '';
+            const dedupeKey = normPath || `${cand.type}_${cand.tmdbId || cand.imdbId || cand.title.toLowerCase()}_${cand.year || ''}_s${cand.seasonNumber ?? ''}`;
+            
+            if (deduplicatedCandidatesMap.has(dedupeKey)) {
+                const existing = deduplicatedCandidatesMap.get(dedupeKey)!;
+                if (cand.serverName && !existing.serverName?.includes(cand.serverName)) {
+                    existing.serverName = `${existing.serverName} • ${cand.serverName}`;
+                }
+                if (cand.viewCount > existing.viewCount) existing.viewCount = cand.viewCount;
+                if ((cand.lastViewedAt || 0) > (existing.lastViewedAt || 0)) {
+                    existing.lastViewedAt = cand.lastViewedAt;
+                    existing.lastActivityDate = cand.lastActivityDate;
+                    if (cand.watchedOnServerName) existing.watchedOnServerName = cand.watchedOnServerName;
+                }
+            } else {
+                deduplicatedCandidatesMap.set(dedupeKey, cand);
+            }
+        }
+        allCandidates = Array.from(deduplicatedCandidatesMap.values());
 
         // Sort candidates with Priority Cascade (Option A): Lane 2 (Never Watched) -> Lane 1 (Oldest Watched)
         const sortBy = criteria?.sortBy ?? "combined_oldest";

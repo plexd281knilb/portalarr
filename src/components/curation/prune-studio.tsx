@@ -2941,11 +2941,15 @@ export function PruneStudio() {
                                                                                 ({c.year})
                                                                             </span>
                                                                         )}
-                                                                        {c.serverName && (
+                                                                        {c.serverSources && c.serverSources.length > 1 ? (
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-purple-500/50 text-purple-300 bg-purple-950/40 font-bold" title={c.serverSources.map((s: any) => `${s.serverName}: ${s.viewCount} plays`).join(' • ')}>
+                                                                                🔗 {c.serverSources.length} servers linked
+                                                                            </Badge>
+                                                                        ) : c.serverName ? (
                                                                             <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-slate-700 text-slate-400">
                                                                                 {c.serverName}
                                                                             </Badge>
-                                                                        )}
+                                                                        ) : null}
                                                                         {c.resolution && (
                                                                             <Badge className="bg-sky-950 text-sky-300 border-sky-600/40 text-[10px] font-mono py-0 px-1.5">
                                                                                 {c.resolution}
@@ -2984,7 +2988,10 @@ export function PruneStudio() {
                                                             <div className="flex items-center gap-1.5 text-slate-300">
                                                                 <Eye className="h-3 w-3 text-amber-400 shrink-0" />
                                                                 {c.viewCount > 0 && lastWatchedDateStr ? (
-                                                                    <span>Watched: <strong className="text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)</span>
+                                                                    <span>
+                                                                        Watched: <strong className="text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)
+                                                                        {c.watchedOnServerName ? <span className="text-purple-300 text-[10px] ml-1">[{c.watchedOnServerName}]</span> : null}
+                                                                    </span>
                                                                 ) : (
                                                                     <Badge className="bg-cyan-950/80 text-cyan-300 border-cyan-600/40 text-[10px] py-0 px-1.5">
                                                                         Never Watched (0 plays)
