@@ -23,7 +23,7 @@ import WhatsNewModal from "@/components/whats-new-modal";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ExternalLink, AlertTriangle, BookOpen, Sparkles } from "lucide-react"; 
+import { ExternalLink, AlertTriangle, BookOpen, Sparkles, Compass } from "lucide-react"; 
 import { cookies } from "next/headers"; 
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/auth-secret";
@@ -148,17 +148,24 @@ export default async function UserLandingPage() {
             <Card className="h-full flex flex-col border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                        <ExternalLink className="h-5 w-5 text-primary"/> Request Content
+                        <Compass className="h-5 w-5 text-primary"/> Discover & Requests
                     </CardTitle>
-                    <CardDescription>Looking for something specific? Request it here.</CardDescription>
+                    <CardDescription>Browse trending titles, watch trailers & request media.</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 flex flex-col justify-center space-y-4">
+                <CardContent className="flex-1 flex flex-col justify-center space-y-3">
+                    <Link href="/discover" className="w-full block">
+                        <Button size="lg" className="w-full text-sm sm:text-base font-bold h-12 sm:h-13 shadow-md transition-all duration-200 bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 hover:ring-2 hover:ring-primary/50 hover:shadow-lg active:scale-98 rounded-xl">
+                            <Compass className="h-5 w-5" />
+                            Discover Movies & TV
+                        </Button>
+                    </Link>
+
                     {isLoggedIn && (
-                        <div className="border-b border-border/40 pb-4">
+                        <div>
                             {hasAccess ? (
                                 <Link href="/library" className="w-full block">
-                                    <Button size="lg" className="w-full text-base font-semibold h-12 shadow-sm transition-all duration-200 bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-lg active:scale-98">
-                                        <BookOpen className="h-5 w-5 text-white" />
+                                    <Button size="lg" variant="outline" className="w-full text-sm sm:text-base font-semibold h-11 sm:h-12 shadow-sm transition-all duration-200 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center gap-2 hover:ring-1 hover:ring-emerald-400/50 active:scale-98 rounded-xl">
+                                        <BookOpen className="h-4 w-4 text-emerald-400" />
                                         Access Book Library
                                     </Button>
                                 </Link>
@@ -167,31 +174,31 @@ export default async function UserLandingPage() {
                             )}
                         </div>
                     )}
-                    {requestApps.length === 0 ? (
-                        <div className="text-center text-muted-foreground italic p-4 border border-dashed rounded-lg border-border/40">
-                            No request apps configured.
-                        </div>
-                    ) : (
-                        requestApps.map(app => {
-                            const safeUrl = makeAbsoluteUrl(app.externalUrl);
-                            return (
-                                <Link 
-                                    key={app.id} 
-                                    href={safeUrl} 
-                                    target={app.externalUrl ? "_blank" : "_self"} 
-                                    className={`w-full block ${!app.externalUrl && "opacity-50 cursor-not-allowed"}`}
-                                >
-                                    <Button 
-                                        size="lg" 
-                                        disabled={!app.externalUrl} 
-                                        className="w-full text-base sm:text-lg h-14 sm:h-16 shadow-md transition-all duration-200 font-semibold hover:ring-2 hover:ring-primary/50 hover:shadow-lg active:scale-98"
+
+                    {requestApps.length > 0 && (
+                        <div className="pt-2 border-t border-border/30 space-y-2">
+                            {requestApps.map(app => {
+                                const safeUrl = makeAbsoluteUrl(app.externalUrl);
+                                return (
+                                    <Link 
+                                        key={app.id} 
+                                        href={safeUrl} 
+                                        target={app.externalUrl ? "_blank" : "_self"} 
+                                        className={`w-full block ${!app.externalUrl && "opacity-50 cursor-not-allowed"}`}
                                     >
-                                        {app.name} 
-                                        {app.externalUrl ? <ExternalLink className="ml-2 h-5 w-5" /> : <span className="ml-2 text-xs font-normal opacity-70">(Not Configured)</span>}
-                                    </Button>
-                                </Link>
-                            );
-                        })
+                                        <Button 
+                                            size="sm" 
+                                            variant="ghost"
+                                            disabled={!app.externalUrl} 
+                                            className="w-full text-xs h-9 transition-all text-muted-foreground hover:text-foreground font-semibold"
+                                        >
+                                            {app.name} 
+                                            {app.externalUrl ? <ExternalLink className="ml-1.5 h-3.5 w-3.5" /> : <span className="ml-1.5 text-[10px] font-normal opacity-70">(Not Configured)</span>}
+                                        </Button>
+                                    </Link>
+                                );
+                            })}
+                        </div>
                     )}
                 </CardContent>
             </Card>

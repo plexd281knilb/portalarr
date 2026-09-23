@@ -20,7 +20,9 @@ import {
   Tv,
   Sparkles,
   Trash2,
-  Tag
+  Tag,
+  Compass,
+  Inbox
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -76,6 +78,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               >
                 <LayoutDashboard className="mr-2 h-4 w-4 text-primary" />
                 Dashboard
+              </Button>
+            </Link>
+
+            <Link href="/discover">
+              <Button
+                variant={pathname.startsWith("/discover") || pathname.startsWith("/requests") ? "secondary" : "ghost"}
+                className={cn(
+                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                  pathname.startsWith("/discover") || pathname.startsWith("/requests")
+                    ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                )}
+              >
+                <Compass className="mr-2 h-4 w-4 text-primary" />
+                Discover & Requests
               </Button>
             </Link>
 
@@ -355,6 +372,20 @@ export function MobileSidebar() {
                       )}
                     >
                       <LayoutDashboard className="mr-2 h-4 w-4 text-primary" /> Dashboard
+                    </Button>
+                  </Link>
+
+                  <Link href="/discover" onClick={() => setIsOpen(false)}>
+                    <Button
+                      variant={pathname.startsWith("/discover") || pathname.startsWith("/requests") ? "secondary" : "ghost"}
+                      className={cn(
+                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                        pathname.startsWith("/discover") || pathname.startsWith("/requests")
+                          ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                      )}
+                    >
+                      <Compass className="mr-2 h-4 w-4 text-primary" /> Discover & Requests
                     </Button>
                   </Link>
 

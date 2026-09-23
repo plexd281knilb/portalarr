@@ -14,6 +14,7 @@ export type LogCategory =
     | "SYSTEM"
     | "CURATION"
     | "SETTINGS"
+    | "SEERR"
     | "PLEX_HUB"; // backward compatibility
 
 export interface SystemLogEntry {

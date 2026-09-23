@@ -24,11 +24,61 @@ export interface TmdbMediaItem {
     genres?: string[];
     certification?: string; // MPAA or TV Rating (e.g. PG-13, R, TV-MA)
     imdbId?: string;
+    tvdbId?: number;
     nudityLevel?: string;
     violenceLevel?: string;
     profanityLevel?: string;
     alcoholLevel?: string;
     frighteningLevel?: string;
+}
+
+export interface TmdbCastMember {
+    id: number;
+    name: string;
+    character?: string;
+    profilePath: string | null;
+    order: number;
+}
+
+export interface TmdbSeasonInfo {
+    id: number;
+    seasonNumber: number;
+    name: string;
+    episodeCount: number;
+    airDate?: string;
+    posterPath: string | null;
+    overview: string;
+}
+
+export interface TmdbEpisodeInfo {
+    id: number;
+    episodeNumber: number;
+    seasonNumber: number;
+    name: string;
+    overview: string;
+    airDate?: string;
+    stillPath: string | null;
+    voteAverage: number;
+    runtime?: number;
+}
+
+export interface TmdbMediaDetail extends TmdbMediaItem {
+    tagline?: string;
+    runtime?: number; // Minutes
+    status?: string; // Released, Returning Series, Ended, In Production
+    networks?: { id: number; name: string; logoPath: string | null }[];
+    productionCompanies?: { id: number; name: string; logoPath: string | null }[];
+    numberOfSeasons?: number;
+    numberOfEpisodes?: number;
+    seasons?: TmdbSeasonInfo[];
+    cast?: TmdbCastMember[];
+    videos?: TmdbVideoItem[];
+    recommendations?: TmdbMediaItem[];
+    watchProviders?: {
+        stream?: { providerId: number; providerName: string; logoPath: string }[];
+        rent?: { providerId: number; providerName: string; logoPath: string }[];
+        buy?: { providerId: number; providerName: string; logoPath: string }[];
+    };
 }
 
 export interface TmdbCollectionInfo {
@@ -169,13 +219,25 @@ function mapTmdbTv(t: any): TmdbMediaItem {
 /**
  * Get Trending Movies or TV Shows (Day or Week)
  */
-export async function getTmdbTrending(mediaType: "movie" | "tv" | "all" = "all", timeWindow: "day" | "week" = "week"): Promise<TmdbMediaItem[]> {
+export async function getTmdbTrending(mediaType: "movie" | "tv" | "all" = "all", timeWindow: "day" | "week" = "week", page = 1): Promise<TmdbMediaItem[]> {
     try {
-        const data = await tmdbFetch(`/trending/${mediaType}/${timeWindow}`);
+        const data = await tmdbFetch(`/trending/${mediaType}/${timeWindow}`, { page });
         if (!data?.results) return [];
         return data.results.map((item: any) => 
             item.media_type === "tv" ? mapTmdbTv(item) : mapTmdbMovie(item)
         );
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Get Upcoming / On The Air TV Shows
+ */
+export async function getTmdbUpcomingTv(page = 1): Promise<TmdbMediaItem[]> {
+    try {
+        const data = await tmdbFetch("/tv/on_the_air", { page });
+        return (data?.results || []).map(mapTmdbTv);
     } catch {
         return [];
     }
@@ -516,6 +578,250 @@ export async function getTmdbVideos(tmdbId: number, mediaType: "movie" | "tv" = 
             if (!a.official && b.official) return 1;
             return 0;
         });
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Multi-Search across Movies, TV Shows, and People
+ */
+export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMediaItem[]> {
+    if (!query || !query.trim()) return [];
+    try {
+        const data = await tmdbFetch("/search/multi", {
+            query: query.trim(),
+            page,
+            include_adult: "false"
+        });
+        if (!data?.results || !Array.isArray(data.results)) return [];
+
+        const items: TmdbMediaItem[] = [];
+        for (const item of data.results) {
+            if (item.media_type === "movie") {
+                items.push(mapTmdbMovie(item));
+            } else if (item.media_type === "tv") {
+                items.push(mapTmdbTv(item));
+            } else if (item.media_type === "person" && Array.isArray(item.known_for)) {
+                // Flatten notable items for person searches
+                for (const kf of item.known_for) {
+                    if (kf.media_type === "movie") items.push(mapTmdbMovie(kf));
+                    else if (kf.media_type === "tv") items.push(mapTmdbTv(kf));
+                }
+            }
+        }
+        return items;
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Get comprehensive Movie details including cast, recommendations, videos, release dates & watch providers
+ */
+export async function getTmdbMovieDetailsFull(tmdbId: number): Promise<TmdbMediaDetail | null> {
+    try {
+        const data = await tmdbFetch(`/movie/${tmdbId}`, {
+            append_to_response: "credits,recommendations,similar,videos,release_dates,external_ids,keywords,watch/providers"
+        });
+        if (!data) return null;
+
+        const base = mapTmdbMovie(data);
+
+        // Cast
+        const cast: TmdbCastMember[] = (data.credits?.cast || []).slice(0, 20).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            character: c.character,
+            profilePath: c.profile_path ? `${TMDB_IMAGE_BASE}${c.profile_path}` : null,
+            order: c.order ?? 0
+        }));
+
+        // Videos / Trailers
+        const videos: TmdbVideoItem[] = (data.videos?.results || [])
+            .filter((v: any) => v.site === "YouTube" && v.key)
+            .map((v: any) => ({
+                id: v.id,
+                key: v.key,
+                name: v.name || "Trailer",
+                site: v.site,
+                type: v.type || "Trailer",
+                official: Boolean(v.official),
+                url: `https://www.youtube.com/watch?v=${v.key}`,
+                embedUrl: `https://www.youtube.com/embed/${v.key}`
+            }))
+            .sort((a: any, b: any) => {
+                const isTrailerA = a.type.toLowerCase().includes("trailer");
+                const isTrailerB = b.type.toLowerCase().includes("trailer");
+                if (isTrailerA && !isTrailerB) return -1;
+                if (!isTrailerA && isTrailerB) return 1;
+                if (a.official && !b.official) return -1;
+                if (!a.official && b.official) return 1;
+                return 0;
+            });
+
+        // Recommendations
+        const recommendations: TmdbMediaItem[] = (data.recommendations?.results || data.similar?.results || [])
+            .slice(0, 15)
+            .map(mapTmdbMovie);
+
+        // Watch Providers (US)
+        const usProviders = data["watch/providers"]?.results?.US;
+        const watchProviders = usProviders ? {
+            stream: usProviders.flatrate?.map((p: any) => ({ providerId: p.provider_id, providerName: p.provider_name, logoPath: `${TMDB_IMAGE_BASE}${p.logo_path}` })),
+            rent: usProviders.rent?.map((p: any) => ({ providerId: p.provider_id, providerName: p.provider_name, logoPath: `${TMDB_IMAGE_BASE}${p.logo_path}` })),
+            buy: usProviders.buy?.map((p: any) => ({ providerId: p.provider_id, providerName: p.provider_name, logoPath: `${TMDB_IMAGE_BASE}${p.logo_path}` }))
+        } : undefined;
+
+        return {
+            ...base,
+            tagline: data.tagline || undefined,
+            runtime: data.runtime || undefined,
+            status: data.status || undefined,
+            productionCompanies: (data.production_companies || []).map((pc: any) => ({
+                id: pc.id,
+                name: pc.name,
+                logoPath: pc.logo_path ? `${TMDB_IMAGE_BASE}${pc.logo_path}` : null
+            })),
+            cast,
+            videos,
+            recommendations,
+            watchProviders
+        };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Get comprehensive TV Show details including seasons, episodes count, cast, recommendations, videos & watch providers
+ */
+export async function getTmdbTvDetailsFull(tvId: number): Promise<TmdbMediaDetail | null> {
+    try {
+        const data = await tmdbFetch(`/tv/${tvId}`, {
+            append_to_response: "credits,recommendations,similar,videos,content_ratings,external_ids,keywords,watch/providers"
+        });
+        if (!data) return null;
+
+        const base = mapTmdbTv(data);
+
+        // Cast
+        const cast: TmdbCastMember[] = (data.credits?.cast || []).slice(0, 20).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            character: c.character,
+            profilePath: c.profile_path ? `${TMDB_IMAGE_BASE}${c.profile_path}` : null,
+            order: c.order ?? 0
+        }));
+
+        // Seasons
+        const seasons: TmdbSeasonInfo[] = (data.seasons || [])
+            .filter((s: any) => s.season_number > 0) // Filter out Specials (Season 0) by default or keep as option
+            .map((s: any) => ({
+                id: s.id,
+                seasonNumber: s.season_number,
+                name: s.name || `Season ${s.season_number}`,
+                episodeCount: s.episode_count || 0,
+                airDate: s.air_date,
+                posterPath: s.poster_path ? `${TMDB_IMAGE_BASE}${s.poster_path}` : null,
+                overview: s.overview || ""
+            }));
+
+        // Include Season 0 (Specials) if it exists at the end
+        const specials = (data.seasons || []).find((s: any) => s.season_number === 0);
+        if (specials && specials.episode_count > 0) {
+            seasons.push({
+                id: specials.id,
+                seasonNumber: 0,
+                name: specials.name || "Specials",
+                episodeCount: specials.episode_count,
+                airDate: specials.air_date,
+                posterPath: specials.poster_path ? `${TMDB_IMAGE_BASE}${specials.poster_path}` : null,
+                overview: specials.overview || ""
+            });
+        }
+
+        // Videos / Trailers
+        const videos: TmdbVideoItem[] = (data.videos?.results || [])
+            .filter((v: any) => v.site === "YouTube" && v.key)
+            .map((v: any) => ({
+                id: v.id,
+                key: v.key,
+                name: v.name || "Trailer",
+                site: v.site,
+                type: v.type || "Trailer",
+                official: Boolean(v.official),
+                url: `https://www.youtube.com/watch?v=${v.key}`,
+                embedUrl: `https://www.youtube.com/embed/${v.key}`
+            }))
+            .sort((a: any, b: any) => {
+                const isTrailerA = a.type.toLowerCase().includes("trailer");
+                const isTrailerB = b.type.toLowerCase().includes("trailer");
+                if (isTrailerA && !isTrailerB) return -1;
+                if (!isTrailerA && isTrailerB) return 1;
+                if (a.official && !b.official) return -1;
+                if (!a.official && b.official) return 1;
+                return 0;
+            });
+
+        // Recommendations
+        const recommendations: TmdbMediaItem[] = (data.recommendations?.results || data.similar?.results || [])
+            .slice(0, 15)
+            .map(mapTmdbTv);
+
+        // Networks
+        const networks = (data.networks || []).map((n: any) => ({
+            id: n.id,
+            name: n.name,
+            logoPath: n.logo_path ? `${TMDB_IMAGE_BASE}${n.logo_path}` : null
+        }));
+
+        // Watch Providers (US)
+        const usProviders = data["watch/providers"]?.results?.US;
+        const watchProviders = usProviders ? {
+            stream: usProviders.flatrate?.map((p: any) => ({ providerId: p.provider_id, providerName: p.provider_name, logoPath: `${TMDB_IMAGE_BASE}${p.logo_path}` })),
+            rent: usProviders.rent?.map((p: any) => ({ providerId: p.provider_id, providerName: p.provider_name, logoPath: `${TMDB_IMAGE_BASE}${p.logo_path}` })),
+            buy: usProviders.buy?.map((p: any) => ({ providerId: p.provider_id, providerName: p.provider_name, logoPath: `${TMDB_IMAGE_BASE}${p.logo_path}` }))
+        } : undefined;
+
+        return {
+            ...base,
+            tvdbId: data.external_ids?.tvdb_id ? parseInt(data.external_ids.tvdb_id, 10) : undefined,
+            tagline: data.tagline || undefined,
+            status: data.status || undefined,
+            numberOfSeasons: data.number_of_seasons || seasons.length,
+            numberOfEpisodes: data.number_of_episodes || undefined,
+            networks,
+            seasons,
+            cast,
+            videos,
+            recommendations,
+            watchProviders
+        };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Get detailed episodes list for a specific TV Season
+ */
+export async function getTmdbTvSeasonDetails(tvId: number, seasonNumber: number): Promise<TmdbEpisodeInfo[]> {
+    try {
+        const data = await tmdbFetch(`/tv/${tvId}/season/${seasonNumber}`);
+        if (!data?.episodes || !Array.isArray(data.episodes)) return [];
+
+        return data.episodes.map((ep: any) => ({
+            id: ep.id,
+            episodeNumber: ep.episode_number,
+            seasonNumber: ep.season_number,
+            name: ep.name || `Episode ${ep.episode_number}`,
+            overview: ep.overview || "",
+            airDate: ep.air_date,
+            stillPath: ep.still_path ? `${TMDB_IMAGE_BASE}${ep.still_path}` : null,
+            voteAverage: ep.vote_average || 0,
+            runtime: ep.runtime || undefined
+        }));
     } catch {
         return [];
     }

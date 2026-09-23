@@ -60,6 +60,21 @@ model Settings {
   tmdbApiKey                  String?
   traktClientId               String?
   mdblistApiKey               String?
+
+  // Seerr & Native Media Request Engine Settings
+  seerrAutoApproveAll          Boolean   @default(true) // Auto-approve all requests by default
+  seerrDefaultMovieProfileId   Int?
+  seerrDefaultTvProfileId      Int?
+  seerrDefaultMovieRootFolder  String?
+  seerrDefaultTvRootFolder     String?
+  seerrDefaultMovieAppId       String?   // MediaApp ID for standard Radarr
+  seerrDefaultTvAppId          String?   // MediaApp ID for standard Sonarr
+  seerrDefaultMovie4kAppId     String?   // MediaApp ID for 4K Radarr
+  seerrDefaultTv4kAppId        String?   // MediaApp ID for 4K Sonarr
+  seerrQuotaMovies             Int?      @default(10) // Default weekly movie quota
+  seerrQuotaTv                 Int?      @default(10) // Default weekly TV show quota
+  seerrQuotaDays               Int?      @default(7)  // Quota sliding window in days
+  seerrNotificationOnAvailable Boolean   @default(true)
   autoOverlaySync             Boolean   @default(true)
   autoCollectionSync          Boolean   @default(true)
   leavingSoonDiskThreshold    Int?      @default(15) // % free space threshold to flag leaving soon
@@ -227,8 +242,19 @@ model User {
   contentPreference      UserContentPreference?
   convertedAt            DateTime? // When trial converted to paying subscriber
   lastLogin              DateTime? // Last time the user logged in
+  
+  // Media Request Permissions & Quotas
+  canRequest             Boolean   @default(true)
+  canRequest4k           Boolean   @default(false)
+  autoApproveMovies      Boolean   @default(true)
+  autoApproveTv          Boolean   @default(true)
+  requestLimitMovies     Int?      @default(10) // null or 0 = unlimited, otherwise max per quota window
+  requestLimitTv         Int?      @default(10)
+  requestLimitDays       Int?      @default(7)  // sliding window in days
+  
   createdAt              DateTime  @default(now())
   paymentTransactions    PaymentTransaction[]
+  mediaRequests          MediaRequest[]
 }
 
 model SupportTicket {
@@ -567,4 +593,47 @@ model PaymentTransaction {
   @@unique([provider, externalTxId])
   @@index([matchedUserId])
   @@index([emailDate])
+}
+
+model MediaRequest {
+  id                  String    @id @default(cuid())
+  mediaType           String    // "movie" or "tv"
+  tmdbId              Int
+  tvdbId              Int?
+  imdbId              String?
+  title               String
+  releaseYear         String?
+  posterPath          String?
+  backdropPath        String?
+  overview            String?
+  status              String    @default("PENDING") // "PENDING", "APPROVED", "DECLINED", "PROCESSING", "PARTIALLY_AVAILABLE", "AVAILABLE", "FAILED"
+  status4k            String?   // Independent 4K state e.g. "PENDING", "AVAILABLE"
+  is4k                Boolean   @default(false)
+  
+  // User Association
+  requestedByUserId   String?
+  requestedByUser     User?     @relation(fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  requestedByUsername String
+  
+  // TV Show Specifics
+  seasons             String?   // JSON array e.g. "[1,2,3]" or "all"
+  
+  // Servarr (Radarr / Sonarr) Dispatch Details
+  servarrAppId        String?   // MediaApp id (target Radarr or Sonarr instance)
+  qualityProfileId    Int?
+  rootFolderPath      String?
+  servarrId           Int?      // Radarr movieId or Sonarr seriesId
+  
+  // Diagnostics & Status
+  errorMessage        String?
+  downloadProgress    Float?    // 0 to 100 percentage
+  availableAt         DateTime? // When it became available in Plex
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([tmdbId, mediaType])
+  @@index([status])
+  @@index([requestedByUsername])
+  @@index([requestedByUserId])
 }
