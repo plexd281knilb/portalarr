@@ -79,3 +79,6 @@ Portalarr separates overlay generation into two distinct, decoupled automated sc
 6. **Weight & Group Collision**:
    - Cause: Multiple overlays render on the same corner without a common `group` or `queue`.
    - Rule: Overlays that share screen coordinates must define a `group` with distinctive `weight` values.
+7. **Badge Toggles & Slider Layout**:
+   - Cause: Nesting `sm:grid-cols-2` inside multi-column simulator cards squeezes columns to ~120px, causing the Position Select dropdown to overlap the Size slider and forcing the slider out of the card bounds.
+   - Rule: Always stack Placement dropdowns (`h-7.5 w-32 shrink-0`) and Scale Size sliders vertically with `w-full min-w-0` on range inputs within a bounded `max-w-[150px]` container.

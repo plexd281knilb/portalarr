@@ -2881,18 +2881,18 @@ export function PruneStudio() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
                             {/* Sort / Discovery Mode */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
-                                    <Clock className="h-3.5 w-3.5 text-rose-400" />
-                                    <span>Sort Strategy:</span>
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Clock className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                                    <span className="truncate">Sort Strategy:</span>
                                 </Label>
                                 <Select
                                     value={simSortBy}
                                     onValueChange={(val: any) => setSimSortBy(val)}
                                 >
-                                    <SelectTrigger className="bg-slate-900 border-slate-700 h-8 text-xs text-slate-200">
+                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 h-8 text-xs text-slate-200 truncate [&>span]:truncate [&>span]:block">
                                         <SelectValue placeholder="Select Sort Strategy" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -2907,16 +2907,16 @@ export function PruneStudio() {
                             </div>
 
                             {/* Show Oldest Limit */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
-                                    <Filter className="h-3.5 w-3.5 text-sky-400" />
-                                    <span>Candidate Limit:</span>
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Filter className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                    <span className="truncate">Candidate Limit:</span>
                                 </Label>
                                 <Select
                                     value={String(simOldestLimit)}
                                     onValueChange={(val) => setSimOldestLimit(parseInt(val, 10))}
                                 >
-                                    <SelectTrigger className="bg-slate-900 border-slate-700 h-8 text-xs font-mono text-slate-200">
+                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 h-8 text-xs font-mono text-slate-200 truncate [&>span]:truncate [&>span]:block">
                                         <SelectValue placeholder="Limit" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -2931,10 +2931,10 @@ export function PruneStudio() {
                             </div>
 
                             {/* Lane 2: Never Watched Min Age */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
-                                    <Calendar className="h-3.5 w-3.5 text-cyan-400" />
-                                    <span>Lane 2: Unwatched:</span>
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Calendar className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                                    <span className="truncate">Lane 2: Unwatched:</span>
                                 </Label>
                                 <div className="flex items-center gap-2">
                                     <Input
@@ -2947,17 +2947,17 @@ export function PruneStudio() {
                                             setSimUnwatchedMinAgeDays(v);
                                             setSimMinAgeDays(v);
                                         }}
-                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono"
+                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-full min-w-0"
                                     />
                                     <span className="text-slate-400 text-xs shrink-0">days</span>
                                 </div>
                             </div>
 
                             {/* Lane 1: Oldest Watched Min Age */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
-                                    <Eye className="h-3.5 w-3.5 text-amber-400" />
-                                    <span>Lane 1: Watched:</span>
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Eye className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                    <span className="truncate">Lane 1: Watched:</span>
                                 </Label>
                                 <div className="flex items-center gap-2">
                                     <Input
@@ -2966,33 +2966,33 @@ export function PruneStudio() {
                                         max="3650"
                                         value={simWatchedMinAgeDays}
                                         onChange={(e) => setSimWatchedMinAgeDays(parseInt(e.target.value, 10) || 0)}
-                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono"
+                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-full min-w-0"
                                     />
                                     <span className="text-slate-400 text-xs shrink-0">days</span>
                                 </div>
                             </div>
 
                             {/* Season-Level TV Pruning Toggle */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
-                                        <Tv className="h-3.5 w-3.5 text-indigo-400" />
-                                        <span>TV Seasons:</span>
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                    <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                        <Tv className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                        <span className="truncate">TV Seasons:</span>
                                     </Label>
-                                    <Switch checked={simEvaluateSeasons} onCheckedChange={setSimEvaluateSeasons} />
+                                    <Switch checked={simEvaluateSeasons} onCheckedChange={setSimEvaluateSeasons} className="shrink-0" />
                                 </div>
-                                <p className="text-[10px] text-slate-400">
+                                <p className="text-[10px] text-slate-400 truncate">
                                     {simEvaluateSeasons ? "Evaluate individual seasons" : "Evaluate whole series"}
                                 </p>
                             </div>
 
                             {/* Unwatched Only Toggle */}
-                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-xs text-slate-300 font-semibold">Unwatched Only:</Label>
-                                    <Switch checked={simUnwatchedOnly} onCheckedChange={setSimUnwatchedOnly} />
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                    <Label className="text-xs text-slate-300 font-semibold min-w-0 truncate">Unwatched Only:</Label>
+                                    <Switch checked={simUnwatchedOnly} onCheckedChange={setSimUnwatchedOnly} className="shrink-0" />
                                 </div>
-                                <p className="text-[10px] text-slate-400">
+                                <p className="text-[10px] text-slate-400 truncate">
                                     {simUnwatchedOnly ? "Skip Lane 1 watched media" : "Cascade Lane 2 → Lane 1"}
                                 </p>
                             </div>

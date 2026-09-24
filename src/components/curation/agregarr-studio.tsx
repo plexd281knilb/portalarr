@@ -2769,7 +2769,7 @@ export function AgregarrStudio() {
                                                 {/* Collection Details */}
                                                 <div className="space-y-1 min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-bold text-white text-xs truncate max-w-[200px] xs:max-w-[280px] sm:max-w-[380px]" title={coll.title}>
+                                                        <span className="font-bold text-white text-xs sm:text-sm tracking-tight" title={coll.title}>
                                                             {coll.title}
                                                         </span>
                                                         <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400 shrink-0 capitalize">
@@ -2805,7 +2805,7 @@ export function AgregarrStudio() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-[11px] text-slate-400 truncate max-w-[240px] xs:max-w-[360px] sm:max-w-[500px]">
+                                                    <p className="text-[11px] text-slate-400 line-clamp-1" title={coll.summary || coll.sourceQuery}>
                                                         {coll.summary || coll.sourceQuery || "No summary configured."}
                                                     </p>
                                                     {collPlaceholderMsg && collPlaceholderMsg.id === coll.id && (

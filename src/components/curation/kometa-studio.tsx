@@ -3824,16 +3824,16 @@ export function KometaStudio() {
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
                                     {/* Resolution */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">📺 Resolution (4K / 1080p)</span>
                                             <Switch checked={simShowResolution} onCheckedChange={setSimShowResolution} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simResolutionPosition} onValueChange={setSimResolutionPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3846,9 +3846,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -3856,9 +3856,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.resolution ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("resolution", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.resolution ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -3867,16 +3867,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* HDR */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">✨ HDR / Dolby Vision</span>
                                             <Switch checked={simShowHdr} onCheckedChange={setSimShowHdr} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simHdrPosition} onValueChange={setSimHdrPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3889,9 +3889,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -3899,9 +3899,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.hdr ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("hdr", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.hdr ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -3910,16 +3910,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Video Codec */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">🎞️ Video Codec (HEVC / AV1)</span>
                                             <Switch checked={simShowCodec} onCheckedChange={setSimShowCodec} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simCodecPosition} onValueChange={setSimCodecPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3932,9 +3932,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -3942,9 +3942,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.codec ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("codec", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.codec ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -3953,16 +3953,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Audio Codec */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">🔊 Audio Codec (Atmos / DTS)</span>
                                             <Switch checked={simShowAudio} onCheckedChange={setSimShowAudio} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simAudioPosition} onValueChange={setSimAudioPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3975,9 +3975,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -3985,9 +3985,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.audio ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("audio", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.audio ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -3996,16 +3996,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Audio Channels */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">🎛️ Surround Channels (7.1)</span>
                                             <Switch checked={simShowChannels} onCheckedChange={setSimShowChannels} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simChannelsPosition} onValueChange={setSimChannelsPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4018,9 +4018,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -4028,9 +4028,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.channels ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("channels", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.channels ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -4039,16 +4039,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Edition Cuts */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">🏷️ Edition Cuts (IMAX Enhanced)</span>
                                             <Switch checked={simShowEdition} onCheckedChange={setSimShowEdition} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simEditionPosition} onValueChange={setSimEditionPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4061,9 +4061,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -4071,9 +4071,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.edition ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("edition", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.edition ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -4082,16 +4082,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Studio Logos */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">🏢 Studio / Network (HBO)</span>
                                             <Switch checked={simShowStudio} onCheckedChange={setSimShowStudio} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simStudioPosition} onValueChange={setSimStudioPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4104,9 +4104,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -4114,9 +4114,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.studio ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("studio", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.studio ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -4125,16 +4125,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Age Ratings */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">🔞 Age Ratings (PG-13 / R)</span>
                                             <Switch checked={simShowRating} onCheckedChange={setSimShowRating} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simRatingPosition} onValueChange={setSimRatingPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4147,9 +4147,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -4157,9 +4157,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.contentRating ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("contentRating", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.contentRating ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
@@ -4168,16 +4168,16 @@ export function KometaStudio() {
                                     </div>
 
                                     {/* Community Ratings */}
-                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-2.5 sm:col-span-2 shadow-sm hover:border-slate-750 transition-all">
+                                    <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800/90 space-y-3 sm:col-span-2 shadow-sm hover:border-slate-750 transition-all min-w-0">
                                         <div className="flex items-center justify-between">
                                             <span className="font-semibold text-slate-200">⭐ Community Ratings (IMDb / Rotten Tomatoes)</span>
                                             <Switch checked={simRatings} onCheckedChange={setSimRatings} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/70">
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Position:</span>
+                                        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Placement:</span>
                                                 <Select value={simRatingsPosition} onValueChange={setSimRatingsPosition}>
-                                                    <SelectTrigger className="h-7 w-28 bg-slate-950 border-slate-750 text-xs font-medium">
+                                                    <SelectTrigger className="h-7.5 w-32 bg-slate-950 border-slate-750 text-xs font-medium shrink-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -4190,9 +4190,9 @@ export function KometaStudio() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="flex items-center justify-between gap-1.5">
-                                                <span className="text-[11px] text-slate-400 font-medium">Size:</span>
-                                                <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Scale Size:</span>
+                                                <div className="flex items-center gap-2 flex-1 max-w-[150px] justify-end min-w-0">
                                                     <input
                                                         type="range"
                                                         min="0.5"
@@ -4200,9 +4200,9 @@ export function KometaStudio() {
                                                         step="0.05"
                                                         value={simCategoryScales.ratings ?? 1.0}
                                                         onChange={(e) => setSimCategoryScale("ratings", parseFloat(e.target.value))}
-                                                        className="w-16 sm:w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        className="w-full min-w-0 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                                     />
-                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right">
+                                                    <span className="text-[11px] font-mono font-bold text-purple-300 w-9 text-right shrink-0">
                                                         {Math.round((simCategoryScales.ratings ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>

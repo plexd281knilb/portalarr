@@ -65,3 +65,6 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
    - Always provide dry-run / candidate preview modes before executing disk prune actions.
 3. **File Lock Collisions (`EACCES`)**:
    - When deleting media that is actively seeding or downloading, delegate torrent/NZB deletion to the client API first before attempting filesystem unlinks.
+4. **Oldest Files Discovery & Rule Sandbox Grid Overlaps**:
+   - Cause: Using `lg:grid-cols-6` without intermediate breakpoints or `min-w-0` on container cards causes text-heavy `<SelectValue>` text (e.g. `⚡ Dual-Lane Cascade (Never Watched → Oldest Watched)`) to expand beyond column widths and overlap adjacent dropdowns.
+   - Rule: Use `grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3`, ensure all cells have `min-w-0`, and add `w-full min-w-0 truncate [&>span]:truncate [&>span]:block` to all `SelectTrigger` and `SelectValue` elements.

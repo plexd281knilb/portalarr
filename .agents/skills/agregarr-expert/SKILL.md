@@ -109,4 +109,7 @@ Agregarr manages metadata labels on items:
 7. **Automated Scheduler Execution & Missing Token Guard**:
    - Agregarr curation sync runs automatically via `isScheduleDue()` in `src/lib/prisma.ts`.
    - If Plex tokens or global settings are missing, `runFullCurationSyncInternal` must persist `curationLastRunAt: new Date()` to prevent the 60-second background ticker from triggering repeatedly every minute.
+8. **Collection Title Truncation with Placeholders**:
+   - Cause: Hardcoded `max-w-[200px]` constraints with `truncate` on collection title spans cause names like "Netflix Trending & Top Charts" to be cut off as "Netflix Trending & ..." when badges (e.g. `Placeholders: ON`, `Seasonal`, `Limit`) are enabled.
+   - Rule: Let collection titles take natural width (`font-bold text-white text-xs sm:text-sm tracking-tight`) inside flex header containers so titles and status badges wrap cleanly without clipping.
 
