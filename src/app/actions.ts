@@ -6925,18 +6925,25 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 // Check for Tier 1 request metadata match to backfill series, volume, author, or relational links
                 const matchedReq = findMatchingRequest(existing.title, existing.author || "", fullPath, targetMediaType);
                 if (matchedReq) {
-                    if (matchedReq.series && matchedReq.series.trim() && existing.series !== matchedReq.series) updateData.series = matchedReq.series;
-                    if (matchedReq.volumeNumber && matchedReq.volumeNumber.trim() && existing.volumeNumber !== matchedReq.volumeNumber) updateData.volumeNumber = matchedReq.volumeNumber;
+                    if (matchedReq.series && matchedReq.series.trim() && (existing.series || "").trim().toLowerCase() !== matchedReq.series.trim().toLowerCase()) {
+                        updateData.series = matchedReq.series.trim();
+                    }
+                    if (matchedReq.volumeNumber && matchedReq.volumeNumber.trim()) {
+                        const v1 = (existing.volumeNumber || "").trim();
+                        const v2 = matchedReq.volumeNumber.trim();
+                        const eq = v1.toLowerCase() === v2.toLowerCase() || (!isNaN(parseFloat(v1)) && !isNaN(parseFloat(v2)) && parseFloat(v1) === parseFloat(v2));
+                        if (!eq) updateData.volumeNumber = v2;
+                    }
                     if (matchedReq.author && matchedReq.author.trim() && (!existing.author || existing.author === "Unknown Author")) updateData.author = matchedReq.author;
                     if (matchedReq.coverUrl && (!existing.coverUrl || existing.coverUrl.trim().length < 10)) updateData.coverUrl = matchedReq.coverUrl;
                 }
 
                 // Check on-disk parsed metadata for series and volume number backfill if missing
                 if (!existing.series && parsedMetaCheck.series && !updateData.series) {
-                    updateData.series = parsedMetaCheck.series;
+                    updateData.series = parsedMetaCheck.series.trim();
                 }
                 if (!existing.volumeNumber && parsedMetaCheck.volumeNumber && !updateData.volumeNumber) {
-                    updateData.volumeNumber = parsedMetaCheck.volumeNumber;
+                    updateData.volumeNumber = parsedMetaCheck.volumeNumber.trim();
                 }
                 if ((!existing.author || existing.author === "Unknown Author") && parsedMetaCheck.author && parsedMetaCheck.author !== "Unknown Author" && !updateData.author) {
                     updateData.author = parsedMetaCheck.author;
@@ -6961,6 +6968,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         where: { id: existing.id },
                         data: updateData
                     }).catch(err => {
+                        logger.addLog("ERROR", "DATABASE", `❌ Failed to update book "${existing.title}" (ID: ${existing.id}): ${err?.message || err}`);
                         console.warn(`[SCANNER] Failed to update book ${existing.id}:`, err?.message || err);
                     });
                     Object.assign(existing, updateData);

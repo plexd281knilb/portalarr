@@ -769,6 +769,88 @@ export async function ensureSchemaColumns(): Promise<void> {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to patch Library columns:", e.message || e);
         }
 
+        // --- 5.5 AUTHOR & BOOK SERIES TABLES ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "Author" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL UNIQUE,
+                    "cleanName" TEXT,
+                    "foreignAuthorId" TEXT,
+                    "biography" TEXT,
+                    "photoUrl" TEXT,
+                    "birthDate" TEXT,
+                    "deathDate" TEXT,
+                    "monitored" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Author_cleanName_idx" ON "Author"("cleanName");`).catch(() => {});
+
+            const authTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Author");`);
+            const authCols = authTableInfo.map((c: any) => c.name);
+            const authAddCols: [string, string][] = [
+                ["cleanName", `ALTER TABLE "Author" ADD COLUMN "cleanName" TEXT;`],
+                ["foreignAuthorId", `ALTER TABLE "Author" ADD COLUMN "foreignAuthorId" TEXT;`],
+                ["biography", `ALTER TABLE "Author" ADD COLUMN "biography" TEXT;`],
+                ["photoUrl", `ALTER TABLE "Author" ADD COLUMN "photoUrl" TEXT;`],
+                ["birthDate", `ALTER TABLE "Author" ADD COLUMN "birthDate" TEXT;`],
+                ["deathDate", `ALTER TABLE "Author" ADD COLUMN "deathDate" TEXT;`],
+                ["monitored", `ALTER TABLE "Author" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 0;`]
+            ];
+            for (const [colName, ddl] of authAddCols) {
+                if (!authCols.includes(colName)) {
+                    try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                }
+            }
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Author table check error:", e.message || e);
+        }
+
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "BookSeries" (
+                    "id" TEXT PRIMARY KEY,
+                    "title" TEXT NOT NULL,
+                    "cleanTitle" TEXT,
+                    "authorId" TEXT,
+                    "authorName" TEXT,
+                    "foreignSeriesId" TEXT,
+                    "description" TEXT,
+                    "coverUrl" TEXT,
+                    "totalVolumes" INTEGER,
+                    "monitored" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "BookSeries_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "Author" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "BookSeries_title_authorName_key" ON "BookSeries"("title", "authorName");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BookSeries_authorId_idx" ON "BookSeries"("authorId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BookSeries_cleanTitle_idx" ON "BookSeries"("cleanTitle");`).catch(() => {});
+
+            const seriesTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("BookSeries");`);
+            const seriesCols = seriesTableInfo.map((c: any) => c.name);
+            const seriesAddCols: [string, string][] = [
+                ["cleanTitle", `ALTER TABLE "BookSeries" ADD COLUMN "cleanTitle" TEXT;`],
+                ["authorId", `ALTER TABLE "BookSeries" ADD COLUMN "authorId" TEXT;`],
+                ["authorName", `ALTER TABLE "BookSeries" ADD COLUMN "authorName" TEXT;`],
+                ["foreignSeriesId", `ALTER TABLE "BookSeries" ADD COLUMN "foreignSeriesId" TEXT;`],
+                ["description", `ALTER TABLE "BookSeries" ADD COLUMN "description" TEXT;`],
+                ["coverUrl", `ALTER TABLE "BookSeries" ADD COLUMN "coverUrl" TEXT;`],
+                ["totalVolumes", `ALTER TABLE "BookSeries" ADD COLUMN "totalVolumes" INTEGER;`],
+                ["monitored", `ALTER TABLE "BookSeries" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 0;`]
+            ];
+            for (const [colName, ddl] of seriesAddCols) {
+                if (!seriesCols.includes(colName)) {
+                    try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                }
+            }
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] BookSeries table check error:", e.message || e);
+        }
+
         // --- 6. BOOK TABLE ---
         try {
             await prisma.$executeRawUnsafe(`
@@ -783,31 +865,50 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "fileSize" REAL,
                     "fileType" TEXT NOT NULL,
                     "mediaType" TEXT NOT NULL DEFAULT 'ebook',
+                    "isbn" TEXT,
+                    "asin" TEXT,
+                    "narrator" TEXT,
+                    "duration" REAL,
+                    "chapters" TEXT,
                     "libraryId" TEXT NOT NULL,
+                    "authorId" TEXT,
+                    "seriesId" TEXT,
                     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT "Book_libraryId_fkey" FOREIGN KEY ("libraryId") REFERENCES "Library" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    CONSTRAINT "Book_libraryId_fkey" FOREIGN KEY ("libraryId") REFERENCES "Library" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                    CONSTRAINT "Book_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "Author" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                    CONSTRAINT "Book_seriesId_fkey" FOREIGN KEY ("seriesId") REFERENCES "BookSeries" ("id") ON DELETE SET NULL ON UPDATE CASCADE
                 );
             `);
 
             const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("Book");`);
             const columns = tableInfo.map((c: any) => c.name);
-            if (!columns.includes("mediaType")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+            const bookAddCols: [string, string][] = [
+                ["mediaType", `ALTER TABLE "Book" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`],
+                ["series", `ALTER TABLE "Book" ADD COLUMN "series" TEXT;`],
+                ["volumeNumber", `ALTER TABLE "Book" ADD COLUMN "volumeNumber" TEXT;`],
+                ["coverUrl", `ALTER TABLE "Book" ADD COLUMN "coverUrl" TEXT;`],
+                ["fileSize", `ALTER TABLE "Book" ADD COLUMN "fileSize" REAL;`],
+                ["authorId", `ALTER TABLE "Book" ADD COLUMN "authorId" TEXT;`],
+                ["seriesId", `ALTER TABLE "Book" ADD COLUMN "seriesId" TEXT;`],
+                ["isbn", `ALTER TABLE "Book" ADD COLUMN "isbn" TEXT;`],
+                ["asin", `ALTER TABLE "Book" ADD COLUMN "asin" TEXT;`],
+                ["narrator", `ALTER TABLE "Book" ADD COLUMN "narrator" TEXT;`],
+                ["duration", `ALTER TABLE "Book" ADD COLUMN "duration" REAL;`],
+                ["chapters", `ALTER TABLE "Book" ADD COLUMN "chapters" TEXT;`]
+            ];
+            for (const [colName, ddl] of bookAddCols) {
+                if (!columns.includes(colName)) {
+                    try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                }
             }
-            if (!columns.includes("series")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "series" TEXT;`);
-            }
-            if (!columns.includes("volumeNumber")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "volumeNumber" TEXT;`);
-            }
-            if (!columns.includes("coverUrl")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "coverUrl" TEXT;`);
-            }
-            if (!columns.includes("fileSize")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "Book" ADD COLUMN "fileSize" REAL;`);
-            }
-        } catch (e: any) {}
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Book_authorId_idx" ON "Book"("authorId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Book_seriesId_idx" ON "Book"("seriesId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Book_libraryId_idx" ON "Book"("libraryId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Book_mediaType_idx" ON "Book"("mediaType");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Book table check error:", e.message || e);
+        }
 
         // --- 7. BOOK REQUEST TABLE ---
         try {
@@ -821,10 +922,15 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "coverUrl" TEXT,
                     "publishYear" TEXT,
                     "requestedBy" TEXT NOT NULL,
+                    "requestedByUserId" TEXT,
+                    "userEmail" TEXT,
+                    "kindleEmail" TEXT,
+                    "sendToKindle" BOOLEAN NOT NULL DEFAULT 0,
                     "type" TEXT NOT NULL DEFAULT 'book',
                     "mediaType" TEXT NOT NULL DEFAULT 'ebook',
                     "status" TEXT NOT NULL DEFAULT 'Pending',
                     "monitorSeries" BOOLEAN NOT NULL DEFAULT 0,
+                    "libraryId" TEXT,
                     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
@@ -832,28 +938,28 @@ export async function ensureSchemaColumns(): Promise<void> {
 
             const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("BookRequest");`);
             const columns = tableInfo.map((c: any) => c.name);
-            if (!columns.includes("mediaType")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`);
+            const reqAddCols: [string, string][] = [
+                ["mediaType", `ALTER TABLE "BookRequest" ADD COLUMN "mediaType" TEXT DEFAULT "ebook";`],
+                ["type", `ALTER TABLE "BookRequest" ADD COLUMN "type" TEXT DEFAULT "book";`],
+                ["series", `ALTER TABLE "BookRequest" ADD COLUMN "series" TEXT;`],
+                ["volumeNumber", `ALTER TABLE "BookRequest" ADD COLUMN "volumeNumber" TEXT;`],
+                ["monitorSeries", `ALTER TABLE "BookRequest" ADD COLUMN "monitorSeries" BOOLEAN DEFAULT 0;`],
+                ["coverUrl", `ALTER TABLE "BookRequest" ADD COLUMN "coverUrl" TEXT;`],
+                ["publishYear", `ALTER TABLE "BookRequest" ADD COLUMN "publishYear" TEXT;`],
+                ["requestedByUserId", `ALTER TABLE "BookRequest" ADD COLUMN "requestedByUserId" TEXT;`],
+                ["userEmail", `ALTER TABLE "BookRequest" ADD COLUMN "userEmail" TEXT;`],
+                ["kindleEmail", `ALTER TABLE "BookRequest" ADD COLUMN "kindleEmail" TEXT;`],
+                ["sendToKindle", `ALTER TABLE "BookRequest" ADD COLUMN "sendToKindle" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["libraryId", `ALTER TABLE "BookRequest" ADD COLUMN "libraryId" TEXT;`]
+            ];
+            for (const [colName, ddl] of reqAddCols) {
+                if (!columns.includes(colName)) {
+                    try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                }
             }
-            if (!columns.includes("type")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "type" TEXT DEFAULT "book";`);
-            }
-            if (!columns.includes("series")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "series" TEXT;`);
-            }
-            if (!columns.includes("volumeNumber")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "volumeNumber" TEXT;`);
-            }
-            if (!columns.includes("monitorSeries")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "monitorSeries" BOOLEAN DEFAULT 0;`);
-            }
-            if (!columns.includes("coverUrl")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "coverUrl" TEXT;`);
-            }
-            if (!columns.includes("publishYear")) {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "BookRequest" ADD COLUMN "publishYear" TEXT;`);
-            }
-        } catch (e: any) {}
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] BookRequest table check error:", e.message || e);
+        }
 
         // --- 8. DELIVERY LOGS & COMMUNTIY SUGGESTIONS ---
         try {
