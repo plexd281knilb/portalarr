@@ -32,6 +32,7 @@
   - **All-in-One Movie & TV Media Discovery:** Built-in trending carousels, personalized recommendations, interactive trailer playback, upcoming theatrical/digital releases, and full cast/crew filmographies without needing external Overseerr or Jellyseerr containers.
   - **1-Click Radarr & Sonarr Dispatch:** Instant request routing to Radarr and Sonarr instances with multi-server root folder, language profile, custom format score tagging, and quality profile mapping.
   - **Granular Request Quotas & Auto-Approval Engine:** Custom weekly/monthly request limits by user role, auto-approval workflows for trusted accounts, and live request status tracking (`Requested` → `Searching` → `Downloading` → `Available on Plex`).
+  - **Episode-Based & Season-Level TV Quota Engine:** Configurable episode-based and season-based quota counting for trial and full accounts, dynamically aggregating exact episode counts per requested season or TV series via TMDB and Sonarr metadata to accurately deduct against user quota allowances (e.g. requesting a 10-episode season counts as 10 episodes toward an episode-based quota).
   - **Plex Availability & Stream-Ready Notifications:** Automated background library sync to detect 4K/1080p availability, auto-close fulfilled requests, and dispatch instant ready-to-watch notifications via SMTP email, Discord webhooks, and push notifications.
 
 - **🛡️ Step 3: User Onboarding, Membership Subscriptions & Authorization (Wizarr Replacement)**
