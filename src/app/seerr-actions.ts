@@ -1097,13 +1097,15 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
 
         // 1. Reconcile with Plex library
         for (const req of activeRequests) {
-            let match = guidIndex.get(`tmdb:${req.mediaType}:${req.tmdbId}`);
-            if (!match && req.imdbId) match = guidIndex.get(`imdb:${req.imdbId}`);
-            if (!match && req.tvdbId) match = guidIndex.get(`tvdb:${req.tvdbId}`);
-            if (!match && req.title) {
+            let matches = guidIndex.get(`tmdb:${req.mediaType}:${req.tmdbId}`);
+            if ((!matches || matches.length === 0) && req.imdbId) matches = guidIndex.get(`imdb:${req.imdbId}`);
+            if ((!matches || matches.length === 0) && req.tvdbId) matches = guidIndex.get(`tvdb:${req.tvdbId}`);
+            if ((!matches || matches.length === 0) && req.title) {
                 const norm = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                match = guidIndex.get(`title:${req.mediaType}:${norm}:${req.releaseYear || ""}`);
+                matches = guidIndex.get(`title:${req.mediaType}:${norm}:${req.releaseYear || ""}`);
             }
+
+            const match = matches && matches.length > 0 ? matches[0] : null;
 
             if (match) {
                 await prisma.mediaRequest.update({
@@ -1115,7 +1117,7 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
                     }
                 });
                 updatedCount++;
-                const plexUrl = match.ratingKey ? `https://app.plex.tv/desktop#!/server/${match.serverId || ""}/details?key=%2Flibrary%2Fmetadata%2F${match.ratingKey}` : undefined;
+                const plexUrl = match.ratingKey ? `https://app.plex.tv/desktop#!/server/${match.serverName || ""}/details?key=%2Flibrary%2Fmetadata%2F${match.ratingKey}` : undefined;
                 notifyMediaRequestEvent("AVAILABLE", req.id, { plexUrl }).catch(() => {});
             }
         }

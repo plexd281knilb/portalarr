@@ -191,14 +191,14 @@ export async function sendSeerrDiscordWebhook(
 
         if (!res.ok) {
             const errText = await res.text().catch(() => "");
-            logger.addLog("WARN", "SEERR-DISCORD", `Discord webhook returned HTTP ${res.status}: ${errText}`);
+            logger.addLog("WARN", "SEERR", `Discord webhook returned HTTP ${res.status}: ${errText}`);
             return { success: false, error: `Discord HTTP ${res.status}: ${errText}` };
         }
 
-        logger.addLog("INFO", "SEERR-DISCORD", `Dispatched Discord webhook for event ${event} ("${request.title}")`);
+        logger.addLog("INFO", "SEERR", `Dispatched Discord webhook for event ${event} ("${request.title}")`);
         return { success: true };
     } catch (e: any) {
-        logger.addLog("ERROR", "SEERR-DISCORD", `Failed sending Discord webhook: ${e.message}`);
+        logger.addLog("ERROR", "SEERR", `Failed sending Discord webhook: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -356,10 +356,10 @@ export async function sendSeerrEmailNotification(
                     to: admin.email,
                     subject,
                     html
-                }).catch(e => logger.addLog("WARN", "SEERR-EMAIL", `Failed sending admin email to ${admin.email}: ${e.message}`));
+                }).catch(e => logger.addLog("WARN", "SEERR", `Failed sending admin email to ${admin.email}: ${e.message}`));
             }
 
-            logger.addLog("INFO", "SEERR-EMAIL", `Dispatched admin request notification for "${request.title}"`);
+            logger.addLog("INFO", "SEERR", `Dispatched admin request notification for "${request.title}"`);
             return { success: true };
         }
 
@@ -373,7 +373,7 @@ export async function sendSeerrEmailNotification(
         }
 
         if (!requesterUser || !requesterUser.email || !requesterUser.email.includes("@")) {
-            logger.addLog("INFO", "SEERR-EMAIL", `No valid email for user ${request.requestedByUsername}. Skipping user email.`);
+            logger.addLog("INFO", "SEERR", `No valid email for user ${request.requestedByUsername}. Skipping user email.`);
             return { success: true };
         }
 
@@ -409,10 +409,10 @@ export async function sendSeerrEmailNotification(
             html
         });
 
-        logger.addLog("INFO", "SEERR-EMAIL", `Dispatched ${templateId} email to ${requesterUser.email} for "${request.title}"`);
+        logger.addLog("INFO", "SEERR", `Dispatched ${templateId} email to ${requesterUser.email} for "${request.title}"`);
         return { success: true };
     } catch (e: any) {
-        logger.addLog("ERROR", "SEERR-EMAIL", `Failed sending Seerr email notification: ${e.message}`);
+        logger.addLog("ERROR", "SEERR", `Failed sending Seerr email notification: ${e.message}`);
         return { success: false, error: e.message };
     }
 }
@@ -455,13 +455,13 @@ export async function notifyMediaRequestEvent(
         // Fire both Discord Webhook and Email in parallel in the background
         Promise.all([
             sendSeerrDiscordWebhook(event, payload, extra).catch(e => {
-                logger.addLog("ERROR", "SEERR-NOTIFY", `Discord error: ${e?.message || e}`);
+                logger.addLog("ERROR", "SEERR", `Discord error: ${e?.message || e}`);
             }),
             sendSeerrEmailNotification(event, payload, extra).catch(e => {
-                logger.addLog("ERROR", "SEERR-NOTIFY", `Email error: ${e?.message || e}`);
+                logger.addLog("ERROR", "SEERR", `Email error: ${e?.message || e}`);
             })
         ]).catch(() => {});
     } catch (e: any) {
-        logger.addLog("ERROR", "SEERR-NOTIFY", `Failed executing notifyMediaRequestEvent: ${e.message}`);
+        logger.addLog("ERROR", "SEERR", `Failed executing notifyMediaRequestEvent: ${e.message}`);
     }
 }
