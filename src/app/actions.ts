@@ -6640,17 +6640,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const ebookGroups = new Map<string, typeof foundMediaItems>();
 
             for (const item of foundMediaItems) {
-                const parentDir = path.dirname(item.fullPath);
                 const cleanMeta = extractMetadataFromPath(item.fullPath, item.file, item.ext, scanPath);
-                const normTitle = (cleanMeta.title || path.basename(item.file, item.ext)).toLowerCase().replace(/[^a-z0-9]/g, "");
-                const normAuthor = (cleanMeta.author || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                const normTitle = cleanTitleForMatch(cleanMeta.title || path.basename(item.file, item.ext));
+                const rawAuth = cleanMeta.author || "";
+                const normAuthor = (rawAuth && rawAuth !== "Unknown Author") ? getNormTitle(rawAuth) : "unknown";
 
-                let ebookKey = "";
-                if (parentDir !== scanPath) {
-                    ebookKey = parentDir.toLowerCase() + ":::" + normTitle;
-                } else {
-                    ebookKey = scanPath.toLowerCase() + ":::" + normAuthor + ":::" + normTitle;
-                }
+                const ebookKey = `${normAuthor !== "unknownauthor" && normAuthor !== "unknown" ? normAuthor : "all"}:::${normTitle}`;
 
                 if (!ebookGroups.has(ebookKey)) {
                     ebookGroups.set(ebookKey, []);
@@ -6661,6 +6656,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const consolidatedEbookMap = new Map<string, { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }>();
 
             for (const [ebookKey, group] of ebookGroups.entries()) {
+                // Sort group so highest-priority, organized bracketed paths and larger files come first
+                group.sort((a, b) => {
+                    const aPriority = getEbookExtPriority(a.ext);
+                    const bPriority = getEbookExtPriority(b.ext);
+                    if (aPriority !== bPriority) return bPriority - aPriority;
+
+                    const aHasBrackets = a.fullPath.includes("[") && a.fullPath.includes("]");
+                    const bHasBrackets = b.fullPath.includes("[") && b.fullPath.includes("]");
+                    if (aHasBrackets !== bHasBrackets) return aHasBrackets ? -1 : 1;
+
+                    return (b.stats.size || 0) - (a.stats.size || 0);
+                });
+
                 const epubItem = group.find(i => i.ext.toLowerCase() === ".epub");
 
                 if (epubItem) {
