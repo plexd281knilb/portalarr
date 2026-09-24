@@ -1,12 +1,25 @@
 import { getSession } from "@/app/auth-actions";
 import { DiscoverHub } from "@/components/seerr/discover-hub";
 import { Compass } from "lucide-react";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
-export default async function DiscoverPage() {
+export default async function DiscoverPage(props: {
+    searchParams?: Promise<{ tab?: string; section?: string }>;
+}) {
     const session = await getSession();
     const isAdmin = session?.role === "ADMIN" || session?.role === "SUPER_USER";
+    const searchParams = props.searchParams ? await props.searchParams : {};
+    const tabParam = (searchParams.tab || "").toLowerCase();
+    const sectionParam = (searchParams.section || "").toLowerCase();
+
+    const validTabs = ["discover", "movies", "tv", "ebooks", "audiobooks", "requests"];
+    const initialTab = (
+        validTabs.includes(tabParam) ? tabParam : "discover"
+    ) as "discover" | "movies" | "tv" | "ebooks" | "audiobooks" | "requests";
+
+    const initialSection = sectionParam === "kids" ? "kids" : "main";
 
     return (
         <div className="min-h-screen bg-background flex flex-col">
@@ -22,14 +35,25 @@ export default async function DiscoverPage() {
                                 Discover & Media Requests
                             </h1>
                             <p className="text-xs sm:text-sm text-muted-foreground">
-                                Browse trending movies, popular TV shows, watch trailers, and request media with 1-click automatic download.
+                                Browse trending movies, popular TV shows, bestselling books, audiobooks, and request media with 1-click automatic download.
                             </p>
                         </div>
                     </div>
                 </section>
 
                 {/* All-in-one Discover & Request Hub */}
-                <DiscoverHub isAdmin={isAdmin} />
+                <Suspense fallback={
+                    <div className="p-16 text-center space-y-3">
+                        <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+                        <p className="text-xs text-muted-foreground animate-pulse">Loading Discover Hub...</p>
+                    </div>
+                }>
+                    <DiscoverHub 
+                        isAdmin={isAdmin} 
+                        initialTab={initialTab} 
+                        initialSection={initialSection} 
+                    />
+                </Suspense>
             </main>
         </div>
     );

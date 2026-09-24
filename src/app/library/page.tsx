@@ -2529,7 +2529,7 @@ function BookLibraryPageContent() {
             size="sm"
             className="text-xs gap-1.5 shadow-md bg-primary text-slate-950 font-bold hover:bg-primary/90"
           >
-            <Link href="/discover?tab=ebooks">
+            <Link href={activeTab === "audiobooks" ? "/discover?tab=audiobooks" : "/discover?tab=ebooks"}>
               <Sparkles className="h-3.5 w-3.5" />
               <span>Discover &amp; Request</span>
             </Link>

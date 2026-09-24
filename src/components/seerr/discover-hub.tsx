@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
     getDiscoverHomeAction, 
     getDiscoverMediaAction, 
@@ -52,12 +53,25 @@ import {
 interface DiscoverHubProps {
     isAdmin: boolean;
     initialTab?: "discover" | "movies" | "tv" | "ebooks" | "audiobooks" | "requests";
+    initialSection?: "main" | "kids";
 }
 
-export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubProps) {
+export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection = "main" }: DiscoverHubProps) {
+    const searchParams = useSearchParams();
+    
+    // Read from search params if present
+    const urlTab = searchParams?.get("tab")?.toLowerCase();
+    const urlSection = searchParams?.get("section")?.toLowerCase();
+
     // Section Mode: Main (General/Adult) vs Kids (Family/Child-Friendly)
-    const [section, setSection] = useState<"main" | "kids">("main");
-    const [activeTab, setActiveTab] = useState<"discover" | "movies" | "tv" | "ebooks" | "audiobooks" | "requests">(initialTab);
+    const [section, setSection] = useState<"main" | "kids">(
+        urlSection === "kids" || initialSection === "kids" ? "kids" : "main"
+    );
+    const [activeTab, setActiveTab] = useState<"discover" | "movies" | "tv" | "ebooks" | "audiobooks" | "requests">(
+        (["discover", "movies", "tv", "ebooks", "audiobooks", "requests"].includes(urlTab || "")
+            ? (urlTab as any)
+            : initialTab)
+    );
     const [loading, setLoading] = useState(true);
     
     // Movie/TV Home data
@@ -93,12 +107,61 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
     const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
     const [selectedSeries, setSelectedSeries] = useState<{ title: string; author?: string } | null>(null);
 
+    // Synchronize tab and section if searchParams change externally
+    useEffect(() => {
+        const t = searchParams?.get("tab")?.toLowerCase();
+        if (t && ["discover", "movies", "tv", "ebooks", "audiobooks", "requests"].includes(t)) {
+            setActiveTab(t as any);
+        }
+        const s = searchParams?.get("section")?.toLowerCase();
+        if (s && (s === "kids" || s === "main")) {
+            setSection(s as any);
+        }
+    }, [searchParams]);
+
+    // Handle tab change and sync URL
+    const handleTabChange = (tab: "discover" | "movies" | "tv" | "ebooks" | "audiobooks" | "requests") => {
+        setActiveTab(tab);
+        setSearchQuery("");
+        if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            if (tab === "discover") {
+                url.searchParams.delete("tab");
+            } else {
+                url.searchParams.set("tab", tab);
+            }
+            if (section === "kids") {
+                url.searchParams.set("section", "kids");
+            } else {
+                url.searchParams.delete("section");
+            }
+            window.history.replaceState(null, "", url.toString());
+        }
+    };
+
+    // Handle section mode change and sync URL
+    const handleSectionChange = (sec: "main" | "kids") => {
+        setSection(sec);
+        setSearchQuery("");
+        if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            if (sec === "kids") {
+                url.searchParams.set("section", "kids");
+            } else {
+                url.searchParams.delete("section");
+            }
+            window.history.replaceState(null, "", url.toString());
+        }
+    };
+
     useEffect(() => {
         if (activeTab === "discover") {
             loadHomeData(section);
             loadBooksData("all");
-        } else if (activeTab === "movies" || activeTab === "tv") {
-            loadGridData(activeTab === "movies" ? "movie" : "tv", gridCategory, 1, section === "kids");
+        } else if (activeTab === "movies") {
+            loadGridData("movie", gridCategory, 1, section === "kids");
+        } else if (activeTab === "tv") {
+            loadGridData("tv", gridCategory, 1, section === "kids");
         } else if (activeTab === "ebooks") {
             loadBooksData("ebook");
         } else if (activeTab === "audiobooks") {
@@ -220,7 +283,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-2 sm:p-2.5 rounded-2xl bg-[#0e0e14] border border-border/60 shadow-lg">
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
-                        onClick={() => { setSection("main"); setSearchQuery(""); }}
+                        onClick={() => handleSectionChange("main")}
                         className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 ${
                             section === "main"
                                 ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 border border-blue-400/30 scale-[1.02]"
@@ -232,7 +295,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
                     </button>
 
                     <button
-                        onClick={() => { setSection("kids"); setSearchQuery(""); }}
+                        onClick={() => handleSectionChange("kids")}
                         className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 ${
                             section === "kids"
                                 ? "bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25 border border-amber-300/40 scale-[1.02]"
@@ -275,7 +338,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
                                 ? (section === "kids" ? "bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/20" : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20")
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
-                        onClick={() => { setActiveTab("discover"); setSearchQuery(""); }}
+                        onClick={() => handleTabChange("discover")}
                     >
                         <Compass className="h-4 w-4 mr-1.5" />
                         Discover
@@ -289,7 +352,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
                                 ? "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20" 
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
-                        onClick={() => { setActiveTab("movies"); setSearchQuery(""); }}
+                        onClick={() => handleTabChange("movies")}
                     >
                         <Film className="h-4 w-4 mr-1.5 text-blue-400" />
                         {section === "kids" ? "Family Movies" : "Movies"}
@@ -303,7 +366,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
                                 ? "bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/20" 
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
-                        onClick={() => { setActiveTab("tv"); setSearchQuery(""); }}
+                        onClick={() => handleTabChange("tv")}
                     >
                         <Tv className="h-4 w-4 mr-1.5 text-cyan-400" />
                         {section === "kids" ? "Kids Shows" : "TV Shows"}
@@ -317,7 +380,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
                                 ? "bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/20" 
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
-                        onClick={() => { setActiveTab("ebooks"); setSearchQuery(""); }}
+                        onClick={() => handleTabChange("ebooks")}
                     >
                         <BookOpen className="h-4 w-4 mr-1.5 text-purple-400" />
                         Ebooks
@@ -331,7 +394,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
                                 ? "bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/20" 
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
-                        onClick={() => { setActiveTab("audiobooks"); setSearchQuery(""); }}
+                        onClick={() => handleTabChange("audiobooks")}
                     >
                         <Headphones className="h-4 w-4 mr-1.5 text-amber-400" />
                         Audiobooks
@@ -345,7 +408,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover" }: DiscoverHubPro
                                 ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20" 
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
-                        onClick={() => { setActiveTab("requests"); setSearchQuery(""); }}
+                        onClick={() => handleTabChange("requests")}
                     >
                         <Inbox className="h-4 w-4 mr-1.5 text-indigo-400" />
                         Requests

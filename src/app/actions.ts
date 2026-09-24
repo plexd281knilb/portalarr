@@ -40,23 +40,28 @@ import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
 // --- SECURITY LAYER ---
 // ============================================================================
 
-async function fetchWithRetry(url: string, options: any = {}, retries = 3) {
+async function fetchWithRetry(url: string, options: any = {}, retries = 3, timeoutMs = 7000): Promise<Response> {
     if (!options.headers) options.headers = {};
     if (!options.headers["User-Agent"]) {
-        options.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        options.headers["User-Agent"] = "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)";
     }
-    let lastErr;
+    let lastErr: any;
     for (let i = 0; i < retries; i++) {
         try {
-            const res = await fetch(url, options);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            const res = await fetch(url, { ...options, signal: options.signal || controller.signal });
+            clearTimeout(timeoutId);
             if (res.ok || res.status === 404 || res.status === 403) return res;
-        } catch (e) {
+        } catch (e: any) {
             lastErr = e;
         }
-        await new Promise(r => setTimeout(r, 1000));
+        if (i < retries - 1) {
+            await new Promise(r => setTimeout(r, 400 * (i + 1)));
+        }
     }
     if (lastErr) throw lastErr;
-    return fetch(url, options); // fallback throw
+    throw new Error(`Failed to fetch ${url} after ${retries} attempts`);
 }
 
 async function verifyAdmin() {
@@ -433,13 +438,13 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                     });
                 }
             }
-        } catch(e) {
-            console.warn("[API-FAILOVER] iTunes search failed for missing books:", e);
+        } catch(e: any) {
+            console.warn("[API-FAILOVER] iTunes search failed for missing books:", e?.message || String(e));
         }
 
         // 2. OpenLibrary Search
         try {
-            const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=25`;
+            const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=25&fields=key,title,author_name,cover_i,first_publish_year`;
             const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
 
             if (res && res.ok) {
@@ -461,8 +466,8 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] OpenLibrary search failed for missing books:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary search failed for missing books:", e?.message || String(e));
         }
 
         // 3. Google Books Search
@@ -491,8 +496,8 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                     }
                 }
             }
-        } catch(e) {
-            console.warn("[API-FAILOVER] Google Books search failed for missing books:", e);
+        } catch(e: any) {
+            console.warn("[API-FAILOVER] Google Books search failed for missing books:", e?.message || String(e));
         }
 
         if (rawCandidates.length === 0) {
@@ -5830,8 +5835,12 @@ function cleanSearchQuery(searchQuery: string): string {
 }
 
 async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortSignal): Promise<any> {
-    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" }, signal });
+    const headers = { 
+        "Accept": "application/json",
+        "User-Agent": "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)"
+    };
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+    const res = await fetch(url, { headers, signal });
     if (!res.ok) return null;
     const data = await res.json();
     
@@ -5844,8 +5853,8 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
     if (prefixRegex.test(cleanedQuery)) {
         const fallbackQuery = cleanedQuery.replace(prefixRegex, "").trim();
         console.log(`[OPEN-LIBRARY-FALLBACK] No matches for "${cleanedQuery}". Retrying with stripped prefix: "${fallbackQuery}"`);
-        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1`;
-        const fallbackRes = await fetch(fallbackUrl, { headers: { "Accept": "application/json" }, signal });
+        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+        const fallbackRes = await fetch(fallbackUrl, { headers, signal });
         if (fallbackRes.ok) {
             return await fallbackRes.json();
         }
@@ -10373,8 +10382,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
         // 3. Open Library
         try {
             const olUrl = parsedAuthor
-                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(parsedTitle)}&author=${encodeURIComponent(parsedAuthor)}&limit=12`
-                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=12`;
+                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(parsedTitle)}&author=${encodeURIComponent(parsedAuthor)}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`
+                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`;
             const response = await fetchWithRetry(olUrl, {
                 headers: { "Accept": "application/json" }
             });
@@ -10392,8 +10401,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] OpenLibrary search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary search failed:", e?.message || String(e));
         }
 
         // 4. Google Books
@@ -10417,8 +10426,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] Google Books API Error:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] Google Books API Error:", e?.message || String(e));
         }
         
         // Deduplicate results by normalized title + author
@@ -10523,8 +10532,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                         results.push({ title, author: authorName, coverUrl, year, mediaType: "audiobook" });
                     }
                 }
-            } catch (e) {
-                console.warn("[API-FAILOVER] Audible author search failed:", e);
+            } catch (e: any) {
+                console.warn("[API-FAILOVER] Audible author search failed:", e?.message || String(e));
             }
         }
 
@@ -10558,8 +10567,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                     });
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] iTunes author search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] iTunes author search failed:", e?.message || String(e));
         }
 
         // 3. Open Library (Author Search)
@@ -10591,8 +10600,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] OpenLibrary author search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary author search failed:", e?.message || String(e));
         }
 
         // 4. Google Books API (Author Search)
@@ -10614,8 +10623,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] Google Books author API error:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] Google Books author API error:", e?.message || String(e));
         }
 
         // Deduplicate results by normalized title + author
@@ -10701,8 +10710,8 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] OpenLibrary series search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary series search failed:", e?.message || String(e));
         }
         
         // 2. Failover: Google Books

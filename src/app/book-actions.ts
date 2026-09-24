@@ -97,11 +97,15 @@ export async function fetchMissingSeriesSuggestions(
             }
         }
 
-        const topSeries = Array.from(seriesMap.values()).slice(0, 8);
-        for (const s of topSeries) {
-            const missingRes = await findMissingBooksInSeries(s.series, s.author, s.libraryId);
-            if (missingRes.success && Array.isArray(missingRes.data)) {
-                for (const item of missingRes.data) {
+        const topSeries = Array.from(seriesMap.values()).slice(0, 5);
+        const results = await Promise.allSettled(
+            topSeries.map(s => findMissingBooksInSeries(s.series, s.author, s.libraryId))
+        );
+
+        results.forEach((res, idx) => {
+            const s = topSeries[idx];
+            if (res.status === "fulfilled" && res.value?.success && Array.isArray(res.value.data)) {
+                for (const item of res.value.data) {
                     const volNum = item.volumeNumber ? String(item.volumeNumber).replace(/^0+/, "") : undefined;
                     if (volNum && s.ownedVols.has(volNum)) continue;
 
@@ -119,7 +123,7 @@ export async function fetchMissingSeriesSuggestions(
                     });
                 }
             }
-        }
+        });
     } catch (e: any) {
         console.warn("[SEERR-MISSING-SUGGESTIONS] Notice:", e?.message || e);
     }

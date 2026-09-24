@@ -16,7 +16,7 @@ async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 7000
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         if (!options.headers) options.headers = {};
         if (!options.headers["User-Agent"]) {
-            options.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+            options.headers["User-Agent"] = "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)";
         }
         const res = await fetch(url, { ...options, signal: controller.signal });
         clearTimeout(timeoutId);
