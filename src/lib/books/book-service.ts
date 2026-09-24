@@ -552,25 +552,45 @@ export async function resolveOrLinkAuthorAndSeries(
     // 1. Author Resolution & Upsert
     if (authorName && authorName.trim().length > 1 && authorName !== "Unknown Author") {
         const cleanName = authorName.trim();
+        const normKey = normalizeKey(cleanName);
         try {
             const existingAuthor = await prisma.author.findFirst({
-                where: { name: cleanName }
+                where: {
+                    OR: [
+                        { name: cleanName },
+                        { cleanName: normKey }
+                    ]
+                }
             });
 
             if (existingAuthor) {
                 authorId = existingAuthor.id;
             } else {
-                const newAuthor = await prisma.author.create({
-                    data: {
-                        name: cleanName,
-                        cleanName: normalizeKey(cleanName),
-                        monitored: false
-                    }
-                });
-                authorId = newAuthor.id;
+                try {
+                    const newAuthor = await prisma.author.create({
+                        data: {
+                            name: cleanName,
+                            cleanName: normKey,
+                            monitored: false
+                        }
+                    });
+                    authorId = newAuthor.id;
 
-                // Enrich author photo/bio asynchronously
-                enrichAuthorMetadataInBackground(newAuthor.id, cleanName).catch(() => {});
+                    // Enrich author photo/bio asynchronously
+                    enrichAuthorMetadataInBackground(newAuthor.id, cleanName).catch(() => {});
+                } catch (createErr) {
+                    const fallbackAuthor = await prisma.author.findFirst({
+                        where: {
+                            OR: [
+                                { name: cleanName },
+                                { cleanName: normKey }
+                            ]
+                        }
+                    });
+                    if (fallbackAuthor) {
+                        authorId = fallbackAuthor.id;
+                    }
+                }
             }
         } catch (e) {}
     }
@@ -578,34 +598,56 @@ export async function resolveOrLinkAuthorAndSeries(
     // 2. Series Resolution & Upsert
     if (seriesTitle && seriesTitle.trim().length > 1) {
         const cleanSeriesTitle = seriesTitle.trim();
+        const normSeriesKey = normalizeKey(cleanSeriesTitle);
         const cleanAuthor = authorName && authorName !== "Unknown Author" ? authorName.trim() : null;
         try {
             const existingSeries = await prisma.bookSeries.findFirst({
                 where: {
-                    title: cleanSeriesTitle,
-                    ...(cleanAuthor ? { authorName: cleanAuthor } : {})
+                    OR: [
+                        { title: cleanSeriesTitle, ...(cleanAuthor ? { authorName: cleanAuthor } : {}) },
+                        { cleanTitle: normSeriesKey, ...(authorId ? { authorId } : {}) },
+                        { title: cleanSeriesTitle },
+                        { cleanTitle: normSeriesKey }
+                    ]
                 }
             });
 
             if (existingSeries) {
                 seriesId = existingSeries.id;
-                if (!existingSeries.authorId && authorId) {
+                const seriesUpdate: any = {};
+                if (!existingSeries.authorId && authorId) seriesUpdate.authorId = authorId;
+                if (!existingSeries.authorName && cleanAuthor) seriesUpdate.authorName = cleanAuthor;
+                if (Object.keys(seriesUpdate).length > 0) {
                     await prisma.bookSeries.update({
                         where: { id: existingSeries.id },
-                        data: { authorId }
+                        data: seriesUpdate
                     }).catch(() => {});
                 }
             } else {
-                const newSeries = await prisma.bookSeries.create({
-                    data: {
-                        title: cleanSeriesTitle,
-                        cleanTitle: normalizeKey(cleanSeriesTitle),
-                        authorId: authorId || null,
-                        authorName: cleanAuthor,
-                        monitored: false
+                try {
+                    const newSeries = await prisma.bookSeries.create({
+                        data: {
+                            title: cleanSeriesTitle,
+                            cleanTitle: normSeriesKey,
+                            authorId: authorId || null,
+                            authorName: cleanAuthor,
+                            monitored: false
+                        }
+                    });
+                    seriesId = newSeries.id;
+                } catch (createErr) {
+                    const fallbackSeries = await prisma.bookSeries.findFirst({
+                        where: {
+                            OR: [
+                                { title: cleanSeriesTitle },
+                                { cleanTitle: normSeriesKey }
+                            ]
+                        }
+                    });
+                    if (fallbackSeries) {
+                        seriesId = fallbackSeries.id;
                     }
-                });
-                seriesId = newSeries.id;
+                }
             }
         } catch (e) {}
     }

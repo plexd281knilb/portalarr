@@ -224,6 +224,10 @@ function isTitleMatch(titleA: string | null | undefined, titleB: string | null |
     return false;
 }
 
+function normalizePathForLookup(p: string | null | undefined): string {
+    return (p || "").replace(/\\/g, "/").toLowerCase().trim();
+}
+
 async function mobiBounceEpub(filePath: string): Promise<boolean> {
     try {
         const ext = path.extname(filePath).toLowerCase();
@@ -6486,7 +6490,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         const dbBooksByPathLower = new Map<string, any>();
         for (const b of dbBooks) {
-            dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
+            if (b.filePath) {
+                dbBooksByPathLower.set(normalizePathForLookup(b.filePath), b);
+            }
         }
 
 
@@ -6876,18 +6882,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
             const targetMediaType = library.mediaType || "ebook";
             const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
+            const normFullPathForLookup = normalizePathForLookup(fullPath);
 
-            let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
+            let existing = dbBooksByPathLower.get(normFullPathForLookup);
             if (existing && matchedDbBookIds.has(existing.id)) {
                 existing = undefined;
             }
 
-            if (!existing) {
-                const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                const targetCheckTitle = parsedMetaCheck.title || cleanBaseCheck;
-                const targetCheckAuthor = parsedMetaCheck.author || "";
+            const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
+            const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
+            const targetCheckTitle = parsedMetaCheck.title || cleanBaseCheck;
+            const targetCheckAuthor = parsedMetaCheck.author || "";
 
+            if (!existing) {
                 existing = dbBooks.find(b => {
                     if (matchedDbBookIds.has(b.id)) return false;
                     const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
@@ -6905,20 +6912,34 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                 const updateData: any = {};
                 if (existing.libraryId !== libraryId) updateData.libraryId = libraryId;
-                if (existing.fileSize !== stats.size) updateData.fileSize = stats.size;
-                if (existing.filePath !== fullPath) updateData.filePath = fullPath;
+                if (typeof stats.size === 'number' && stats.size > 0 && Math.abs((existing.fileSize || 0) - stats.size) > 0) updateData.fileSize = stats.size;
+                
+                const normExistingPath = normalizePathForLookup(existing.filePath);
+                if (normExistingPath !== normFullPathForLookup) updateData.filePath = fullPath;
+                
                 if (existing.mediaType !== targetMediaType) updateData.mediaType = targetMediaType;
 
-                const newFileType = ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub");
-                if (existing.fileType !== newFileType) updateData.fileType = newFileType;
+                const newFileType = (ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub")).toLowerCase();
+                if ((existing.fileType || "").toLowerCase() !== newFileType) updateData.fileType = newFileType;
 
                 // Check for Tier 1 request metadata match to backfill series, volume, author, or relational links
                 const matchedReq = findMatchingRequest(existing.title, existing.author || "", fullPath, targetMediaType);
                 if (matchedReq) {
-                    if (matchedReq.series && !existing.series) updateData.series = matchedReq.series;
-                    if (matchedReq.volumeNumber && !existing.volumeNumber) updateData.volumeNumber = matchedReq.volumeNumber;
-                    if (matchedReq.author && (!existing.author || existing.author === "Unknown Author")) updateData.author = matchedReq.author;
+                    if (matchedReq.series && matchedReq.series.trim() && existing.series !== matchedReq.series) updateData.series = matchedReq.series;
+                    if (matchedReq.volumeNumber && matchedReq.volumeNumber.trim() && existing.volumeNumber !== matchedReq.volumeNumber) updateData.volumeNumber = matchedReq.volumeNumber;
+                    if (matchedReq.author && matchedReq.author.trim() && (!existing.author || existing.author === "Unknown Author")) updateData.author = matchedReq.author;
                     if (matchedReq.coverUrl && (!existing.coverUrl || existing.coverUrl.trim().length < 10)) updateData.coverUrl = matchedReq.coverUrl;
+                }
+
+                // Check on-disk parsed metadata for series and volume number backfill if missing
+                if (!existing.series && parsedMetaCheck.series && !updateData.series) {
+                    updateData.series = parsedMetaCheck.series;
+                }
+                if (!existing.volumeNumber && parsedMetaCheck.volumeNumber && !updateData.volumeNumber) {
+                    updateData.volumeNumber = parsedMetaCheck.volumeNumber;
+                }
+                if ((!existing.author || existing.author === "Unknown Author") && parsedMetaCheck.author && parsedMetaCheck.author !== "Unknown Author" && !updateData.author) {
+                    updateData.author = parsedMetaCheck.author;
                 }
 
                 // Ensure Author and BookSeries relational keys (authorId, seriesId) are resolved and linked in SQLite
@@ -6934,15 +6955,17 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 if (Object.keys(updateData).length > 0) {
-                    logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                    console.log(`[SCANNER] 🔄 Updated book "${existing.title}" in library "${library.name}" (ID: ${existing.id})`);
+                    logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" [${Object.keys(updateData).join(", ")}] (ID: ${existing.id}, Target Lib: "${library.name}", Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                    console.log(`[SCANNER] 🔄 Updated book "${existing.title}" [${Object.keys(updateData).join(", ")}] in library "${library.name}" (ID: ${existing.id})`);
                     await prisma.book.updateMany({
                         where: { id: existing.id },
                         data: updateData
-                    }).catch(() => {});
+                    }).catch(err => {
+                        console.warn(`[SCANNER] Failed to update book ${existing.id}:`, err?.message || err);
+                    });
                     Object.assign(existing, updateData);
                 }
-                dbBooksByPathLower.set(fullPath.toLowerCase(), existing);
+                dbBooksByPathLower.set(normFullPathForLookup, existing);
 
                 // Only fetch cover if completely missing or empty
                 if (!existing.coverUrl || existing.coverUrl.trim().length < 10) {
@@ -7114,7 +7137,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
 
                     matchedDbBookIds.add(newBook.id);
-                    dbBooksByPathLower.set(fullPath.toLowerCase(), newBook);
+                    dbBooksByPathLower.set(normalizePathForLookup(fullPath), newBook);
 
                     // Fetch cover artwork asynchronously in background if not already provided
                     if (!newBook.coverUrl || newBook.coverUrl.trim().length < 10) {
