@@ -6131,18 +6131,11 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             } catch (e) {}
         }
 
-        // Build list of paths to scan strictly scoped to this library's configured path
-        const pathsToScan = [scanPath];
-
-        for (const targetDir of pathsToScan) {
-            collectFiles(targetDir);
-        }
-
         collectFiles(scanPath);
 
-        let finalMediaItems = foundMediaItems;
+        let finalMediaItems: { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }[] = [];
         if (isAudiobookLib) {
-            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: any }>();
+            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }>();
             for (const item of foundMediaItems) {
                 const parentDir = path.dirname(item.fullPath);
                 let groupFolder = item.fullPath; // default for loose files in root
@@ -6158,11 +6151,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 const folderKey = groupFolder.toLowerCase();
-                
                 const folderLower = path.basename(groupFolder).toLowerCase();
                 const isGenericRootFolder = folderLower === "books" || folderLower === "audiobooks" || folderLower === "userbooks" || folderLower === "kidsbooks" || folderLower === "kyrabooks" || folderLower === "downloads" || folderLower.includes("library") || folderLower.includes("bookshelf");
                 if (isGenericRootFolder && groupFolder !== item.fullPath) {
-                    // Fallback to grouping by file itself if the parent is a generic root
                     groupFolder = item.fullPath;
                 }
 
@@ -6171,7 +6162,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         fullPath: groupFolder,
                         file: item.file,
                         ext: item.ext,
-                        stats: { size: item.stats.size }
+                        stats: { size: item.stats.size, birthtime: item.stats.birthtime, mtime: item.stats.mtime }
                     });
                 } else {
                     const existing = consolidatedMap.get(folderKey)!;
@@ -6187,6 +6178,52 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
             }
             finalMediaItems = Array.from(consolidatedMap.values());
+        } else {
+            // Ebooks Consolidation by folder and clean title to prevent .epub/.mobi/.azw3 duplicates
+            function getEbookExtPriority(ext: string): number {
+                const e = ext.toLowerCase();
+                if (e === ".epub") return 100;
+                if (e === ".azw3") return 80;
+                if (e === ".mobi") return 60;
+                if (e === ".pdf") return 40;
+                if (e === ".cbz") return 30;
+                if (e === ".cbr") return 20;
+                return 10;
+            }
+
+            const consolidatedEbookMap = new Map<string, { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }>();
+
+            for (const item of foundMediaItems) {
+                const parentDir = path.dirname(item.fullPath);
+                const cleanMeta = extractMetadataFromPath(item.fullPath, item.file, item.ext, scanPath);
+                const normTitle = (cleanMeta.title || path.basename(item.file, item.ext)).toLowerCase().replace(/[^a-z0-9]/g, "");
+                const normAuthor = (cleanMeta.author || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+                let ebookKey = "";
+                if (parentDir !== scanPath) {
+                    ebookKey = parentDir.toLowerCase() + ":::" + normTitle;
+                } else {
+                    ebookKey = scanPath.toLowerCase() + ":::" + normAuthor + ":::" + normTitle;
+                }
+
+                if (!consolidatedEbookMap.has(ebookKey)) {
+                    consolidatedEbookMap.set(ebookKey, {
+                        fullPath: item.fullPath,
+                        file: item.file,
+                        ext: item.ext,
+                        stats: { size: item.stats.size, birthtime: item.stats.birthtime, mtime: item.stats.mtime }
+                    });
+                } else {
+                    const existing = consolidatedEbookMap.get(ebookKey)!;
+                    existing.stats.size += item.stats.size;
+                    if (getEbookExtPriority(item.ext) > getEbookExtPriority(existing.ext)) {
+                        existing.fullPath = item.fullPath;
+                        existing.file = item.file;
+                        existing.ext = item.ext;
+                    }
+                }
+            }
+            finalMediaItems = Array.from(consolidatedEbookMap.values());
         }
 
         console.log(`[SCANNER] 🔍 Located ${foundMediaItems.length} media files on disk for "${library.name}". (Consolidated into ${finalMediaItems.length} entries)`);
@@ -6203,423 +6240,291 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const { file, ext, stats } = item;
             let fullPath = item.fullPath;
             if (!fs.existsSync(fullPath)) {
-                continue; // File was moved/deleted by a concurrent scan thread
+                continue;
             }
 
-                // Check and handle foreign language ebooks in library folders
-                if (isForeignLanguage(file)) {
-                    console.log(`[SCANNER] Detected foreign language file in library: ${file}. Deleting file and requesting English copy.`);
+            // Check and handle foreign language ebooks in library folders
+            if (isForeignLanguage(file)) {
+                console.log(`[SCANNER] Detected foreign language file in library: ${file}. Deleting file and requesting English copy.`);
+                
+                const cleanBase = path.basename(file, ext);
+                let author = "Unknown Author";
+                let title = cleanBase.replace(/[_-]/g, ' ').trim();
+                if (cleanBase.includes(" - ")) {
+                    const parts = cleanBase.split(" - ").map(p => p.trim());
+                    if (parts.length >= 2) {
+                        author = parts[0];
+                        title = parts.slice(1).join(" - ");
+                    }
+                }
+                
+                const cleanedTitle = title
+                    .replace(/\b(?:epub|pdf|mobi|cbz|ebook|retail|decipher|repack|web|download)\b/gi, "")
+                    .replace(/\b(?:swedish|svensk|utgava|german|french|spanish|dutch|italian|danish|norwegian|russian|polish)\b/gi, "")
+                    .replace(/\b\d{4}\b/g, "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                try {
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (err: any) {
+                    console.error(`[SCANNER] Failed to delete foreign language file ${file}:`, err.message);
+                }
+
+                const cleanTitleLower = cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                let englishVersionExists = false;
+                const otherFiles = fs.readdirSync(library.path);
+                for (const otherFile of otherFiles) {
+                    if (otherFile === file) continue;
+                    const otherExt = path.extname(otherFile).toLowerCase();
+                    if (validExtensions.includes(otherExt) && !isForeignLanguage(otherFile)) {
+                        const otherClean = otherFile.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        if (otherClean.includes(cleanTitleLower)) {
+                            englishVersionExists = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!englishVersionExists) {
+                    console.log(`[SCANNER] No English version of "${cleanedTitle}" found. Resetting request or adding request to auto-download...`);
                     
-                    const cleanBase = path.basename(file, ext);
-                    let author = "Unknown Author";
-                    let title = cleanBase.replace(/[_-]/g, ' ').trim();
-                    if (cleanBase.includes(" - ")) {
-                        const parts = cleanBase.split(" - ").map(p => p.trim());
-                        if (parts.length >= 2) {
-                            author = parts[0];
-                            title = parts.slice(1).join(" - ");
+                    let matchedRequest = await prisma.bookRequest.findFirst({
+                        where: {
+                            OR: [
+                                {
+                                    title: { contains: cleanedTitle },
+                                    author: { contains: author === "Unknown Author" ? "" : author }
+                                },
+                                {
+                                    title: { contains: author === "Unknown Author" ? "" : author },
+                                    author: { contains: cleanedTitle }
+                                }
+                            ]
                         }
-                    }
-                    
-                    const cleanedTitle = title
-                        .replace(/\b(?:epub|pdf|mobi|cbz|ebook|retail|decipher|repack|web|download)\b/gi, "")
-                        .replace(/\b(?:swedish|svensk|utgava|german|french|spanish|dutch|italian|danish|norwegian|russian|polish)\b/gi, "")
-                        .replace(/\b\d{4}\b/g, "")
-                        .replace(/\s+/g, " ")
-                        .trim();
+                    });
 
-                    try {
-                        if (fs.existsSync(fullPath)) {
-                            fs.unlinkSync(fullPath);
-                        }
-                    } catch (err: any) {
-                        console.error(`[SCANNER] Failed to delete foreign language file ${file}:`, err.message);
-                    }
-
-                    const cleanTitleLower = cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    let englishVersionExists = false;
-                    const otherFiles = fs.readdirSync(library.path);
-                    for (const otherFile of otherFiles) {
-                        if (otherFile === file) continue;
-                        const otherExt = path.extname(otherFile).toLowerCase();
-                        if (validExtensions.includes(otherExt) && !isForeignLanguage(otherFile)) {
-                            const otherClean = otherFile.toLowerCase().replace(/[^a-z0-9]/g, "");
-                            if (otherClean.includes(cleanTitleLower)) {
-                                englishVersionExists = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (!englishVersionExists) {
-                        console.log(`[SCANNER] No English version of "${cleanedTitle}" found. Resetting request or adding request to auto-download...`);
-                        
-                        let matchedRequest = await prisma.bookRequest.findFirst({
-                            where: {
-                                OR: [
-                                    {
-                                        title: { contains: cleanedTitle },
-                                        author: { contains: author === "Unknown Author" ? "" : author }
-                                    },
-                                    {
-                                        title: { contains: author === "Unknown Author" ? "" : author },
-                                        author: { contains: cleanedTitle }
-                                    }
-                                ]
+                    if (matchedRequest) {
+                        await prisma.bookRequest.update({
+                            where: { id: matchedRequest.id },
+                            data: { status: "Searching" }
+                        });
+                        autoDownloadBookRequest(matchedRequest.id, cleanedTitle, author).catch(err => {
+                            console.error(`[SCANNER] Failed to trigger auto-download for request ${matchedRequest.id}:`, err.message);
+                        });
+                    } else {
+                        const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+                        const requestedBy = adminUser ? adminUser.username : "system";
+                        const newRequest = await prisma.bookRequest.create({
+                            data: {
+                                title: cleanedTitle,
+                                author: author,
+                                requestedBy,
+                                status: "Searching"
                             }
                         });
-
-                        if (matchedRequest) {
-                            await prisma.bookRequest.update({
-                                where: { id: matchedRequest.id },
-                                data: { status: "Searching" }
-                            });
-                            autoDownloadBookRequest(matchedRequest.id, cleanedTitle, author).catch(err => {
-                                console.error(`[SCANNER] Failed to trigger auto-download for request ${matchedRequest.id}:`, err.message);
-                            });
-                        } else {
-                            const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
-                            const requestedBy = adminUser ? adminUser.username : "system";
-                            const newRequest = await prisma.bookRequest.create({
-                                data: {
-                                    title: cleanedTitle,
-                                    author: author,
-                                    requestedBy,
-                                    status: "Searching"
-                                }
-                            });
-                            autoDownloadBookRequest(newRequest.id, cleanedTitle, author).catch(err => {
-                                console.error(`[SCANNER] Failed to trigger auto-download for request ${newRequest.id}:`, err.message);
-                            });
-                        }
+                        autoDownloadBookRequest(newRequest.id, cleanedTitle, author).catch(err => {
+                            console.error(`[SCANNER] Failed to trigger auto-download for request ${newRequest.id}:`, err.message);
+                        });
                     }
+                }
+                continue;
+            }
+
+            if (ext === ".epub") {
+                try {
+                    fullPath = await processEpubForKindle(fullPath);
+                } catch (err: any) {
+                    console.warn(`[KINDLE-PROCESS] EPUB check failed for ${file}: ${err.message}`);
+                }
+            }
+
+            const targetMediaType = library.mediaType || "ebook";
+            const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
+
+            let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
+            if (!existing) {
+                const crossMatch = allDbBooksByPathLower.get(fullPath.toLowerCase());
+                if (crossMatch && (crossMatch.mediaType || "ebook") === targetMediaType) {
+                    existing = crossMatch;
+                }
+            }
+
+            if (!existing) {
+                const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
+                const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
+                const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
+                const targetAuthorNorm = getNormTitle(parsedMetaCheck.author || "");
+
+                if (targetTitleNorm.length > 3) {
+                    existing = dbBooks.find(b => {
+                        if ((b.mediaType || "ebook") !== targetMediaType) return false;
+                        if (matchedDbBookIds.has(b.id)) return false;
+                        const dbTitleNorm = getNormTitle(b.title || "");
+                        if (dbTitleNorm !== targetTitleNorm) return false;
+                        if (targetAuthorNorm && targetAuthorNorm !== "unknownauthor") {
+                            const dbAuthorNorm = getNormTitle(b.author || "");
+                            if (dbAuthorNorm && dbAuthorNorm !== "unknownauthor" && dbAuthorNorm !== targetAuthorNorm) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+                }
+            }
+
+            if (existing) {
+                matchedDbBookIds.add(existing.id);
+
+                const updateData: any = {};
+                if (existing.libraryId !== libraryId) updateData.libraryId = libraryId;
+                if (existing.fileSize !== stats.size) updateData.fileSize = stats.size;
+                if (existing.filePath !== fullPath) updateData.filePath = fullPath;
+                if (existing.mediaType !== targetMediaType) updateData.mediaType = targetMediaType;
+
+                const newFileType = ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub");
+                if (existing.fileType !== newFileType) updateData.fileType = newFileType;
+
+                if (Object.keys(updateData).length > 0) {
+                    logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                    console.log(`[SCANNER] 🔄 Updated book "${existing.title}" in library "${library.name}" (ID: ${existing.id})`);
+                    await prisma.book.updateMany({
+                        where: { id: existing.id },
+                        data: updateData
+                    }).catch(() => {});
+                    Object.assign(existing, updateData);
+                }
+
+                // Only fetch cover if completely missing or empty
+                if (!existing.coverUrl || existing.coverUrl.trim().length < 10) {
+                    (async () => {
+                        try {
+                            const fetchedCover = await fetchBookCover(existing.title, existing.author, targetMediaType);
+                            if (fetchedCover) {
+                                console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${existing.title}": ${fetchedCover}`);
+                                await prisma.book.updateMany({
+                                    where: { id: existing.id },
+                                    data: { coverUrl: fetchedCover }
+                                }).catch(() => {});
+                            }
+                        } catch (e) {}
+                    })();
+                }
+            } else {
+                // New book creation
+                const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
+                const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
+                let title = parsedMeta.title;
+                let author = parsedMeta.author;
+
+                const normT = (title || "").toLowerCase().trim();
+                if (normT === "userbooks" || normT === "user books" || normT === "books" || normT === "audiobooks" || normT === "downloads") {
                     continue;
                 }
 
-                if (ext === ".epub") {
-                    try {
-                        fullPath = await processEpubForKindle(fullPath);
-                    } catch (err: any) {
-                        console.warn(`[KINDLE-PROCESS] EPUB check failed for ${file}: ${err.message}`);
-                    }
-                }
+                // Dynamic Author Heuristic based on existing DB authors
+                try {
+                    const titleLower = (title || "").toLowerCase();
+                    const isProtectedTitle = titleLower.startsWith("harry potter") ||
+                                            titleLower.startsWith("the lord of the rings") ||
+                                            titleLower.startsWith("the hobbit") ||
+                                            titleLower.startsWith("alix") ||
+                                            titleLower.startsWith("percy jackson");
 
-                const targetMediaType = library.mediaType || "ebook";
-                const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
-
-                let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
-                if (!existing) {
-                    const crossMatch = allDbBooksByPathLower.get(fullPath.toLowerCase());
-                    if (crossMatch && (crossMatch.mediaType || "ebook") === targetMediaType) {
-                        existing = crossMatch;
-                    }
-                }
-                
-                if (existing && matchedDbBookIds.has(existing.id)) {
-                    const rowIsEpub = (existing.filePath || "").toLowerCase().endsWith(".epub");
-                    const newIsEpub = ext === ".epub";
-                    if (rowIsEpub && !newIsEpub) {
-                        continue; // Skip worse duplicate file
-                    } else if (newIsEpub && !rowIsEpub) {
-                        // Allow stealing the row
-                    } else if (stats.size <= (existing.fileSize || 0)) {
-                        continue; // Skip smaller/equal duplicate file
-                    }
-                }
-
-                // ==== AUTO-ORGANIZE ALL ITEMS (NEW & EXISTING) ====
-                let orgTitle = "";
-                let orgAuthor = "";
-                let orgSeries = "";
-                let orgVolume = "";
-                if (existing) {
-                    orgTitle = existing.title || "";
-                    orgAuthor = existing.author || "";
-                    orgSeries = existing.series || "";
-                    orgVolume = existing.volumeNumber || "";
-                }
-                
-                const cleanBaseCheckForOrg = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                const parsedMetaCheckForOrg = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                
-                if (!orgTitle || !orgAuthor || orgAuthor === "Unknown Author") {
-                    if (!orgTitle) orgTitle = parsedMetaCheckForOrg.title || cleanBaseCheckForOrg;
-                    if (!orgAuthor || orgAuthor === "Unknown Author") orgAuthor = parsedMetaCheckForOrg.author || "Unknown Author";
-                    if (!orgSeries) orgSeries = parsedMetaCheckForOrg.series || "";
-                    if (!orgVolume) orgVolume = parsedMetaCheckForOrg.volumeNumber || "";
-                }
-
-                if (library.path && orgTitle) {
-                    try {
-                        let seriesTag = "";
-                        if (orgSeries) {
-                            let safeSeries = orgSeries.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
-                            let vol = orgVolume ? orgVolume.replace(/[^a-zA-Z0-9.\\-]/g, "").trim() : "01";
-                            if (vol.length === 1) vol = "0" + vol;
-                            seriesTag = `[${safeSeries} ${vol}] `;
-                        }
-
-                        const safeAuthor = (orgAuthor && orgAuthor !== "Unknown Author") 
-                            ? orgAuthor.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
-                            : "Unknown Author";
-                            
-                        let safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
-                        safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags
-                        let safeTitleWithSeries = `${seriesTag}${safeTitle}`;
-                        if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
-
-                        const destFolder = path.join(library.path, safeAuthor, safeTitleWithSeries);
-                        safeTitle = safeTitleWithSeries; // Reassign safeTitle so the file itself gets the tag too!
-                        
-                        if (!fs.existsSync(destFolder)) {
-                            fs.mkdirSync(destFolder, { recursive: true });
-                        }
-                        const isDir = fs.statSync(fullPath).isDirectory();
-                        if (isDir) {
-                            if (fullPath !== destFolder) {
-                                try {
-                                    await fs.promises.rename(fullPath, destFolder);
-                                } catch (err: any) {
-                                    if (err.code === 'EXDEV' || err.code === 'ENOTEMPTY' || err.code === 'EEXIST' || err.code === 'EPERM') {
-                                        await copyFolderRecursiveAsync(fullPath, destFolder);
-                                        removePathSafely(fullPath);
-                                    } else throw err;
-                                }
-                                await setPermissionsRecursiveAsync(destFolder);
-                                fullPath = destFolder;
-                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved folder to ${fullPath}`);
-                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved folder into pristine path -> "${destFolder}"`);
-                            }
-                        } else {
-                            const newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
-                            const destPath = path.join(destFolder, newFileName);
-                            if (fullPath !== destPath) {
-                                try {
-                                    await fs.promises.rename(fullPath, destPath);
-                                } catch (err: any) {
-                                    if (err.code === 'EXDEV' || err.code === 'EEXIST' || err.code === 'EPERM') {
-                                        await fs.promises.copyFile(fullPath, destPath);
-                                        removePathSafely(fullPath);
-                                    } else throw err;
-                                }
-                                await setPermissionsRecursiveAsync(destPath);
-                                const oldDir = path.dirname(fullPath);
-                                fullPath = destPath;
-                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved/Renamed file to ${fullPath}`);
-                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Renamed & moved file into pristine path -> "${destPath}"`);
-                                
-                                try {
-                                    if (fs.existsSync(oldDir)) {
-                                        cleanUpEmptyFolder(oldDir);
-                                    }
-                                } catch (e) {}
-                            }
-                        }
-                    } catch (orgErr: any) {
-                        if (orgErr.code === 'ENOENT') continue;
-                        console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
-                        logger.addLog("ERROR", "SCANNER", `❌ AUTO-ORGANIZE FAILED for "${fullPath}": ${orgErr.message}`);
-                    }
-                }
-                // ==== END AUTO-ORGANIZE ====
-
-                if (!existing) {
-                    const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                    const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
-
-                    if (targetTitleNorm.length > 3) {
-                        const targetMediaType = library.mediaType || "ebook";
-                        existing = dbBooks.find(b => {
-                            const dbMediaType = b.mediaType || "ebook";
-                            if (dbMediaType !== targetMediaType) return false;
-                            const dbTitleNorm = getNormTitle(b.title || "");
-                            if (dbTitleNorm !== targetTitleNorm) return false;
-                            
-                            if (matchedDbBookIds.has(b.id)) {
-                                const rowIsEpub = (b.filePath || "").toLowerCase().endsWith(".epub");
-                                const newIsEpub = ext === ".epub";
-                                if (rowIsEpub && !newIsEpub) return false;
-                                if (newIsEpub && !rowIsEpub) return true;
-                                if (stats.size <= (b.fileSize || 0)) return false;
-                            }
-                            return true;
+                    if (!isProtectedTitle && author === "Unknown Author") {
+                        const dbAuthors = await prisma.book.findMany({
+                            where: { author: { not: "Unknown Author" } },
+                            select: { author: true },
+                            distinct: ['author']
                         });
-                    }
-                }
 
-                if (!existing) {
-                    const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                    let title = parsedMeta.title;
-                    let author = parsedMeta.author;
-                    let coverUrl = "";
-
-                    const normT = (title || "").toLowerCase().trim();
-                    if (normT === "userbooks" || normT === "user books" || normT === "books" || normT === "audiobooks" || normT === "downloads") {
-                        continue;
-                    }
-
-                    // Dynamic Author Heuristic based on existing DB authors & requested authors
-                    try {
-                        const titleLower = (title || "").toLowerCase();
-                        const isProtectedTitle = titleLower.startsWith("harry potter") ||
-                                                titleLower.startsWith("the lord of the rings") ||
-                                                titleLower.startsWith("the hobbit") ||
-                                                titleLower.startsWith("alix") ||
-                                                titleLower.startsWith("percy jackson");
-
-                        if (!isProtectedTitle && author === "Unknown Author") {
-                            const dbAuthors = await prisma.book.findMany({
-                                where: { author: { not: "Unknown Author" } },
-                                select: { author: true },
-                                distinct: ['author']
-                            });
-
-                            for (const row of dbAuthors) {
-                                if (!row.author) continue;
-                                const auth = row.author.trim();
-                                const authLower = auth.toLowerCase();
-                                if (authLower.length > 3 && !authLower.startsWith("harry potter") && !authLower.startsWith("the lord")) {
-                                    if (titleLower.startsWith(authLower) && title.length > auth.length + 3) {
-                                        author = auth;
-                                        const newT = title.substring(auth.length).replace(/^[:\-\s]+/, "").trim();
-                                        if (newT.length >= 3) title = newT;
-                                        break;
-                                    }
+                        for (const row of dbAuthors) {
+                            if (!row.author) continue;
+                            const auth = row.author.trim();
+                            const authLower = auth.toLowerCase();
+                            if (authLower.length > 3 && !authLower.startsWith("harry potter") && !authLower.startsWith("the lord")) {
+                                if (titleLower.startsWith(authLower) && title.length > auth.length + 3) {
+                                    author = auth;
+                                    const newT = title.substring(auth.length).replace(/^[:\-\s]+/, "").trim();
+                                    if (newT.length >= 3) title = newT;
+                                    break;
                                 }
                             }
+                        }
+                    }
+                } catch (e) {}
+
+                if (!title || !title.trim()) {
+                    title = parsedMeta.title || cleanBase;
+                }
+
+                let series: string | null = null;
+                let volumeNumber: string | null = null;
+
+                if (options?.enableAi) {
+                    try {
+                        const aiMeta = await resolveMetadataWithAI(parsedMeta.cleanQuery || cleanBase, targetMediaType);
+                        if (aiMeta) {
+                            if (aiMeta.title) title = aiMeta.title;
+                            if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
+                            if (aiMeta.series) series = aiMeta.series;
+                            if (aiMeta.volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
                         }
                     } catch (e) {}
+                }
 
-                    if (!title || !title.trim()) {
-                        title = parsedMeta.title || cleanBase;
+                const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
+                    ? stats.birthtime
+                    : (stats.mtime || new Date());
+
+                try {
+                    let newBook = await prisma.book.findFirst({
+                        where: { filePath: fullPath }
+                    });
+
+                    if (!newBook) {
+                        newBook = await prisma.book.create({
+                            data: {
+                                title,
+                                author,
+                                series,
+                                volumeNumber,
+                                coverUrl: "",
+                                filePath: fullPath,
+                                fileSize: stats.size,
+                                fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub"),
+                                mediaType: targetMediaType,
+                                libraryId: libraryId,
+                                createdAt: fileAddedDate
+                            }
+                        });
+                        logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
                     }
 
-                    let series: string | null = null;
-                    let volumeNumber: string | null = null;
+                    matchedDbBookIds.add(newBook.id);
 
-                    if (options?.enableAi) {
+                    // Fetch cover artwork asynchronously in background
+                    (async () => {
                         try {
-                            const aiMeta = await resolveMetadataWithAI(parsedMeta.cleanQuery || cleanBase, library.mediaType || "ebook");
-                            if (aiMeta) {
-                                if (aiMeta.title) title = aiMeta.title;
-                                if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
-                                if (aiMeta.series) series = aiMeta.series;
-                                if (aiMeta.volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
+                            const fetchedCover = await fetchBookCover(title, author, targetMediaType);
+                            if (fetchedCover) {
+                                console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
+                                await prisma.book.updateMany({
+                                    where: { id: newBook.id },
+                                    data: { coverUrl: fetchedCover }
+                                }).catch(() => {});
                             }
                         } catch (e) {}
-                    }
-
-                    const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
-                        ? stats.birthtime
-                        : (stats.mtime || new Date());
-
-                    try {
-                        let newBook = await prisma.book.findFirst({
-                            where: { filePath: fullPath }
-                        });
-
-                        if (!newBook) {
-                            newBook = await prisma.book.create({
-                                data: {
-                                    title,
-                                    author,
-                                    series,
-                                    volumeNumber,
-                                    coverUrl: "",
-                                    filePath: fullPath,
-                                    fileSize: stats.size,
-                                    fileType: ext.replace(".", ""),
-                                    mediaType: library.mediaType || "ebook",
-                                    libraryId: libraryId,
-                                    createdAt: fileAddedDate
-                                }
-                            });
-                            logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                            console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
-                        }
-                        
-                        matchedDbBookIds.add(newBook.id);
-                        
-                        if (options?.enableAi) {
-                            await renameBookFileOnDisk(newBook.id);
-                        }
-
-                        // Fetch cover artwork asynchronously in background
-                        (async () => {
-                            try {
-                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
-                                if (fetchedCover) {
-                                    console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
-                                    await prisma.book.updateMany({
-                                        where: { id: newBook.id },
-                                        data: { coverUrl: fetchedCover }
-                                    }).catch(() => {});
-                                }
-                            } catch (e) {}
-                        })();
-                    } catch (createErr: any) {
-                        logger.addLog("ERROR", "DATABASE", `❌ DB-WRITE FAILED for "${title}" by "${author}": ${createErr.message}`);
-                        console.error(`[SCANNER-ERROR] Failed to save book "${title}" to DB:`, createErr.message);
-                    }
-                } else {
-                    matchedDbBookIds.add(existing.id);
-                    const updateData: any = {};
-                    if (existing.libraryId !== libraryId) updateData.libraryId = libraryId;
-                    if (existing.fileSize !== stats.size) updateData.fileSize = stats.size;
-                    if (existing.filePath !== fullPath) updateData.filePath = fullPath;
-                    if (existing.mediaType !== (library.mediaType || "ebook")) updateData.mediaType = library.mediaType || "ebook";
-                    
-                    const newFileType = ext.replace(".", "") || "folder";
-                    if (existing.fileType !== newFileType) updateData.fileType = newFileType;
-
-                    if (Object.keys(updateData).length > 0) {
-                        logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Reassigned/Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", New Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                        console.log(`[SCANNER] 🔄 Reassigned/Updated book "${existing.title}" to library "${library.name}" (ID: ${existing.id})`);
-                        await prisma.book.updateMany({
-                            where: { id: existing.id },
-                            data: updateData
-                        }).catch(() => {});
-                        Object.assign(existing, updateData);
-                    }
-                    const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                    let parsedAuthor = parsedMeta.author;
-                    let parsedTitle = parsedMeta.title;
-
-                    let title = parsedTitle;
-                    let author = parsedAuthor;
-                    let coverUrl = existing.coverUrl || "";
-
-                    const needsCleaning = existing.title !== title || 
-                                          existing.author !== author || 
-                                          existing.author === "Unknown Author" || 
-                                          existing.title.includes("[") || 
-                                          existing.title.includes("]") ||
-                                          existing.title.includes("(");
-
-                    if (needsCleaning || !coverUrl) {
-                        (async () => {
-                            try {
-                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
-                                if (fetchedCover) {
-                                    coverUrl = fetchedCover;
-                                }
-                            } catch (e) {}
-
-                            await prisma.book.updateMany({
-                                where: { id: existing.id },
-                                data: {
-                                    title,
-                                    author,
-                                    coverUrl
-                                }
-                            }).catch(() => {});
-                        })();
-                    }
+                    })();
+                } catch (createErr: any) {
+                    logger.addLog("ERROR", "DATABASE", `❌ DB-WRITE FAILED for "${title}" by "${author}": ${createErr.message}`);
+                    console.error(`[SCANNER-ERROR] Failed to save book "${title}" to DB:`, createErr.message);
                 }
             }
+        }
 
         for (const dbBook of dbBooks) {
             if (!matchedDbBookIds.has(dbBook.id) && dbBook.fileType !== 'missing') {
