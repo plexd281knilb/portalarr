@@ -159,24 +159,27 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Library-Specific Download Client Category Routing:** Each `Library` has its own configurable `downloadCategory` (e.g. `books`, `audiobooks`, `kids-books`). Portalarr routes Usenet (SABnzbd) and Torrent (qBittorrent) downloads using the specific library's configured category, preventing cross-library folder placement issues.
 - **Cross-Library Isolation Rules:** Maintain strict library boundary isolation. Never cross-match or compare media records or folders between different libraries (e.g. Public Library vs Kids Library) during scans, requests, or purges.
 - **Interactive Matcher vs Blind AI Restructuring:** Loose manual files or downloads without request bindings are non-destructively imported without forced disk restructuring or blind AI hallucinated renaming. Users can click `🔗 Match` on any book or audiobook card to preview detection telemetry, search online registries, select correct volumes, and safely apply canonical metadata with relational linking (`authorId`, `seriesId`).
+- **OpenLibrary API Constraints & Rate Limit Resilience:** Always specify explicit projection fields (`&fields=key,title,author_name,cover_i,first_publish_year`) on all OpenLibrary searches to prevent massive payloads and server socket timeouts (`fetch failed`). Pass a valid identifying application `User-Agent` (`Portalarr/3.0 ...`) to comply with OpenLibrary's API policy and prevent aggressive Cloudflare/IP throttling. Enforce bounded `AbortController` timeouts (5–7s) and concurrent `Promise.allSettled` execution for batch series lookups.
+- **Next.js 16 App Router Tab SearchParams Hydration Alignment:** Pages hosting tabbed client hubs (`/discover`) must accept and await `searchParams: Promise<{ tab?: string; section?: string }>` in server components (`page.tsx`) and pass down `initialTab` and `initialSection` wrapped inside `<Suspense>` to prevent tab state hydration desync. Client components must consume `useSearchParams()` and reflect manual tab switches to the browser URL (`window.history.replaceState` or `router.replace`) to maintain deep-link integrity.
 
 ### 7. Mandatory Pre-Push Testing & Verification Protocol
-- **Strict Requirement Before Every Git Push:** NEVER push untested code to `origin/main` or remote. Before committing and pushing any code changes, the agent/developer MUST perform and pass the complete 5-step verification suite:
+- **Strict Requirement Before Every Git Push:** NEVER push untested code to `origin/main` or remote. Before committing and pushing any code changes, the agent/developer MUST perform and pass the complete 6-step verification suite:
   1. **Prisma Schema Validation:** Run `npx prisma validate` and verify the schema is clean with 0 syntax errors.
   2. **TypeScript Typecheck:** Run `npx tsc --noEmit` and confirm **0 compile errors**.
   3. **Full System Integration Test Suite:** Run `npx tsx scripts/verify-all.ts` (or `npm test` / scratch verification) and confirm **100% of integration & database assertion tests pass**.
   4. **Production Turbopack Build:** Run `npm run build` (`next build`) and confirm Turbopack compiler, static route generation, and NFT dependency tracing exit with **code 0**.
-  5. **Git Sanity Check & Clean Atomic Push:** Run `git status` and `git diff` to confirm only intended changes are staged, commit with semantic prefixes (`feat:`, `fix:`, `refactor:`, `chore:`), and push to `origin/main`.
+  5. **Continuous Documentation & Skill Knowledge Sync:** Document all architectural decisions, bug root causes, API gotchas, UI patterns, and learned domain knowledge in `GEMINI.md` and the relevant `.agents/skills/` reference guides (e.g. `seerr-expert`, `portalarr-ui`, `plex-api-expert`, `agregarr-expert`, `kometa-expert`, `maintainerr-expert`, etc.) so future agent sessions immediately possess the accumulated learnings.
+  6. **Git Sanity Check & Clean Atomic Push:** Run `git status` and `git diff` to confirm only intended changes are staged, commit with semantic prefixes (`feat:`, `fix:`, `refactor:`, `chore:`), and push to `origin/main`.
 - **Fix Before Push:** If any step fails or reports an error, resolve the underlying issue immediately and re-run all verification tiers until 100% clean before committing or pushing to git.
 
 - **Git Workflow Overrides & Daily Multi-Device Sync:**
   - **Daily Git Pull & Sync First:** Always check and pull the latest changes from `origin/main` (`git pull origin main` or `git fetch`) at the start of each day or session before modifying files to ensure synchronization across multiple development computers/devices.
-  - **Mandatory Pre-Push Verification:** Always run the complete verification protocol (`npx prisma validate`, `npx tsc --noEmit`, `npm run build`) before pushing commits.
+  - **Mandatory Pre-Push Verification:** Always run the complete 6-step verification protocol (`npx prisma validate`, `npx tsc --noEmit`, `npm run build`, documentation & skills sync) before pushing commits.
   - **Main Branch Pushes:** Always push completed updates directly to `origin/main` unless `stable` is explicitly requested by the user. Pushing to `stable` is strictly forbidden to protect production unless explicitly commanded.
 - **Autonomous Agent Directives & Auto-Approve:**
   - **Always Proceed:** Automatically execute all file edits, refactors, and code modifications immediately using write tools without asking for confirmation.
   - **Direct Command Execution:** Run required terminal commands (builds, migrations, tests, git operations) directly and proactively.
-  - **Full Pre-Push Testing:** Always run `npx prisma validate`, `npx tsc --noEmit`, and `npm run build` before pushing to git.
+  - **Full Pre-Push Testing & Knowledge Updates:** Always run `npx prisma validate`, `npx tsc --noEmit`, `npm run build`, and synchronize learned findings to `.md` documentation and skills before pushing to git.
   - **Daily Repository Sync:** Check and pull the latest changes from remote Git repository at the beginning of each conversation/task.
 
 
