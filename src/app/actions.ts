@@ -5257,7 +5257,12 @@ export async function createBookRequest(formData: FormData) {
         
         const isApproved = true; // Auto-approve all requests
         const disableAutoDownload = formData.get("disableAutoDownload") === "true";
+        const sendToKindleVal = formData.get("sendToKindle") === "true";
         
+        const reqUser = await prisma.user.findFirst({
+            where: { username: targetUser }
+        });
+
         const request = await prisma.bookRequest.create({
             data: {
                 title: finalTitle,
@@ -5267,11 +5272,36 @@ export async function createBookRequest(formData: FormData) {
                 coverUrl: finalCover,
                 publishYear: finalYear,
                 requestedBy: targetUser,
+                requestedByUserId: reqUser?.id || null,
+                userEmail: reqUser?.email || null,
+                kindleEmail: reqUser?.kindleEmail || null,
+                sendToKindle: Boolean(sendToKindleVal && mediaType === "ebook"),
+                libraryId: libraryId || null,
                 type,
                 mediaType,
                 status: isApproved ? "Approved" : "Pending"
             }
         });
+
+        // Mirror to MediaRequest for unified request tracking
+        await prisma.mediaRequest.create({
+            data: {
+                mediaType,
+                title: finalTitle,
+                requestedByUsername: targetUser,
+                requestedByUserId: reqUser?.id || null,
+                userEmail: reqUser?.email || null,
+                kindleEmail: reqUser?.kindleEmail || null,
+                bookAuthor: finalAuthor,
+                bookSeries: finalSeries,
+                bookVolume: finalVolNum,
+                bookLibraryId: libraryId || null,
+                sendToKindle: Boolean(sendToKindleVal && mediaType === "ebook"),
+                posterPath: finalCover || null,
+                releaseYear: finalYear || null,
+                status: isApproved ? "PROCESSING" : "PENDING"
+            }
+        }).catch(() => {});
         
         if (type === "book" && isApproved && !disableAutoDownload) {
             autoDownloadBookRequest(request.id, finalTitle, finalAuthor).catch(err => {

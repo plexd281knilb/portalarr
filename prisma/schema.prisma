@@ -346,38 +346,96 @@ model Library {
   updatedAt        DateTime @updatedAt
 }
 
+model Author {
+  id               String       @id @default(cuid())
+  name             String       @unique
+  cleanName        String?
+  foreignAuthorId  String?      // e.g. OpenLibrary author ID (e.g. OL23919A), Goodreads ID, Google Books
+  biography        String?
+  photoUrl         String?
+  birthDate        String?
+  deathDate        String?
+  monitored        Boolean      @default(false)
+  books            Book[]
+  series           BookSeries[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([cleanName])
+}
+
+model BookSeries {
+  id              String   @id @default(cuid())
+  title           String
+  cleanTitle      String?
+  authorId        String?
+  author          Author?  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorName      String?
+  foreignSeriesId String?  // e.g. OpenLibrary work/series ID
+  description     String?
+  coverUrl        String?
+  totalVolumes    Int?
+  monitored       Boolean  @default(false)
+  books           Book[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([title, authorName])
+  @@index([authorId])
+  @@index([cleanTitle])
+}
+
 model Book {
-  id          String   @id @default(cuid())
-  title       String
-  author      String?
-  series      String?  // Series name (e.g. "The Founders Trilogy", "Harry Potter")
-  volumeNumber String? // Volume or book number (e.g. "1", "01")
-  coverUrl    String?  // Optional cover image
-  filePath    String   // Local path on disk to the PDF/EPUB/M4B/MP3/etc.
-  fileSize    Float?   // Size in bytes (Float supports >2GB files up to 9 Petabytes)
-  fileType    String   // "epub", "pdf", "m4b", "mp3", etc.
-  mediaType   String   @default("ebook") // "ebook" or "audiobook"
-  libraryId   String
-  library     Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String      @id @default(cuid())
+  title        String
+  author       String?
+  series       String?     // Series name (e.g. "The Founders Trilogy", "Harry Potter")
+  volumeNumber String?     // Volume or book number (e.g. "1", "01")
+  coverUrl     String?     // Optional cover image
+  filePath     String      // Local path on disk to the PDF/EPUB/M4B/MP3/etc.
+  fileSize     Float?      // Size in bytes (Float supports >2GB files up to 9 Petabytes)
+  fileType     String      // "epub", "pdf", "m4b", "mp3", etc.
+  mediaType    String      @default("ebook") // "ebook" or "audiobook"
+  isbn         String?
+  asin         String?
+  narrator     String?
+  duration     Float?      // Duration in seconds for audiobooks
+  chapters     String?     // JSON chapter metadata
+  libraryId    String
+  library      Library     @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  authorId     String?
+  authorRef    Author?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  seriesId     String?
+  seriesRef    BookSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([authorId])
+  @@index([seriesId])
+  @@index([libraryId])
+  @@index([mediaType])
 }
 
 model BookRequest {
-  id           String   @id @default(cuid())
-  title        String
-  author       String?
-  series       String?  // Series name if requested as part of a series
-  volumeNumber String?  // Volume or book number
-  coverUrl     String?
-  publishYear  String?
-  requestedBy  String   // Username
-  type         String   @default("book") // "book" or "series"
-  mediaType    String   @default("ebook") // "ebook" or "audiobook"
-  status       String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected"
-  monitorSeries Boolean @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  title               String
+  author              String?
+  series              String?  // Series name if requested as part of a series
+  volumeNumber        String?  // Volume or book number
+  coverUrl            String?
+  publishYear         String?
+  requestedBy         String   // Username
+  requestedByUserId   String?
+  userEmail           String?
+  kindleEmail         String?
+  sendToKindle        Boolean  @default(false)
+  type                String   @default("book") // "book" or "series"
+  mediaType           String   @default("ebook") // "ebook" or "audiobook"
+  status              String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected", "Searching", "Downloading", "Failed"
+  monitorSeries       Boolean  @default(false)
+  libraryId           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model KindleDeliveryLog {
@@ -650,8 +708,8 @@ model PaymentTransaction {
 
 model MediaRequest {
   id                  String    @id @default(cuid())
-  mediaType           String    // "movie" or "tv"
-  tmdbId              Int
+  mediaType           String    // "movie", "tv", "book", "audiobook"
+  tmdbId              Int?      // Optional for books/audiobooks
   tvdbId              Int?
   imdbId              String?
   title               String
@@ -659,7 +717,7 @@ model MediaRequest {
   posterPath          String?
   backdropPath        String?
   overview            String?
-  status              String    @default("PENDING") // "PENDING", "APPROVED", "DECLINED", "PROCESSING", "PARTIALLY_AVAILABLE", "AVAILABLE", "FAILED"
+  status              String    @default("PENDING") // "PENDING", "APPROVED", "DECLINED", "PROCESSING", "PARTIALLY_AVAILABLE", "AVAILABLE", "FAILED", "SEARCHING", "DOWNLOADING"
   status4k            String?   // Independent 4K state e.g. "PENDING", "AVAILABLE"
   is4k                Boolean   @default(false)
   isKids              Boolean   @default(false)
@@ -671,10 +729,23 @@ model MediaRequest {
   requestedByUserId   String?
   requestedByUser     User?     @relation(fields: [requestedByUserId], references: [id], onDelete: SetNull)
   requestedByUsername String
+  userEmail           String?
+  kindleEmail         String?
   
   // TV Show Specifics
   seasons             String?   // JSON array e.g. "[1,2,3]" or "all"
   
+  // Book & Audiobook Specifics
+  bookAuthor          String?
+  bookSeries          String?
+  bookVolume          String?
+  bookLibraryId       String?
+  sendToKindle        Boolean   @default(false)
+  format              String?   // "epub", "pdf", "m4b", "mp3"
+  openLibraryId       String?
+  googleBooksId       String?
+  asin                String?
+
   // Servarr (Radarr / Sonarr) Dispatch Details
   servarrAppId        String?   // MediaApp id (target Radarr or Sonarr instance)
   qualityProfileId    Int?
@@ -693,4 +764,5 @@ model MediaRequest {
   @@index([status])
   @@index([requestedByUsername])
   @@index([requestedByUserId])
+  @@index([mediaType])
 }

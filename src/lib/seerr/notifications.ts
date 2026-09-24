@@ -15,8 +15,8 @@ export type SeerrNotificationEvent =
 
 export interface SeerrNotificationPayload {
     id: string;
-    mediaType: "movie" | "tv" | string;
-    tmdbId: number;
+    mediaType: "movie" | "tv" | "book" | "audiobook" | string;
+    tmdbId?: number | null;
     tvdbId?: number | null;
     imdbId?: string | null;
     title: string;

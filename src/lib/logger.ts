@@ -15,6 +15,7 @@ export type LogCategory =
     | "CURATION"
     | "SETTINGS"
     | "SEERR"
+    | "BOOK_ENGINE"
     | "PLEX_HUB"; // backward compatibility
 
 export interface SystemLogEntry {

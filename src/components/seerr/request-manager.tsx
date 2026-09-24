@@ -10,6 +10,10 @@ import {
     deleteMediaRequestAction, 
     syncMediaRequestsQueueAndAvailabilityAction 
 } from "@/app/seerr-actions";
+import { BookDetailModal } from "@/components/seerr/book-detail-modal";
+import { AuthorDetailModal } from "@/components/seerr/author-detail-modal";
+import { SeriesDetailModal } from "@/components/seerr/series-detail-modal";
+import { BookDiscoveryItem } from "@/lib/books/book-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +32,11 @@ import {
     Sparkles, 
     RefreshCw,
     Layers,
-    User as UserIcon
+    User as UserIcon,
+    BookOpen,
+    Headphones,
+    Send,
+    ExternalLink
 } from "lucide-react";
 
 interface RequestManagerProps {
@@ -44,6 +52,11 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     const [mediaTypeFilter, setMediaTypeFilter] = useState("ALL");
     const [searchTerm, setSearchTerm] = useState("");
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+    // Book Detail Modal State
+    const [selectedBook, setSelectedBook] = useState<BookDiscoveryItem | null>(null);
+    const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
+    const [selectedSeries, setSelectedSeries] = useState<{ title: string; author?: string } | null>(null);
 
     const loadRequests = async () => {
         setLoading(true);
@@ -124,12 +137,21 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
         if (searchTerm.trim()) {
             const term = searchTerm.toLowerCase();
             const matchTitle = req.title?.toLowerCase().includes(term);
+            const matchAuthor = req.bookAuthor?.toLowerCase().includes(term);
             const matchUser = req.requestedByUsername?.toLowerCase().includes(term);
-            if (!matchTitle && !matchUser) return false;
+            if (!matchTitle && !matchAuthor && !matchUser) return false;
         }
-        if (!isAdmin) {
-            if (statusFilter !== "ALL" && req.status !== statusFilter) return false;
-            if (mediaTypeFilter !== "ALL" && req.mediaType !== mediaTypeFilter) return false;
+        if (mediaTypeFilter !== "ALL") {
+            if (mediaTypeFilter === "movie" && req.mediaType !== "movie") return false;
+            if (mediaTypeFilter === "tv" && req.mediaType !== "tv") return false;
+            if (mediaTypeFilter === "book" && req.mediaType !== "book" && req.mediaType !== "ebook") return false;
+            if (mediaTypeFilter === "audiobook" && req.mediaType !== "audiobook") return false;
+        }
+        if (statusFilter !== "ALL" && req.status !== statusFilter) {
+            if (statusFilter === "PROCESSING" && (req.status === "APPROVED" || req.status === "SEARCHING" || req.status === "DOWNLOADING")) {
+                return true;
+            }
+            return false;
         }
         return true;
     });
@@ -137,7 +159,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     const counts = {
         all: requests.length,
         pending: requests.filter(r => r.status === "PENDING").length,
-        processing: requests.filter(r => r.status === "PROCESSING" || r.status === "APPROVED").length,
+        processing: requests.filter(r => r.status === "PROCESSING" || r.status === "APPROVED" || r.status === "SEARCHING" || r.status === "DOWNLOADING").length,
         available: requests.filter(r => r.status === "AVAILABLE" || r.status === "PARTIALLY_AVAILABLE").length,
         failed: requests.filter(r => r.status === "FAILED" || r.status === "DECLINED").length
     };
@@ -145,12 +167,85 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     return (
         <div className="space-y-4">
             {/* Header Controls & Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 rounded-2xl bg-[#121218] border border-border/50">
+            <div className="flex flex-col gap-3 p-4 rounded-2xl bg-[#121218] border border-border/50">
+                {/* Media Type Tabs */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/40">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                            size="sm"
+                            variant={mediaTypeFilter === "ALL" ? "default" : "ghost"}
+                            className="h-8 px-3 text-xs font-bold rounded-lg"
+                            onClick={() => setMediaTypeFilter("ALL")}
+                        >
+                            All Media
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={mediaTypeFilter === "movie" ? "default" : "ghost"}
+                            className="h-8 px-3 text-xs font-bold rounded-lg text-blue-300 hover:text-blue-200"
+                            onClick={() => setMediaTypeFilter("movie")}
+                        >
+                            <Film className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                            Movies
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={mediaTypeFilter === "tv" ? "default" : "ghost"}
+                            className="h-8 px-3 text-xs font-bold rounded-lg text-cyan-300 hover:text-cyan-200"
+                            onClick={() => setMediaTypeFilter("tv")}
+                        >
+                            <Tv className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+                            TV Shows
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={mediaTypeFilter === "book" ? "default" : "ghost"}
+                            className="h-8 px-3 text-xs font-bold rounded-lg text-purple-300 hover:text-purple-200"
+                            onClick={() => setMediaTypeFilter("book")}
+                        >
+                            <BookOpen className="h-3.5 w-3.5 mr-1 text-purple-400" />
+                            Ebooks
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={mediaTypeFilter === "audiobook" ? "default" : "ghost"}
+                            className="h-8 px-3 text-xs font-bold rounded-lg text-amber-300 hover:text-amber-200"
+                            onClick={() => setMediaTypeFilter("audiobook")}
+                        >
+                            <Headphones className="h-3.5 w-3.5 mr-1 text-amber-400" />
+                            Audiobooks
+                        </Button>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                        <div className="relative flex-1 sm:w-56">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Input
+                                placeholder="Search requests..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="h-8 pl-8 text-xs bg-background/50 rounded-lg border-border/50"
+                            />
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2.5 text-xs font-semibold rounded-lg border-border/50 hover:bg-muted/40"
+                            onClick={handleSync}
+                            disabled={syncing}
+                        >
+                            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncing ? "animate-spin text-primary" : ""}`} />
+                            <span>Sync</span>
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Status Filter Buttons */}
                 <div className="flex flex-wrap items-center gap-1.5">
                     <Button
                         size="sm"
                         variant={statusFilter === "ALL" ? "default" : "outline"}
-                        className="h-8 px-3 text-xs font-semibold rounded-lg"
+                        className="h-7 px-2.5 text-xs font-semibold rounded-lg"
                         onClick={() => setStatusFilter("ALL")}
                     >
                         All ({counts.all})
@@ -158,7 +253,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     <Button
                         size="sm"
                         variant={statusFilter === "PENDING" ? "default" : "outline"}
-                        className={`h-8 px-3 text-xs font-semibold rounded-lg ${
+                        className={`h-7 px-2.5 text-xs font-semibold rounded-lg ${
                             statusFilter === "PENDING" ? "bg-amber-600 hover:bg-amber-500 text-white" : "border-amber-500/30 text-amber-300"
                         }`}
                         onClick={() => setStatusFilter("PENDING")}
@@ -168,7 +263,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     <Button
                         size="sm"
                         variant={statusFilter === "PROCESSING" ? "default" : "outline"}
-                        className={`h-8 px-3 text-xs font-semibold rounded-lg ${
+                        className={`h-7 px-2.5 text-xs font-semibold rounded-lg ${
                             statusFilter === "PROCESSING" ? "bg-cyan-600 hover:bg-cyan-500 text-white" : "border-cyan-500/30 text-cyan-300"
                         }`}
                         onClick={() => setStatusFilter("PROCESSING")}
@@ -178,7 +273,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     <Button
                         size="sm"
                         variant={statusFilter === "AVAILABLE" ? "default" : "outline"}
-                        className={`h-8 px-3 text-xs font-semibold rounded-lg ${
+                        className={`h-7 px-2.5 text-xs font-semibold rounded-lg ${
                             statusFilter === "AVAILABLE" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "border-emerald-500/30 text-emerald-300"
                         }`}
                         onClick={() => setStatusFilter("AVAILABLE")}
@@ -186,31 +281,9 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                         Available ({counts.available})
                     </Button>
                 </div>
-
-                <div className="flex items-center gap-2">
-                    <div className="relative flex-1 sm:w-56">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                            placeholder="Search requests..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="h-8 pl-8 text-xs bg-background/50 rounded-lg border-border/50"
-                        />
-                    </div>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 px-2.5 text-xs font-semibold rounded-lg border-border/50 hover:bg-muted/40"
-                        onClick={handleSync}
-                        disabled={syncing}
-                    >
-                        <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncing ? "animate-spin text-primary" : ""}`} />
-                        <span>Sync</span>
-                    </Button>
-                </div>
             </div>
 
-            {/* Requests List */}
+            {/* Requests Grid */}
             {loading ? (
                 <div className="p-16 text-center space-y-3">
                     <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
@@ -227,39 +300,88 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {filteredRequests.map((req) => {
+                        const isMovie = req.mediaType === "movie";
                         const isTv = req.mediaType === "tv";
+                        const isBook = req.mediaType === "book" || req.mediaType === "ebook";
+                        const isAudiobook = req.mediaType === "audiobook";
                         const isLoading = actionLoadingId === req.id;
+
+                        const formatBadgeColor = isAudiobook
+                            ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                            : isBook
+                            ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                            : isTv
+                            ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30"
+                            : "bg-blue-500/15 text-blue-300 border-blue-500/30";
+
+                        const formatLabel = isAudiobook
+                            ? "🎧 Audiobook"
+                            : isBook
+                            ? "📖 Ebook"
+                            : isTv
+                            ? "TV Series"
+                            : "Movie";
 
                         return (
                             <div
                                 key={req.id}
-                                className="p-3.5 rounded-2xl bg-[#14141c] border border-border/40 hover:border-border/80 transition-all flex gap-3.5 items-start justify-between"
+                                className="p-3.5 rounded-2xl bg-[#14141c] border border-border/40 hover:border-border/80 transition-all flex gap-3.5 items-start justify-between shadow-sm"
                             >
-                                {/* Poster */}
+                                {/* Poster / Cover */}
                                 <div 
-                                    onClick={() => onSelectMedia && onSelectMedia(req.tmdbId, req.mediaType)}
-                                    className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-muted/20 shrink-0 border border-white/5 cursor-pointer"
+                                    onClick={() => {
+                                        if (isMovie || isTv) {
+                                            if (onSelectMedia && req.tmdbId) onSelectMedia(req.tmdbId, req.mediaType);
+                                        } else {
+                                            setSelectedBook({
+                                                title: req.title,
+                                                author: req.bookAuthor || "Unknown Author",
+                                                series: req.bookSeries || undefined,
+                                                volumeNumber: req.bookVolume || undefined,
+                                                coverUrl: req.posterPath || undefined,
+                                                publishYear: req.releaseYear || undefined,
+                                                mediaType: isAudiobook ? "audiobook" : "ebook",
+                                                availability: {
+                                                    status: req.status === "AVAILABLE" ? "AVAILABLE" : req.status === "PROCESSING" ? "DOWNLOADING" : "REQUESTED",
+                                                    requestId: req.id
+                                                }
+                                            });
+                                        }
+                                    }}
+                                    className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-muted/20 shrink-0 border border-white/5 cursor-pointer hover:opacity-90 transition-opacity"
                                 >
                                     {req.posterPath ? (
                                         <img src={req.posterPath} alt={req.title} className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                            {isTv ? <Tv className="h-6 w-6 opacity-40" /> : <Film className="h-6 w-6 opacity-40" />}
+                                        <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center text-muted-foreground bg-muted/40">
+                                            {isAudiobook ? (
+                                                <Headphones className="h-6 w-6 text-amber-400/40" />
+                                            ) : isBook ? (
+                                                <BookOpen className="h-6 w-6 text-purple-400/40" />
+                                            ) : isTv ? (
+                                                <Tv className="h-6 w-6 opacity-40" />
+                                            ) : (
+                                                <Film className="h-6 w-6 opacity-40" />
+                                            )}
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Content Details */}
                                 <div className="flex-1 min-w-0 space-y-1.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                                            isTv ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30" : "bg-blue-500/15 text-blue-300 border-blue-500/30"
-                                        }`}>
-                                            {isTv ? "TV" : "Movie"}
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${formatBadgeColor}`}>
+                                            {formatLabel}
                                         </Badge>
                                         {req.is4k && (
                                             <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border-purple-500/40">
                                                 4K
+                                            </Badge>
+                                        )}
+                                        {req.sendToKindle && isBook && (
+                                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-900/30 text-purple-300 border-purple-500/30 gap-1">
+                                                <Send className="h-2.5 w-2.5" />
+                                                <span>Kindle</span>
                                             </Badge>
                                         )}
                                         {req.releaseYear && (
@@ -267,27 +389,49 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                         )}
                                     </div>
 
+                                    {/* Title */}
                                     <h4 
-                                        onClick={() => onSelectMedia && onSelectMedia(req.tmdbId, req.mediaType)}
+                                        onClick={() => {
+                                            if (isMovie || isTv) {
+                                                if (onSelectMedia && req.tmdbId) onSelectMedia(req.tmdbId, req.mediaType);
+                                            } else {
+                                                setSelectedBook({
+                                                    title: req.title,
+                                                    author: req.bookAuthor || "Unknown Author",
+                                                    series: req.bookSeries || undefined,
+                                                    volumeNumber: req.bookVolume || undefined,
+                                                    coverUrl: req.posterPath || undefined,
+                                                    publishYear: req.releaseYear || undefined,
+                                                    mediaType: isAudiobook ? "audiobook" : "ebook"
+                                                });
+                                            }
+                                        }}
                                         className="text-sm font-bold text-foreground line-clamp-1 hover:text-primary cursor-pointer transition-colors"
                                     >
                                         {req.title}
                                     </h4>
 
+                                    {/* Author & Series Subtitle (for books) */}
+                                    {(isBook || isAudiobook) && req.bookAuthor && (
+                                        <p className="text-xs text-muted-foreground line-clamp-1 font-medium">
+                                            by {req.bookAuthor} {req.bookSeries ? `• Series: ${req.bookSeries}` : ""}
+                                        </p>
+                                    )}
+
                                     {/* Status Badge & Download Progress */}
                                     <div className="flex items-center gap-2">
                                         {req.status === "AVAILABLE" && (
                                             <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
-                                                <CheckCircle2 className="h-3.5 w-3.5" /> Available in Plex
+                                                <CheckCircle2 className="h-3.5 w-3.5" /> Available in {isBook || isAudiobook ? "Shelf" : "Plex"}
                                             </span>
                                         )}
-                                        {req.status === "PROCESSING" && (
+                                        {(req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") && (
                                             <div className="space-y-1 w-full max-w-xs">
                                                 <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300">
                                                     <span className="flex items-center gap-1">
                                                         <Download className="h-3.5 w-3.5 animate-pulse" /> Downloading
                                                     </span>
-                                                    <span>{req.downloadProgress ? `${req.downloadProgress}%` : "Queued"}</span>
+                                                    <span>{req.downloadProgress ? `${req.downloadProgress}%` : "Searching / Queued"}</span>
                                                 </div>
                                                 {req.downloadProgress ? (
                                                     <div className="w-full h-1.5 bg-muted/40 rounded-full overflow-hidden">
@@ -316,10 +460,13 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                         )}
                                     </div>
 
-                                    {/* Requester & Date */}
+                                    {/* Requester Attribution */}
                                     <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
                                         <UserIcon className="h-3 w-3 opacity-60" />
-                                        <span>{req.requestedByUsername}</span>
+                                        <span className="font-semibold text-foreground/80">{req.requestedByUsername}</span>
+                                        {req.kindleEmail && isBook && (
+                                            <span className="text-[10px] text-purple-300/80">({req.kindleEmail})</span>
+                                        )}
                                         <span>•</span>
                                         <span>{new Date(req.createdAt).toLocaleDateString()}</span>
                                     </div>
@@ -388,6 +535,33 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     })}
                 </div>
             )}
+
+            {/* Book Modals */}
+            <BookDetailModal
+                item={selectedBook}
+                open={Boolean(selectedBook)}
+                onOpenChange={(val) => { if (!val) setSelectedBook(null); }}
+                onSelectAuthor={(name) => setSelectedAuthor(name)}
+                onSelectSeries={(title, author) => setSelectedSeries({ title, author })}
+                onRequestSuccess={loadRequests}
+            />
+
+            <AuthorDetailModal
+                authorName={selectedAuthor}
+                open={Boolean(selectedAuthor)}
+                onOpenChange={(val) => { if (!val) setSelectedAuthor(null); }}
+                onSelectBook={(b) => setSelectedBook(b)}
+                onSelectSeries={(title, author) => setSelectedSeries({ title, author })}
+            />
+
+            <SeriesDetailModal
+                seriesTitle={selectedSeries?.title || null}
+                authorName={selectedSeries?.author}
+                open={Boolean(selectedSeries)}
+                onOpenChange={(val) => { if (!val) setSelectedSeries(null); }}
+                onSelectVolume={(b) => setSelectedBook(b)}
+                onSelectAuthor={(name) => setSelectedAuthor(name)}
+            />
         </div>
     );
 }

@@ -30,6 +30,8 @@ export async function dispatchMediaRequest(requestId: string): Promise<DispatchR
             res = await dispatchMovieRequest(req, settings);
         } else if (req.mediaType === "tv") {
             res = await dispatchTvRequest(req, settings);
+        } else if (req.mediaType === "book" || req.mediaType === "audiobook") {
+            res = await dispatchBookOrAudiobookRequest(req);
         } else {
             return { success: false, error: `Unsupported media type: ${req.mediaType}` };
         }
@@ -536,6 +538,75 @@ async function dispatchDual1080pCompanion(req: any, settings: any) {
         await dispatchMediaRequest(companion.id);
     } catch (e: any) {
         logger.addLog("WARN", "SEERR", `Dual Ingestion companion dispatch notice for "${req.title}": ${e.message}`);
+    }
+}
+
+/**
+ * Dispatches an approved book or audiobook request to Prowlarr & download client
+ */
+async function dispatchBookOrAudiobookRequest(req: any): Promise<DispatchResult> {
+    try {
+        const mediaType = req.mediaType === "audiobook" ? "audiobook" : "ebook";
+        const title = req.title;
+        const author = req.bookAuthor || "";
+
+        // Find or create associated BookRequest
+        let bookReq = await prisma.bookRequest.findFirst({
+            where: {
+                title: req.title,
+                requestedBy: req.requestedByUsername,
+                status: { notIn: ["Downloaded", "Rejected"] }
+            }
+        });
+
+        if (!bookReq) {
+            bookReq = await prisma.bookRequest.create({
+                data: {
+                    title,
+                    author: author || null,
+                    series: req.bookSeries || null,
+                    volumeNumber: req.bookVolume || null,
+                    coverUrl: req.posterPath || null,
+                    publishYear: req.releaseYear || null,
+                    requestedBy: req.requestedByUsername,
+                    requestedByUserId: req.requestedByUserId,
+                    userEmail: req.userEmail,
+                    kindleEmail: req.kindleEmail,
+                    sendToKindle: Boolean(req.sendToKindle && mediaType === "ebook"),
+                    mediaType,
+                    libraryId: req.bookLibraryId,
+                    status: "Searching"
+                }
+            });
+        } else {
+            await prisma.bookRequest.update({
+                where: { id: bookReq.id },
+                data: { status: "Searching" }
+            });
+        }
+
+        await prisma.mediaRequest.update({
+            where: { id: req.id },
+            data: { status: "PROCESSING", errorMessage: null }
+        });
+
+        // Trigger background search & grab
+        const { autoDownloadBookRequest } = await import("@/app/actions");
+        autoDownloadBookRequest(bookReq.id, title, author).catch(err => {
+            logger.addLog("WARN", "BOOK_ENGINE", `Auto-download failed for request ${bookReq?.id}: ${err.message}`);
+        });
+
+        logger.addLog("SUCCESS", "SEERR", `Successfully dispatched ${mediaType.toUpperCase()} request "${title}" by ${author || "Unknown Author"}`);
+
+        return {
+            success: true
+        };
+    } catch (err: any) {
+        logger.addLog("ERROR", "SEERR", `Failed to dispatch book request "${req.title}": ${err.message}`);
+        return {
+            success: false,
+            error: err.message
+        };
     }
 }
 
