@@ -2001,6 +2001,7 @@ function BookLibraryPageContent() {
       const res = await findMissingBooksInSeries(
         seriesName,
         author,
+        selectedLibrary?.id,
       );
       if (res.success && res.data) {
         setMissingBooksMap((prev) => ({ ...prev, [seriesName]: res.data }));
@@ -2898,19 +2899,22 @@ function BookLibraryPageContent() {
                             missingBooksMap[seriesName] || []
                           )
                             .filter((mBook: any) => {
-                              const mTitle = (mBook.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-                              const mVol = String(mBook.volumeNumber || "").replace(/[^0-9.]/g, "");
+                              const mNorm = (mBook.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                              const mVol = String(mBook.volumeNumber || "").replace(/^0+/, "");
                               return !seriesBooks.some((b: any) => {
-                                const bTitle = (
+                                const bNorm = (
                                   b.cleanSeriesTitle || b.title || ""
                                 ).toLowerCase().replace(/[^a-z0-9]/g, "");
-                                const bVol = String(b.volumeNumber || "").replace(/[^0-9.]/g, "");
-                                if (mVol && bVol && mVol === bVol) return true;
-                                return (
-                                  bTitle === mTitle ||
-                                  bTitle.includes(mTitle) ||
-                                  mTitle.includes(bTitle)
-                                );
+                                const bVol = String(b.seriesVolume || b.volumeNumber || "").replace(/^0+/, "");
+                                if (mVol && bVol && mVol !== "0" && mVol === bVol) return true;
+                                if (mNorm === bNorm) return true;
+                                if (
+                                  (mNorm.includes("sorcerer") || mNorm.includes("philosopher")) &&
+                                  (bNorm.includes("sorcerer") || bNorm.includes("philosopher"))
+                                ) {
+                                  return true;
+                                }
+                                return false;
                               });
                             })
                             .sort((a: any, b: any) => {

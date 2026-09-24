@@ -169,6 +169,8 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
   2. A secondary action button (`flex-1` `Send to Kindle` or `Download`) paired with a Radix UI `DropdownMenu` trigger button (`•••` or `MoreHorizontal`).
   3. Secondary administrative/management actions (Fetch Cover, Match Book, Edit, Delete, Reassign, Admin Kindle dispatch) live inside the Radix `DropdownMenuContent` with descriptive text labels and icons.
 - **Radix Sub-Menu Portaling Gotcha (`DropdownMenuSubContent`):** In Radix UI / Shadcn UI primitives, `DropdownMenuSubContent` MUST be wrapped inside `<DropdownMenuPrimitive.Portal>`. If omitted, the sub-menu mounts inline as a child of `DropdownMenuContent`, which has `overflow: hidden`, causing the sub-menu to be clipped and invisible when expanded.
+- **Canonical Series Discovery & Bundle/Spinoff Elimination:** `findMissingBooksInSeries` defines canonical series lists (`CANONICAL_SERIES`) for high-profile series (Harry Potter, Lord of the Rings, Percy Jackson, Hunger Games, Narnia, Expanse, Dune, Wheel of Time) to ensure canonical volume numbers (#1 through #N) and titles are always prioritized. Strict regex `JUNK_OR_BUNDLE_REGEX` filters out multi-volume ranges (e.g. `1-3`, `1-4`, `1-5`, `1-6`, `1-7`, `(1-7)`), boxsets, omnibuses, complete collections, almanacs, and reference companions. Candidate books by the same author that lack a series volume number and do not match the series name (like *Fantastic Beasts*, *Quidditch Through the Ages*, *The Tales of Beedle the Bard*) are eliminated as spinoffs rather than inserted into the core series. Series queries pass and respect `libraryId` and verify disk existence to avoid cross-library false-negative filtering.
+
 
 
 

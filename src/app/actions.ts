@@ -470,19 +470,100 @@ function getKnownSeriesVolume(seriesName: string, title: string): string | null 
     return null;
 }
 
+const CANONICAL_SERIES: Record<string, Array<{ volumeNumber: string; title: string; author: string }>> = {
+    "harry potter": [
+        { volumeNumber: "1", title: "Harry Potter and the Sorcerer's Stone", author: "J. K. Rowling" },
+        { volumeNumber: "2", title: "Harry Potter and the Chamber of Secrets", author: "J. K. Rowling" },
+        { volumeNumber: "3", title: "Harry Potter and the Prisoner of Azkaban", author: "J. K. Rowling" },
+        { volumeNumber: "4", title: "Harry Potter and the Goblet of Fire", author: "J. K. Rowling" },
+        { volumeNumber: "5", title: "Harry Potter and the Order of the Phoenix", author: "J. K. Rowling" },
+        { volumeNumber: "6", title: "Harry Potter and the Half-Blood Prince", author: "J. K. Rowling" },
+        { volumeNumber: "7", title: "Harry Potter and the Deathly Hallows", author: "J. K. Rowling" }
+    ],
+    "lord of the rings": [
+        { volumeNumber: "1", title: "The Fellowship of the Ring", author: "J. R. R. Tolkien" },
+        { volumeNumber: "2", title: "The Two Towers", author: "J. R. R. Tolkien" },
+        { volumeNumber: "3", title: "The Return of the King", author: "J. R. R. Tolkien" }
+    ],
+    "the lord of the rings": [
+        { volumeNumber: "1", title: "The Fellowship of the Ring", author: "J. R. R. Tolkien" },
+        { volumeNumber: "2", title: "The Two Towers", author: "J. R. R. Tolkien" },
+        { volumeNumber: "3", title: "The Return of the King", author: "J. R. R. Tolkien" }
+    ],
+    "percy jackson": [
+        { volumeNumber: "1", title: "The Lightning Thief", author: "Rick Riordan" },
+        { volumeNumber: "2", title: "The Sea of Monsters", author: "Rick Riordan" },
+        { volumeNumber: "3", title: "The Titan's Curse", author: "Rick Riordan" },
+        { volumeNumber: "4", title: "The Battle of the Labyrinth", author: "Rick Riordan" },
+        { volumeNumber: "5", title: "The Last Olympian", author: "Rick Riordan" }
+    ],
+    "the hunger games": [
+        { volumeNumber: "1", title: "The Hunger Games", author: "Suzanne Collins" },
+        { volumeNumber: "2", title: "Catching Fire", author: "Suzanne Collins" },
+        { volumeNumber: "3", title: "Mockingjay", author: "Suzanne Collins" }
+    ],
+    "hunger games": [
+        { volumeNumber: "1", title: "The Hunger Games", author: "Suzanne Collins" },
+        { volumeNumber: "2", title: "Catching Fire", author: "Suzanne Collins" },
+        { volumeNumber: "3", title: "Mockingjay", author: "Suzanne Collins" }
+    ],
+    "the chronicles of narnia": [
+        { volumeNumber: "1", title: "The Magician's Nephew", author: "C. S. Lewis" },
+        { volumeNumber: "2", title: "The Lion, the Witch and the Wardrobe", author: "C. S. Lewis" },
+        { volumeNumber: "3", title: "The Horse and His Boy", author: "C. S. Lewis" },
+        { volumeNumber: "4", title: "Prince Caspian", author: "C. S. Lewis" },
+        { volumeNumber: "5", title: "The Voyage of the Dawn Treader", author: "C. S. Lewis" },
+        { volumeNumber: "6", title: "The Silver Chair", author: "C. S. Lewis" },
+        { volumeNumber: "7", title: "The Last Battle", author: "C. S. Lewis" }
+    ],
+    "the expanse": [
+        { volumeNumber: "1", title: "Leviathan Wakes", author: "James S. A. Corey" },
+        { volumeNumber: "2", title: "Caliban's War", author: "James S. A. Corey" },
+        { volumeNumber: "3", title: "Abaddon's Gate", author: "James S. A. Corey" },
+        { volumeNumber: "4", title: "Cibola Burn", author: "James S. A. Corey" },
+        { volumeNumber: "5", title: "Nemesis Games", author: "James S. A. Corey" },
+        { volumeNumber: "6", title: "Babylon's Ashes", author: "James S. A. Corey" },
+        { volumeNumber: "7", title: "Persepolis Rising", author: "James S. A. Corey" },
+        { volumeNumber: "8", title: "Tiamat's Wrath", author: "James S. A. Corey" },
+        { volumeNumber: "9", title: "Leviathan Falls", author: "James S. A. Corey" }
+    ],
+    "dune": [
+        { volumeNumber: "1", title: "Dune", author: "Frank Herbert" },
+        { volumeNumber: "2", title: "Dune Messiah", author: "Frank Herbert" },
+        { volumeNumber: "3", title: "Children of Dune", author: "Frank Herbert" },
+        { volumeNumber: "4", title: "God Emperor of Dune", author: "Frank Herbert" },
+        { volumeNumber: "5", title: "Heretics of Dune", author: "Frank Herbert" },
+        { volumeNumber: "6", title: "Chapterhouse: Dune", author: "Frank Herbert" }
+    ]
+};
+
 export async function findMissingBooksInSeries(seriesName: string, author: string, libraryId?: string) {
     try {
-        const q = `${seriesName} ${author}`;
+        const q = `${seriesName} ${author}`.trim();
+        const normSeries = seriesName.toLowerCase().trim();
         let rawCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+
+        // Check if series matches a known canonical series
+        const canonicalMatchKey = Object.keys(CANONICAL_SERIES).find(k => normSeries.includes(k) || k.includes(normSeries));
+        if (canonicalMatchKey && CANONICAL_SERIES[canonicalMatchKey]) {
+            for (const cBook of CANONICAL_SERIES[canonicalMatchKey]) {
+                rawCandidates.push({
+                    title: cBook.title,
+                    author: cBook.author,
+                    volumeNumber: cBook.volumeNumber,
+                    coverUrl: null
+                });
+            }
+        }
 
         // 1. Primary: iTunes API
         try {
-            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=25`;
+            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=35`;
             let iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
 
             if (!data || !data.results || data.results.length === 0) {
-                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=25`;
+                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=35`;
                 iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
                 data = iRes && iRes.ok ? await iRes.json() : null;
             }
@@ -508,7 +589,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
 
         // 2. OpenLibrary Search
         try {
-            const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=25&fields=key,title,author_name,cover_i,first_publish_year`;
+            const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=35&fields=key,title,author_name,cover_i,first_publish_year`;
             const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
 
             if (res && res.ok) {
@@ -539,7 +620,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             const settings = await prisma.settings.findUnique({ where: { id: "global" } });
             const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
             const gbKey = activeKey ? `&key=${activeKey}` : "";
-            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=25${gbKey}`;
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=35${gbKey}`;
             const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
             if (gRes && gRes.ok) {
                 const data = await gRes.json();
@@ -569,83 +650,127 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
         }
 
         // 4. Strict Filtering & Title Cleaning
-        const junkKeywords = [
-            "summary of", "summary:", "study guide", "analysis of", "workbook", "companion to",
-            "trivia on", "cliffsnotes", "sparknotes", "instaread", "easy reads", "quickreads",
-            "unofficial guide", "discussion prompts", "test prep", "sampler", "free preview",
-            "collection", "box set", "boxed set", "omnibus", "a history of", "the journey of",
-            "the making of", "official guide", "playscript"
-        ];
+        const isCanonicalSeries = !!(canonicalMatchKey && CANONICAL_SERIES[canonicalMatchKey]);
+        const JUNK_OR_BUNDLE_REGEX = /\b(?:\d+\s*[-–—]\s*\d+|(?:box|boxed)\s*set|omnibus|collection|complete\s+collection|bundle|almanac|atlas|encyclopedia|handbook|companion|screenplay|playscript|sampler|preview|cliffsnotes|sparknotes|instaread|easy\s+reads|quickreads|unofficial|test\s+prep|discussion\s+prompts|coloring\s+book|activity\s+book|guide\s+to\s+the|series\s+\d+|movie\s+book|\d+-d\b)\b/i;
 
         const validCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
         const seenTitles = new Set<string>();
 
-        for (const cand of rawCandidates) {
-            if (!cand.title) continue;
-            const candTitleLower = cand.title.toLowerCase();
+        if (isCanonicalSeries && canonicalMatchKey) {
+            const canonicalList = CANONICAL_SERIES[canonicalMatchKey];
+            for (const cBook of canonicalList) {
+                // Find best artwork match from rawCandidates
+                let bestCover: string | null = null;
+                const cTitleNorm = cBook.title.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-            // Check foreign language
-            if (isForeignLanguage(cand.title)) continue;
-            if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero)\b/.test(candTitleLower)) continue;
-
-            // Check junk keywords in title
-            if (junkKeywords.some(j => candTitleLower.includes(j))) continue;
-
-            // Strict Author Matching (Eliminates knockoffs like "Easy Reads")
-            if (!isSeriesAuthorMatch(cand.author, author)) continue;
-
-            // Clean title of "By [Author]" and junk suffixes
-            const cleanedTitle = cleanSeriesBookTitle(cand.title, author);
-            if (!cleanedTitle || cleanedTitle.length < 2) continue;
-
-            const normKey = cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
-            if (seenTitles.has(normKey)) continue;
-            seenTitles.add(normKey);
-
-            // Determine volume number
-            const knownVol = getKnownSeriesVolume(seriesName, cleanedTitle);
-
-            validCandidates.push({
-                title: cleanedTitle,
-                author: author && author !== "Unknown Author" ? author : cand.author,
-                coverUrl: cand.coverUrl,
-                volumeNumber: knownVol
-            });
-        }
-
-        // 5. Bulk AI Volume Assignment for unnumbered titles
-        const unassigned = validCandidates.filter(b => !b.volumeNumber);
-        if (unassigned.length > 0) {
-            try {
-                const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
-                const titles = unassigned.map(b => b.title);
-                const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
-                for (const b of validCandidates) {
-                    if (!b.volumeNumber && volMap[b.title]) {
-                        b.volumeNumber = String(volMap[b.title]);
+                for (const raw of rawCandidates) {
+                    if (!raw.coverUrl) continue;
+                    const rTitleNorm = (raw.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const rVol = raw.volumeNumber || getKnownSeriesVolume(seriesName, raw.title);
+                    if (rVol === cBook.volumeNumber || rTitleNorm === cTitleNorm || rTitleNorm.includes(cTitleNorm)) {
+                        bestCover = raw.coverUrl;
+                        break;
                     }
                 }
-            } catch (e) {
-                console.warn("[AI-FAILOVER] Bulk AI Volume Assignment notice:", e);
+
+                validCandidates.push({
+                    title: cBook.title,
+                    author: cBook.author,
+                    volumeNumber: cBook.volumeNumber,
+                    coverUrl: bestCover
+                });
+            }
+        } else {
+            for (const cand of rawCandidates) {
+                if (!cand.title) continue;
+                const candTitleLower = cand.title.toLowerCase();
+
+                // Check foreign language
+                if (isForeignLanguage(cand.title)) continue;
+                if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero|en de|és a|ja viisasten)\b/.test(candTitleLower)) continue;
+
+                // Check junk/bundle keywords in title
+                if (JUNK_OR_BUNDLE_REGEX.test(candTitleLower)) continue;
+
+                // Strict Author Matching (Eliminates knockoffs like "Easy Reads")
+                if (author && author !== "Unknown Author" && !isSeriesAuthorMatch(cand.author, author)) continue;
+
+                // Clean title of "By [Author]" and junk suffixes
+                const cleanedTitle = cleanSeriesBookTitle(cand.title, author);
+                if (!cleanedTitle || cleanedTitle.length < 2) continue;
+
+                // Determine volume number
+                const knownVol = cand.volumeNumber || getKnownSeriesVolume(seriesName, cleanedTitle);
+
+                // Spinoff / Standalone filter: If candidate has no volume number and its title doesn't match the series name, reject it
+                const cleanedTitleLower = cleanedTitle.toLowerCase();
+                const seriesWords = normSeries.split(/\s+/).filter(w => w.length > 2);
+                const matchesSeries = seriesWords.length > 0 && seriesWords.some(w => cleanedTitleLower.includes(w));
+                if (!knownVol && !matchesSeries) {
+                    continue;
+                }
+
+                const normKey = (knownVol ? `vol-${knownVol}:::` : "") + cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                if (seenTitles.has(normKey)) {
+                    const existing = validCandidates.find(c => {
+                        const cNorm = (c.volumeNumber ? `vol-${c.volumeNumber}:::` : "") + c.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        return cNorm === normKey;
+                    });
+                    if (existing && !existing.coverUrl && cand.coverUrl) {
+                        existing.coverUrl = cand.coverUrl;
+                    }
+                    continue;
+                }
+                seenTitles.add(normKey);
+
+                validCandidates.push({
+                    title: cleanedTitle,
+                    author: author && author !== "Unknown Author" ? author : cand.author,
+                    coverUrl: cand.coverUrl,
+                    volumeNumber: knownVol
+                });
+            }
+
+            // 5. Bulk AI Volume Assignment for unnumbered titles
+            const unassigned = validCandidates.filter(b => !b.volumeNumber);
+            if (unassigned.length > 0) {
+                try {
+                    const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
+                    const titles = unassigned.map(b => b.title);
+                    const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
+                    for (const b of validCandidates) {
+                        if (!b.volumeNumber && volMap[b.title]) {
+                            b.volumeNumber = String(volMap[b.title]);
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[AI-FAILOVER] Bulk AI Volume Assignment notice:", e);
+                }
             }
         }
 
-        // 6. Cross-check against existing books in SQLite (Filter out already-owned volumes and titles)
+        // 6. Cross-check against existing books in SQLite (Filter out already-owned volumes and titles in this library)
         const dbSeriesBooks = await prisma.book.findMany({
             where: {
+                ...(libraryId ? { libraryId } : {}),
                 OR: [
                     { series: { contains: seriesName } },
                     { title: { contains: seriesName } }
                 ],
                 fileType: { not: "missing" }
             },
-            select: { title: true, volumeNumber: true, series: true }
+            select: { id: true, title: true, volumeNumber: true, series: true, filePath: true }
         });
 
         const ownedNormTitles = new Set<string>();
         const ownedVolumes = new Set<string>();
 
         for (const b of dbSeriesBooks) {
+            // Verify file actually exists if filePath is given
+            if (b.filePath && !fs.existsSync(b.filePath)) {
+                continue;
+            }
+
             ownedNormTitles.add(b.title.toLowerCase().replace(/[^a-z0-9]/g, ""));
             // Also add UK/US canonical title equivalents
             if (b.title.toLowerCase().includes("philosopher")) {
@@ -670,7 +795,16 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             return true;
         });
 
-        // 7. Sort strictly by Volume Number ascending
+        // 7. Resolve missing covers for canonical entries
+        for (const b of trulyMissingBooks) {
+            if (!b.coverUrl) {
+                try {
+                    b.coverUrl = await fetchAudibleCover(b.title, b.author);
+                } catch (e) {}
+            }
+        }
+
+        // 8. Sort strictly by Volume Number ascending
         trulyMissingBooks.sort((a, b) => {
             const volA = a.volumeNumber ? parseFloat(a.volumeNumber) : 9999;
             const volB = b.volumeNumber ? parseFloat(b.volumeNumber) : 9999;
@@ -678,7 +812,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             return a.title.localeCompare(b.title);
         });
 
-        // 8. Persist / Sync Series in SQLite Database
+        // 9. Persist / Sync Series in SQLite Database
         try {
             const cleanSeries = seriesName.trim();
             const cleanAuth = author && author !== "Unknown Author" ? author.trim() : null;
