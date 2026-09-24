@@ -170,41 +170,50 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
         throw new Error(`Radarr could not find metadata for TMDb ID ${req.tmdbId} ("${req.title}")`);
     }
 
-    // 4. Construct payload and add movie to Radarr
-    const { id, ...cleanedMovieData } = movieData;
-    const addBody = {
-        ...cleanedMovieData,
-        qualityProfileId,
-        rootFolderPath,
-        monitored: true,
-        addOptions: {
-            searchForMovie: true
-        }
-    };
-
-    const addRes = await arrApiPost(targetApp, "/api/v3/movie", addBody);
-
+    // 4. Construct payload and add or update movie in Radarr
     let servarrId: number | undefined;
 
-    if (addRes.success && addRes.data) {
-        servarrId = addRes.data.id;
-    } else {
-        // If movie already exists in Radarr, fetch existing record, ensure monitored, and trigger search
-        const existingMoviesRes = await arrApiGet(targetApp, `/api/v3/movie`);
-        if (existingMoviesRes.success && Array.isArray(existingMoviesRes.data)) {
-            const existing = existingMoviesRes.data.find((m: any) => m.tmdbId === req.tmdbId);
-            if (existing) {
-                servarrId = existing.id;
-                if (!existing.monitored) {
-                    existing.monitored = true;
-                    await arrApiPut(targetApp, `/api/v3/movie/${existing.id}`, existing).catch(() => {});
-                }
-                // Trigger movie search
-                await arrApiPost(targetApp, "/api/v3/command", { name: "MoviesSearch", movieIds: [existing.id] }).catch(() => {});
-            }
+    if (movieData.id && movieData.id > 0) {
+        servarrId = movieData.id;
+        if (!movieData.monitored) {
+            movieData.monitored = true;
+            await arrApiPut(targetApp, `/api/v3/movie/${movieData.id}`, movieData).catch(() => {});
         }
-        if (!servarrId) {
-            throw new Error(addRes.error || "Failed adding movie to Radarr");
+        await arrApiPost(targetApp, "/api/v3/command", { name: "MoviesSearch", movieIds: [movieData.id] }).catch(() => {});
+    } else {
+        const { id, ...cleanedMovieData } = movieData;
+        const addBody = {
+            ...cleanedMovieData,
+            qualityProfileId,
+            rootFolderPath,
+            monitored: true,
+            addOptions: {
+                searchForMovie: true
+            }
+        };
+
+        const addRes = await arrApiPost(targetApp, "/api/v3/movie", addBody);
+
+        if (addRes.success && addRes.data) {
+            servarrId = addRes.data.id;
+        } else {
+            // Fallback: If movie already exists in Radarr under a different lookup, fetch existing record
+            const existingMoviesRes = await arrApiGet(targetApp, `/api/v3/movie`);
+            if (existingMoviesRes.success && Array.isArray(existingMoviesRes.data)) {
+                const existing = existingMoviesRes.data.find((m: any) => m.tmdbId === req.tmdbId);
+                if (existing) {
+                    servarrId = existing.id;
+                    if (!existing.monitored) {
+                        existing.monitored = true;
+                        await arrApiPut(targetApp, `/api/v3/movie/${existing.id}`, existing).catch(() => {});
+                    }
+                    // Trigger movie search
+                    await arrApiPost(targetApp, "/api/v3/command", { name: "MoviesSearch", movieIds: [existing.id] }).catch(() => {});
+                }
+            }
+            if (!servarrId) {
+                throw new Error(addRes.error || "Failed adding movie to Radarr");
+            }
         }
     }
 
@@ -372,65 +381,89 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
         };
     });
 
-    // 5. Construct payload and add series to Sonarr
-    const { id, languageProfileId: lookupLangId, ...cleanedSeriesData } = seriesData;
-    const addBody: any = {
-        ...cleanedSeriesData,
-        qualityProfileId,
-        rootFolderPath,
-        monitored: true,
-        seasonFolder: true,
-        seasons,
-        addOptions: {
-            monitor: "unknown",
-            searchForMissingEpisodes: true
-        }
-    };
-
-    if (lookupLangId !== undefined) {
-        addBody.languageProfileId = lookupLangId || 1;
-    }
-
-    const addRes = await arrApiPost(targetApp, "/api/v3/series", addBody);
-
+    // 5. Construct payload and add or update series in Sonarr
     let servarrId: number | undefined;
 
-    if (addRes.success && addRes.data) {
-        servarrId = addRes.data.id;
-    } else {
-        // If series already exists in Sonarr, fetch existing record, update season monitoring, and trigger search
-        const existingSeriesRes = await arrApiGet(targetApp, `/api/v3/series`);
-        if (existingSeriesRes.success && Array.isArray(existingSeriesRes.data)) {
-            const existing = existingSeriesRes.data.find((s: any) => (req.tvdbId && s.tvdbId === req.tvdbId) || s.title.toLowerCase() === req.title.toLowerCase());
-            if (existing) {
-                servarrId = existing.id;
-                existing.monitored = true;
+    if (seriesData.id && seriesData.id > 0) {
+        servarrId = seriesData.id;
+        seriesData.monitored = true;
 
-                // Update season monitoring
-                if (existing.seasons && Array.isArray(existing.seasons)) {
-                    existing.seasons = existing.seasons.map((s: any) => {
-                        if (requestedSeasonsList === "all" || (Array.isArray(requestedSeasonsList) && requestedSeasonsList.includes(s.seasonNumber))) {
-                            return { ...s, monitored: true };
-                        }
-                        return s;
-                    });
+        if (seriesData.seasons && Array.isArray(seriesData.seasons)) {
+            seriesData.seasons = seriesData.seasons.map((s: any) => {
+                if (requestedSeasonsList === "all" || (Array.isArray(requestedSeasonsList) && requestedSeasonsList.includes(s.seasonNumber))) {
+                    return { ...s, monitored: true };
                 }
+                return s;
+            });
+        }
 
-                // Save series update
-                await arrApiPut(targetApp, `/api/v3/series/${existing.id}`, existing).catch(() => {});
+        await arrApiPut(targetApp, `/api/v3/series/${seriesData.id}`, seriesData).catch(() => {});
 
-                // If specific seasons requested, trigger SeasonSearch per season; otherwise SeriesSearch
-                if (Array.isArray(requestedSeasonsList) && requestedSeasonsList.length > 0) {
-                    for (const seasonNum of requestedSeasonsList) {
-                        await arrApiPost(targetApp, "/api/v3/command", { name: "SeasonSearch", seriesId: existing.id, seasonNumber: seasonNum }).catch(() => {});
+        if (Array.isArray(requestedSeasonsList) && requestedSeasonsList.length > 0) {
+            for (const seasonNum of requestedSeasonsList) {
+                await arrApiPost(targetApp, "/api/v3/command", { name: "SeasonSearch", seriesId: seriesData.id, seasonNumber: seasonNum }).catch(() => {});
+            }
+        } else {
+            await arrApiPost(targetApp, "/api/v3/command", { name: "SeriesSearch", seriesId: seriesData.id }).catch(() => {});
+        }
+    } else {
+        const { id, languageProfileId: lookupLangId, ...cleanedSeriesData } = seriesData;
+        const addBody: any = {
+            ...cleanedSeriesData,
+            qualityProfileId,
+            rootFolderPath,
+            monitored: true,
+            seasonFolder: true,
+            seasons,
+            addOptions: {
+                monitor: "unknown",
+                searchForMissingEpisodes: true
+            }
+        };
+
+        if (lookupLangId !== undefined) {
+            addBody.languageProfileId = lookupLangId || 1;
+        }
+
+        const addRes = await arrApiPost(targetApp, "/api/v3/series", addBody);
+
+        if (addRes.success && addRes.data) {
+            servarrId = addRes.data.id;
+        } else {
+            // If series already exists in Sonarr, fetch existing record, update season monitoring, and trigger search
+            const existingSeriesRes = await arrApiGet(targetApp, `/api/v3/series`);
+            if (existingSeriesRes.success && Array.isArray(existingSeriesRes.data)) {
+                const existing = existingSeriesRes.data.find((s: any) => (req.tvdbId && s.tvdbId === req.tvdbId) || s.title.toLowerCase() === req.title.toLowerCase());
+                if (existing) {
+                    servarrId = existing.id;
+                    existing.monitored = true;
+
+                    // Update season monitoring
+                    if (existing.seasons && Array.isArray(existing.seasons)) {
+                        existing.seasons = existing.seasons.map((s: any) => {
+                            if (requestedSeasonsList === "all" || (Array.isArray(requestedSeasonsList) && requestedSeasonsList.includes(s.seasonNumber))) {
+                                return { ...s, monitored: true };
+                            }
+                            return s;
+                        });
                     }
-                } else {
-                    await arrApiPost(targetApp, "/api/v3/command", { name: "SeriesSearch", seriesId: existing.id }).catch(() => {});
+
+                    // Save series update
+                    await arrApiPut(targetApp, `/api/v3/series/${existing.id}`, existing).catch(() => {});
+
+                    // If specific seasons requested, trigger SeasonSearch per season; otherwise SeriesSearch
+                    if (Array.isArray(requestedSeasonsList) && requestedSeasonsList.length > 0) {
+                        for (const seasonNum of requestedSeasonsList) {
+                            await arrApiPost(targetApp, "/api/v3/command", { name: "SeasonSearch", seriesId: existing.id, seasonNumber: seasonNum }).catch(() => {});
+                        }
+                    } else {
+                        await arrApiPost(targetApp, "/api/v3/command", { name: "SeriesSearch", seriesId: existing.id }).catch(() => {});
+                    }
                 }
             }
-        }
-        if (!servarrId) {
-            throw new Error(addRes.error || "Failed adding series to Sonarr");
+            if (!servarrId) {
+                throw new Error(addRes.error || "Failed adding series to Sonarr");
+            }
         }
     }
 
