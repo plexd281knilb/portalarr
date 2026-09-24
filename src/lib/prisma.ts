@@ -1671,8 +1671,9 @@ export function isScheduleDue(
 // --- BACKGROUND SCHEDULER ---
 const globalForScheduler = global as unknown as { schedulerInitialized?: boolean; lastSeerrSyncTime?: number };
 
-if (!globalForScheduler.schedulerInitialized) {
+if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDULER_INITIALIZED) {
   globalForScheduler.schedulerInitialized = true;
+  process.env.__PORTALARR_SCHEDULER_INITIALIZED = "true";
 
   // Let Next.js boot finish before running initial checks
   setTimeout(async () => {
