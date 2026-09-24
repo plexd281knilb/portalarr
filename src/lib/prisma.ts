@@ -1392,13 +1392,14 @@ export async function ensureSchemaColumns(): Promise<void> {
 
             // Check if tmdbId has a NOT NULL constraint on existing tables and migrate it to NULLABLE
             const tmdbCol = reqTableInfo.find((c: any) => c.name === "tmdbId");
-            if (tmdbCol && (tmdbCol.notnull === 1 || tmdbCol.notnull === true)) {
+            if (tmdbCol && (Number(tmdbCol.notnull) === 1 || tmdbCol.notnull == 1 || tmdbCol.notnull === true)) {
                 try {
                     console.log("[DB-SCHEMA-AUTOFIX] Migrating MediaRequest table to relax NOT NULL constraint on tmdbId for books/audiobooks...");
                     const refreshedInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaRequest");`);
                     const commonCols = refreshedInfo.map((c: any) => `"${c.name}"`).join(", ");
 
                     await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=OFF;`);
+                    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "MediaRequest_migrating";`);
                     await prisma.$executeRawUnsafe(`
                         CREATE TABLE "MediaRequest_migrating" (
                             "id" TEXT NOT NULL PRIMARY KEY,

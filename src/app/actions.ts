@@ -5540,24 +5540,29 @@ export async function createBookRequest(formData: FormData) {
         });
 
         // Mirror to MediaRequest for unified request tracking
-        await prisma.mediaRequest.create({
-            data: {
-                mediaType,
-                title: finalTitle,
-                requestedByUsername: targetUser,
-                requestedByUserId: reqUser?.id || null,
-                userEmail: reqUser?.email || null,
-                kindleEmail: reqUser?.kindleEmail || null,
-                bookAuthor: finalAuthor,
-                bookSeries: finalSeries,
-                bookVolume: finalVolNum,
-                bookLibraryId: libraryId || null,
-                sendToKindle: Boolean(sendToKindleVal && mediaType === "ebook"),
-                posterPath: finalCover || null,
-                releaseYear: finalYear || null,
-                status: isApproved ? "PROCESSING" : "PENDING"
-            }
-        }).catch(() => {});
+        try {
+            await ensureSchemaColumns();
+            await prisma.mediaRequest.create({
+                data: {
+                    mediaType,
+                    title: finalTitle,
+                    requestedByUsername: targetUser,
+                    requestedByUserId: reqUser?.id || null,
+                    userEmail: reqUser?.email || null,
+                    kindleEmail: reqUser?.kindleEmail || null,
+                    bookAuthor: finalAuthor,
+                    bookSeries: finalSeries,
+                    bookVolume: finalVolNum,
+                    bookLibraryId: libraryId || null,
+                    sendToKindle: Boolean(sendToKindleVal && mediaType === "ebook"),
+                    posterPath: finalCover || null,
+                    releaseYear: finalYear || null,
+                    status: isApproved ? "PROCESSING" : "PENDING"
+                }
+            });
+        } catch (mErr: any) {
+            // Non-fatal if MediaRequest mirror fails
+        }
         
         if (type === "book" && isApproved && !disableAutoDownload) {
             autoDownloadBookRequest(request.id, finalTitle, finalAuthor).catch(err => {
