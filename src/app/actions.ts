@@ -164,6 +164,66 @@ function getNormTitle(rawTitle: string): string {
     return norm;
 }
 
+function isAuthorMatch(authorA: string | null | undefined, authorB: string | null | undefined): boolean {
+    if (!authorA || !authorB) return true;
+    const aNorm = getNormTitle(authorA);
+    const bNorm = getNormTitle(authorB);
+    if (!aNorm || !bNorm || aNorm === "unknownauthor" || bNorm === "unknownauthor") return true;
+    if (aNorm === bNorm) return true;
+
+    // Inverted names check: "Silver, Elsie" -> "Elsie Silver"
+    const normalizeInverted = (raw: string) => {
+        if (raw.includes(",")) {
+            const parts = raw.split(",").map(p => p.trim()).filter(Boolean);
+            if (parts.length === 2) return getNormTitle(`${parts[1]} ${parts[0]}`);
+        }
+        return getNormTitle(raw);
+    };
+    const aInv = normalizeInverted(authorA);
+    const bInv = normalizeInverted(authorB);
+    if (aInv === bInv || aInv === bNorm || aNorm === bInv) return true;
+
+    // Token set match: ["elsie", "silver"] sorted
+    const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 1).sort().join("");
+    const aTok = tokenize(authorA);
+    const bTok = tokenize(authorB);
+    if (aTok && bTok && aTok === bTok) return true;
+
+    // Substring match for substantial author names (>= 5 chars)
+    if ((aNorm.length >= 5 && bNorm.length >= 5) && (aNorm.includes(bNorm) || bNorm.includes(aNorm))) return true;
+
+    return false;
+}
+
+function cleanTitleForMatch(rawTitle: string): string {
+    let clean = (rawTitle || "")
+        .replace(/\[[^\]]+\]|\([^\)]+\)/g, " ")
+        .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
+        .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ")
+        .replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*#?\s*\d{1,3}(?:\.\d{1,2})?\s*[-:]\s*/i, " ")
+        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ");
+    return clean.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
+
+function isTitleMatch(titleA: string | null | undefined, titleB: string | null | undefined): boolean {
+    if (!titleA || !titleB) return false;
+    const normA = getNormTitle(titleA);
+    const normB = getNormTitle(titleB);
+    if (!normA || !normB) return false;
+    if (normA === normB) return true;
+
+    const cleanA = cleanTitleForMatch(titleA);
+    const cleanB = cleanTitleForMatch(titleB);
+    if (cleanA && cleanB && cleanA === cleanB) return true;
+
+    // Substring match for substantial titles (>= 6 characters)
+    if (cleanA.length >= 6 && cleanB.length >= 6) {
+        if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
+    }
+
+    return false;
+}
+
 async function mobiBounceEpub(filePath: string): Promise<boolean> {
     try {
         const ext = path.extname(filePath).toLowerCase();
@@ -6810,28 +6870,26 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
 
             let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
+            if (existing && matchedDbBookIds.has(existing.id)) {
+                existing = undefined;
+            }
 
             if (!existing) {
                 const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
                 const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
-                const targetAuthorNorm = getNormTitle(parsedMetaCheck.author || "");
+                const targetCheckTitle = parsedMetaCheck.title || cleanBaseCheck;
+                const targetCheckAuthor = parsedMetaCheck.author || "";
 
-                if (targetTitleNorm.length > 3) {
-                    existing = dbBooks.find(b => {
-                        if ((b.mediaType || "ebook") !== targetMediaType) return false;
-                        if (matchedDbBookIds.has(b.id)) return false;
-                        const dbTitleNorm = getNormTitle(b.title || "");
-                        if (dbTitleNorm !== targetTitleNorm) return false;
-                        if (targetAuthorNorm && targetAuthorNorm !== "unknownauthor") {
-                            const dbAuthorNorm = getNormTitle(b.author || "");
-                            if (dbAuthorNorm && dbAuthorNorm !== "unknownauthor" && dbAuthorNorm !== targetAuthorNorm) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    });
-                }
+                existing = dbBooks.find(b => {
+                    if (matchedDbBookIds.has(b.id)) return false;
+                    const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
+                    const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
+                    if (bMedia !== normTargetMedia) return false;
+
+                    if (!isTitleMatch(b.title, targetCheckTitle)) return false;
+                    if (!isAuthorMatch(b.author, targetCheckAuthor)) return false;
+                    return true;
+                });
             }
 
             if (existing) {
@@ -6876,6 +6934,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }).catch(() => {});
                     Object.assign(existing, updateData);
                 }
+                dbBooksByPathLower.set(fullPath.toLowerCase(), existing);
 
                 // Only fetch cover if completely missing or empty
                 if (!existing.coverUrl || existing.coverUrl.trim().length < 10) {
@@ -6982,46 +7041,45 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     : (stats.mtime || new Date());
 
                 try {
-                    let newBook = await prisma.book.findFirst({
+                    let newBook: any = null;
+                    const pathMatched = await prisma.book.findFirst({
                         where: { filePath: fullPath, libraryId }
                     });
+                    if (pathMatched && !matchedDbBookIds.has(pathMatched.id)) {
+                        newBook = pathMatched;
+                    }
 
                     if (!newBook) {
-                        const targetTitleNormFinal = getNormTitle(title);
-                        const targetAuthorNormFinal = getNormTitle(author);
-                        if (targetTitleNormFinal.length > 3) {
-                            const potentialMatch = dbBooks.find(b => {
-                                if ((b.mediaType || "ebook") !== targetMediaType) return false;
-                                if (matchedDbBookIds.has(b.id)) return false;
-                                const dbTNorm = getNormTitle(b.title || "");
-                                if (dbTNorm !== targetTitleNormFinal) return false;
-                                if (targetAuthorNormFinal && targetAuthorNormFinal !== "unknownauthor") {
-                                    const dbANorm = getNormTitle(b.author || "");
-                                    if (dbANorm && dbANorm !== "unknownauthor" && dbANorm !== targetAuthorNormFinal) {
-                                        return false;
-                                    }
+                        const potentialMatch = dbBooks.find(b => {
+                            if (matchedDbBookIds.has(b.id)) return false;
+                            const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
+                            const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
+                            if (bMedia !== normTargetMedia) return false;
+
+                            if (!isTitleMatch(b.title, title)) return false;
+                            if (!isAuthorMatch(b.author, author)) return false;
+                            return true;
+                        });
+                        if (potentialMatch) {
+                            newBook = potentialMatch;
+                            await prisma.book.update({
+                                where: { id: newBook.id },
+                                data: {
+                                    filePath: fullPath,
+                                    fileSize: stats.size,
+                                    title,
+                                    author: author !== "Unknown Author" ? author : newBook.author,
+                                    series: series || newBook.series,
+                                    volumeNumber: volumeNumber || newBook.volumeNumber,
+                                    authorId: authorId || newBook.authorId,
+                                    seriesId: seriesId || newBook.seriesId,
+                                    coverUrl: initialCoverUrl || newBook.coverUrl,
+                                    mediaType: targetMediaType,
+                                    fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub")
                                 }
-                                return true;
                             });
-                            if (potentialMatch) {
-                                newBook = potentialMatch;
-                                await prisma.book.update({
-                                    where: { id: newBook.id },
-                                    data: {
-                                        filePath: fullPath,
-                                        fileSize: stats.size,
-                                        title,
-                                        author: author !== "Unknown Author" ? author : newBook.author,
-                                        series: series || newBook.series,
-                                        volumeNumber: volumeNumber || newBook.volumeNumber,
-                                        authorId: authorId || newBook.authorId,
-                                        seriesId: seriesId || newBook.seriesId,
-                                        coverUrl: initialCoverUrl || newBook.coverUrl
-                                    }
-                                });
-                                logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${newBook.title}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                                console.log(`[SCANNER] 🔄 Updated existing book DB record for "${title}" by "${author}" (ID: ${newBook.id})`);
-                            }
+                            logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${newBook.title}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                            console.log(`[SCANNER] 🔄 Updated existing book DB record for "${title}" by "${author}" (ID: ${newBook.id})`);
                         }
                     }
 
@@ -7048,6 +7106,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
 
                     matchedDbBookIds.add(newBook.id);
+                    dbBooksByPathLower.set(fullPath.toLowerCase(), newBook);
 
                     // Fetch cover artwork asynchronously in background if not already provided
                     if (!newBook.coverUrl || newBook.coverUrl.trim().length < 10) {
@@ -7107,7 +7166,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             }
         } catch (pathDedupErr) {}
 
-        // Post-scan database deduplication by title key
+        // Post-scan database deduplication by composite mediaType + author + title key
         try {
             const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
             const titleMap = new Map<string, typeof currentDbBooks>();
@@ -7145,13 +7204,23 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 if (!cleanKey) continue;
-                if (!titleMap.has(cleanKey)) titleMap.set(cleanKey, []);
-                titleMap.get(cleanKey)!.push(b);
+                const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
+                const bAuthorKey = getNormTitle(b.author || "");
+                const authorGroupKey = (bAuthorKey && bAuthorKey !== "unknownauthor") ? bAuthorKey : "all";
+                const compositeKey = `${bMedia}:::${authorGroupKey}:::${cleanKey}`;
+
+                if (!titleMap.has(compositeKey)) titleMap.set(compositeKey, []);
+                titleMap.get(compositeKey)!.push(b);
             }
 
             for (const [key, group] of titleMap.entries()) {
                 if (group.length > 1) {
-                    group.sort((a, b) => (b.fileSize || 0) - (a.fileSize || 0));
+                    group.sort((a, b) => {
+                        const aIsMissing = a.fileType === 'missing' ? 1 : 0;
+                        const bIsMissing = b.fileType === 'missing' ? 1 : 0;
+                        if (aIsMissing !== bIsMissing) return aIsMissing - bIsMissing; // Real files first
+                        return (b.fileSize || 0) - (a.fileSize || 0); // Largest file size first
+                    });
                     const keepBook = group[0];
                     const deleteIds = group.slice(1).map(b => b.id);
                     console.log(`[SCANNER-DEDUP] Purging ${deleteIds.length} duplicate DB rows for book "${keepBook.title}" (Keeping ID: ${keepBook.id})`);
