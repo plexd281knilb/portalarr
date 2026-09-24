@@ -2074,6 +2074,8 @@ function BookLibraryPageContent() {
       const fd = new FormData();
       fd.append("title", book.title);
       fd.append("author", book.author || "");
+      if (book.series) fd.append("series", book.series);
+      if (book.volumeNumber) fd.append("volumeNumber", String(book.volumeNumber));
       if (book.publishYear) fd.append("publishYear", String(book.publishYear));
       if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
       fd.append("mediaType", detectedMediaType);
@@ -2863,18 +2865,29 @@ function BookLibraryPageContent() {
                         .map(([seriesName, seriesBooks]) => {
                           const actualMissing = (
                             missingBooksMap[seriesName] || []
-                          ).filter((mBook: any) => {
-                            const mTitle = mBook.title.toLowerCase();
-                            return !seriesBooks.some((b: any) => {
-                              const bTitle = (
-                                b.cleanSeriesTitle || b.title
-                              ).toLowerCase();
-                              return (
-                                bTitle.includes(mTitle) ||
-                                mTitle.includes(bTitle)
-                              );
+                          )
+                            .filter((mBook: any) => {
+                              const mTitle = (mBook.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                              const mVol = String(mBook.volumeNumber || "").replace(/[^0-9.]/g, "");
+                              return !seriesBooks.some((b: any) => {
+                                const bTitle = (
+                                  b.cleanSeriesTitle || b.title || ""
+                                ).toLowerCase().replace(/[^a-z0-9]/g, "");
+                                const bVol = String(b.volumeNumber || "").replace(/[^0-9.]/g, "");
+                                if (mVol && bVol && mVol === bVol) return true;
+                                return (
+                                  bTitle === mTitle ||
+                                  bTitle.includes(mTitle) ||
+                                  mTitle.includes(bTitle)
+                                );
+                              });
+                            })
+                            .sort((a: any, b: any) => {
+                              const vA = parseFloat(String(a.volumeNumber || "999").replace(/[^0-9.]/g, "")) || 999;
+                              const vB = parseFloat(String(b.volumeNumber || "999").replace(/[^0-9.]/g, "")) || 999;
+                              if (vA !== vB) return vA - vB;
+                              return (a.title || "").localeCompare(b.title || "");
                             });
-                          });
 
                           return (
                             <div
@@ -2921,6 +2934,7 @@ function BookLibraryPageContent() {
                                     {actualMissing.map(
                                       (book: any, i: number) => {
                                         const extMissing = extractSeriesInfo(book.title, "", [seriesName]);
+                                        const displayVol = book.volumeNumber || extMissing.volume;
                                         return (
                                         <div
                                           key={i}
@@ -2948,9 +2962,9 @@ function BookLibraryPageContent() {
                                               >
                                                 {extMissing.bookTitle}
                                               </h4>
-                                              {(book.volumeNumber || extMissing.volume) && (
+                                              {displayVol && (
                                                 <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 bg-primary/10 text-primary border-primary/20">
-                                                  Vol {book.volumeNumber || extMissing.volume}
+                                                  Vol {displayVol}
                                                 </Badge>
                                               )}
                                             </div>
@@ -2969,6 +2983,8 @@ function BookLibraryPageContent() {
                                                   handleAutoDownloadMissingBook(
                                                     {
                                                       ...book,
+                                                      series: seriesName,
+                                                      volumeNumber: displayVol,
                                                       mediaType:
                                                         activeTab ===
                                                         "audiobooks"
@@ -2989,6 +3005,8 @@ function BookLibraryPageContent() {
                                                   handleSearchAndReplaceRelease(
                                                     {
                                                       ...book,
+                                                      series: seriesName,
+                                                      volumeNumber: displayVol,
                                                       mediaType:
                                                         activeTab ===
                                                         "audiobooks"

@@ -222,14 +222,13 @@ function cleanUpEmptyFolder(folderPath: string) {
     if (!folderPath || !fs.existsSync(folderPath)) return;
     try {
         const remaining = fs.readdirSync(folderPath);
+        if (remaining.includes('.portalarr-missing')) return;
+
         const onlyIgnored = remaining.every(f => 
             f === '.DS_Store' || 
             f === 'Thumbs.db' || 
             f === 'desktop.ini' || 
             f === '.nomedia' ||
-            f === '.portalarr-missing' ||
-            f.endsWith('.jpg') || // Often left behind covers
-            f.endsWith('.png') ||
             f.endsWith('.nfo') ||
             f.endsWith('.txt') ||
             f.endsWith('.cue') ||
@@ -246,24 +245,178 @@ function cleanUpEmptyFolder(folderPath: string) {
     } catch (e) {}
 }
 
-export async function findMissingBooksInSeries(seriesName: string, author: string) {
+function isSeriesAuthorMatch(candidateAuthor: string, targetAuthor: string): boolean {
+    if (!candidateAuthor || !targetAuthor) return true;
+    if (targetAuthor === "Unknown Author" || targetAuthor === "Unknown" || !targetAuthor.trim()) return true;
+
+    // Filter out common summary, study guide, and knockoff publishers
+    const junkAuthorPatterns = [
+        /\beasy reads?\b/i,
+        /\bsummary\b/i,
+        /\bstudy guide\b/i,
+        /\bbookrags\b/i,
+        /\bsparknotes\b/i,
+        /\bcliffs?notes\b/i,
+        /\binstaread\b/i,
+        /\bquickreads?\b/i,
+        /\btrivia\b/i,
+        /\bunofficial\b/i,
+        /\banalysis\b/i,
+        /\btest prep\b/i,
+        /\bworkbooks?\b/i
+    ];
+    if (junkAuthorPatterns.some(p => p.test(candidateAuthor))) {
+        return false;
+    }
+
+    const cleanCandidate = candidateAuthor.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+    const cleanTarget = targetAuthor.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+
+    if (cleanCandidate === cleanTarget) return true;
+    if (cleanCandidate.includes(cleanTarget) || cleanTarget.includes(cleanCandidate)) return true;
+
+    const candidateParts = cleanCandidate.split(" ").filter(p => p.length > 1);
+    const targetParts = cleanTarget.split(" ").filter(p => p.length > 1);
+
+    if (candidateParts.length > 0 && targetParts.length > 0) {
+        const candidateLastName = candidateParts[candidateParts.length - 1];
+        const targetLastName = targetParts[targetParts.length - 1];
+        if (candidateLastName === targetLastName) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function cleanSeriesBookTitle(title: string, author?: string): string {
+    let cleaned = (title || "")
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\s*\([^)]*\)/g, " ")
+        .replace(/\s*\[[^\]]*\]/g, " ")
+        .replace(/\s+-\s+(?:Part|Book|Volume)\s*\d+.*$/i, "")
+        .replace(/\s*:\s*A Novel.*$/i, "")
+        .replace(/\s*:\s*Book\s*\d+.*$/i, "")
+        .replace(/\s*\(Illustrated Edition\)/gi, "")
+        .replace(/\s*\(Unabridged\)/gi, "");
+
+    if (author && author !== "Unknown Author") {
+        const escapedAuthor = author.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        cleaned = cleaned.replace(new RegExp(`\\s+(?:by|- by|: by)\\s+${escapedAuthor}.*$`, 'i'), "");
+    }
+    cleaned = cleaned.replace(/\s+(?:by|- by|: by)\s+[A-Za-z0-9\.\s]+$/i, "");
+
+    return cleaned.replace(/\s+/g, " ").trim();
+}
+
+function getKnownSeriesVolume(seriesName: string, title: string): string | null {
+    const s = (seriesName || "").toLowerCase();
+    const t = (title || "").toLowerCase();
+
+    if (s.includes("harry potter")) {
+        if (t.includes("sorcerer") || t.includes("philosopher")) return "1";
+        if (t.includes("chamber of secrets")) return "2";
+        if (t.includes("prisoner of azkaban")) return "3";
+        if (t.includes("goblet of fire")) return "4";
+        if (t.includes("order of the phoenix")) return "5";
+        if (t.includes("half-blood prince") || t.includes("half blood prince")) return "6";
+        if (t.includes("deathly hallows")) return "7";
+        if (t.includes("cursed child")) return "8";
+    }
+    if (s.includes("lord of the rings")) {
+        if (t.includes("fellowship of the ring")) return "1";
+        if (t.includes("two towers")) return "2";
+        if (t.includes("return of the king")) return "3";
+    }
+    if (s.includes("percy jackson")) {
+        if (t.includes("lightning thief")) return "1";
+        if (t.includes("sea of monsters")) return "2";
+        if (t.includes("titan's curse") || t.includes("titans curse")) return "3";
+        if (t.includes("battle of the labyrinth")) return "4";
+        if (t.includes("last olympian")) return "5";
+    }
+    if (s.includes("hunger games")) {
+        if (t.includes("hunger games") && !t.includes("catching") && !t.includes("mockingjay") && !t.includes("ballad")) return "1";
+        if (t.includes("catching fire")) return "2";
+        if (t.includes("mockingjay")) return "3";
+        if (t.includes("ballad of songbirds")) return "0";
+    }
+    if (s.includes("chronicles of narnia") || s.includes("narnia")) {
+        if (t.includes("magician's nephew") || t.includes("magicians nephew")) return "1";
+        if (t.includes("lion, the witch") || t.includes("lion the witch")) return "2";
+        if (t.includes("horse and his boy")) return "3";
+        if (t.includes("prince caspian")) return "4";
+        if (t.includes("voyage of the dawn treader")) return "5";
+        if (t.includes("silver chair")) return "6";
+        if (t.includes("last battle")) return "7";
+    }
+    if (s.includes("twilight")) {
+        if (t.includes("twilight") && !t.includes("new moon") && !t.includes("eclipse") && !t.includes("breaking dawn") && !t.includes("midnight sun")) return "1";
+        if (t.includes("new moon")) return "2";
+        if (t.includes("eclipse")) return "3";
+        if (t.includes("breaking dawn")) return "4";
+        if (t.includes("midnight sun")) return "5";
+    }
+    if (s.includes("expanse")) {
+        if (t.includes("leviathan wakes")) return "1";
+        if (t.includes("caliban's war") || t.includes("calibans war")) return "2";
+        if (t.includes("abaddon's gate") || t.includes("abaddons gate")) return "3";
+        if (t.includes("cibola burn")) return "4";
+        if (t.includes("nemesis games")) return "5";
+        if (t.includes("babylon's ashes") || t.includes("babylons ashes")) return "6";
+        if (t.includes("persepolis rising")) return "7";
+        if (t.includes("tiamat's wrath") || t.includes("tiamats wrath")) return "8";
+        if (t.includes("leviathan falls")) return "9";
+    }
+    if (s.includes("dune")) {
+        if (t.includes("dune") && !t.includes("messiah") && !t.includes("children") && !t.includes("god emperor") && !t.includes("heretics") && !t.includes("chapterhouse")) return "1";
+        if (t.includes("dune messiah")) return "2";
+        if (t.includes("children of dune")) return "3";
+        if (t.includes("god emperor of dune")) return "4";
+        if (t.includes("heretics of dune")) return "5";
+        if (t.includes("chapterhouse dune")) return "6";
+    }
+    if (s.includes("wheel of time")) {
+        if (t.includes("eye of the world")) return "1";
+        if (t.includes("great hunt")) return "2";
+        if (t.includes("dragon reborn")) return "3";
+        if (t.includes("shadow rising")) return "4";
+        if (t.includes("fires of heaven")) return "5";
+        if (t.includes("lord of chaos")) return "6";
+        if (t.includes("crown of swords")) return "7";
+        if (t.includes("path of daggers")) return "8";
+        if (t.includes("winter's heart") || t.includes("winters heart")) return "9";
+        if (t.includes("crossroads of twilight")) return "10";
+        if (t.includes("knife of dreams")) return "11";
+        if (t.includes("gathering storm")) return "12";
+        if (t.includes("towers of midnight")) return "13";
+        if (t.includes("memory of light")) return "14";
+        if (t.includes("new spring")) return "0";
+    }
+
+    const match = title.match(/(?:Book|Vol|Volume|#)\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if (match) return match[1];
+
+    return null;
+}
+
+export async function findMissingBooksInSeries(seriesName: string, author: string, libraryId?: string) {
     try {
         const q = `${seriesName} ${author}`;
-        let books = [];
-        
-        // 1. Primary: iTunes API (Fastest and most reliable for commercial books)
+        let rawCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+
+        // 1. Primary: iTunes API
         try {
-            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=15`;
+            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=25`;
             let iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
-            
-            // If no ebook found, try audiobook
+
             if (!data || !data.results || data.results.length === 0) {
-                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=15`;
+                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=25`;
                 iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
                 data = iRes && iRes.ok ? await iRes.json() : null;
             }
-            
+
             if (data && data.results && data.results.length > 0) {
                 for (const item of data.results) {
                     const title = item.trackName || item.collectionName;
@@ -272,7 +425,7 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                     if (artwork) {
                         artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
                     }
-                    books.push({
+                    rawCandidates.push({
                         title: title,
                         author: item.artistName || author,
                         coverUrl: artwork
@@ -283,106 +436,237 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             console.warn("[API-FAILOVER] iTunes search failed for missing books:", e);
         }
 
-        // 2. Failover: OpenLibrary
-        if (books.length === 0) {
-            try {
-                const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=15`;
-                const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
-                
-                if (res && res.ok) {
-                    const data = await res.json();
-                    if (data.docs) {
-                        for (const item of data.docs) {
-                            const title = item.title || "";
-                            const bookAuthor = item.author_name?.[0] || author;
-                            const coverId = item.cover_i;
-                            const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
-                            
-                            if (!title) continue;
-                            
-                            books.push({
-                                title: title,
-                                author: bookAuthor,
-                                coverUrl: coverUrl
-                            });
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn("[API-FAILOVER] OpenLibrary search failed for missing books:", e);
-            }
-        }
-        
-        // 3. Failover: Google Books
-        if (books.length === 0) {
-            try {
-                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-                const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
-                const gbKey = activeKey ? `&key=${activeKey}` : "";
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=15${gbKey}`;
-                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
-                if (gRes && gRes.ok) {
-                    const data = await gRes.json();
-                    if (data.items) {
-                        for (const item of data.items) {
-                            const title = item.volumeInfo?.title || "";
-                            const bookAuthor = item.volumeInfo?.authors?.[0] || author;
-                            let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || null;
-                            if (coverUrl) {
-                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0");
-                            }
-                            if (!title) continue;
-                            books.push({
-                                title: title,
-                                author: bookAuthor,
-                                coverUrl: coverUrl
-                            });
-                        }
-                    }
-                }
-            } catch(e) {
-                console.warn("[API-FAILOVER] Google Books search failed for missing books:", e);
-            }
-        }
-        
-        if (books.length === 0) {
-            return { success: false, error: "Failed to query all metadata APIs (iTunes, OpenLibrary, Google Books)" };
-        }
-        
-        const filteredBooks = books.filter(b => {
-            const t = b.title.toLowerCase();
-            if (isForeignLanguage(b.title)) return false;
-            // Filter omnibuses/boxsets
-            if (t.includes("collection") || t.includes("box set") || t.includes("boxed set") || t.includes("omnibus") || /\b\d+\s*-\s*\d+\b/.test(t) || /\b(?:vol|volumes|books)\s*\d+\s*(?:to|-|and)\s*\d+\b/.test(t)) return false;
-            // Filter non-series companions
-            if (t.includes("a history") || t.includes("the journey") || t.includes("the making of") || t.includes("official guide") || t.includes("playscript") || t.includes("script") || t.includes("companion")) return false;
-            // Foreign conjunctions common in translations
-            if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero)\b/.test(t)) return false;
-            return true;
-        }).map(b => {
-            return {
-                ...b,
-                title: b.title.replace(/\s*\([^)]+\)\s*/g, " ").replace(/\s*\[[^\]]+\]\s*/g, " ").split(/ - (?:Part|Book)s? /i)[0].trim()
-            };
-        });
-
-        const uniqueBooks = Array.from(new Map(filteredBooks.map(b => [b.title.toLowerCase(), b])).values());
-        
-        // 4. Try Bulk AI Volume Assignment
+        // 2. OpenLibrary Search
         try {
-            const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
-            const titles = uniqueBooks.map(b => b.title);
-            const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
-            for (const b of uniqueBooks) {
-                if (volMap[b.title]) {
-                    (b as any).volumeNumber = String(volMap[b.title]);
+            const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=25`;
+            const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+
+            if (res && res.ok) {
+                const data = await res.json();
+                if (data.docs) {
+                    for (const item of data.docs) {
+                        const title = item.title || "";
+                        const bookAuthor = item.author_name?.[0] || author;
+                        const coverId = item.cover_i;
+                        const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
+
+                        if (!title) continue;
+
+                        rawCandidates.push({
+                            title: title,
+                            author: bookAuthor,
+                            coverUrl: coverUrl
+                        });
+                    }
                 }
             }
         } catch (e) {
-            console.warn("[AI-FAILOVER] Bulk AI Volume Assignment failed:", e);
+            console.warn("[API-FAILOVER] OpenLibrary search failed for missing books:", e);
         }
-        
-        return { success: true, data: uniqueBooks };
+
+        // 3. Google Books Search
+        try {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+            const gbKey = activeKey ? `&key=${activeKey}` : "";
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=25${gbKey}`;
+            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+            if (gRes && gRes.ok) {
+                const data = await gRes.json();
+                if (data.items) {
+                    for (const item of data.items) {
+                        const title = item.volumeInfo?.title || "";
+                        const bookAuthor = item.volumeInfo?.authors?.[0] || author;
+                        let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || null;
+                        if (coverUrl) {
+                            coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0");
+                        }
+                        if (!title) continue;
+                        rawCandidates.push({
+                            title: title,
+                            author: bookAuthor,
+                            coverUrl: coverUrl
+                        });
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn("[API-FAILOVER] Google Books search failed for missing books:", e);
+        }
+
+        if (rawCandidates.length === 0) {
+            return { success: false, error: "Failed to query metadata APIs (iTunes, OpenLibrary, Google Books)" };
+        }
+
+        // 4. Strict Filtering & Title Cleaning
+        const junkKeywords = [
+            "summary of", "summary:", "study guide", "analysis of", "workbook", "companion to",
+            "trivia on", "cliffsnotes", "sparknotes", "instaread", "easy reads", "quickreads",
+            "unofficial guide", "discussion prompts", "test prep", "sampler", "free preview",
+            "collection", "box set", "boxed set", "omnibus", "a history of", "the journey of",
+            "the making of", "official guide", "playscript"
+        ];
+
+        const validCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+        const seenTitles = new Set<string>();
+
+        for (const cand of rawCandidates) {
+            if (!cand.title) continue;
+            const candTitleLower = cand.title.toLowerCase();
+
+            // Check foreign language
+            if (isForeignLanguage(cand.title)) continue;
+            if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero)\b/.test(candTitleLower)) continue;
+
+            // Check junk keywords in title
+            if (junkKeywords.some(j => candTitleLower.includes(j))) continue;
+
+            // Strict Author Matching (Eliminates knockoffs like "Easy Reads")
+            if (!isSeriesAuthorMatch(cand.author, author)) continue;
+
+            // Clean title of "By [Author]" and junk suffixes
+            const cleanedTitle = cleanSeriesBookTitle(cand.title, author);
+            if (!cleanedTitle || cleanedTitle.length < 2) continue;
+
+            const normKey = cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (seenTitles.has(normKey)) continue;
+            seenTitles.add(normKey);
+
+            // Determine volume number
+            const knownVol = getKnownSeriesVolume(seriesName, cleanedTitle);
+
+            validCandidates.push({
+                title: cleanedTitle,
+                author: author && author !== "Unknown Author" ? author : cand.author,
+                coverUrl: cand.coverUrl,
+                volumeNumber: knownVol
+            });
+        }
+
+        // 5. Bulk AI Volume Assignment for unnumbered titles
+        const unassigned = validCandidates.filter(b => !b.volumeNumber);
+        if (unassigned.length > 0) {
+            try {
+                const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
+                const titles = unassigned.map(b => b.title);
+                const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
+                for (const b of validCandidates) {
+                    if (!b.volumeNumber && volMap[b.title]) {
+                        b.volumeNumber = String(volMap[b.title]);
+                    }
+                }
+            } catch (e) {
+                console.warn("[AI-FAILOVER] Bulk AI Volume Assignment notice:", e);
+            }
+        }
+
+        // 6. Cross-check against existing books in SQLite (Filter out already-owned volumes and titles)
+        const dbSeriesBooks = await prisma.book.findMany({
+            where: {
+                OR: [
+                    { series: { contains: seriesName } },
+                    { title: { contains: seriesName } }
+                ],
+                fileType: { not: "missing" }
+            },
+            select: { title: true, volumeNumber: true, series: true }
+        });
+
+        const ownedNormTitles = new Set<string>();
+        const ownedVolumes = new Set<string>();
+
+        for (const b of dbSeriesBooks) {
+            ownedNormTitles.add(b.title.toLowerCase().replace(/[^a-z0-9]/g, ""));
+            // Also add UK/US canonical title equivalents
+            if (b.title.toLowerCase().includes("philosopher")) {
+                ownedNormTitles.add(b.title.toLowerCase().replace(/philosopher'?s stone/gi, "sorcerers stone").replace(/[^a-z0-9]/g, ""));
+            } else if (b.title.toLowerCase().includes("sorcerer")) {
+                ownedNormTitles.add(b.title.toLowerCase().replace(/sorcerer'?s stone/gi, "philosophers stone").replace(/[^a-z0-9]/g, ""));
+            }
+            if (b.volumeNumber) {
+                ownedVolumes.add(String(b.volumeNumber).replace(/^0+/, ""));
+            }
+        }
+
+        const trulyMissingBooks = validCandidates.filter(b => {
+            const bNorm = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const bVol = b.volumeNumber ? String(b.volumeNumber).replace(/^0+/, "") : null;
+
+            // If owned by title
+            if (ownedNormTitles.has(bNorm)) return false;
+            // If owned by volume number in this series
+            if (bVol && ownedVolumes.has(bVol)) return false;
+
+            return true;
+        });
+
+        // 7. Sort strictly by Volume Number ascending
+        trulyMissingBooks.sort((a, b) => {
+            const volA = a.volumeNumber ? parseFloat(a.volumeNumber) : 9999;
+            const volB = b.volumeNumber ? parseFloat(b.volumeNumber) : 9999;
+            if (volA !== volB) return volA - volB;
+            return a.title.localeCompare(b.title);
+        });
+
+        // 8. Persist / Sync Series in SQLite Database
+        try {
+            const cleanSeries = seriesName.trim();
+            const cleanAuth = author && author !== "Unknown Author" ? author.trim() : null;
+
+            let seriesRecord = await prisma.bookSeries.findFirst({
+                where: {
+                    title: cleanSeries,
+                    ...(cleanAuth ? { authorName: cleanAuth } : {})
+                }
+            });
+
+            let authorRecord = cleanAuth ? await prisma.author.findFirst({ where: { name: cleanAuth } }) : null;
+            if (cleanAuth && !authorRecord) {
+                authorRecord = await prisma.author.create({
+                    data: {
+                        name: cleanAuth,
+                        cleanName: cleanAuth.toLowerCase().replace(/[^a-z0-9]/g, "")
+                    }
+                }).catch(() => null);
+            }
+
+            if (!seriesRecord) {
+                seriesRecord = await prisma.bookSeries.create({
+                    data: {
+                        title: cleanSeries,
+                        cleanTitle: cleanSeries.toLowerCase().replace(/[^a-z0-9]/g, ""),
+                        authorName: cleanAuth,
+                        authorId: authorRecord?.id || null,
+                        coverUrl: trulyMissingBooks[0]?.coverUrl || null,
+                        totalVolumes: trulyMissingBooks.length + dbSeriesBooks.length
+                    }
+                }).catch(() => null);
+            } else if (seriesRecord) {
+                await prisma.bookSeries.update({
+                    where: { id: seriesRecord.id },
+                    data: {
+                        totalVolumes: Math.max(seriesRecord.totalVolumes || 0, trulyMissingBooks.length + dbSeriesBooks.length),
+                        coverUrl: seriesRecord.coverUrl || trulyMissingBooks[0]?.coverUrl || null
+                    }
+                }).catch(() => {});
+            }
+
+            if (seriesRecord) {
+                await prisma.book.updateMany({
+                    where: {
+                        series: cleanSeries,
+                        seriesId: null
+                    },
+                    data: {
+                        seriesId: seriesRecord.id
+                    }
+                }).catch(() => {});
+            }
+        } catch (syncErr: any) {
+            console.warn("[SERIES-SYNC] DB sync note:", syncErr?.message || syncErr);
+        }
+
+        return { success: true, data: trulyMissingBooks };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -5146,8 +5430,8 @@ export async function createBookRequest(formData: FormData) {
         
         let finalTitle = title.trim();
         let finalAuthor = author.trim();
-        let finalSeries: string | null = null;
-        let finalVolNum: string | null = null;
+        let finalSeries: string | null = (formData.get("series") as string) || null;
+        let finalVolNum: string | null = (formData.get("volumeNumber") as string) || null;
         let finalCover = coverUrl;
         let finalYear = publishYear;
 
@@ -5174,8 +5458,8 @@ export async function createBookRequest(formData: FormData) {
                 if (heur) {
                     if (heur.title) finalTitle = heur.title;
                     if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
-                    if (heur.series) finalSeries = heur.series;
-                    if (heur.volumeNumber) finalVolNum = String(heur.volumeNumber);
+                    if (heur.series && !finalSeries) finalSeries = heur.series;
+                    if (heur.volumeNumber && !finalVolNum) finalVolNum = String(heur.volumeNumber);
                 }
             }
         } catch (e) {}
@@ -5884,18 +6168,25 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
     return { title, author, series: finalParse.series || parsedFile.series, volumeNumber: finalParse.volumeNumber || parsedFile.volumeNumber, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
 }
 
-function purgeEmptyDirectories(dir: string) {
+function purgeEmptyDirectories(dir: string, protectedFolderSet?: Set<string>) {
     if (!fs.existsSync(dir)) return;
     try {
+        const dirNorm = path.resolve(dir).toLowerCase();
+        if (protectedFolderSet && protectedFolderSet.has(dirNorm)) {
+            // Explicitly protected directory (belongs to an active book or request in DB)
+            return;
+        }
+
         const files = fs.readdirSync(dir);
         let isEmpty = true;
         
         for (const file of files) {
             const fullPath = path.join(dir, file);
+            const fullPathNorm = path.resolve(fullPath).toLowerCase();
             const stat = fs.statSync(fullPath);
             
             if (stat.isDirectory()) {
-                purgeEmptyDirectories(fullPath);
+                purgeEmptyDirectories(fullPath, protectedFolderSet);
                 if (fs.existsSync(fullPath)) {
                     isEmpty = false;
                 }
@@ -5905,15 +6196,15 @@ function purgeEmptyDirectories(dir: string) {
                     file === 'Thumbs.db' || 
                     file === 'desktop.ini' || 
                     file === '.nomedia' ||
-                    file.endsWith('.jpg') ||
-                    file.endsWith('.png') ||
                     file.endsWith('.nfo') ||
                     file.endsWith('.txt') ||
                     file.endsWith('.cue') ||
                     file.endsWith('.md5') ||
                     file.endsWith('.url') ||
                     file.endsWith('.log') ||
-                    file.endsWith('.srt');
+                    file.endsWith('.srt') ||
+                    file.endsWith('.diz') ||
+                    file.endsWith('.sfv');
                     
                 if (file === '.portalarr-missing') {
                     isEmpty = false;
@@ -5924,8 +6215,11 @@ function purgeEmptyDirectories(dir: string) {
         }
         
         if (isEmpty) {
+            if (protectedFolderSet && protectedFolderSet.has(dirNorm)) {
+                return;
+            }
             fs.rmSync(dir, { recursive: true, force: true });
-            console.log(`[CLEANUP] 🧹 Purged zombie directory: ${dir}`);
+            console.log(`[CLEANUP] 🧹 Purged orphaned zombie directory: ${dir}`);
         }
     } catch (e) {}
 }
@@ -6698,11 +6992,49 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         if (scanPath && fs.existsSync(scanPath)) {
             console.log(`[SCANNER] 🧹 Running zombie directory sweep on ${scanPath}...`);
             try {
+                // Build set of protected directory paths from SQLite
+                const protectedFolderSet = new Set<string>();
+                protectedFolderSet.add(path.resolve(scanPath).toLowerCase());
+
+                const currentDbBooks = await prisma.book.findMany({
+                    where: { libraryId },
+                    select: { filePath: true, title: true, author: true }
+                });
+                for (const b of currentDbBooks) {
+                    if (b.filePath) {
+                        try {
+                            const resolved = path.resolve(b.filePath).toLowerCase();
+                            protectedFolderSet.add(resolved);
+                            protectedFolderSet.add(path.dirname(resolved));
+                            protectedFolderSet.add(path.dirname(path.dirname(resolved)));
+                        } catch (e) {}
+                    }
+                }
+
+                const activeBookReqs = await prisma.bookRequest.findMany({
+                    where: {
+                        libraryId,
+                        status: { notIn: ["Rejected"] }
+                    },
+                    select: { title: true, author: true }
+                });
+                for (const r of activeBookReqs) {
+                    if (r.author) {
+                        protectedFolderSet.add(path.resolve(path.join(scanPath, r.author)).toLowerCase());
+                        if (r.title) {
+                            protectedFolderSet.add(path.resolve(path.join(scanPath, r.author, r.title)).toLowerCase());
+                        }
+                    }
+                    if (r.title) {
+                        protectedFolderSet.add(path.resolve(path.join(scanPath, r.title)).toLowerCase());
+                    }
+                }
+
                 const topLevelDirs = fs.readdirSync(scanPath);
                 for (const d of topLevelDirs) {
                     const fullD = path.join(scanPath, d);
                     if (fs.statSync(fullD).isDirectory()) {
-                        purgeEmptyDirectories(fullD);
+                        purgeEmptyDirectories(fullD, protectedFolderSet);
                     }
                 }
             } catch (e) {}

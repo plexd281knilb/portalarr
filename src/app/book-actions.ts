@@ -19,7 +19,7 @@ import {
     isUserAllowedForLibrary,
     getSimilarBooks
 } from "@/lib/books/book-service";
-import { autoDownloadBookRequest } from "@/app/actions";
+import { autoDownloadBookRequest, findMissingBooksInSeries } from "@/app/actions";
 import { logger } from "@/lib/logger";
 
 interface AuthSession {
@@ -45,18 +45,99 @@ async function verifyAuth(): Promise<AuthSession> {
 }
 
 /**
+ * Discovers missing series books for series present in the user's accessible libraries
+ */
+export async function fetchMissingSeriesSuggestions(
+    username?: string,
+    email?: string,
+    mediaType: "all" | MediaType = "all"
+): Promise<BookDiscoveryItem[]> {
+    const suggestions: BookDiscoveryItem[] = [];
+    const seen = new Set<string>();
+
+    try {
+        const accessibleLibs = await getAccessibleLibrariesForUser(username, email, mediaType === "all" ? undefined : mediaType);
+        const accessibleLibIds = accessibleLibs.map(l => l.id);
+        if (accessibleLibIds.length === 0) return suggestions;
+
+        const userBooks = await prisma.book.findMany({
+            where: {
+                libraryId: { in: accessibleLibIds },
+                series: { not: null },
+                fileType: { not: "missing" }
+            },
+            select: {
+                series: true,
+                author: true,
+                volumeNumber: true,
+                mediaType: true,
+                libraryId: true
+            }
+        });
+
+        // Group by series + author
+        const seriesMap = new Map<string, { series: string; author: string; ownedVols: Set<string>; mediaType: MediaType; libraryId: string }>();
+        for (const b of userBooks) {
+            if (!b.series) continue;
+            const key = `${b.series.toLowerCase()}:::${(b.author || "").toLowerCase()}`;
+            if (!seriesMap.has(key)) {
+                seriesMap.set(key, {
+                    series: b.series,
+                    author: b.author || "",
+                    ownedVols: new Set<string>(),
+                    mediaType: (b.mediaType as MediaType) || "ebook",
+                    libraryId: b.libraryId
+                });
+            }
+            if (b.volumeNumber) {
+                seriesMap.get(key)!.ownedVols.add(String(b.volumeNumber).replace(/^0+/, ""));
+            }
+        }
+
+        const topSeries = Array.from(seriesMap.values()).slice(0, 8);
+        for (const s of topSeries) {
+            const missingRes = await findMissingBooksInSeries(s.series, s.author, s.libraryId);
+            if (missingRes.success && Array.isArray(missingRes.data)) {
+                for (const item of missingRes.data) {
+                    const volNum = item.volumeNumber ? String(item.volumeNumber).replace(/^0+/, "") : undefined;
+                    if (volNum && s.ownedVols.has(volNum)) continue;
+
+                    const itemKey = `${s.mediaType}:${item.title.toLowerCase()}`;
+                    if (seen.has(itemKey)) continue;
+                    seen.add(itemKey);
+
+                    suggestions.push({
+                        title: item.title,
+                        author: item.author || s.author,
+                        series: s.series,
+                        volumeNumber: item.volumeNumber || undefined,
+                        coverUrl: item.coverUrl || undefined,
+                        mediaType: s.mediaType
+                    });
+                }
+            }
+        }
+    } catch (e: any) {
+        console.warn("[SEERR-MISSING-SUGGESTIONS] Notice:", e?.message || e);
+    }
+
+    return suggestions;
+}
+
+/**
  * Loads Discovery Home for Ebooks and Audiobooks with hero spotlights and carousels
  */
 export async function getDiscoverBooksHomeAction(mediaType: "all" | MediaType = "all") {
     try {
         const session = await verifyAuth();
 
-        const [trendingEbooks, trendingAudiobooks] = await Promise.all([
+        const [trendingEbooks, trendingAudiobooks, missingSeriesSuggestions] = await Promise.all([
             (mediaType === "all" || mediaType === "ebook") ? fetchTrendingEbooks().catch(() => []) : [],
-            (mediaType === "all" || mediaType === "audiobook") ? fetchTrendingAudiobooks().catch(() => []) : []
+            (mediaType === "all" || mediaType === "audiobook") ? fetchTrendingAudiobooks().catch(() => []) : [],
+            fetchMissingSeriesSuggestions(session.username, session.email, mediaType).catch(() => [])
         ]);
 
-        const allItems: BookDiscoveryItem[] = [...trendingEbooks, ...trendingAudiobooks];
+        const allItems: BookDiscoveryItem[] = [...missingSeriesSuggestions, ...trendingEbooks, ...trendingAudiobooks];
 
         // Pick top hero item with artwork & overview
         const heroCandidates = allItems.filter(i => Boolean(i.coverUrl && (i.overview || i.rating)));
@@ -66,6 +147,15 @@ export async function getDiscoverBooksHomeAction(mediaType: "all" | MediaType = 
         const availabilityMap = await batchCheckBookAvailability(allItems, session.username, session.email);
 
         const sections: any[] = [];
+        if (missingSeriesSuggestions.length > 0) {
+            sections.push({
+                id: "missing-series-suggestions",
+                title: "Missing from Your Series",
+                icon: "Library",
+                mediaType: mediaType === "all" ? "ebook" : mediaType,
+                items: missingSeriesSuggestions
+            });
+        }
         if (trendingEbooks.length > 0) {
             sections.push({
                 id: "trending-ebooks",
