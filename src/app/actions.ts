@@ -34,6 +34,7 @@ import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, 
 import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
+import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -5002,10 +5003,26 @@ export async function deleteBook(id: string) {
 export async function updateBook(id: string, title: string, author: string, coverUrl: string) {
     await verifyAdmin();
     
-    // 1. Immediately save the new text metadata
+    // Resolve and link Author and BookSeries in SQLite
+    let authorId: string | undefined;
+    let seriesId: string | undefined;
+    try {
+        const currentBook = await prisma.book.findUnique({ where: { id } });
+        const resolved = await resolveOrLinkAuthorAndSeries(author, currentBook?.series, currentBook?.volumeNumber);
+        authorId = resolved.authorId;
+        seriesId = resolved.seriesId;
+    } catch (e) {}
+
+    // 1. Immediately save the new text metadata and relational foreign keys
     await prisma.book.updateMany({
         where: { id },
-        data: { title, author, coverUrl }
+        data: {
+            title,
+            author,
+            coverUrl,
+            ...(authorId ? { authorId } : {}),
+            ...(seriesId ? { seriesId } : {})
+        }
     });
     
     // 2. Instantly reorganize the folder on disk
@@ -6305,6 +6322,99 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             where: { libraryId: libraryId }
         });
 
+        const [dbBookRequests, dbMediaRequests] = await Promise.all([
+            prisma.bookRequest.findMany({
+                where: {
+                    OR: [
+                        { libraryId: libraryId },
+                        { libraryId: null }
+                    ]
+                }
+            }).catch(() => []),
+            prisma.mediaRequest.findMany({
+                where: {
+                    mediaType: { in: ["book", "audiobook"] },
+                    OR: [
+                        { bookLibraryId: libraryId },
+                        { bookLibraryId: null }
+                    ]
+                }
+            }).catch(() => [])
+        ]);
+
+        interface CanonicalRequestMatch {
+            requestId?: string;
+            title: string;
+            author?: string | null;
+            series?: string | null;
+            volumeNumber?: string | null;
+            coverUrl?: string | null;
+            mediaType?: string | null;
+        }
+
+        const canonicalRequests: CanonicalRequestMatch[] = [];
+        for (const br of dbBookRequests) {
+            if (br.title) {
+                canonicalRequests.push({
+                    requestId: br.id,
+                    title: br.title,
+                    author: br.author,
+                    series: br.series,
+                    volumeNumber: br.volumeNumber,
+                    coverUrl: br.coverUrl,
+                    mediaType: br.mediaType || "ebook"
+                });
+            }
+        }
+        for (const mr of dbMediaRequests) {
+            if (mr.title) {
+                canonicalRequests.push({
+                    requestId: mr.id,
+                    title: mr.title,
+                    author: mr.bookAuthor,
+                    series: mr.bookSeries,
+                    volumeNumber: mr.bookVolume,
+                    coverUrl: mr.posterPath,
+                    mediaType: mr.mediaType === "audiobook" ? "audiobook" : "ebook"
+                });
+            }
+        }
+
+        function findMatchingRequest(targetTitle: string, targetAuthor: string, filePathStr: string, itemMediaType: string): CanonicalRequestMatch | null {
+            const cleanTargetT = getNormTitle(targetTitle);
+            const cleanTargetA = getNormTitle(targetAuthor);
+            const cleanPath = filePathStr.toLowerCase();
+
+            for (const req of canonicalRequests) {
+                if (req.mediaType && req.mediaType !== itemMediaType) continue;
+
+                const reqT = getNormTitle(req.title);
+                const reqA = getNormTitle(req.author || "");
+
+                // 1. Exact normalized title match
+                if (reqT && reqT === cleanTargetT) {
+                    if (!cleanTargetA || cleanTargetA === "unknownauthor" || !reqA || cleanTargetA === reqA || cleanPath.includes(reqA)) {
+                        return req;
+                    }
+                }
+
+                // 2. Path contains request title and request author
+                if (reqT && reqT.length > 3 && cleanPath.includes(reqT.replace(/[^a-z0-9]/g, ""))) {
+                    if (!reqA || cleanPath.includes(reqA.replace(/[^a-z0-9]/g, ""))) {
+                        return req;
+                    }
+                }
+
+                // 3. Substring inclusion for long titles (>5 chars)
+                if (reqT && reqT.length > 5 && (cleanTargetT.includes(reqT) || reqT.includes(cleanTargetT))) {
+                    if (!cleanTargetA || cleanTargetA === "unknownauthor" || !reqA || cleanTargetA === reqA) {
+                        return req;
+                    }
+                }
+            }
+            return null;
+        }
+
         const dbBooksByPathLower = new Map<string, any>();
         for (const b of dbBooks) {
             dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
@@ -6727,6 +6837,27 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 const newFileType = ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub");
                 if (existing.fileType !== newFileType) updateData.fileType = newFileType;
 
+                // Check for Tier 1 request metadata match to backfill series, volume, author, or relational links
+                const matchedReq = findMatchingRequest(existing.title, existing.author || "", fullPath, targetMediaType);
+                if (matchedReq) {
+                    if (matchedReq.series && !existing.series) updateData.series = matchedReq.series;
+                    if (matchedReq.volumeNumber && !existing.volumeNumber) updateData.volumeNumber = matchedReq.volumeNumber;
+                    if (matchedReq.author && (!existing.author || existing.author === "Unknown Author")) updateData.author = matchedReq.author;
+                    if (matchedReq.coverUrl && (!existing.coverUrl || existing.coverUrl.trim().length < 10)) updateData.coverUrl = matchedReq.coverUrl;
+                }
+
+                // Ensure Author and BookSeries relational keys (authorId, seriesId) are resolved and linked in SQLite
+                const effectiveAuthor = updateData.author || existing.author;
+                const effectiveSeries = updateData.series || existing.series;
+                const effectiveVol = updateData.volumeNumber || existing.volumeNumber;
+                if ((effectiveAuthor && !existing.authorId) || (effectiveSeries && !existing.seriesId)) {
+                    try {
+                        const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(effectiveAuthor, effectiveSeries, effectiveVol);
+                        if (authorId && existing.authorId !== authorId) updateData.authorId = authorId;
+                        if (seriesId && existing.seriesId !== seriesId) updateData.seriesId = seriesId;
+                    } catch (e) {}
+                }
+
                 if (Object.keys(updateData).length > 0) {
                     logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
                     console.log(`[SCANNER] 🔄 Updated book "${existing.title}" in library "${library.name}" (ID: ${existing.id})`);
@@ -6802,18 +6933,40 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                 let series: string | null = null;
                 let volumeNumber: string | null = null;
+                let initialCoverUrl: string | null = null;
 
-                if (options?.enableAi) {
+                // TIER 1: Match against active/fulfilled BookRequest or MediaRequest
+                const matchedReq = findMatchingRequest(title, author, fullPath, targetMediaType);
+                if (matchedReq) {
+                    console.log(`[SCANNER] 🎯 Matched authoritative request for "${title}" -> Canonical Title: "${matchedReq.title}", Author: "${matchedReq.author || author}", Series: "${matchedReq.series || 'N/A'}" Vol: ${matchedReq.volumeNumber || 'N/A'}`);
+                    if (matchedReq.title) title = matchedReq.title;
+                    if (matchedReq.author && matchedReq.author !== "Unknown Author") author = matchedReq.author;
+                    if (matchedReq.series) series = matchedReq.series;
+                    if (matchedReq.volumeNumber) volumeNumber = String(matchedReq.volumeNumber);
+                    if (matchedReq.coverUrl) initialCoverUrl = matchedReq.coverUrl;
+                }
+
+                // TIER 4: AI metadata resolution fallback ONLY if series is missing or author is unknown
+                if (options?.enableAi && (!series || !author || author === "Unknown Author")) {
                     try {
                         const aiMeta = await resolveMetadataWithAI(parsedMeta.cleanQuery || cleanBase, targetMediaType);
                         if (aiMeta) {
-                            if (aiMeta.title) title = aiMeta.title;
-                            if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
-                            if (aiMeta.series) series = aiMeta.series;
-                            if (aiMeta.volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
+                            if (aiMeta.title && (!title || title === cleanBase)) title = aiMeta.title;
+                            if (aiMeta.author && aiMeta.author !== "Unknown Author" && (!author || author === "Unknown Author")) author = aiMeta.author;
+                            if (aiMeta.series && !series) series = aiMeta.series;
+                            if (aiMeta.volumeNumber && !volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
                         }
                     } catch (e) {}
                 }
+
+                // Resolve and link relational Author and BookSeries foreign keys in SQLite
+                let authorId: string | undefined;
+                let seriesId: string | undefined;
+                try {
+                    const resolved = await resolveOrLinkAuthorAndSeries(author, series, volumeNumber);
+                    authorId = resolved.authorId;
+                    seriesId = resolved.seriesId;
+                } catch (e) {}
 
                 const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
                     ? stats.birthtime
@@ -6851,7 +7004,10 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                         title,
                                         author: author !== "Unknown Author" ? author : newBook.author,
                                         series: series || newBook.series,
-                                        volumeNumber: volumeNumber || newBook.volumeNumber
+                                        volumeNumber: volumeNumber || newBook.volumeNumber,
+                                        authorId: authorId || newBook.authorId,
+                                        seriesId: seriesId || newBook.seriesId,
+                                        coverUrl: initialCoverUrl || newBook.coverUrl
                                     }
                                 });
                                 logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${newBook.title}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -6867,7 +7023,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 author,
                                 series,
                                 volumeNumber,
-                                coverUrl: "",
+                                authorId: authorId || null,
+                                seriesId: seriesId || null,
+                                coverUrl: initialCoverUrl || "",
                                 filePath: fullPath,
                                 fileSize: stats.size,
                                 fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub"),
@@ -6882,19 +7040,21 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                     matchedDbBookIds.add(newBook.id);
 
-                    // Fetch cover artwork asynchronously in background
-                    (async () => {
-                        try {
-                            const fetchedCover = await fetchBookCover(title, author, targetMediaType);
-                            if (fetchedCover) {
-                                console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
-                                await prisma.book.updateMany({
-                                    where: { id: newBook.id },
-                                    data: { coverUrl: fetchedCover }
-                                }).catch(() => {});
-                            }
-                        } catch (e) {}
-                    })();
+                    // Fetch cover artwork asynchronously in background if not already provided
+                    if (!newBook.coverUrl || newBook.coverUrl.trim().length < 10) {
+                        (async () => {
+                            try {
+                                const fetchedCover = await fetchBookCover(title, author, targetMediaType);
+                                if (fetchedCover) {
+                                    console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
+                                    await prisma.book.updateMany({
+                                        where: { id: newBook.id },
+                                        data: { coverUrl: fetchedCover }
+                                    }).catch(() => {});
+                                }
+                            } catch (e) {}
+                        })();
+                    }
                 } catch (createErr: any) {
                     logger.addLog("ERROR", "DATABASE", `❌ DB-WRITE FAILED for "${title}" by "${author}": ${createErr.message}`);
                     console.error(`[SCANNER-ERROR] Failed to save book "${title}" to DB:`, createErr.message);
@@ -7455,12 +7615,22 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 });
 
                 if (!existingStub) {
+                    let authorId: string | undefined;
+                    let seriesId: string | undefined;
+                    try {
+                        const resolved = await resolveOrLinkAuthorAndSeries(author, req?.series, req?.volumeNumber);
+                        authorId = resolved.authorId;
+                        seriesId = resolved.seriesId;
+                    } catch (e) {}
+
                     const newBook = await prisma.book.create({
                         data: {
                             title: title,
                             author: author || "Unknown Author",
                             series: req?.series || null,
                             volumeNumber: req?.volumeNumber ? String(req.volumeNumber) : null,
+                            authorId: authorId || null,
+                            seriesId: seriesId || null,
                             filePath: folderPath,
                             fileType: 'missing',
                             fileSize: 0,
@@ -8593,25 +8763,41 @@ export async function monitorAndRetryDownload(
                     try {
                         await scanLibraryInternal(targetLib.id, { enableAi: true });
 
-                    // Inherit series metadata from the original BookRequest
+                    // Inherit series & author metadata from the authoritative BookRequest / MediaRequest
                     try {
-                        if (currentReq.series) {
-                            const ingestedBooks = await prisma.book.findMany({
-                                where: {
-                                    libraryId: targetLib.id,
-                                    filePath: { startsWith: path.dirname(finalDestPath) }
+                        const canonicalAuthor = (currentReq.author && currentReq.author !== "Unknown Author") ? currentReq.author : undefined;
+                        const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(canonicalAuthor, currentReq.series, currentReq.volumeNumber);
+
+                        const ingestedBooks = await prisma.book.findMany({
+                            where: {
+                                libraryId: targetLib.id,
+                                filePath: { startsWith: path.dirname(finalDestPath) }
+                            }
+                        });
+                        for (const ib of ingestedBooks) {
+                            await prisma.book.update({
+                                where: { id: ib.id },
+                                data: {
+                                    title: currentReq.title || ib.title,
+                                    author: canonicalAuthor || ib.author,
+                                    series: currentReq.series || ib.series,
+                                    volumeNumber: currentReq.volumeNumber || ib.volumeNumber,
+                                    authorId: authorId || ib.authorId,
+                                    seriesId: seriesId || ib.seriesId,
+                                    coverUrl: currentReq.coverUrl || ib.coverUrl
                                 }
                             });
-                            for (const ib of ingestedBooks) {
-                                await prisma.book.update({
-                                    where: { id: ib.id },
-                                    data: {
-                                        series: currentReq.series,
-                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
-                                    }
-                                });
-                            }
                         }
+
+                        // Sync corresponding Seerr MediaRequest to AVAILABLE
+                        await prisma.mediaRequest.updateMany({
+                            where: {
+                                title: currentReq.title,
+                                mediaType: { in: ["book", "audiobook"] },
+                                status: { notIn: ["AVAILABLE", "DECLINED"] }
+                            },
+                            data: { status: "AVAILABLE" }
+                        }).catch(() => {});
                     } catch (e) {
                         console.warn("Failed to inherit series metadata for imported download:", e);
                     }
@@ -11283,28 +11469,44 @@ export async function importCompletedDownload(requestId: string) {
     // Auto-scan target library shelf so newly imported media is immediately available with AI resolution
     await scanLibraryInternal(targetLib.id, { enableAi: true });
 
-                    // Inherit series metadata from the original BookRequest
-                    try {
-                        if (currentReq.series) {
-                            const ingestedBooks = await prisma.book.findMany({
-                                where: {
-                                    libraryId: targetLib.id,
-                                    filePath: { startsWith: path.dirname(finalDestPath) }
-                                }
-                            });
-                            for (const ib of ingestedBooks) {
-                                await prisma.book.update({
-                                    where: { id: ib.id },
-                                    data: {
-                                        series: currentReq.series,
-                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
-                                    }
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        console.warn("Failed to inherit series metadata for imported download:", e);
-                    }
+    // Inherit series & author metadata from the authoritative BookRequest / MediaRequest
+    try {
+        const canonicalAuthor = (currentReq.author && currentReq.author !== "Unknown Author") ? currentReq.author : undefined;
+        const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(canonicalAuthor, currentReq.series, currentReq.volumeNumber);
+
+        const ingestedBooks = await prisma.book.findMany({
+            where: {
+                libraryId: targetLib.id,
+                filePath: { startsWith: path.dirname(finalDestPath) }
+            }
+        });
+        for (const ib of ingestedBooks) {
+            await prisma.book.update({
+                where: { id: ib.id },
+                data: {
+                    title: currentReq.title || ib.title,
+                    author: canonicalAuthor || ib.author,
+                    series: currentReq.series || ib.series,
+                    volumeNumber: currentReq.volumeNumber || ib.volumeNumber,
+                    authorId: authorId || ib.authorId,
+                    seriesId: seriesId || ib.seriesId,
+                    coverUrl: currentReq.coverUrl || ib.coverUrl
+                }
+            });
+        }
+
+        // Sync corresponding Seerr MediaRequest to AVAILABLE
+        await prisma.mediaRequest.updateMany({
+            where: {
+                title: currentReq.title,
+                mediaType: { in: ["book", "audiobook"] },
+                status: { notIn: ["AVAILABLE", "DECLINED"] }
+            },
+            data: { status: "AVAILABLE" }
+        }).catch(() => {});
+    } catch (e) {
+        console.warn("Failed to inherit series metadata for imported download:", e);
+    }
 
     await prisma.bookRequest.update({
         where: { id: requestId },

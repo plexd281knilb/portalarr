@@ -589,6 +589,12 @@ export async function resolveOrLinkAuthorAndSeries(
 
             if (existingSeries) {
                 seriesId = existingSeries.id;
+                if (!existingSeries.authorId && authorId) {
+                    await prisma.bookSeries.update({
+                        where: { id: existingSeries.id },
+                        data: { authorId }
+                    }).catch(() => {});
+                }
             } else {
                 const newSeries = await prisma.bookSeries.create({
                     data: {
