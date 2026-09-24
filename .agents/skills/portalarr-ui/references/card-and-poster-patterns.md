@@ -147,3 +147,5 @@ Standard grid layout for media shelves and discovery pages:
 </div>
 ```
 
+- **Radix Sub-Menu Portaling Rule (`DropdownMenuSubContent`):** `DropdownMenuSubContent` MUST be wrapped in `<DropdownMenuPrimitive.Portal>`. If rendered without a Portal, the sub-menu is inserted inline into parent `DropdownMenuContent` which has `overflow: hidden`, completely clipping and hiding the expanded sub-menu from view.
+

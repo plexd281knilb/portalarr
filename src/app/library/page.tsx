@@ -1043,15 +1043,20 @@ function BookLibraryPageContent() {
                             <span>AI Metadata Agent</span>
                           </DropdownMenuItem>
 
-                          {!isComic && allUsers.filter((u) => u.kindleEmail).length > 0 && (
+                          {!isComic && allUsers.filter((u) => u.kindleEmail && u.kindleEmail.trim()).length > 0 && (
                             <DropdownMenuSub>
                               <DropdownMenuSubTrigger>
-                                <Send className="h-3.5 w-3.5 text-amber-400 mr-2" />
+                                {sendingToKindleId === book.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                                ) : (
+                                  <Send className="h-3.5 w-3.5 text-amber-400" />
+                                )}
                                 <span>Send to User Kindle</span>
                               </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent className="w-56 max-h-48 overflow-y-auto">
+                              <DropdownMenuSubContent className="w-64 max-h-56 overflow-y-auto">
+                                <DropdownMenuLabel className="text-[10px] text-muted-foreground">Select User</DropdownMenuLabel>
                                 {allUsers
-                                  .filter((u) => u.kindleEmail)
+                                  .filter((u) => u.kindleEmail && u.kindleEmail.trim())
                                   .map((u) => (
                                     <DropdownMenuItem
                                       key={u.id}
@@ -1075,8 +1080,11 @@ function BookLibraryPageContent() {
                                         }
                                       }}
                                     >
-                                      <User className="h-3.5 w-3.5 mr-1 text-slate-400" />
-                                      <span className="truncate">{u.username}</span>
+                                      <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                      <div className="flex flex-col flex-1 min-w-0">
+                                        <span className="truncate font-medium text-xs text-foreground">{u.username}</span>
+                                        <span className="truncate text-[10px] text-muted-foreground">{u.kindleEmail}</span>
+                                      </div>
                                     </DropdownMenuItem>
                                   ))}
                               </DropdownMenuSubContent>

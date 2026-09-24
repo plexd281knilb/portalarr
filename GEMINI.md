@@ -168,6 +168,9 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
   1. Full-width Hero CTA button (`Resume (31%)` / `Read Book` / `Listen & Chapters`) spanning 100% width.
   2. A secondary action button (`flex-1` `Send to Kindle` or `Download`) paired with a Radix UI `DropdownMenu` trigger button (`•••` or `MoreHorizontal`).
   3. Secondary administrative/management actions (Fetch Cover, Match Book, Edit, Delete, Reassign, Admin Kindle dispatch) live inside the Radix `DropdownMenuContent` with descriptive text labels and icons.
+- **Radix Sub-Menu Portaling Gotcha (`DropdownMenuSubContent`):** In Radix UI / Shadcn UI primitives, `DropdownMenuSubContent` MUST be wrapped inside `<DropdownMenuPrimitive.Portal>`. If omitted, the sub-menu mounts inline as a child of `DropdownMenuContent`, which has `overflow: hidden`, causing the sub-menu to be clipped and invisible when expanded.
+
+
 
 
 ### 7. Mandatory Pre-Push Testing & Verification Protocol
