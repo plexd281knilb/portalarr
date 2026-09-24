@@ -6179,7 +6179,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             }
             finalMediaItems = Array.from(consolidatedMap.values());
         } else {
-            // Ebooks Consolidation by folder and clean title to prevent .epub/.mobi/.azw3 duplicates
+            // Ebooks Consolidation: If an .epub exists for a book, delete redundant .azw3/.mobi files from disk
             function getEbookExtPriority(ext: string): number {
                 const e = ext.toLowerCase();
                 if (e === ".epub") return 100;
@@ -6191,7 +6191,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 return 10;
             }
 
-            const consolidatedEbookMap = new Map<string, { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }>();
+            const ebookGroups = new Map<string, typeof foundMediaItems>();
 
             for (const item of foundMediaItems) {
                 const parentDir = path.dirname(item.fullPath);
@@ -6206,23 +6206,69 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     ebookKey = scanPath.toLowerCase() + ":::" + normAuthor + ":::" + normTitle;
                 }
 
-                if (!consolidatedEbookMap.has(ebookKey)) {
-                    consolidatedEbookMap.set(ebookKey, {
-                        fullPath: item.fullPath,
-                        file: item.file,
-                        ext: item.ext,
-                        stats: { size: item.stats.size, birthtime: item.stats.birthtime, mtime: item.stats.mtime }
-                    });
-                } else {
-                    const existing = consolidatedEbookMap.get(ebookKey)!;
-                    existing.stats.size += item.stats.size;
-                    if (getEbookExtPriority(item.ext) > getEbookExtPriority(existing.ext)) {
-                        existing.fullPath = item.fullPath;
-                        existing.file = item.file;
-                        existing.ext = item.ext;
+                if (!ebookGroups.has(ebookKey)) {
+                    ebookGroups.set(ebookKey, []);
+                }
+                ebookGroups.get(ebookKey)!.push(item);
+            }
+
+            const consolidatedEbookMap = new Map<string, { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }>();
+
+            for (const [ebookKey, group] of ebookGroups.entries()) {
+                const epubItem = group.find(i => i.ext.toLowerCase() === ".epub");
+
+                // If an EPUB version exists, delete redundant AZW3, MOBI, AZW, and AZW4 files from disk
+                if (epubItem) {
+                    for (const other of group) {
+                        const otherExt = other.ext.toLowerCase();
+                        if (otherExt === ".azw3" || otherExt === ".mobi" || otherExt === ".azw" || otherExt === ".azw4") {
+                            try {
+                                if (fs.existsSync(other.fullPath)) {
+                                    fs.unlinkSync(other.fullPath);
+                                    console.log(`[SCANNER] 🧹 Deleted redundant ${otherExt} file on disk: ${other.fullPath} (.epub version exists)`);
+                                    logger.addLog("INFO", "SCANNER", `🗑️ Deleted redundant "${other.file}" (${otherExt}) from disk since EPUB version is present.`);
+                                }
+                            } catch (delErr: any) {
+                                console.warn(`[SCANNER] Could not delete redundant format file ${other.fullPath}:`, delErr.message);
+                            }
+                        }
                     }
                 }
+
+                // Filter out any deleted files
+                const remainingItems = group.filter(i => {
+                    if (epubItem) {
+                        const otherExt = i.ext.toLowerCase();
+                        if (otherExt === ".azw3" || otherExt === ".mobi" || otherExt === ".azw" || otherExt === ".azw4") {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+
+                remainingItems.sort((a, b) => getEbookExtPriority(b.ext) - getEbookExtPriority(a.ext));
+                const primaryItem = remainingItems[0] || epubItem || group[0];
+
+                let totalSize = 0;
+                for (const item of remainingItems) {
+                    totalSize += item.stats.size;
+                }
+                if (totalSize === 0 && primaryItem) {
+                    totalSize = primaryItem.stats.size;
+                }
+
+                consolidatedEbookMap.set(ebookKey, {
+                    fullPath: primaryItem.fullPath,
+                    file: primaryItem.file,
+                    ext: primaryItem.ext,
+                    stats: {
+                        size: totalSize,
+                        birthtime: primaryItem.stats.birthtime,
+                        mtime: primaryItem.stats.mtime
+                    }
+                });
             }
+
             finalMediaItems = Array.from(consolidatedEbookMap.values());
         }
 
