@@ -900,20 +900,21 @@ function BookLibraryPageContent() {
             const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
             return (
               <>
-                <div className="flex gap-2 w-full">
+                <div className="grid grid-cols-2 gap-1.5 w-full">
                   <Button
                     variant="default"
                     size="sm"
-                    className="flex-1 text-xs font-semibold text-black"
+                    className="w-full text-xs font-semibold text-black px-1.5 truncate min-w-0"
+                    title={hasProgress ? `Resume reading (${displayPercentage}%)` : "Read"}
                     onClick={() => setActiveReadingBook(book)}
                   >
-                    <BookOpen className="h-3 w-3 mr-1" />
-                    {hasProgress ? `Resume (${displayPercentage}%)` : "Read"}
+                    <BookOpen className="h-3 w-3 mr-1 shrink-0" />
+                    <span className="truncate">{hasProgress ? "Resume" : "Read"}</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className={`flex-1 text-xs border-primary/20 text-primary font-semibold ${
+                    className={`w-full text-xs border-primary/20 text-primary font-semibold px-1.5 truncate min-w-0 ${
                       isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-primary/10"
                     }`}
                     title={
@@ -925,11 +926,11 @@ function BookLibraryPageContent() {
                     onClick={() => !isComic && handleSendToKindle(book.id)}
                   >
                     {sendingToKindleId === book.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      <Loader2 className="h-3 w-3 animate-spin mr-1 shrink-0" />
                     ) : (
-                      <Send className="h-3 w-3 mr-1" />
+                      <Send className="h-3 w-3 mr-1 shrink-0" />
                     )}
-                    Kindle
+                    <span className="truncate">Kindle</span>
                   </Button>
                 </div>
                 {user?.role === "ADMIN" && allUsers.length > 0 && (
