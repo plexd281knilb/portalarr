@@ -172,7 +172,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{author}", description: "Author name", sampleValue: "Frank Herbert" },
             { key: "{mediaLabel}", description: "Format name ('Ebook' or 'Audiobook')", sampleValue: "Ebook" },
             { key: "{requestedBy}", description: "Username who made the request", sampleValue: "marcus_t" },
-            { key: "{manageUrl}", description: "URL to the Library Requests management tab", sampleValue: "https://portal.example.com/library?tab=requests" },
+            { key: "{manageUrl}", description: "URL to the Requests management portal", sampleValue: "https://portal.example.com/requests" },
             { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
         ]
     },

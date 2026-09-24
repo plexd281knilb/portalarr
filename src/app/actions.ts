@@ -5134,7 +5134,7 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             requestedBy: request.requestedBy,
             type: request.type || "book",
             publishYear: request.publishYear || "",
-            manageUrl: `${appUrl}/library?tab=requests`,
+            manageUrl: `${appUrl}/requests`,
             appUrl
         });
 
