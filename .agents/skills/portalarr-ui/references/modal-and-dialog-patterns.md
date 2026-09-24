@@ -74,3 +74,19 @@ For detail modals that have multiple sub-sections (e.g. Details, Seasons/Episode
     />
   </div>
   ```
+
+---
+
+## 5. Radarr/Sonarr-Style Interactive Match & Ingest Modals
+
+For loose file ingestion, unlinked series metadata matching, and interactive release verification (`BookMatchModal`):
+- **Candidate Suggestion Cards**:
+  - Render detected candidate cards with tier confidence badges (`emerald` for High SQLite/Exact match, `amber` for Medium registry search, `purple` for AI analysis).
+  - Include 2:3 vertical poster thumbnails, canonical title, author, series name, volume number, and a direct `✓ Select` action.
+- **Side-by-Side File Inspection Telemetry**:
+  - Show raw disk file path, parsed base title, file type, file size, and current relational link status (`Unlinked` vs `Linked to Series`).
+- **Interactive Search Bar**:
+  - Provide an inline search bar with format filter buttons (`📚 Ebook` vs `🎧 Audiobook`) querying online registries (OpenLibrary, Audible, Google Books) on demand.
+- **Manual Overrides & Safety Toggles**:
+  - Editable form inputs for Title, Author, Series Name, Volume Number, and Cover URL.
+  - Safe disk restructuring checkbox (`"Organize on disk into Author / [Series Vol] Title"`) defaulting to checked only when confident.

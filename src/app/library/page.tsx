@@ -40,6 +40,7 @@ import {
 } from "@/app/actions";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
+import { BookMatchModal } from "@/components/book-match-modal";
 import ErrorTicketModal from "@/components/error-ticket-modal";
 import {
   Card,
@@ -58,6 +59,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   BookOpen,
   Plus,
+  Link2,
   Search,
   Trash2,
   Edit3,
@@ -473,8 +475,17 @@ function BookLibraryPageContent() {
   const [editBookCoverUrl, setEditBookCoverUrl] = useState("");
   const [updatingBook, setUpdatingBook] = useState(false);
   const [refreshingCoverId, setRefreshingCoverId] = useState<string | null>(
-    null,
+    null
   );
+
+  // Match & Link Modal states
+  const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
+  const [matchModalBook, setMatchModalBook] = useState<any | null>(null);
+
+  const handleOpenMatchModal = (book: any) => {
+    setMatchModalBook(book);
+    setIsMatchModalOpen(true);
+  };
 
   // User Guide states
   const [guideMarkdown, setGuideMarkdown] = useState("");
@@ -1049,6 +1060,17 @@ function BookLibraryPageContent() {
               <Button
                 variant="outline"
                 size="sm"
+                className="text-xs h-7 px-2 border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10 font-semibold gap-1"
+                title="Match & Link Metadata (Radarr/Sonarr-style Series, Author & Volume mapping)"
+                onClick={() => handleOpenMatchModal(book)}
+              >
+                <Link2 className="h-3.5 w-3.5" /> Match
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
                 className="text-xs h-7 px-2 border-purple-500/40 text-purple-300 hover:bg-purple-500/20"
                 title="Run AI Metadata Agent (Extract Official Title, Author & HD Cover)"
                 disabled={resolvingAiId === book.id}
@@ -1231,6 +1253,15 @@ function BookLibraryPageContent() {
             </Button>
             {isAdmin && (
               <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 px-2 border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10 font-semibold gap-1"
+                  title="Match & Link Metadata (Radarr/Sonarr-style Series, Author & Volume mapping)"
+                  onClick={() => handleOpenMatchModal(book)}
+                >
+                  <Link2 className="h-3.5 w-3.5" /> Match
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -5178,6 +5209,20 @@ function BookLibraryPageContent() {
           }}
         />
       )}
+
+      <BookMatchModal
+        book={matchModalBook}
+        isOpen={isMatchModalOpen}
+        onClose={() => {
+          setIsMatchModalOpen(false);
+          setMatchModalBook(null);
+        }}
+        onMatched={() => {
+          if (selectedLibrary) {
+            handleScanLibrary(selectedLibrary.id);
+          }
+        }}
+      />
     </div>
   );
 }

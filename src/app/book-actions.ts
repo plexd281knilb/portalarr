@@ -19,7 +19,10 @@ import {
     isUserAllowedForLibrary,
     getSimilarBooks
 } from "@/lib/books/book-service";
-import { autoDownloadBookRequest, findMissingBooksInSeries } from "@/app/actions";
+import { autoDownloadBookRequest, findMissingBooksInSeries, renameBookFileOnDisk } from "@/app/actions";
+import { resolveMetadataWithAI } from "@/lib/ai-agent";
+import { revalidatePath } from "next/cache";
+import path from "path";
 import { logger } from "@/lib/logger";
 
 interface AuthSession {
@@ -499,6 +502,278 @@ export async function getSimilarBooksAction(params: {
     } catch (e: any) {
         logger.addLog("ERROR", "BOOK_ENGINE", `Failed to get similar books for "${params?.title}": ${e.message}`);
         return { success: false, error: e.message || "Failed to get similar books", items: [] };
+    }
+}
+
+export interface BookMatchSuggestion {
+    id: string;
+    title: string;
+    author: string;
+    series?: string | null;
+    volumeNumber?: string | null;
+    coverUrl?: string | null;
+    overview?: string | null;
+    publishYear?: string | null;
+    confidence: "high" | "medium" | "low";
+    source: "database" | "openlibrary" | "audible" | "googlebooks" | "ai";
+    reason: string;
+}
+
+/**
+ * Previews match suggestions from Database (Tier 2), Online Registries (Tier 4), and AI Agent
+ */
+export async function previewBookMatchSuggestionsAction(bookId: string): Promise<{
+    success: boolean;
+    error?: string;
+    currentBook?: any;
+    suggestions: BookMatchSuggestion[];
+}> {
+    try {
+        await verifyAuth();
+        const book = await prisma.book.findUnique({
+            where: { id: bookId },
+            include: { library: true }
+        });
+
+        if (!book) {
+            return { success: false, error: "Book not found in library.", suggestions: [] };
+        }
+
+        const suggestions: BookMatchSuggestion[] = [];
+        const seenKeys = new Set<string>();
+
+        function addSuggestion(s: Omit<BookMatchSuggestion, "id">) {
+            const key = `${(s.title || "").toLowerCase().trim()}:::${(s.author || "").toLowerCase().trim()}:::${(s.series || "").toLowerCase().trim()}:::${s.volumeNumber || ""}`;
+            if (seenKeys.has(key)) return;
+            seenKeys.add(key);
+            suggestions.push({
+                ...s,
+                id: `sug-${suggestions.length + 1}`
+            });
+        }
+
+        // Clean filename and title
+        const filename = book.filePath ? path.basename(book.filePath) : "";
+        const cleanFileQuery = filename
+            .replace(/\.[a-zA-Z0-9]{2,5}$/, "")
+            .replace(/\[[^\]]+\]|\([^\)]+\)/g, " ")
+            .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
+            .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ")
+            .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ")
+            .replace(/[_\-]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const cleanTitleQuery = (book.title || "")
+            .replace(/\[[^\]]+\]|\([^\)]+\)/g, " ")
+            .replace(/[_\-]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const primaryQuery = cleanTitleQuery.length > 2 ? cleanTitleQuery : cleanFileQuery;
+        const authorQuery = book.author && book.author !== "Unknown Author" ? book.author.trim() : "";
+        const combinedQuery = `${primaryQuery} ${authorQuery}`.trim();
+
+        // 1. Tier 2: Check SQLite Database for existing Series and Authors
+        try {
+            if (authorQuery || cleanTitleQuery) {
+                const dbSeries = await prisma.bookSeries.findMany({
+                    where: {
+                        OR: [
+                            ...(cleanTitleQuery ? [{ title: { contains: cleanTitleQuery } }] : []),
+                            ...(authorQuery ? [{ authorName: { contains: authorQuery } }] : [])
+                        ]
+                    },
+                    take: 4
+                });
+
+                for (const ds of dbSeries) {
+                    addSuggestion({
+                        title: book.title,
+                        author: ds.authorName || authorQuery || "Unknown Author",
+                        series: ds.title,
+                        volumeNumber: book.volumeNumber || "1",
+                        coverUrl: ds.coverUrl || book.coverUrl || null,
+                        confidence: "high",
+                        source: "database",
+                        reason: `Matched existing database series "${ds.title}" in your library`
+                    });
+                }
+            }
+        } catch (e) {}
+
+        // 2. Tier 4: Query Online Registries (OpenLibrary, Audible, Google Books)
+        try {
+            const targetMedia = book.mediaType === "audiobook" ? "audiobook" : "ebook";
+            const onlineResults = await searchBooksUnified(combinedQuery || primaryQuery, targetMedia);
+
+            for (const item of onlineResults) {
+                const isExactTitle = item.title.toLowerCase().trim() === primaryQuery.toLowerCase().trim();
+                const isAuthorMatch = authorQuery && item.author.toLowerCase().includes(authorQuery.toLowerCase());
+
+                let confidence: "high" | "medium" | "low" = "medium";
+                let reason = "Found in online book registry";
+
+                if (isExactTitle && isAuthorMatch) {
+                    confidence = "high";
+                    reason = "Exact match for title & author in online registry";
+                } else if (isExactTitle) {
+                    confidence = "high";
+                    reason = "Title matched online book registry";
+                } else if (item.series) {
+                    confidence = "medium";
+                    reason = `Identified series "${item.series}" (#${item.volumeNumber || "1"})`;
+                }
+
+                addSuggestion({
+                    title: item.title,
+                    author: item.author,
+                    series: item.series || null,
+                    volumeNumber: item.volumeNumber || null,
+                    coverUrl: item.coverUrl || null,
+                    overview: item.overview || null,
+                    publishYear: item.publishYear || null,
+                    confidence,
+                    source: item.mediaType === "audiobook" ? "audible" : "openlibrary",
+                    reason
+                });
+            }
+        } catch (e) {}
+
+        // 3. Fallback: If suggestions are empty, attempt AI Resolution
+        if (suggestions.length === 0 && primaryQuery.length > 2) {
+            try {
+                const aiMeta = await resolveMetadataWithAI(primaryQuery, book.mediaType || "ebook");
+                if (aiMeta && (aiMeta.title || aiMeta.author)) {
+                    addSuggestion({
+                        title: aiMeta.title || book.title,
+                        author: aiMeta.author || book.author || "Unknown Author",
+                        series: aiMeta.series || null,
+                        volumeNumber: aiMeta.volumeNumber ? String(aiMeta.volumeNumber) : null,
+                        coverUrl: book.coverUrl || null,
+                        confidence: "medium",
+                        source: "ai",
+                        reason: "AI agent extracted canonical series and author from filename"
+                    });
+                }
+            } catch (e) {}
+        }
+
+        return {
+            success: true,
+            currentBook: {
+                id: book.id,
+                title: book.title,
+                author: book.author,
+                series: book.series,
+                volumeNumber: book.volumeNumber,
+                coverUrl: book.coverUrl,
+                filePath: book.filePath,
+                fileSize: book.fileSize,
+                fileType: book.fileType,
+                mediaType: book.mediaType,
+                libraryName: book.library?.name,
+                libraryPath: book.library?.path
+            },
+            suggestions
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "BOOK_ENGINE", `Preview match suggestions failed for book ${bookId}: ${e.message}`);
+        return { success: false, error: e.message || "Failed to preview match suggestions", suggestions: [] };
+    }
+}
+
+/**
+ * Searches online book registries for interactive matching
+ */
+export async function searchBooksUnifiedAction(query: string, mediaType: "all" | MediaType = "all") {
+    try {
+        await verifyAuth();
+        const results = await searchBooksUnified(query, mediaType);
+        return { success: true, results };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Search failed", results: [] };
+    }
+}
+
+/**
+ * Matches and links a book to Author & BookSeries relational schema and optionally reorganizes disk files
+ */
+export async function matchAndLinkBookAction(
+    bookId: string,
+    data: {
+        title: string;
+        author: string;
+        series?: string | null;
+        volumeNumber?: string | null;
+        coverUrl?: string | null;
+        organizeDisk?: boolean;
+    }
+) {
+    try {
+        const session = await verifyAuth();
+        const book = await prisma.book.findUnique({
+            where: { id: bookId },
+            include: { library: true }
+        });
+        if (!book) return { success: false, error: "Book not found in database" };
+
+        const cleanTitle = data.title.trim();
+        const cleanAuthor = data.author && data.author !== "Unknown Author" ? data.author.trim() : null;
+        const cleanSeries = data.series && data.series.trim().length > 0 ? data.series.trim() : null;
+        const cleanVol = data.volumeNumber && data.volumeNumber.trim().length > 0 ? data.volumeNumber.trim() : null;
+
+        // 1. Resolve and link Author and BookSeries foreign keys in SQLite
+        const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(cleanAuthor, cleanSeries, cleanVol);
+
+        // 2. Update Book record
+        await prisma.book.update({
+            where: { id: bookId },
+            data: {
+                title: cleanTitle,
+                author: cleanAuthor || "Unknown Author",
+                series: cleanSeries,
+                volumeNumber: cleanVol,
+                authorId: authorId || null,
+                seriesId: seriesId || null,
+                coverUrl: data.coverUrl || book.coverUrl || null
+            }
+        });
+
+        // 3. Reorganize on disk if requested
+        if (data.organizeDisk !== false) {
+            try {
+                await renameBookFileOnDisk(bookId);
+            } catch (diskErr: any) {
+                console.warn("[MATCH-AND-LINK] Disk reorganization warning:", diskErr.message);
+            }
+        }
+
+        // 4. Sync matching BookRequests / MediaRequests to Downloaded / AVAILABLE
+        try {
+            await prisma.bookRequest.updateMany({
+                where: {
+                    title: cleanTitle,
+                    status: { notIn: ["Downloaded", "Rejected"] }
+                },
+                data: { status: "Downloaded" }
+            });
+            await prisma.mediaRequest.updateMany({
+                where: {
+                    title: cleanTitle,
+                    mediaType: { in: ["book", "audiobook"] },
+                    status: { notIn: ["AVAILABLE", "DECLINED"] }
+                },
+                data: { status: "AVAILABLE" }
+            });
+        } catch (e) {}
+
+        logger.addLog("SUCCESS", "BOOK_ENGINE", `User ${session.username} matched & linked book "${cleanTitle}" by ${cleanAuthor || "Unknown Author"} (Series: ${cleanSeries || "None"})`);
+        revalidatePath("/library");
+        return { success: true, message: `Successfully linked "${cleanTitle}" to library!` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "BOOK_ENGINE", `Failed to match & link book ${bookId}: ${e.message}`);
+        return { success: false, error: e.message || "Failed to link book" };
     }
 }
 
