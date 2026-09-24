@@ -84,3 +84,66 @@ Standard grid layout for media shelves and discovery pages:
 - Series missing book displays render strictly ordered ascending by volume (`Vol 1`, `Vol 2`, `Vol 3`...).
 - Missing cards feature clean volume badges, author attribution, and prominent **`Auto Grab`** (1-click trigger) and **`Search`** (modal chooser) action buttons.
 - In *Seerr media discovery, missing series items appear in the horizontal `"Missing from Your Series"` carousel with volume tags and 1-click grab workflows.
+
+---
+
+## 7. Media Card Action Bar & Radix DropdownMenu Pattern
+
+- **Zero Button Truncation Rule:** Never place 3+ text or icon buttons side-by-side in responsive card footers. In multi-column grids (where cards narrow to 150px–180px), multi-button rows squeeze buttons down to <45px, causing aggressive text truncation (`Res...`, `k...`, `f...`, `e...`) or unrecognizable mystery icons.
+- **2-Tier Standard Card Footer Structure:**
+  1. **Tier 1 (Hero CTA):** Full card-width button for the primary user interaction (`Resume (31%)`, `Read Book`, `Listen & Chapters`). Spans `w-full` and never wraps or truncates.
+  2. **Tier 2 (Secondary Action & Radix Menu):** A primary secondary action button (`flex-1`, e.g. `Send to Kindle` or `Download`) paired with a Radix UI `DropdownMenu` trigger button (`•••` / `MoreHorizontal`).
+  3. **Tier 3 (Radix DropdownMenuContent):** All auxiliary and administrative actions (`Fetch Cover`, `Match Book`, `Edit Metadata`, `Delete`, `Admin Send to User Kindle`) reside inside `DropdownMenuContent` with clear, full text labels, colored icons, and sub-menus.
+
+```tsx
+<div className="flex flex-col gap-1.5 p-2 bg-slate-950/60 border-t border-slate-800/80">
+  {/* Primary Hero Action */}
+  <Button
+    size="sm"
+    className="w-full h-8 text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white truncate shadow-sm"
+    onClick={handlePrimaryAction}
+  >
+    <BookOpen className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+    <span className="truncate">{resumePercent ? `Resume (${resumePercent}%)` : "Read Book"}</span>
+  </Button>
+
+  {/* Secondary Action + Overflow Dropdown */}
+  <div className="flex items-center gap-1.5 w-full">
+    <Button
+      size="sm"
+      variant="outline"
+      className="flex-1 h-7 text-[11px] font-medium border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-200 truncate px-2"
+      onClick={handleSecondaryAction}
+    >
+      <Send className="w-3 h-3 mr-1 shrink-0 text-amber-400" />
+      <span className="truncate">Kindle</span>
+    </Button>
+
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 w-7 p-0 shrink-0 border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-300"
+          title="More actions"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-800 text-slate-200">
+        <DropdownMenuItem onClick={handleFetchCover}>
+          <Image className="w-3.5 h-3.5 mr-2 text-cyan-400" /> Fetch Cover
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleMatchBook}>
+          <Sparkles className="w-3.5 h-3.5 mr-2 text-purple-400" /> Match Metadata
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="bg-slate-800" />
+        <DropdownMenuItem onClick={handleDelete} className="text-red-400 focus:text-red-300">
+          <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+</div>
+```
+
