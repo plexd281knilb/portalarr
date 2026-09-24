@@ -33,6 +33,7 @@ import { logger, maskToken } from "@/lib/logger";
 import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout } from "@/lib/email-templates";
 import fs from "fs";
 import path from "path";
+import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -153,64 +154,27 @@ function getNormTitle(rawTitle: string): string {
 
 async function mobiBounceEpub(filePath: string): Promise<boolean> {
     try {
-        const fs = require("fs");
-        const path = require("path");
-        const { exec } = require("child_process");
-        const { promisify } = require("util");
-        const execAsync = promisify(exec);
-
-        // 1. Check if ebook-convert is available (cross-platform check)
-        try {
-            const checkCmd = process.platform === "win32" ? "where ebook-convert" : "which ebook-convert";
-            await execAsync(checkCmd);
-        } catch (e) {
-            console.log("[MOBI-BOUNCE] ebook-convert is not installed or not in PATH. Skipping Mobi-Bounce.");
-            return false;
+        const ext = path.extname(filePath).toLowerCase();
+        let targetPath = filePath;
+        if (ext !== ".epub") {
+            const convRes = await convertEbookToEpub(filePath);
+            if (!convRes.success || !convRes.epubPath) {
+                if (convRes.error && (convRes.error.includes("DRM") || convRes.error.includes("is DRM protected"))) {
+                    throw new Error("DRM_PROTECTED");
+                }
+                return false;
+            }
+            targetPath = convRes.epubPath;
         }
 
-        const ext = path.extname(filePath).toLowerCase();
-        if (ext !== ".epub") return false;
-
-        const dirname = path.dirname(filePath);
-        const basename = path.basename(filePath, ext);
-        const tempMobi = path.join(dirname, `${basename}.bounce.mobi`);
-        const tempOutput = path.join(dirname, `${basename}.rebuilding.epub`);
-
-        console.log(`[MOBI-BOUNCE] Starting conversion for: ${basename}`);
-        
-        // Step 1: EPUB to MOBI
-        try {
-            await execAsync(`ebook-convert "${filePath}" "${tempMobi}"`);
-        } catch (convErr: any) {
-            if (convErr.message && (convErr.message.includes("DRMError") || convErr.message.includes("is DRM protected"))) {
+        const valRes = await validateAndFixEpubForKindle(targetPath);
+        if (!valRes.valid) {
+            if (valRes.error && (valRes.error.includes("DRM") || valRes.error.includes("is DRM protected"))) {
                 throw new Error("DRM_PROTECTED");
             }
-            throw convErr;
+            return false;
         }
-        
-        // Step 2: MOBI to EPUB (forcing language to en)
-        await execAsync(`ebook-convert "${tempMobi}" "${tempOutput}" --language en`);
-        
-        // Step 3: Cleanup MOBI
-        if (fs.existsSync(tempMobi)) {
-            fs.unlinkSync(tempMobi);
-        }
-
-        // Step 4: Swap files
-        if (fs.existsSync(tempOutput)) {
-            fs.unlinkSync(filePath);
-            fs.renameSync(tempOutput, filePath);
-            
-            // Set Unraid permissions (chmod 666)
-            try {
-                fs.chmodSync(filePath, 0o666);
-            } catch (permErr) {}
-
-            console.log(`[MOBI-BOUNCE] Successfully sanitized and rebuilt EPUB for: ${basename}`);
-            return true;
-        }
-        
-        return false;
+        return true;
     } catch (err: any) {
         if (err.message === "DRM_PROTECTED") {
             throw err;
@@ -6217,11 +6181,18 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             for (const [ebookKey, group] of ebookGroups.entries()) {
                 const epubItem = group.find(i => i.ext.toLowerCase() === ".epub");
 
-                // If an EPUB version exists, delete redundant AZW3, MOBI, AZW, and AZW4 files from disk
                 if (epubItem) {
+                    // 1. Deep validate & repair EPUB for Amazon Send-to-Kindle compliance
+                    try {
+                        await validateAndFixEpubForKindle(epubItem.fullPath);
+                    } catch (vErr: any) {
+                        console.warn(`[SCANNER] Preflight check warning for ${epubItem.fullPath}:`, vErr.message);
+                    }
+
+                    // 2. Delete redundant non-EPUB files (AZW3, MOBI, AZW, AZW4, PDF, etc.) from disk
                     for (const other of group) {
                         const otherExt = other.ext.toLowerCase();
-                        if (otherExt === ".azw3" || otherExt === ".mobi" || otherExt === ".azw" || otherExt === ".azw4") {
+                        if (otherExt !== ".epub") {
                             try {
                                 if (fs.existsSync(other.fullPath)) {
                                     fs.unlinkSync(other.fullPath);
@@ -6233,40 +6204,66 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             }
                         }
                     }
-                }
 
-                // Filter out any deleted files
-                const remainingItems = group.filter(i => {
-                    if (epubItem) {
-                        const otherExt = i.ext.toLowerCase();
-                        if (otherExt === ".azw3" || otherExt === ".mobi" || otherExt === ".azw" || otherExt === ".azw4") {
-                            return false;
+                    const st = fs.existsSync(epubItem.fullPath) ? fs.statSync(epubItem.fullPath) : epubItem.stats;
+                    consolidatedEbookMap.set(ebookKey, {
+                        fullPath: epubItem.fullPath,
+                        file: epubItem.file,
+                        ext: ".epub",
+                        stats: {
+                            size: st.size,
+                            birthtime: epubItem.stats.birthtime,
+                            mtime: epubItem.stats.mtime
+                        }
+                    });
+                } else {
+                    // No EPUB exists! Attempt Calibre conversion from the highest-priority non-EPUB format
+                    group.sort((a, b) => getEbookExtPriority(b.ext) - getEbookExtPriority(a.ext));
+                    const primaryItem = group[0];
+
+                    console.log(`[SCANNER] 🔄 Non-EPUB book found with no EPUB equivalent: "${primaryItem.file}" (${primaryItem.ext}). Converting to EPUB...`);
+                    const convRes = await convertEbookToEpub(primaryItem.fullPath);
+
+                    if (convRes.success && convRes.epubPath && fs.existsSync(convRes.epubPath)) {
+                        const newEpubPath = convRes.epubPath;
+                        await validateAndFixEpubForKindle(newEpubPath).catch(() => {});
+
+                        // Delete any other non-EPUB files in the group
+                        for (const other of group) {
+                            if (other.fullPath !== primaryItem.fullPath && fs.existsSync(other.fullPath)) {
+                                try {
+                                    fs.unlinkSync(other.fullPath);
+                                    console.log(`[SCANNER] 🧹 Cleaned up non-EPUB file: ${other.fullPath}`);
+                                } catch (e) {}
+                            }
+                        }
+
+                        const newStat = fs.statSync(newEpubPath);
+                        consolidatedEbookMap.set(ebookKey, {
+                            fullPath: newEpubPath,
+                            file: path.basename(newEpubPath),
+                            ext: ".epub",
+                            stats: {
+                                size: newStat.size,
+                                birthtime: primaryItem.stats.birthtime,
+                                mtime: newStat.mtime
+                            }
+                        });
+                    } else {
+                        console.warn(`[SCANNER] ❌ Could not convert "${primaryItem.file}" (${primaryItem.ext}) to EPUB: ${convRes.error}. Rejecting unconvertible file.`);
+                        logger.addLog("WARN", "SCANNER", `⚠️ Unconvertible non-EPUB file rejected: "${primaryItem.file}" (${primaryItem.ext}). Only EPUBs are kept.`);
+
+                        // Delete unconvertible non-EPUB files from disk so only valid EPUBs remain
+                        for (const other of group) {
+                            if (fs.existsSync(other.fullPath)) {
+                                try {
+                                    fs.unlinkSync(other.fullPath);
+                                    console.log(`[SCANNER] 🗑️ Deleted unconvertible non-EPUB file from disk: ${other.fullPath}`);
+                                } catch (e) {}
+                            }
                         }
                     }
-                    return true;
-                });
-
-                remainingItems.sort((a, b) => getEbookExtPriority(b.ext) - getEbookExtPriority(a.ext));
-                const primaryItem = remainingItems[0] || epubItem || group[0];
-
-                let totalSize = 0;
-                for (const item of remainingItems) {
-                    totalSize += item.stats.size;
                 }
-                if (totalSize === 0 && primaryItem) {
-                    totalSize = primaryItem.stats.size;
-                }
-
-                consolidatedEbookMap.set(ebookKey, {
-                    fullPath: primaryItem.fullPath,
-                    file: primaryItem.file,
-                    ext: primaryItem.ext,
-                    stats: {
-                        size: totalSize,
-                        birthtime: primaryItem.stats.birthtime,
-                        mtime: primaryItem.stats.mtime
-                    }
-                });
             }
 
             finalMediaItems = Array.from(consolidatedEbookMap.values());
@@ -7151,8 +7148,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
 
             if (reqMediaType === "ebook") {
                 const aTitle = (r.title || "").toLowerCase();
-                if (aTitle.includes("epub")) totalScore += 5;
-                else if (aTitle.includes("mobi") || aTitle.includes("azw3")) totalScore += 2;
+                if (aTitle.includes("epub")) totalScore += 20;
+                else if (aTitle.includes("mobi") || aTitle.includes("azw3") || aTitle.includes("azw")) totalScore += 2;
+                else if (aTitle.includes("pdf")) totalScore -= 5;
             }
             if (r.protocol === "usenet") totalScore += 3;
             else if (r.protocol === "torrent") totalScore += Math.min((r.seeders || 0) / 25, 2);
@@ -8057,52 +8055,54 @@ export async function monitorAndRetryDownload(
                                 finalDestPath = destPath;
                             }
                             
-                            const ext = path.extname(finalDestPath).toLowerCase();
-                            if (ext === ".mobi") {
-                                try {
-                                    const epubPath = finalDestPath.replace(/\.mobi$/i, ".epub");
-                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Attempting to convert MOBI to EPUB: ${finalDestPath} -> ${epubPath}`);
-                                    const { exec } = require("child_process");
-                                    const { promisify } = require("util");
-                                    const execAsync = promisify(exec);
-                                    
-                                    let hasConverter = false;
-                                    try {
-                                        const checkCmd = process.platform === "win32" ? "where ebook-convert" : "which ebook-convert";
-                                        await execAsync(checkCmd);
-                                        hasConverter = true;
-                                    } catch (e) {
-                                        console.log("[AUTO-DOWNLOAD-MONITOR] ebook-convert is not in PATH. Skipping MOBI conversion.");
+                            let ebookFailed = false;
+                            let failReason = "";
+
+                            if (reqMedia === "ebook") {
+                                const destExt = path.extname(finalDestPath).toLowerCase();
+                                if (destExt !== ".epub") {
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] 🔄 Non-EPUB downloaded (${destExt}). Converting to standard EPUB...`);
+                                    const convRes = await convertEbookToEpub(finalDestPath);
+                                    if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
+                                        ebookFailed = true;
+                                        failReason = `Failed to convert ${destExt} to EPUB: ${convRes.error || "Conversion failed"}`;
+                                    } else {
+                                        finalDestPath = convRes.epubPath;
                                     }
-                                    
-                                    if (hasConverter) {
-                                        await execAsync(`ebook-convert "${finalDestPath}" "${epubPath}" --language en`);
-                                        if (fs.existsSync(epubPath)) {
-                                            fs.unlinkSync(finalDestPath);
-                                            finalDestPath = epubPath;
-                                            console.log(`[AUTO-DOWNLOAD-MONITOR] MOBI successfully converted to EPUB!`);
+                                }
+
+                                if (!ebookFailed) {
+                                    // Deep Kindle validation and auto-repair
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] 🔍 Validating EPUB for Amazon Send-to-Kindle compliance...`);
+                                    const valRes = await validateAndFixEpubForKindle(finalDestPath);
+                                    if (!valRes.valid) {
+                                        ebookFailed = true;
+                                        failReason = `EPUB failed Kindle preflight check: ${valRes.error || "Malformed EPUB"}`;
+                                    }
+                                }
+
+                                // Delete any redundant non-EPUB files in destination directory
+                                try {
+                                    const destDir = path.dirname(finalDestPath);
+                                    if (fs.existsSync(destDir)) {
+                                        const destEntries = fs.readdirSync(destDir);
+                                        for (const de of destEntries) {
+                                            const deExt = path.extname(de).toLowerCase();
+                                            if (deExt === ".azw3" || deExt === ".mobi" || deExt === ".azw" || deExt === ".azw4") {
+                                                try {
+                                                    fs.unlinkSync(path.join(destDir, de));
+                                                    console.log(`[AUTO-DOWNLOAD-MONITOR] 🧹 Cleaned redundant ${deExt} file from library folder: ${de}`);
+                                                } catch (e) {}
+                                            }
                                         }
                                     }
-                                } catch (convErr: any) {
-                                    console.error(`[AUTO-DOWNLOAD-MONITOR] MOBI to EPUB conversion failed:`, convErr.message);
-                                }
-                            }
-                            
-                            // Sanitize and flatten formatting (Mobi-Bounce)
-                            let hasDrm = false;
-                            try {
-                                await mobiBounceEpub(finalDestPath);
-                            } catch (bounceErr: any) {
-                                if (bounceErr.message === "DRM_PROTECTED") {
-                                    hasDrm = true;
-                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Detected DRM in release "${release.title}". Deleting and marking download as failed to retry another release.`);
-                                    await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, "DRM protected file", requestId);
-                                } else {
-                                    console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
-                                }
+                                } catch (e) {}
                             }
 
-                            if (hasDrm) {
+                            if (ebookFailed) {
+                                console.warn(`[AUTO-DOWNLOAD-MONITOR] ❌ Release "${release.title}" rejected: ${failReason}. Deleting and failing over to next release.`);
+                                await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, failReason, requestId);
+
                                 copySuccessful = false;
                                 downloadStatus = "failed";
 
@@ -8610,68 +8610,52 @@ export async function validateAndSanitizeKindleEbook(filePath: string, title?: s
         return { valid: false, error: "Target path is a directory stub rather than a media file.", fileSize: 0, fileSizeMb: "0" };
     }
 
-    const maxSizeBytes = 50 * 1024 * 1024; // Amazon 50MB limit
-    const fileSizeMb = (stat.size / (1024 * 1024)).toFixed(1);
-    if (stat.size > maxSizeBytes) {
-        return {
-            valid: false,
-            error: `File size (${fileSizeMb} MB) exceeds Amazon Send-to-Kindle's 50 MB email limit. Please read this book directly in your browser or download it directly to your device.`,
-            fileSize: stat.size,
-            fileSizeMb
-        };
-    }
+    let effectivePath = filePath;
+    let ext = path.extname(effectivePath).toLowerCase();
 
-    const ext = path.extname(filePath).toLowerCase();
-    const unsupported = [".cbr", ".cbz", ".rar", ".zip", ".7z", ".mp3", ".m4b", ".m4a", ".flac", ".wav"];
-    if (unsupported.includes(ext)) {
-        return {
-            valid: false,
-            error: `Format '${ext}' is not supported by Amazon Send-to-Kindle. Only EPUB, PDF, and standard text formats are supported.`,
-            fileSize: stat.size,
-            fileSizeMb
-        };
-    }
-
-    // EPUB format integrity check (magic bytes 'PK\x03\x04')
-    if (ext === ".epub") {
-        try {
-            const fd = fs.openSync(filePath, "r");
-            const buffer = Buffer.alloc(4);
-            fs.readSync(fd, buffer, 0, 4, 0);
-            fs.closeSync(fd);
-            const isZip = buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
-            if (!isZip) {
-                return {
-                    valid: false,
-                    error: "EPUB file is corrupted or not a valid archive (missing standard ZIP header).",
-                    fileSize: stat.size,
-                    fileSizeMb
-                };
-            }
-        } catch (e: any) {
+    // 1. If format is non-EPUB (.azw3, .mobi, .azw, .azw4, .pdf, .cbz, .cbr, etc.), auto-convert to standard EPUB
+    if (ext !== ".epub") {
+        console.log(`[KINDLE-SANITIZER] Auto-converting non-EPUB file "${path.basename(effectivePath)}" (${ext}) to EPUB for Kindle delivery...`);
+        const convRes = await convertEbookToEpub(effectivePath);
+        if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
             return {
                 valid: false,
-                error: `Failed to verify EPUB integrity: ${e.message}`,
+                error: `Format '${ext}' is not supported by Amazon Send-to-Kindle, and automatic EPUB conversion failed: ${convRes.error || "Conversion error"}`,
                 fileSize: stat.size,
-                fileSizeMb
+                fileSizeMb: (stat.size / (1024 * 1024)).toFixed(1)
             };
         }
+        effectivePath = convRes.epubPath;
+        ext = ".epub";
     }
 
-    const rawBase = title && author ? `${author}_${title}` : path.basename(filePath, ext);
+    // 2. Run deep preflight check & Calibre auto-repair to ensure 100% compliance with Amazon Send-to-Kindle
+    const validation = await validateAndFixEpubForKindle(effectivePath);
+    if (!validation.valid) {
+        return {
+            valid: false,
+            error: validation.error || "EPUB failed Amazon Kindle validation and could not be repaired.",
+            fileSize: validation.fileSize || stat.size,
+            fileSizeMb: validation.fileSizeMb || "0"
+        };
+    }
+
+    const rawBase = title && author ? `${author}_${title}` : path.basename(effectivePath, ext);
     const cleanAttachmentName = rawBase
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "") // remove accents
         .replace(/[^a-zA-Z0-9_\-]/g, "_")
         .replace(/__+/g, "_")
-        .substring(0, 80) + ext;
+        .substring(0, 80) + ".epub";
 
     return {
         valid: true,
-        fileSize: stat.size,
-        fileSizeMb,
+        filePath: effectivePath,
+        fileSize: validation.fileSize,
+        fileSizeMb: validation.fileSizeMb,
         cleanAttachmentName,
-        ext
+        ext: ".epub",
+        repaired: validation.repaired
     };
 }
 
@@ -8729,6 +8713,18 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
             return { success: false, error: validation.error };
         }
 
+        // If file was converted/repaired to a new path, synchronize book database record
+        if (validation.filePath && validation.filePath !== book.filePath) {
+            await prisma.book.update({
+                where: { id: book.id },
+                data: {
+                    filePath: validation.filePath,
+                    fileType: "epub",
+                    fileSize: validation.fileSize
+                }
+            }).catch(() => {});
+        }
+
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: false, error: "SMTP is not configured on this server. Please contact your administrator to configure SMTP." };
@@ -8757,7 +8753,7 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
             attachments: [
                 {
                     filename: validation.cleanAttachmentName,
-                    path: book.filePath
+                    path: validation.filePath || book.filePath
                 }
             ]
         };
@@ -8978,6 +8974,18 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         return;
     }
 
+    // If file was converted/repaired to a new path, synchronize book database record
+    if (validation.filePath && validation.filePath !== book.filePath) {
+        await prisma.book.update({
+            where: { id: book.id },
+            data: {
+                filePath: validation.filePath,
+                fileType: "epub",
+                fileSize: validation.fileSize
+            }
+        }).catch(() => {});
+    }
+
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
     if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
         console.error("[AUTO-KINDLE] SMTP is not configured on this server.");
@@ -9008,7 +9016,7 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         attachments: [
             {
                 filename: validation.cleanAttachmentName,
-                path: book.filePath
+                path: validation.filePath || book.filePath
             }
         ]
     };
@@ -9414,8 +9422,25 @@ export async function fulfillRequestWithUpload(formData: FormData) {
             fs.mkdirSync(destDir, { recursive: true });
         }
 
-        const destPath = path.join(destDir, `${safeAuthor} - ${safeTitle}${ext}`);
+        let destPath = path.join(destDir, `${safeAuthor} - ${safeTitle}${ext}`);
         fs.writeFileSync(destPath, buffer);
+
+        if (request.mediaType !== "audiobook") {
+            if (ext !== ".epub") {
+                const convRes = await convertEbookToEpub(destPath);
+                if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
+                    try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
+                    return { success: false, error: `Failed to convert uploaded ${ext} file to EPUB: ${convRes.error || "Conversion error"}` };
+                }
+                destPath = convRes.epubPath;
+            }
+
+            const valRes = await validateAndFixEpubForKindle(destPath);
+            if (!valRes.valid) {
+                try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
+                return { success: false, error: `Uploaded EPUB failed Kindle preflight validation: ${valRes.error}` };
+            }
+        }
 
         // Scan the library to register the new book
         await scanLibraryInternal(targetLib.id, { enableAi: true });
@@ -10772,6 +10797,38 @@ export async function importCompletedDownload(requestId: string) {
         await fs.promises.copyFile(foundFilePath, destPath);
         await setPermissionsRecursiveAsync(destPath);
         finalDestPath = destPath;
+    }
+
+    if (reqMedia === "ebook") {
+        const destExt = path.extname(finalDestPath).toLowerCase();
+        if (destExt !== ".epub") {
+            const convRes = await convertEbookToEpub(finalDestPath);
+            if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
+                removePathSafely(finalDestPath);
+                return { success: false, error: `Failed to convert imported ${destExt} file to EPUB: ${convRes.error || "Conversion error"}` };
+            }
+            finalDestPath = convRes.epubPath;
+        }
+
+        const valRes = await validateAndFixEpubForKindle(finalDestPath);
+        if (!valRes.valid) {
+            removePathSafely(finalDestPath);
+            return { success: false, error: `Imported EPUB failed Kindle preflight validation: ${valRes.error}` };
+        }
+
+        // Clean redundant non-EPUB files in destination directory
+        try {
+            const destEntries = fs.readdirSync(destFolder);
+            for (const de of destEntries) {
+                const deExt = path.extname(de).toLowerCase();
+                if (deExt === ".azw3" || deExt === ".mobi" || deExt === ".azw" || deExt === ".azw4") {
+                    try {
+                        fs.unlinkSync(path.join(destFolder, de));
+                        console.log(`[IMPORT-DOWNLOAD] 🧹 Cleaned redundant ${deExt} file from library folder: ${de}`);
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {}
     }
 
     // Clean up original downloaded file/folder and client entries
