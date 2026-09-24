@@ -104,10 +104,14 @@ export async function getArrIndex(forceRefresh = false): Promise<ArrIndexCache> 
 
         // Identify target instances for 1080p and 4K
         const defaultRadarr1080p = radarrApps.find(a => a.id === settings?.seerrDefaultMovieAppId) || radarrApps.find(a => !a.name.toLowerCase().includes("4k")) || radarrApps[0];
-        const defaultRadarr4k = radarrApps.find(a => a.id === settings?.seerrDefaultMovie4kAppId) || radarrApps.find(a => a.id !== defaultRadarr1080p?.id && a.name.toLowerCase().includes("4k"));
+        const defaultRadarr4k = (settings?.seerrDefaultMovie4kAppId && settings.seerrDefaultMovie4kAppId !== "none")
+            ? radarrApps.find(a => a.id === settings.seerrDefaultMovie4kAppId)
+            : null;
 
         const defaultSonarr1080p = sonarrApps.find(a => a.id === settings?.seerrDefaultTvAppId) || sonarrApps.find(a => !a.name.toLowerCase().includes("4k")) || sonarrApps[0];
-        const defaultSonarr4k = sonarrApps.find(a => a.id === settings?.seerrDefaultTv4kAppId) || sonarrApps.find(a => a.id !== defaultSonarr1080p?.id && a.name.toLowerCase().includes("4k"));
+        const defaultSonarr4k = (settings?.seerrDefaultTv4kAppId && settings.seerrDefaultTv4kAppId !== "none")
+            ? sonarrApps.find(a => a.id === settings.seerrDefaultTv4kAppId)
+            : null;
 
         // Fetch Radarr 1080p
         if (defaultRadarr1080p) {
@@ -295,10 +299,13 @@ export async function getArrMediaMonitoringDetails(
             // Resolve Radarr 4K App
             let app4k = null;
             if (isKids) {
-                app4k = radarrApps.find(a => a.id === settings?.seerrKidsMovie4kAppId);
-            }
-            if (!app4k) {
-                app4k = radarrApps.find(a => a.id === settings?.seerrDefaultMovie4kAppId) || radarrApps.find(a => a.id !== app1080p?.id && a.name.toLowerCase().includes("4k"));
+                if (settings?.seerrKidsMovie4kAppId && settings.seerrKidsMovie4kAppId !== "none") {
+                    app4k = radarrApps.find(a => a.id === settings.seerrKidsMovie4kAppId) || null;
+                }
+            } else {
+                if (settings?.seerrDefaultMovie4kAppId && settings.seerrDefaultMovie4kAppId !== "none") {
+                    app4k = radarrApps.find(a => a.id === settings.seerrDefaultMovie4kAppId) || null;
+                }
             }
 
             if (app1080p) {
@@ -354,10 +361,13 @@ export async function getArrMediaMonitoringDetails(
 
             let app4k = null;
             if (isKids) {
-                app4k = sonarrApps.find(a => a.id === settings?.seerrKidsTv4kAppId);
-            }
-            if (!app4k) {
-                app4k = sonarrApps.find(a => a.id === settings?.seerrDefaultTv4kAppId) || sonarrApps.find(a => a.id !== app1080p?.id && a.name.toLowerCase().includes("4k"));
+                if (settings?.seerrKidsTv4kAppId && settings.seerrKidsTv4kAppId !== "none") {
+                    app4k = sonarrApps.find(a => a.id === settings.seerrKidsTv4kAppId) || null;
+                }
+            } else {
+                if (settings?.seerrDefaultTv4kAppId && settings.seerrDefaultTv4kAppId !== "none") {
+                    app4k = sonarrApps.find(a => a.id === settings.seerrDefaultTv4kAppId) || null;
+                }
             }
 
             // Check Sonarr 1080p

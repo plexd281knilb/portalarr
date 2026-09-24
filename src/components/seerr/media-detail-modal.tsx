@@ -138,6 +138,9 @@ export function MediaDetailModal({
             if (res.success && res.details) {
                 setDetails(res.details);
                 setAvailability(res.availability);
+                if (!res.availability?.arrMonitoring?.isConfigured4k) {
+                    setIs4k(false);
+                }
                 if (type === "tv" && res.details.seasons) {
                     const validSeasons = res.details.seasons.filter(s => s.seasonNumber > 0).map(s => s.seasonNumber);
                     setSelectedSeasons(validSeasons);
@@ -445,11 +448,13 @@ export function MediaDetailModal({
 
     // Arr monitoring breakdown
     const arrDetails = availability?.arrMonitoring;
+    const is4kConfigured = Boolean(arrDetails?.isConfigured4k);
+    const canRequest4k = Boolean(quotaData?.canRequest4k && is4kConfigured);
     const is1080pMonitored = Boolean(availability?.isMonitored1080p || arrDetails?.isMonitored1080p);
-    const is4kMonitored = Boolean(availability?.isMonitored4k || arrDetails?.isMonitored4k);
-    const isCurrentQualityMonitored = is4k ? is4kMonitored : is1080pMonitored;
-    const activeSeasonsMap = is4k ? arrDetails?.seasons4k : arrDetails?.seasons1080p;
-    const activeEpisodesMap = is4k ? arrDetails?.episodes4k : arrDetails?.episodes1080p;
+    const is4kMonitored = Boolean(is4kConfigured && (availability?.isMonitored4k || arrDetails?.isMonitored4k));
+    const isCurrentQualityMonitored = (is4k && is4kConfigured) ? is4kMonitored : is1080pMonitored;
+    const activeSeasonsMap = (is4k && is4kConfigured) ? arrDetails?.seasons4k : arrDetails?.seasons1080p;
+    const activeEpisodesMap = (is4k && is4kConfigured) ? arrDetails?.episodes4k : arrDetails?.episodes1080p;
 
     // Check if all selected seasons are already monitored in active resolution
     const validSeasons = details?.seasons?.filter(s => s.seasonNumber > 0) || [];
@@ -460,7 +465,7 @@ export function MediaDetailModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="w-[96vw] sm:w-[94vw] md:w-[92vw] max-w-6xl max-h-[94vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw] sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] max-h-[94vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
                 {loading || !details ? (
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -556,7 +561,7 @@ export function MediaDetailModal({
 
                                 <div className="relative z-10 flex flex-col sm:flex-row gap-4 sm:gap-5 md:gap-6 items-start">
                                     {/* Left Column: 2:3 Vertical Poster Card */}
-                                    <div className="w-28 sm:w-36 md:w-44 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0 bg-[#14141c] mx-auto sm:mx-0 relative group">
+                                    <div className="w-28 sm:w-36 md:w-44 lg:w-48 xl:w-52 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0 bg-[#14141c] mx-auto sm:mx-0 relative group">
                                         {details.posterPath ? (
                                             <img
                                                 src={details.posterPath}
@@ -697,7 +702,7 @@ export function MediaDetailModal({
                                                         <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                                                         <span>1080p Monitored</span>
                                                     </div>
-                                                    {quotaData?.canRequest4k && (
+                                                    {canRequest4k && (
                                                         <Button
                                                             size="sm"
                                                             className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/20 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
@@ -944,7 +949,7 @@ export function MediaDetailModal({
                                         </div>
 
                                         {/* 4K UHD Quality Selection Toggle */}
-                                        {quotaData?.canRequest4k && !isMatureInKids && !isDisallowed && (
+                                        {canRequest4k && !isMatureInKids && !isDisallowed && (
                                             <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
                                                 <div className="flex items-center gap-2">
                                                     <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 border-purple-500/50">
@@ -997,7 +1002,7 @@ export function MediaDetailModal({
                                                     </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5">
                                                     {details.seasons.filter(s => s.seasonNumber > 0).map(s => {
                                                         const sNum = s.seasonNumber;
                                                         const seasonMon1080 = arrDetails?.seasons1080p?.[sNum];
@@ -1211,7 +1216,7 @@ export function MediaDetailModal({
 
                                         {/* 4K vs 1080p target indicator */}
                                         <div className="flex items-center gap-2">
-                                            {quotaData?.canRequest4k && (
+                                            {canRequest4k && (
                                                 <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/[0.04] border border-border/40 text-[11px]">
                                                     <span className="text-muted-foreground">Target:</span>
                                                     <span className={`font-bold ${is4k ? "text-purple-300" : "text-blue-300"}`}>
@@ -1384,7 +1389,7 @@ export function MediaDetailModal({
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                         Top Cast Members
                                     </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2.5">
                                         {details.cast.map(c => (
                                             <div key={c.id} className="p-2.5 rounded-xl bg-[#121218] border border-border/40 space-y-1.5 text-center">
                                                 <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full overflow-hidden border border-border/50 bg-muted/20 shadow-md">
@@ -1451,7 +1456,7 @@ export function MediaDetailModal({
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                         Titles You May Also Like
                                     </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2.5">
                                         {details.recommendations.map(rec => (
                                             <div
                                                 key={rec.id}
