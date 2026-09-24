@@ -4882,6 +4882,7 @@ export async function getBookRequests() {
                 const reqMedia = req.mediaType || "ebook";
                 const isFound = allBooks.some(b => {
                     if (b.fileType === "missing") return false;
+                    if (req.libraryId && b.libraryId !== req.libraryId) return false;
                     const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const bMedia = b.mediaType || "ebook";
                     return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
@@ -4899,6 +4900,7 @@ export async function getBookRequests() {
                 const reqMedia = req.mediaType || "ebook";
                 const isFound = allBooks.some(b => {
                     if (b.fileType === "missing") return false;
+                    if (req.libraryId && b.libraryId !== req.libraryId) return false;
                     const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const bMedia = b.mediaType || "ebook";
                     return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
@@ -6003,15 +6005,10 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         const dbBooks = await prisma.book.findMany({
             where: { libraryId: libraryId }
         });
-        const allDbBooks = await prisma.book.findMany();
 
         const dbBooksByPathLower = new Map<string, any>();
         for (const b of dbBooks) {
             dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
-        }
-        const allDbBooksByPathLower = new Map<string, any>();
-        for (const b of allDbBooks) {
-            allDbBooksByPathLower.set(b.filePath.toLowerCase(), b);
         }
 
 
@@ -6395,12 +6392,6 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
 
             let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
-            if (!existing) {
-                const crossMatch = allDbBooksByPathLower.get(fullPath.toLowerCase());
-                if (crossMatch && (crossMatch.mediaType || "ebook") === targetMediaType) {
-                    existing = crossMatch;
-                }
-            }
 
             if (!existing) {
                 const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
@@ -6531,7 +6522,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                 try {
                     let newBook = await prisma.book.findFirst({
-                        where: { filePath: fullPath }
+                        where: { filePath: fullPath, libraryId }
                     });
 
                     if (!newBook) {
@@ -6617,7 +6608,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 try {
                     logger.addLog("WARN", "DATABASE", `🗑️ DB-DELETE: Purged missing book "${dbBook.title}" (ID: ${dbBook.id}) from SQLite.`);
                     await prisma.book.deleteMany({
-                        where: { id: dbBook.id }
+                        where: { id: dbBook.id, libraryId }
                     });
                 } catch (delErr) {
                     // Ignore record if already deleted
@@ -8301,7 +8292,9 @@ export async function monitorAndRetryDownload(
                     }
                 }
                 
-                const allBooks = await prisma.book.findMany();
+                const allBooks = await prisma.book.findMany({
+                    where: targetLib?.id ? { libraryId: targetLib.id } : undefined
+                });
                 const finalPathClean = finalDestPath ? finalDestPath.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
                 const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 
@@ -10779,7 +10772,9 @@ export async function refreshRequestCover(requestId: string) {
         // Also update any matching book in library
         const normReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
         const reqMedia = req.mediaType || "ebook";
-        const matchingBooks = await prisma.book.findMany();
+        const matchingBooks = await prisma.book.findMany({
+            where: req.libraryId ? { libraryId: req.libraryId } : undefined
+        });
         for (const b of matchingBooks) {
             const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
             const bMedia = b.mediaType || "ebook";
