@@ -16,7 +16,8 @@ import {
     getBookSeriesProfile,
     getAccessibleLibrariesForUser,
     resolveOrLinkAuthorAndSeries,
-    isUserAllowedForLibrary
+    isUserAllowedForLibrary,
+    getSimilarBooks
 } from "@/lib/books/book-service";
 import { autoDownloadBookRequest } from "@/app/actions";
 import { logger } from "@/lib/logger";
@@ -387,3 +388,27 @@ export async function toggleMonitorBookSeriesAction(seriesId: string, monitored:
         return { success: false, error: e.message };
     }
 }
+
+/**
+ * Fetches similar books by author, series, or related keywords
+ */
+export async function getSimilarBooksAction(params: {
+    title: string;
+    author?: string;
+    series?: string;
+    mediaType?: "all" | MediaType;
+}) {
+    try {
+        const session = await verifyAuth();
+        const items = await getSimilarBooks({
+            ...params,
+            username: session.username,
+            email: session.email
+        });
+        return { success: true, items };
+    } catch (e: any) {
+        logger.addLog("ERROR", "BOOK_ENGINE", `Failed to get similar books for "${params?.title}": ${e.message}`);
+        return { success: false, error: e.message || "Failed to get similar books", items: [] };
+    }
+}
+

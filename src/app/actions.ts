@@ -142,7 +142,13 @@ function isForeignLanguage(title: string): boolean {
 }
 
 function getNormTitle(rawTitle: string): string {
-    let norm = (rawTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+    let cleaned = (rawTitle || "")
+        .replace(/\[[^\]]+\]|\([^\)]+\)/g, " ")
+        .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
+        .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ")
+        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ");
+
+    let norm = cleaned.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
     if (norm.includes("harrypotter")) {
         norm = norm.replace("philosophersstone", "sorcerersstone");
         norm = norm.replace("philosopherstone", "sorcerersstone");
@@ -6528,6 +6534,42 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     });
 
                     if (!newBook) {
+                        const targetTitleNormFinal = getNormTitle(title);
+                        const targetAuthorNormFinal = getNormTitle(author);
+                        if (targetTitleNormFinal.length > 3) {
+                            const potentialMatch = dbBooks.find(b => {
+                                if ((b.mediaType || "ebook") !== targetMediaType) return false;
+                                if (matchedDbBookIds.has(b.id)) return false;
+                                const dbTNorm = getNormTitle(b.title || "");
+                                if (dbTNorm !== targetTitleNormFinal) return false;
+                                if (targetAuthorNormFinal && targetAuthorNormFinal !== "unknownauthor") {
+                                    const dbANorm = getNormTitle(b.author || "");
+                                    if (dbANorm && dbANorm !== "unknownauthor" && dbANorm !== targetAuthorNormFinal) {
+                                        return false;
+                                    }
+                                }
+                                return true;
+                            });
+                            if (potentialMatch) {
+                                newBook = potentialMatch;
+                                await prisma.book.update({
+                                    where: { id: newBook.id },
+                                    data: {
+                                        filePath: fullPath,
+                                        fileSize: stats.size,
+                                        title,
+                                        author: author !== "Unknown Author" ? author : newBook.author,
+                                        series: series || newBook.series,
+                                        volumeNumber: volumeNumber || newBook.volumeNumber
+                                    }
+                                });
+                                logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${newBook.title}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                                console.log(`[SCANNER] 🔄 Updated existing book DB record for "${title}" by "${author}" (ID: ${newBook.id})`);
+                            }
+                        }
+                    }
+
+                    if (!newBook) {
                         newBook = await prisma.book.create({
                             data: {
                                 title,
@@ -7782,10 +7824,21 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
     let matches: string[] = [];
 
     try {
-        const files = fs.readdirSync(dir);
+        let files: string[] = [];
+        try {
+            files = fs.readdirSync(dir);
+        } catch (readErr) {
+            return matches;
+        }
+
         for (const file of files) {
             const fullPath = path.join(dir, file);
-            const stat = fs.statSync(fullPath);
+            let stat: fs.Stats;
+            try {
+                stat = fs.statSync(fullPath);
+            } catch (statErr) {
+                continue;
+            }
             
             if (stat.isDirectory()) {
                 // Skip incomplete SABnzbd folders
@@ -7821,10 +7874,12 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 }
                 
                 // Recurse into subdirectories
-                const subFound = findDownloadedFile(fullPath, bookTitle, mediaType, bookAuthor);
-                if (subFound.length > 0) {
-                    matches.push(...subFound);
-                }
+                try {
+                    const subFound = findDownloadedFile(fullPath, bookTitle, mediaType, bookAuthor);
+                    if (subFound.length > 0) {
+                        matches.push(...subFound);
+                    }
+                } catch (subErr) {}
 
             } else {
                 const ext = path.extname(file).toLowerCase();
@@ -7852,9 +7907,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 }
             }
         }
-    } catch (e: any) {
-        console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e.message);
-    }
+    } catch (e: any) {}
     
     return matches;
 }

@@ -63,10 +63,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
         try {
             if (isAdmin) {
                 const res = await getAllMediaRequestsAction({
-                    status: statusFilter,
-                    mediaType: mediaTypeFilter,
-                    search: searchTerm,
-                    limit: 100
+                    limit: 500
                 });
                 if (res.success && res.data) setRequests(res.data);
             } else {
@@ -80,7 +77,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
 
     useEffect(() => {
         loadRequests();
-    }, [isAdmin, statusFilter, mediaTypeFilter]);
+    }, [isAdmin]);
 
     const handleSync = async () => {
         setSyncing(true);
@@ -147,21 +144,38 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
             if (mediaTypeFilter === "book" && req.mediaType !== "book" && req.mediaType !== "ebook") return false;
             if (mediaTypeFilter === "audiobook" && req.mediaType !== "audiobook") return false;
         }
-        if (statusFilter !== "ALL" && req.status !== statusFilter) {
-            if (statusFilter === "PROCESSING" && (req.status === "APPROVED" || req.status === "SEARCHING" || req.status === "DOWNLOADING")) {
-                return true;
+        if (statusFilter !== "ALL") {
+            const s = (req.status || "").toUpperCase();
+            if (statusFilter === "PROCESSING") {
+                if (s !== "PROCESSING" && s !== "APPROVED" && s !== "SEARCHING" && s !== "DOWNLOADING") return false;
+            } else if (statusFilter === "AVAILABLE") {
+                if (s !== "AVAILABLE" && s !== "PARTIALLY_AVAILABLE" && s !== "DOWNLOADED") return false;
+            } else if (statusFilter === "FAILED") {
+                if (s !== "FAILED" && s !== "DECLINED" && s !== "REJECTED") return false;
+            } else if (statusFilter === "PENDING") {
+                if (s !== "PENDING") return false;
+            } else if (s !== statusFilter.toUpperCase()) {
+                return false;
             }
-            return false;
         }
         return true;
     });
 
     const counts = {
         all: requests.length,
-        pending: requests.filter(r => r.status === "PENDING").length,
-        processing: requests.filter(r => r.status === "PROCESSING" || r.status === "APPROVED" || r.status === "SEARCHING" || r.status === "DOWNLOADING").length,
-        available: requests.filter(r => r.status === "AVAILABLE" || r.status === "PARTIALLY_AVAILABLE").length,
-        failed: requests.filter(r => r.status === "FAILED" || r.status === "DECLINED").length
+        pending: requests.filter(r => (r.status || "").toUpperCase() === "PENDING").length,
+        processing: requests.filter(r => {
+            const s = (r.status || "").toUpperCase();
+            return s === "PROCESSING" || s === "APPROVED" || s === "SEARCHING" || s === "DOWNLOADING";
+        }).length,
+        available: requests.filter(r => {
+            const s = (r.status || "").toUpperCase();
+            return s === "AVAILABLE" || s === "PARTIALLY_AVAILABLE" || s === "DOWNLOADED";
+        }).length,
+        failed: requests.filter(r => {
+            const s = (r.status || "").toUpperCase();
+            return s === "FAILED" || s === "DECLINED" || s === "REJECTED";
+        }).length
     };
 
     return (
@@ -402,7 +416,11 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                     volumeNumber: req.bookVolume || undefined,
                                                     coverUrl: req.posterPath || undefined,
                                                     publishYear: req.releaseYear || undefined,
-                                                    mediaType: isAudiobook ? "audiobook" : "ebook"
+                                                    mediaType: isAudiobook ? "audiobook" : "ebook",
+                                                    availability: {
+                                                        status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? "DOWNLOADING" : "REQUESTED",
+                                                        requestId: req.id
+                                                    }
                                                 });
                                             }
                                         }}

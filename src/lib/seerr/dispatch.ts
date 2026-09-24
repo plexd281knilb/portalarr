@@ -30,7 +30,7 @@ export async function dispatchMediaRequest(requestId: string): Promise<DispatchR
             res = await dispatchMovieRequest(req, settings);
         } else if (req.mediaType === "tv") {
             res = await dispatchTvRequest(req, settings);
-        } else if (req.mediaType === "book" || req.mediaType === "audiobook") {
+        } else if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook") {
             res = await dispatchBookOrAudiobookRequest(req);
         } else {
             return { success: false, error: `Unsupported media type: ${req.mediaType}` };

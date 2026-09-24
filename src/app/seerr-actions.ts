@@ -1,6 +1,6 @@
 "use server";
 
-import prisma from "@/lib/prisma";
+import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { getSession } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
 import {
@@ -51,6 +51,7 @@ interface AuthSession {
     username: string;
     role: string;
     status: string;
+    email?: string;
 }
 
 async function verifyAuth(): Promise<AuthSession> {
@@ -62,7 +63,8 @@ async function verifyAuth(): Promise<AuthSession> {
         userId: String(session.userId || session.id || ""),
         username: String(session.username || ""),
         role: String(session.role || "USER"),
-        status: String(session.status || "APPROVED")
+        status: String(session.status || "APPROVED"),
+        email: session.email ? String(session.email) : undefined
     };
 }
 
@@ -905,6 +907,127 @@ export async function submitMediaRequestAction(payload: {
 }
 
 /**
+ * Reconciles native BookRequest records with MediaRequest for unified request views
+ */
+export async function reconcileBookRequestsWithMediaRequests(targetUsername?: string) {
+    try {
+        await ensureSchemaColumns();
+        // 1. Fetch book requests
+        const bookReqs = await prisma.bookRequest.findMany({
+            where: targetUsername ? {
+                OR: [
+                    { requestedBy: targetUsername },
+                    { requestedBy: { contains: targetUsername } }
+                ]
+            } : undefined,
+            orderBy: { createdAt: "desc" },
+            take: 300
+        });
+
+        if (bookReqs.length === 0) return;
+
+        // 2. Fetch existing media requests for books
+        const existingMediaReqs = await prisma.mediaRequest.findMany({
+            where: {
+                mediaType: { in: ["book", "ebook", "audiobook"] }
+            }
+        });
+
+        // 3. Fetch books in library to check availability
+        const allBooks = await prisma.book.findMany({
+            where: { fileType: { not: "missing" } },
+            select: { id: true, title: true, author: true, mediaType: true }
+        });
+
+        const libraryBookSet = new Set<string>();
+        for (const b of allBooks) {
+            const mType = (b.mediaType === "audiobook") ? "audiobook" : "ebook";
+            const normT = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+            libraryBookSet.add(`${mType}:${normT}`);
+        }
+
+        // Index existing media requests by normalized key
+        const mediaReqMap = new Map<string, typeof existingMediaReqs[0]>();
+        for (const mr of existingMediaReqs) {
+            const mType = (mr.mediaType === "audiobook") ? "audiobook" : "ebook";
+            const normTitle = (mr.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+            const normUser = (mr.requestedByUsername || "").toLowerCase().trim();
+            mediaReqMap.set(`${mType}:${normTitle}:${normUser}`, mr);
+            mediaReqMap.set(`${mType}:${normTitle}`, mr);
+        }
+
+        // Reconcile each BookRequest
+        for (const br of bookReqs) {
+            const mType = (br.mediaType === "audiobook") ? "audiobook" : "ebook";
+            const normTitle = (br.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+            const normUser = (br.requestedBy || "").toLowerCase().trim();
+
+            const match = mediaReqMap.get(`${mType}:${normTitle}:${normUser}`) ||
+                          mediaReqMap.get(`${mType}:${normTitle}`);
+
+            // Determine effective status
+            let mappedStatus = "PENDING";
+            const brStatus = (br.status || "").toLowerCase();
+            const inLibrary = libraryBookSet.has(`${mType}:${normTitle}`);
+
+            if (inLibrary || brStatus === "downloaded" || brStatus === "available") {
+                mappedStatus = "AVAILABLE";
+            } else if (brStatus === "searching") {
+                mappedStatus = "SEARCHING";
+            } else if (brStatus === "downloading") {
+                mappedStatus = "DOWNLOADING";
+            } else if (brStatus === "approved") {
+                mappedStatus = "APPROVED";
+            } else if (brStatus === "failed" || brStatus === "rejected") {
+                mappedStatus = "FAILED";
+            }
+
+            if (!match) {
+                // Create missing MediaRequest record
+                const created = await prisma.mediaRequest.create({
+                    data: {
+                        mediaType: mType,
+                        title: br.title,
+                        requestedByUsername: br.requestedBy,
+                        requestedByUserId: br.requestedByUserId || null,
+                        userEmail: br.userEmail || null,
+                        kindleEmail: br.kindleEmail || null,
+                        bookAuthor: br.author || null,
+                        bookSeries: br.series || null,
+                        bookVolume: br.volumeNumber || null,
+                        bookLibraryId: br.libraryId || null,
+                        sendToKindle: Boolean(br.sendToKindle),
+                        posterPath: br.coverUrl || null,
+                        releaseYear: br.publishYear || null,
+                        status: mappedStatus,
+                        downloadProgress: mappedStatus === "AVAILABLE" ? 100 : null,
+                        createdAt: br.createdAt || new Date()
+                    }
+                }).catch(() => null);
+
+                if (created) {
+                    mediaReqMap.set(`${mType}:${normTitle}:${normUser}`, created);
+                }
+            } else {
+                // Synchronize status if out of sync
+                if (match.status !== mappedStatus && (mappedStatus === "AVAILABLE" || match.status === "PENDING" || match.status === "APPROVED")) {
+                    await prisma.mediaRequest.update({
+                        where: { id: match.id },
+                        data: {
+                            status: mappedStatus,
+                            downloadProgress: mappedStatus === "AVAILABLE" ? 100 : match.downloadProgress,
+                            availableAt: mappedStatus === "AVAILABLE" ? (match.availableAt || new Date()) : match.availableAt
+                        }
+                    }).catch(() => {});
+                }
+            }
+        }
+    } catch (e: any) {
+        console.warn("[SEERR-RECONCILE] Error reconciling book requests:", e?.message || e);
+    }
+}
+
+/**
  * Fetch all media requests with optional filters (for Admin or Requests view)
  */
 export async function getAllMediaRequestsAction(filters?: {
@@ -918,16 +1041,32 @@ export async function getAllMediaRequestsAction(filters?: {
 }) {
     try {
         await verifyAuth();
+        await reconcileBookRequestsWithMediaRequests();
+
         const page = filters?.page || 1;
         const limit = filters?.limit || 50;
         const skip = (page - 1) * limit;
 
         const where: any = {};
         if (filters?.status && filters.status !== "ALL") {
-            where.status = filters.status;
+            if (filters.status === "PROCESSING") {
+                where.status = { in: ["PROCESSING", "APPROVED", "SEARCHING", "DOWNLOADING"] };
+            } else if (filters.status === "AVAILABLE") {
+                where.status = { in: ["AVAILABLE", "PARTIALLY_AVAILABLE", "Downloaded"] };
+            } else if (filters.status === "FAILED") {
+                where.status = { in: ["FAILED", "DECLINED", "Rejected"] };
+            } else if (filters.status === "PENDING") {
+                where.status = { in: ["PENDING", "Pending"] };
+            } else {
+                where.status = filters.status;
+            }
         }
         if (filters?.mediaType && filters.mediaType !== "ALL") {
-            where.mediaType = filters.mediaType;
+            if (filters.mediaType === "book" || filters.mediaType === "ebook") {
+                where.mediaType = { in: ["book", "ebook"] };
+            } else {
+                where.mediaType = filters.mediaType;
+            }
         }
         if (filters?.is4k !== undefined) {
             where.is4k = filters.is4k;
@@ -936,7 +1075,12 @@ export async function getAllMediaRequestsAction(filters?: {
             where.requestedByUsername = filters.requestedBy;
         }
         if (filters?.search && filters.search.trim()) {
-            where.title = { contains: filters.search.trim() };
+            const term = filters.search.trim();
+            where.OR = [
+                { title: { contains: term } },
+                { bookAuthor: { contains: term } },
+                { requestedByUsername: { contains: term } }
+            ];
         }
 
         const [requests, total] = await Promise.all([
@@ -967,8 +1111,15 @@ export async function getAllMediaRequestsAction(filters?: {
 export async function getUserMediaRequestsAction() {
     try {
         const session = await verifyAuth();
+        await reconcileBookRequestsWithMediaRequests(session.username);
         const requests = await prisma.mediaRequest.findMany({
-            where: { requestedByUsername: session.username },
+            where: {
+                OR: [
+                    { requestedByUsername: session.username },
+                    ...(session.userId ? [{ requestedByUserId: session.userId }] : []),
+                    ...(session.email ? [{ userEmail: session.email }] : [])
+                ]
+            },
             orderBy: { createdAt: "desc" }
         });
         return { success: true, data: requests };
@@ -1082,9 +1233,11 @@ export async function deleteMediaRequestAction(requestId: string) {
  */
 export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
     try {
+        await reconcileBookRequestsWithMediaRequests();
+
         const activeRequests = await prisma.mediaRequest.findMany({
             where: {
-                status: { in: ["PROCESSING", "APPROVED", "PENDING"] }
+                status: { in: ["PROCESSING", "APPROVED", "PENDING", "SEARCHING", "DOWNLOADING"] }
             }
         });
 
@@ -1095,8 +1248,37 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
         const guidIndex = await getPlexLibraryGuidIndex(true);
         let updatedCount = 0;
 
-        // 1. Reconcile with Plex library
+        // 1. Reconcile with Plex library (for Movies/TV) & Local Library (for Books/Audiobooks)
         for (const req of activeRequests) {
+            if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook") {
+                const cleanTitle = (req.title || "").trim();
+                const cleanAuthor = (req.bookAuthor || "").trim();
+                const mType = req.mediaType === "audiobook" ? "audiobook" : "ebook";
+
+                // Check if book exists in local database
+                const foundBook = await prisma.book.findFirst({
+                    where: {
+                        title: { contains: cleanTitle },
+                        ...(cleanAuthor ? { author: { contains: cleanAuthor } } : {}),
+                        fileType: { not: "missing" },
+                        mediaType: mType
+                    }
+                });
+
+                if (foundBook) {
+                    await prisma.mediaRequest.update({
+                        where: { id: req.id },
+                        data: {
+                            status: "AVAILABLE",
+                            downloadProgress: 100,
+                            availableAt: new Date()
+                        }
+                    }).catch(() => {});
+                    updatedCount++;
+                }
+                continue;
+            }
+
             let matches = guidIndex.get(`tmdb:${req.mediaType}:${req.tmdbId}`);
             if ((!matches || matches.length === 0) && req.imdbId) matches = guidIndex.get(`imdb:${req.imdbId}`);
             if ((!matches || matches.length === 0) && req.tvdbId) matches = guidIndex.get(`tvdb:${req.tvdbId}`);

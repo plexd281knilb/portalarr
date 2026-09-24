@@ -906,3 +906,146 @@ export async function getBookSeriesProfile(
         return null;
     }
 }
+
+/**
+ * Fetches similar books by author, series, or subject/category
+ */
+export async function getSimilarBooks(params: {
+    title: string;
+    author?: string;
+    series?: string;
+    mediaType?: "all" | MediaType;
+    username?: string;
+    email?: string;
+}): Promise<BookDiscoveryItem[]> {
+    const { title, author, series, mediaType = "all", username, email } = params;
+    const cleanTitle = (title || "").trim();
+    const cleanAuthor = (author || "").trim();
+    const cleanSeries = (series || "").trim();
+
+    const results: BookDiscoveryItem[] = [];
+    const seen = new Set<string>();
+
+    // Helper to add unique book
+    const currentNorm = normalizeKey(cleanTitle);
+    const addCandidate = (item: BookDiscoveryItem) => {
+        if (!item.title) return;
+        const itemNorm = normalizeKey(item.title);
+        // Exclude the current book itself
+        if (itemNorm === currentNorm || itemNorm.includes(currentNorm) || currentNorm.includes(itemNorm)) return;
+        const key = `${item.mediaType || "ebook"}:${itemNorm}:${normalizeKey(item.author || "")}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        results.push(item);
+    };
+
+    const tasks: Promise<void>[] = [];
+
+    // 1. If part of a series, fetch other books from that series first
+    if (cleanSeries && cleanSeries.length > 2) {
+        tasks.push((async () => {
+            try {
+                const seriesProfile = await getBookSeriesProfile(cleanSeries, cleanAuthor, username, email);
+                if (seriesProfile && seriesProfile.volumes) {
+                    for (const vol of seriesProfile.volumes) {
+                        addCandidate({
+                            title: vol.title,
+                            author: vol.author || cleanAuthor,
+                            series: cleanSeries,
+                            volumeNumber: vol.volumeNumber,
+                            coverUrl: vol.coverUrl,
+                            publishYear: vol.publishYear,
+                            overview: vol.overview,
+                            mediaType: vol.mediaType
+                        });
+                    }
+                }
+            } catch (e) {}
+        })());
+    }
+
+    // 2. Fetch other books by the same author (from local DB and search)
+    if (cleanAuthor && cleanAuthor.length > 2 && cleanAuthor !== "Unknown Author") {
+        tasks.push((async () => {
+            try {
+                // Local DB books by this author
+                const dbBooks = await prisma.book.findMany({
+                    where: {
+                        author: { contains: cleanAuthor },
+                        fileType: { not: "missing" }
+                    },
+                    take: 12
+                });
+                for (const dbB of dbBooks) {
+                    addCandidate({
+                        id: dbB.id,
+                        title: dbB.title,
+                        author: dbB.author || cleanAuthor,
+                        series: dbB.series || undefined,
+                        volumeNumber: dbB.volumeNumber || undefined,
+                        coverUrl: dbB.coverUrl || undefined,
+                        mediaType: (dbB.mediaType as MediaType) || "ebook"
+                    });
+                }
+
+                // External search for author's top works
+                const authorWorks = await searchBooksUnified(cleanAuthor, mediaType);
+                for (const w of authorWorks) {
+                    addCandidate(w);
+                }
+            } catch (e) {}
+        })());
+    }
+
+    // 3. Search related titles or subject keywords
+    if (cleanTitle && cleanTitle.length > 3) {
+        tasks.push((async () => {
+            try {
+                // Extract keywords from title (excluding common stop words)
+                const stopWords = new Set(["the", "a", "an", "and", "or", "of", "in", "to", "for", "with", "on", "at", "by", "from", "volume", "vol", "book", "part"]);
+                const keywords = cleanTitle
+                    .replace(/[^a-zA-Z0-9\s]/g, "")
+                    .split(/\s+/)
+                    .filter(w => w.length > 3 && !stopWords.has(w.toLowerCase()))
+                    .slice(0, 3)
+                    .join(" ");
+
+                if (keywords) {
+                    const searchRes = await searchBooksUnified(keywords, mediaType);
+                    for (const item of searchRes) {
+                        addCandidate(item);
+                    }
+                }
+            } catch (e) {}
+        })());
+    }
+
+    await Promise.all(tasks);
+
+    // Batch check availability
+    const availMap = await batchCheckBookAvailability(results, username, email);
+    for (const item of results) {
+        const itemKey = `${item.title}:${item.author}`;
+        if (availMap[itemKey]) {
+            item.availability = availMap[itemKey];
+        }
+    }
+
+    // Prioritize results with cover artwork and ratings
+    results.sort((a, b) => {
+        let aScore = 0;
+        let bScore = 0;
+        if (a.series === cleanSeries && cleanSeries) aScore += 50;
+        if (b.series === cleanSeries && cleanSeries) bScore += 50;
+        if (normalizeKey(a.author || "") === normalizeKey(cleanAuthor) && cleanAuthor) aScore += 30;
+        if (normalizeKey(b.author || "") === normalizeKey(cleanAuthor) && cleanAuthor) bScore += 30;
+        if (a.coverUrl) aScore += 10;
+        if (b.coverUrl) bScore += 10;
+        if (a.rating) aScore += a.rating;
+        if (b.rating) bScore += b.rating;
+        return bScore - aScore;
+    });
+
+    return results.slice(0, 24);
+}
+
