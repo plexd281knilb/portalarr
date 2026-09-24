@@ -5378,6 +5378,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     coverUrl: book.coverUrl,
                     publishYear: book.publishYear,
                     requestedBy,
+                    libraryId: libraryId || null,
                     type: "book",
                     mediaType,
                     status: "Approved"
@@ -6726,8 +6727,18 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
     }
 }
 
-async function getTargetLibraryForUser(username: string, mediaType: string = "ebook", coverUrl?: string | null) {
+async function getTargetLibraryForUser(
+    username: string, 
+    mediaType: string = "ebook", 
+    coverUrl?: string | null,
+    explicitLibraryId?: string | null
+) {
     try {
+        if (explicitLibraryId) {
+            const explicitLib = await prisma.library.findUnique({ where: { id: explicitLibraryId } });
+            if (explicitLib) return explicitLib;
+        }
+
         if (coverUrl && /[\?&]lib=/.test(coverUrl)) {
             const parsedLibId = coverUrl.split(/[\?&]lib=/)[1].split("&")[0];
             const explicitLib = await prisma.library.findUnique({ where: { id: parsedLibId } });
@@ -6772,12 +6783,22 @@ async function getTargetLibraryForUser(username: string, mediaType: string = "eb
     }
 }
 
-function getDownloadCategoryForLibrary(libraryName: string, mediaType: string = "ebook"): string {
-    const nameLower = libraryName.toLowerCase();
-    if (nameLower.includes("kids")) return "kids-books";
-    if (nameLower.includes("wife")) return "wife-books";
-    if (mediaType === "audiobook" || nameLower.includes("audio")) return "audiobooks";
-    return "books";
+function getDownloadCategoryForLibrary(library: any, mediaType: string = "ebook"): string {
+    if (typeof library === "object" && library !== null) {
+        if (library.downloadCategory && typeof library.downloadCategory === "string" && library.downloadCategory.trim()) {
+            return library.downloadCategory.trim();
+        }
+        const nameLower = (library.name || "").toLowerCase();
+        if (nameLower.includes("kids")) return "kids-books";
+        if (nameLower.includes("wife")) return "wife-books";
+        if (library.mediaType === "audiobook" || nameLower.includes("audio")) return "audiobooks";
+    } else if (typeof library === "string") {
+        const nameLower = library.toLowerCase();
+        if (nameLower.includes("kids")) return "kids-books";
+        if (nameLower.includes("wife")) return "wife-books";
+        if (mediaType === "audiobook" || nameLower.includes("audio")) return "audiobooks";
+    }
+    return mediaType === "audiobook" ? "audiobooks" : "books";
 }
 
 interface ReleaseMatchEvaluation {
@@ -7050,7 +7071,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const requester = req?.requestedBy || "";
         const reqMediaType = req?.mediaType || "ebook";
         
-        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl);
+        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl, req?.libraryId);
         const resolvedLibId = targetLib?.id;
         
         // Instant Fulfill: Check if book is already downloaded in the TARGET library
@@ -7143,7 +7164,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             }
         }
         
-        const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
+        const category = targetLib ? getDownloadCategoryForLibrary(targetLib, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
 
         const prowlarrApp = await prisma.mediaApp.findFirst({
             where: { type: "prowlarr" }
@@ -7516,8 +7537,8 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     
     const requester = req.requestedBy || "";
     const reqMediaType = req.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl);
-    const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
+    const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl, req.libraryId);
+    const category = targetLib ? getDownloadCategoryForLibrary(targetLib, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
     
     let downloadId = "";
     if (protocol === "usenet") {
@@ -7614,7 +7635,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: string, releaseTitle: string = ""): Promise<"downloading" | "completed" | "failed" | "unknown"> {
+async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: string, releaseTitle: string = ""): Promise<{ status: "downloading" | "completed" | "failed" | "unknown", storage?: string, category?: string }> {
     try {
         const titleLower = releaseTitle.toLowerCase().trim();
         const qRes = await fetch(`${sabUrl}/api?mode=queue&output=json&apikey=${sabKey}`);
@@ -7630,8 +7651,8 @@ async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: st
                 );
             }
             if (slot) {
-                if (slot.status?.toLowerCase() === "failed") return "failed";
-                return "downloading";
+                if (slot.status?.toLowerCase() === "failed") return { status: "failed" };
+                return { status: "downloading", category: slot.cat };
             }
         }
 
@@ -7648,14 +7669,14 @@ async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: st
                 );
             }
             if (slot) {
-                if (slot.status?.toLowerCase() === "failed") return "failed";
-                if (slot.status?.toLowerCase() === "completed") return "completed";
+                if (slot.status?.toLowerCase() === "failed") return { status: "failed" };
+                if (slot.status?.toLowerCase() === "completed") return { status: "completed", storage: slot.storage, category: slot.category };
             }
         }
-        return "unknown";
+        return { status: "unknown" };
     } catch (e) {
         console.error("Error checking SABnzbd status:", e);
-        return "unknown";
+        return { status: "unknown" };
     }
 }
 
@@ -7974,13 +7995,16 @@ export async function monitorAndRetryDownload(
         }
 
         let downloadStatus: "downloading" | "completed" | "failed" | "unknown" = "unknown";
+        let sabStoragePath: string | undefined = undefined;
         
         if (release.protocol === "usenet") {
             const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
                 const sabKey = decryptData(sabApp.apiKey as string);
-                downloadStatus = await checkSabnzbdStatus(sabUrl, sabKey, downloadId, release.title);
+                const sabRes = await checkSabnzbdStatus(sabUrl, sabKey, downloadId, release.title);
+                downloadStatus = sabRes.status;
+                sabStoragePath = sabRes.storage;
             }
         } else {
             const qbitApp = await prisma.mediaApp.findFirst({
@@ -8007,17 +8031,30 @@ export async function monitorAndRetryDownload(
             let finalDestPath = "";
             try {
                 const reqMedia = currentReq?.mediaType || "ebook";
-                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
+                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl, currentReq.libraryId);
                 if (targetLib) {
                     const settings = await prisma.settings.findFirst();
                     const configuredPath = settings?.downloadsPath || "/downloads";
+                    const targetCategory = (targetLib?.downloadCategory || "").trim();
                     const searchPaths = [
+                        ...(sabStoragePath ? [sabStoragePath, path.dirname(sabStoragePath)] : []),
+                        ...(targetCategory ? [
+                            path.join(configuredPath, targetCategory),
+                            path.join(configuredPath, "complete", targetCategory),
+                            path.join(configuredPath, "completed", targetCategory)
+                        ] : []),
+                        path.join(configuredPath, "books"),
+                        path.join(configuredPath, "audiobooks"),
+                        path.join(configuredPath, "complete", "books"),
+                        path.join(configuredPath, "complete", "audiobooks"),
+                        path.join(configuredPath, "complete"),
+                        path.join(configuredPath, "completed"),
                         configuredPath,
                         process.env.DOWNLOADS_DIR || "/downloads",
                         "/downloads",
                         "/app/downloads",
                         "./downloads"
-                    ];
+                    ].filter(Boolean);
                     console.log(`[AUTO-DOWNLOAD-MONITOR] Searching for completed download in paths:`, searchPaths);
                     let foundFilePath: string | null = null;
                     let allFound: string[] = [];
@@ -8338,8 +8375,8 @@ export async function monitorAndRetryDownload(
             const currentReq = await prisma.bookRequest.findUnique({ where: { id: requestId } });
             const reqMedia = currentReq?.mediaType || "ebook";
             const requester = currentReq?.requestedBy || "";
-            const backupLib = await getTargetLibraryForUser(requester, reqMedia, currentReq?.coverUrl);
-            const nextCategory = backupLib ? getDownloadCategoryForLibrary(backupLib.name, reqMedia) : (reqMedia === "audiobook" ? "audiobooks" : "books");
+            const backupLib = await getTargetLibraryForUser(requester, reqMedia, currentReq?.coverUrl, currentReq?.libraryId);
+            const nextCategory = backupLib ? getDownloadCategoryForLibrary(backupLib, reqMedia) : (reqMedia === "audiobook" ? "audiobooks" : "books");
             
             let nextDownloadId = "";
             if (nextRelease.protocol === "usenet") {
@@ -9441,7 +9478,8 @@ export async function fulfillRequestWithUpload(formData: FormData) {
             if (!sabApp) return { success: false, error: "SABnzbd is not configured." };
             const sabUrl = cleanUrl(sabApp.url);
             const sabKey = decryptData(sabApp.apiKey as string);
-            const category = request.mediaType === "audiobook" ? "audiobooks" : "books";
+            const targetLibForNzb = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl, request.libraryId);
+            const category = targetLibForNzb ? getDownloadCategoryForLibrary(targetLibForNzb, request.mediaType || "ebook") : (request.mediaType === "audiobook" ? "audiobooks" : "books");
 
             const form = new FormData();
             form.append("name", new Blob([buffer], { type: "application/x-nzb" }), originalName);
@@ -9462,7 +9500,7 @@ export async function fulfillRequestWithUpload(formData: FormData) {
         }
 
         // Media file (.epub, .pdf, .m4b, .mp3, etc.)
-        const targetLib = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl);
+        const targetLib = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl, request.libraryId);
         if (!targetLib) {
             return { success: false, error: "No target library found for user." };
         }
@@ -10765,17 +10803,25 @@ export async function importCompletedDownload(requestId: string) {
     if (!currentReq) return { success: false, error: "Request not found" };
 
     const reqMedia = currentReq.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
+    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl, currentReq.libraryId);
     if (!targetLib) return { success: false, error: "No target library shelf configured for user" };
 
     const settings = await prisma.settings.findFirst();
     const configuredPath = settings?.downloadsPath || "/downloads";
+    const targetCategory = (targetLib?.downloadCategory || "").trim();
     const searchPaths = [
-        configuredPath,
-        path.join(configuredPath, "completed"),
-        path.join(configuredPath, "complete"),
-        path.join(configuredPath, "audiobooks"),
+        ...(targetCategory ? [
+            path.join(configuredPath, targetCategory),
+            path.join(configuredPath, "complete", targetCategory),
+            path.join(configuredPath, "completed", targetCategory)
+        ] : []),
         path.join(configuredPath, "books"),
+        path.join(configuredPath, "audiobooks"),
+        path.join(configuredPath, "complete", "books"),
+        path.join(configuredPath, "complete", "audiobooks"),
+        path.join(configuredPath, "complete"),
+        path.join(configuredPath, "completed"),
+        configuredPath,
         process.env.DOWNLOADS_DIR || "/downloads",
         "/downloads",
         "/downloads/completed",
@@ -10789,7 +10835,7 @@ export async function importCompletedDownload(requestId: string) {
         "/mnt/user/Books",
         "/app/downloads",
         "./downloads"
-    ];
+    ].filter(Boolean);
 
     let foundFilePath: string | null = null;
     let allFound: string[] = [];
