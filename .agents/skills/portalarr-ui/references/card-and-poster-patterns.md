@@ -76,3 +76,11 @@ Standard grid layout for media shelves and discovery pages:
   {items.map(item => <MediaCard key={item.id} item={item} />)}
 </div>
 ```
+
+---
+
+## 6. Volume-Ordered Missing Series Cards & 1-Click Auto-Grab
+
+- Series missing book displays render strictly ordered ascending by volume (`Vol 1`, `Vol 2`, `Vol 3`...).
+- Missing cards feature clean volume badges, author attribution, and prominent **`Auto Grab`** (1-click trigger) and **`Search`** (modal chooser) action buttons.
+- In *Seerr media discovery, missing series items appear in the horizontal `"Missing from Your Series"` carousel with volume tags and 1-click grab workflows.

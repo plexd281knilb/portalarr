@@ -161,8 +161,8 @@ Portalarr tracks book series and helps you complete your collections:
 
 - **Group by Series:** Check the *Group by Series* toggle on any library shelf to organize books sequentially by series name and volume number.
 - **📡 Auto-Monitor Series:** Click the **`Monitor Series` (`Zap`)** button on any series request card. Portalarr's background scheduler will automatically check book registries for new installments and queue downloads as soon as they become available.
-- **🔍 Show Missing Books:** Click *Show Missing Books* on any series card to automatically scan iTunes, OpenLibrary, and Google Books for unacquired installments.
-- **⚡ 1-Click Auto-Grab:** Click **`Auto-Grab`** on individual missing installments (or **`Grab All Missing`**) to automatically search indexers and download them.
+- **🔍 Show Missing Books:** Click *Show Missing Books* on any series card to automatically scan iTunes, OpenLibrary, and Google Books for unacquired installments. Results are sorted strictly by volume (`Vol 1`, `Vol 2`, `Vol 3`...) with knockoff study guides, summary publishers, and foreign translations filtered out.
+- **⚡ 1-Click Auto-Grab:** Click **`Auto-Grab`** on individual missing installments (or **`Grab All Missing`**) to automatically search indexers and download them. Discovered missing books also appear in the *Seerr discovery ("Missing from Your Series") carousel.
 - **Missing Book Stubs:** Missing books appear on your shelf as grayscale cards with a `MISSING` badge and `.portalarr-missing` immunity markers. When the real file is downloaded, the stub is automatically replaced.
 
 ---

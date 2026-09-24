@@ -120,8 +120,8 @@ Portalarr organizes your reading and listening collection into dedicated tabs:
 ### 📖 Ebooks Tab
 - **Browse & Search:** Filter by library shelves, search by title or author, and sort by date or title.
 - **Series Grouping:** Toggle *Group by Series* to view books neatly organized by their book series with volume numbers.
-- **🔍 Show Missing Books:** Click **Show Missing Books** on any series group to discover unacquired books in that series.
-- **⚡ 1-Click Auto-Grab:** In the Missing Books view, click **Auto-Grab** on any missing installment (or grab the entire series) to immediately auto-request and download it.
+- **🔍 Show Missing Books:** Click **Show Missing Books** on any series group to discover unacquired books in that series, sorted chronologically and sequentially by volume number (`Vol 1`, `Vol 2`, `Vol 3`...) with knockoff study guides and summary publishers automatically filtered out.
+- **⚡ 1-Click Auto-Grab:** In the Missing Books view, click **Auto-Grab** on any missing installment (or grab the entire series) to immediately auto-request and download it. Missing series items automatically surface in *Seerr discovery ("Missing from Your Series" carousel).
 - **🌫️ Missing Book Cards:** Missing books display on your shelf with a grayscale poster, "MISSING" badge, and 0 MB indicator. You can click **Re-Grab Release** directly from the book card modal to search indexers anytime.
 - **1-Click Kindle Send (`📧`):** Click the Kindle button on any book card to wirelessly dispatch the EPUB/MOBI file directly to your e-reader.
 - **Direct Download (`⬇️`):** Click the Download button to download EPUB or PDF files directly to your phone, tablet, or computer.

@@ -75,6 +75,13 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 - **Safe Content Enforcements**: Kids searches and carousels pass `include_adult=false`, enforce TMDb certification ratings (`G`, `PG`, `TV-Y`, `TV-Y7`, `TV-G`, `TV-PG`), and filter out adult keywords.
 - **Isolated Library Matching**: Kids views verify library availability strictly against kids-specific Plex libraries rather than unrestricted main adult libraries.
 
+### 7. Unified Multi-Media Pipeline (Movies, TV, Ebooks & Audiobooks)
+Portalarr's native Seerr engine unifies all media types into a single mission control request registry (`/requests` and `/discover`):
+- **Cross-Format MediaRequest Model**: Supports `mediaType: "movie" | "tv" | "book" | "audiobook" | "ebook"`.
+- **Nullable `tmdbId` for Books & Audiobooks**: Non-TMDB media identifiers use `openLibraryId`, `googleBooksId`, `asin`, `bookAuthor`, `bookSeries`, and `bookVolume`, with `tmdbId` explicitly nullable (`Int?`).
+- **Missing from Your Series Discovery**: Discovered unacquired installments from the user's book and audiobook series automatically surface in the *Seerr discovery feed as high-priority suggestions.
+- **Bi-Directional Request Mirroring**: `syncMediaRequestsQueueAndAvailabilityInternal` periodically reconciles legacy `BookRequest` records into `MediaRequest`, synchronizing download progress and availability states.
+
 ---
 
 ## Common Gotchas & Troubleshooting
@@ -96,3 +103,5 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 6. **Radix Dialog `sm:max-w-lg` Tailwind Specificity**:
    - Radix `DialogContent` includes `sm:max-w-lg` in base classes. Passing an unprefixed `max-w-6xl` fails to override `sm:max-w-lg` during `tailwind-merge`.
    - Pass explicit prefixed responsive classes (`sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw]`) to render wide, spacious modals for TV series episode guides and cast grids.
+7. **SQLite `PRAGMA table_info` BigInt Gotcha on Table Rebuilds**:
+   - In Prisma with SQLite, `prisma.$queryRawUnsafe("PRAGMA table_info(...)")` returns column integer metadata (`notnull`, `pk`) as JavaScript `BigInt` (e.g. `1n`). Strict equality `col.notnull === 1` returns `false`, causing table constraint migrations (like relaxing `tmdbId` to nullable) to be skipped. Always check `Number(col.notnull) === 1 || col.notnull == 1` and execute `DROP TABLE IF EXISTS "Table_migrating";` before staging new tables.
