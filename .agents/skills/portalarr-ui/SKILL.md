@@ -1,0 +1,101 @@
+---
+name: portalarr-ui
+description: Comprehensive UI/UX design, component styling, layout architecture, and responsiveness guide for Portalarr. Activate when building, modifying, or refining frontend components, modals, dialogs, media cards, forms, settings panels, navigation, or dark theme styling.
+---
+
+# Portalarr UI Design & Component System Guide
+
+This skill serves as the single source of truth for all UI/UX design patterns, component conventions, responsiveness rules, and aesthetic standards across Portalarr. Use and update this guide whenever implementing new views, tweaking existing layouts, or refining user interaction flows.
+
+---
+
+## 🎨 Core Design Foundations
+
+Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix UI primitives, Lucide React icons, and custom glassmorphic styling.
+
+### 1. Color Palette & Hierarchy
+- **Canvas / App Background**: `bg-slate-950` or `bg-black` with subtle gradients (`from-slate-950 via-slate-900 to-slate-950`).
+- **Primary Cards & Containers**: `bg-slate-900/90` with `border border-slate-800 backdrop-blur-md`.
+- **Secondary Nested Wells / Inner Boxes**: `bg-slate-950/60` or `bg-slate-900/40` with `border border-slate-800/80`.
+- **Active / Unsaved Dirty State Warning**:
+  - Border: `border-2 border-amber-500/70`
+  - Glow: `shadow-[0_0_20px_rgba(245,158,11,0.2)]`
+- **Semantic Accents**:
+  - 🟢 **Emerald (`emerald-400` / `emerald-500`)**: Success, available in library, active streaming, auto-approved.
+  - 🟡 **Amber (`amber-400` / `amber-500`)**: Pending review, warnings, unsaved dirty states, monitored coming soon.
+  - 🟣 **Purple / Indigo (`purple-400` / `indigo-400`)**: Poster overlays, Kometa studio, AI metadata agents, automation schedules.
+  - 🔵 **Cinematic Blue / Cyan (`sky-400` / `cyan-400`)**: Live stream telemetry, Plex direct play, speed test, digital releases.
+  - 🔴 **Crimson / Rose (`rose-500` / `red-500`)**: Prune deletions, errors, stream terminations, declined requests.
+
+---
+
+## 📐 Key Layout & Component Rules
+
+### 1. Modals & Dialogs (Space Optimization & Responsive Widths)
+- **Radix Tailwind Merge Gotcha**: Base `DialogContent` contains `sm:max-w-lg`. Passing an unprefixed `max-w-6xl` gets overridden!
+- **Rule**: Always pass explicit prefixed responsive classes for wide modals (Media Detail, Seerr requests, Episode Guide, Collection Builders):
+  ```tsx
+  className="sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw] max-h-[92vh] overflow-y-auto p-0 bg-slate-950 border border-slate-800 shadow-2xl rounded-2xl"
+  ```
+- **Zero Wasted Header Space**:
+  - Use a compact hero backdrop layout with gradient fades (`bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent`).
+  - Keep titles, badges (Year, Rating, Runtime, Status), and quick-action buttons aligned without massive empty top margins.
+  - Place trailer playback triggers and primary action buttons (Request / Download) directly in the header action bar for instant 1-click access without vertical scrolling.
+
+See detailed reference: [modal-and-dialog-patterns.md](./references/modal-and-dialog-patterns.md).
+
+---
+
+### 2. Media Cards & Posters (Strict 2:3 Proportions)
+- **Strict Aspect Ratio**: Always enforce standard 2:3 vertical poster proportions (`aspect-[2/3]` or `h-[270px] w-[180px]`).
+- **Plex Photo Transcode Dimensions**: In `/api/media/image` and PMS endpoints, pass `width=600&height=900` (never landscape `600x400` which crops portrait posters).
+- **Extensive Non-Fiction Subtitles**:
+  - In `BookCard`, `AudiobookCard`, and `MediaCard`, use `line-clamp-3 h-[60px] block` instead of `flex items-center` to avoid squishing long titles.
+- **Grayscale Missing Stubs**:
+  - Missing book or media stubs use `grayscale opacity-60 hover:opacity-90` with dashed amber/slate borders and `.portalarr-missing` immunity.
+
+See detailed reference: [card-and-poster-patterns.md](./references/card-and-poster-patterns.md).
+
+---
+
+### 3. Forms, Autocomplete & Dirty State Management
+- **Autocomplete Dropdowns**: Always use `onMouseDown` on dropdown suggestion items instead of `onClick` to prevent input `onBlur` from unmounting items before the click event fires.
+- **Unsaved Settings Protection**:
+  - Highlight dirty sections with amber glowing borders.
+  - Render a fixed bottom floating save bar (`Save Settings *`) when changes are pending.
+- **Sensitive Fields**:
+  - Mask tokens and passwords by default (`type={showToken ? "text" : "password"}`).
+  - Provide an inline toggle button with Lucide `<Eye />` / `<EyeOff />`.
+- **Live Connection Diagnostics**:
+  - Provide a dedicated `"Test"` button next to server/app URLs and API tokens with `<Loader2 className="animate-spin" />` feedback.
+
+See detailed reference: [form-and-input-patterns.md](./references/form-and-input-patterns.md).
+
+---
+
+### 4. Responsive Media Grids
+Use dynamic wrapping columns optimized across all screen breakpoints:
+```tsx
+className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4 lg:gap-5"
+```
+
+---
+
+## 🛠️ How to Update and Tweak This Skill
+
+As the Portalarr frontend evolves or new design decisions are finalized:
+1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
+2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.
+3. **Documenting New Pages or Studios**: Create a new reference file in `references/` and link it here.
+
+Detailed guide on updating: [updating-this-skill.md](./references/updating-this-skill.md).
+
+---
+
+## 📚 Reference Documents
+
+- [Modal & Dialog Patterns](./references/modal-and-dialog-patterns.md)
+- [Card & Poster Patterns](./references/card-and-poster-patterns.md)
+- [Form & Input Patterns](./references/form-and-input-patterns.md)
+- [Theme & Color Tokens](./references/theme-and-color-tokens.md)
+- [Updating This Skill](./references/updating-this-skill.md)
