@@ -600,7 +600,7 @@ export function MediaDetailModal({
                                             {is1080pMonitored && (
                                                 <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border-blue-500/40 backdrop-blur-md flex items-center gap-1">
                                                     <Check className="h-3 w-3" />
-                                                    <span>1080p Monitored</span>
+                                                    <span>{canRequest4k ? "1080p Monitored" : "Monitored"}</span>
                                                 </Badge>
                                             )}
 
@@ -700,7 +700,7 @@ export function MediaDetailModal({
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-8 sm:h-9 px-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-300 flex items-center gap-1.5 text-xs font-bold">
                                                         <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                                                        <span>1080p Monitored</span>
+                                                        <span>{canRequest4k ? "1080p Monitored" : "Monitored"}</span>
                                                     </div>
                                                     {canRequest4k && (
                                                         <Button
@@ -890,10 +890,14 @@ export function MediaDetailModal({
                                                 </div>
                                                 <div>
                                                     <h4 className="text-xs sm:text-sm font-bold text-blue-200">
-                                                        Monitored in 1080p ({arrDetails?.app1080pName || "Standard Instance"})
+                                                        {canRequest4k ? `Monitored in 1080p (${arrDetails?.app1080pName || (isTv ? "Sonarr" : "Radarr")})` : `Monitored in ${arrDetails?.app1080pName || (isTv ? "Sonarr" : "Radarr")}`}
                                                     </h4>
                                                     <p className="text-[11px] text-blue-300/80">
-                                                        This title is already monitored for 1080p. You can still request a dedicated 4K UHD version below!
+                                                        {canRequest4k
+                                                            ? `This title is already monitored for 1080p. You can still request a dedicated 4K UHD version below!`
+                                                            : isTv
+                                                            ? `This series is actively monitored in Sonarr. You can manage or request specific seasons and episodes below.`
+                                                            : `This movie is actively monitored in Radarr and will download automatically once available.`}
                                                     </p>
                                                 </div>
                                             </div>
@@ -909,7 +913,9 @@ export function MediaDetailModal({
                                                         Monitored in 4K UHD ({arrDetails?.app4kName || "4K Instance"})
                                                     </h4>
                                                     <p className="text-[11px] text-purple-300/80">
-                                                        This title is already monitored for 4K. You can request a companion 1080p standard version below!
+                                                        {isTv
+                                                            ? `This series is currently monitored for 4K UHD. You can request companion 1080p standard versions or unmonitored episodes below!`
+                                                            : `This movie is already monitored for 4K UHD. You can request a companion 1080p standard version below!`}
                                                     </p>
                                                 </div>
                                             </div>
@@ -976,7 +982,7 @@ export function MediaDetailModal({
                                             <div className="space-y-2.5 border-t border-border/40 pt-2.5">
                                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                                     <span className="text-xs font-semibold text-muted-foreground">
-                                                        Select Seasons to Request ({is4k ? "4K UHD" : "1080p"}):
+                                                        Select Seasons to Request{canRequest4k ? ` (${is4k ? "4K UHD" : "1080p"})` : ""}:
                                                     </span>
                                                     <div className="flex items-center gap-2">
                                                         <Button
@@ -1040,7 +1046,7 @@ export function MediaDetailModal({
                                                                     {isFullyMon ? (
                                                                         <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/40 flex items-center gap-0.5">
                                                                             <Check className="h-2.5 w-2.5" />
-                                                                            {is4k ? "4K Monitored" : "1080p Monitored"}
+                                                                            {canRequest4k ? (is4k ? "4K Monitored" : "1080p Monitored") : "Monitored"}
                                                                         </span>
                                                                     ) : isPartiallyMon ? (
                                                                         <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/40">
@@ -1052,7 +1058,7 @@ export function MediaDetailModal({
                                                                         </span>
                                                                     )}
 
-                                                                    {!is4k && seasonMon4k?.isFullyMonitored && (
+                                                                    {!is4k && canRequest4k && seasonMon4k?.isFullyMonitored && (
                                                                         <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[9px] font-bold border border-purple-500/40">
                                                                             4K
                                                                         </span>
@@ -1101,7 +1107,7 @@ export function MediaDetailModal({
                                             ) : !isTv && isCurrentQualityMonitored ? (
                                                 <>
                                                     <RefreshCw className="h-4 w-4" />
-                                                    <span>Re-Search {is4k ? "4K UHD" : "1080p"} Movie in Radarr</span>
+                                                    <span>Re-Search {canRequest4k ? (is4k ? "4K UHD " : "1080p ") : ""}Movie in Radarr</span>
                                                 </>
                                             ) : isTv && allSelectedSeasonsMonitored ? (
                                                 <>
@@ -1112,7 +1118,7 @@ export function MediaDetailModal({
                                                 <>
                                                     <Plus className="h-4 w-4" />
                                                     <span>
-                                                        Request {isTv ? `${selectedSeasons.length} Season(s)` : "Movie"} ({is4k ? "4K UHD" : "1080p"})
+                                                        Request {isTv ? `${selectedSeasons.length} Season(s)` : "Movie"}{canRequest4k ? ` (${is4k ? "4K UHD" : "1080p"})` : ""}
                                                     </span>
                                                 </>
                                             )}
@@ -1320,20 +1326,20 @@ export function MediaDetailModal({
                                                                     {mon1080?.hasFile ? (
                                                                         <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
                                                                             <CheckCircle2 className="h-3 w-3" />
-                                                                            1080p Downloaded
+                                                                            {canRequest4k ? "1080p Downloaded" : "Downloaded"}
                                                                         </span>
                                                                     ) : mon1080?.monitored ? (
                                                                         <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-500/40 flex items-center gap-1">
                                                                             <Clock className="h-3 w-3" />
-                                                                            1080p Monitored
+                                                                            {canRequest4k ? "1080p Monitored" : "Monitored"}
                                                                         </span>
                                                                     ) : (
                                                                         <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-muted-foreground text-[10px] font-medium border border-white/10">
-                                                                            1080p Unmonitored
+                                                                            {canRequest4k ? "1080p Unmonitored" : "Unmonitored"}
                                                                         </span>
                                                                     )}
 
-                                                                    {arrDetails?.isConfigured4k && (
+                                                                    {canRequest4k && (
                                                                         mon4k?.hasFile ? (
                                                                             <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
                                                                                 <CheckCircle2 className="h-3 w-3" />

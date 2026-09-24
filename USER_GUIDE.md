@@ -13,9 +13,10 @@ Welcome to Portalarr! This guide will walk you through monitoring your Plex stre
 6. [Browsing & Accessing Media (Ebooks & Audiobooks)](#6-browsing--accessing-media-ebooks--audiobooks)
 7. [Requesting New Books & Audiobooks](#7-requesting-new-books--audiobooks)
 8. [Troubleshooting, Release Selection & 1-Click Import](#8-troubleshooting-release-selection--1-click-import)
-9. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#9--curation-studio-suite-kometa-agregarr-maintainerr-tagging)
-10. [👁️ Admin Tools: View Site As User (Impersonation)](#10-️-admin-tools-view-site-as-user-impersonation)
-11. [Need Help or Technical Support?](#11-need-help-or-technical-support)
+9. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#9--native-movie--tv-show-requests-seerr-engine--episode-guides)
+10. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#10--curation-studio-suite-kometa-agregarr-maintainerr-tagging)
+11. [👁️ Admin Tools: View Site As User (Impersonation)](#11-️-admin-tools-view-site-as-user-impersonation)
+12. [Need Help or Technical Support?](#12-need-help-or-technical-support)
 
 ---
 
@@ -181,7 +182,31 @@ Click **Submit Request**. You can track live progress under the **Requests** tab
 
 ---
 
-## 🎨 9. 🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)
+## 🎬 9. 🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)
+
+Portalarr includes a built-in, native media discovery and request engine (replacing external Overseerr or Jellyseerr instances) directly connected with TMDb, Plex, Radarr, and Sonarr!
+
+### 🌟 Discovering Trending & Recommended Media (`/discover`)
+- **Interactive Carousels:** Browse Trending Movies, Trending TV Shows, Upcoming Releases, and Popular Titles with real-time availability badges (`Available`, `Partially Available`, `Requested`, `Monitored`).
+- **Live Search & Autocomplete:** Search for any movie, TV series, actor, director, or studio with instant keyboard navigation.
+- **Media Detail Modals:** Click any title to view high-definition artwork, overview, runtime, genres, trailers, cast/crew directory, ratings, and recommendations.
+
+### 📥 Requesting Movies & TV Shows
+- **1-Click Movie Requests:** Click **Request** to dispatch the movie directly to Radarr. If 4K is configured and permitted on your account, toggle between standard 1080p and dedicated 4K UHD quality.
+- **TV Series & Granular Season/Episode Requests:**
+  - **Full Series:** Request all past, present, and future seasons with one click.
+  - **Specific Seasons:** Pick and choose exact seasons using the interactive season grid.
+  - **Episode-Level Monitoring:** Expand any season to view episode thumbnails, titles, air dates, and individual episode monitoring switches (`Monitored` vs `Unmonitored`).
+- **Deep Episode Sync:** If a series is already partially monitored in Sonarr, requesting newly selected episodes dynamically updates Sonarr via `PUT /api/v3/episode/monitor` and immediately triggers an automatic `EpisodeSearch` command.
+- **Quota Management:** Enforces user-specific weekly/daily movie and TV request quotas.
+
+### 🔔 Live Discord & Email Notifications
+- **Discord Webhook Alerts:** When a request is submitted, approved, or downloaded, rich Discord embed cards are automatically dispatched with color coding (🟡 Pending, 🟢 Approved/Available, 🔴 Declined/Failed), media poster thumbnails, format tags (`4K UHD` vs `1080p`), and requesting user details.
+- **Styled HTML Email Notifications:** Administrators receive instant email updates with direct links to approve or manage requests.
+
+---
+
+## 🎨 10. 🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)
 
 Administrators can curate Plex libraries natively without external scripts or extra docker containers:
 
@@ -192,7 +217,7 @@ Administrators can curate Plex libraries natively without external scripts or ex
 
 ---
 
-## 👁️ 10. 👁️ Admin Tools: View Site As User (Impersonation)
+## 👁️ 11. 👁️ Admin Tools: View Site As User (Impersonation)
 
 Administrators can view the entire Portalarr portal through the eyes of any registered user:
 1. Navigate to **System Settings** → **Access Control** (`/settings/access`).
@@ -203,7 +228,7 @@ Administrators can view the entire Portalarr portal through the eyes of any regi
 
 ---
 
-## ❓ 11. Need Help or Technical Support?
+## ❓ 12. Need Help or Technical Support?
 
 If a download fails, a stream won't play, or you need server assistance:
 1. Click the **Support** (`💬`) icon in the main navigation bar.

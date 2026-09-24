@@ -71,3 +71,7 @@ See detailed runbook: [movie-model-and-decisions.md](./references/movie-model-an
    - Fix: Configure **Remote Path Mappings** in Settings -> Download Clients to map host/client directory to local container directory.
 3. **Hardlink vs Copy**:
    - For torrents to continue seeding without consuming double storage space, Radarr and the download client completed directory must reside on the same filesystem mount to allow atomic hardlinks (`link` syscall).
+4. **4K UHD vs 1080p Radarr Instance Isolation**:
+   - Radarr instances must be explicitly selected by ID (`seerrDefaultMovieAppId` for standard 1080p, `seerrDefaultMovie4kAppId` for 4K). Never fall back to auto-discovering any server containing "4k" if 4K is disabled in settings.
+5. **Fast TMDB Lookup & Monitored State**:
+   - Query `/api/v3/movie` and index movies by `tmdbId` to instantly check if a movie is `monitored` and whether it `hasFile` across 1080p and 4K instances.

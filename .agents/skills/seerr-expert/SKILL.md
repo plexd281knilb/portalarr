@@ -53,7 +53,15 @@ When requests are approved:
 - **`OverrideRule`**: Dynamically assigns custom quality profiles, root paths, or tags based on language (e.g. Japanese anime -> `/data/anime`), genres, or keywords.
 - **`AvailabilitySync`**: Periodic scanner checks Plex/Jellyfin libraries to flip media to `AVAILABLE` and notifies the requester.
 
-See detailed runbook: [servarr-dispatch-and-sync.md](./references/servarr-dispatch-and-sync.md).
+### 3. Granular TV Episode Monitoring & Deep Arr Inspection
+Portalarr's native Seerr engine features deep per-episode monitoring synchronization:
+- **Episode Mapping**: Queries `/api/v3/episode?seriesId={id}` on target Sonarr instances to construct a per-episode map (`s{season}e{episode}`) tracking monitored and on-disk file availability for both 1080p and 4K instances.
+- **Season Status Reconciliation**: Compares `monitoredEpisodeCount` against `totalEpisodeCount` to flag seasons as `isFullyMonitored`, `isPartiallyMonitored`, or `Unmonitored`.
+- **Targeted Episode Grabs**: Allows users to select individual unmonitored episodes or unmonitored seasons, dispatching `/api/v3/episode/monitor` and triggering `EpisodeSearch` commands without redundant series re-imports.
+
+### 4. Multi-Channel Notification Engine (Discord Webhooks & HTML Emails)
+- **Discord Webhook Cards**: Dispatches embed cards for `PENDING`, `AUTO_APPROVED`, `APPROVED`, `DECLINED`, `AVAILABLE`, and `FAILED` events. Embeds feature poster artwork, format badges (🎬 MOVIE vs 📺 TV SERIES, 4K UHD vs 1080p), requester username, season counts, and direct action links.
+- **Rich HTML Emails**: Sends branded HTML emails via SMTP for admin approval alerts and user status updates, using dynamic public host resolution (`getAppUrl()`).
 
 ---
 
@@ -65,5 +73,10 @@ See detailed runbook: [servarr-dispatch-and-sync.md](./references/servarr-dispat
 2. **Duplicate Request Error (HTTP 409)**:
    - Cause: Another user already submitted a request for this TMDb ID or season.
    - Fix: Seerr blocks duplicate requests. The UI attaches multiple users to the existing `Media` record instead.
-3. **4K vs Standard Media Isolation**:
-   - Seerr tracks `status` (standard) and `status4k` (4K) independently. A movie can be `AVAILABLE` in 1080p while pending in 4K. Ensure 4K Radarr/Sonarr servers are flagged with `is4k: true`.
+3. **4K vs Standard Media Isolation & Strict Gating**:
+   - 4K Radarr and Sonarr instances must strictly resolve only when explicitly configured in settings (`seerrDefaultMovie4kAppId` / `seerrDefaultTv4kAppId` !== `"none"`).
+   - Never fall back to auto-discovering any app containing "4k" in its name if 4K has been disabled in settings.
+   - The UI must gate all 4K checkboxes, target quality indicators, and banner messages behind `canRequest4k = Boolean(quotaData?.canRequest4k && arrDetails?.isConfigured4k)`.
+4. **Radix Dialog `sm:max-w-lg` Tailwind Specificity**:
+   - Radix `DialogContent` includes `sm:max-w-lg` in base classes. Passing an unprefixed `max-w-6xl` fails to override `sm:max-w-lg` during `tailwind-merge`.
+   - Pass explicit prefixed responsive classes (`sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw]`) to render wide, spacious modals for TV series episode guides and cast grids.

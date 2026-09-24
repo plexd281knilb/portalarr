@@ -6,6 +6,12 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 ## 🚀 Features
 
+- **Native Seerr Media Request Engine (Overseerr / Jellyseerr Replacement):** Full-featured media discovery, request management, and library automation built right into Portalarr (`/discover` and `/requests`):
+  - **TMDb Discovery & Trending Carousels:** Browse trending movies, popular TV shows, upcoming releases, and personalized recommendations with instant search autocomplete.
+  - **Radarr & Sonarr Dispatch:** 1-click media requests with quota enforcement, automatic approval workflows, and instant root folder and quality profile routing.
+  - **Granular Season & Episode Request Guides:** Drill down into any TV series to inspect episode thumbnails, titles, air dates, and individual episode monitoring switches. Requests for new episodes dynamically update Sonarr via `PUT /api/v3/episode/monitor` and trigger automated `EpisodeSearch` commands.
+  - **Quality-Aware 4K UHD vs 1080p Multi-Instance Routing:** Configure separate 4K and 1080p Radarr/Sonarr instances with granular permission gates and intelligent UI toggle adaptation.
+  - **Live Discord Webhook Cards & Email Notifications:** Real-time embed cards dispatched to Discord channels with poster artwork, status colors (🟡 Pending, 🟢 Approved/Available, 🔴 Declined/Failed), and 4K tags, paired with rich HTML email notifications.
 - **Plex & Server Master AI Assistant:** Interactive AI assistant trained on media server troubleshooting, stream telemetry, and device playback bugs. Delivers step-by-step fixes for issues like Roku Auto-Adjust Quality bandwidth rejection, transcode stuttering, audio transcoding, and subtitle burn-in, with 1-click ticket escalation pre-populated with diagnostic telemetry.
 - **View Site As User (Admin Impersonation):** Administrators can switch into any user's exact perspective with 1 click from the User Directory (`/settings/access`). Enforces user-specific library shelves, watch time, active streams, and non-admin restrictions, with a persistent global warning banner and 1-click return to admin.
 - **Curation Studio Suite (Beta):** Native built-in tools replacing external containers:
@@ -37,9 +43,8 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 - **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
 - **Upcoming Roadmap:**
   - **Step 1 — Curation & Poster Studio (Agregarr & Kometa Replacement):** Dynamic collection generator, smart playlists, automated poster overlays (4K HDR, Dolby Vision/Atmos), and storage prune engine.
-  - **Step 2 — Native *Seerr Replacement (Overseerr / Jellyseerr):** All-in-one Movie & TV media discovery, interactive trailer playback, trending carousels, and Radarr/Sonarr request engine.
-  - **Step 3 — User Authorization, Personal Visibility & Kid/Living Room Accounts:** Granular user control over personalized tag, genre, and collection visibility, plus dedicated Kid and Shared Household accounts.
-  - **Step 4 — AI Log Ingestion & Deep Server Log Diagnostics:** Automated Plex Media Server, Tautulli, Transcoder, and Arr log ingestion into Portalarr for AI agent error correlation and pinpoint fixes.
+  - **Step 2 — User Authorization, Personal Visibility & Kid/Living Room Accounts:** Granular user control over personalized tag, genre, and collection visibility, plus dedicated Kid and Shared Household accounts.
+  - **Step 3 — AI Log Ingestion & Deep Server Log Diagnostics:** Automated Plex Media Server, Tautulli, Transcoder, and Arr log ingestion into Portalarr for AI agent error correlation and pinpoint fixes.
 
 ## 🛠️ Quick Start
 

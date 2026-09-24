@@ -46,7 +46,8 @@ Sonarr exposes an OpenAPI-compliant HTTP API secured by `X-Api-Key`:
 - **Monitored Missing Queries**: `GET /api/v5/series` filtered by `s.monitored && (s.statistics.episodeFileCount === 0 || s.statistics.percentOfEpisodes < 100)`.
 - **Tag Collections**: `GET /api/v5/tag` -> filter series where `s.tags.includes(tagId)`.
 - **Episode Management**: `GET /api/v5/episode?seriesId={id}` -> `PUT /api/v5/episode/{id}`.
-- **Commands**: `POST /api/v5/command` (`SeriesSearch`, `SeasonSearch`, `EpisodeSearch`, `DownloadedEpisodesScan`, `RefreshSeries`).
+- **Bulk Episode Monitoring**: `PUT /api/v3/episode/monitor` with payload `{ episodeIds: number[], monitored: boolean }` to update monitoring state for multiple episodes at once.
+- **Commands**: `POST /api/v5/command` (`SeriesSearch`, `SeasonSearch`, `EpisodeSearch`, `DownloadedEpisodesScan`, `RefreshSeries`). For specific episodes: `{ name: "EpisodeSearch", episodeIds: number[] }`.
 
 See detailed runbook: [api-v5-endpoints.md](./references/api-v5-endpoints.md).
 
@@ -72,3 +73,7 @@ See detailed runbook: [series-parsing-and-models.md](./references/series-parsing
 3. **Episode Left Unmonitored After Adding Series**:
    - Cause: The series was added with `addOptions.monitor` set to `"future"` or `"none"`.
    - Fix: Use `"monitor": "all"` to monitor historical seasons.
+4. **4K vs 1080p Sonarr Instance Isolation**:
+   - Sonarr instances should be explicitly targeted by their configured ID in settings (`seerrDefaultTvAppId` for 1080p, `seerrDefaultTv4kAppId` for 4K). Never auto-fallback to any server containing "4k" if 4K is disabled in settings.
+5. **Reconciling Season Monitoring Completeness**:
+   - When inspecting series monitoring, evaluate `episodes` list: if `monitoredEpisodeCount === totalEpisodeCount`, flag `isFullyMonitored = true`; if `0 < monitoredEpisodeCount < totalEpisodeCount`, flag `isPartiallyMonitored = true`.
