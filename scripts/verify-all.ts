@@ -332,6 +332,78 @@ async function runTestSuite() {
         await prisma.supportTicket.delete({ where: { id: res.ticketId } });
     });
 
+    // 18. Prisma: MediaRequest Model (Seerr Requests)
+    await assertTest("Prisma: MediaRequest Model Lifecycle & Transitions", async () => {
+        const mediaReq = await prisma.mediaRequest.create({
+            data: {
+                mediaType: "tv",
+                tmdbId: 999999,
+                tvdbId: 888888,
+                title: "Test Verification Series",
+                releaseYear: "2026",
+                posterPath: "/test-poster.jpg",
+                overview: "Test TV Show for full test suite verification",
+                status: "PENDING",
+                is4k: true,
+                isKids: false,
+                contentRating: "TV-14",
+                requestedByUsername: "testrunner",
+                seasons: JSON.stringify([1, 2])
+            }
+        });
+
+        if (!mediaReq.id || mediaReq.title !== "Test Verification Series") {
+            throw new Error("MediaRequest creation failed");
+        }
+
+        for (const nextStatus of ["APPROVED", "PROCESSING", "AVAILABLE"]) {
+            const updated = await prisma.mediaRequest.update({
+                where: { id: mediaReq.id },
+                data: { status: nextStatus, downloadProgress: nextStatus === "AVAILABLE" ? 100 : 50 }
+            });
+            if (updated.status !== nextStatus) throw new Error(`MediaRequest transition to ${nextStatus} failed`);
+        }
+
+        await prisma.mediaRequest.delete({ where: { id: mediaReq.id } });
+    });
+
+    // 19. Email Templates: Render All Seerr Email Templates
+    await assertTest("Email Engine: Render Seerr Notification Templates", async () => {
+        const { renderEmailTemplate } = await import("../src/lib/email-templates");
+        const templatesToTest = [
+            "seerr_request_new_admin",
+            "seerr_request_auto_approved",
+            "seerr_request_approved",
+            "seerr_request_declined",
+            "seerr_request_available",
+            "seerr_request_failed"
+        ];
+
+        for (const tid of templatesToTest) {
+            const rendered = await renderEmailTemplate(tid, {
+                title: "Inception",
+                mediaType: "Movie",
+                releaseYear: "2010",
+                overview: "A thief who steals corporate secrets through the use of dream-sharing technology.",
+                requestedBy: "johndoe",
+                username: "johndoe",
+                contentRating: "PG-13",
+                quality: "4K UHD",
+                serverName: "Main PMS",
+                seasons: "Season 1, Season 2",
+                reason: "Disk storage limit reached",
+                appName: "Portalarr",
+                appUrl: "http://localhost:3000",
+                posterUrl: "https://image.tmdb.org/t/p/w500/edv5CZvWj09upOsy2Y6IwDhK8bt.jpg",
+                plexUrl: "https://app.plex.tv"
+            });
+
+            if (!rendered.subject || !rendered.html || !rendered.html.includes("Inception")) {
+                throw new Error(`Email template ${tid} failed rendering test`);
+            }
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

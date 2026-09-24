@@ -6,7 +6,9 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx tsx scripts/verify-all.ts",
+    "test:all": "npx tsc --noEmit && npx tsx scripts/verify-all.ts && next build"
   },
   "dependencies": {
     "@prisma/client": "6.2.1",

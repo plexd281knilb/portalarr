@@ -146,13 +146,22 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Card Subtitle Typography:** `BookCard` and `AudiobookCard` titles must use `line-clamp-3 h-[60px] block` instead of `flex items-center` to avoid squished text on non-fiction books with extensive subtitles.
 - **Plex Collection Deletion Performance & Cascading:** Never iterate and untag individual items before deleting a collection in Plex. PMS automatically cascades collection deletion to all tagged metadata items in ~10ms. Attempting to fetch and untag thousands of items individually causes 30-40s request latency and Server Action timeout failures (*"An unexpected response was received from the server"*). Always issue `DELETE /library/metadata/{ratingKey}` directly.
 - **Plex Hub Moving & Timeout Avoidance:** Order home screen hubs using the official `PUT /hubs/sections/{sectionKey}/manage/{hubId}/move?after={afterHubId}` endpoint along with locked `titleSort` prefixes. When pushing hub visibility changes across multiple collections, dispatch updates concurrently with a 4-second timeout guard (`AbortSignal.timeout(4000)`) to prevent connection hangs from triggering Server Action errors.
-- **Git Workflow Overrides & Daily Multi-Device Sync:**
 
+### 7. Mandatory Pre-Push Testing & Verification Protocol
+- **Strict Requirement Before Every Git Push:** NEVER push untested code to `origin/main` or remote. Before committing and pushing any code changes, the agent/developer MUST perform and pass the complete three-tier verification suite:
+  1. **TypeScript Typecheck:** Run `npx tsc --noEmit` and confirm **0 compile errors**.
+  2. **Full System Integration Test Suite:** Run `npx tsx scripts/verify-all.ts` (or `npm test`) and confirm **100% of integration & database assertion tests pass**.
+  3. **Production Turbopack Build:** Run `npm run build` (`next build`) and confirm Turbopack compiler, static route generation, and NFT dependency tracing exit with **code 0**.
+- **Fix Before Push:** If any step fails or reports an error, resolve the underlying issue immediately and re-run all three verification tiers until 100% clean before committing or pushing to git.
+
+- **Git Workflow Overrides & Daily Multi-Device Sync:**
   - **Daily Git Pull & Sync First:** Always check and pull the latest changes from `origin/main` (`git pull origin main` or `git fetch`) at the start of each day or session before modifying files to ensure synchronization across multiple development computers/devices.
+  - **Mandatory Pre-Push Verification:** Always run the complete verification protocol (`tsc --noEmit`, `scripts/verify-all.ts`, `npm run build`) before pushing commits.
   - **Main Branch Pushes:** Always push completed updates directly to `origin/main` unless `stable` is explicitly requested by the user. Pushing to `stable` is strictly forbidden to protect production unless explicitly commanded.
 - **Autonomous Agent Directives & Auto-Approve:**
   - **Always Proceed:** Automatically execute all file edits, refactors, and code modifications immediately using write tools without asking for confirmation.
   - **Direct Command Execution:** Run required terminal commands (builds, migrations, tests, git operations) directly and proactively.
+  - **Full Pre-Push Testing:** Always run `npx tsc --noEmit`, `npx tsx scripts/verify-all.ts`, and `npm run build` before pushing to git.
   - **Daily Repository Sync:** Check and pull the latest changes from remote Git repository at the beginning of each conversation/task.
 
 
