@@ -102,7 +102,20 @@ import {
   Clock,
   Zap,
   Ban,
+  MoreVertical,
+  User,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -888,7 +901,7 @@ function BookLibraryPageContent() {
             <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
           </div>
         </div>
-        <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
+        <CardFooter className="p-2.5 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
           {(() => {
             const isComic = book.fileType === "cbr" || book.fileType === "cbz" || (book.filePath && /\.(?:cbr|cbz)$/i.test(book.filePath));
             const progress = readingProgressMap[book.id];
@@ -900,7 +913,7 @@ function BookLibraryPageContent() {
             const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
             return (
               <>
-                {/* Hero Primary Action CTA */}
+                {/* 1. Primary Hero Action (Zero Truncation) */}
                 <Button
                   variant="default"
                   size="sm"
@@ -912,12 +925,12 @@ function BookLibraryPageContent() {
                   <span className="truncate">{hasProgress ? `Resume (${displayPercentage}%)` : isComic ? "Read Comic" : "Read Book"}</span>
                 </Button>
 
-                {/* Quick Delivery Actions Row */}
-                <div className="grid grid-cols-3 gap-1.5 w-full">
+                {/* 2. Secondary Action & More Options Row */}
+                <div className="flex items-center gap-1.5 w-full">
                   <Button
                     variant="outline"
                     size="sm"
-                    className={`w-full h-7 text-[11px] border-amber-500/30 text-amber-400 font-semibold px-1 gap-1 min-w-0 ${
+                    className={`flex-1 h-7 text-xs border-amber-500/30 text-amber-400 font-semibold px-2 gap-1.5 min-w-0 ${
                       isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-amber-500/10"
                     }`}
                     title={
@@ -929,206 +942,167 @@ function BookLibraryPageContent() {
                     onClick={() => !isComic && handleSendToKindle(book.id)}
                   >
                     {sendingToKindleId === book.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                     ) : (
-                      <Send className="h-3 w-3 shrink-0" />
+                      <Send className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    <span className="truncate">Kindle</span>
+                    <span className="truncate">Send to Kindle</span>
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full h-7 text-[11px] border-slate-700/60 text-slate-300 hover:text-white font-medium hover:bg-slate-800/60 px-1 gap-1 min-w-0"
-                    asChild
-                    title="Direct Download File"
-                  >
-                    <a href={`/api/books/${book.id}`} download>
-                      <Download className="h-3 w-3 shrink-0" />
-                      <span className="truncate">File</span>
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full h-7 text-[11px] border-emerald-500/30 text-emerald-400 font-semibold hover:bg-emerald-500/10 px-1 gap-1 min-w-0"
-                    title="Email File to Personal Inbox"
-                    disabled={sendingToPersonalEmailId === book.id}
-                    onClick={() => handleSendToPersonalEmail(book.id)}
-                  >
-                    {sendingToPersonalEmailId === book.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                    ) : (
-                      <Mail className="h-3 w-3 shrink-0" />
-                    )}
-                    <span className="truncate">Email</span>
-                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                        title="More Actions"
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>Book Options</DropdownMenuLabel>
+
+                      <DropdownMenuItem asChild>
+                        <a href={`/api/books/${book.id}`} download className="flex items-center gap-2 w-full">
+                          <Download className="h-3.5 w-3.5 text-slate-400" />
+                          <span>Download File</span>
+                        </a>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        disabled={sendingToPersonalEmailId === book.id}
+                        onClick={() => handleSendToPersonalEmail(book.id)}
+                      >
+                        {sendingToPersonalEmailId === book.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                        ) : (
+                          <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                        )}
+                        <span>Email to Inbox</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem onClick={() => handleSearchAndReplaceRelease(book)}>
+                        <Search className="h-3.5 w-3.5 text-cyan-400" />
+                        <span>Search &amp; Re-Grab</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        disabled={refreshingCoverId === book.id}
+                        onClick={() => handleRefreshCover(book.id)}
+                      >
+                        {refreshingCoverId === book.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                        ) : (
+                          <ImageIcon className="h-3.5 w-3.5 text-purple-400" />
+                        )}
+                        <span>Fetch Cover Artwork</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleOpenReportIssueModal({
+                            type: "book",
+                            title: book.title,
+                            id: book.id,
+                          })
+                        }
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                        <span>Report an Issue</span>
+                      </DropdownMenuItem>
+
+                      {isAdmin && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel>Administration</DropdownMenuLabel>
+
+                          <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
+                            <Link2 className="h-3.5 w-3.5 text-indigo-400" />
+                            <span>Match &amp; Link Series</span>
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            disabled={resolvingAiId === book.id}
+                            onClick={async () => {
+                              setResolvingAiId(book.id);
+                              const res = await resolveBookWithAI(book.id);
+                              setResolvingAiId(null);
+                              if (res.success) {
+                                handleScanLibrary(book.libraryId || selectedLibrary?.id);
+                              } else {
+                                alert(res.error || "Failed to resolve with AI Agent");
+                              }
+                            }}
+                          >
+                            {resolvingAiId === book.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                            ) : (
+                              <Bot className="h-3.5 w-3.5 text-purple-400" />
+                            )}
+                            <span>AI Metadata Agent</span>
+                          </DropdownMenuItem>
+
+                          {!isComic && allUsers.filter((u) => u.kindleEmail).length > 0 && (
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger>
+                                <Send className="h-3.5 w-3.5 text-amber-400 mr-2" />
+                                <span>Send to User Kindle</span>
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="w-56 max-h-48 overflow-y-auto">
+                                {allUsers
+                                  .filter((u) => u.kindleEmail)
+                                  .map((u) => (
+                                    <DropdownMenuItem
+                                      key={u.id}
+                                      onClick={async () => {
+                                        const confirmSend = window.confirm(
+                                          `Send this book to ${u.username}'s Kindle (${u.kindleEmail})?`
+                                        );
+                                        if (!confirmSend) return;
+                                        setSendingToKindleId(book.id);
+                                        try {
+                                          const res = await sendBookToKindle(book.id, u.username);
+                                          if (res && !res.success) {
+                                            alert(res.error || `Delivery failed.`);
+                                          } else {
+                                            alert(`Sent to ${u.username}'s Kindle!`);
+                                          }
+                                        } catch (err: any) {
+                                          alert(err.message || `Delivery failed.`);
+                                        } finally {
+                                          setSendingToKindleId(null);
+                                        }
+                                      }}
+                                    >
+                                      <User className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                                      <span className="truncate">{u.username}</span>
+                                    </DropdownMenuItem>
+                                  ))}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          )}
+
+                          <DropdownMenuItem onClick={() => handleOpenEditBookModal(book)}>
+                            <Edit3 className="h-3.5 w-3.5 text-blue-400" />
+                            <span>Edit Details</span>
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => handleDeleteBook(book.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                            <span>Delete Book</span>
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-
-                {/* Admin Send-to-User Dropdown */}
-                {user?.role === "ADMIN" && allUsers.length > 0 && (
-                  <div className="w-full flex gap-1 items-center">
-                    <select
-                      id={`send-to-user-${book.id}`}
-                      className={`w-full h-7 text-[10px] rounded border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-muted-foreground focus:text-slate-200 focus:outline-none ${
-                        isComic ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
-                      }`}
-                      defaultValue=""
-                      disabled={isComic}
-                      title={isComic ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle." : "Send to User's Kindle"}
-                      onChange={async (e) => {
-                        const targetUsername = e.target.value;
-                        if (!targetUsername || isComic) return;
-
-                        const confirmSend = window.confirm(
-                          `Are you sure you want to send this book to ${targetUsername}'s Kindle?`,
-                        );
-                        if (!confirmSend) {
-                          e.target.value = "";
-                          return;
-                        }
-
-                        // Reset value of select
-                        e.target.value = "";
-
-                        setSendingToKindleId(book.id);
-                        try {
-                          const res = await sendBookToKindle(book.id, targetUsername);
-                          if (res && !res.success) {
-                            alert(
-                              res.error ||
-                                `Delivery to ${targetUsername}'s Kindle failed.`,
-                            );
-                          } else {
-                            alert(
-                              `Ebook successfully sent to ${targetUsername}'s Kindle!`,
-                            );
-                          }
-                        } catch (err: any) {
-                          alert(err.message || `Delivery failed.`);
-                        } finally {
-                          setSendingToKindleId(null);
-                        }
-                      }}
-                    >
-                      <option value="">{isComic ? "Kindle Unsupported for Comic" : "Send to User's Kindle..."}</option>
-                      {!isComic &&
-                        allUsers
-                          .filter((u) => u.kindleEmail)
-                          .map((u) => (
-                            <option key={u.id} value={u.username}>
-                              {u.username} ({u.kindleEmail})
-                            </option>
-                          ))}
-                    </select>
-                  </div>
-                )}
               </>
             );
           })()}
-
-          {/* Management & Tools Single-Line Toolbar */}
-          <div className="flex items-center justify-between w-full border-t border-muted/30 pt-2 px-0.5 gap-1">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-                title="Search & Re-Grab Release"
-                onClick={() => handleSearchAndReplaceRelease(book)}
-              >
-                <Search className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
-                title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
-                disabled={refreshingCoverId === book.id}
-                onClick={() => handleRefreshCover(book.id)}
-              >
-                {refreshingCoverId === book.id ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ImageIcon className="h-3.5 w-3.5" />
-                )}
-              </Button>
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10"
-                  title="Match & Link Metadata (Series, Author & Volume mapping)"
-                  onClick={() => handleOpenMatchModal(book)}
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-purple-300 hover:text-purple-200 hover:bg-purple-500/20"
-                  title="Run AI Metadata Agent (Extract Official Title, Author & HD Cover)"
-                  disabled={resolvingAiId === book.id}
-                  onClick={async () => {
-                    setResolvingAiId(book.id);
-                    const res = await resolveBookWithAI(book.id);
-                    setResolvingAiId(null);
-                    if (res.success) {
-                      handleScanLibrary(book.libraryId || selectedLibrary?.id);
-                    } else {
-                      alert(res.error || "Failed to resolve with AI Agent");
-                    }
-                  }}
-                >
-                  {resolvingAiId === book.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
-                  ) : (
-                    <Bot className="h-3.5 w-3.5 text-purple-400" />
-                  )}
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-amber-500/80 hover:text-amber-400 hover:bg-amber-500/10"
-                title="Report an Issue"
-                onClick={() =>
-                  handleOpenReportIssueModal({
-                    type: "book",
-                    title: book.title,
-                    id: book.id,
-                  })
-                }
-              >
-                <AlertTriangle className="h-3.5 w-3.5" />
-              </Button>
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                  title="Edit Book Details"
-                  onClick={() => handleOpenEditBookModal(book)}
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteBook(book.id)}
-                  className="h-7 w-7 p-0 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
-                  title="Delete Book"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          </div>
         </CardFooter>
       </Card>
     );
@@ -1188,7 +1162,7 @@ function BookLibraryPageContent() {
           </div>
         </div>
 
-        <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2 relative z-20">
+        <CardFooter className="p-2.5 bg-muted/20 border-t border-muted/50 flex flex-col gap-2 relative z-20">
           {/* Hero Primary Action CTA */}
           <Button
             variant="default"
@@ -1203,114 +1177,103 @@ function BookLibraryPageContent() {
             <span>Listen &amp; Chapters</span>
           </Button>
 
-          {/* Quick Delivery Actions Row */}
-          <div className="grid grid-cols-2 gap-1.5 w-full">
+          {/* 2. Secondary Action & Options Row */}
+          <div className="flex items-center gap-1.5 w-full">
             <Button
               variant="outline"
               size="sm"
-              className="w-full h-7 text-[11px] border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1 px-1 min-w-0"
+              className="flex-1 h-7 text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1.5 px-2 min-w-0"
               asChild
               title="Direct Download Audiobook"
             >
               <a href={`/api/books/${book.id}`} download>
-                <Download className="h-3 w-3 shrink-0" />
+                <Download className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">Download</span>
               </a>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full h-7 text-[11px] border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-semibold gap-1 px-1 min-w-0"
-              title="Email Audio File to Personal Inbox"
-              disabled={sendingToPersonalEmailId === book.id}
-              onClick={() => handleSendToPersonalEmail(book.id)}
-            >
-              {sendingToPersonalEmailId === book.id ? (
-                <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-              ) : (
-                <Mail className="h-3 w-3 shrink-0" />
-              )}
-              <span className="truncate">Email</span>
-            </Button>
-          </div>
 
-          {/* Management & Tools Single-Line Toolbar */}
-          <div className="flex items-center justify-between w-full border-t border-muted/30 pt-2 px-0.5 gap-1">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-                title="Search & Re-Grab Release"
-                onClick={() => handleSearchAndReplaceRelease(book)}
-              >
-                <Search className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
-                title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
-                disabled={refreshingCoverId === book.id}
-                onClick={() => handleRefreshCover(book.id)}
-              >
-                {refreshingCoverId === book.id ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ImageIcon className="h-3.5 w-3.5" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                  title="More Actions"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Audiobook Options</DropdownMenuLabel>
+
+                <DropdownMenuItem
+                  disabled={sendingToPersonalEmailId === book.id}
+                  onClick={() => handleSendToPersonalEmail(book.id)}
+                >
+                  {sendingToPersonalEmailId === book.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                  ) : (
+                    <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                  )}
+                  <span>Email to Inbox</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => handleSearchAndReplaceRelease(book)}>
+                  <Search className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Search &amp; Re-Grab</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  disabled={refreshingCoverId === book.id}
+                  onClick={() => handleRefreshCover(book.id)}
+                >
+                  {refreshingCoverId === book.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                  ) : (
+                    <ImageIcon className="h-3.5 w-3.5 text-purple-400" />
+                  )}
+                  <span>Fetch Cover Artwork</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    handleOpenReportIssueModal({
+                      type: "audiobook",
+                      title: book.title,
+                      id: book.id,
+                    })
+                  }
+                >
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Report an Issue</span>
+                </DropdownMenuItem>
+
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Administration</DropdownMenuLabel>
+
+                    <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
+                      <Link2 className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Match &amp; Link Series</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem onClick={() => handleOpenEditBookModal(book)}>
+                      <Edit3 className="h-3.5 w-3.5 text-blue-400" />
+                      <span>Edit Details</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => handleDeleteBook(book.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                      <span>Delete Audiobook</span>
+                    </DropdownMenuItem>
+                  </>
                 )}
-              </Button>
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10"
-                  title="Match & Link Metadata (Series, Author & Volume mapping)"
-                  onClick={() => handleOpenMatchModal(book)}
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-amber-500/80 hover:text-amber-400 hover:bg-amber-500/10"
-                title="Report an Issue"
-                onClick={() =>
-                  handleOpenReportIssueModal({
-                    type: "audiobook",
-                    title: book.title,
-                    id: book.id,
-                  })
-                }
-              >
-                <AlertTriangle className="h-3.5 w-3.5" />
-              </Button>
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                  title="Edit Audiobook Details"
-                  onClick={() => handleOpenEditBookModal(book)}
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {isAdmin && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteBook(book.id)}
-                  className="h-7 w-7 p-0 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
-                  title="Delete Audiobook"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardFooter>
       </Card>
