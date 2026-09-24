@@ -80,6 +80,25 @@ model Settings {
   seerrQuotaDays               Int?      @default(7)  // Quota sliding window in days
   seerrNotificationOnAvailable Boolean   @default(true)
 
+  // Seerr Discord Webhook Notification Settings
+  seerrDiscordWebhookUrl          String?
+  seerrDiscordBotUsername         String?   @default("Portalarr")
+  seerrDiscordBotAvatarUrl        String?
+  seerrDiscordNotifyPending       Boolean   @default(true)
+  seerrDiscordNotifyAutoApproved  Boolean   @default(true)
+  seerrDiscordNotifyApproved      Boolean   @default(true)
+  seerrDiscordNotifyDeclined      Boolean   @default(true)
+  seerrDiscordNotifyAvailable     Boolean   @default(true)
+  seerrDiscordNotifyFailed        Boolean   @default(true)
+
+  // Seerr Email Notification Settings
+  seerrEmailNotifyAdminNewRequest Boolean   @default(true)
+  seerrEmailNotifyUserAutoApproved Boolean  @default(true)
+  seerrEmailNotifyUserApproved    Boolean   @default(true)
+  seerrEmailNotifyUserDeclined    Boolean   @default(true)
+  seerrEmailNotifyUserAvailable   Boolean   @default(true)
+  seerrEmailNotifyUserFailed      Boolean   @default(true)
+
   // Full vs Trial Accounts Request Controls
   seerrFullAutoApprove         Boolean   @default(true) // Full accounts auto-approve in main arrs
   seerrFullUnlimited           Boolean   @default(true) // Full accounts have no limits

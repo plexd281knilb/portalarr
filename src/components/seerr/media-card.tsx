@@ -26,7 +26,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
     const isRequested = availability?.isRequested;
     const requestStatus = availability?.requestStatus;
     const downloadProgress = availability?.downloadProgress;
-    const has4k = availability?.has4k;
+    const has4k = availability?.has4k || availability?.isMonitored4k;
 
     const renderAvailabilityBadge = () => {
         if (inLibrary) {
@@ -41,6 +41,30 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
             return (
                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <span>Main Library</span>
+                </div>
+            );
+        }
+        if (availability?.isMonitored1080p && availability?.isMonitored4k) {
+            return (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>Monitored (Dual)</span>
+                </div>
+            );
+        }
+        if (availability?.isMonitored4k && !availability?.isMonitored1080p) {
+            return (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>4K Monitored</span>
+                </div>
+            );
+        }
+        if (availability?.isMonitored1080p && !availability?.isMonitored4k) {
+            return (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>1080p Monitored</span>
                 </div>
             );
         }

@@ -32,7 +32,8 @@ import {
     Tag,
     Trash2,
     Loader2,
-    CheckCircle2
+    CheckCircle2,
+    Captions
 } from "lucide-react";
 import { getFeatureSuggestions, toggleFeatureVote, createFeatureSuggestion, deleteFeatureSuggestion } from "@/app/actions";
 
@@ -51,6 +52,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
     "Live TV": <Tv className="h-3.5 w-3.5 text-amber-400" />,
     "Audiobooks": <Headphones className="h-3.5 w-3.5 text-cyan-400" />,
     "Plex": <Sliders className="h-3.5 w-3.5 text-orange-400" />,
+    "Subtitles": <Captions className="h-3.5 w-3.5 text-pink-400" />,
     "Notifications": <BellRing className="h-3.5 w-3.5 text-blue-400" />,
     "Stats": <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />,
     "Ebooks": <BookOpen className="h-3.5 w-3.5 text-purple-400" />,
@@ -268,8 +270,8 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
 
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-semibold text-foreground">Category</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {["Live TV", "Audiobooks", "Plex", "Notifications", "Stats", "Ebooks", "General"].map(cat => (
+                                    <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
+                                        {["Live TV", "Audiobooks", "Plex", "Subtitles", "Notifications", "Stats", "Ebooks", "General"].map(cat => (
                                             <button
                                                 key={cat}
                                                 type="button"

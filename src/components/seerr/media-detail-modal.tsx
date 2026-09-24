@@ -9,7 +9,9 @@ import {
     getMediaDetailsAction, 
     getTvSeasonEpisodesAction, 
     getUserRequestQuotaAction, 
-    submitMediaRequestAction 
+    submitMediaRequestAction,
+    getArrMonitoringDetailsAction,
+    requestTvEpisodesAction
 } from "@/app/seerr-actions";
 import { 
     TmdbMediaDetail, 
@@ -42,7 +44,11 @@ import {
     Info,
     Tv2,
     Users,
-    Clapperboard
+    Clapperboard,
+    Check,
+    CheckCheck,
+    Filter,
+    RefreshCw
 } from "lucide-react";
 
 interface MediaDetailModalProps {
@@ -86,10 +92,14 @@ export function MediaDetailModal({
     const [requestSuccessMsg, setRequestSuccessMsg] = useState<string | null>(null);
     const [requestErrorMsg, setRequestErrorMsg] = useState<string | null>(null);
 
-    // TV Episodes Guide State
+    // TV Episodes Guide State & Multi-Episode Selection
     const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number>(1);
     const [seasonEpisodes, setSeasonEpisodes] = useState<Record<number, TmdbEpisodeInfo[]>>({});
     const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+    const [selectedEpisodeKeys, setSelectedEpisodeKeys] = useState<string[]>([]);
+    const [submittingEpisodes, setSubmittingEpisodes] = useState(false);
+    const [episodeSuccessMsg, setEpisodeSuccessMsg] = useState<string | null>(null);
+    const [episodeErrorMsg, setEpisodeErrorMsg] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen && tmdbId) {
@@ -98,6 +108,9 @@ export function MediaDetailModal({
             setIsPlayingTrailer(false);
             setActiveTrailerIndex(0);
             setActiveTab("request");
+            setSelectedEpisodeKeys([]);
+            setEpisodeSuccessMsg(null);
+            setEpisodeErrorMsg(null);
             loadMediaData(tmdbId, mediaType);
             loadQuota();
         } else {
@@ -110,6 +123,9 @@ export function MediaDetailModal({
             setSelectAllSeasons(true);
             setSeasonEpisodes({});
             setSelectedSeasonNumber(1);
+            setSelectedEpisodeKeys([]);
+            setEpisodeSuccessMsg(null);
+            setEpisodeErrorMsg(null);
         }
     }, [isOpen, tmdbId, mediaType, isKids]);
 
@@ -165,6 +181,9 @@ export function MediaDetailModal({
         setIsPlayingTrailer(false);
         setActiveTrailerIndex(0);
         setActiveTab("request");
+        setSelectedEpisodeKeys([]);
+        setEpisodeSuccessMsg(null);
+        setEpisodeErrorMsg(null);
         loadMediaData(rec.id, rec.mediaType);
     };
 
@@ -198,6 +217,163 @@ export function MediaDetailModal({
         }
     };
 
+    const handleSelectUnmonitoredSeasons = () => {
+        if (!details?.seasons) return;
+        const targetSeasons = is4k ? availability?.arrMonitoring?.seasons4k : availability?.arrMonitoring?.seasons1080p;
+        const validSeasons = details.seasons.filter(s => s.seasonNumber > 0);
+        
+        const unmonitored = validSeasons
+            .filter(s => {
+                const mon = targetSeasons?.[s.seasonNumber];
+                return !mon || !mon.isFullyMonitored;
+            })
+            .map(s => s.seasonNumber);
+
+        setSelectedSeasons(unmonitored);
+        setSelectAllSeasons(unmonitored.length === validSeasons.length);
+    };
+
+    // Episode Selection in Episode Guide
+    const handleToggleEpisodeKey = (key: string) => {
+        if (selectedEpisodeKeys.includes(key)) {
+            setSelectedEpisodeKeys(prev => prev.filter(k => k !== key));
+        } else {
+            setSelectedEpisodeKeys(prev => [...prev, key]);
+        }
+    };
+
+    const handleSelectAllUnmonitoredEpisodesInSeason = (seasonNum: number) => {
+        const episodes = seasonEpisodes[seasonNum] || [];
+        const epMonMap = is4k ? availability?.arrMonitoring?.episodes4k : availability?.arrMonitoring?.episodes1080p;
+        
+        const unmonitoredKeys: string[] = [];
+        for (const ep of episodes) {
+            const key = `s${seasonNum}e${ep.episodeNumber}`;
+            const isMon = epMonMap?.[key]?.monitored;
+            if (!isMon) {
+                unmonitoredKeys.push(key);
+            }
+        }
+
+        setSelectedEpisodeKeys(prev => {
+            const set = new Set([...prev, ...unmonitoredKeys]);
+            return Array.from(set);
+        });
+    };
+
+    const handleClearEpisodeSelection = () => {
+        setSelectedEpisodeKeys([]);
+        setEpisodeSuccessMsg(null);
+        setEpisodeErrorMsg(null);
+    };
+
+    const handleRequestSelectedEpisodes = async () => {
+        if (!details || !currentId || selectedEpisodeKeys.length === 0) return;
+        setSubmittingEpisodes(true);
+        setEpisodeSuccessMsg(null);
+        setEpisodeErrorMsg(null);
+
+        try {
+            const episodeObjects = selectedEpisodeKeys.map(k => {
+                const match = k.match(/^s(\d+)e(\d+)$/);
+                const sNum = match ? parseInt(match[1], 10) : 1;
+                const eNum = match ? parseInt(match[2], 10) : 1;
+                return {
+                    seasonNumber: sNum,
+                    episodeNumber: eNum
+                };
+            });
+
+            const res = await requestTvEpisodesAction({
+                tmdbId: currentId,
+                tvdbId: details.tvdbId,
+                imdbId: details.imdbId,
+                title: details.title,
+                releaseYear: details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
+                posterPath: details.posterPath || undefined,
+                backdropPath: details.backdropPath || undefined,
+                overview: details.overview,
+                is4k,
+                isKids: Boolean(isKids),
+                contentRating: details.certification,
+                episodes: episodeObjects
+            });
+
+            if (res.success) {
+                setEpisodeSuccessMsg(res.message || `Requested ${selectedEpisodeKeys.length} episode(s)!`);
+                setSelectedEpisodeKeys([]);
+                if (res.arrMonitoring) {
+                    setAvailability(prev => prev ? {
+                        ...prev,
+                        isRequested: true,
+                        isMonitored: true,
+                        isMonitored1080p: res.arrMonitoring?.isMonitored1080p,
+                        isMonitored4k: res.arrMonitoring?.isMonitored4k,
+                        hasFile1080p: res.arrMonitoring?.hasFile1080p,
+                        hasFile4k: res.arrMonitoring?.hasFile4k,
+                        arrMonitoring: res.arrMonitoring
+                    } : prev);
+                }
+                loadQuota();
+                if (onRequestSubmitted) onRequestSubmitted();
+            } else {
+                setEpisodeErrorMsg(res.error || "Failed to request episodes.");
+            }
+        } catch (e: any) {
+            setEpisodeErrorMsg(e.message || "An unexpected error occurred.");
+        } finally {
+            setSubmittingEpisodes(false);
+        }
+    };
+
+    const handleRequestSingleEpisode = async (seasonNum: number, episodeNum: number) => {
+        if (!details || !currentId) return;
+        setSubmittingEpisodes(true);
+        setEpisodeSuccessMsg(null);
+        setEpisodeErrorMsg(null);
+
+        try {
+            const res = await requestTvEpisodesAction({
+                tmdbId: currentId,
+                tvdbId: details.tvdbId,
+                imdbId: details.imdbId,
+                title: details.title,
+                releaseYear: details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
+                posterPath: details.posterPath || undefined,
+                backdropPath: details.backdropPath || undefined,
+                overview: details.overview,
+                is4k,
+                isKids: Boolean(isKids),
+                contentRating: details.certification,
+                episodes: [{ seasonNumber: seasonNum, episodeNumber: episodeNum }]
+            });
+
+            if (res.success) {
+                setEpisodeSuccessMsg(`Episode S${seasonNum}E${episodeNum} requested in Sonarr!`);
+                if (res.arrMonitoring) {
+                    setAvailability(prev => prev ? {
+                        ...prev,
+                        isRequested: true,
+                        isMonitored: true,
+                        isMonitored1080p: res.arrMonitoring?.isMonitored1080p,
+                        isMonitored4k: res.arrMonitoring?.isMonitored4k,
+                        hasFile1080p: res.arrMonitoring?.hasFile1080p,
+                        hasFile4k: res.arrMonitoring?.hasFile4k,
+                        arrMonitoring: res.arrMonitoring
+                    } : prev);
+                }
+                loadQuota();
+                if (onRequestSubmitted) onRequestSubmitted();
+            } else {
+                setEpisodeErrorMsg(res.error || "Failed to request episode.");
+            }
+        } catch (e: any) {
+            setEpisodeErrorMsg(e.message || "An unexpected error occurred.");
+        } finally {
+            setSubmittingEpisodes(false);
+        }
+    };
+
     const handleSubmitRequest = async () => {
         if (!details || !currentId) return;
         if (isNc17OrDisallowedRating(details.certification)) {
@@ -227,13 +403,17 @@ export function MediaDetailModal({
 
             if (res.success) {
                 setRequestSuccessMsg(res.message || "Request submitted successfully!");
-                setAvailability({
-                    inLibrary: false,
+                setAvailability(prev => ({
+                    inLibrary: prev?.inLibrary || false,
                     inMainLibraryOnly: false,
                     isRequested: true,
+                    isMonitored: true,
                     requestStatus: res.request?.status || "APPROVED",
-                    requestedBy: res.request?.requestedByUsername
-                });
+                    requestedBy: res.request?.requestedByUsername,
+                    isMonitored1080p: is4k ? prev?.isMonitored1080p : true,
+                    isMonitored4k: is4k ? true : prev?.isMonitored4k,
+                    arrMonitoring: prev?.arrMonitoring
+                }));
                 loadQuota();
                 if (onRequestSubmitted) onRequestSubmitted();
             } else {
@@ -263,6 +443,21 @@ export function MediaDetailModal({
     const isPgSafe = Boolean(isKids && isKidsSafeRating(details?.certification));
     const isPg13OrUnrated = Boolean(isKids && !isMatureInKids && !isPgSafe);
 
+    // Arr monitoring breakdown
+    const arrDetails = availability?.arrMonitoring;
+    const is1080pMonitored = Boolean(availability?.isMonitored1080p || arrDetails?.isMonitored1080p);
+    const is4kMonitored = Boolean(availability?.isMonitored4k || arrDetails?.isMonitored4k);
+    const isCurrentQualityMonitored = is4k ? is4kMonitored : is1080pMonitored;
+    const activeSeasonsMap = is4k ? arrDetails?.seasons4k : arrDetails?.seasons1080p;
+    const activeEpisodesMap = is4k ? arrDetails?.episodes4k : arrDetails?.episodes1080p;
+
+    // Check if all selected seasons are already monitored in active resolution
+    const validSeasons = details?.seasons?.filter(s => s.seasonNumber > 0) || [];
+    const allSelectedSeasonsMonitored = isTv && selectedSeasons.length > 0 && selectedSeasons.every(sNum => {
+        const mon = activeSeasonsMap?.[sNum];
+        return mon && mon.isFullyMonitored;
+    });
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="w-[96vw] sm:w-[94vw] md:w-[92vw] max-w-6xl max-h-[94vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
@@ -270,7 +465,7 @@ export function MediaDetailModal({
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
                         <p className="text-sm font-semibold text-muted-foreground animate-pulse">
-                            Loading metadata & library availability...
+                            Loading metadata & Radarr/Sonarr monitoring status...
                         </p>
                     </div>
                 ) : (
@@ -344,7 +539,7 @@ export function MediaDetailModal({
                                 )}
                             </div>
                         ) : (
-                            /* COMPACT 2-COLUMN HERO HEADER (Zero Wasted Space) */
+                            /* COMPACT 2-COLUMN HERO HEADER */
                             <div className="relative w-full bg-[#0e0e16] p-4 sm:p-5 md:p-6 border-b border-border/40 overflow-hidden">
                                 {/* Ambient Blurred Backdrop Layer */}
                                 {details.backdropPath && (
@@ -388,13 +583,28 @@ export function MediaDetailModal({
 
                                     {/* Right Column: Title, Metadata, Actions, Synopsis */}
                                     <div className="space-y-2 flex-1 min-w-0">
-                                        {/* Row 1: Badges */}
+                                        {/* Row 1: Badges & Arr Monitored Tags */}
                                         <div className="flex flex-wrap items-center gap-2">
                                             <Badge variant="outline" className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full backdrop-blur-md ${
                                                 isTv ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-blue-500/20 text-blue-300 border-blue-500/40"
                                             }`}>
                                                 {isTv ? "TV Series" : "Movie"}
                                             </Badge>
+
+                                            {/* Monitoring Badges */}
+                                            {is1080pMonitored && (
+                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border-blue-500/40 backdrop-blur-md flex items-center gap-1">
+                                                    <Check className="h-3 w-3" />
+                                                    <span>1080p Monitored</span>
+                                                </Badge>
+                                            )}
+
+                                            {is4kMonitored && (
+                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-300 border-purple-500/50 backdrop-blur-md flex items-center gap-1">
+                                                    <Check className="h-3 w-3" />
+                                                    <span>4K UHD Monitored</span>
+                                                </Badge>
+                                            )}
 
                                             {rating && Number(rating) > 0 && (
                                                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold backdrop-blur-md">
@@ -433,12 +643,6 @@ export function MediaDetailModal({
                                                     {details.numberOfSeasons} Season{details.numberOfSeasons > 1 ? "s" : ""}
                                                 </span>
                                             ) : null}
-
-                                            {details.status && (
-                                                <Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/[0.05] text-muted-foreground border-border/40">
-                                                    {details.status}
-                                                </Badge>
-                                            )}
                                         </div>
 
                                         {/* Row 2: Title & Tagline */}
@@ -482,45 +686,53 @@ export function MediaDetailModal({
                                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                                                     <span>In {isKids ? "Kids " : ""}Library ({availability?.quality || "1080p"})</span>
                                                 </div>
-                                            ) : inMainOnly ? (
-                                                <>
-                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center gap-1.5 text-xs font-bold">
-                                                        <Info className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                                                        <span>In Main Library Only ({availability?.quality || "1080p"})</span>
+                                            ) : is1080pMonitored && is4kMonitored ? (
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <CheckCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                                                    <span>Monitored (1080p & 4K UHD)</span>
+                                                </div>
+                                            ) : is1080pMonitored && !is4kMonitored ? (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-300 flex items-center gap-1.5 text-xs font-bold">
+                                                        <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                                        <span>1080p Monitored</span>
+                                                    </div>
+                                                    {quotaData?.canRequest4k && (
+                                                        <Button
+                                                            size="sm"
+                                                            className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/20 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
+                                                            onClick={() => {
+                                                                setIs4k(true);
+                                                                setActiveTab("request");
+                                                            }}
+                                                        >
+                                                            <Plus className="h-3.5 w-3.5" />
+                                                            <span>Request 4K UHD</span>
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ) : is4kMonitored && !is1080pMonitored ? (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-300 flex items-center gap-1.5 text-xs font-bold">
+                                                        <Clock className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                        <span>4K UHD Monitored</span>
                                                     </div>
                                                     <Button
                                                         size="sm"
-                                                        className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
-                                                        disabled={submitting}
+                                                        className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
                                                         onClick={() => {
-                                                            if (isTv) setActiveTab("request");
-                                                            else handleSubmitRequest();
+                                                            setIs4k(false);
+                                                            setActiveTab("request");
                                                         }}
                                                     >
-                                                        {submitting ? (
-                                                            <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                        ) : (
-                                                            <>
-                                                                <Plus className="h-3.5 w-3.5" />
-                                                                <span>Request for Kids Library</span>
-                                                            </>
-                                                        )}
+                                                        <Plus className="h-3.5 w-3.5" />
+                                                        <span>Request 1080p</span>
                                                     </Button>
-                                                </>
-                                            ) : isRequested ? (
-                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-300 flex items-center gap-1.5 text-xs font-bold">
-                                                    <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                                                    <span>{availability?.requestStatus === "PROCESSING" ? "Downloading" : "Requested"}</span>
                                                 </div>
-                                            ) : isDisallowed ? (
-                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-1.5 text-xs font-bold">
-                                                    <ShieldAlert className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                                                    <span>Restricted (NC-17)</span>
-                                                </div>
-                                            ) : isMatureInKids ? (
-                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-1.5 text-xs font-bold">
-                                                    <ShieldAlert className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                                                    <span>Unavailable in Kids Mode</span>
+                                            ) : inMainOnly ? (
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <Info className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                                    <span>In Main Library Only ({availability?.quality || "1080p"})</span>
                                                 </div>
                                             ) : (
                                                 <Button
@@ -588,7 +800,7 @@ export function MediaDetailModal({
                                     }`}
                                 >
                                     <Tv2 className="h-3.5 w-3.5 mr-1.5" />
-                                    Episode Guide
+                                    Episode Guide & Monitoring
                                 </Button>
                             )}
 
@@ -645,241 +857,262 @@ export function MediaDetailModal({
                         {/* TAB BODY CONTENTS                                                         */}
                         {/* ========================================================================= */}
                         <div className="p-4 sm:p-5 md:p-6 space-y-4 flex-1">
-                            {/* TAB 1: REQUEST & DETAILS */}
+                            {/* TAB 1: REQUEST & SEASONS */}
                             {activeTab === "request" && (
                                 <div className="space-y-4">
-                                    {/* Availability Status Banners */}
-                                    {inLibrary && (
-                                        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 text-emerald-400">
+                                    {/* Monitored Status Banners */}
+                                    {is1080pMonitored && is4kMonitored ? (
+                                        <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between gap-3 text-cyan-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                                                    <CheckCircle2 className="h-4 w-4" />
+                                                <div className="h-8 w-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0">
+                                                    <CheckCheck className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs sm:text-sm font-bold text-emerald-300">Available in Plex Library ({availability?.plexSectionName || "Movies"})</h4>
-                                                    <p className="text-[11px] text-emerald-400/80">
-                                                        Server: {availability?.plexServerName || "Plex Server"} • Quality: {availability?.quality || "1080p"}
+                                                    <h4 className="text-xs sm:text-sm font-bold text-cyan-200">
+                                                        Fully Monitored in 1080p & 4K UHD
+                                                    </h4>
+                                                    <p className="text-[11px] text-cyan-300/80">
+                                                        Actively monitored across {arrDetails?.app1080pName || "Radarr/Sonarr"} and {arrDetails?.app4kName || "4K Instance"}.
                                                     </p>
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
-
-                                    {inMainOnly && (
-                                        <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-between gap-3 text-indigo-300">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
-                                                    <Info className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-xs sm:text-sm font-bold text-indigo-200">Available in Main Library ({availability?.mainLibrarySection || "Movies"})</h4>
-                                                    <p className="text-[11px] text-indigo-300/80">
-                                                        Server: {availability?.plexServerName || "Plex Server"} • Quality: {availability?.quality || "1080p"} • Not yet in Kids Library. Submit a request below to add it directly to the Kids collection.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {isRequested && !inLibrary && (
+                                    ) : is1080pMonitored && !is4kMonitored ? (
                                         <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 text-blue-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
-                                                    <Clock className="h-4 w-4" />
+                                                <div className="h-8 w-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-300 shrink-0">
+                                                    <Check className="h-4 w-4" />
                                                 </div>
                                                 <div>
                                                     <h4 className="text-xs sm:text-sm font-bold text-blue-200">
-                                                        {availability?.requestStatus === "PROCESSING" ? "Downloading to Library" : "Request Approved"}
+                                                        Monitored in 1080p ({arrDetails?.app1080pName || "Standard Instance"})
                                                     </h4>
                                                     <p className="text-[11px] text-blue-300/80">
-                                                        Requested by: {availability?.requestedBy || "You"}
-                                                        {availability?.downloadProgress ? ` • Progress: ${availability.downloadProgress}%` : ""}
+                                                        This title is already monitored for 1080p. You can still request a dedicated 4K UHD version below!
                                                     </p>
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
-
-                                    {/* Request Submission Form (If not in library & not requested) */}
-                                    {(!inLibrary || inMainOnly) && !isRequested && (
-                                        <div className="p-4 sm:p-5 rounded-2xl bg-[#121218] border border-border/60 space-y-3.5">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                                                    <Plus className="h-4 w-4 text-primary" />
-                                                    {inMainOnly ? "Add to Kids Library" : "Submit Media Request"}
-                                                </h4>
-                                                
-                                                {/* Account Tier & Quota Label */}
-                                                <div className="flex items-center gap-2">
-                                                    {quotaData?.accountTier === "TRIAL" ? (
-                                                        <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/15 text-amber-300 border-amber-500/30">
-                                                            Trial Account
-                                                        </Badge>
-                                                    ) : quotaData?.accountTier === "FULL" ? (
-                                                        <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
-                                                            Full Account
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-blue-500/15 text-blue-300 border-blue-500/30">
-                                                            Admin
-                                                        </Badge>
-                                                    )}
-
-                                                    {quotaInfo && (
-                                                        <span className="text-xs text-muted-foreground font-medium">
-                                                            Quota: <strong className="text-foreground">{quotaInfo.remaining}</strong> of {quotaInfo.limit === 0 ? "Unlimited" : quotaInfo.limit}
-                                                        </span>
-                                                    )}
+                                    ) : is4kMonitored && !is1080pMonitored ? (
+                                        <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between gap-3 text-purple-300">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+                                                    <Check className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-xs sm:text-sm font-bold text-purple-200">
+                                                        Monitored in 4K UHD ({arrDetails?.app4kName || "4K Instance"})
+                                                    </h4>
+                                                    <p className="text-[11px] text-purple-300/80">
+                                                        This title is already monitored for 4K. You can request a companion 1080p standard version below!
+                                                    </p>
                                                 </div>
                                             </div>
+                                        </div>
+                                    ) : null}
 
-                                            {/* Approval Status Callout */}
-                                            {isDisallowed ? (
-                                                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2 text-xs">
-                                                    <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                                    {/* Request Submission Card */}
+                                    <div className="p-4 sm:p-5 rounded-2xl bg-[#121218] border border-border/60 space-y-3.5">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                                <Plus className="h-4 w-4 text-primary" />
+                                                {inMainOnly ? "Add to Kids Library" : "Configure Request & Quality"}
+                                            </h4>
+                                            
+                                            {/* Account Tier & Quota Label */}
+                                            <div className="flex items-center gap-2">
+                                                {quotaData?.accountTier === "TRIAL" ? (
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                                        Trial Account
+                                                    </Badge>
+                                                ) : quotaData?.accountTier === "FULL" ? (
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                                        Full Account
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-blue-500/15 text-blue-300 border-blue-500/30">
+                                                        Admin
+                                                    </Badge>
+                                                )}
+
+                                                {quotaInfo && (
+                                                    <span className="text-xs text-muted-foreground font-medium">
+                                                        Quota: <strong className="text-foreground">{quotaInfo.remaining}</strong> of {quotaInfo.limit === 0 ? "Unlimited" : quotaInfo.limit}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* 4K UHD Quality Selection Toggle */}
+                                        {quotaData?.canRequest4k && !isMatureInKids && !isDisallowed && (
+                                            <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 border-purple-500/50">
+                                                        4K UHD
+                                                    </Badge>
                                                     <div>
-                                                        <strong className="text-rose-200">Restricted Title:</strong> NC-17 and adult-rated titles cannot be requested.
+                                                        <h5 className="text-xs font-bold text-foreground">
+                                                            {is4kMonitored ? "4K UHD Version (Already Monitored in 4K Arr)" : "Request 4K Ultra HD Quality"}
+                                                        </h5>
+                                                        <p className="text-[11px] text-muted-foreground">
+                                                            {is4k ? "Targeting 4K instance" : "Targeting 1080p standard instance"}
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            ) : isMatureInKids ? (
-                                                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-start gap-2 text-xs">
-                                                    <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
-                                                    <div>
-                                                        <strong className="text-rose-200">Blocked in Kids Mode:</strong> Rated {details.certification || "Mature"} — Contains mature themes. Switch to Main Discovery to request.
-                                                    </div>
-                                                </div>
-                                            ) : isPgSafe ? (
-                                                <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs">
-                                                    <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
-                                                    <span><strong>Kids Auto-Approval:</strong> Rated {details.certification || "PG"} — Instant auto-approval into kids download queue.</span>
-                                                </div>
-                                            ) : isPg13OrUnrated ? (
-                                                <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
-                                                    <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
-                                                    <span><strong>Requires Admin Review:</strong> Rated {details.certification || "PG-13 / Unrated"} — Submitted for administrator review before downloading.</span>
-                                                </div>
-                                            ) : quotaData?.accountTier === "TRIAL" ? (
-                                                <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-2 text-xs">
-                                                    <Clock className="h-4 w-4 shrink-0 text-amber-400" />
-                                                    <span><strong>Trial Account:</strong> Requests require administrator review before downloading.</span>
-                                                </div>
-                                            ) : (
-                                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center gap-2 text-xs">
-                                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                                                    <span><strong>Instant Auto-Approval:</strong> Full Account requests are immediately dispatched to download clients.</span>
-                                                </div>
-                                            )}
+                                                <Checkbox
+                                                    checked={is4k}
+                                                    onCheckedChange={(c) => setIs4k(Boolean(c))}
+                                                />
+                                            </div>
+                                        )}
 
-                                            {/* TV Show Season Selection Checklist */}
-                                            {isTv && details.seasons && details.seasons.length > 0 && !isMatureInKids && !isDisallowed && (
-                                                <div className="space-y-2.5 border-t border-border/40 pt-2.5">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-xs font-semibold text-muted-foreground">Select Seasons to Download:</span>
-                                                        <div className="flex items-center gap-2">
+                                        {/* TV Show Season Selection Checklist */}
+                                        {isTv && details.seasons && details.seasons.length > 0 && !isMatureInKids && !isDisallowed && (
+                                            <div className="space-y-2.5 border-t border-border/40 pt-2.5">
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                    <span className="text-xs font-semibold text-muted-foreground">
+                                                        Select Seasons to Request ({is4k ? "4K UHD" : "1080p"}):
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-6 px-2 text-[11px] rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
+                                                            onClick={handleSelectUnmonitoredSeasons}
+                                                        >
+                                                            <Filter className="h-3 w-3 mr-1" />
+                                                            Select Unmonitored
+                                                        </Button>
+                                                        <div className="flex items-center gap-1.5">
                                                             <Checkbox
                                                                 id="modal-select-all-seasons"
                                                                 checked={selectAllSeasons}
                                                                 onCheckedChange={(c) => handleToggleAllSeasons(Boolean(c))}
                                                             />
                                                             <label htmlFor="modal-select-all-seasons" className="text-xs font-medium cursor-pointer">
-                                                                All Seasons ({details.seasons.filter(s => s.seasonNumber > 0).length})
+                                                                All Seasons
                                                             </label>
                                                         </div>
                                                     </div>
+                                                </div>
 
-                                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                                        {details.seasons.filter(s => s.seasonNumber > 0).map(s => (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                                    {details.seasons.filter(s => s.seasonNumber > 0).map(s => {
+                                                        const sNum = s.seasonNumber;
+                                                        const seasonMon1080 = arrDetails?.seasons1080p?.[sNum];
+                                                        const seasonMon4k = arrDetails?.seasons4k?.[sNum];
+                                                        const activeMon = is4k ? seasonMon4k : seasonMon1080;
+                                                        const isFullyMon = activeMon?.isFullyMonitored;
+                                                        const isPartiallyMon = activeMon?.isPartiallyMonitored;
+                                                        const isSelected = selectedSeasons.includes(sNum);
+
+                                                        return (
                                                             <div
                                                                 key={s.id}
-                                                                onClick={() => handleToggleSeasonSelect(s.seasonNumber)}
-                                                                className={`p-2 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                                                                  selectedSeasons.includes(s.seasonNumber)
+                                                                onClick={() => handleToggleSeasonSelect(sNum)}
+                                                                className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+                                                                    isSelected
                                                                         ? "bg-primary/15 border-primary/50 text-foreground shadow-sm"
+                                                                        : isFullyMon
+                                                                        ? "bg-emerald-500/10 border-emerald-500/30 text-foreground"
                                                                         : "bg-muted/10 border-border/40 text-muted-foreground hover:bg-muted/20"
                                                                 }`}
                                                             >
-                                                                <div className="flex items-center gap-2">
-                                                                    <Checkbox
-                                                                        checked={selectedSeasons.includes(s.seasonNumber)}
-                                                                        onCheckedChange={() => handleToggleSeasonSelect(s.seasonNumber)}
-                                                                    />
-                                                                    <div>
-                                                                        <div className="text-xs font-bold">{s.name}</div>
-                                                                        <div className="text-[10px] text-muted-foreground">{s.episodeCount} eps</div>
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Checkbox
+                                                                            checked={isSelected}
+                                                                            onCheckedChange={() => handleToggleSeasonSelect(sNum)}
+                                                                        />
+                                                                        <span className="text-xs font-bold text-white">{s.name}</span>
                                                                     </div>
+                                                                    <span className="text-[10px] text-muted-foreground">{s.episodeCount} eps</span>
+                                                                </div>
+
+                                                                {/* Status indicators */}
+                                                                <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                                                    {isFullyMon ? (
+                                                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/40 flex items-center gap-0.5">
+                                                                            <Check className="h-2.5 w-2.5" />
+                                                                            {is4k ? "4K Monitored" : "1080p Monitored"}
+                                                                        </span>
+                                                                    ) : isPartiallyMon ? (
+                                                                        <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/40">
+                                                                            {activeMon.monitoredEpisodeCount}/{activeMon.episodeCount} eps
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-gray-400 text-[9px] font-medium border border-white/10">
+                                                                            Unmonitored
+                                                                        </span>
+                                                                    )}
+
+                                                                    {!is4k && seasonMon4k?.isFullyMonitored && (
+                                                                        <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[9px] font-bold border border-purple-500/40">
+                                                                            4K
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                        ))}
-                                                    </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                            )}
+                                            </div>
+                                        )}
 
-                                            {/* 4K UHD Quality Toggle Option */}
-                                            {quotaData?.canRequest4k && !isMatureInKids && !isDisallowed && (
-                                                <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 border-purple-500/50">
-                                                            4K UHD
-                                                        </Badge>
-                                                        <div>
-                                                            <h5 className="text-xs font-bold text-foreground">Request 4K Ultra HD Quality</h5>
-                                                            <p className="text-[11px] text-muted-foreground">Dispatches to 4K quality profile instance</p>
-                                                        </div>
-                                                    </div>
-                                                    <Checkbox
-                                                        checked={is4k}
-                                                        onCheckedChange={(c) => setIs4k(Boolean(c))}
-                                                    />
-                                                </div>
-                                            )}
+                                        {/* Feedback Messages */}
+                                        {requestSuccessMsg && (
+                                            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{requestSuccessMsg}</span>
+                                            </div>
+                                        )}
+                                        {requestErrorMsg && (
+                                            <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
+                                                <AlertCircle className="h-4 w-4 shrink-0" />
+                                                <span>{requestErrorMsg}</span>
+                                            </div>
+                                        )}
 
-                                            {/* Feedback Messages */}
-                                            {requestSuccessMsg && (
-                                                <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
-                                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                                    <span>{requestSuccessMsg}</span>
-                                                </div>
+                                        {/* Primary Submit Button */}
+                                        <Button
+                                            size="lg"
+                                            className="w-full h-10 text-sm font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                            disabled={submitting || isDisallowed || isMatureInKids || (isTv && selectedSeasons.length === 0)}
+                                            onClick={handleSubmitRequest}
+                                        >
+                                            {submitting ? (
+                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            ) : isDisallowed ? (
+                                                <>
+                                                    <ShieldAlert className="h-4 w-4" />
+                                                    <span>Restricted (NC-17 / Adult)</span>
+                                                </>
+                                            ) : isMatureInKids ? (
+                                                <>
+                                                    <ShieldAlert className="h-4 w-4" />
+                                                    <span>Unavailable in Kids Mode</span>
+                                                </>
+                                            ) : !isTv && isCurrentQualityMonitored ? (
+                                                <>
+                                                    <RefreshCw className="h-4 w-4" />
+                                                    <span>Re-Search {is4k ? "4K UHD" : "1080p"} Movie in Radarr</span>
+                                                </>
+                                            ) : isTv && allSelectedSeasonsMonitored ? (
+                                                <>
+                                                    <RefreshCw className="h-4 w-4" />
+                                                    <span>Re-Search {selectedSeasons.length} Monitored Season(s) in Sonarr</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Plus className="h-4 w-4" />
+                                                    <span>
+                                                        Request {isTv ? `${selectedSeasons.length} Season(s)` : "Movie"} ({is4k ? "4K UHD" : "1080p"})
+                                                    </span>
+                                                </>
                                             )}
-                                            {requestErrorMsg && (
-                                                <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
-                                                    <AlertCircle className="h-4 w-4 shrink-0" />
-                                                    <span>{requestErrorMsg}</span>
-                                                </div>
-                                            )}
-
-                                            {/* Primary Submit Button */}
-                                            <Button
-                                                size="lg"
-                                                className="w-full h-10 text-sm font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                                disabled={submitting || isDisallowed || isMatureInKids || (isTv && selectedSeasons.length === 0)}
-                                                onClick={handleSubmitRequest}
-                                            >
-                                                {submitting ? (
-                                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                ) : isDisallowed ? (
-                                                    <>
-                                                        <ShieldAlert className="h-4 w-4" />
-                                                        <span>Restricted (NC-17 / Adult)</span>
-                                                    </>
-                                                ) : isMatureInKids ? (
-                                                    <>
-                                                        <ShieldAlert className="h-4 w-4" />
-                                                        <span>Unavailable in Kids Mode</span>
-                                                    </>
-                                                ) : inMainOnly ? (
-                                                    <>
-                                                        <Plus className="h-4 w-4" />
-                                                        <span>Request for Kids Library</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Plus className="h-4 w-4" />
-                                                        <span>Request {isTv ? `${selectedSeasons.length} Season(s)` : "Movie"}</span>
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </div>
-                                    )}
+                                        </Button>
+                                    </div>
 
                                     {/* Production Info & External Links */}
                                     <div className="p-3.5 rounded-xl bg-muted/20 border border-border/40 space-y-2.5">
@@ -918,27 +1151,114 @@ export function MediaDetailModal({
                                 </div>
                             )}
 
-                            {/* TAB 2: TV EPISODE GUIDE */}
+                            {/* TAB 2: TV EPISODE GUIDE & PER-EPISODE MONITORING */}
                             {activeTab === "episodes" && isTv && details.seasons && (
                                 <div className="space-y-3.5">
-                                    {/* Season Selector Tabs */}
+                                    {/* Season Selector Tabs with Monitored Status Dots */}
                                     <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                                        {details.seasons.filter(s => s.seasonNumber > 0).map(s => (
-                                            <Button
-                                                key={s.id}
-                                                size="sm"
-                                                variant={selectedSeasonNumber === s.seasonNumber ? "default" : "outline"}
-                                                onClick={() => handleSeasonTabChange(s.seasonNumber)}
-                                                className={`h-7 px-3 rounded-xl text-xs font-bold shrink-0 transition-all ${
-                                                    selectedSeasonNumber === s.seasonNumber
-                                                        ? "bg-primary text-primary-foreground"
-                                                        : "bg-muted/20 border-border/50 text-muted-foreground hover:text-foreground"
-                                                }`}
-                                            >
-                                                {s.name} ({s.episodeCount} eps)
-                                            </Button>
-                                        ))}
+                                        {details.seasons.filter(s => s.seasonNumber > 0).map(s => {
+                                            const mon = activeSeasonsMap?.[s.seasonNumber];
+                                            const isFully = mon?.isFullyMonitored;
+                                            const isPart = mon?.isPartiallyMonitored;
+
+                                            return (
+                                                <Button
+                                                    key={s.id}
+                                                    size="sm"
+                                                    variant={selectedSeasonNumber === s.seasonNumber ? "default" : "outline"}
+                                                    onClick={() => handleSeasonTabChange(s.seasonNumber)}
+                                                    className={`h-8 px-3 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 ${
+                                                        selectedSeasonNumber === s.seasonNumber
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "bg-muted/20 border-border/50 text-muted-foreground hover:text-foreground"
+                                                    }`}
+                                                >
+                                                    <span className={`w-2 h-2 rounded-full ${
+                                                        isFully ? "bg-emerald-400" : isPart ? "bg-amber-400" : "bg-gray-500"
+                                                    }`} />
+                                                    <span>{s.name} ({s.episodeCount} eps)</span>
+                                                </Button>
+                                            );
+                                        })}
                                     </div>
+
+                                    {/* Toolbar for Season: Quick Selection & Action Bar */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-[#121218] border border-border/40">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-muted-foreground">
+                                                Season {selectedSeasonNumber} Episodes:
+                                            </span>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 px-2.5 text-xs font-semibold rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
+                                                onClick={() => handleSelectAllUnmonitoredEpisodesInSeason(selectedSeasonNumber)}
+                                            >
+                                                <Filter className="h-3 w-3 mr-1" />
+                                                Select Unmonitored
+                                            </Button>
+                                            {selectedEpisodeKeys.length > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-7 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                                                    onClick={handleClearEpisodeSelection}
+                                                >
+                                                    Clear ({selectedEpisodeKeys.length})
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {/* 4K vs 1080p target indicator */}
+                                        <div className="flex items-center gap-2">
+                                            {quotaData?.canRequest4k && (
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/[0.04] border border-border/40 text-[11px]">
+                                                    <span className="text-muted-foreground">Target:</span>
+                                                    <span className={`font-bold ${is4k ? "text-purple-300" : "text-blue-300"}`}>
+                                                        {is4k ? "4K UHD" : "1080p"}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Multi-Episode Request Banner if items selected */}
+                                    {selectedEpisodeKeys.length > 0 && (
+                                        <div className="p-3 rounded-xl bg-primary/15 border border-primary/40 flex items-center justify-between gap-3 text-foreground animate-fadeIn">
+                                            <div className="text-xs font-semibold">
+                                                <strong className="text-primary-foreground">{selectedEpisodeKeys.length}</strong> episode(s) selected for {is4k ? "4K UHD" : "1080p"} download
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                className="h-8 px-4 font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-md"
+                                                disabled={submittingEpisodes}
+                                                onClick={handleRequestSelectedEpisodes}
+                                            >
+                                                {submittingEpisodes ? (
+                                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        <Plus className="h-3.5 w-3.5 mr-1" />
+                                                        <span>Request Selected Episodes</span>
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {/* Episode Feedback */}
+                                    {episodeSuccessMsg && (
+                                        <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
+                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            <span>{episodeSuccessMsg}</span>
+                                        </div>
+                                    )}
+                                    {episodeErrorMsg && (
+                                        <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
+                                            <AlertCircle className="h-4 w-4 shrink-0" />
+                                            <span>{episodeErrorMsg}</span>
+                                        </div>
+                                    )}
 
                                     {/* Episodes List */}
                                     {loadingEpisodes ? (
@@ -948,26 +1268,107 @@ export function MediaDetailModal({
                                         </div>
                                     ) : seasonEpisodes[selectedSeasonNumber] && seasonEpisodes[selectedSeasonNumber].length > 0 ? (
                                         <div className="space-y-2">
-                                            {seasonEpisodes[selectedSeasonNumber].map(ep => (
-                                                <div key={ep.id} className="p-2.5 rounded-xl border border-border/40 bg-[#121218] flex flex-col sm:flex-row gap-3 items-start hover:bg-muted/15 transition-colors">
-                                                    {ep.stillPath && (
-                                                        <img
-                                                            src={ep.stillPath}
-                                                            alt={ep.name}
-                                                            className="w-full sm:w-32 aspect-video rounded-lg object-cover shrink-0 bg-muted/20 border border-white/5"
-                                                        />
-                                                    )}
-                                                    <div className="space-y-0.5 flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between text-xs font-bold text-foreground">
-                                                            <span className="line-clamp-1">{ep.episodeNumber}. {ep.name}</span>
-                                                            {ep.airDate && <span className="text-[10px] text-muted-foreground shrink-0 ml-2">{ep.airDate}</span>}
+                                            {seasonEpisodes[selectedSeasonNumber].map(ep => {
+                                                const key = `s${selectedSeasonNumber}e${ep.episodeNumber}`;
+                                                const mon1080 = arrDetails?.episodes1080p?.[key];
+                                                const mon4k = arrDetails?.episodes4k?.[key];
+                                                const isSelected = selectedEpisodeKeys.includes(key);
+
+                                                return (
+                                                    <div
+                                                        key={ep.id}
+                                                        className={`p-2.5 rounded-xl border transition-colors flex flex-col sm:flex-row gap-3 items-start ${
+                                                            isSelected
+                                                                ? "bg-primary/10 border-primary/50"
+                                                                : "bg-[#121218] border-border/40 hover:bg-muted/15"
+                                                        }`}
+                                                    >
+                                                        {/* Checkbox for episode */}
+                                                        <div className="pt-1">
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => handleToggleEpisodeKey(key)}
+                                                            />
                                                         </div>
-                                                        <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
-                                                            {ep.overview || "No episode description available."}
-                                                        </p>
+
+                                                        {ep.stillPath && (
+                                                            <img
+                                                                src={ep.stillPath}
+                                                                alt={ep.name}
+                                                                className="w-full sm:w-32 aspect-video rounded-lg object-cover shrink-0 bg-muted/20 border border-white/5"
+                                                            />
+                                                        )}
+
+                                                        <div className="space-y-1 flex-1 min-w-0">
+                                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                <div className="text-xs font-bold text-foreground">
+                                                                    <span>{ep.episodeNumber}. {ep.name}</span>
+                                                                    {ep.airDate && (
+                                                                        <span className="text-[10px] text-muted-foreground ml-2 font-normal">
+                                                                            ({ep.airDate})
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Monitored Status Badges */}
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {mon1080?.hasFile ? (
+                                                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
+                                                                            <CheckCircle2 className="h-3 w-3" />
+                                                                            1080p Downloaded
+                                                                        </span>
+                                                                    ) : mon1080?.monitored ? (
+                                                                        <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-500/40 flex items-center gap-1">
+                                                                            <Clock className="h-3 w-3" />
+                                                                            1080p Monitored
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-muted-foreground text-[10px] font-medium border border-white/10">
+                                                                            1080p Unmonitored
+                                                                        </span>
+                                                                    )}
+
+                                                                    {arrDetails?.isConfigured4k && (
+                                                                        mon4k?.hasFile ? (
+                                                                            <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
+                                                                                <CheckCircle2 className="h-3 w-3" />
+                                                                                4K Downloaded
+                                                                            </span>
+                                                                        ) : mon4k?.monitored ? (
+                                                                            <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/40 flex items-center gap-1">
+                                                                                <Clock className="h-3 w-3" />
+                                                                                4K Monitored
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-muted-foreground text-[10px] font-medium border border-white/10">
+                                                                                4K Unmonitored
+                                                                            </span>
+                                                                        )
+                                                                    )}
+
+                                                                    {/* 1-click Request Button for single episode */}
+                                                                    {!(is4k ? mon4k?.monitored : mon1080?.monitored) && (
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-6 px-2 text-[10px] font-bold rounded-md bg-primary/20 hover:bg-primary text-primary hover:text-primary-foreground border-primary/40 ml-1"
+                                                                            disabled={submittingEpisodes}
+                                                                            onClick={() => handleRequestSingleEpisode(selectedSeasonNumber, ep.episodeNumber)}
+                                                                        >
+                                                                            <Plus className="h-2.5 w-2.5 mr-0.5" />
+                                                                            Request
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
+                                                                {ep.overview || "No episode description available."}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <div className="p-6 text-center text-xs text-muted-foreground">

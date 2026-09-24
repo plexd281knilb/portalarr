@@ -3,6 +3,11 @@ import { decryptData } from "@/lib/encryption";
 import { getPlexServers } from "@/lib/plex";
 import { analyzeMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { logger } from "@/lib/logger";
+import {
+    ArrMediaMonitoringDetails,
+    getQuickArrMonitoringStatus,
+    getArrMediaMonitoringDetails
+} from "@/lib/seerr/arr-monitoring";
 
 export interface MediaAvailabilityStatus {
     inLibrary: boolean;
@@ -22,6 +27,14 @@ export interface MediaAvailabilityStatus {
     requestedBy?: string;
     downloadProgress?: number;
     servarrStatus?: string;
+
+    // Radarr / Sonarr Monitoring Data
+    isMonitored?: boolean;
+    isMonitored1080p?: boolean;
+    isMonitored4k?: boolean;
+    hasFile1080p?: boolean;
+    hasFile4k?: boolean;
+    arrMonitoring?: ArrMediaMonitoringDetails;
 }
 
 export interface PlexGuidEntry {
@@ -163,7 +176,7 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
 }
 
 /**
- * Checks single media availability against Plex and active MediaRequests
+ * Checks single media availability against Plex, SQLite MediaRequests, and active Radarr/Sonarr instances
  */
 export async function checkMediaAvailability(
     tmdbId: number,
@@ -172,7 +185,8 @@ export async function checkMediaAvailability(
     tvdbId?: number,
     title?: string,
     year?: number | string,
-    isKids = false
+    isKids = false,
+    fetchDeepArrDetails = false
 ): Promise<MediaAvailabilityStatus> {
     const result: MediaAvailabilityStatus = {
         inLibrary: false,
@@ -201,7 +215,35 @@ export async function checkMediaAvailability(
             }
         }
 
-        // 2. Check Plex GUID index
+        // 2. Check Radarr / Sonarr monitoring status
+        if (fetchDeepArrDetails) {
+            const arrDetails = await getArrMediaMonitoringDetails(tmdbId, mediaType, tvdbId, imdbId, title, isKids);
+            result.arrMonitoring = arrDetails;
+            result.isMonitored1080p = arrDetails.isMonitored1080p;
+            result.isMonitored4k = arrDetails.isMonitored4k;
+            result.hasFile1080p = arrDetails.hasFile1080p;
+            result.hasFile4k = arrDetails.hasFile4k;
+            result.isMonitored = arrDetails.isMonitored1080p || arrDetails.isMonitored4k;
+
+            if (result.isMonitored && !result.isRequested) {
+                result.isRequested = true;
+                result.requestStatus = (result.hasFile1080p || result.hasFile4k) ? "AVAILABLE" : "PROCESSING";
+            }
+        } else {
+            const quickStatus = await getQuickArrMonitoringStatus(tmdbId, mediaType, tvdbId, title);
+            result.isMonitored1080p = quickStatus.isMonitored1080p;
+            result.isMonitored4k = quickStatus.isMonitored4k;
+            result.hasFile1080p = quickStatus.hasFile1080p;
+            result.hasFile4k = quickStatus.hasFile4k;
+            result.isMonitored = quickStatus.isMonitored;
+
+            if (quickStatus.isMonitored && !result.isRequested) {
+                result.isRequested = true;
+                result.requestStatus = quickStatus.hasFile ? "AVAILABLE" : "PROCESSING";
+            }
+        }
+
+        // 3. Check Plex GUID index
         const guidIndex = await getPlexLibraryGuidIndex();
         
         let matches = guidIndex.get(`tmdb:${mediaType}:${tmdbId}`) || [];
@@ -287,7 +329,10 @@ export async function batchCheckMediaAvailability(
             requestMap.set(`${req.mediaType}:${req.tmdbId}`, req);
         }
 
-        const guidIndex: Map<string, PlexGuidEntry[]> = await getPlexLibraryGuidIndex().catch(() => new Map<string, PlexGuidEntry[]>());
+        const [guidIndex, arrIndex] = await Promise.all([
+            getPlexLibraryGuidIndex().catch(() => new Map<string, PlexGuidEntry[]>()),
+            import("@/lib/seerr/arr-monitoring").then(m => m.getArrIndex()).catch(() => null)
+        ]);
 
         for (const item of items) {
             const req = requestMap.get(`${item.mediaType}:${item.id}`);
@@ -304,6 +349,33 @@ export async function batchCheckMediaAvailability(
                 status.downloadProgress = req.downloadProgress ?? undefined;
                 if (req.status === "AVAILABLE" || req.status === "PARTIALLY_AVAILABLE") {
                     status.inLibrary = true;
+                }
+            }
+
+            // Cross-reference with Arr monitoring index
+            if (arrIndex) {
+                if (item.mediaType === "movie") {
+                    const rad1080 = arrIndex.radarr1080p.get(item.id);
+                    const rad4k = arrIndex.radarr4k.get(item.id);
+                    status.isMonitored1080p = Boolean(rad1080?.monitored);
+                    status.isMonitored4k = Boolean(rad4k?.monitored);
+                    status.hasFile1080p = Boolean(rad1080?.hasFile);
+                    status.hasFile4k = Boolean(rad4k?.hasFile);
+                    status.isMonitored = status.isMonitored1080p || status.isMonitored4k;
+                } else {
+                    const normTitle = (item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const son1080 = (item.tvdbId ? arrIndex.sonarr1080p.get(item.tvdbId) : null) || (normTitle ? arrIndex.sonarrTitles1080p.get(normTitle) : null);
+                    const son4k = (item.tvdbId ? arrIndex.sonarr4k.get(item.tvdbId) : null) || (normTitle ? arrIndex.sonarrTitles4k.get(normTitle) : null);
+                    status.isMonitored1080p = Boolean(son1080?.monitored || (son1080?.seasons && son1080.seasons.some((s: any) => s.monitored)));
+                    status.isMonitored4k = Boolean(son4k?.monitored || (son4k?.seasons && son4k.seasons.some((s: any) => s.monitored)));
+                    status.hasFile1080p = Boolean(son1080?.seasons && son1080.seasons.some((s: any) => s.statistics?.episodeFileCount > 0));
+                    status.hasFile4k = Boolean(son4k?.seasons && son4k.seasons.some((s: any) => s.statistics?.episodeFileCount > 0));
+                    status.isMonitored = status.isMonitored1080p || status.isMonitored4k;
+                }
+
+                if (status.isMonitored && !status.isRequested) {
+                    status.isRequested = true;
+                    status.requestStatus = (status.hasFile1080p || status.hasFile4k) ? "AVAILABLE" : "PROCESSING";
                 }
             }
 

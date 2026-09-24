@@ -38,8 +38,13 @@ import {
     MediaAvailabilityStatus,
     getPlexLibraryGuidIndex
 } from "@/lib/seerr/availability";
+import {
+    getArrMediaMonitoringDetails,
+    ArrMediaMonitoringDetails
+} from "@/lib/seerr/arr-monitoring";
 import { dispatchMediaRequest } from "@/lib/seerr/dispatch";
-import { getEnabledArrInstancesInternal, arrApiGet, getArrProfilesAndFolders } from "@/app/arr-actions";
+import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, getArrProfilesAndFolders } from "@/app/arr-actions";
+import { notifyMediaRequestEvent, sendTestSeerrDiscordWebhook } from "@/lib/seerr/notifications";
 
 interface AuthSession {
     userId: string;
@@ -294,7 +299,8 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
             details.tvdbId,
             details.title,
             details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
-            Boolean(isKids)
+            Boolean(isKids),
+            true // fetchDeepArrDetails
         );
 
         // Fetch recommendations availability
@@ -307,6 +313,264 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
             details,
             availability,
             recAvailability
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Fetch on-demand Arr monitoring details for movies or TV shows
+ */
+export async function getArrMonitoringDetailsAction(
+    tmdbId: number,
+    mediaType: "movie" | "tv",
+    tvdbId?: number,
+    imdbId?: string,
+    title?: string,
+    isKids = false
+) {
+    try {
+        const monitoring = await getArrMediaMonitoringDetails(tmdbId, mediaType, tvdbId, imdbId, title, Boolean(isKids));
+        return { success: true, monitoring };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Request or update monitoring for specific TV episodes in Sonarr
+ */
+export async function requestTvEpisodesAction(payload: {
+    tmdbId: number;
+    tvdbId?: number;
+    imdbId?: string;
+    title: string;
+    releaseYear?: string;
+    posterPath?: string;
+    backdropPath?: string;
+    overview?: string;
+    is4k?: boolean;
+    isKids?: boolean;
+    contentRating?: string;
+    episodes: { seasonNumber: number; episodeNumber: number; episodeId?: number }[];
+}) {
+    try {
+        const session = await verifyAuth();
+        const user = await prisma.user.findUnique({
+            where: { username: session.username }
+        });
+
+        if (!user) throw new Error("User record not found");
+
+        const isAdmin = user.role === "ADMIN" || user.role === "SUPER_USER";
+        if (!isAdmin && user.canRequest === false) {
+            throw new Error("You do not have permission to submit media requests.");
+        }
+
+        if (payload.is4k && !isAdmin && !user.canRequest4k) {
+            throw new Error("You do not have permission to request 4K UHD media.");
+        }
+
+        if (payload.contentRating && isNc17OrDisallowedRating(payload.contentRating)) {
+            throw new Error("NC-17 and adult-rated titles cannot be requested in Portalarr.");
+        }
+
+        if (payload.isKids && isAdultOrMatureRating(payload.contentRating)) {
+            throw new Error("This title contains mature content and cannot be requested in the Kids section.");
+        }
+
+        if (!payload.episodes || payload.episodes.length === 0) {
+            throw new Error("No episodes selected for request.");
+        }
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const sonarrAppsRes = await getEnabledArrInstancesInternal("sonarr");
+        const sonarrApps = sonarrAppsRes.success && sonarrAppsRes.data ? sonarrAppsRes.data : [];
+
+        if (sonarrApps.length === 0) {
+            throw new Error("No Sonarr instances configured. Please configure Sonarr in Settings -> Apps.");
+        }
+
+        // Determine target Sonarr app
+        let targetApp = null;
+        if (payload.isKids) {
+            const preferredId = payload.is4k ? settings?.seerrKidsTv4kAppId : settings?.seerrKidsTvAppId;
+            if (preferredId && preferredId !== "none") {
+                targetApp = sonarrApps.find(a => a.id === preferredId);
+            }
+        }
+        if (!targetApp) {
+            const preferredId = payload.is4k ? settings?.seerrDefaultTv4kAppId : settings?.seerrDefaultTvAppId;
+            if (preferredId && preferredId !== "none") {
+                targetApp = sonarrApps.find(a => a.id === preferredId);
+            }
+        }
+        if (!targetApp) {
+            targetApp = payload.is4k
+                ? (sonarrApps.find(a => a.name.toLowerCase().includes("4k")) || sonarrApps[0])
+                : (sonarrApps.find(a => !a.name.toLowerCase().includes("4k")) || sonarrApps[0]);
+        }
+
+        if (!targetApp) {
+            throw new Error("Could not resolve a suitable Sonarr instance for episode request.");
+        }
+
+        // 1. Look for existing series in Sonarr
+        const seriesListRes = await arrApiGet(targetApp, "/api/v3/series");
+        let existingSeries: any = null;
+        if (seriesListRes.success && Array.isArray(seriesListRes.data)) {
+            existingSeries = seriesListRes.data.find((s: any) => 
+                (payload.tvdbId && s.tvdbId === payload.tvdbId) || 
+                (payload.imdbId && s.imdbId === payload.imdbId) || 
+                s.title.toLowerCase() === payload.title.toLowerCase()
+            );
+        }
+
+        let servarrId: number;
+        const requestedSeasonNumbers = Array.from(new Set(payload.episodes.map(e => e.seasonNumber)));
+
+        if (existingSeries) {
+            servarrId = existingSeries.id;
+            // Ensure series and seasons are monitored
+            existingSeries.monitored = true;
+            if (existingSeries.seasons && Array.isArray(existingSeries.seasons)) {
+                existingSeries.seasons = existingSeries.seasons.map((s: any) => {
+                    if (requestedSeasonNumbers.includes(s.seasonNumber)) {
+                        return { ...s, monitored: true };
+                    }
+                    return s;
+                });
+            }
+            await arrApiPut(targetApp, `/api/v3/series/${existingSeries.id}`, existingSeries).catch(() => {});
+
+            // Fetch episodes and update specific episode monitoring
+            const epRes = await arrApiGet(targetApp, `/api/v3/episode?seriesId=${existingSeries.id}`);
+            const allEps: any[] = epRes.success && Array.isArray(epRes.data) ? epRes.data : [];
+
+            const matchingEpIds: number[] = [];
+            for (const reqEp of payload.episodes) {
+                const found = allEps.find(e => e.seasonNumber === reqEp.seasonNumber && e.episodeNumber === reqEp.episodeNumber);
+                if (found) {
+                    matchingEpIds.push(found.id);
+                }
+            }
+
+            if (matchingEpIds.length > 0) {
+                // Update episode monitoring in Sonarr
+                await arrApiPut(targetApp, `/api/v3/episode/monitor`, { episodeIds: matchingEpIds, monitored: true }).catch(async () => {
+                    // Fallback to individual episode PUT if monitor endpoint is unsupported
+                    for (const epId of matchingEpIds) {
+                        const epObj = allEps.find(e => e.id === epId);
+                        if (epObj) {
+                            await arrApiPut(targetApp, `/api/v3/episode/${epId}`, { ...epObj, monitored: true }).catch(() => {});
+                        }
+                    }
+                });
+
+                // Trigger EpisodeSearch command
+                await arrApiPost(targetApp, "/api/v3/command", { name: "EpisodeSearch", episodeIds: matchingEpIds }).catch(() => {});
+            }
+        } else {
+            // Series not yet in Sonarr: create request and dispatch it
+            const newReq = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "tv",
+                    tmdbId: payload.tmdbId,
+                    tvdbId: payload.tvdbId,
+                    imdbId: payload.imdbId,
+                    title: payload.title,
+                    releaseYear: payload.releaseYear,
+                    posterPath: payload.posterPath,
+                    backdropPath: payload.backdropPath,
+                    overview: payload.overview,
+                    status: "APPROVED",
+                    is4k: Boolean(payload.is4k),
+                    isKids: Boolean(payload.isKids),
+                    contentRating: payload.contentRating,
+                    requestedByUserId: user.id,
+                    requestedByUsername: user.username,
+                    seasons: JSON.stringify(requestedSeasonNumbers)
+                }
+            });
+
+            const dispatchRes = await dispatchMediaRequest(newReq.id);
+            if (!dispatchRes.success) {
+                throw new Error(dispatchRes.error || "Failed adding series to Sonarr.");
+            }
+            servarrId = dispatchRes.servarrId || 0;
+        }
+
+        // Upsert / Record MediaRequest in SQLite
+        const existingReq = await prisma.mediaRequest.findFirst({
+            where: {
+                tmdbId: payload.tmdbId,
+                mediaType: "tv",
+                is4k: Boolean(payload.is4k)
+            }
+        });
+
+        if (existingReq) {
+            let combinedSeasons: number[] = [];
+            try {
+                if (existingReq.seasons && existingReq.seasons !== "all") {
+                    combinedSeasons = JSON.parse(existingReq.seasons);
+                }
+            } catch {}
+            for (const sNum of requestedSeasonNumbers) {
+                if (!combinedSeasons.includes(sNum)) combinedSeasons.push(sNum);
+            }
+
+            await prisma.mediaRequest.update({
+                where: { id: existingReq.id },
+                data: {
+                    status: "PROCESSING",
+                    servarrAppId: targetApp.id,
+                    servarrId,
+                    seasons: JSON.stringify(combinedSeasons)
+                }
+            });
+        } else {
+            await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "tv",
+                    tmdbId: payload.tmdbId,
+                    tvdbId: payload.tvdbId,
+                    imdbId: payload.imdbId,
+                    title: payload.title,
+                    releaseYear: payload.releaseYear,
+                    posterPath: payload.posterPath,
+                    backdropPath: payload.backdropPath,
+                    overview: payload.overview,
+                    status: "PROCESSING",
+                    is4k: Boolean(payload.is4k),
+                    isKids: Boolean(payload.isKids),
+                    contentRating: payload.contentRating,
+                    requestedByUserId: user.id,
+                    requestedByUsername: user.username,
+                    seasons: JSON.stringify(requestedSeasonNumbers),
+                    servarrAppId: targetApp.id,
+                    servarrId
+                }
+            });
+        }
+
+        // Fetch refreshed monitoring details
+        const updatedMonitoring = await getArrMediaMonitoringDetails(
+            payload.tmdbId,
+            "tv",
+            payload.tvdbId,
+            payload.imdbId,
+            payload.title,
+            Boolean(payload.isKids)
+        );
+
+        logger.addLog("INFO", "SEERR", `User ${user.username} requested ${payload.episodes.length} episodes for "${payload.title}" on Sonarr (${targetApp.name})`);
+
+        return {
+            success: true,
+            message: `Successfully requested ${payload.episodes.length} episode(s) in Sonarr (${targetApp.name})!`,
+            arrMonitoring: updatedMonitoring
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -619,12 +883,15 @@ export async function submitMediaRequestAction(payload: {
 
         logger.addLog("INFO", "SEERR", `User ${user.username} (${isTrial ? "Trial" : "Full"}) submitted request for "${payload.title}" (${payload.mediaType.toUpperCase()}${payload.isKids ? " - Kids" : ""}) - Status: ${initialStatus}`);
 
-        // If auto-approved, trigger immediate Servarr dispatch
+        // If auto-approved, trigger immediate Servarr dispatch and notification
         if (autoApprove) {
             const dispatchRes = await dispatchMediaRequest(newRequest.id);
             if (!dispatchRes.success) {
                 logger.addLog("WARN", "SEERR", `Auto-dispatch for request "${payload.title}" encountered an issue: ${dispatchRes.error}`);
             }
+            notifyMediaRequestEvent("AUTO_APPROVED", newRequest.id).catch(() => {});
+        } else {
+            notifyMediaRequestEvent("PENDING", newRequest.id).catch(() => {});
         }
 
         return {
@@ -725,6 +992,7 @@ export async function approveMediaRequestAction(requestId: string) {
         });
 
         const dispatchRes = await dispatchMediaRequest(requestId);
+        notifyMediaRequestEvent("APPROVED", requestId).catch(() => {});
         return {
             success: true,
             message: dispatchRes.success ? "Request approved and dispatched!" : `Approved, but dispatch failed: ${dispatchRes.error}`
@@ -747,6 +1015,7 @@ export async function declineMediaRequestAction(requestId: string, reason?: stri
                 errorMessage: reason || "Request declined by administrator"
             }
         });
+        notifyMediaRequestEvent("DECLINED", requestId, { declineReason: reason }).catch(() => {});
         return { success: true, message: "Request declined." };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -773,6 +1042,11 @@ export async function retryMediaRequestAction(requestId: string) {
         });
 
         const dispatchRes = await dispatchMediaRequest(requestId);
+        if (!dispatchRes.success) {
+            notifyMediaRequestEvent("FAILED", requestId, { errorMessage: dispatchRes.error }).catch(() => {});
+        } else {
+            notifyMediaRequestEvent("APPROVED", requestId).catch(() => {});
+        }
         return {
             success: dispatchRes.success,
             message: dispatchRes.success ? "Request retried successfully!" : `Retry failed: ${dispatchRes.error}`
@@ -841,6 +1115,8 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
                     }
                 });
                 updatedCount++;
+                const plexUrl = match.ratingKey ? `https://app.plex.tv/desktop#!/server/${match.serverId || ""}/details?key=%2Flibrary%2Fmetadata%2F${match.ratingKey}` : undefined;
+                notifyMediaRequestEvent("AVAILABLE", req.id, { plexUrl }).catch(() => {});
             }
         }
 
@@ -1003,6 +1279,25 @@ export async function getSeerrSettingsAction() {
                 // Dual 4K + 1080p Ingestion
                 seerrAutoDual1080pFor4k: settings?.seerrAutoDual1080pFor4k ?? true,
 
+                // Seerr Discord Webhook Notification Settings
+                seerrDiscordWebhookUrl: settings?.seerrDiscordWebhookUrl ?? null,
+                seerrDiscordBotUsername: settings?.seerrDiscordBotUsername ?? "Portalarr",
+                seerrDiscordBotAvatarUrl: settings?.seerrDiscordBotAvatarUrl ?? null,
+                seerrDiscordNotifyPending: settings?.seerrDiscordNotifyPending ?? true,
+                seerrDiscordNotifyAutoApproved: settings?.seerrDiscordNotifyAutoApproved ?? true,
+                seerrDiscordNotifyApproved: settings?.seerrDiscordNotifyApproved ?? true,
+                seerrDiscordNotifyDeclined: settings?.seerrDiscordNotifyDeclined ?? true,
+                seerrDiscordNotifyAvailable: settings?.seerrDiscordNotifyAvailable ?? true,
+                seerrDiscordNotifyFailed: settings?.seerrDiscordNotifyFailed ?? true,
+
+                // Seerr Email Notification Settings
+                seerrEmailNotifyAdminNewRequest: settings?.seerrEmailNotifyAdminNewRequest ?? true,
+                seerrEmailNotifyUserAutoApproved: settings?.seerrEmailNotifyUserAutoApproved ?? true,
+                seerrEmailNotifyUserApproved: settings?.seerrEmailNotifyUserApproved ?? true,
+                seerrEmailNotifyUserDeclined: settings?.seerrEmailNotifyUserDeclined ?? true,
+                seerrEmailNotifyUserAvailable: settings?.seerrEmailNotifyUserAvailable ?? true,
+                seerrEmailNotifyUserFailed: settings?.seerrEmailNotifyUserFailed ?? true,
+
                 radarrApps,
                 sonarrApps,
                 appDataMap
@@ -1022,6 +1317,18 @@ export async function getArrAppProfilesAndFoldersAction(appId: string) {
         return await getArrProfilesAndFolders(appId);
     } catch (e: any) {
         return { success: false, error: e.message, profiles: [], folders: [] };
+    }
+}
+
+/**
+ * Test Discord Webhook connectivity with a rich sample embed
+ */
+export async function testSeerrDiscordWebhookAction(webhookUrl: string, botUsername?: string, botAvatarUrl?: string) {
+    try {
+        await verifyAdmin();
+        return await sendTestSeerrDiscordWebhook(webhookUrl, botUsername, botAvatarUrl);
+    } catch (e: any) {
+        return { success: false, error: e.message };
     }
 }
 
@@ -1077,6 +1384,25 @@ export async function updateSeerrSettingsAction(payload: {
 
     // Dual 4K + 1080p Ingestion
     seerrAutoDual1080pFor4k?: boolean;
+
+    // Seerr Discord Webhook Notification Settings
+    seerrDiscordWebhookUrl?: string | null;
+    seerrDiscordBotUsername?: string | null;
+    seerrDiscordBotAvatarUrl?: string | null;
+    seerrDiscordNotifyPending?: boolean;
+    seerrDiscordNotifyAutoApproved?: boolean;
+    seerrDiscordNotifyApproved?: boolean;
+    seerrDiscordNotifyDeclined?: boolean;
+    seerrDiscordNotifyAvailable?: boolean;
+    seerrDiscordNotifyFailed?: boolean;
+
+    // Seerr Email Notification Settings
+    seerrEmailNotifyAdminNewRequest?: boolean;
+    seerrEmailNotifyUserAutoApproved?: boolean;
+    seerrEmailNotifyUserApproved?: boolean;
+    seerrEmailNotifyUserDeclined?: boolean;
+    seerrEmailNotifyUserAvailable?: boolean;
+    seerrEmailNotifyUserFailed?: boolean;
 }) {
     try {
         await verifyAdmin();

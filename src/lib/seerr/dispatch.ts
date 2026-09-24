@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
-import { arrApiGet, arrApiPost, getEnabledArrInstancesInternal } from "@/app/arr-actions";
+import { arrApiGet, arrApiPost, arrApiPut, getEnabledArrInstancesInternal } from "@/app/arr-actions";
 import { logger } from "@/lib/logger";
 
 export interface DispatchResult {
@@ -189,12 +189,16 @@ async function dispatchMovieRequest(req: any, settings: any): Promise<DispatchRe
     if (addRes.success && addRes.data) {
         servarrId = addRes.data.id;
     } else {
-        // If movie already exists in Radarr, fetch existing record and trigger search
+        // If movie already exists in Radarr, fetch existing record, ensure monitored, and trigger search
         const existingMoviesRes = await arrApiGet(targetApp, `/api/v3/movie`);
         if (existingMoviesRes.success && Array.isArray(existingMoviesRes.data)) {
             const existing = existingMoviesRes.data.find((m: any) => m.tmdbId === req.tmdbId);
             if (existing) {
                 servarrId = existing.id;
+                if (!existing.monitored) {
+                    existing.monitored = true;
+                    await arrApiPut(targetApp, `/api/v3/movie/${existing.id}`, existing).catch(() => {});
+                }
                 // Trigger movie search
                 await arrApiPost(targetApp, "/api/v3/command", { name: "MoviesSearch", movieIds: [existing.id] }).catch(() => {});
             }
@@ -394,13 +398,35 @@ async function dispatchTvRequest(req: any, settings: any): Promise<DispatchResul
     if (addRes.success && addRes.data) {
         servarrId = addRes.data.id;
     } else {
-        // If series already exists in Sonarr, fetch existing record and trigger search
+        // If series already exists in Sonarr, fetch existing record, update season monitoring, and trigger search
         const existingSeriesRes = await arrApiGet(targetApp, `/api/v3/series`);
         if (existingSeriesRes.success && Array.isArray(existingSeriesRes.data)) {
             const existing = existingSeriesRes.data.find((s: any) => (req.tvdbId && s.tvdbId === req.tvdbId) || s.title.toLowerCase() === req.title.toLowerCase());
             if (existing) {
                 servarrId = existing.id;
-                await arrApiPost(targetApp, "/api/v3/command", { name: "SeriesSearch", seriesId: existing.id }).catch(() => {});
+                existing.monitored = true;
+
+                // Update season monitoring
+                if (existing.seasons && Array.isArray(existing.seasons)) {
+                    existing.seasons = existing.seasons.map((s: any) => {
+                        if (requestedSeasonsList === "all" || (Array.isArray(requestedSeasonsList) && requestedSeasonsList.includes(s.seasonNumber))) {
+                            return { ...s, monitored: true };
+                        }
+                        return s;
+                    });
+                }
+
+                // Save series update
+                await arrApiPut(targetApp, `/api/v3/series/${existing.id}`, existing).catch(() => {});
+
+                // If specific seasons requested, trigger SeasonSearch per season; otherwise SeriesSearch
+                if (Array.isArray(requestedSeasonsList) && requestedSeasonsList.length > 0) {
+                    for (const seasonNum of requestedSeasonsList) {
+                        await arrApiPost(targetApp, "/api/v3/command", { name: "SeasonSearch", seriesId: existing.id, seasonNumber: seasonNum }).catch(() => {});
+                    }
+                } else {
+                    await arrApiPost(targetApp, "/api/v3/command", { name: "SeriesSearch", seriesId: existing.id }).catch(() => {});
+                }
             }
         }
         if (!servarrId) {

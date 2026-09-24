@@ -4163,7 +4163,7 @@ export async function getFeatureSuggestions() {
         const user: any = await verifyUser().catch(() => null);
         const username: string = String(user?.username || "");
 
-        const suggestions = await prisma.featureSuggestion.findMany({
+        let suggestions = await prisma.featureSuggestion.findMany({
             include: {
                 votes: true
             },
@@ -4171,6 +4171,27 @@ export async function getFeatureSuggestions() {
                 createdAt: "desc"
             }
         });
+
+        // Ensure default community suggestion for Subtitle Engine exists
+        const subtitleExists = suggestions.some(s => s.title.toLowerCase().includes("subtitle"));
+        if (!subtitleExists) {
+            try {
+                const newSub = await prisma.featureSuggestion.create({
+                    data: {
+                        title: "Native Subtitle Engine & Auto-Sync (Bazarr Replacement)",
+                        description: "Automated missing subtitle downloader across OpenSubtitles, Subscene, and Addic7ed, with AI speech-to-text audio sync alignment and 1-click user 'Fix Subtitles' in My Plex Hub.",
+                        category: "Subtitles",
+                        createdBy: "Portalarr"
+                    },
+                    include: {
+                        votes: true
+                    }
+                });
+                suggestions.unshift(newSub);
+            } catch (seedErr) {
+                console.warn("Could not auto-seed subtitle feature suggestion:", seedErr);
+            }
+        }
 
         const formatted = suggestions.map(s => {
             const hasVoted = username ? s.votes.some(v => v.username.toLowerCase() === username.toLowerCase()) : false;

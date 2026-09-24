@@ -465,6 +465,189 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{fileSizeMb}", description: "File size in MB", sampleValue: "2.4" },
             { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
         ]
+    },
+    {
+        id: "seerr_request_new_admin",
+        name: "New Movie/TV Request Alert (Admins)",
+        description: "Sent to administrators when a user submits a Movie or TV Show request that requires review.",
+        category: "REQUESTS",
+        defaultSubject: "🎬 New {mediaLabel} Request: {title} ({releaseYear})",
+        defaultBody: `<h2>New Media Request 🎬</h2>
+<p>A new {mediaLabel} request has been submitted by <strong>{requestedBy}</strong>:</p>
+
+<table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;">
+    <tr style="background-color: #f8fafc;">
+        <td style="padding: 10px; font-weight: bold; width: 130px; border: 1px solid #e2e8f0;">Title:</td>
+        <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>{title} ({releaseYear})</strong></td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Type & Quality:</td>
+        <td style="padding: 10px; border: 1px solid #e2e8f0;">{mediaLabel} • <strong>{quality}</strong> ({section})</td>
+    </tr>
+    <tr style="background-color: #f8fafc;">
+        <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Content Rating:</td>
+        <td style="padding: 10px; border: 1px solid #e2e8f0;"><code>{contentRating}</code></td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Requested By:</td>
+        <td style="padding: 10px; border: 1px solid #e2e8f0;"><code>{requestedBy}</code></td>
+    </tr>
+    <tr style="background-color: #f8fafc;">
+        <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Overview:</td>
+        <td style="padding: 10px; border: 1px solid #e2e8f0; font-size: 13px; color: #475569;">{overview}</td>
+    </tr>
+</table>
+
+<div style="margin-top: 24px; text-align: center;">
+    <a href="{manageUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Manage Requests</a>
+</div>`,
+        variables: [
+            { key: "{title}", description: "Title of the requested movie or series", sampleValue: "Dune: Part Two" },
+            { key: "{releaseYear}", description: "Release year of media", sampleValue: "2024" },
+            { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "Movie" },
+            { key: "{mediaType}", description: "Media type identifier ('movie' or 'tv')", sampleValue: "movie" },
+            { key: "{quality}", description: "Quality resolution ('4K UHD' or '1080p Standard')", sampleValue: "4K UHD" },
+            { key: "{section}", description: "Library category ('Main Library' or 'Kids & Family')", sampleValue: "Main Library" },
+            { key: "{contentRating}", description: "Age rating certificate", sampleValue: "PG-13" },
+            { key: "{requestedBy}", description: "Username who submitted request", sampleValue: "alex_reader" },
+            { key: "{overview}", description: "Plot summary", sampleValue: "Paul Atreides unites with Chani and the Fremen..." },
+            { key: "{manageUrl}", description: "Link to Request Engine management tab", sampleValue: "https://portal.example.com/requests" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "seerr_request_auto_approved",
+        name: "Media Request Auto-Approved Confirmation",
+        description: "Sent to the requesting user when their Movie or TV Show request is automatically approved and queued for download.",
+        category: "REQUESTS",
+        defaultSubject: "🚀 Your Request is Auto-Approved: {title}",
+        defaultBody: `<h2>Request Auto-Approved! 🚀</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your request for <strong>{title} ({releaseYear})</strong> has been automatically approved and queued for download.</p>
+
+<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 15px;"><strong>Title:</strong> {title} ({releaseYear})</p>
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #166534;"><strong>Format:</strong> {mediaLabel} • {quality}</p>
+    <p style="margin: 0; font-size: 13px; color: #475569;"><strong>Status:</strong> Queued & Downloading</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b;">You will receive another notification as soon as the media is ready to stream on Plex!</p>`,
+        variables: [
+            { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of requested media", sampleValue: "Oppenheimer" },
+            { key: "{releaseYear}", description: "Release year", sampleValue: "2023" },
+            { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "Movie" },
+            { key: "{quality}", description: "Quality resolution", sampleValue: "1080p Standard" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "seerr_request_approved",
+        name: "Media Request Approved (Admin Review)",
+        description: "Sent to the requesting user when an administrator reviews and approves their pending Movie or TV Show request.",
+        category: "REQUESTS",
+        defaultSubject: "✅ Media Request Approved: {title}",
+        defaultBody: `<h2>Request Approved! ✅</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Great news! Your request for <strong>{title} ({releaseYear})</strong> has been reviewed and approved by the server administrator.</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 15px;"><strong>Title:</strong> {title} ({releaseYear})</p>
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #475569;"><strong>Format:</strong> {mediaLabel} • {quality}</p>
+    <p style="margin: 0; font-size: 13px; color: #2563eb;"><strong>Status:</strong> Approved & Downloading</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b;">We will email you once it's available to watch on Plex.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of requested media", sampleValue: "House of the Dragon" },
+            { key: "{releaseYear}", description: "Release year", sampleValue: "2022" },
+            { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "TV Series" },
+            { key: "{quality}", description: "Quality resolution", sampleValue: "4K UHD" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "seerr_request_declined",
+        name: "Media Request Declined Notice",
+        description: "Sent to the requesting user when an administrator declines their Movie or TV Show request, including the reason.",
+        category: "REQUESTS",
+        defaultSubject: "❌ Media Request Declined: {title}",
+        defaultBody: `<h2>Media Request Update</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your request for <strong>{title} ({releaseYear})</strong> could not be fulfilled at this time.</p>
+
+<div style="background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 4px; padding: 14px; margin: 20px 0;">
+    <h4 style="margin: 0 0 6px 0; color: #991b1b;">Reason for Decline:</h4>
+    <p style="margin: 0; font-size: 14px; color: #7f1d1d;">{declineReason}</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b;">If you have any questions, feel free to submit a support ticket in the dashboard.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of requested media", sampleValue: "The Matrix Resurrections" },
+            { key: "{releaseYear}", description: "Release year", sampleValue: "2021" },
+            { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "Movie" },
+            { key: "{declineReason}", description: "Administrator's reason for declining", sampleValue: "Already available under alternate edition in library." },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "seerr_request_available",
+        name: "Media Available to Stream (Plex)",
+        description: "Sent to the requesting user when their requested Movie or TV Show is downloaded and ready to stream on Plex.",
+        category: "REQUESTS",
+        defaultSubject: "🎉 Ready to Watch: {title} is Now on Plex!",
+        defaultBody: `<h2>Ready to Stream! 🎉</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Great news! The {mediaLabel} you requested is now downloaded and ready to stream on Plex.</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 16px; font-weight: bold; color: #0f172a;">{title} ({releaseYear})</p>
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #475569;"><strong>Format:</strong> {mediaLabel} • {quality}</p>
+    <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;">{overview}</p>
+</div>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{plexUrl}" style="background-color: #e5a00d; color: #000000; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 800; font-size: 14px; display: inline-block;">
+        ▶️ Watch on Plex
+    </a>
+</div>`,
+        variables: [
+            { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of requested media", sampleValue: "Dune: Part Two" },
+            { key: "{releaseYear}", description: "Release year", sampleValue: "2024" },
+            { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "Movie" },
+            { key: "{quality}", description: "Quality resolution ('4K UHD' or '1080p Standard')", sampleValue: "4K UHD" },
+            { key: "{overview}", description: "Plot overview", sampleValue: "Paul Atreides unites with Chani and the Fremen..." },
+            { key: "{plexUrl}", description: "Direct link to watch on Plex", sampleValue: "https://app.plex.tv/desktop" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "seerr_request_failed",
+        name: "Media Request Download Issue Alert",
+        description: "Sent when a Movie or TV Show request encounters a download or dispatch error.",
+        category: "REQUESTS",
+        defaultSubject: "⚠️ Media Request Issue: {title}",
+        defaultBody: `<h2>Media Request Notice ⚠️</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>We encountered an issue while processing your request for <strong>{title} ({releaseYear})</strong>.</p>
+
+<div style="background-color: #fef2f2; border-left: 4px solid #dc2626; border-radius: 4px; padding: 14px; margin: 20px 0;">
+    <h4 style="margin: 0 0 6px 0; color: #991b1b;">Error Details:</h4>
+    <p style="margin: 0; font-size: 13px; color: #7f1d1d; font-family: monospace;">{errorMessage}</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b;">The system or administrator will retry this request automatically when indexers or sources become available.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of requested media", sampleValue: "Fallout" },
+            { key: "{releaseYear}", description: "Release year", sampleValue: "2024" },
+            { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "TV Series" },
+            { key: "{errorMessage}", description: "Description of the download or dispatch error", sampleValue: "No indexer release matches custom quality cutoff." },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
     }
 ];
 

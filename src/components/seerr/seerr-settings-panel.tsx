@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { 
     getSeerrSettingsAction, 
     updateSeerrSettingsAction, 
-    getArrAppProfilesAndFoldersAction 
+    getArrAppProfilesAndFoldersAction,
+    testSeerrDiscordWebhookAction
 } from "@/app/seerr-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,14 @@ import {
     CopyCheck,
     FolderTree,
     HardDrive,
-    RotateCw
+    RotateCw,
+    MessageSquare,
+    Send,
+    Mail,
+    Check,
+    Loader2,
+    ExternalLink,
+    Link
 } from "lucide-react";
 
 interface ArrAppProfile {
@@ -74,8 +82,27 @@ export function SeerrSettingsPanel() {
     // Dual 4K + 1080p Ingestion
     const [autoDual1080pFor4k, setAutoDual1080pFor4k] = useState(true);
 
-    // Notifications
+    // Notifications (Discord & Email)
     const [notificationOnAvailable, setNotificationOnAvailable] = useState(true);
+    const [discordWebhookUrl, setDiscordWebhookUrl] = useState<string>("");
+    const [discordBotUsername, setDiscordBotUsername] = useState<string>("Portalarr");
+    const [discordBotAvatarUrl, setDiscordBotAvatarUrl] = useState<string>("");
+    const [discordNotifyPending, setDiscordNotifyPending] = useState(true);
+    const [discordNotifyAutoApproved, setDiscordNotifyAutoApproved] = useState(true);
+    const [discordNotifyApproved, setDiscordNotifyApproved] = useState(true);
+    const [discordNotifyDeclined, setDiscordNotifyDeclined] = useState(true);
+    const [discordNotifyAvailable, setDiscordNotifyAvailable] = useState(true);
+    const [discordNotifyFailed, setDiscordNotifyFailed] = useState(true);
+
+    const [emailNotifyAdminNewRequest, setEmailNotifyAdminNewRequest] = useState(true);
+    const [emailNotifyUserAutoApproved, setEmailNotifyUserAutoApproved] = useState(true);
+    const [emailNotifyUserApproved, setEmailNotifyUserApproved] = useState(true);
+    const [emailNotifyUserDeclined, setEmailNotifyUserDeclined] = useState(true);
+    const [emailNotifyUserAvailable, setEmailNotifyUserAvailable] = useState(true);
+    const [emailNotifyUserFailed, setEmailNotifyUserFailed] = useState(true);
+
+    const [testingDiscord, setTestingDiscord] = useState(false);
+    const [testDiscordResult, setTestDiscordResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
 
     // Main Movies (1080p & 4K)
     const [defaultMovieAppId, setDefaultMovieAppId] = useState<string>("");
@@ -145,8 +172,24 @@ export function SeerrSettingsPanel() {
                 // Dual 1080p Companion
                 setAutoDual1080pFor4k(d.seerrAutoDual1080pFor4k ?? true);
 
-                // Notifications
+                // Notifications (Discord & Email)
                 setNotificationOnAvailable(d.seerrNotificationOnAvailable ?? true);
+                setDiscordWebhookUrl(d.seerrDiscordWebhookUrl || "");
+                setDiscordBotUsername(d.seerrDiscordBotUsername || "Portalarr");
+                setDiscordBotAvatarUrl(d.seerrDiscordBotAvatarUrl || "");
+                setDiscordNotifyPending(d.seerrDiscordNotifyPending ?? true);
+                setDiscordNotifyAutoApproved(d.seerrDiscordNotifyAutoApproved ?? true);
+                setDiscordNotifyApproved(d.seerrDiscordNotifyApproved ?? true);
+                setDiscordNotifyDeclined(d.seerrDiscordNotifyDeclined ?? true);
+                setDiscordNotifyAvailable(d.seerrDiscordNotifyAvailable ?? true);
+                setDiscordNotifyFailed(d.seerrDiscordNotifyFailed ?? true);
+
+                setEmailNotifyAdminNewRequest(d.seerrEmailNotifyAdminNewRequest ?? true);
+                setEmailNotifyUserAutoApproved(d.seerrEmailNotifyUserAutoApproved ?? true);
+                setEmailNotifyUserApproved(d.seerrEmailNotifyUserApproved ?? true);
+                setEmailNotifyUserDeclined(d.seerrEmailNotifyUserDeclined ?? true);
+                setEmailNotifyUserAvailable(d.seerrEmailNotifyUserAvailable ?? true);
+                setEmailNotifyUserFailed(d.seerrEmailNotifyUserFailed ?? true);
 
                 // Main Movies
                 setDefaultMovieAppId(d.seerrDefaultMovieAppId || "");
@@ -216,6 +259,28 @@ export function SeerrSettingsPanel() {
         }
     };
 
+    const handleTestDiscordWebhook = async () => {
+        if (!discordWebhookUrl || !discordWebhookUrl.trim()) {
+            setTestDiscordResult({ success: false, error: "Please enter a Discord Webhook URL first." });
+            return;
+        }
+        setTestingDiscord(true);
+        setTestDiscordResult(null);
+        try {
+            const res = await testSeerrDiscordWebhookAction(
+                discordWebhookUrl.trim(),
+                discordBotUsername.trim(),
+                discordBotAvatarUrl.trim()
+            );
+            setTestDiscordResult(res);
+            setTimeout(() => setTestDiscordResult(null), 6000);
+        } catch (e: any) {
+            setTestDiscordResult({ success: false, error: e.message || "Failed to send test webhook" });
+        } finally {
+            setTestingDiscord(false);
+        }
+    };
+
     const handleSave = async () => {
         setSaving(true);
         setSuccessMsg(null);
@@ -252,6 +317,25 @@ export function SeerrSettingsPanel() {
 
                 // Dual 1080p Companion
                 seerrAutoDual1080pFor4k: autoDual1080pFor4k,
+
+                // Discord Webhook Notification Settings
+                seerrDiscordWebhookUrl: discordWebhookUrl ? discordWebhookUrl.trim() : null,
+                seerrDiscordBotUsername: discordBotUsername ? discordBotUsername.trim() : "Portalarr",
+                seerrDiscordBotAvatarUrl: discordBotAvatarUrl ? discordBotAvatarUrl.trim() : null,
+                seerrDiscordNotifyPending: discordNotifyPending,
+                seerrDiscordNotifyAutoApproved: discordNotifyAutoApproved,
+                seerrDiscordNotifyApproved: discordNotifyApproved,
+                seerrDiscordNotifyDeclined: discordNotifyDeclined,
+                seerrDiscordNotifyAvailable: discordNotifyAvailable,
+                seerrDiscordNotifyFailed: discordNotifyFailed,
+
+                // Email Notification Settings
+                seerrEmailNotifyAdminNewRequest: emailNotifyAdminNewRequest,
+                seerrEmailNotifyUserAutoApproved: emailNotifyUserAutoApproved,
+                seerrEmailNotifyUserApproved: emailNotifyUserApproved,
+                seerrEmailNotifyUserDeclined: emailNotifyUserDeclined,
+                seerrEmailNotifyUserAvailable: emailNotifyUserAvailable,
+                seerrEmailNotifyUserFailed: emailNotifyUserFailed,
 
                 // Notifications & Main
                 seerrNotificationOnAvailable: notificationOnAvailable,
@@ -862,21 +946,325 @@ export function SeerrSettingsPanel() {
                         </div>
                     </div>
 
-                    {/* 6. NOTIFICATION ON AVAILABILITY */}
-                    <div className="flex items-center justify-between p-3.5 rounded-xl bg-background/50 border border-border/40">
-                        <div className="space-y-0.5 max-w-xl">
-                            <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                <Bell className="h-3.5 w-3.5 text-emerald-400" />
-                                Ready to Stream Email Notifications
-                            </Label>
-                            <p className="text-[11px] text-muted-foreground">
-                                Send an automated email notification to the requester when their requested movie or series is detected and ready to stream in Plex.
-                            </p>
+                    {/* 6. DISCORD WEBHOOK NOTIFICATIONS */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+                            <div className="flex items-center gap-2">
+                                <MessageSquare className="h-5 w-5 text-[#5865F2]" />
+                                <div>
+                                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                        Discord Webhook Notifications
+                                        <Badge variant="outline" className="text-[10px] border-[#5865F2]/40 text-[#5865F2] bg-[#5865F2]/10 font-mono">
+                                            Overseerr Style
+                                        </Badge>
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground">Broadcast rich request cards, status updates, and Plex availability alerts directly into your Discord channels.</p>
+                                </div>
+                            </div>
                         </div>
-                        <Switch
-                            checked={notificationOnAvailable}
-                            onCheckedChange={setNotificationOnAvailable}
-                        />
+
+                        <div className="space-y-3.5">
+                            {/* Webhook URL Input */}
+                            <div className="space-y-1.5 p-3.5 rounded-xl bg-background/50 border border-border/40">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                        <Link className="h-3.5 w-3.5 text-primary" /> Discord Webhook URL
+                                    </Label>
+                                    <span className="text-[10px] text-muted-foreground">Server Settings &rarr; Integrations &rarr; Webhooks</span>
+                                </div>
+                                <Input
+                                    type="url"
+                                    placeholder="https://discord.com/api/webhooks/..."
+                                    value={discordWebhookUrl}
+                                    onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                                    className="h-9 text-xs bg-background/70 font-mono"
+                                />
+                                <p className="text-[11px] text-muted-foreground">
+                                    Create a webhook in your Discord server channel and paste the full webhook URL above.
+                                </p>
+                            </div>
+
+                            {/* Bot Customization & Test Button */}
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-xl bg-background/30 border border-border/40">
+                                <div className="sm:col-span-4 space-y-1">
+                                    <Label className="text-[11px] font-semibold text-foreground">Bot Username</Label>
+                                    <Input
+                                        placeholder="Portalarr"
+                                        value={discordBotUsername}
+                                        onChange={(e) => setDiscordBotUsername(e.target.value)}
+                                        className="h-8 text-xs bg-background/60"
+                                    />
+                                </div>
+                                <div className="sm:col-span-5 space-y-1">
+                                    <Label className="text-[11px] font-semibold text-foreground">Bot Avatar URL (Optional)</Label>
+                                    <Input
+                                        type="url"
+                                        placeholder="https://.../avatar.png"
+                                        value={discordBotAvatarUrl}
+                                        onChange={(e) => setDiscordBotAvatarUrl(e.target.value)}
+                                        className="h-8 text-xs bg-background/60"
+                                    />
+                                </div>
+                                <div className="sm:col-span-3 flex items-end">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={testingDiscord || !discordWebhookUrl.trim()}
+                                        onClick={handleTestDiscordWebhook}
+                                        className="w-full h-8 text-xs font-semibold gap-1.5 border-[#5865F2]/40 text-[#5865F2] hover:bg-[#5865F2]/10"
+                                    >
+                                        {testingDiscord ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                        Test Webhook
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Test Webhook Status Feedback */}
+                            {testDiscordResult && (
+                                <div className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                                    testDiscordResult.success 
+                                        ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-300" 
+                                        : "bg-rose-500/15 border border-rose-500/40 text-rose-300"
+                                }`}>
+                                    {testDiscordResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+                                    <span>{testDiscordResult.message || testDiscordResult.error}</span>
+                                </div>
+                            )}
+
+                            {/* Discord Event Triggers Grid */}
+                            <div className="space-y-2 pt-1">
+                                <Label className="text-xs font-bold text-foreground">Discord Notification Event Triggers</Label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                    {/* 1. Pending Request */}
+                                    <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                        <div className="space-y-0.5 pr-2">
+                                            <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                                <Clock className="h-3.5 w-3.5 text-amber-400" /> New Request (Pending)
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                Alert Discord when a request requiring admin review is submitted.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={discordNotifyPending}
+                                            onCheckedChange={setDiscordNotifyPending}
+                                            disabled={!discordWebhookUrl.trim()}
+                                        />
+                                    </div>
+
+                                    {/* 2. Auto-Approved */}
+                                    <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                        <div className="space-y-0.5 pr-2">
+                                            <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                                <Sparkles className="h-3.5 w-3.5 text-blue-400" /> Auto-Approved Request
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                Alert Discord when a request is auto-approved and queued for download.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={discordNotifyAutoApproved}
+                                            onCheckedChange={setDiscordNotifyAutoApproved}
+                                            disabled={!discordWebhookUrl.trim()}
+                                        />
+                                    </div>
+
+                                    {/* 3. Admin Approved */}
+                                    <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                        <div className="space-y-0.5 pr-2">
+                                            <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Admin Approved
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                Alert Discord when an administrator manually approves a pending request.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={discordNotifyApproved}
+                                            onCheckedChange={setDiscordNotifyApproved}
+                                            disabled={!discordWebhookUrl.trim()}
+                                        />
+                                    </div>
+
+                                    {/* 4. Request Declined */}
+                                    <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                        <div className="space-y-0.5 pr-2">
+                                            <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                                <AlertCircle className="h-3.5 w-3.5 text-rose-400" /> Request Declined
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                Alert Discord when a request is declined with reason.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={discordNotifyDeclined}
+                                            onCheckedChange={setDiscordNotifyDeclined}
+                                            disabled={!discordWebhookUrl.trim()}
+                                        />
+                                    </div>
+
+                                    {/* 5. Media Available */}
+                                    <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                        <div className="space-y-0.5 pr-2">
+                                            <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                                <Film className="h-3.5 w-3.5 text-emerald-400" /> Media Available on Plex
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                Broadcast announcement when media is ready to stream.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={discordNotifyAvailable}
+                                            onCheckedChange={setDiscordNotifyAvailable}
+                                            disabled={!discordWebhookUrl.trim()}
+                                        />
+                                    </div>
+
+                                    {/* 6. Request Failed */}
+                                    <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                        <div className="space-y-0.5 pr-2">
+                                            <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                                <ShieldAlert className="h-3.5 w-3.5 text-amber-400" /> Request Issue / Failure
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                Notify admins when a request encounters a download or dispatch error.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={discordNotifyFailed}
+                                            onCheckedChange={setDiscordNotifyFailed}
+                                            disabled={!discordWebhookUrl.trim()}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 7. EMAIL NOTIFICATIONS */}
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/40">
+                            <div className="flex items-center gap-2">
+                                <Mail className="h-5 w-5 text-indigo-400" />
+                                <div>
+                                    <h3 className="text-sm font-bold text-foreground">Email Notifications</h3>
+                                    <p className="text-xs text-muted-foreground">Automated transactional emails dispatched via your server SMTP configuration.</p>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                asChild
+                                className="h-7 text-[11px] gap-1 border-primary/30 text-primary hover:bg-primary/10 self-start sm:self-auto"
+                            >
+                                <a href="/settings" target="_blank" rel="noreferrer">
+                                    <ExternalLink className="h-3 w-3" /> Customize Email Templates
+                                </a>
+                            </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                            {/* 1. Admin Request Alert */}
+                            <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                <div className="space-y-0.5 pr-2">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-400" /> Admin Request Alerts
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                        Email server administrators when a new user request requires manual approval.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailNotifyAdminNewRequest}
+                                    onCheckedChange={setEmailNotifyAdminNewRequest}
+                                />
+                            </div>
+
+                            {/* 2. User Auto-Approved */}
+                            <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                <div className="space-y-0.5 pr-2">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> User Auto-Approved Notice
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                        Email user when their request is automatically approved and queued.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailNotifyUserAutoApproved}
+                                    onCheckedChange={setEmailNotifyUserAutoApproved}
+                                />
+                            </div>
+
+                            {/* 3. User Admin Approved */}
+                            <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                <div className="space-y-0.5 pr-2">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> User Admin-Approved Notice
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                        Email user when an admin reviews and approves their pending request.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailNotifyUserApproved}
+                                    onCheckedChange={setEmailNotifyUserApproved}
+                                />
+                            </div>
+
+                            {/* 4. User Request Declined */}
+                            <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                <div className="space-y-0.5 pr-2">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <AlertCircle className="h-3.5 w-3.5 text-rose-400" /> User Declined Notice
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                        Email user with the administrator decline reason when rejected.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailNotifyUserDeclined}
+                                    onCheckedChange={setEmailNotifyUserDeclined}
+                                />
+                            </div>
+
+                            {/* 5. User Media Available */}
+                            <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                <div className="space-y-0.5 pr-2">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <Film className="h-3.5 w-3.5 text-emerald-400" /> Ready to Stream (Plex)
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                        Email user with a direct "Watch on Plex" button when media is available.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailNotifyUserAvailable && notificationOnAvailable}
+                                    onCheckedChange={(val) => {
+                                        setEmailNotifyUserAvailable(val);
+                                        setNotificationOnAvailable(val);
+                                    }}
+                                />
+                            </div>
+
+                            {/* 6. User Request Failed */}
+                            <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
+                                <div className="space-y-0.5 pr-2">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <ShieldAlert className="h-3.5 w-3.5 text-amber-400" /> Request Failure Alert
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                        Email alert if a request encounters a download or dispatch error.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailNotifyUserFailed}
+                                    onCheckedChange={setEmailNotifyUserFailed}
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Status Feedback Messages */}
