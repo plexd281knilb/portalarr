@@ -1323,7 +1323,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 CREATE TABLE IF NOT EXISTS "MediaRequest" (
                     "id" TEXT NOT NULL PRIMARY KEY,
                     "mediaType" TEXT NOT NULL,
-                    "tmdbId" INTEGER NOT NULL,
+                    "tmdbId" INTEGER,
                     "tvdbId" INTEGER,
                     "imdbId" TEXT,
                     "title" TEXT NOT NULL,
@@ -1340,7 +1340,18 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "parent4kRequestId" TEXT,
                     "requestedByUserId" TEXT,
                     "requestedByUsername" TEXT NOT NULL,
+                    "userEmail" TEXT,
+                    "kindleEmail" TEXT,
                     "seasons" TEXT,
+                    "bookAuthor" TEXT,
+                    "bookSeries" TEXT,
+                    "bookVolume" TEXT,
+                    "bookLibraryId" TEXT,
+                    "sendToKindle" BOOLEAN NOT NULL DEFAULT 0,
+                    "format" TEXT,
+                    "openLibraryId" TEXT,
+                    "googleBooksId" TEXT,
+                    "asin" TEXT,
                     "servarrAppId" TEXT,
                     "qualityProfileId" INTEGER,
                     "rootFolderPath" TEXT,
@@ -1376,6 +1387,70 @@ export async function ensureSchemaColumns(): Promise<void> {
             for (const [colName, ddl] of reqAddCols) {
                 if (!reqCols.includes(colName)) {
                     try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                }
+            }
+
+            // Check if tmdbId has a NOT NULL constraint on existing tables and migrate it to NULLABLE
+            const tmdbCol = reqTableInfo.find((c: any) => c.name === "tmdbId");
+            if (tmdbCol && (tmdbCol.notnull === 1 || tmdbCol.notnull === true)) {
+                try {
+                    console.log("[DB-SCHEMA-AUTOFIX] Migrating MediaRequest table to relax NOT NULL constraint on tmdbId for books/audiobooks...");
+                    const refreshedInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaRequest");`);
+                    const commonCols = refreshedInfo.map((c: any) => `"${c.name}"`).join(", ");
+
+                    await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=OFF;`);
+                    await prisma.$executeRawUnsafe(`
+                        CREATE TABLE "MediaRequest_migrating" (
+                            "id" TEXT NOT NULL PRIMARY KEY,
+                            "mediaType" TEXT NOT NULL,
+                            "tmdbId" INTEGER,
+                            "tvdbId" INTEGER,
+                            "imdbId" TEXT,
+                            "title" TEXT NOT NULL,
+                            "releaseYear" TEXT,
+                            "posterPath" TEXT,
+                            "backdropPath" TEXT,
+                            "overview" TEXT,
+                            "status" TEXT NOT NULL DEFAULT 'PENDING',
+                            "status4k" TEXT,
+                            "is4k" BOOLEAN NOT NULL DEFAULT 0,
+                            "isKids" BOOLEAN NOT NULL DEFAULT 0,
+                            "contentRating" TEXT,
+                            "isDual1080pChild" BOOLEAN NOT NULL DEFAULT 0,
+                            "parent4kRequestId" TEXT,
+                            "requestedByUserId" TEXT,
+                            "requestedByUsername" TEXT NOT NULL,
+                            "userEmail" TEXT,
+                            "kindleEmail" TEXT,
+                            "seasons" TEXT,
+                            "bookAuthor" TEXT,
+                            "bookSeries" TEXT,
+                            "bookVolume" TEXT,
+                            "bookLibraryId" TEXT,
+                            "sendToKindle" BOOLEAN NOT NULL DEFAULT 0,
+                            "format" TEXT,
+                            "openLibraryId" TEXT,
+                            "googleBooksId" TEXT,
+                            "asin" TEXT,
+                            "servarrAppId" TEXT,
+                            "qualityProfileId" INTEGER,
+                            "rootFolderPath" TEXT,
+                            "servarrId" INTEGER,
+                            "errorMessage" TEXT,
+                            "downloadProgress" REAL,
+                            "availableAt" DATETIME,
+                            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY ("requestedByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                        );
+                    `);
+                    await prisma.$executeRawUnsafe(`INSERT INTO "MediaRequest_migrating" (${commonCols}) SELECT ${commonCols} FROM "MediaRequest";`);
+                    await prisma.$executeRawUnsafe(`DROP TABLE "MediaRequest";`);
+                    await prisma.$executeRawUnsafe(`ALTER TABLE "MediaRequest_migrating" RENAME TO "MediaRequest";`);
+                    await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=ON;`);
+                    console.log("[DB-SCHEMA-AUTOFIX] ✅ Successfully relaxed tmdbId constraint on MediaRequest.");
+                } catch (migErr: any) {
+                    console.error("[DB-SCHEMA-AUTOFIX] Failed MediaRequest tmdbId migration:", migErr.message || migErr);
                 }
             }
 

@@ -1,6 +1,6 @@
 "use server";
 
-import prisma from "@/lib/prisma";
+import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { getSession } from "@/app/auth-actions";
 import { 
     BookRequestInput, 
@@ -230,24 +230,30 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const autoApprove = settings?.seerrAutoApproveAll !== false;
 
-        const mediaReq = await prisma.mediaRequest.create({
-            data: {
-                mediaType,
-                title,
-                requestedByUsername: session.username,
-                requestedByUserId: user.id,
-                userEmail: user.email,
-                kindleEmail: user.kindleEmail || null,
-                bookAuthor: author,
-                bookSeries: input.series || null,
-                bookVolume: input.volumeNumber || null,
-                bookLibraryId: targetLibId,
-                sendToKindle: Boolean(input.sendToKindle && mediaType === "ebook"),
-                posterPath: input.coverUrl || null,
-                releaseYear: input.publishYear || null,
-                status: autoApprove ? "APPROVED" : "PENDING"
-            }
-        });
+        let mediaReq: any = null;
+        try {
+            await ensureSchemaColumns();
+            mediaReq = await prisma.mediaRequest.create({
+                data: {
+                    mediaType,
+                    title,
+                    requestedByUsername: session.username,
+                    requestedByUserId: user.id,
+                    userEmail: user.email,
+                    kindleEmail: user.kindleEmail || null,
+                    bookAuthor: author,
+                    bookSeries: input.series || null,
+                    bookVolume: input.volumeNumber || null,
+                    bookLibraryId: targetLibId,
+                    sendToKindle: Boolean(input.sendToKindle && mediaType === "ebook"),
+                    posterPath: input.coverUrl || null,
+                    releaseYear: input.publishYear || null,
+                    status: autoApprove ? "APPROVED" : "PENDING"
+                }
+            });
+        } catch (mErr: any) {
+            console.warn("[BOOK-REQUEST] MediaRequest mirror notice:", mErr?.message || mErr);
+        }
 
         logger.addLog("SUCCESS", "SEERR", `User ${session.username} submitted ${mediaType.toUpperCase()} request: "${title}" by ${author}`);
 
@@ -258,10 +264,12 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                 where: { id: bookRequest.id },
                 data: { status: "Searching" }
             });
-            await prisma.mediaRequest.update({
-                where: { id: mediaReq.id },
-                data: { status: "SEARCHING" }
-            });
+            if (mediaReq?.id) {
+                await prisma.mediaRequest.update({
+                    where: { id: mediaReq.id },
+                    data: { status: "SEARCHING" }
+                }).catch(() => {});
+            }
 
             autoDownloadBookRequest(bookRequest.id, title, author).catch(err => {
                 console.error(`[BOOK-REQUEST] Auto-download failed for ${bookRequest.id}:`, err.message);
@@ -272,7 +280,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
             success: true,
             message: autoApprove ? `Request submitted and auto-approved! Searching indexers...` : `Request submitted for admin review.`,
             requestId: bookRequest.id,
-            mediaRequestId: mediaReq.id
+            mediaRequestId: mediaReq?.id || null
         };
     } catch (e: any) {
         logger.addLog("ERROR", "BOOK_ENGINE", `Submit book request failed: ${e.message}`);
