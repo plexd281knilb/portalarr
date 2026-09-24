@@ -75,5 +75,9 @@ See detailed runbook: [series-parsing-and-models.md](./references/series-parsing
    - Fix: Use `"monitor": "all"` to monitor historical seasons.
 4. **4K vs 1080p Sonarr Instance Isolation**:
    - Sonarr instances should be explicitly targeted by their configured ID in settings (`seerrDefaultTvAppId` for 1080p, `seerrDefaultTv4kAppId` for 4K). Never auto-fallback to any server containing "4k" if 4K is disabled in settings.
-5. **Reconciling Season Monitoring Completeness**:
+5. **Super User Instance Access Gating**:
+   - In `src/app/arr-actions.ts`, only `ADMIN` bypasses `enabledForUsers`. Super users and regular users must only see instances where `enabledForUsers: true` is explicitly checked in Edit Application, ensuring instances like `Kids Sonarr` never leak into user management views unless explicitly enabled.
+6. **Queue Progress Monitoring**:
+   - Query `/api/v3/queue?page=1&pageSize=1000` and match `record.seriesId` against active requests to compute exact download progress percentages (`((size - sizeleft) / size) * 100`).
+7. **Reconciling Season Monitoring Completeness**:
    - When inspecting series monitoring, evaluate `episodes` list: if `monitoredEpisodeCount === totalEpisodeCount`, flag `isFullyMonitored = true`; if `0 < monitoredEpisodeCount < totalEpisodeCount`, flag `isPartiallyMonitored = true`.

@@ -63,6 +63,18 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 - **Discord Webhook Cards**: Dispatches embed cards for `PENDING`, `AUTO_APPROVED`, `APPROVED`, `DECLINED`, `AVAILABLE`, and `FAILED` events. Embeds feature poster artwork, format badges (🎬 MOVIE vs 📺 TV SERIES, 4K UHD vs 1080p), requester username, season counts, and direct action links.
 - **Rich HTML Emails**: Sends branded HTML emails via SMTP for admin approval alerts and user status updates, using dynamic public host resolution (`getAppUrl()`).
 
+### 5. Automated Background Queue & Availability Reconciliation
+- **Unauthenticated Internal Runner (`syncMediaRequestsQueueAndAvailabilityInternal`)**:
+  - Called every 2 minutes by the background scheduler in `src/lib/prisma.ts`.
+  - Reconciles active requests (`PROCESSING`, `APPROVED`, `PENDING`) against the Plex library GUID index.
+  - Queries `/api/v3/queue?page=1&pageSize=1000` on enabled Radarr and Sonarr instances to compute exact download progress percentages:
+    $$\text{progress} = \max\left(1, \min\left(99, \text{round}\left(\frac{\text{size} - \text{sizeleft}}{\text{size}} \times 100\right)\right)\right)$$
+  - Updates requests to `AVAILABLE` with `100%` progress when media is detected on PMS.
+
+### 6. Kids Profile Isolation & Filtered Media Discovery
+- **Safe Content Enforcements**: Kids searches and carousels pass `include_adult=false`, enforce TMDb certification ratings (`G`, `PG`, `TV-Y`, `TV-Y7`, `TV-G`, `TV-PG`), and filter out adult keywords.
+- **Isolated Library Matching**: Kids views verify library availability strictly against kids-specific Plex libraries rather than unrestricted main adult libraries.
+
 ---
 
 ## Common Gotchas & Troubleshooting
@@ -70,13 +82,17 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 1. **Request Stuck in "Approved" Without Reaching Radarr/Sonarr**:
    - Cause: Radarr/Sonarr server settings misconfigured (invalid API key, unreachable hostname), or no default server was flagged.
    - Fix: Check `MediaRequest.status`. If `FAILED`, inspect server connection settings, ensure port and URL base match, and click `/retry`.
-2. **Duplicate Request Error (HTTP 409)**:
+2. **Trailer Placeholders Falsely Flagged as "In Library"**:
+   - Cause: Agregarr placeholder video stubs matching the TMDb/IMDb ID of an upcoming movie exist in Plex.
+   - Fix: Availability indexer (`getPlexLibraryGuidIndex`) must explicitly exclude items tagged with `trailer-placeholder` label or `editionTitle === "Trailer"`.
+3. **Duplicate Request Error (HTTP 409)**:
    - Cause: Another user already submitted a request for this TMDb ID or season.
    - Fix: Seerr blocks duplicate requests. The UI attaches multiple users to the existing `Media` record instead.
-3. **4K vs Standard Media Isolation & Strict Gating**:
+4. **4K vs Standard Media Isolation & Strict Gating**:
    - 4K Radarr and Sonarr instances must strictly resolve only when explicitly configured in settings (`seerrDefaultMovie4kAppId` / `seerrDefaultTv4kAppId` !== `"none"`).
-   - Never fall back to auto-discovering any app containing "4k" in its name if 4K has been disabled in settings.
-   - The UI must gate all 4K checkboxes, target quality indicators, and banner messages behind `canRequest4k = Boolean(quotaData?.canRequest4k && arrDetails?.isConfigured4k)`.
-4. **Radix Dialog `sm:max-w-lg` Tailwind Specificity**:
+   - When 4K is set to "Disabled / Don't Use", always fallback cleanly to standard 1080p and gate UI 4K checkboxes behind `canRequest4k = Boolean(quotaData?.canRequest4k && arrDetails?.isConfigured4k)`.
+5. **Trial Account Quota Sliding Window**:
+   - Quotas for trial accounts are calculated over the user's active trial window defined in Access Control, rather than an arbitrary rolling window.
+6. **Radix Dialog `sm:max-w-lg` Tailwind Specificity**:
    - Radix `DialogContent` includes `sm:max-w-lg` in base classes. Passing an unprefixed `max-w-6xl` fails to override `sm:max-w-lg` during `tailwind-merge`.
    - Pass explicit prefixed responsive classes (`sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw]`) to render wide, spacious modals for TV series episode guides and cast grids.

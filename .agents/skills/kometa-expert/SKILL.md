@@ -52,6 +52,12 @@ Builds collections from over 20+ list providers:
 
 See detailed runbook: [collection-builders.md](./references/collection-builders.md).
 
+### 3. Dual Automation Schedules & Background Engine
+Portalarr separates overlay generation into two distinct, decoupled automated schedules:
+- **Fast Incremental Scan (`overlayIncrementalSchedule`)**: High-frequency scan (e.g. `every_hour`, `every_3_hours`) targeting newly added and upgraded media across enabled libraries.
+- **Deep Library Recheck (`overlayRecheckSchedule`)**: Comprehensive maintenance sweep (e.g. `daily_4am`, `weekly_sun`) verifying existing badge hashes, updating dynamic countdown/ribbon dates, and processing all catalog items.
+- **Universal Scheduler (`isScheduleDue`)**: Evaluates interval schedules with a 5-minute variance buffer (e.g. 55m for 1h), and checks daily fixed-time schedules against `now.getHours() === targetHour && (!lastRun || lastRun.toDateString() !== now.toDateString()) && elapsed >= 12h`.
+
 ---
 
 ## Common Gotchas & Troubleshooting
@@ -59,12 +65,17 @@ See detailed runbook: [collection-builders.md](./references/collection-builders.
 1. **Poster Aspect Ratio & Transcoder Cropping**:
    - Cause: Requesting landscape dimensions (e.g. `600x400`) from Plex `/photo/:/transcode` forces PMS to center-crop portrait posters.
    - Solution: Always request standard 2:3 vertical poster proportions (`width=600&height=900&minSize=1`).
-2. **Overlay Degradation / Quality Loss**:
+2. **Scheduler Looping on Missing Tokens**:
+   - Cause: If Plex tokens or settings are missing, returning early without updating `overlayIncrementalLastRunAt` / `overlayRecheckLastRunAt` causes the 60-second background ticker to retry indefinitely every minute.
+   - Solution: Always persist `lastRunAt: new Date()` to SQLite even on early exits or unconfigured server tokens.
+3. **Decoupled In-Flight Mutexes**:
+   - Incremental and deep recheck runners must use dedicated in-flight locks (`__PORTALARR_OVERLAY_INC_RUNNING`, `__PORTALARR_OVERLAY_RECHECK_RUNNING`) rather than a shared global sync lock, ensuring long-running deep sweeps do not block quick incremental checks or library scans.
+4. **Overlay Degradation / Quality Loss**:
    - Cause: Re-applying overlays on top of already overlaid posters causes blur and artifacting.
    - Solution: Always preserve clean original source posters in an asset cache or pristine storage before compositing overlays.
-3. **Plex Client Caching Glitches**:
+5. **Plex Client Caching Glitches**:
    - Cause: Plex Web and mobile clients aggressively cache posters in local cache storage.
    - Fix: Force a cache busting parameter or update PMS `thumb` timestamp upon uploading new artwork.
-4. **Weight & Group Collision**:
+6. **Weight & Group Collision**:
    - Cause: Multiple overlays render on the same corner without a common `group` or `queue`.
    - Rule: Overlays that share screen coordinates must define a `group` with distinctive `weight` values.

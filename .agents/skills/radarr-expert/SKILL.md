@@ -73,5 +73,9 @@ See detailed runbook: [movie-model-and-decisions.md](./references/movie-model-an
    - For torrents to continue seeding without consuming double storage space, Radarr and the download client completed directory must reside on the same filesystem mount to allow atomic hardlinks (`link` syscall).
 4. **4K UHD vs 1080p Radarr Instance Isolation**:
    - Radarr instances must be explicitly selected by ID (`seerrDefaultMovieAppId` for standard 1080p, `seerrDefaultMovie4kAppId` for 4K). Never fall back to auto-discovering any server containing "4k" if 4K is disabled in settings.
-5. **Fast TMDB Lookup & Monitored State**:
+5. **Super User Instance Access Gating**:
+   - In `src/app/arr-actions.ts`, only `ADMIN` bypasses `enabledForUsers`. Super users and regular users must only see instances where `enabledForUsers: true` is explicitly checked in Edit Application, ensuring instances like `Kids Radarr` never leak into user management views unless explicitly enabled.
+6. **Queue Progress Monitoring**:
+   - Query `/api/v3/queue?page=1&pageSize=1000` and match `record.movieId` against active requests to compute exact download progress percentages (`((size - sizeleft) / size) * 100`).
+7. **Fast TMDB Lookup & Monitored State**:
    - Query `/api/v3/movie` and index movies by `tmdbId` to instantly check if a movie is `monitored` and whether it `hasFile` across 1080p and 4K instances.

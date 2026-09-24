@@ -106,4 +106,7 @@ Agregarr manages metadata labels on items:
 6. **Hub Reordering & Visibility Timeouts**:
    - Use `PUT /hubs/sections/{sectionKey}/manage/{hubId}/move?after={afterHubId}` alongside locked `titleSort` prefixes for immediate, stable home screen positioning.
    - Concurrently dispatch visibility updates (`promotedToOwnHome`, `promotedToSharedHome`, `promotedToRecommended`) using `Promise.all` wrapped in 4s timeout guards (`AbortSignal.timeout(4000)`) to prevent single unresponsive endpoints from stalling execution.
+7. **Automated Scheduler Execution & Missing Token Guard**:
+   - Agregarr curation sync runs automatically via `isScheduleDue()` in `src/lib/prisma.ts`.
+   - If Plex tokens or global settings are missing, `runFullCurationSyncInternal` must persist `curationLastRunAt: new Date()` to prevent the 60-second background ticker from triggering repeatedly every minute.
 

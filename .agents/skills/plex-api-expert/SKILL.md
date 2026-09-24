@@ -72,4 +72,8 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
    - Deleting a collection via `DELETE /library/metadata/{ratingKey}` automatically unlinks all media items in Plex in ~10ms. Avoid pre-fetching and untagging items individually, as this triggers severe latency and Server Action timeouts.
 7. **Hub Reordering & Visibility Timeouts**:
    - Use `PUT /hubs/sections/{sectionKey}/manage/{hubId}/move?after={afterHubId}` combined with locked `titleSort` prefixes to reorder hubs. Dispatch hub visibility updates concurrently (`Promise.all`) using 4s timeout guards (`AbortSignal.timeout(4000)`) to ensure Server Action resilience.
+8. **Large Section Responses & Next.js Data Cache Limit**:
+   - Large library endpoints (`/library/sections/{id}/all?includeGuids=1`) frequently exceed Next.js 2MB data cache limit (`WARN: items over 2MB can not be cached`). Direct server calls must bypass Next.js automatic fetch caching by supplying `{ cache: 'no-store' }`.
+9. **Identifying Trailer Placeholders vs Real Media**:
+   - Agregarr trailer placeholders share identical `Guid` (TMDb / IMDb) values with real movies. Distinguish them by checking `editionTitle === "Trailer"` or searching `metadata.Label` for `trailer-placeholder`. Availability indexes must exclude placeholders so upcoming movies are not falsely marked as "In Library".
 
