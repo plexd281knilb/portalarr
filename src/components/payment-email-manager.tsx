@@ -9,6 +9,11 @@ import {
     scanPaymentEmailsAction, 
     getPaymentTransactions, 
     manuallyAttributePaymentTransaction, 
+    unmatchPaymentTransactionAction,
+    unmatchMultiplePaymentTransactionsAction,
+    groupAndAttributePaymentsAction,
+    splitPaymentTransactionAction,
+    bulkDeletePaymentTransactionsAction,
     savePaymentEmailScraperConfig,
     deletePaymentTransactionAction,
     purgeUnmatchedPaymentTransactionsAction,
@@ -22,11 +27,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
     Mail, DollarSign, RefreshCw, Plus, Trash2, Edit2, Play, CheckCircle2, 
     XCircle, AlertTriangle, ShieldCheck, User, Search, Clock, Sparkles, 
-    Layers, ExternalLink, HelpCircle, KeyRound, Server, Check, ArrowRight
+    Layers, ExternalLink, HelpCircle, KeyRound, Server, Check, ArrowRight,
+    Unlink, Scissors, CheckSquare, Square, Split, Users
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -72,6 +77,30 @@ export default function PaymentEmailManager() {
     const [assigning, setAssigning] = useState(false);
     const [assignMsg, setAssignMsg] = useState("");
     const [assignErr, setAssignErr] = useState("");
+
+    // Batch Selection State
+    const [selectedTxIds, setSelectedTxIds] = useState<string[]>([]);
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
+    const [unmatchingTxId, setUnmatchingTxId] = useState<string | null>(null);
+
+    // Group Modal State
+    const [groupModalOpen, setGroupModalOpen] = useState(false);
+    const [groupUserId, setGroupUserId] = useState("");
+    const [groupSearch, setGroupSearch] = useState("");
+    const [groupNote, setGroupNote] = useState("");
+    const [grouping, setGrouping] = useState(false);
+    const [groupMsg, setGroupMsg] = useState("");
+    const [groupErr, setGroupErr] = useState("");
+
+    // Split Modal State
+    const [splitModalTx, setSplitModalTx] = useState<any | null>(null);
+    const [splitParts, setSplitParts] = useState<{ amount: string; userId: string; note: string }[]>([
+        { amount: "", userId: "", note: "" },
+        { amount: "", userId: "", note: "" }
+    ]);
+    const [splitting, setSplitting] = useState(false);
+    const [splitMsg, setSplitMsg] = useState("");
+    const [splitErr, setSplitErr] = useState("");
 
     // Transactions Filter
     const [txFilter, setTxFilter] = useState("ALL");
@@ -272,7 +301,7 @@ export default function PaymentEmailManager() {
 
     const handleOpenAssignModal = (tx: any) => {
         setAssignModalTx(tx);
-        setAssignUserId("");
+        setAssignUserId(tx.matchedUserId || "");
         setAssignSearch("");
         setAssignMsg("");
         setAssignErr("");
@@ -303,8 +332,190 @@ export default function PaymentEmailManager() {
         const res = await deletePaymentTransactionAction(id);
         if (res.success) {
             setTransactions(prev => prev.filter(t => t.id !== id));
+            setSelectedTxIds(prev => prev.filter(item => item !== id));
         } else {
             alert(res.error || "Failed to delete transaction");
+        }
+    };
+
+    // --- SELECTION & BULK ACTIONS ---
+    const handleToggleSelectTx = (id: string) => {
+        setSelectedTxIds(prev => 
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAllTx = () => {
+        if (selectedTxIds.length === transactions.length) {
+            setSelectedTxIds([]);
+        } else {
+            setSelectedTxIds(transactions.map(t => t.id));
+        }
+    };
+
+    // --- UNMATCH ACTIONS ---
+    const handleUnmatch = async (tx: any) => {
+        const username = tx.matchedUser?.username || "this member";
+        if (!confirm(`Are you sure you want to unmatch the $${tx.amount.toFixed(2)} payment from "${username}"?\n\nTheir remaining subscription and Plex access will be automatically recalculated.`)) {
+            return;
+        }
+        setUnmatchingTxId(tx.id);
+        const res = await unmatchPaymentTransactionAction(tx.id);
+        setUnmatchingTxId(null);
+        if (res.success) {
+            loadData();
+        } else {
+            alert(res.error || "Failed to unmatch payment transaction.");
+        }
+    };
+
+    const handleBulkUnmatch = async () => {
+        const matchedSelected = transactions.filter(t => selectedTxIds.includes(t.id) && t.matchedUserId);
+        if (matchedSelected.length === 0) {
+            alert("None of the selected transactions are currently linked to a member.");
+            return;
+        }
+        if (!confirm(`Are you sure you want to unmatch ${matchedSelected.length} payment(s)?\n\nAffected members' subscriptions and Plex access will be recalculated.`)) {
+            return;
+        }
+        setBulkActionLoading(true);
+        const res = await unmatchMultiplePaymentTransactionsAction(matchedSelected.map(t => t.id));
+        setBulkActionLoading(false);
+        if (res.success) {
+            setSelectedTxIds([]);
+            loadData();
+        } else {
+            alert(res.error || "Failed to bulk unmatch transactions.");
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (!confirm(`Are you sure you want to delete ${selectedTxIds.length} selected payment transaction(s)?\n\nThis will permanently delete the records and recalculate affected member subscriptions.`)) {
+            return;
+        }
+        setBulkActionLoading(true);
+        const res = await bulkDeletePaymentTransactionsAction(selectedTxIds);
+        setBulkActionLoading(false);
+        if (res.success) {
+            setSelectedTxIds([]);
+            loadData();
+        } else {
+            alert(res.error || "Failed to bulk delete transactions.");
+        }
+    };
+
+    // --- GROUPING PAYMENTS ---
+    const handleOpenGroupModal = () => {
+        if (selectedTxIds.length < 2) {
+            alert("Please select at least 2 payment transactions to group together.");
+            return;
+        }
+        const selectedTxs = transactions.filter(t => selectedTxIds.includes(t.id));
+        const matchedWithUser = selectedTxs.find(t => t.matchedUserId);
+        setGroupUserId(matchedWithUser ? matchedWithUser.matchedUserId : "");
+        setGroupSearch("");
+        setGroupNote("");
+        setGroupMsg("");
+        setGroupErr("");
+        setGroupModalOpen(true);
+    };
+
+    const handleExecuteGroup = async () => {
+        if (!groupUserId) {
+            setGroupErr("Please select a target member to attribute these payments to.");
+            return;
+        }
+        setGrouping(true);
+        setGroupMsg("");
+        setGroupErr("");
+
+        const res = await groupAndAttributePaymentsAction(selectedTxIds, groupUserId, groupNote || undefined);
+        setGrouping(false);
+
+        if (res.success) {
+            setGroupMsg(res.message || "Payments grouped successfully!");
+            setSelectedTxIds([]);
+            loadData();
+            setTimeout(() => {
+                setGroupModalOpen(false);
+            }, 1500);
+        } else {
+            setGroupErr(res.error || "Failed to group payments.");
+        }
+    };
+
+    // --- SPLITTING PAYMENTS ---
+    const handleOpenSplitModal = (tx: any) => {
+        setSplitModalTx(tx);
+        const half = (tx.amount / 2).toFixed(2);
+        const remainingHalf = (tx.amount - parseFloat(half)).toFixed(2);
+        setSplitParts([
+            { amount: half, userId: tx.matchedUserId || "", note: tx.note || "" },
+            { amount: remainingHalf, userId: "", note: tx.note || "" }
+        ]);
+        setSplitMsg("");
+        setSplitErr("");
+    };
+
+    const handleAddSplitPart = () => {
+        setSplitParts(prev => [...prev, { amount: "", userId: "", note: "" }]);
+    };
+
+    const handleRemoveSplitPart = (index: number) => {
+        if (splitParts.length <= 2) return;
+        setSplitParts(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleSplitPartChange = (index: number, field: "amount" | "userId" | "note", value: string) => {
+        setSplitParts(prev => {
+            const next = [...prev];
+            next[index] = { ...next[index], [field]: value };
+            return next;
+        });
+    };
+
+    const handleSplitEvenly = () => {
+        if (!splitModalTx || splitParts.length === 0) return;
+        const total = splitModalTx.amount;
+        const count = splitParts.length;
+        const baseAmount = Math.floor((total / count) * 100) / 100;
+        const remainder = Math.round((total - baseAmount * count) * 100) / 100;
+
+        setSplitParts(prev => prev.map((part, idx) => ({
+            ...part,
+            amount: (idx === count - 1 ? (baseAmount + remainder) : baseAmount).toFixed(2)
+        })));
+    };
+
+    const handleExecuteSplit = async () => {
+        if (!splitModalTx) return;
+        const totalSplit = splitParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+        if (Math.abs(totalSplit - splitModalTx.amount) > 0.01) {
+            setSplitErr(`Split amounts must equal the original total of $${splitModalTx.amount.toFixed(2)}. Current total: $${totalSplit.toFixed(2)}`);
+            return;
+        }
+
+        setSplitting(true);
+        setSplitMsg("");
+        setSplitErr("");
+
+        const payload = splitParts.map(p => ({
+            amount: parseFloat(p.amount),
+            userId: p.userId || null,
+            note: p.note || undefined
+        }));
+
+        const res = await splitPaymentTransactionAction(splitModalTx.id, payload);
+        setSplitting(false);
+
+        if (res.success) {
+            setSplitMsg(res.message || "Payment split successfully!");
+            loadData();
+            setTimeout(() => {
+                setSplitModalTx(null);
+            }, 1500);
+        } else {
+            setSplitErr(res.error || "Failed to split payment.");
         }
     };
 
@@ -343,6 +554,21 @@ export default function PaymentEmailManager() {
                u.email.toLowerCase().includes(s) || 
                (u.plexUsername && u.plexUsername.toLowerCase().includes(s));
     });
+
+    const groupFilteredUsers = allUsers.filter(u => {
+        if (!groupSearch) return true;
+        const s = groupSearch.toLowerCase();
+        return u.username.toLowerCase().includes(s) || 
+               u.email.toLowerCase().includes(s) || 
+               (u.plexUsername && u.plexUsername.toLowerCase().includes(s));
+    });
+
+    const selectedTransactions = transactions.filter(t => selectedTxIds.includes(t.id));
+    const selectedTotalAmount = selectedTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    const currentSplitSum = splitParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const splitDiff = splitModalTx ? (splitModalTx.amount - currentSplitSum) : 0;
+    const isSplitBalanced = Math.abs(splitDiff) < 0.005;
 
     const getProviderBadge = (provider: string) => {
         switch (provider.toUpperCase()) {
@@ -609,7 +835,7 @@ export default function PaymentEmailManager() {
 
                                     <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground bg-muted/20 p-2.5 rounded-lg border border-border/30">
                                         <div>
-                                            <span className="text-[9px] uppercase font-bold tracking-wider text-muted-foreground/70 block">Host & Port</span>
+                                             <span className="text-[9px] uppercase font-bold tracking-wider text-muted-foreground/70 block">Host & Port</span>
                                             <span className="font-mono text-foreground truncate block">{src.host}:{src.port}</span>
                                         </div>
                                         <div>
@@ -652,7 +878,7 @@ export default function PaymentEmailManager() {
 
             {/* --- SECTION 2: SCANNED PAYMENT TRANSACTIONS & ATTRIBUTION --- */}
             <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
-                <CardHeader className="pb-3 border-b border-border/40">
+                <CardHeader className="pb-3 border-b border-border/40 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-0.5">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -699,10 +925,81 @@ export default function PaymentEmailManager() {
                             </Select>
                         </div>
                     </div>
+
                     {reprocessMsg && (
-                        <div className="mt-2 p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                        <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{reprocessMsg}</span>
+                        </div>
+                    )}
+
+                    {/* Multi-Select & Batch Actions Toolbar */}
+                    {transactions.length > 0 && (
+                        <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/30">
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={handleSelectAllTx}
+                                    className="h-7 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground gap-1.5"
+                                >
+                                    {selectedTxIds.length === transactions.length && transactions.length > 0 ? (
+                                        <CheckSquare className="h-3.5 w-3.5 text-primary" />
+                                    ) : (
+                                        <Square className="h-3.5 w-3.5" />
+                                    )}
+                                    {selectedTxIds.length === transactions.length && transactions.length > 0 ? "Deselect All" : "Select All"}
+                                </Button>
+                                {selectedTxIds.length > 0 && (
+                                    <Badge className="bg-primary/20 text-primary border border-primary/30 text-xs font-bold px-2 py-0.5">
+                                        {selectedTxIds.length} Selected (${selectedTotalAmount.toFixed(2)})
+                                    </Badge>
+                                )}
+                            </div>
+
+                            {selectedTxIds.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                                    <Button
+                                        size="sm"
+                                        onClick={handleOpenGroupModal}
+                                        disabled={bulkActionLoading || selectedTxIds.length < 2}
+                                        className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5 shadow-sm"
+                                        title="Group selected payments together and attribute to a single member"
+                                    >
+                                        <Users className="h-3.5 w-3.5" /> Group & Assign ({selectedTxIds.length})
+                                    </Button>
+                                    {selectedTransactions.some(t => t.matchedUserId) && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleBulkUnmatch}
+                                            disabled={bulkActionLoading}
+                                            className="h-7 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 font-semibold gap-1.5"
+                                            title="Unlink selected payments from members"
+                                        >
+                                            <Unlink className={`h-3.5 w-3.5 ${bulkActionLoading ? "animate-spin" : ""}`} /> Unmatch Selected
+                                        </Button>
+                                    )}
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleBulkDelete}
+                                        disabled={bulkActionLoading}
+                                        className="h-7 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 font-semibold gap-1.5"
+                                        title="Delete selected payment records"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" /> Delete Selected
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setSelectedTxIds([])}
+                                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                    >
+                                        Clear
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </CardHeader>
@@ -717,9 +1014,29 @@ export default function PaymentEmailManager() {
                             {transactions.map((tx) => (
                                 <div 
                                     key={tx.id} 
-                                    className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
+                                    className={`p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${
+                                        selectedTxIds.includes(tx.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-white/[0.02]"
+                                    }`}
                                 >
                                     <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                                        {/* Selection Checkbox */}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleSelectTx(tx.id)}
+                                            className={`p-1.5 rounded-lg border transition-all shrink-0 cursor-pointer mt-0.5 ${
+                                                selectedTxIds.includes(tx.id)
+                                                    ? "bg-primary text-primary-foreground border-primary"
+                                                    : "bg-background/60 hover:bg-white/10 border-border/60 text-muted-foreground"
+                                            }`}
+                                            title="Select transaction"
+                                        >
+                                            {selectedTxIds.includes(tx.id) ? (
+                                                <CheckSquare className="h-4 w-4" />
+                                            ) : (
+                                                <Square className="h-4 w-4" />
+                                            )}
+                                        </button>
+
                                         <div className="pt-0.5 shrink-0">
                                             {getProviderBadge(tx.provider)}
                                         </div>
@@ -760,23 +1077,47 @@ export default function PaymentEmailManager() {
                                         </div>
                                     </div>
 
-                                    {/* Right: Attribution Status & Actions */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0 self-end md:self-auto">
+                                    {/* Right: Attribution Status & Action Buttons */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 shrink-0 self-end md:self-auto">
                                         {tx.matchedUser ? (
-                                            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-0.5 sm:text-right">
-                                                <div className="flex items-center gap-1.5 sm:justify-end">
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                                                    <span className="font-bold text-emerald-400 truncate">
-                                                        {tx.matchedUser.username}
-                                                    </span>
-                                                    <Badge className="bg-emerald-500/20 text-emerald-300 border-0 text-[9px]">
-                                                        {tx.status}
-                                                    </Badge>
+                                            <>
+                                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-0.5 sm:text-right">
+                                                    <div className="flex items-center gap-1.5 sm:justify-end">
+                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                        <span className="font-bold text-emerald-400 truncate max-w-[140px]">
+                                                            {tx.matchedUser.username}
+                                                        </span>
+                                                        <Badge className="bg-emerald-500/20 text-emerald-300 border-0 text-[9px]">
+                                                            {tx.status}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-[10px] text-muted-foreground truncate max-w-[180px]">
+                                                        {tx.subscriptionPeriodGranted || "Subscription Granted"}
+                                                    </p>
                                                 </div>
-                                                <p className="text-[10px] text-muted-foreground">
-                                                    {tx.subscriptionPeriodGranted || "Subscription Granted"}
-                                                </p>
-                                            </div>
+
+                                                <div className="flex items-center gap-1.5">
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline" 
+                                                        onClick={() => handleUnmatch(tx)}
+                                                        disabled={unmatchingTxId === tx.id}
+                                                        className="h-8 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 gap-1 font-medium"
+                                                        title="Unmatch payment from member"
+                                                    >
+                                                        <Unlink className={`h-3.5 w-3.5 ${unmatchingTxId === tx.id ? "animate-spin" : ""}`} /> Unmatch
+                                                    </Button>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline" 
+                                                        onClick={() => handleOpenAssignModal(tx)}
+                                                        className="h-8 text-xs border-border/60 hover:bg-white/10 gap-1"
+                                                        title="Reassign to a different member"
+                                                    >
+                                                        <User className="h-3.5 w-3.5" /> Reassign
+                                                    </Button>
+                                                </div>
+                                            </>
                                         ) : (
                                             <div className="flex items-center gap-2">
                                                 <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs py-1">
@@ -792,15 +1133,27 @@ export default function PaymentEmailManager() {
                                             </div>
                                         )}
 
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            onClick={() => handleDeleteTransaction(tx.id)}
-                                            className="h-8 w-8 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-400 shrink-0"
-                                            title="Delete transaction record"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        {/* Split & Delete Buttons */}
+                                        <div className="flex items-center gap-1 pl-1 border-l border-border/40">
+                                            <Button 
+                                                size="sm" 
+                                                variant="outline" 
+                                                onClick={() => handleOpenSplitModal(tx)}
+                                                className="h-8 text-xs border-border/60 hover:bg-white/10 text-muted-foreground hover:text-foreground gap-1"
+                                                title="Split payment into multiple parts"
+                                            >
+                                                <Scissors className="h-3.5 w-3.5" /> Split
+                                            </Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                onClick={() => handleDeleteTransaction(tx.id)}
+                                                className="h-8 w-8 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-400 shrink-0"
+                                                title="Delete transaction record"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -936,7 +1289,7 @@ export default function PaymentEmailManager() {
                                 <Button 
                                     type="button" 
                                     variant="outline" 
-                                    size="sm"
+                                    size="sm" 
                                     onClick={handleTestConnection}
                                     disabled={testingConn || !formHost || !formUser || (!formPass && !editingSource?.hasPassword)}
                                     className="text-xs gap-1.5"
@@ -970,13 +1323,13 @@ export default function PaymentEmailManager() {
                 </div>
             )}
 
-            {/* --- MANUAL ASSIGN USER MODAL --- */}
+            {/* --- MANUAL ASSIGN / REASSIGN USER MODAL --- */}
             {assignModalTx && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <Card className="w-full max-w-md border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md">
                         <CardHeader className="pb-3 border-b border-border/40">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-primary">
-                                <User className="h-5 w-5 text-primary" /> Manually Assign Payment
+                                <User className="h-5 w-5 text-primary" /> {assignModalTx.matchedUserId ? "Reassign Payment to Member" : "Manually Assign Payment"}
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Select the member who sent this payment. Portalarr will grant their subscription and update their Plex access.
@@ -1071,6 +1424,327 @@ export default function PaymentEmailManager() {
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-1.5"
                             >
                                 {assigning ? "Assigning & Granting..." : "Assign & Grant Subscription"}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
+
+            {/* --- GROUP & ATTRIBUTE PAYMENTS MODAL --- */}
+            {groupModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-lg border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md">
+                        <CardHeader className="pb-3 border-b border-border/40">
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-primary">
+                                <Users className="h-5 w-5 text-primary" /> Group & Attribute Payments ({selectedTransactions.length})
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Combine multiple installment payments together and attribute the total sum to a single member.
+                            </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4 pt-4">
+                            {groupMsg && (
+                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                    <span>{groupMsg}</span>
+                                </div>
+                            )}
+                            {groupErr && (
+                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                    <XCircle className="h-4 w-4 shrink-0" />
+                                    <span>{groupErr}</span>
+                                </div>
+                            )}
+
+                            {/* Selected Transactions Summary */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-xs font-semibold">
+                                    <span>Selected Payments ({selectedTransactions.length})</span>
+                                    <Badge className="bg-emerald-500/20 text-emerald-300 font-extrabold text-xs px-2 py-0.5">
+                                        Combined Total: ${selectedTotalAmount.toFixed(2)} USD
+                                    </Badge>
+                                </div>
+
+                                <div className="max-h-36 overflow-y-auto space-y-1.5 p-2 bg-background rounded-lg border border-border/60">
+                                    {selectedTransactions.map((tx) => (
+                                        <div key={tx.id} className="flex items-center justify-between text-xs p-1.5 rounded bg-muted/20 border border-border/30">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                {getProviderBadge(tx.provider)}
+                                                <span className="font-semibold truncate">{tx.senderName || tx.senderEmail || "Sender"}</span>
+                                                <span className="text-[10px] text-muted-foreground">{format(new Date(tx.emailDate), "MMM d, yyyy")}</span>
+                                            </div>
+                                            <span className="font-extrabold text-foreground shrink-0">${tx.amount.toFixed(2)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Target User Selector */}
+                            <div className="space-y-2">
+                                <Label className="text-xs font-semibold">Assign Combined Total To Member</Label>
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input 
+                                        value={groupSearch}
+                                        onChange={(e) => setGroupSearch(e.target.value)}
+                                        placeholder="Search member by username or email..."
+                                        className="pl-8 bg-background text-xs h-8"
+                                    />
+                                </div>
+
+                                <div className="max-h-40 overflow-y-auto space-y-1 p-1 bg-background/60 rounded-lg border border-border/40 divide-y divide-border/20">
+                                    {groupFilteredUsers.map((u) => (
+                                        <div 
+                                            key={u.id}
+                                            onClick={() => setGroupUserId(u.id)}
+                                            className={`p-2 rounded-md cursor-pointer transition-all flex items-center justify-between text-xs ${
+                                                groupUserId === u.id 
+                                                    ? "bg-primary/20 border border-primary/40 text-primary font-bold" 
+                                                    : "hover:bg-white/5 text-foreground"
+                                            }`}
+                                        >
+                                            <div>
+                                                <p className="font-semibold">{u.username}</p>
+                                                <p className="text-[10px] text-muted-foreground">{u.email}</p>
+                                            </div>
+                                            {groupUserId === u.id && <Check className="h-4 w-4 text-primary" />}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Optional Custom Note */}
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Group Note / Memo (Optional)</Label>
+                                <Input 
+                                    value={groupNote}
+                                    onChange={(e) => setGroupNote(e.target.value)}
+                                    placeholder="e.g. 2x $90 installments for 2026 Annual Membership"
+                                    className="bg-background text-xs h-8"
+                                />
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-muted-foreground flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                                <span>
+                                    Portalarr will calculate the subscription tier from the combined <strong>${selectedTotalAmount.toFixed(2)}</strong> total and update Plex access accordingly.
+                                </span>
+                            </div>
+                        </CardContent>
+
+                        <CardFooter className="pt-2 pb-4 border-t border-border/40 flex items-center justify-end gap-2">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setGroupModalOpen(false)}
+                                disabled={grouping}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleExecuteGroup}
+                                disabled={grouping || !groupUserId}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-1.5"
+                            >
+                                {grouping ? "Grouping & Granting..." : `Group & Attribute ($${selectedTotalAmount.toFixed(2)})`}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
+
+            {/* --- SPLIT PAYMENT TRANSACTION MODAL --- */}
+            {splitModalTx && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-xl border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md max-h-[90vh] flex flex-col">
+                        <CardHeader className="pb-3 border-b border-border/40 shrink-0">
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-primary">
+                                <Scissors className="h-5 w-5 text-primary" /> Split Payment Transaction
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Divide a single payment into 2 or more sub-transactions and attribute them to different members or installments.
+                            </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1">
+                            {splitMsg && (
+                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                    <span>{splitMsg}</span>
+                                </div>
+                            )}
+                            {splitErr && (
+                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                    <XCircle className="h-4 w-4 shrink-0" />
+                                    <span>{splitErr}</span>
+                                </div>
+                            )}
+
+                            {/* Original Payment Banner */}
+                            <div className="p-3 rounded-xl bg-background border border-border/60 text-xs flex flex-wrap items-center justify-between gap-2">
+                                <div className="space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-muted-foreground uppercase font-bold">Original Payment:</span>
+                                        {getProviderBadge(splitModalTx.provider)}
+                                        <span className="font-semibold text-foreground">{splitModalTx.senderName || splitModalTx.senderEmail || "Unknown"}</span>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        {format(new Date(splitModalTx.emailDate), "MMM d, yyyy • h:mm a")}
+                                        {splitModalTx.note ? ` • "${splitModalTx.note}"` : ""}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-lg font-black text-foreground">${splitModalTx.amount.toFixed(2)}</span>
+                                </div>
+                            </div>
+
+                            {/* Controls: Split Evenly & Add Part */}
+                            <div className="flex items-center justify-between pt-1">
+                                <Label className="text-xs font-semibold">Split Allocation Parts ({splitParts.length})</Label>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleSplitEvenly}
+                                        className="h-7 text-xs border-border/60 hover:bg-white/10 gap-1"
+                                        title="Distribute amounts evenly across all parts"
+                                    >
+                                        <Split className="h-3.5 w-3.5" /> Split Evenly
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleAddSplitPart}
+                                        className="h-7 text-xs bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 gap-1"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" /> Add Part
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Split Parts List */}
+                            <div className="space-y-3">
+                                {splitParts.map((part, idx) => (
+                                    <div key={idx} className="p-3 rounded-xl bg-background/80 border border-border/60 space-y-2.5 relative">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] uppercase font-bold text-primary tracking-wider">
+                                                Part #{idx + 1}
+                                            </span>
+                                            {splitParts.length > 2 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleRemoveSplitPart(idx)}
+                                                    className="h-6 w-6 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-400"
+                                                    title="Remove split part"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] text-muted-foreground uppercase font-bold">Amount ($ USD)</Label>
+                                                <div className="relative">
+                                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={part.amount}
+                                                        onChange={(e) => handleSplitPartChange(idx, "amount", e.target.value)}
+                                                        placeholder="0.00"
+                                                        className="pl-6 bg-background text-xs h-8 font-mono"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="sm:col-span-2 space-y-1">
+                                                <Label className="text-[10px] text-muted-foreground uppercase font-bold">Attribute To Member</Label>
+                                                <select
+                                                    value={part.userId}
+                                                    onChange={(e) => handleSplitPartChange(idx, "userId", e.target.value)}
+                                                    className="h-8 text-xs bg-background border border-border/60 rounded-md px-2 text-foreground font-medium w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                                                >
+                                                    <option value="">(Leave Unmatched / Unassigned)</option>
+                                                    {allUsers.map((u) => (
+                                                        <option key={u.id} value={u.id}>
+                                                            {u.username} ({u.email})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] text-muted-foreground uppercase font-bold">Part Note / Memo (Optional)</Label>
+                                            <Input
+                                                value={part.note}
+                                                onChange={(e) => handleSplitPartChange(idx, "note", e.target.value)}
+                                                placeholder={`e.g. Split ${idx + 1} of ${splitParts.length}`}
+                                                className="bg-background text-xs h-7"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Live Balance Validator Banner */}
+                            <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-3 ${
+                                isSplitBalanced 
+                                    ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-300"
+                                    : "bg-red-950/30 border-red-500/40 text-red-300"
+                            }`}>
+                                <div className="flex items-center gap-2">
+                                    {isSplitBalanced ? (
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                    ) : (
+                                        <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                    )}
+                                    <div>
+                                        <span className="font-bold">
+                                            {isSplitBalanced ? "Amounts Perfectly Balanced" : "Split Amounts Unbalanced"}
+                                        </span>
+                                        <p className="text-[10px] opacity-90">
+                                            Original: ${splitModalTx.amount.toFixed(2)} • Allocated: ${currentSplitSum.toFixed(2)}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-[10px] uppercase font-bold block opacity-80">Remaining</span>
+                                    <span className="font-mono font-bold text-sm">
+                                        ${Math.abs(splitDiff).toFixed(2)} {splitDiff > 0 ? "Left" : splitDiff < 0 ? "Over" : ""}
+                                    </span>
+                                </div>
+                            </div>
+                        </CardContent>
+
+                        <CardFooter className="pt-2 pb-4 border-t border-border/40 flex items-center justify-end gap-2 shrink-0">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setSplitModalTx(null)}
+                                disabled={splitting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleExecuteSplit}
+                                disabled={splitting || !isSplitBalanced}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-1.5"
+                            >
+                                {splitting ? "Splitting & Updating..." : `Execute Split (${splitParts.length} Parts)`}
                             </Button>
                         </CardFooter>
                     </Card>

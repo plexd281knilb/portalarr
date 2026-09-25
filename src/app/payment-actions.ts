@@ -9,6 +9,7 @@ import {
     testPaymentEmailConnection, 
     scanPaymentEmailsInternal, 
     applySubscriptionForPayment,
+    calculateAlignedExpiryDate,
     matchPaymentToUser 
 } from "@/lib/payment-email-scraper";
 
@@ -580,4 +581,461 @@ export async function purgeUnmatchedPaymentTransactionsAction() {
         return { success: false, error: e.message || "Failed to purge unmatched payment transactions." };
     }
 }
+
+/**
+ * Helper to recalculate a user's subscription and Plex access based on their currently matched payments.
+ */
+export async function recalculateUserSubscriptionFromPayments(userId: string) {
+    if (!userId) return;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return;
+    if (user.role === "ADMIN") return;
+
+    const matchedPayments = await prisma.paymentTransaction.findMany({
+        where: { matchedUserId: userId },
+        orderBy: { emailDate: "asc" }
+    });
+
+    if (matchedPayments.length === 0) {
+        // Only expire if user is not on a valid trial or permanent grant
+        const isPermanent = user.status === "APPROVED" && !user.subscriptionEndsAt && !user.trialEndsAt;
+        const isTrial = user.status === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
+
+        if (!isPermanent && !isTrial) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: {
+                    status: "EXPIRED",
+                    subscriptionEndsAt: null
+                }
+            });
+            try {
+                const { revokePlexAccessForUserInternal } = await import("./actions");
+                await revokePlexAccessForUserInternal(user, "All linked payments have been unmatched.");
+            } catch (e) {}
+        }
+        return;
+    }
+
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    const yearlyPrice = settings?.yearlyPrice || 180;
+    const monthlyPrice = settings?.monthlyPrice || 15;
+
+    let currentExpiry: Date | null = null;
+
+    for (const tx of matchedPayments) {
+        const paymentDate = new Date(tx.emailDate);
+        const { newExpiryDate, periodGrantedText } = calculateAlignedExpiryDate({
+            paymentDate,
+            totalAmount: tx.amount,
+            yearlyPrice,
+            monthlyPrice,
+            existingExpiry: currentExpiry
+        });
+        currentExpiry = newExpiryDate;
+
+        await prisma.paymentTransaction.update({
+            where: { id: tx.id },
+            data: {
+                appliedSubscription: true,
+                subscriptionPeriodGranted: periodGrantedText
+            }
+        });
+    }
+
+    const now = new Date();
+    const isCurrentlyActive = currentExpiry ? currentExpiry > now : false;
+    const newStatus = isCurrentlyActive ? "APPROVED" : "EXPIRED";
+
+    await prisma.user.update({
+        where: { id: userId },
+        data: {
+            status: newStatus,
+            subscriptionEndsAt: currentExpiry
+        }
+    });
+
+    if (isCurrentlyActive && currentExpiry) {
+        try {
+            const { setUserTrialOrSubscription } = await import("./actions");
+            await setUserTrialOrSubscription(userId, "CUSTOM", currentExpiry.toISOString());
+        } catch (e) {}
+    } else {
+        try {
+            const { revokePlexAccessForUserInternal } = await import("./actions");
+            await revokePlexAccessForUserInternal(user, "Subscription period has ended.");
+        } catch (e) {}
+    }
+}
+
+/**
+ * Unmatch a single payment transaction from a user
+ */
+export async function unmatchPaymentTransactionAction(transactionId: string) {
+    try {
+        await verifyAdmin();
+        if (!transactionId) return { success: false, error: "Transaction ID is required." };
+
+        const tx = await prisma.paymentTransaction.findUnique({ where: { id: transactionId } });
+        if (!tx) return { success: false, error: "Payment transaction not found." };
+
+        const previousUserId = tx.matchedUserId;
+
+        await prisma.paymentTransaction.update({
+            where: { id: transactionId },
+            data: {
+                matchedUserId: null,
+                status: "UNMATCHED",
+                appliedSubscription: false,
+                subscriptionPeriodGranted: null,
+                adminNotes: `Unmatched by Admin on ${new Date().toLocaleDateString()}`
+            }
+        });
+
+        if (previousUserId) {
+            await recalculateUserSubscriptionFromPayments(previousUserId);
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            message: `Successfully unlinked $${tx.amount.toFixed(2)} payment.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to unmatch payment transaction." };
+    }
+}
+
+/**
+ * Unmatch multiple payment transactions
+ */
+export async function unmatchMultiplePaymentTransactionsAction(transactionIds: string[]) {
+    try {
+        await verifyAdmin();
+        if (!transactionIds || transactionIds.length === 0) {
+            return { success: false, error: "No transactions provided." };
+        }
+
+        const txs = await prisma.paymentTransaction.findMany({
+            where: { id: { in: transactionIds } }
+        });
+
+        const affectedUserIds = new Set<string>();
+
+        for (const tx of txs) {
+            if (tx.matchedUserId) affectedUserIds.add(tx.matchedUserId);
+            await prisma.paymentTransaction.update({
+                where: { id: tx.id },
+                data: {
+                    matchedUserId: null,
+                    status: "UNMATCHED",
+                    appliedSubscription: false,
+                    subscriptionPeriodGranted: null,
+                    adminNotes: `Bulk unmatched by Admin on ${new Date().toLocaleDateString()}`
+                }
+            });
+        }
+
+        for (const uId of affectedUserIds) {
+            await recalculateUserSubscriptionFromPayments(uId);
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            count: txs.length,
+            message: `Successfully unlinked ${txs.length} payment transaction(s).`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to unmatch payment transactions." };
+    }
+}
+
+/**
+ * Group multiple payment transactions together and attribute them to a single user
+ */
+export async function groupAndAttributePaymentsAction(transactionIds: string[], userId: string, customNote?: string) {
+    try {
+        await verifyAdmin();
+        if (!transactionIds || transactionIds.length === 0) {
+            return { success: false, error: "No transactions selected to group." };
+        }
+        if (!userId) return { success: false, error: "Target user is required." };
+
+        const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (!targetUser) return { success: false, error: "Target user not found." };
+
+        const transactions = await prisma.paymentTransaction.findMany({
+            where: { id: { in: transactionIds } },
+            orderBy: { emailDate: "asc" }
+        });
+
+        if (transactions.length === 0) {
+            return { success: false, error: "No matching transactions found." };
+        }
+
+        const previousUserIds = new Set<string>();
+        for (const tx of transactions) {
+            if (tx.matchedUserId && tx.matchedUserId !== userId) {
+                previousUserIds.add(tx.matchedUserId);
+            }
+        }
+
+        const totalAmount = transactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+        const primaryTx = transactions[0];
+
+        const scrapedCombined = {
+            provider: primaryTx.provider as any,
+            externalTxId: primaryTx.externalTxId || undefined,
+            senderName: primaryTx.senderName || undefined,
+            senderEmail: primaryTx.senderEmail || undefined,
+            senderHandle: primaryTx.senderHandle || undefined,
+            amount: totalAmount,
+            currency: primaryTx.currency || "USD",
+            note: customNote || transactions.map(t => t.note).filter(Boolean).join(" | ") || undefined,
+            emailSubject: primaryTx.emailSubject || "",
+            emailDate: primaryTx.emailDate || new Date(),
+            emailUid: primaryTx.emailUid || ""
+        };
+
+        const { periodGrantedText } = await applySubscriptionForPayment(targetUser, scrapedCombined);
+
+        // If target user doesn't have a real name set, try to use sender name
+        if (!targetUser.name && primaryTx.senderName && primaryTx.senderName.trim()) {
+            await prisma.user.update({
+                where: { id: targetUser.id },
+                data: { name: primaryTx.senderName.trim() }
+            }).catch(() => {});
+        }
+
+        for (let i = 0; i < transactions.length; i++) {
+            const tx = transactions[i];
+            await prisma.paymentTransaction.update({
+                where: { id: tx.id },
+                data: {
+                    matchedUserId: targetUser.id,
+                    status: "MANUAL",
+                    appliedSubscription: true,
+                    subscriptionPeriodGranted: `Grouped (${transactions.length} payments, total $${totalAmount.toFixed(2)}): ${periodGrantedText}`,
+                    adminNotes: customNote ? `Grouped payment: ${customNote}` : `Grouped with ${transactions.length} payments for user "${targetUser.username}".`
+                }
+            });
+        }
+
+        for (const prevId of previousUserIds) {
+            await recalculateUserSubscriptionFromPayments(prevId);
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            message: `Successfully grouped ${transactions.length} payments ($${totalAmount.toFixed(2)}) for "${targetUser.username}". Granted: ${periodGrantedText}`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to group payments." };
+    }
+}
+
+/**
+ * Split a payment transaction into multiple separate payments
+ */
+export async function splitPaymentTransactionAction(
+    originalTxId: string, 
+    splits: { amount: number; userId?: string | null; note?: string }[]
+) {
+    try {
+        await verifyAdmin();
+        if (!originalTxId) return { success: false, error: "Original transaction ID is required." };
+        if (!Array.isArray(splits) || splits.length < 2) {
+            return { success: false, error: "At least 2 split parts are required." };
+        }
+
+        const originalTx = await prisma.paymentTransaction.findUnique({
+            where: { id: originalTxId }
+        });
+        if (!originalTx) return { success: false, error: "Original transaction not found." };
+
+        const totalSplitAmount = splits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+        if (Math.abs(totalSplitAmount - originalTx.amount) > 0.01) {
+            return {
+                success: false,
+                error: `Total split amount ($${totalSplitAmount.toFixed(2)}) must equal the original payment amount ($${originalTx.amount.toFixed(2)}).`
+            };
+        }
+
+        const previousUserId = originalTx.matchedUserId;
+        const affectedUserIds = new Set<string>();
+        if (previousUserId) affectedUserIds.add(previousUserId);
+
+        // 1. Update the original transaction to become Split #1
+        const split1 = splits[0];
+        const split1Amount = Number(split1.amount);
+        let split1User = null;
+        let split1PeriodText: string | null = null;
+
+        if (split1.userId) {
+            split1User = await prisma.user.findUnique({ where: { id: split1.userId } });
+            if (split1User) {
+                affectedUserIds.add(split1User.id);
+                const scraped1 = {
+                    provider: originalTx.provider as any,
+                    externalTxId: originalTx.externalTxId || undefined,
+                    senderName: originalTx.senderName || undefined,
+                    senderEmail: originalTx.senderEmail || undefined,
+                    senderHandle: originalTx.senderHandle || undefined,
+                    amount: split1Amount,
+                    currency: originalTx.currency,
+                    note: split1.note || originalTx.note || undefined,
+                    emailSubject: originalTx.emailSubject || "",
+                    emailDate: originalTx.emailDate,
+                    emailUid: originalTx.emailUid || ""
+                };
+                const res = await applySubscriptionForPayment(split1User, scraped1);
+                split1PeriodText = res.periodGrantedText;
+            }
+        }
+
+        await prisma.paymentTransaction.update({
+            where: { id: originalTx.id },
+            data: {
+                amount: split1Amount,
+                note: split1.note || originalTx.note,
+                matchedUserId: split1User ? split1User.id : null,
+                status: split1User ? "MANUAL" : "UNMATCHED",
+                appliedSubscription: Boolean(split1User),
+                subscriptionPeriodGranted: split1PeriodText,
+                adminNotes: `Split 1 of ${splits.length} (from original $${originalTx.amount.toFixed(2)})`
+            }
+        });
+
+        // 2. Create new transactions for Split #2..N
+        for (let i = 1; i < splits.length; i++) {
+            const splitItem = splits[i];
+            const splitAmount = Number(splitItem.amount);
+            let splitUser = null;
+            let splitPeriodText: string | null = null;
+
+            if (splitItem.userId) {
+                splitUser = await prisma.user.findUnique({ where: { id: splitItem.userId } });
+                if (splitUser) {
+                    affectedUserIds.add(splitUser.id);
+                }
+            }
+
+            const newTx = await prisma.paymentTransaction.create({
+                data: {
+                    sourceId: originalTx.sourceId,
+                    provider: originalTx.provider,
+                    externalTxId: originalTx.externalTxId ? `${originalTx.externalTxId}-split-${i + 1}` : null,
+                    senderName: originalTx.senderName,
+                    senderEmail: originalTx.senderEmail,
+                    senderHandle: originalTx.senderHandle,
+                    amount: splitAmount,
+                    currency: originalTx.currency,
+                    note: splitItem.note || originalTx.note,
+                    emailSubject: originalTx.emailSubject,
+                    emailDate: originalTx.emailDate,
+                    emailUid: originalTx.emailUid,
+                    matchedUserId: splitUser ? splitUser.id : null,
+                    status: splitUser ? "MANUAL" : "UNMATCHED",
+                    appliedSubscription: false,
+                    adminNotes: `Split ${i + 1} of ${splits.length} (from original $${originalTx.amount.toFixed(2)})`
+                }
+            });
+
+            if (splitUser) {
+                const scrapedSplit = {
+                    provider: originalTx.provider as any,
+                    externalTxId: newTx.externalTxId || undefined,
+                    senderName: originalTx.senderName || undefined,
+                    senderEmail: originalTx.senderEmail || undefined,
+                    senderHandle: originalTx.senderHandle || undefined,
+                    amount: splitAmount,
+                    currency: originalTx.currency,
+                    note: splitItem.note || originalTx.note || undefined,
+                    emailSubject: originalTx.emailSubject || "",
+                    emailDate: originalTx.emailDate,
+                    emailUid: originalTx.emailUid || ""
+                };
+                const res = await applySubscriptionForPayment(splitUser, scrapedSplit);
+                splitPeriodText = res.periodGrantedText;
+
+                await prisma.paymentTransaction.update({
+                    where: { id: newTx.id },
+                    data: {
+                        appliedSubscription: true,
+                        subscriptionPeriodGranted: splitPeriodText
+                    }
+                });
+            }
+        }
+
+        // 3. Recalculate any affected users
+        for (const uId of affectedUserIds) {
+            await recalculateUserSubscriptionFromPayments(uId);
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            message: `Successfully split $${originalTx.amount.toFixed(2)} payment into ${splits.length} parts.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to split payment transaction." };
+    }
+}
+
+/**
+ * Bulk delete payment transactions
+ */
+export async function bulkDeletePaymentTransactionsAction(transactionIds: string[]) {
+    try {
+        await verifyAdmin();
+        if (!transactionIds || transactionIds.length === 0) {
+            return { success: false, error: "No transactions selected." };
+        }
+
+        const txs = await prisma.paymentTransaction.findMany({
+            where: { id: { in: transactionIds } }
+        });
+
+        const affectedUserIds = new Set<string>();
+        for (const tx of txs) {
+            if (tx.matchedUserId) affectedUserIds.add(tx.matchedUserId);
+        }
+
+        const result = await prisma.paymentTransaction.deleteMany({
+            where: { id: { in: transactionIds } }
+        });
+
+        for (const uId of affectedUserIds) {
+            await recalculateUserSubscriptionFromPayments(uId);
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            count: result.count,
+            message: `Successfully deleted ${result.count} payment transaction(s).`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to delete payment transactions." };
+    }
+}
+
 
