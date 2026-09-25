@@ -1085,12 +1085,23 @@ export default function AccessSettingsPage() {
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
+                                        disabled={syncingPlex}
+                                        className="border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/10 gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-[#e5a00d]/40 active:scale-95"
+                                        onClick={handleSyncPlex}
+                                        title="Scan live friend access directly from Plex and update all user cards"
+                                    >
+                                        {syncingPlex ? <Loader2 className="h-4 w-4 animate-spin text-[#e5a00d]" /> : <RefreshCw className="h-4 w-4 text-[#e5a00d]" />}
+                                        Scan Live Plex Access
+                                    </Button>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
                                         disabled={restoringAccess}
                                         className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95"
                                         onClick={handleRestoreAllPlexAccess}
                                         title="Re-synchronize and restore default Plex libraries across all servers for all active users"
                                     >
-                                        {restoringAccess ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <RefreshCw className="h-4 w-4 text-primary" />}
+                                        {restoringAccess ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Layers className="h-4 w-4 text-primary" />}
                                         Restore All Users' Libraries
                                     </Button>
                                     {pendingUsersCount > 0 && (

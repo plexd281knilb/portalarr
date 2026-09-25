@@ -12532,6 +12532,43 @@ export async function syncPlexFriendsInternal() {
             if (adminUserObj.title) activePlexUsernames.add(adminUserObj.title.toLowerCase().trim());
         }
 
+        // Helper to accurately extract live Plex library keys across all discovered servers
+        const extractUserLiveLibraryKeys = (target: any): string[] => {
+            const matchedShares = sharesList.filter(s => matchesPlexUser(target, s));
+            const liveKeys: string[] = [];
+
+            for (const share of matchedShares) {
+                const srv = serversWithSections.find(sv => 
+                    (sv.serverId && share.serverId && sv.serverId.toLowerCase() === share.serverId.toLowerCase()) ||
+                    (sv.serverName && share.serverName && sv.serverName.toLowerCase() === share.serverName.toLowerCase()) ||
+                    (sv.serverName && share.serverId && sv.serverName.toLowerCase() === share.serverId.toLowerCase())
+                ) || (serversWithSections.length === 1 ? serversWithSections[0] : null);
+
+                if (srv) {
+                    if (share.allLibraries) {
+                        for (const sec of srv.sections || []) {
+                            liveKeys.push(`${srv.serverId}:${sec.id}`);
+                        }
+                    } else {
+                        for (const secId of (share.librarySectionIds || [])) {
+                            const sec = (srv.sections || []).find((s: any) => s.id === secId || (s.key && String(s.key) === String(secId)));
+                            if (sec) {
+                                liveKeys.push(`${srv.serverId}:${sec.id}`);
+                            } else {
+                                liveKeys.push(`${srv.serverId}:${secId}`);
+                            }
+                        }
+                    }
+                } else if (share.serverId) {
+                    for (const secId of (share.librarySectionIds || [])) {
+                        liveKeys.push(`${share.serverId}:${secId}`);
+                    }
+                }
+            }
+
+            return Array.from(new Set(liveKeys));
+        };
+
         for (const friend of friendsList) {
             const fEmail = (friend.email || "").toLowerCase().trim();
             const fUsername = (friend.username || (fEmail ? fEmail.split('@')[0] : "")).trim();
@@ -12541,41 +12578,11 @@ export async function syncPlexFriendsInternal() {
             if (fEmail) activePlexEmails.add(fEmail);
             if (fUsername) activePlexUsernames.add(fUsername.toLowerCase());
 
-            // Determine shared library sections for this friend
-            const userMatchedShares = sharesList.filter(s => {
-                const sEmail = (s.user.email || s.invitedEmail || "").toLowerCase().trim();
-                const sUser = (s.user.username || s.user.title || "").toLowerCase().trim();
-                return (fEmail && sEmail === fEmail) ||
-                       (fUsername && sUser === fUsername.toLowerCase()) ||
-                       (fEmail && sUser === fEmail) ||
-                       (fUsername && sEmail === fUsername.toLowerCase());
-            });
+            // Determine actual live shared library sections for this friend across all servers
+            const userLibraryKeys = extractUserLiveLibraryKeys(friend);
+            const userLibraryKeyStr = userLibraryKeys.join(",");
 
-            const userLibraryKeys: string[] = [];
-            for (const share of userMatchedShares) {
-                const srv = serversWithSections.find(sv => sv.serverId === share.serverId) || (serversWithSections.length === 1 ? serversWithSections[0] : null);
-                if (srv) {
-                    if (share.allLibraries) {
-                        for (const sec of srv.sections) {
-                            userLibraryKeys.push(`${srv.serverId}:${sec.id}`);
-                        }
-                    } else {
-                        for (const secId of share.librarySectionIds) {
-                            const secExists = srv.sections.some(s => s.id === secId);
-                            if (secExists) {
-                                userLibraryKeys.push(`${srv.serverId}:${secId}`);
-                            }
-                        }
-                    }
-                } else if (share.serverId) {
-                    for (const secId of share.librarySectionIds) {
-                        userLibraryKeys.push(`${share.serverId}:${secId}`);
-                    }
-                }
-            }
-            const userLibraryKeyStr = Array.from(new Set(userLibraryKeys)).join(",");
-
-            // Match existing user by email or username or plexEmail or plexUsername (case-insensitive & alphanumeric)
+            // Match existing user by email, username, plexEmail, or plexUsername
             const cleanAlnum = (str?: string | null) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
             const fEmailAlnum = cleanAlnum(fEmail);
             const fUserAlnum = cleanAlnum(fUsername);
@@ -12604,6 +12611,7 @@ export async function syncPlexFriendsInternal() {
 
             if (existingUser) {
                 // If user is suspended, expired, or rejected in Portalarr, make sure any shares on Plex are revoked
+                const userMatchedShares = sharesList.filter(s => matchesPlexUser(existingUser, s));
                 if (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED") {
                     if (userMatchedShares.length > 0) {
                         console.log(`[PLEX-SYNC] User "${existingUser.username}" is ${existingUser.status} but has ${userMatchedShares.length} active Plex shares. Revoking...`);
@@ -12613,7 +12621,7 @@ export async function syncPlexFriendsInternal() {
                     continue;
                 }
 
-                // Update existing user details/status/libraries if needed
+                // Update existing user details/status/libraries with live Plex telemetry
                 let needsUpdate = false;
                 const updateData: any = {};
 
@@ -12641,7 +12649,13 @@ export async function syncPlexFriendsInternal() {
                     }
                 }
 
-                // Sync libraries only if user is active (not suspended, expired, or rejected)
+                // Auto-fill real name if empty and Plex friend has title/name
+                if (!existingUser.name && friend.title && friend.title !== fUsername && friend.title !== fEmail) {
+                    updateData.name = friend.title.trim();
+                    needsUpdate = true;
+                }
+
+                // Update live scanned library access from Plex
                 if (
                     existingUser.status !== "SUSPENDED" && 
                     existingUser.status !== "EXPIRED" && 
@@ -12684,6 +12698,7 @@ export async function syncPlexFriendsInternal() {
                 const newUser = await prisma.user.create({
                     data: {
                         username: safeUsername,
+                        name: friend.title && friend.title !== fUsername ? friend.title.trim() : null,
                         email: safeEmail,
                         password: hashedPassword,
                         role: "USER",
@@ -12696,6 +12711,20 @@ export async function syncPlexFriendsInternal() {
 
                 dbUsers.push(newUser);
                 addedCount++;
+            }
+        }
+
+        // Secondary Pass: Scan actual live Plex library shares for all remaining DB users
+        for (const u of dbUsers) {
+            if (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED") continue;
+            const liveKeys = extractUserLiveLibraryKeys(u);
+            const liveKeysStr = liveKeys.join(",");
+            if (liveKeysStr && u.plexLibrarySectionIds !== liveKeysStr) {
+                await prisma.user.update({
+                    where: { id: u.id },
+                    data: { plexLibrarySectionIds: liveKeysStr }
+                }).catch(() => {});
+                updatedCount++;
             }
         }
 

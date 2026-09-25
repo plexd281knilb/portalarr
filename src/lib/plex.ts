@@ -45,15 +45,17 @@ export interface PlexFriendItem {
     id?: number | string;
     email: string;
     username: string;
+    title?: string;
     thumb?: string;
 }
 
 export async function getPlexServerFriends(adminToken: string): Promise<PlexFriendItem[]> {
     const friendsMap = new Map<string, PlexFriendItem>();
 
-    const addFriend = (rawEmail?: string, rawUsername?: string, rawId?: number | string, rawThumb?: string) => {
+    const addFriend = (rawEmail?: string, rawUsername?: string, rawId?: number | string, rawThumb?: string, rawTitle?: string) => {
         const email = (rawEmail || "").toLowerCase().trim();
         const username = (rawUsername || (email ? email.split('@')[0] : "")).trim();
+        const title = (rawTitle || "").trim();
         if (!email && !username) return;
         const key = email || username.toLowerCase();
         const existing = friendsMap.get(key);
@@ -62,6 +64,7 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                 id: rawId || undefined, 
                 email, 
                 username, 
+                title: title || undefined,
                 thumb: rawThumb || undefined 
             });
         } else {
@@ -69,6 +72,7 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
             if (!existing.thumb && rawThumb) existing.thumb = rawThumb;
             if (!existing.email && email) existing.email = email;
             if (!existing.username && username) existing.username = username;
+            if (!existing.title && title) existing.title = title;
         }
     };
 
@@ -84,7 +88,7 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                     const u = item.user || item;
                     const rawId = u.id || item.id;
                     const rawThumb = u.thumb || item.thumb;
-                    addFriend(u.email || item.email, u.username || item.username || u.title || item.title, rawId, rawThumb);
+                    addFriend(u.email || item.email, u.username || item.username, rawId, rawThumb, u.title || item.title || u.name || item.name);
                 }
             }
         }
@@ -104,7 +108,7 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                     const u = item.user || item.invited || {};
                     const rawId = u.id || item.user_id || item.userID;
                     const rawThumb = u.thumb || item.thumb;
-                    addFriend(u.email || item.email || item.invitedEmail, u.username || item.username || u.title || item.title, rawId, rawThumb);
+                    addFriend(u.email || item.email || item.invitedEmail, u.username || item.username, rawId, rawThumb, u.title || item.title || u.name || item.name);
                 }
             }
         }
@@ -122,9 +126,10 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                 const attrs = match[1] || "";
                 const id = attrs.match(/\bid="([^"]*)"/i)?.[1];
                 const email = attrs.match(/\bemail="([^"]*)"/i)?.[1];
-                const username = attrs.match(/\busername="([^"]*)"/i)?.[1] || attrs.match(/\btitle="([^"]*)"/i)?.[1];
+                const username = attrs.match(/\busername="([^"]*)"/i)?.[1];
+                const title = attrs.match(/\btitle="([^"]*)"/i)?.[1] || attrs.match(/\bname="([^"]*)"/i)?.[1];
                 const thumb = attrs.match(/\bthumb="([^"]*)"/i)?.[1];
-                addFriend(email, username, id, thumb);
+                addFriend(email, username || title, id, thumb, title);
             }
         }
     } catch (e) {
@@ -151,8 +156,9 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                         const attrs = m[1] || "";
                         const email = attrs.match(/\bemail="([^"]*)"/i)?.[1] || attrs.match(/\binvitedEmail="([^"]*)"/i)?.[1];
                         const username = attrs.match(/\busername="([^"]*)"/i)?.[1];
+                        const title = attrs.match(/\btitle="([^"]*)"/i)?.[1] || attrs.match(/\bname="([^"]*)"/i)?.[1];
                         const userId = attrs.match(/\buserID="([^"]*)"/i)?.[1];
-                        addFriend(email, username, userId);
+                        addFriend(email, username || title, userId, undefined, title);
                     }
                 }
             } catch (e) {}
