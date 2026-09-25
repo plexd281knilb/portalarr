@@ -200,11 +200,13 @@ export async function testPaymentEmailSourceAction(formData: FormData) {
 
 /**
  * Trigger payment email scan across all or specific email sources
+ * @param sourceId Optional specific source ID
+ * @param lookbackDays Number of days to search back (default: 365 days / 1 year)
  */
-export async function scanPaymentEmailsAction(sourceId?: string) {
+export async function scanPaymentEmailsAction(sourceId?: string, lookbackDays: number = 365) {
     try {
         await verifyAdmin();
-        const result = await scanPaymentEmailsInternal(sourceId);
+        const result = await scanPaymentEmailsInternal(sourceId, lookbackDays);
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
@@ -217,6 +219,7 @@ export async function scanPaymentEmailsAction(sourceId?: string) {
             newPaymentsFound: 0,
             autoAttributed: 0,
             unmatched: 0,
+            duplicatePaymentsSkipped: 0,
             errors: [e.message || "Failed to run payment email scan"]
         };
     }

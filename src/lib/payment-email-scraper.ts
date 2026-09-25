@@ -693,14 +693,17 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
 
 /**
  * Scan payment emails across all enabled sources (or a specific source)
+ * @param sourceId Optional specific source ID
+ * @param lookbackDays Number of days to search back (default: 365 days / 1 year; 0 = last 300 messages)
  */
-export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
+export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays: number = 365): Promise<{
     success: boolean;
     totalSources: number;
     scannedMessages: number;
     newPaymentsFound: number;
     autoAttributed: number;
     unmatched: number;
+    duplicatePaymentsSkipped: number;
     errors: string[];
 }> {
     const whereClause = sourceId ? { id: sourceId, enabled: true } : { enabled: true };
@@ -710,6 +713,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
     let newPaymentsFound = 0;
     let autoAttributed = 0;
     let unmatched = 0;
+    let duplicatePaymentsSkipped = 0;
     const errors: string[] = [];
 
     if (sources.length === 0) {
@@ -724,6 +728,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
                     newPaymentsFound: 0,
                     autoAttributed: 0,
                     unmatched: 0,
+                    duplicatePaymentsSkipped: 0,
                     errors: []
                 })
             },
@@ -740,6 +745,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
             newPaymentsFound: 0,
             autoAttributed: 0,
             unmatched: 0,
+            duplicatePaymentsSkipped: 0,
             errors: []
         };
     }
@@ -760,17 +766,29 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
             });
 
             await client.connect();
-            const lock = await client.getMailboxLock(src.mailbox || "INBOX");
+            const mailboxName = src.mailbox || "INBOX";
+            const lock = await client.getMailboxLock(mailboxName);
 
             try {
-                // Fetch recent messages: look back 14 days or fetch last 60 messages
-                const sinceDate = new Date();
-                sinceDate.setDate(sinceDate.getDate() - 14);
-
-                const messages = client.fetch(
-                    { since: sinceDate },
-                    { uid: true, envelope: true, source: true }
-                );
+                let messages;
+                if (lookbackDays && lookbackDays > 0) {
+                    const sinceDate = new Date();
+                    sinceDate.setDate(sinceDate.getDate() - lookbackDays);
+                    logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Scanning source "${src.name}" (${src.user}) in mailbox "${mailboxName}" since ${sinceDate.toLocaleDateString()} (${lookbackDays} days lookback)`);
+                    messages = client.fetch(
+                        { since: sinceDate },
+                        { uid: true, envelope: true, source: true }
+                    );
+                } else {
+                    const status = await client.status(mailboxName, { messages: true });
+                    const totalMsgs = status.messages || 0;
+                    const startSeq = Math.max(1, totalMsgs - 300);
+                    logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Scanning source "${src.name}" (${src.user}) in mailbox "${mailboxName}" across sequence ${startSeq}:* (last ${totalMsgs - startSeq + 1} messages)`);
+                    messages = client.fetch(
+                        `${startSeq}:*`,
+                        { uid: true, envelope: true, source: true }
+                    );
+                }
 
                 let highestUid = src.lastUid || 0;
 
@@ -797,6 +815,8 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
 
                             if (!existing) {
                                 newPaymentsFound++;
+                                logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Detected inbound payment: ${scraped.provider} $${scraped.amount.toFixed(2)} from "${scraped.senderName || scraped.senderHandle || scraped.senderEmail || 'Unknown'}" (TxID: ${scraped.externalTxId})`);
+                                
                                 // Match with user
                                 const matchedUser = await matchPaymentToUser(scraped);
 
@@ -855,6 +875,8 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
                                         }
                                     });
                                 }
+                            } else {
+                                duplicatePaymentsSkipped++;
                             }
                         }
                     } catch (parseMsgErr: any) {
@@ -868,7 +890,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
                     data: {
                         lastScannedAt: new Date(),
                         lastUid: highestUid,
-                        lastStatus: `Active: Scanned OK at ${new Date().toLocaleTimeString()}`
+                        lastStatus: `Active: Scanned OK at ${new Date().toLocaleTimeString()} (${scannedMessages} msgs checked)`
                     }
                 });
 
@@ -905,6 +927,8 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
         newPaymentsFound,
         autoAttributed,
         unmatched,
+        duplicatePaymentsSkipped,
+        lookbackDays,
         errors
     };
 
@@ -929,6 +953,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string): Promise<{
         newPaymentsFound,
         autoAttributed,
         unmatched,
+        duplicatePaymentsSkipped,
         errors
     };
 }

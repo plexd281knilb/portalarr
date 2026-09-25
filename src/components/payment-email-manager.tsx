@@ -41,6 +41,7 @@ export default function PaymentEmailManager() {
     const [allUsers, setAllUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [scanning, setScanning] = useState(false);
+    const [scanLookback, setScanLookback] = useState("365");
     const [scanResult, setScanResult] = useState<any>(null);
 
     // Source Add/Edit Modal
@@ -223,7 +224,8 @@ export default function PaymentEmailManager() {
         setScanning(true);
         setScanResult(null);
         try {
-            const res = await scanPaymentEmailsAction(sourceId);
+            const days = parseInt(scanLookback, 10) || 365;
+            const res = await scanPaymentEmailsAction(sourceId, days);
             setScanResult(res);
             loadData();
         } catch (err: any) {
@@ -341,11 +343,28 @@ export default function PaymentEmailManager() {
                             </CardDescription>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 bg-background/60 p-1 rounded-lg border border-border/60">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold px-1.5 hidden sm:inline">Lookback:</span>
+                                <Select value={scanLookback} onValueChange={setScanLookback}>
+                                    <SelectTrigger className="h-7 text-xs w-36 bg-background border-border/40 font-medium">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="365">Past 1 Year (365d)</SelectItem>
+                                        <SelectItem value="180">Past 6 Months (180d)</SelectItem>
+                                        <SelectItem value="90">Past 3 Months (90d)</SelectItem>
+                                        <SelectItem value="30">Past 30 Days</SelectItem>
+                                        <SelectItem value="14">Past 14 Days</SelectItem>
+                                        <SelectItem value="0">All Recent (300 msgs)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
                             <Button 
                                 onClick={() => handleRunScan()} 
                                 disabled={scanning || sources.length === 0}
-                                className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-2 text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+                                className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-2 text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer h-9 px-3.5"
                             >
                                 <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
                                 {scanning ? "Scanning Emails..." : "Scan All Emails Now"}
@@ -424,7 +443,8 @@ export default function PaymentEmailManager() {
                                 <p className="text-[11px] opacity-90">
                                     Found <strong className="text-foreground">{scanResult.newPaymentsFound}</strong> new payments (
                                     <span className="text-emerald-400 font-bold">{scanResult.autoAttributed} Auto-Attributed</span>,{" "}
-                                    <span className="text-amber-400 font-bold">{scanResult.unmatched} Unmatched</span>).
+                                    <span className="text-amber-400 font-bold">{scanResult.unmatched} Unmatched</span>
+                                    {scanResult.duplicatePaymentsSkipped ? `, ${scanResult.duplicatePaymentsSkipped} already processed in database` : ""}).
                                 </p>
                                 {scanResult.errors && scanResult.errors.length > 0 && (
                                     <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-red-300">
