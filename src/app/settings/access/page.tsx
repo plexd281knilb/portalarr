@@ -1209,6 +1209,11 @@ export default function AccessSettingsPage() {
                                                 return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
                                             }
 
+                                            // Inactive, expired, suspended, rejected, or pending accounts have 0 active libraries
+                                            if (isExpired || isSuspended || isRejected || isPending) {
+                                                return 0;
+                                            }
+
                                             let rawKeys: string[] = [];
                                             if (user.selectedPlexLibrarySectionIds) {
                                                 rawKeys = user.selectedPlexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
@@ -1217,7 +1222,7 @@ export default function AccessSettingsPage() {
                                             } else if (user.accountType === "KID" && (paymentSettings?.defaultKidsPlexLibraries || defaultKidsSelectedKeys.length > 0)) {
                                                 const raw = paymentSettings?.defaultKidsPlexLibraries || defaultKidsSelectedKeys.join(",");
                                                 rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                            } else if ((isTrial || user.status === "TRIAL") && (paymentSettings?.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
+                                            } else if (isTrial && (paymentSettings?.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
                                                 const raw = paymentSettings?.defaultTrialPlexLibraries || defaultTrialSelectedKeys.join(",");
                                                 rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
                                             } else if (paymentSettings?.defaultPlexLibraries || defaultSelectedKeys.length > 0) {
