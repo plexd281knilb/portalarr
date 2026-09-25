@@ -367,6 +367,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "parentalCategories" TEXT DEFAULT '["nudity","violence","profanity","alcohol","frightening"]',
                     "paymentEmailAutoScan" BOOLEAN NOT NULL DEFAULT 1,
                     "paymentEmailScanInterval" INTEGER DEFAULT 15,
+                    "paymentEmailLookbackDays" INTEGER DEFAULT 365,
                     "paymentLastScanAt" DATETIME,
                     "paymentLastScanResult" TEXT
                 );
@@ -482,6 +483,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["enabledServersForTagging", `ALTER TABLE "Settings" ADD COLUMN "enabledServersForTagging" TEXT;`],
                 ["paymentEmailAutoScan", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailAutoScan" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["paymentEmailScanInterval", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailScanInterval" INTEGER DEFAULT 15;`],
+                ["paymentEmailLookbackDays", `ALTER TABLE "Settings" ADD COLUMN "paymentEmailLookbackDays" INTEGER DEFAULT 365;`],
                 ["paymentLastScanAt", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanAt" DATETIME;`],
                 ["paymentLastScanResult", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanResult" TEXT;`],
                 ["dismissedHubs", `ALTER TABLE "Settings" ADD COLUMN "dismissedHubs" TEXT;`],

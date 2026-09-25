@@ -2573,18 +2573,10 @@ export async function revokePlexAccessForUserInternal(
             plexUsername: user.plexUsername
         };
 
-        const ownerUser = await getPlexOwnerUser(adminToken);
-        const isOwner = (ownerUser && matchesPlexUser(matchTarget, {
-            id: "",
-            serverId: "",
-            librarySectionIds: [],
-            user: ownerUser,
-            invitedEmail: ownerUser.email
-        })) || (user as any).role === "ADMIN";
-
-        if (isOwner) {
-            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is the Plex Server Owner or Administrator.`);
-            return { success: true, message: "Plex owner/admin access retained." };
+        const isAdmin = (user as any).role === "ADMIN";
+        if (isAdmin) {
+            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is a Portalarr Administrator.`);
+            return { success: true, message: "Plex administrator access retained." };
         }
 
         logger.addLog("INFO", "PLEX", `[REVOKE-PLEX-ACCESS] Revoking Plex library shares for user "${user.username}" across ${servers.length} servers...`);
@@ -3433,22 +3425,6 @@ export async function updateUserPlexLibraries(
             plexUsername: user.plexUsername
         };
 
-        // If user is the Plex Server Owner, owner already has full, unrestricted access to all servers.
-        const ownerUser = await getPlexOwnerUser(adminToken);
-        const isOwner = ownerUser && matchesPlexUser(matchTarget, {
-            id: "",
-            serverId: "",
-            librarySectionIds: [],
-            user: ownerUser,
-            invitedEmail: ownerUser.email
-        });
-
-        if (isOwner) {
-            logger.addLog("INFO", "PLEX", `[ACTION] User "${user.username}" is the Plex Server Owner. All server libraries are inherently accessible on Plex. Skipping cloud share creation.`);
-            revalidatePath("/settings/access");
-            return { success: true, message: `Saved library preferences for ${user.username} (Server Owner has unrestricted Plex access).` };
-        }
-
         // If KEEP_SUSPENDED was selected, do not grant access on Plex
         if (activationType === "KEEP_SUSPENDED") {
             for (const srv of servers) {
@@ -3512,13 +3488,23 @@ export async function updateUserPlexLibraries(
                     if (!upRes.success) {
                         const invRes = await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
                         if (!invRes.success) {
-                            shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                            const errLower = (invRes.error || upRes.error || "").toLowerCase();
+                            if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                                logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${targetEmail || targetUser}" is owner of "${srv.name}". Full access active.`);
+                            } else {
+                                shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                            }
                         }
                     }
                 } else if (targetEmail || targetUser || friendId) {
                     const invRes = await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
                     if (!invRes.success) {
-                        shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                        const errLower = (invRes.error || "").toLowerCase();
+                        if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                            logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${targetEmail || targetUser}" is owner of "${srv.name}". Full access active.`);
+                        } else {
+                            shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                        }
                     }
                 }
             }
@@ -3775,19 +3761,6 @@ export async function syncUserPlexShareInternal(
             plexUsername: targetUser.plexUsername
         };
 
-        const ownerUser = await getPlexOwnerUser(adminToken);
-        const isOwner = ownerUser && matchesPlexUser(matchTarget, {
-            id: "",
-            serverId: "",
-            librarySectionIds: [],
-            user: ownerUser,
-            invitedEmail: ownerUser.email
-        });
-
-        if (isOwner) {
-            return { success: true };
-        }
-
         const shareErrors: string[] = [];
         for (const srv of (servers || [])) {
             const srvId = srv.clientIdentifier;
@@ -3837,13 +3810,23 @@ export async function syncUserPlexShareInternal(
                     if (!upRes.success) {
                         const invRes = await invitePlexFriendAndShare(adminToken, srvId, resolvedEmail || resolvedUser, targetSectionIds, friendId);
                         if (!invRes.success) {
-                            shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                            const errLower = (invRes.error || upRes.error || "").toLowerCase();
+                            if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                                logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${resolvedEmail || resolvedUser}" is owner of "${srv.name}". Full access active.`);
+                            } else {
+                                shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                            }
                         }
                     }
                 } else if (resolvedEmail || resolvedUser || friendId) {
                     const invRes = await invitePlexFriendAndShare(adminToken, srvId, resolvedEmail || resolvedUser, targetSectionIds, friendId);
                     if (!invRes.success) {
-                        shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                        const errLower = (invRes.error || "").toLowerCase();
+                        if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                            logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${resolvedEmail || resolvedUser}" is owner of "${srv.name}". Full access active.`);
+                        } else {
+                            shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                        }
                     }
                 }
             }

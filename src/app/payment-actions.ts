@@ -62,6 +62,7 @@ export async function getPaymentEmailSources() {
             config: {
                 paymentEmailAutoScan: settings?.paymentEmailAutoScan ?? true,
                 paymentEmailScanInterval: settings?.paymentEmailScanInterval ?? 15,
+                paymentEmailLookbackDays: (settings as any)?.paymentEmailLookbackDays ?? 365,
                 paymentLastScanAt: settings?.paymentLastScanAt,
                 paymentLastScanResult: settings?.paymentLastScanResult ? JSON.parse(settings.paymentLastScanResult) : null
             }
@@ -422,18 +423,30 @@ export async function savePaymentEmailScraperConfig(formData: FormData) {
         await verifyAdmin();
         const paymentEmailAutoScan = formData.get("paymentEmailAutoScan") === "true";
         const paymentEmailScanInterval = parseInt((formData.get("paymentEmailScanInterval") as string) || "15", 10) || 15;
+        const lookbackRaw = formData.get("paymentEmailLookbackDays");
+        const paymentEmailLookbackDays = lookbackRaw !== null ? (parseInt(lookbackRaw as string, 10) || 365) : undefined;
+
+        const updateData: any = {
+            paymentEmailAutoScan,
+            paymentEmailScanInterval
+        };
+        if (paymentEmailLookbackDays !== undefined) {
+            updateData.paymentEmailLookbackDays = paymentEmailLookbackDays;
+        }
+
+        const createData: any = {
+            id: "global",
+            paymentEmailAutoScan,
+            paymentEmailScanInterval
+        };
+        if (paymentEmailLookbackDays !== undefined) {
+            createData.paymentEmailLookbackDays = paymentEmailLookbackDays;
+        }
 
         await prisma.settings.upsert({
             where: { id: "global" },
-            update: {
-                paymentEmailAutoScan,
-                paymentEmailScanInterval
-            },
-            create: {
-                id: "global",
-                paymentEmailAutoScan,
-                paymentEmailScanInterval
-            }
+            update: updateData,
+            create: createData
         });
 
         revalidatePath("/settings");

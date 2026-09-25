@@ -251,6 +251,7 @@ model Settings {
   // Payment Email Scraper & Verification Controls
   paymentEmailAutoScan             Boolean   @default(true)
   paymentEmailScanInterval         Int?      @default(15) // Minutes interval between auto-scans
+  paymentEmailLookbackDays         Int?      @default(365) // Default lookback window in days
   paymentLastScanAt                DateTime?
   paymentLastScanResult            String?   // JSON telemetry summary
 

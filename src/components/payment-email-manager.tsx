@@ -35,6 +35,7 @@ export default function PaymentEmailManager() {
     const [config, setConfig] = useState<any>({
         paymentEmailAutoScan: true,
         paymentEmailScanInterval: 15,
+        paymentEmailLookbackDays: 365,
         paymentLastScanAt: null,
         paymentLastScanResult: null
     });
@@ -86,7 +87,12 @@ export default function PaymentEmailManager() {
 
             if (sourcesRes.success) {
                 setSources(sourcesRes.sources || []);
-                if (sourcesRes.config) setConfig(sourcesRes.config);
+                if (sourcesRes.config) {
+                    setConfig(sourcesRes.config);
+                    if (sourcesRes.config.paymentEmailLookbackDays !== undefined && sourcesRes.config.paymentEmailLookbackDays !== null) {
+                        setScanLookback(String(sourcesRes.config.paymentEmailLookbackDays));
+                    }
+                }
             }
             if (txRes.success) {
                 setTransactions(txRes.transactions || []);
@@ -240,11 +246,27 @@ export default function PaymentEmailManager() {
         const formData = new FormData();
         formData.append("paymentEmailAutoScan", String(enabled));
         formData.append("paymentEmailScanInterval", String(interval));
+        formData.append("paymentEmailLookbackDays", String(config.paymentEmailLookbackDays ?? 365));
         await savePaymentEmailScraperConfig(formData);
         setConfig((prev: any) => ({
             ...prev,
             paymentEmailAutoScan: enabled,
             paymentEmailScanInterval: interval
+        }));
+    };
+
+    const handleLookbackChange = async (val: string) => {
+        setScanLookback(val);
+        const days = parseInt(val, 10);
+        const lookbackDays = isNaN(days) ? 365 : days;
+        const formData = new FormData();
+        formData.append("paymentEmailAutoScan", String(config.paymentEmailAutoScan ?? true));
+        formData.append("paymentEmailScanInterval", String(config.paymentEmailScanInterval ?? 15));
+        formData.append("paymentEmailLookbackDays", String(lookbackDays));
+        await savePaymentEmailScraperConfig(formData);
+        setConfig((prev: any) => ({
+            ...prev,
+            paymentEmailLookbackDays: lookbackDays
         }));
     };
 
@@ -364,7 +386,7 @@ export default function PaymentEmailManager() {
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
                             <div className="flex items-center gap-1.5 bg-background/60 p-1 rounded-lg border border-border/60">
                                 <span className="text-[10px] text-muted-foreground uppercase font-bold px-1.5 hidden sm:inline">Lookback:</span>
-                                <Select value={scanLookback} onValueChange={setScanLookback}>
+                                <Select value={scanLookback} onValueChange={handleLookbackChange}>
                                     <SelectTrigger className="h-7 text-xs w-36 bg-background border-border/40 font-medium">
                                         <SelectValue />
                                     </SelectTrigger>
