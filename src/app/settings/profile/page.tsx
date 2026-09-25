@@ -84,6 +84,8 @@ export default function UserProfilePage() {
     const [notifErr, setNotifErr] = useState("");
 
     // Content Safety Preferences State
+    const [selectedSafetyUserId, setSelectedSafetyUserId] = useState<string>("");
+    const [loadingSafetyPrefs, setLoadingSafetyPrefs] = useState(false);
     const [contentPrefs, setContentPrefs] = useState({
         maxContentRating: "ALL",
         hideLeavingSoon: false,
@@ -372,6 +374,9 @@ export default function UserProfilePage() {
                     setSubAccounts(subRes.subAccounts || []);
                     if (subRes.limits) setSubLimits(subRes.limits);
                 }
+                if (selectedSafetyUserId === id) {
+                    handleSelectSafetyAccount(user?.id);
+                }
                 setDeleteSubConfirmId(null);
             }
         } catch (err) {
@@ -485,13 +490,43 @@ export default function UserProfilePage() {
         }
     };
 
+    const handleSelectSafetyAccount = async (targetId: string) => {
+        const effectiveId = targetId || user?.id || "";
+        setSelectedSafetyUserId(effectiveId);
+        setLoadingSafetyPrefs(true);
+        setContentMsg("");
+        setContentErr("");
+        try {
+            const contentRes = await getUserContentPreferencesAction(effectiveId);
+            if (contentRes?.success && contentRes.preferences) {
+                setContentPrefs({
+                    maxContentRating: contentRes.preferences.maxContentRating || "ALL",
+                    hideLeavingSoon: Boolean(contentRes.preferences.hideLeavingSoon),
+                    hideHorror: Boolean(contentRes.preferences.hideHorror),
+                    hideNsfw: Boolean(contentRes.preferences.hideNsfw),
+                    hideGore: Boolean(contentRes.preferences.hideGore),
+                    excludedGenresList: contentRes.preferences.excludedGenresList || [],
+                    excludedTagsList: contentRes.preferences.excludedTagsList || []
+                });
+            } else if (contentRes?.error) {
+                setContentErr(contentRes.error);
+            }
+        } catch (err: any) {
+            setContentErr(err.message || "Failed to load preferences for selected account");
+        } finally {
+            setLoadingSafetyPrefs(false);
+        }
+    };
+
     const handleSaveContentSafety = async (e: React.FormEvent) => {
         e.preventDefault();
         setSavingContent(true);
         setContentMsg("");
         setContentErr("");
         try {
+            const targetId = selectedSafetyUserId || user?.id;
             const res = await updateUserContentPreferencesAction({
+                targetUserId: targetId,
                 maxContentRating: contentPrefs.maxContentRating,
                 hideLeavingSoon: contentPrefs.hideLeavingSoon,
                 hideHorror: contentPrefs.hideHorror,
@@ -501,7 +536,11 @@ export default function UserProfilePage() {
                 excludedTags: contentPrefs.excludedTagsList
             });
             if (res.success) {
-                setContentMsg(res.message || "Content safety preferences saved!");
+                const targetSub = subAccounts.find(s => s.id === targetId);
+                const targetName = targetSub 
+                    ? `"${targetSub.subAccountLabel || (targetSub.accountType === "KID" ? "Kids Account" : "Living Room")}"`
+                    : "Primary Account";
+                setContentMsg(`Content safety preferences saved for ${targetName}!`);
                 setTimeout(() => setContentMsg(""), 4000);
             } else {
                 setContentErr(res.error || "Failed to save preferences");
@@ -1480,7 +1519,90 @@ export default function UserProfilePage() {
                         </Badge>
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                    {/* ACCOUNT SELECTOR BAR */}
+                    <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <Users className="h-3.5 w-3.5 text-amber-400" />
+                                Select Account to Configure:
+                            </Label>
+                            {loadingSafetyPrefs && (
+                                <span className="text-[11px] text-amber-400 flex items-center gap-1">
+                                    <Loader2 className="h-3 w-3 animate-spin" /> Loading profile rules...
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            {/* Primary Account Button */}
+                            <button
+                                type="button"
+                                onClick={() => handleSelectSafetyAccount(user?.id)}
+                                disabled={loadingSafetyPrefs}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                                    (!selectedSafetyUserId || selectedSafetyUserId === user?.id)
+                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-sm ring-1 ring-amber-500/40"
+                                        : "bg-background/70 text-muted-foreground border-border/40 hover:text-foreground hover:bg-background"
+                                }`}
+                            >
+                                <Crown className="h-4 w-4 text-amber-400 shrink-0" />
+                                <div className="text-left">
+                                    <div>{user?.username || "My Account"} <span className="text-[10px] opacity-75 font-normal">(Primary)</span></div>
+                                </div>
+                            </button>
+
+                            {/* Sub-Accounts Buttons */}
+                            {subAccounts.map((sub) => {
+                                const isSelected = selectedSafetyUserId === sub.id;
+                                const isKid = sub.accountType === "KID";
+                                return (
+                                    <button
+                                        key={sub.id}
+                                        type="button"
+                                        onClick={() => handleSelectSafetyAccount(sub.id)}
+                                        disabled={loadingSafetyPrefs}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                                            isSelected
+                                                ? isKid
+                                                    ? "bg-purple-500/20 text-purple-300 border-purple-500/60 shadow-sm ring-1 ring-purple-500/40"
+                                                    : "bg-blue-500/20 text-blue-300 border-blue-500/60 shadow-sm ring-1 ring-blue-500/40"
+                                                : "bg-background/70 text-muted-foreground border-border/40 hover:text-foreground hover:bg-background"
+                                        }`}
+                                    >
+                                        {isKid ? (
+                                            <Baby className="h-4 w-4 text-purple-400 shrink-0" />
+                                        ) : (
+                                            <Tv className="h-4 w-4 text-blue-400 shrink-0" />
+                                        )}
+                                        <div className="text-left">
+                                            <div>
+                                                {sub.subAccountLabel || (isKid ? "Kids Account" : "Living Room")}
+                                                <span className="text-[10px] opacity-75 font-normal ml-1">
+                                                    ({isKid ? "Kids" : "Living Room"})
+                                                </span>
+                                            </div>
+                                            {(sub.plexUsername || sub.plexEmail) && (
+                                                <div className="text-[10px] font-mono text-muted-foreground font-normal">
+                                                    {sub.plexUsername || sub.plexEmail}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {subAccounts.length === 0 && (
+                            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                                <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
+                                <span>
+                                    Currently configuring primary account. You can create separate <strong>Kids</strong> and <strong>Living Room</strong> profiles in the <a href="#subaccounts" className="text-amber-400 underline underline-offset-2 hover:text-amber-300">Household Sub-Accounts</a> section below to configure independent parental restrictions.
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
                     <form onSubmit={handleSaveContentSafety} className="space-y-4">
                         {contentMsg && (
                             <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
@@ -1495,7 +1617,7 @@ export default function UserProfilePage() {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 transition-opacity ${loadingSafetyPrefs ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold">Maximum Content Rating Ceiling</Label>
                                 <Select 
@@ -1513,7 +1635,7 @@ export default function UserProfilePage() {
                                         <SelectItem value="R">R / TV-MA (Mature 17+)</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <p className="text-[11px] text-muted-foreground">Titles exceeding this rating are hidden from discovery and search.</p>
+                                <p className="text-[11px] text-muted-foreground">Titles exceeding this rating are hidden from discovery and search for this profile.</p>
                             </div>
 
                             <div className="space-y-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
@@ -1569,7 +1691,7 @@ export default function UserProfilePage() {
 
                         <Button
                             type="submit"
-                            disabled={savingContent}
+                            disabled={savingContent || loadingSafetyPrefs}
                             className="w-full sm:w-auto font-bold text-xs h-9 bg-amber-600 hover:bg-amber-500 text-white gap-2 transition-all hover:ring-2 hover:ring-amber-400/40 active:scale-95"
                         >
                             {savingContent ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}

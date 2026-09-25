@@ -4760,7 +4760,21 @@ export async function getUserContentPreferencesAction(targetUserId?: string) {
     const currentUser = await getCurrentUser();
     if (!currentUser) throw new Error("Unauthorized");
 
-    const userId = targetUserId && currentUser.role === "ADMIN" ? targetUserId : currentUser.id;
+    let userId = currentUser.id;
+    if (targetUserId && targetUserId !== currentUser.id) {
+        if (currentUser.role === "ADMIN" || currentUser.role === "SUPER_USER") {
+            userId = targetUserId;
+        } else {
+            const isSub = await prisma.user.findFirst({
+                where: { id: targetUserId, parentUserId: currentUser.id }
+            });
+            if (isSub) {
+                userId = targetUserId;
+            } else {
+                throw new Error("Unauthorized to access sub-account preferences");
+            }
+        }
+    }
 
     try {
         const preference = await prisma.userContentPreference.findUnique({
@@ -4796,7 +4810,21 @@ export async function saveUserContentPreferencesAction(preferences: {
     const currentUser = await getCurrentUser();
     if (!currentUser) throw new Error("Unauthorized");
 
-    const userId = targetUserId && currentUser.role === "ADMIN" ? targetUserId : currentUser.id;
+    let userId = currentUser.id;
+    if (targetUserId && targetUserId !== currentUser.id) {
+        if (currentUser.role === "ADMIN" || currentUser.role === "SUPER_USER") {
+            userId = targetUserId;
+        } else {
+            const isSub = await prisma.user.findFirst({
+                where: { id: targetUserId, parentUserId: currentUser.id }
+            });
+            if (isSub) {
+                userId = targetUserId;
+            } else {
+                throw new Error("Unauthorized to save sub-account preferences");
+            }
+        }
+    }
 
     try {
         const updated = await prisma.userContentPreference.upsert({

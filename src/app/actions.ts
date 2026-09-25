@@ -4358,25 +4358,42 @@ export async function updateUserNotificationPreferencesAction(data: {
     }
 }
 
-export async function getUserContentPreferencesAction() {
+export async function getUserContentPreferencesAction(targetUserId?: string) {
     try {
         await ensureSchemaColumns();
         const user: any = await verifyUser();
+        
+        let effectiveUserId = user.id;
+        if (targetUserId && targetUserId !== user.id) {
+            // Check if caller is admin or if targetUserId is a sub-account of user.id
+            const isSub = await prisma.user.findFirst({
+                where: { id: targetUserId, parentUserId: user.id }
+            });
+            if (!isSub && user.role !== "ADMIN" && user.role !== "SUPER_USER") {
+                return { success: false, error: "Unauthorized access to content preferences" };
+            }
+            effectiveUserId = targetUserId;
+        }
+
         let pref = await prisma.userContentPreference.findUnique({
-            where: { userId: user.id }
+            where: { userId: effectiveUserId }
         });
 
         if (!pref) {
+            const targetUser = await prisma.user.findUnique({ where: { id: effectiveUserId } });
+            const isKid = targetUser?.accountType === "KID";
+            const isLivingRoom = targetUser?.accountType === "LIVING_ROOM";
+
             pref = await prisma.userContentPreference.create({
                 data: {
-                    userId: user.id,
-                    maxContentRating: "ALL",
+                    userId: effectiveUserId,
+                    maxContentRating: isKid ? "PG" : "ALL",
                     hideLeavingSoon: false,
-                    hideHorror: false,
-                    hideNsfw: false,
-                    hideGore: false,
+                    hideHorror: isKid,
+                    hideNsfw: isKid || isLivingRoom,
+                    hideGore: isKid,
                     excludedGenres: JSON.stringify([]),
-                    excludedTags: JSON.stringify([])
+                    excludedTags: isLivingRoom ? JSON.stringify(["IMDb:Severe:Nudity", "Severe Nudity", "Nudity:Severe"]) : JSON.stringify([])
                 }
             });
         }
@@ -4384,8 +4401,20 @@ export async function getUserContentPreferencesAction() {
         let parsedGenres: string[] = [];
         let parsedTags: string[] = [];
         try {
-            if (pref.excludedGenres) parsedGenres = JSON.parse(pref.excludedGenres);
-            if (pref.excludedTags) parsedTags = JSON.parse(pref.excludedTags);
+            if (pref.excludedGenres) {
+                if (pref.excludedGenres.startsWith("[")) {
+                    parsedGenres = JSON.parse(pref.excludedGenres);
+                } else {
+                    parsedGenres = pref.excludedGenres.split(",").map(s => s.trim()).filter(Boolean);
+                }
+            }
+            if (pref.excludedTags) {
+                if (pref.excludedTags.startsWith("[")) {
+                    parsedTags = JSON.parse(pref.excludedTags);
+                } else {
+                    parsedTags = pref.excludedTags.split(",").map(s => s.trim()).filter(Boolean);
+                }
+            }
         } catch (e) {}
 
         return {
@@ -4402,6 +4431,7 @@ export async function getUserContentPreferencesAction() {
 }
 
 export async function updateUserContentPreferencesAction(data: {
+    targetUserId?: string;
     maxContentRating?: string | null;
     hideLeavingSoon?: boolean;
     hideHorror?: boolean;
@@ -4414,8 +4444,19 @@ export async function updateUserContentPreferencesAction(data: {
         await ensureSchemaColumns();
         const user: any = await verifyUser();
 
+        let effectiveUserId = user.id;
+        if (data.targetUserId && data.targetUserId !== user.id) {
+            const isSub = await prisma.user.findFirst({
+                where: { id: data.targetUserId, parentUserId: user.id }
+            });
+            if (!isSub && user.role !== "ADMIN" && user.role !== "SUPER_USER") {
+                return { success: false, error: "Unauthorized access to content preferences" };
+            }
+            effectiveUserId = data.targetUserId;
+        }
+
         const updated = await prisma.userContentPreference.upsert({
-            where: { userId: user.id },
+            where: { userId: effectiveUserId },
             update: {
                 maxContentRating: data.maxContentRating || "ALL",
                 hideLeavingSoon: Boolean(data.hideLeavingSoon),
@@ -4426,7 +4467,7 @@ export async function updateUserContentPreferencesAction(data: {
                 excludedTags: JSON.stringify(data.excludedTags || [])
             },
             create: {
-                userId: user.id,
+                userId: effectiveUserId,
                 maxContentRating: data.maxContentRating || "ALL",
                 hideLeavingSoon: Boolean(data.hideLeavingSoon),
                 hideHorror: Boolean(data.hideHorror),
