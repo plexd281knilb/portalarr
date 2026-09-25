@@ -24,7 +24,8 @@ import {
     updateUserMembershipTierAction,
     toggleAdminAddonAvailabilityAction,
     getAvailableAddonsAction,
-    restoreAllUsersPlexAccessAction
+    restoreAllUsersPlexAccessAction,
+    forceRevokePlexAccessAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
@@ -249,6 +250,8 @@ export default function AccessSettingsPage() {
         }
     }, []);
 
+    const [revokingUserId, setRevokingUserId] = useState<string | null>(null);
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         const formData = new FormData(e.target as HTMLFormElement);
@@ -263,11 +266,35 @@ export default function AccessSettingsPage() {
         const res = await syncPlexFriendsAction();
         setSyncingPlex(false);
         if (res.success) {
-            setSyncMessage(`Synced ${res.totalFriends} Plex friends (${res.addedCount} added, ${res.updatedCount} updated).`);
+            let msg = `Synced ${res.totalFriends} Plex friends (${res.addedCount} added, ${res.updatedCount} updated).`;
+            if (res.securityLeaksRemediatedCount && res.securityLeaksRemediatedCount > 0) {
+                msg += ` 🚨 Automatically revoked unauthorized Plex access for ${res.securityLeaksRemediatedCount} inactive users (${(res.securityAlertUsers || []).join(", ")}).`;
+            }
+            setSyncMessage(msg);
             loadUsers();
             loadLibraries();
         } else {
             setSyncMessage(res.error || "Failed to sync Plex friends.");
+        }
+    };
+
+    const handleForceRevoke = async (userId: string, username: string) => {
+        if (!confirm(`Are you sure you want to immediately revoke all Plex library access and terminate active playback sessions for ${username}?`)) {
+            return;
+        }
+        setRevokingUserId(userId);
+        try {
+            const res = await forceRevokePlexAccessAction(userId);
+            if (res.success) {
+                await loadUsers();
+                await loadLibraries();
+            } else {
+                alert(res.error || "Failed to revoke Plex access.");
+            }
+        } catch (e: any) {
+            alert(e.message || "An error occurred.");
+        } finally {
+            setRevokingUserId(null);
         }
     };
 
@@ -840,6 +867,14 @@ export default function AccessSettingsPage() {
 
     const pendingUsersCount = users.filter(u => u.status === "PENDING").length;
 
+    // Detect any inactive users who still retain active Plex library access (Security Breach)
+    const usersWithSecurityLeaks = users.filter(u => {
+        const isInactive = u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED" || u.status === "PENDING";
+        const isAdmin = u.role === "ADMIN";
+        if (!isInactive || isAdmin) return false;
+        return !!(u.plexLibrarySectionIds && u.plexLibrarySectionIds.trim().length > 0);
+    });
+
     // Filter users
     const filteredUsers = users.filter(u => {
         const matchStatus = 
@@ -1117,6 +1152,32 @@ export default function AccessSettingsPage() {
                                 </div>
                             </div>
 
+                            {usersWithSecurityLeaks.length > 0 && (
+                                <div className="bg-red-500/15 border-2 border-red-500/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-red-200 animate-pulse shadow-lg shadow-red-950/40">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <ShieldAlert className="h-6 w-6 text-red-400 shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="font-bold text-sm text-red-200">
+                                                🚨 CRITICAL SECURITY ALERT: {usersWithSecurityLeaks.length} Inactive User{usersWithSecurityLeaks.length > 1 ? "s Retain" : " Retains"} Active Plex Access!
+                                            </div>
+                                            <div className="text-xs text-red-300/80 truncate">
+                                                {usersWithSecurityLeaks.map(u => `${u.username} (${u.status})`).join(", ")} {usersWithSecurityLeaks.length > 1 ? "have" : "has"} active Plex shares that should be immediately revoked.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Button 
+                                        variant="destructive" 
+                                        size="sm" 
+                                        className="font-bold bg-red-600 hover:bg-red-500 text-white gap-2 shadow shrink-0 active:scale-95 whitespace-nowrap"
+                                        disabled={syncingPlex}
+                                        onClick={handleSyncPlex}
+                                    >
+                                        {syncingPlex ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}
+                                        Scan & Auto-Revoke All Leaks
+                                    </Button>
+                                </div>
+                            )}
+
                             {restoreStatusMsg && (
                                 <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground">
                                     <div className="flex items-center gap-2">
@@ -1178,10 +1239,19 @@ export default function AccessSettingsPage() {
                                     <Button 
                                         variant={filterStatus === "INACTIVE" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 text-red-400 transition-all duration-200 hover:ring-2 hover:ring-red-400/40 active:scale-95 font-semibold"
+                                        className={`h-7 text-xs px-2.5 transition-all duration-200 active:scale-95 font-semibold ${
+                                            usersWithSecurityLeaks.length > 0 
+                                                ? "text-red-400 font-bold hover:ring-2 hover:ring-red-500/50" 
+                                                : "text-red-400 hover:ring-2 hover:ring-red-400/40"
+                                        }`}
                                         onClick={() => setFilterStatus("INACTIVE")}
                                     >
                                         Inactive ({users.filter(u => u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED").length})
+                                        {usersWithSecurityLeaks.length > 0 && (
+                                            <Badge variant="destructive" className="ml-1 px-1 py-0 text-[9px] font-mono animate-pulse">
+                                                ⚠️ {usersWithSecurityLeaks.length}
+                                            </Badge>
+                                        )}
                                     </Button>
                                 </div>
                             </div>
@@ -1203,14 +1273,61 @@ export default function AccessSettingsPage() {
                                         const isExpired = user.status === "EXPIRED";
                                         const isPending = user.status === "PENDING";
                                         const isRejected = user.status === "REJECTED";
+                                        const isInactive = isExpired || isSuspended || isRejected || isPending;
+                                        const isAdmin = user.role === "ADMIN";
                                         const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
+
+                                        // Calculate actual active libraries scanned from Plex
+                                        const actualPlexShareCount = (() => {
+                                            if (isAdmin && serverLibraries && serverLibraries.length > 0) {
+                                                return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
+                                            }
+                                            if (!user.plexLibrarySectionIds || !user.plexLibrarySectionIds.trim()) {
+                                                return 0;
+                                            }
+                                            const rawKeys = user.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            if (rawKeys.length === 0) return 0;
+                                            if (serverLibraries && serverLibraries.length > 0) {
+                                                let count = 0;
+                                                for (const srv of serverLibraries) {
+                                                    for (const sec of srv.sections || []) {
+                                                        const fullKey = `${srv.serverId}:${sec.id}`;
+                                                        const altFullKey = sec.key ? `${srv.serverId}:${sec.key}` : null;
+                                                        const rawKey = String(sec.id);
+                                                        const altRawKey = sec.key ? String(sec.key) : null;
+                                                        if (
+                                                            rawKeys.includes(fullKey) || 
+                                                            (altFullKey && rawKeys.includes(altFullKey)) || 
+                                                            rawKeys.includes(rawKey) || 
+                                                            (altRawKey && rawKeys.includes(altRawKey)) ||
+                                                            rawKeys.some((k: string) => {
+                                                                const clean = k.includes(":") ? k.split(":")[1] : k;
+                                                                return clean === String(sec.id) || (sec.key && clean === String(sec.key));
+                                                            })
+                                                        ) {
+                                                            count++;
+                                                        }
+                                                    }
+                                                }
+                                                if (count > 0) return count;
+                                            }
+                                            return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
+                                        })();
+
+                                        // Security leak: inactive account that still retains active shares on Plex
+                                        const hasSecurityLeak = isInactive && !isAdmin && actualPlexShareCount > 0;
+
                                         const userLibraryCount = (() => {
-                                            if (user.role === "ADMIN" && serverLibraries && serverLibraries.length > 0) {
+                                            if (isAdmin && serverLibraries && serverLibraries.length > 0) {
                                                 return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
                                             }
 
-                                            // Inactive, expired, suspended, rejected, or pending accounts have 0 active libraries
-                                            if (isExpired || isSuspended || isRejected || isPending) {
+                                            if (hasSecurityLeak) {
+                                                return actualPlexShareCount;
+                                            }
+
+                                            // Clean inactive account with no shares
+                                            if (isInactive) {
                                                 return 0;
                                             }
 
@@ -1246,7 +1363,7 @@ export default function AccessSettingsPage() {
                                                             (altFullKey && rawKeys.includes(altFullKey)) || 
                                                             rawKeys.includes(rawKey) || 
                                                             (altRawKey && rawKeys.includes(altRawKey)) ||
-                                                            rawKeys.some(k => {
+                                                            rawKeys.some((k: string) => {
                                                                 const clean = k.includes(":") ? k.split(":")[1] : k;
                                                                 return clean === String(sec.id) || (sec.key && clean === String(sec.key));
                                                             })
@@ -1264,13 +1381,54 @@ export default function AccessSettingsPage() {
                                             <div 
                                                 key={user.id} 
                                                 className={`p-4 rounded-xl border transition-all duration-200 space-y-3 ${
-                                                    isPending 
+                                                    hasSecurityLeak
+                                                        ? "bg-red-950/30 border-2 border-red-500 shadow-lg shadow-red-950/50"
+                                                        : isPending 
                                                         ? "bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60" 
                                                         : isSuspended || isExpired || isRejected
                                                         ? "bg-red-500/5 border-red-500/30 hover:border-red-500/50"
                                                         : "bg-[#101014]/90 border-border/50 hover:border-primary/40 hover:shadow-sm"
                                                 }`}
                                             >
+                                                {/* SECURITY LEAK BANNER */}
+                                                {hasSecurityLeak && (
+                                                    <div className="bg-red-500/20 border border-red-500/60 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <ShieldAlert className="h-5 w-5 text-red-400 shrink-0 animate-bounce" />
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs font-bold text-red-200 flex items-center gap-1.5 flex-wrap">
+                                                                    <span>🚨 CRITICAL SECURITY LEAK: Unauthorized Plex Access Detected</span>
+                                                                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-mono uppercase">
+                                                                        {user.status}
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="text-[11px] text-red-300/90 mt-0.5">
+                                                                    This account is inactive ({user.status}) but still retains active sharing permissions for <span className="font-bold underline text-white">{actualPlexShareCount} Plex librar{actualPlexShareCount === 1 ? "y" : "ies"}</span> on the server.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="destructive" 
+                                                            className="h-8 px-3 text-xs font-bold gap-1.5 bg-red-600 hover:bg-red-500 text-white shadow-md shrink-0 active:scale-95 whitespace-nowrap"
+                                                            onClick={() => handleForceRevoke(user.id, user.username)}
+                                                            disabled={revokingUserId === user.id}
+                                                            title="Immediately revoke all Plex shares and terminate active playback sessions"
+                                                        >
+                                                            {revokingUserId === user.id ? (
+                                                                <>
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                    Revoking...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <ShieldAlert className="h-3.5 w-3.5" />
+                                                                    🚨 Revoke Now
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                )}
                                                 {/* TOP ROW: USER INFO & BADGES */}
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                                                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1456,11 +1614,21 @@ export default function AccessSettingsPage() {
 
                                                     {/* PLEX LIBRARIES */}
                                                     <div className="flex items-center gap-1.5 truncate">
-                                                        <Layers className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                        <Layers className={`h-3.5 w-3.5 shrink-0 ${hasSecurityLeak ? "text-red-400 animate-pulse" : "text-primary"}`} />
                                                         <span className="text-muted-foreground">Libraries:</span>
-                                                        <span className="font-semibold text-foreground truncate">
-                                                            {userLibraryCount > 0 ? `${userLibraryCount} server libraries` : "None configured"}
-                                                        </span>
+                                                        {hasSecurityLeak ? (
+                                                            <span className="font-bold text-red-400 truncate flex items-center gap-1">
+                                                                ⚠️ {actualPlexShareCount} active on Plex (Security Leak)
+                                                            </span>
+                                                        ) : isInactive && !isAdmin ? (
+                                                            <span className="text-muted-foreground truncate italic">
+                                                                None (0 active - {user.status.toLowerCase()})
+                                                            </span>
+                                                        ) : (
+                                                            <span className="font-semibold text-foreground truncate">
+                                                                {userLibraryCount > 0 ? `${userLibraryCount} server libraries` : "None configured"}
+                                                            </span>
+                                                        )}
                                                     </div>
 
                                                     {/* JOINED & ACTIVITY */}
@@ -1511,11 +1679,19 @@ export default function AccessSettingsPage() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="outline" 
-                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-primary/40 hover:border-primary hover:bg-primary/10 transition-all active:scale-95"
+                                                            className={`h-8 px-2.5 text-xs font-semibold gap-1.5 transition-all active:scale-95 ${
+                                                                hasSecurityLeak 
+                                                                    ? "border-red-500/60 text-red-400 hover:bg-red-500/20 hover:border-red-500 font-bold" 
+                                                                    : "border-primary/40 hover:border-primary hover:bg-primary/10"
+                                                            }`}
                                                             onClick={() => handleOpenLibrariesModal(user)}
                                                             title="Manage Shared Plex Libraries"
                                                         >
-                                                            <Layers className="h-3.5 w-3.5 text-primary" />
+                                                            {hasSecurityLeak ? (
+                                                                <ShieldAlert className="h-3.5 w-3.5 text-red-400 animate-pulse" />
+                                                            ) : (
+                                                                <Layers className="h-3.5 w-3.5 text-primary" />
+                                                            )}
                                                             Manage Libraries ({userLibraryCount})
                                                         </Button>
 

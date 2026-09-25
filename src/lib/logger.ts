@@ -6,6 +6,7 @@ export type LogCategory =
     | "AI_AGENT" 
     | "COVER" 
     | "AUTH" 
+    | "SECURITY"
     | "KINDLE" 
     | "EMAIL" 
     | "APPS" 

@@ -12543,6 +12543,8 @@ export async function syncPlexFriendsInternal() {
         let addedCount = 0;
         let updatedCount = 0;
         let revokedCount = 0;
+        let securityLeaksRemediatedCount = 0;
+        const securityAlertUsers: string[] = [];
 
         // Auto-recover any ADMIN whose status was inadvertently set to EXPIRED or SUSPENDED
         for (const u of dbUsers) {
@@ -12670,17 +12672,22 @@ export async function syncPlexFriendsInternal() {
                 const isImmuneRole = existingUser.role === "ADMIN";
                 const userMatchedShares = sharesList.filter(s => matchesPlexUser(existingUser, s));
 
-                // If user is suspended, expired, or rejected in Portalarr, revoke Plex shares ONLY if auto-suspension is enabled and user is not Admin
-                if (!isImmuneRole && (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED")) {
-                    if (settings?.autoSuspendExpiredAccounts === true && userMatchedShares.length > 0) {
-                        console.log(`[PLEX-SYNC] User "${existingUser.username}" is ${existingUser.status} but has ${userMatchedShares.length} active Plex shares. Revoking...`);
-                        await revokePlexAccessForUserInternal(existingUser, `Account access is ${existingUser.status.toLowerCase()}.`);
+                // Strict Security Enforcement: If user is suspended, expired, rejected, or pending, they MUST NOT have Plex access
+                if (!isImmuneRole && (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED" || existingUser.status === "PENDING")) {
+                    if (userMatchedShares.length > 0 || userLibraryKeys.length > 0) {
+                        console.warn(`[SECURITY-AUDIT] Inactive user "${existingUser.username}" (${existingUser.status}) had ${userMatchedShares.length} active Plex shares (${userLibraryKeys.length} libraries). Revoking immediately...`);
+                        logger.addLog("ERROR", "SECURITY", `🚨 [SECURITY BREACH REMEDIATED] Inactive user "${existingUser.username}" (${existingUser.status}) had ${userMatchedShares.length} active Plex shares. Automatically revoked.`);
+                        await revokePlexAccessForUserInternal(existingUser, `Account access is ${existingUser.status.toLowerCase()} (unauthorized share purged).`);
                         revokedCount++;
-                    } else if (userLibraryKeyStr && existingUser.plexLibrarySectionIds !== userLibraryKeyStr) {
-                        // If auto-suspension is disabled, keep their live library section IDs accurate
+                        securityLeaksRemediatedCount++;
+                        if (!securityAlertUsers.includes(existingUser.username)) {
+                            securityAlertUsers.push(existingUser.username);
+                        }
+                    }
+                    if (existingUser.plexLibrarySectionIds !== "") {
                         await prisma.user.update({
                             where: { id: existingUser.id },
-                            data: { plexLibrarySectionIds: userLibraryKeyStr }
+                            data: { plexLibrarySectionIds: "" }
                         }).catch(() => {});
                     }
                     continue;
@@ -12689,12 +12696,6 @@ export async function syncPlexFriendsInternal() {
                 // Update existing user details/status/libraries with live Plex telemetry
                 let needsUpdate = false;
                 const updateData: any = {};
-
-                // Only promote PENDING users to APPROVED.
-                if (existingUser.status === "PENDING" && existingUser.role !== "ADMIN") {
-                    updateData.status = "APPROVED";
-                    needsUpdate = true;
-                }
 
                 if (fEmail && existingUser.plexEmail !== fEmail) {
                     updateData.plexEmail = fEmail;
@@ -12779,9 +12780,30 @@ export async function syncPlexFriendsInternal() {
         // Secondary Pass: Scan actual live Plex library shares for all remaining DB users
         for (const u of dbUsers) {
             const isImmuneRole = u.role === "ADMIN";
-            if (!isImmuneRole && (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED") && settings?.autoSuspendExpiredAccounts === true) continue;
+            const isInactive = u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED" || u.status === "PENDING";
             const liveKeys = extractUserLiveLibraryKeys(u);
             const liveKeysStr = liveKeys.join(",");
+
+            if (isInactive && !isImmuneRole) {
+                if (liveKeys.length > 0) {
+                    console.warn(`[SECURITY-AUDIT] Secondary scan: Inactive user "${u.username}" (${u.status}) had ${liveKeys.length} active Plex libraries. Revoking...`);
+                    logger.addLog("ERROR", "SECURITY", `🚨 [SECURITY BREACH REMEDIATED] Inactive user "${u.username}" (${u.status}) had ${liveKeys.length} active Plex libraries. Automatically revoked.`);
+                    await revokePlexAccessForUserInternal(u, `Account access is ${u.status.toLowerCase()} (unauthorized share purged).`);
+                    revokedCount++;
+                    securityLeaksRemediatedCount++;
+                    if (!securityAlertUsers.includes(u.username)) {
+                        securityAlertUsers.push(u.username);
+                    }
+                }
+                if (u.plexLibrarySectionIds !== "") {
+                    await prisma.user.update({
+                        where: { id: u.id },
+                        data: { plexLibrarySectionIds: "" }
+                    }).catch(() => {});
+                }
+                continue;
+            }
+
             if (liveKeysStr && u.plexLibrarySectionIds !== liveKeysStr) {
                 await prisma.user.update({
                     where: { id: u.id },
@@ -12797,20 +12819,47 @@ export async function syncPlexFriendsInternal() {
             create: { id: "global", lastAutoSync: new Date() }
         });
 
-        logger.addLog("SUCCESS", "PLEX", `[PLEX-SYNC] Completed friends sync. Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}`, `Friends discovered: ${friendsList.length}`);
-        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}`);
+        const auditSummary = securityLeaksRemediatedCount > 0 
+            ? ` | 🚨 ${securityLeaksRemediatedCount} security leaks revoked (${securityAlertUsers.join(", ")})` 
+            : "";
+
+        logger.addLog("SUCCESS", "PLEX", `[PLEX-SYNC] Completed friends sync. Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}${auditSummary}`, `Friends discovered: ${friendsList.length}`);
+        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}${auditSummary}`);
         return {
             success: true,
             totalFriends: friendsList.length,
             addedCount,
             updatedCount,
-            revokedCount
+            revokedCount,
+            securityLeaksRemediatedCount,
+            securityAlertUsers
         };
 
     } catch (e: any) {
         logger.addLog("ERROR", "PLEX", `[PLEX-SYNC] Error during Plex friends sync: ${e.message}`);
         console.error("[PLEX-SYNC] Error during Plex friends sync:", e.message || e);
         return { success: false, error: e.message || "Failed to sync Plex friends" };
+    }
+}
+
+export async function forceRevokePlexAccessAction(userId: string) {
+    await verifyAdmin();
+    try {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found." };
+        const res = await revokePlexAccessForUserInternal(user, "Administrator forced immediate revocation of Plex access.");
+        await prisma.user.update({
+            where: { id: userId },
+            data: { plexLibrarySectionIds: "" }
+        }).catch(() => {});
+        revalidatePath("/settings/access");
+        revalidatePath("/settings");
+        return {
+            success: res.success,
+            message: res.success ? `Successfully revoked all Plex library access for ${user.username}.` : res.error
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to revoke Plex access." };
     }
 }
 
