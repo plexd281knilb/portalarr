@@ -21,7 +21,6 @@ import {
     getReferralStats,
     getPaymentAndTrialSettings,
     savePaymentAndTrialSettings,
-    updateUserAccountTypeAction,
     updateUserMembershipTierAction,
     toggleAdminAddonAvailabilityAction,
     getAvailableAddonsAction
@@ -311,11 +310,6 @@ export default function AccessSettingsPage() {
 
     const handleRoleChange = async (userId: string, newRole: string) => {
         await updateAppUserRole(userId, newRole);
-        loadUsers();
-    };
-
-    const handleAccountTypeChange = async (userId: string, newType: string) => {
-        await updateUserAccountTypeAction(userId, newType);
         loadUsers();
     };
 
@@ -1287,7 +1281,11 @@ export default function AccessSettingsPage() {
                                                             </Badge>
                                                         )}
                                                         {user.subAccounts && user.subAccounts.length > 0 && (
-                                                            <Badge variant="outline" className="bg-indigo-500/15 text-indigo-300 border-indigo-500/40 text-[10px] font-semibold">
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className="bg-indigo-500/15 text-indigo-300 border-indigo-500/40 text-[10px] font-semibold cursor-help"
+                                                                title={`Linked Household Profiles:\n${user.subAccounts.map((s: any) => `• ${s.subAccountLabel || s.username} (${s.accountType === "KID" ? "👶 Kid Profile" : "📺 Living Room"})`).join("\n")}`}
+                                                            >
                                                                 {user.subAccounts.length} Sub-Account{user.subAccounts.length > 1 ? "s" : ""}
                                                             </Badge>
                                                         )}
@@ -1476,18 +1474,6 @@ export default function AccessSettingsPage() {
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        {/* ACCOUNT TYPE SELECTOR */}
-                                                        <Select defaultValue={user.accountType || "STANDARD"} onValueChange={(val) => handleAccountTypeChange(user.id, val)}>
-                                                            <SelectTrigger className="h-8 text-xs w-32 bg-background/80 border-border/60 font-semibold" title="Account Type & Parental Filter">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="STANDARD">Standard User</SelectItem>
-                                                                <SelectItem value="KID">👶 Kid Profile</SelectItem>
-                                                                <SelectItem value="LIVING_ROOM">📺 Living Room</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-
                                                         {/* MEMBERSHIP TIER SELECTOR */}
                                                         <Select defaultValue={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
                                                             <SelectTrigger className="h-8 text-xs w-44 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
