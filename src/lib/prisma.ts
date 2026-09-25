@@ -572,7 +572,11 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["taggingSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "taggingSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["taggingSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "taggingSyncSchedule" TEXT DEFAULT 'daily_3am';`],
                 ["taggingLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "taggingLastRunAt" DATETIME;`],
-                ["taggingLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "taggingLastRunStatus" TEXT;`]
+                ["taggingLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "taggingLastRunStatus" TEXT;`],
+                ["defaultKidsPlexLibraries", `ALTER TABLE "Settings" ADD COLUMN "defaultKidsPlexLibraries" TEXT;`],
+                ["tier2YearlyPrice", `ALTER TABLE "Settings" ADD COLUMN "tier2YearlyPrice" REAL DEFAULT 240;`],
+                ["tier2MonthlyPrice", `ALTER TABLE "Settings" ADD COLUMN "tier2MonthlyPrice" REAL DEFAULT 25;`],
+                ["availableAddons", `ALTER TABLE "Settings" ADD COLUMN "availableAddons" TEXT;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -615,6 +619,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["plexLibrarySectionIds", `ALTER TABLE "User" ADD COLUMN "plexLibrarySectionIds" TEXT;`],
                 ["referralCode", `ALTER TABLE "User" ADD COLUMN "referralCode" TEXT;`],
                 ["referredByUserId", `ALTER TABLE "User" ADD COLUMN "referredByUserId" TEXT;`],
+                ["parentUserId", `ALTER TABLE "User" ADD COLUMN "parentUserId" TEXT;`],
+                ["subAccountLabel", `ALTER TABLE "User" ADD COLUMN "subAccountLabel" TEXT;`],
+                ["selectedPlexLibrarySectionIds", `ALTER TABLE "User" ADD COLUMN "selectedPlexLibrarySectionIds" TEXT;`],
+                ["enabledAddons", `ALTER TABLE "User" ADD COLUMN "enabledAddons" TEXT;`],
                 ["convertedAt", `ALTER TABLE "User" ADD COLUMN "convertedAt" DATETIME;`],
                 ["lastLogin", `ALTER TABLE "User" ADD COLUMN "lastLogin" DATETIME;`],
                 ["accountType", `ALTER TABLE "User" ADD COLUMN "accountType" TEXT NOT NULL DEFAULT 'STANDARD';`],

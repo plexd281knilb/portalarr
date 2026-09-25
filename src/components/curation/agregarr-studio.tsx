@@ -2263,10 +2263,10 @@ export function AgregarrStudio() {
                                                 onValueChange={val => setCurationSyncSchedule(val)}
                                                 disabled={!curationSyncCollections}
                                             >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}

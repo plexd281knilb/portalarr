@@ -10,7 +10,14 @@ import {
     updateUserNotificationPreferencesAction,
     getUserContentPreferencesAction,
     updateUserContentPreferencesAction,
-    requestTierUpgradeAction
+    requestTierUpgradeAction,
+    getUserAllowedPlexLibrariesAction,
+    updateUserSelectedPlexLibrariesAction,
+    getUserSubAccountsAction,
+    createOrUpdateSubAccountAction,
+    deleteSubAccountAction,
+    getAvailableAddonsAction,
+    toggleFreeAddonAction
 } from "@/app/actions";
 import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -26,7 +33,8 @@ import {
     User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, 
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
     CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
-    Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock
+    Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock, Baby, Monitor, FolderCheck,
+    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -96,6 +104,35 @@ export default function UserProfilePage() {
     const [submittingUpgrade, setSubmittingUpgrade] = useState(false);
     const [upgradeSuccessMsg, setUpgradeSuccessMsg] = useState("");
     const [upgradeErrMsg, setUpgradeErrMsg] = useState("");
+
+    // Shared Plex Libraries State
+    const [allowedLibraries, setAllowedLibraries] = useState<string[]>([]);
+    const [selectedLibraries, setSelectedLibraries] = useState<string[]>([]);
+    const [serverLibraries, setServerLibraries] = useState<any[]>([]);
+    const [savingLibraries, setSavingLibraries] = useState(false);
+    const [libMsg, setLibMsg] = useState("");
+    const [libErr, setLibErr] = useState("");
+
+    // Household Sub-Accounts State
+    const [subAccounts, setSubAccounts] = useState<any[]>([]);
+    const [subLimits, setSubLimits] = useState({ includedLivingRooms: 1, includedKids: 1, totalActive: 0 });
+    const [subModalOpen, setSubModalOpen] = useState(false);
+    const [subEditingId, setSubEditingId] = useState<string | null>(null);
+    const [subType, setSubType] = useState<"LIVING_ROOM" | "KID">("LIVING_ROOM");
+    const [subLabel, setSubLabel] = useState("");
+    const [subPlexHandle, setSubPlexHandle] = useState("");
+    const [savingSub, setSavingSub] = useState(false);
+    const [subModalMsg, setSubModalMsg] = useState("");
+    const [subModalErr, setSubModalErr] = useState("");
+    const [deleteSubConfirmId, setDeleteSubConfirmId] = useState<string | null>(null);
+    const [deletingSub, setDeletingSub] = useState(false);
+
+    // Account Add-Ons State
+    const [addonsCatalog, setAddonsCatalog] = useState<any[]>([]);
+    const [userEnabledAddons, setUserEnabledAddons] = useState<string[]>([]);
+    const [togglingAddonId, setTogglingAddonId] = useState<string | null>(null);
+    const [addonMsg, setAddonMsg] = useState("");
+    const [addonErr, setAddonErr] = useState("");
 
     const handleCopy = (text: string, key: string) => {
         if (!text) return;
@@ -173,6 +210,28 @@ export default function UserProfilePage() {
                         excludedTagsList: contentRes.preferences.excludedTagsList || []
                     });
                 }
+
+                // Load Shared Plex Libraries
+                const libRes = await getUserAllowedPlexLibrariesAction();
+                if (libRes?.success) {
+                    setAllowedLibraries(libRes.allowedKeys || []);
+                    setSelectedLibraries(libRes.selectedKeys || []);
+                    setServerLibraries(libRes.servers || []);
+                }
+
+                // Load Household Sub-Accounts
+                const subRes = await getUserSubAccountsAction();
+                if (subRes?.success) {
+                    setSubAccounts(subRes.subAccounts || []);
+                    if (subRes.limits) setSubLimits(subRes.limits);
+                }
+
+                // Load Add-ons Catalog
+                const addRes = await getAvailableAddonsAction();
+                if (addRes?.success) {
+                    setAddonsCatalog(addRes.catalog || []);
+                    setUserEnabledAddons(addRes.userEnabledAddons || []);
+                }
             } catch (e) {
                 console.error("fetchProfile error:", e);
             } finally {
@@ -181,6 +240,173 @@ export default function UserProfilePage() {
         }
         fetchProfile();
     }, []);
+
+    // --- LIBRARY PREFERENCE HANDLERS ---
+    const isSectionAllowed = (uniqueKey: string, id: number | string) => {
+        if (!allowedLibraries || allowedLibraries.length === 0) return true;
+        const idStr = String(id);
+        return (
+            allowedLibraries.includes(uniqueKey) ||
+            allowedLibraries.includes(idStr) ||
+            allowedLibraries.some(ak => ak.endsWith(`:${idStr}`))
+        );
+    };
+
+    const isSectionSelected = (uniqueKey: string, id: number | string) => {
+        const idStr = String(id);
+        return (
+            selectedLibraries.includes(uniqueKey) ||
+            selectedLibraries.includes(idStr) ||
+            selectedLibraries.some(sk => sk.endsWith(`:${idStr}`))
+        );
+    };
+
+    const handleToggleLibrary = (uniqueKey: string, id: number | string) => {
+        const isSelected = isSectionSelected(uniqueKey, id);
+        const idStr = String(id);
+        if (isSelected) {
+            setSelectedLibraries(prev => prev.filter(k => k !== uniqueKey && k !== idStr && !k.endsWith(`:${idStr}`)));
+        } else {
+            setSelectedLibraries(prev => Array.from(new Set([...prev, uniqueKey])));
+        }
+    };
+
+    const handleSelectAllLibraries = () => {
+        const allKeys: string[] = [];
+        for (const srv of serverLibraries) {
+            for (const sec of srv.sections || []) {
+                if (isSectionAllowed(sec.uniqueKey, sec.id)) {
+                    allKeys.push(sec.uniqueKey);
+                }
+            }
+        }
+        setSelectedLibraries(allKeys);
+    };
+
+    const handleDeselectAllLibraries = () => {
+        setSelectedLibraries([]);
+    };
+
+    const handleSaveLibraries = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSavingLibraries(true);
+        setLibMsg("");
+        setLibErr("");
+        try {
+            const res = await updateUserSelectedPlexLibrariesAction(selectedLibraries);
+            if (res.success) {
+                setLibMsg(res.message || "Your shared Plex library preferences have been saved and synced to Plex!");
+                if (res.selectedKeys) setSelectedLibraries(res.selectedKeys);
+                setTimeout(() => setLibMsg(""), 5000);
+            } else {
+                setLibErr(res.error || "Failed to save library preferences.");
+            }
+        } catch (err: any) {
+            setLibErr(err.message || "Error saving library preferences");
+        } finally {
+            setSavingLibraries(false);
+        }
+    };
+
+    // --- SUB-ACCOUNT HANDLERS ---
+    const handleOpenAddSubAccount = (type: "LIVING_ROOM" | "KID") => {
+        setSubEditingId(null);
+        setSubType(type);
+        setSubLabel(type === "KID" ? "Kids Account" : "Living Room TV");
+        setSubPlexHandle("");
+        setSubModalMsg("");
+        setSubModalErr("");
+        setSubModalOpen(true);
+    };
+
+    const handleOpenEditSubAccount = (sub: any) => {
+        setSubEditingId(sub.id);
+        setSubType(sub.accountType === "KID" ? "KID" : "LIVING_ROOM");
+        setSubLabel(sub.subAccountLabel || "");
+        setSubPlexHandle(sub.plexUsername || sub.plexEmail || "");
+        setSubModalMsg("");
+        setSubModalErr("");
+        setSubModalOpen(true);
+    };
+
+    const handleSaveSubAccount = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSavingSub(true);
+        setSubModalMsg("");
+        setSubModalErr("");
+        try {
+            const res = await createOrUpdateSubAccountAction({
+                id: subEditingId || undefined,
+                type: subType,
+                label: subLabel,
+                plexUsernameOrEmail: subPlexHandle
+            });
+            if (res.success) {
+                setSubModalMsg(res.message || "Sub-account saved successfully!");
+                const subRes = await getUserSubAccountsAction();
+                if (subRes?.success) {
+                    setSubAccounts(subRes.subAccounts || []);
+                    if (subRes.limits) setSubLimits(subRes.limits);
+                }
+                setTimeout(() => {
+                    setSubModalOpen(false);
+                    setSubModalMsg("");
+                }, 1500);
+            } else {
+                setSubModalErr(res.error || "Failed to save sub-account");
+            }
+        } catch (err: any) {
+            setSubModalErr(err.message || "Error saving sub-account");
+        } finally {
+            setSavingSub(false);
+        }
+    };
+
+    const handleDeleteSubAccount = async (id: string) => {
+        setDeletingSub(true);
+        try {
+            const res = await deleteSubAccountAction(id);
+            if (res.success) {
+                const subRes = await getUserSubAccountsAction();
+                if (subRes?.success) {
+                    setSubAccounts(subRes.subAccounts || []);
+                    if (subRes.limits) setSubLimits(subRes.limits);
+                }
+                setDeleteSubConfirmId(null);
+            }
+        } catch (err) {
+            console.error("Failed to delete sub-account:", err);
+        } finally {
+            setDeletingSub(false);
+        }
+    };
+
+    // --- ADD-ON HANDLER ---
+    const handleToggleFreeAddon = async (addonId: string, enabled: boolean) => {
+        setTogglingAddonId(addonId);
+        setAddonMsg("");
+        setAddonErr("");
+        try {
+            const res = await toggleFreeAddonAction(addonId, enabled);
+            if (res.success) {
+                setUserEnabledAddons(res.enabledAddons || []);
+                setAddonMsg(res.message || "Add-on preference updated!");
+                const subRes = await getUserSubAccountsAction();
+                if (subRes?.success && subRes.limits) {
+                    setSubLimits(subRes.limits);
+                }
+                setTimeout(() => setAddonMsg(""), 4000);
+            } else {
+                setAddonErr(res.error || "Failed to update add-on");
+                setTimeout(() => setAddonErr(""), 5000);
+            }
+        } catch (err: any) {
+            setAddonErr(err.message || "Error updating add-on");
+            setTimeout(() => setAddonErr(""), 5000);
+        } finally {
+            setTogglingAddonId(null);
+        }
+    };
 
     const handleUpdateKindleEmail = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -340,6 +566,13 @@ export default function UserProfilePage() {
 
     const currentTier = user?.membershipTier || "STANDARD";
     const currentAccountType = user?.accountType || "STANDARD";
+    const isTier2 = currentTier === "TIER_2_VIP";
+    const effectiveYearlyPrice = isTier2 
+        ? (paymentConfig?.tier2YearlyPrice ?? 240) 
+        : (paymentConfig?.yearlyPrice ?? 180);
+    const effectiveMonthlyPrice = isTier2
+        ? (paymentConfig?.tier2MonthlyPrice ?? 25)
+        : (paymentConfig?.monthlyPrice ?? 15);
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-6 animate-in fade-in duration-500">
@@ -536,7 +769,7 @@ export default function UserProfilePage() {
                             </CardDescription>
                         </div>
                         <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
-                            ${paymentConfig?.yearlyPrice ?? 180} / year
+                            ${effectiveYearlyPrice} / year
                         </Badge>
                     </div>
                 </CardHeader>
@@ -556,7 +789,7 @@ export default function UserProfilePage() {
                                 </div>
                                 <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
-                                    <p className="font-bold text-purple-300 text-sm">${paymentConfig.proratedBilling.yearlyRate} / yr</p>
+                                    <p className="font-bold text-purple-300 text-sm">${effectiveYearlyPrice} / yr</p>
                                     <p className="text-[10px] text-muted-foreground">Renews {paymentConfig.proratedBilling.nextRenewalDate}</p>
                                 </div>
                             </div>
@@ -571,7 +804,7 @@ export default function UserProfilePage() {
                                 Valid until {format(new Date(user.subscriptionEndsAt), "MMMM d, yyyy")}
                             </p>
                             <p className="text-[11px] text-muted-foreground">
-                                Renews at ${paymentConfig?.yearlyPrice ?? 180}/year for the following calendar year.
+                                Renews at ${effectiveYearlyPrice}/year for the following calendar year.
                             </p>
                         </div>
                     ) : (
@@ -600,6 +833,441 @@ export default function UserProfilePage() {
                     <p className="text-[11px] text-muted-foreground italic pt-1">
                         💡 When making a payment, remember to include your username <strong className="text-foreground">({user?.username})</strong> in the payment memo.
                     </p>
+                </CardContent>
+            </Card>
+
+            {/* MY SHARED PLEX LIBRARIES CARD */}
+            <Card id="libraries" className="border-cyan-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <FolderCheck className="h-5 w-5 text-cyan-400" /> My Shared Plex Libraries
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Choose which libraries from your allowed membership access appear on your Plex home screen and apps.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-xs w-fit">
+                                {selectedLibraries.length} Libraries Selected
+                            </Badge>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSaveLibraries} className="space-y-4">
+                        {libMsg && (
+                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>{libMsg}</span>
+                            </div>
+                        )}
+                        {libErr && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <XCircle className="h-4 w-4 shrink-0" />
+                                <span>{libErr}</span>
+                            </div>
+                        )}
+
+                        {serverLibraries.length === 0 ? (
+                            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center text-xs text-muted-foreground">
+                                No Plex server libraries found. Your shared libraries will appear here once configured by the administrator.
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                    <span className="text-xs text-muted-foreground">
+                                        Toggle individual libraries on or off to tailor your Plex home screen:
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            onClick={handleSelectAllLibraries}
+                                            className="h-7 px-2.5 text-[11px] text-cyan-300 hover:text-cyan-200 hover:bg-cyan-500/10 cursor-pointer"
+                                        >
+                                            <CheckSquare className="h-3 w-3 mr-1" /> Select All
+                                        </Button>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            onClick={handleDeselectAllLibraries}
+                                            className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                                        >
+                                            <Square className="h-3 w-3 mr-1" /> Deselect All
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {serverLibraries.map((server) => {
+                                        const allowedSections = (server.sections || []).filter((sec: any) => isSectionAllowed(sec.uniqueKey, sec.id));
+                                        if (allowedSections.length === 0) return null;
+
+                                        return (
+                                            <div key={server.serverId} className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+                                                <div className="flex items-center justify-between border-b border-border/30 pb-2">
+                                                    <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                        <Tv className="h-3.5 w-3.5 text-primary" /> {server.serverName || "Plex Server"}
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                                        {allowedSections.length} Available
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                                                    {allowedSections.map((sec: any) => {
+                                                        const isSelected = isSectionSelected(sec.uniqueKey, sec.id);
+                                                        return (
+                                                            <button
+                                                                key={sec.uniqueKey || sec.id}
+                                                                type="button"
+                                                                onClick={() => handleToggleLibrary(sec.uniqueKey, sec.id)}
+                                                                className={`p-2.5 rounded-lg border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                                                                    isSelected
+                                                                        ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-xs"
+                                                                        : "bg-background/50 border-border/40 text-muted-foreground hover:border-border hover:text-foreground"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    {sec.type === "movie" ? (
+                                                                        <Film className={`h-4 w-4 shrink-0 ${isSelected ? "text-cyan-400" : "text-muted-foreground"}`} />
+                                                                    ) : sec.type === "show" ? (
+                                                                        <Tv className={`h-4 w-4 shrink-0 ${isSelected ? "text-purple-400" : "text-muted-foreground"}`} />
+                                                                    ) : sec.type === "artist" || sec.type === "music" ? (
+                                                                        <Music className={`h-4 w-4 shrink-0 ${isSelected ? "text-emerald-400" : "text-muted-foreground"}`} />
+                                                                    ) : (
+                                                                        <FolderCheck className={`h-4 w-4 shrink-0 ${isSelected ? "text-amber-400" : "text-muted-foreground"}`} />
+                                                                    )}
+                                                                    <span className="text-xs font-semibold truncate">{sec.title}</span>
+                                                                </div>
+                                                                <div className={`h-4 w-4 rounded shrink-0 flex items-center justify-center border transition-all ${
+                                                                    isSelected ? "bg-cyan-500 border-cyan-400 text-slate-950" : "border-muted-foreground/40 bg-transparent"
+                                                                }`}>
+                                                                    {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/30">
+                            <p className="text-[11px] text-muted-foreground italic">
+                                💡 Library changes push directly to your Plex account immediately upon saving.
+                            </p>
+                            <Button
+                                type="submit"
+                                disabled={savingLibraries}
+                                className="w-full sm:w-auto font-bold text-xs h-9 bg-cyan-600 hover:bg-cyan-500 text-white gap-2 transition-all hover:ring-2 hover:ring-cyan-400/40 active:scale-95 cursor-pointer"
+                            >
+                                {savingLibraries ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                                Save Library Preferences
+                            </Button>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+
+            {/* HOUSEHOLD SUB-ACCOUNTS CARD */}
+            <Card id="subaccounts" className="border-purple-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Users className="h-5 w-5 text-purple-400" /> Household Sub-Accounts & Profiles
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Create secondary Plex profiles for your Living Room TV or Kids' tablets. Sub-accounts are nested under your membership with zero extra billing.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
+                            {subAccounts.length} / {subLimits.includedLivingRooms + subLimits.includedKids} Profiles Configured
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* LIVING ROOM PROFILES COLUMN */}
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                        <Monitor className="h-4 w-4 text-indigo-400" /> Living Room TV
+                                    </span>
+                                    <Badge variant="outline" className="text-[10px] text-indigo-300 border-indigo-500/30 bg-indigo-500/10">
+                                        Nudity Filtered
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                    Shares the same libraries as your main account, but automatically filters out content with IMDb Severe Nudity tags for family room viewing.
+                                </p>
+
+                                {/* EXISTING LIVING ROOM SUBS */}
+                                <div className="space-y-2">
+                                    {subAccounts.filter(s => s.accountType === "LIVING_ROOM").map(sub => (
+                                        <div key={sub.id} className="p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-500/30 flex items-center justify-between gap-2">
+                                            <div className="space-y-0.5 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Living Room TV"}</span>
+                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                                </div>
+                                                <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
+                                                <span className="inline-flex items-center text-[10px] text-indigo-300/90 font-medium">
+                                                    🚫 Severe Nudity Excluded
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleOpenEditSubAccount(sub)}
+                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                    title="Edit Profile"
+                                                >
+                                                    <Edit2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setDeleteSubConfirmId(sub.id)}
+                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
+                                                    title="Remove Sub-Account"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-2">
+                                {subAccounts.filter(s => s.accountType === "LIVING_ROOM").length < subLimits.includedLivingRooms ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenAddSubAccount("LIVING_ROOM")}
+                                        className="w-full text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" /> Add Living Room TV Profile
+                                    </Button>
+                                ) : (
+                                    <div className="text-[10px] text-muted-foreground italic text-center">
+                                        Included slot in use. Enable extra living room add-on for more.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* KIDS PROFILES COLUMN */}
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                        <Baby className="h-4 w-4 text-purple-400" /> Kids Account
+                                    </span>
+                                    <Badge variant="outline" className="text-[10px] text-purple-300 border-purple-500/30 bg-purple-500/10">
+                                        PG Safe • Curated
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                    Automatically limited to Kids-only server libraries, enforcing a strict PG rating ceiling with adult, horror, and violent content hidden.
+                                </p>
+
+                                {/* EXISTING KIDS SUBS */}
+                                <div className="space-y-2">
+                                    {subAccounts.filter(s => s.accountType === "KID").map(sub => (
+                                        <div key={sub.id} className="p-2.5 rounded-lg bg-purple-950/20 border border-purple-500/30 flex items-center justify-between gap-2">
+                                            <div className="space-y-0.5 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Kids Account"}</span>
+                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                                </div>
+                                                <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
+                                                <span className="inline-flex items-center text-[10px] text-purple-300/90 font-medium">
+                                                    👶 PG Safe • Kids Only Server
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleOpenEditSubAccount(sub)}
+                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                    title="Edit Profile"
+                                                >
+                                                    <Edit2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setDeleteSubConfirmId(sub.id)}
+                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
+                                                    title="Remove Sub-Account"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-2">
+                                {subAccounts.filter(s => s.accountType === "KID").length < subLimits.includedKids ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenAddSubAccount("KID")}
+                                        className="w-full text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" /> Add Kids Profile
+                                    </Button>
+                                ) : (
+                                    <div className="text-[10px] text-muted-foreground italic text-center">
+                                        Included slot in use. Enable extra kids profile add-on for more.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ACCOUNT ADD-ONS & FEATURES CARD */}
+            <Card id="addons" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Zap className="h-5 w-5 text-amber-400" /> Account Add-Ons & Features
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Enable optional features, live streaming channels, and extra household profile slots.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
+                            {userEnabledAddons.length} Enabled
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {addonMsg && (
+                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>{addonMsg}</span>
+                        </div>
+                    )}
+                    {addonErr && (
+                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <XCircle className="h-4 w-4 shrink-0" />
+                            <span>{addonErr}</span>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {addonsCatalog.map((addon) => {
+                            const isEnabled = userEnabledAddons.includes(addon.id);
+                            const isToggling = togglingAddonId === addon.id;
+                            const isFree = addon.isFree || addon.price === 0;
+
+                            return (
+                                <div 
+                                    key={addon.id}
+                                    className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
+                                        isEnabled 
+                                            ? "bg-amber-500/[0.06] border-amber-500/40" 
+                                            : "bg-white/[0.02] border-white/[0.06]"
+                                    }`}
+                                >
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                {addon.icon === "tv" ? (
+                                                    <Tv className="h-4 w-4 text-cyan-400" />
+                                                ) : addon.icon === "baby" ? (
+                                                    <Baby className="h-4 w-4 text-purple-400" />
+                                                ) : addon.icon === "monitor" ? (
+                                                    <Monitor className="h-4 w-4 text-indigo-400" />
+                                                ) : addon.icon === "sparkles" ? (
+                                                    <Sparkles className="h-4 w-4 text-amber-400" />
+                                                ) : (
+                                                    <Zap className="h-4 w-4 text-primary" />
+                                                )}
+                                                <span className="font-bold text-xs text-foreground">{addon.name}</span>
+                                            </div>
+                                            {isFree ? (
+                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-semibold shrink-0">
+                                                    ✨ Free
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold shrink-0">
+                                                    ${addon.price}/mo
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                            {addon.description}
+                                        </p>
+                                    </div>
+
+                                    <div className="pt-2 flex items-center justify-between border-t border-border/30">
+                                        <span className="text-[11px] font-medium text-muted-foreground">
+                                            {isEnabled ? (
+                                                <span className="text-emerald-400 flex items-center gap-1">
+                                                    <Check className="h-3 w-3" /> Active
+                                                </span>
+                                            ) : (
+                                                <span>Inactive</span>
+                                            )}
+                                        </span>
+                                        {isFree ? (
+                                            <div className="flex items-center gap-2">
+                                                {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}
+                                                <Switch
+                                                    checked={isEnabled}
+                                                    disabled={isToggling}
+                                                    onCheckedChange={(checked) => handleToggleFreeAddon(addon.id, checked)}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setUpgradeModalOpen(true);
+                                                    setTargetTier(addon.id);
+                                                    setUpgradeNote(`Interested in activating add-on: ${addon.name}`);
+                                                }}
+                                                className="text-xs h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer"
+                                            >
+                                                Request Add-On
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </CardContent>
             </Card>
 
@@ -1242,7 +1910,7 @@ export default function UserProfilePage() {
                             </Button>
                             <Button 
                                 type="submit" 
-                                size="sm"
+                                size="sm" 
                                 disabled={submittingUpgrade}
                                 className="font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5"
                             >
@@ -1251,6 +1919,143 @@ export default function UserProfilePage() {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* SUB-ACCOUNT ADD / EDIT MODAL */}
+            <Dialog open={subModalOpen} onOpenChange={setSubModalOpen}>
+                <DialogContent className="sm:max-w-md bg-slate-950 border border-slate-800 shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
+                            <Users className="h-5 w-5 text-purple-400" />
+                            {subEditingId ? "Edit Household Sub-Account" : "Add Household Sub-Account"}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            Set up a nested profile for family members or shared living room devices.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleSaveSubAccount} className="space-y-4 py-2">
+                        {subModalMsg && (
+                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>{subModalMsg}</span>
+                            </div>
+                        )}
+                        {subModalErr && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <XCircle className="h-4 w-4 shrink-0" />
+                                <span>{subModalErr}</span>
+                            </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Profile Type & Content Policy</Label>
+                            <Select value={subType} onValueChange={(val: any) => setSubType(val)}>
+                                <SelectTrigger className="bg-background/80 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="LIVING_ROOM">📺 Living Room TV (Severe Nudity Excluded)</SelectItem>
+                                    <SelectItem value="KID">👶 Kids Account (Kids-Only Server & PG Ceiling)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Profile Name / Device Label</Label>
+                            <Input
+                                required
+                                placeholder={subType === "KID" ? "e.g. Timmy's Tablet" : "e.g. Living Room Apple TV"}
+                                value={subLabel}
+                                onChange={(e) => setSubLabel(e.target.value)}
+                                className="bg-background/80 text-xs"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Plex Username or Plex Email</Label>
+                            <Input
+                                required
+                                placeholder="e.g. user@gmail.com or PlexUsername"
+                                value={subPlexHandle}
+                                onChange={(e) => setSubPlexHandle(e.target.value)}
+                                className="bg-background/80 text-xs font-mono"
+                            />
+                            <p className="text-[10px] text-muted-foreground">
+                                An automated Plex friend invite with curated libraries will be dispatched to this Plex user.
+                            </p>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-muted-foreground space-y-1">
+                            <span className="font-bold text-foreground text-xs block">
+                                {subType === "KID" ? "🧸 Kids Protection Policy" : "📺 Living Room Policy"}
+                            </span>
+                            <p>
+                                {subType === "KID"
+                                    ? "Restricted to the dedicated Kids library pool with maximum PG rating ceiling and horror/NSFW/gore content automatically hidden."
+                                    : "Shares your default library sections with IMDb Severe Nudity tags filtered out by default."
+                                }
+                            </p>
+                        </div>
+
+                        <DialogFooter className="pt-2 flex sm:justify-between gap-2">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setSubModalOpen(false)}
+                                className="text-xs"
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="submit" 
+                                size="sm" 
+                                disabled={savingSub}
+                                className="font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white gap-1.5 cursor-pointer"
+                            >
+                                {savingSub ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                {subEditingId ? "Update Sub-Account" : "Create Sub-Account"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* DELETE SUB-ACCOUNT CONFIRM DIALOG */}
+            <Dialog open={Boolean(deleteSubConfirmId)} onOpenChange={(open) => !open && setDeleteSubConfirmId(null)}>
+                <DialogContent className="sm:max-w-md bg-slate-950 border border-slate-800 shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                            <AlertTriangle className="h-5 w-5 text-red-400" /> Remove Household Sub-Account?
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            Are you sure you want to remove this sub-account? This will immediately revoke their Plex server access and delete the sub-profile.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="pt-2 flex sm:justify-between gap-2">
+                        <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setDeleteSubConfirmId(null)}
+                            className="text-xs"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="destructive"
+                            disabled={deletingSub}
+                            onClick={() => deleteSubConfirmId && handleDeleteSubAccount(deleteSubConfirmId)}
+                            className="font-bold text-xs gap-1.5 cursor-pointer"
+                        >
+                            {deletingSub ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            Confirm Removal
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

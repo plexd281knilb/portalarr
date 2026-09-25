@@ -3264,14 +3264,14 @@ export function KometaStudio() {
                         <CardContent className="p-5 space-y-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Schedule 1: Incremental Scan */}
-                                <div className="bg-slate-950/60 border border-purple-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                <div className="bg-slate-950/60 border border-purple-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5 min-w-0">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 <Zap className="h-4 w-4 text-purple-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm">⚡ Incremental Scan (All Changed Items)</span>
+                                                <span className="font-bold text-slate-100 text-sm truncate">⚡ Incremental Scan (All Changed Items)</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 shrink-0">
                                                 <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
                                                     {overlayIncrementalEnabled ? `Active (${formatScheduleLabel(overlayIncrementalSchedule)})` : 'Disabled'}
                                                 </Badge>
@@ -3286,18 +3286,18 @@ export function KometaStudio() {
                                         </p>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
+                                    <div className="space-y-2.5 pt-1">
+                                        <div className="space-y-1 min-w-0">
+                                            <label className="text-[11px] font-medium text-slate-400 block truncate">Trigger Frequency</label>
                                             <Select 
                                                 value={overlayIncrementalSchedule} 
                                                 onValueChange={val => setOverlayIncrementalSchedule(val)}
                                                 disabled={!overlayIncrementalEnabled}
                                             >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}
@@ -3307,14 +3307,14 @@ export function KometaStudio() {
                                             </Select>
                                         </div>
 
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Incremental Scope / Batch</label>
+                                        <div className="space-y-1 min-w-0">
+                                            <label className="text-[11px] font-medium text-slate-400 block truncate">Incremental Scope / Batch</label>
                                             <Select 
                                                 value={String(overlayIncrementalBatchSize)} 
                                                 onValueChange={val => setOverlayIncrementalBatchSize(Number(val))}
                                                 disabled={!overlayIncrementalEnabled}
                                             >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-purple-300 font-semibold">
+                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-purple-300 font-semibold truncate">
                                                     <SelectValue placeholder="Batch Size" />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
@@ -3329,9 +3329,9 @@ export function KometaStudio() {
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                                            <Clock3 className="h-3.5 w-3.5 text-purple-400" />
-                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayIncrementalLastRunAt)}</strong></span>
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5 min-w-0">
+                                            <Clock3 className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                            <span className="truncate">Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayIncrementalLastRunAt)}</strong></span>
                                         </div>
                                         <Button 
                                             size="sm"
@@ -3347,14 +3347,14 @@ export function KometaStudio() {
                                 </div>
 
                                 {/* Schedule 2: Deep Periodic Recheck */}
-                                <div className="bg-slate-950/60 border border-indigo-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                <div className="bg-slate-950/60 border border-indigo-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5 min-w-0">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 <RotateCcw className="h-4 w-4 text-indigo-400 shrink-0" />
-                                                <span className="font-bold text-slate-100 text-sm">🌙 Daily Deep Recheck (All Items)</span>
+                                                <span className="font-bold text-slate-100 text-sm truncate">🌙 Daily Deep Recheck (All Items)</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 shrink-0">
                                                 <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayRecheckEnabled ? 'border-indigo-500/40 text-indigo-300 bg-indigo-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
                                                     {overlayRecheckEnabled ? `Active (${formatScheduleLabel(overlayRecheckSchedule)})` : 'Disabled'}
                                                 </Badge>
@@ -3369,18 +3369,18 @@ export function KometaStudio() {
                                         </p>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Schedule</label>
+                                    <div className="space-y-2.5 pt-1">
+                                        <div className="space-y-1 min-w-0">
+                                            <label className="text-[11px] font-medium text-slate-400 block truncate">Schedule Frequency</label>
                                             <Select 
                                                 value={overlayRecheckSchedule} 
                                                 onValueChange={val => setOverlayRecheckSchedule(val)}
                                                 disabled={!overlayRecheckEnabled}
                                             >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
                                                     <SelectValue placeholder="Select Frequency" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
                                                     {SCHEDULE_OPTIONS.map(opt => (
                                                         <SelectItem key={opt.value} value={opt.value}>
                                                             {opt.label}
@@ -3390,51 +3390,53 @@ export function KometaStudio() {
                                             </Select>
                                         </div>
 
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Recheck Scope</label>
-                                            <Select 
-                                                value={overlayRecheckScope} 
-                                                onValueChange={val => setOverlayRecheckScope(val)}
-                                                disabled={!overlayRecheckEnabled}
-                                            >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                                    <SelectValue placeholder="Recheck Scope" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                                    <SelectItem value="force_all">🔄 All Items (Full Library)</SelectItem>
-                                                    <SelectItem value="daily_recheck">🌙 &gt;24h Old Items</SelectItem>
-                                                    <SelectItem value="weekly_recheck">📅 &gt;7d Old Items</SelectItem>
-                                                    <SelectItem value="monthly_recheck">🗓️ &gt;30d Old Items</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                            <div className="space-y-1 min-w-0">
+                                                <label className="text-[11px] font-medium text-slate-400 block truncate">Recheck Scope</label>
+                                                <Select 
+                                                    value={overlayRecheckScope} 
+                                                    onValueChange={val => setOverlayRecheckScope(val)}
+                                                    disabled={!overlayRecheckEnabled}
+                                                >
+                                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                        <SelectValue placeholder="Recheck Scope" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                        <SelectItem value="force_all">🔄 All Items (Full Library)</SelectItem>
+                                                        <SelectItem value="daily_recheck">🌙 &gt;24h Old Items</SelectItem>
+                                                        <SelectItem value="weekly_recheck">📅 &gt;7d Old Items</SelectItem>
+                                                        <SelectItem value="monthly_recheck">🗓️ &gt;30d Old Items</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
 
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-slate-400">Batch Size</label>
-                                            <Select 
-                                                value={String(overlayRecheckBatchSize)} 
-                                                onValueChange={val => setOverlayRecheckBatchSize(Number(val))}
-                                                disabled={!overlayRecheckEnabled}
-                                            >
-                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-indigo-300 font-semibold">
-                                                    <SelectValue placeholder="Batch Size" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                                    <SelectItem value="0">📦 All Items (Default)</SelectItem>
-                                                    <SelectItem value="100">📦 100 Items</SelectItem>
-                                                    <SelectItem value="200">📦 200 Items</SelectItem>
-                                                    <SelectItem value="500">📦 500 Items</SelectItem>
-                                                    <SelectItem value="1000">📦 1000 Items</SelectItem>
-                                                    <SelectItem value="2500">📦 2500 Items</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <div className="space-y-1 min-w-0">
+                                                <label className="text-[11px] font-medium text-slate-400 block truncate">Batch Size</label>
+                                                <Select 
+                                                    value={String(overlayRecheckBatchSize)} 
+                                                    onValueChange={val => setOverlayRecheckBatchSize(Number(val))}
+                                                    disabled={!overlayRecheckEnabled}
+                                                >
+                                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-indigo-300 font-semibold truncate">
+                                                        <SelectValue placeholder="Batch Size" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                        <SelectItem value="0">📦 All Items (Default)</SelectItem>
+                                                        <SelectItem value="100">📦 100 Items</SelectItem>
+                                                        <SelectItem value="200">📦 200 Items</SelectItem>
+                                                        <SelectItem value="500">📦 500 Items</SelectItem>
+                                                        <SelectItem value="1000">📦 1000 Items</SelectItem>
+                                                        <SelectItem value="2500">📦 2500 Items</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                                            <Clock3 className="h-3.5 w-3.5 text-indigo-400" />
-                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayRecheckLastRunAt)}</strong></span>
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5 min-w-0">
+                                            <Clock3 className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                            <span className="truncate">Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayRecheckLastRunAt)}</strong></span>
                                         </div>
                                         <Button 
                                             size="sm"

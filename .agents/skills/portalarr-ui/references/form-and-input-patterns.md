@@ -86,3 +86,27 @@ All third-party integration fields (Plex, Tautulli, Glances, Radarr, Sonarr, Pro
 - **Compact Inputs / Select Triggers**: `h-8 text-xs bg-slate-900 border-slate-700 text-slate-200 rounded-md`.
 - **Field Labels**: `text-xs font-semibold text-slate-300 flex items-center gap-1.5`.
 - **Help / Description Text**: `text-[11px] sm:text-xs text-slate-400 leading-relaxed`.
+
+---
+
+## 6. Radix `SelectTrigger` Width & Truncation Guard
+
+In Radix UI Select components:
+- `SelectTrigger` MUST default to `w-full min-w-0` and enforce `*:data-[slot=select-value]:truncate` so that long option texts (e.g. `"🌙 Daily at 4:00 AM (Recommended for Deep Overlays)"`) truncate gracefully with ellipsis (`...`) instead of expanding and overflowing into neighboring columns.
+- The chevron icon should have `shrink-0` to avoid being squished by long truncated text:
+  ```tsx
+  <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+    <SelectValue placeholder="Select Option" />
+  </SelectTrigger>
+  ```
+
+---
+
+## 7. Studio Schedule & Multi-Parameter Automation Layouts
+
+When designing side-by-side automation cards (`grid-cols-1 lg:grid-cols-2`):
+- Avoid forcing 3 dropdowns side-by-side in a 3-column row (`sm:grid-cols-3`), as each column receives only ~140px-160px.
+- **2-Row Stacking Pattern**:
+  - **Row 1 (Full width / `sm:col-span-2`)**: Primary Schedule Frequency dropdown (gives ample breathing room for descriptive frequency labels).
+  - **Row 2 (`grid grid-cols-1 sm:grid-cols-2 gap-2.5`)**: Secondary parameters side-by-side (e.g. Recheck Scope & Batch Size).
+- Ensure all grid columns and wrapper containers specify `min-w-0` to prevent CSS Grid blowouts.

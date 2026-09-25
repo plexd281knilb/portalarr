@@ -2721,6 +2721,23 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
 
                 await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on Portalarr.");
                 logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
+
+                // Cascade expiration to nested sub-accounts
+                const subAccounts = await prisma.user.findMany({ where: { parentUserId: u.id } });
+                for (const sub of subAccounts) {
+                    try {
+                        await prisma.user.update({
+                            where: { id: sub.id },
+                            data: {
+                                status: "EXPIRED",
+                                plexLibrarySectionIds: ""
+                            }
+                        });
+                        await revokePlexAccessForUserInternal(sub, "Parent account subscription has expired.");
+                    } catch (subErr: any) {
+                        console.warn(`[TRIAL-EXPIRATION] Failed to expire sub-account "${sub.username}":`, subErr.message);
+                    }
+                }
             } catch (err: any) {
                 console.error(`[TRIAL-EXPIRATION] Error expiring user "${u.username}":`, err.message || err);
                 logger.addLog("ERROR", "PLEX", `[TRIAL-EXPIRATION] Failed to revoke access for "${u.username}": ${err.message}`);
@@ -2757,6 +2774,12 @@ export async function getAppUsers() {
                 plexUsername: true,
                 plexEmail: true,
                 plexLibrarySectionIds: true,
+                selectedPlexLibrarySectionIds: true,
+                accountType: true,
+                membershipTier: true,
+                parentUserId: true,
+                subAccountLabel: true,
+                enabledAddons: true,
                 referralCode: true,
                 referredByUserId: true,
                 convertedAt: true,
@@ -2766,9 +2789,29 @@ export async function getAppUsers() {
                         username: true
                     }
                 },
+                parentUser: {
+                    select: {
+                        id: true,
+                        username: true
+                    }
+                },
+                subAccounts: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                        plexUsername: true,
+                        plexEmail: true,
+                        accountType: true,
+                        subAccountLabel: true,
+                        status: true,
+                        plexLibrarySectionIds: true
+                    }
+                },
                 _count: {
                     select: {
-                        referrals: true
+                        referrals: true,
+                        subAccounts: true
                     }
                 }
             }
@@ -2792,6 +2835,12 @@ export async function getAppUsers() {
                     plexUsername: true,
                     plexEmail: true,
                     plexLibrarySectionIds: true,
+                    selectedPlexLibrarySectionIds: true,
+                    accountType: true,
+                    membershipTier: true,
+                    parentUserId: true,
+                    subAccountLabel: true,
+                    enabledAddons: true,
                     referralCode: true,
                     referredByUserId: true,
                     convertedAt: true
@@ -3502,13 +3551,25 @@ export async function setUserTrialOrSubscription(
 
         logger.addLog("INFO", "PLEX", `[ACTION] setUserTrialOrSubscription: Setting "${user.username}" to ${type} (New status: ${status})`);
 
+        // Cascade to nested sub-accounts
+        const childSubAccounts = await prisma.user.findMany({ where: { parentUserId: userId } });
+        for (const child of childSubAccounts) {
+            await prisma.user.update({
+                where: { id: child.id },
+                data: {
+                    status,
+                    trialEndsAt,
+                    subscriptionEndsAt,
+                    convertedAt
+                }
+            });
+        }
+
         // Sync Plex sharing state: if suspended or expired, revoke Plex shares; if active, restore
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         if (settings?.mainPlexToken) {
             try {
                 const adminToken = decryptData(settings.mainPlexToken);
-                const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
-                const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
                 let servers = await getPlexServers(adminToken);
                 if (servers.length === 0) {
                     const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
@@ -3523,92 +3584,25 @@ export async function setUserTrialOrSubscription(
 
                 if (status === "SUSPENDED" || status === "EXPIRED") {
                     await revokePlexAccessForUserInternal(user, `Account access ${status.toLowerCase()}.`);
+                    for (const child of childSubAccounts) {
+                        await revokePlexAccessForUserInternal(child, `Parent account access ${status.toLowerCase()}.`);
+                    }
                 } else if (status === "APPROVED" || status === "TRIAL") {
-                    // Restore Plex shares with configured library sections
-                    let rawKeys = (user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    // Restore Plex shares with configured library sections for parent
+                    let rawKeys = (user.selectedPlexLibrarySectionIds || user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
                     if (rawKeys.length === 0) {
                         const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
                         rawKeys = srvSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
                     }
-                    logger.addLog("INFO", "PLEX", `[SET-TRIAL-PLEX-SYNC] Restoring/Granting libraries for "${user.username}" across ${servers.length} servers`, `Library Keys: ${rawKeys.join(",") || 'none'}`);
-                    const serverSectionsMap = new Map<string, number[]>();
+                    await syncUserPlexShareInternal(adminToken, user, rawKeys, servers, shares);
 
-                    for (const key of rawKeys) {
-                        if (key.includes(":")) {
-                            const [srvId, secStr] = key.split(":");
-                            const secId = parseInt(secStr, 10);
-                            if (!isNaN(secId)) {
-                                const list = serverSectionsMap.get(srvId) || [];
-                                list.push(secId);
-                                serverSectionsMap.set(srvId, list);
-                            }
-                        } else {
-                            const secId = parseInt(key, 10);
-                            if (!isNaN(secId) && servers.length > 0) {
-                                const primaryId = servers[0].clientIdentifier;
-                                const list = serverSectionsMap.get(primaryId) || [];
-                                list.push(secId);
-                                serverSectionsMap.set(primaryId, list);
-                            }
-                        }
-                    }
-
-                    const friend = await findPlexUserFriend(adminToken, user);
-                    const resolvedTarget = friend?.email || targetEmail || targetUser;
-                    const friendId = friend?.id;
-                    const matchTarget = {
-                        id: friendId,
-                        email: resolvedTarget,
-                        username: targetUser,
-                        plexEmail: user.plexEmail,
-                        plexUsername: user.plexUsername
-                    };
-
-                    const ownerUser = await getPlexOwnerUser(adminToken);
-                    const isOwner = ownerUser && matchesPlexUser(matchTarget, {
-                        id: "",
-                        serverId: "",
-                        librarySectionIds: [],
-                        user: ownerUser,
-                        invitedEmail: ownerUser.email
-                    });
-
-                    if (isOwner) {
-                        logger.addLog("INFO", "PLEX", `[ACTION] User "${user.username}" is the Plex Server Owner. Skipping cloud share sync.`);
-                        revalidatePath("/settings/access");
-                        return { success: true, message: `Updated access status for ${user.username} to ${status} (Owner has unrestricted Plex access).` };
-                    }
-
-                    for (const srv of servers) {
-                        const srvId = srv.clientIdentifier;
-                        let secIds = serverSectionsMap.get(srvId) || [];
-                        if (secIds.length === 0) {
-                            for (const [mapKey, secList] of serverSectionsMap.entries()) {
-                                if (mapKey.toLowerCase() === srvId.toLowerCase() || 
-                                    srvId.toLowerCase().includes(mapKey.toLowerCase()) || 
-                                    mapKey.toLowerCase().includes(srvId.toLowerCase())) {
-                                    secIds = secList;
-                                    break;
-                                }
-                            }
-                        }
-                        if (secIds.length === 0 && servers.length === 1 && serverSectionsMap.size > 0) {
-                            secIds = Array.from(serverSectionsMap.values()).flat();
-                        }
-                        if (secIds.length === 0) continue;
-
-                        const match = shares.find(s => 
-                            ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || servers.length === 1) &&
-                            matchesPlexUser(matchTarget, s)
-                        );
-
-                        if (match && match.id) {
-                            const upRes = await updatePlexUserShareSections(adminToken, match.id, secIds, srvId);
-                            if (!upRes.success) {
-                                await invitePlexFriendAndShare(adminToken, srvId, resolvedTarget, secIds, friendId);
-                            }
-                        } else if (resolvedTarget || friendId) {
-                            await invitePlexFriendAndShare(adminToken, srvId, resolvedTarget, secIds, friendId);
+                    // Restore Plex shares for child sub-accounts
+                    for (const child of childSubAccounts) {
+                        const childRawKeys = child.accountType === "KID"
+                            ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
+                            : (child.selectedPlexLibrarySectionIds || child.plexLibrarySectionIds || rawKeys.join(",")).split(",").map(s => s.trim()).filter(Boolean);
+                        if (childRawKeys.length > 0) {
+                            await syncUserPlexShareInternal(adminToken, child, childRawKeys, servers, shares);
                         }
                     }
                 }
@@ -3619,11 +3613,146 @@ export async function setUserTrialOrSubscription(
         }
 
         revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
         revalidatePath("/settings");
         return { success: true, message: `Updated access status for ${user.username} to ${status}.` };
     } catch (e: any) {
         console.error("[SET-TRIAL-SUBSCRIPTION-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to update trial or subscription" };
+    }
+}
+
+/**
+ * Universal helper to sync Plex library sharing for any user or sub-account.
+ */
+export async function syncUserPlexShareInternal(
+    adminToken: string,
+    targetUser: { id?: string; username: string; email?: string | null; plexUsername?: string | null; plexEmail?: string | null },
+    rawKeys: string[],
+    knownServers?: any[],
+    knownShares?: any[]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        if (!adminToken) return { success: false, error: "No Plex token" };
+        let servers = knownServers;
+        if (!servers || servers.length === 0) {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            servers = srvSections.map(s => ({
+                name: s.serverName,
+                clientIdentifier: s.serverId,
+                accessToken: adminToken,
+                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            }));
+            if (servers.length === 0) {
+                servers = await getPlexServers(adminToken);
+            }
+        }
+        let shares = knownShares;
+        if (!shares) {
+            shares = await getPlexSharedServersList(adminToken);
+        }
+
+        const serverSectionsMap = new Map<string, number[]>();
+        for (const key of rawKeys) {
+            const strKey = String(key).trim();
+            if (!strKey) continue;
+            if (strKey.includes(":")) {
+                const [srvId, secStr] = strKey.split(":");
+                const secId = parseInt(secStr, 10);
+                if (!isNaN(secId)) {
+                    const list = serverSectionsMap.get(srvId) || [];
+                    list.push(secId);
+                    serverSectionsMap.set(srvId, list);
+                }
+            } else {
+                const secId = parseInt(strKey, 10);
+                if (!isNaN(secId) && servers && servers.length > 0) {
+                    const primaryId = servers[0].clientIdentifier;
+                    const list = serverSectionsMap.get(primaryId) || [];
+                    list.push(secId);
+                    serverSectionsMap.set(primaryId, list);
+                }
+            }
+        }
+
+        const friend = await findPlexUserFriend(adminToken, targetUser);
+        const resolvedEmail = (friend?.email || targetUser.plexEmail || targetUser.email || "").toLowerCase().trim();
+        const resolvedUser = (friend?.username || targetUser.plexUsername || targetUser.username || "").toLowerCase().trim();
+        const friendId = friend?.id;
+
+        const matchTarget = {
+            id: friendId,
+            email: resolvedEmail,
+            username: resolvedUser,
+            plexEmail: targetUser.plexEmail,
+            plexUsername: targetUser.plexUsername
+        };
+
+        const ownerUser = await getPlexOwnerUser(adminToken);
+        const isOwner = ownerUser && matchesPlexUser(matchTarget, {
+            id: "",
+            serverId: "",
+            librarySectionIds: [],
+            user: ownerUser,
+            invitedEmail: ownerUser.email
+        });
+
+        if (isOwner) {
+            return { success: true };
+        }
+
+        const shareErrors: string[] = [];
+        for (const srv of (servers || [])) {
+            const srvId = srv.clientIdentifier;
+            let targetSectionIds = serverSectionsMap.get(srvId) || [];
+            if (targetSectionIds.length === 0) {
+                for (const [mapKey, secList] of serverSectionsMap.entries()) {
+                    if (mapKey.toLowerCase() === srvId.toLowerCase() || 
+                        srvId.toLowerCase().includes(mapKey.toLowerCase()) || 
+                        mapKey.toLowerCase().includes(srvId.toLowerCase())) {
+                        targetSectionIds = secList;
+                        break;
+                    }
+                }
+            }
+            if (targetSectionIds.length === 0 && servers && servers.length === 1 && serverSectionsMap.size > 0) {
+                targetSectionIds = Array.from(serverSectionsMap.values()).flat();
+            }
+
+            const match = (shares || []).find((s: any) => 
+                ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || (servers && servers.length === 1)) &&
+                matchesPlexUser(matchTarget, s)
+            );
+
+            if (targetSectionIds.length === 0) {
+                if (match && match.id) {
+                    await removePlexUserShare(adminToken, match.id, srvId);
+                }
+            } else {
+                if (match && match.id) {
+                    const upRes = await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
+                    if (!upRes.success) {
+                        const invRes = await invitePlexFriendAndShare(adminToken, srvId, resolvedEmail || resolvedUser, targetSectionIds, friendId);
+                        if (!invRes.success) {
+                            shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                        }
+                    }
+                } else if (resolvedEmail || resolvedUser || friendId) {
+                    const invRes = await invitePlexFriendAndShare(adminToken, srvId, resolvedEmail || resolvedUser, targetSectionIds, friendId);
+                    if (!invRes.success) {
+                        shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                    }
+                }
+            }
+        }
+
+        if (shareErrors.length > 0) {
+            return { success: false, error: shareErrors.join("; ") };
+        }
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err.message };
     }
 }
 
@@ -3713,6 +3842,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         await ensureSchemaColumns();
         const defaultTrialDays = parseInt((formData.get("defaultTrialDays") as string) || "14", 10) || 14;
         const defaultPlexLibraries = (formData.get("defaultPlexLibraries") as string)?.trim() || "";
+        const defaultKidsPlexLibraries = (formData.get("defaultKidsPlexLibraries") as string)?.trim() || "";
         const paymentPaypal = (formData.get("paymentPaypal") as string)?.trim() || "";
         const paymentVenmo = (formData.get("paymentVenmo") as string)?.trim() || "";
         const paymentCashApp = (formData.get("paymentCashApp") as string)?.trim() || "";
@@ -3721,6 +3851,9 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const subscriptionPrice = (formData.get("subscriptionPrice") as string)?.trim() || "";
         const yearlyPrice = parseFloat((formData.get("yearlyPrice") as string) || "180") || 180;
         const monthlyPrice = parseFloat((formData.get("monthlyPrice") as string) || "15") || (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const tier2YearlyPrice = parseFloat((formData.get("tier2YearlyPrice") as string) || "240") || 240;
+        const tier2MonthlyPrice = parseFloat((formData.get("tier2MonthlyPrice") as string) || "25") || (tier2YearlyPrice > 0 ? Math.round((tier2YearlyPrice / 12) * 100) / 100 : 25);
+        const availableAddons = (formData.get("availableAddons") as string)?.trim() || null;
         const renewalMonth = parseInt((formData.get("renewalMonth") as string) || "1", 10) || 1;
         const renewalDay = parseInt((formData.get("renewalDay") as string) || "1", 10) || 1;
         const billingType = (formData.get("billingType") as string)?.trim() || "YEARLY_PRORATED";
@@ -3731,53 +3864,45 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const membershipTiersEnabled = formData.get("membershipTiersEnabled") !== "false";
         const autoSuspendExpiredAccounts = formData.get("autoSuspendExpiredAccounts") === "true";
 
+        const updateData: any = {
+            defaultTrialDays,
+            defaultPlexLibraries,
+            defaultKidsPlexLibraries,
+            paymentPaypal,
+            paymentVenmo,
+            paymentCashApp,
+            paymentZelle,
+            paymentInstructions,
+            subscriptionPrice,
+            yearlyPrice,
+            monthlyPrice,
+            tier2YearlyPrice,
+            tier2MonthlyPrice,
+            renewalMonth,
+            renewalDay,
+            billingType,
+            requireReferralForSignup,
+            discordInviteUrl,
+            subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
+            membershipTiersEnabled,
+            autoSuspendExpiredAccounts
+        };
+        if (availableAddons !== null) {
+            updateData.availableAddons = availableAddons;
+        }
+
         await prisma.settings.upsert({
             where: { id: "global" },
-            update: {
-                defaultTrialDays,
-                defaultPlexLibraries,
-                paymentPaypal,
-                paymentVenmo,
-                paymentCashApp,
-                paymentZelle,
-                paymentInstructions,
-                subscriptionPrice,
-                yearlyPrice,
-                monthlyPrice,
-                renewalMonth,
-                renewalDay,
-                billingType,
-                requireReferralForSignup,
-                discordInviteUrl,
-                subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
-                membershipTiersEnabled,
-                autoSuspendExpiredAccounts
-            },
+            update: updateData,
             create: {
                 id: "global",
-                defaultTrialDays,
-                defaultPlexLibraries,
-                paymentPaypal,
-                paymentVenmo,
-                paymentCashApp,
-                paymentZelle,
-                paymentInstructions,
-                subscriptionPrice,
-                yearlyPrice,
-                monthlyPrice,
-                renewalMonth,
-                renewalDay,
-                billingType,
-                requireReferralForSignup,
-                discordInviteUrl,
-                subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
-                membershipTiersEnabled,
-                autoSuspendExpiredAccounts
+                ...updateData
             }
         });
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
         return { success: true, message: "Payment & Trial settings saved successfully!" };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to save settings" };
@@ -3791,6 +3916,8 @@ export async function getPaymentAndTrialSettings() {
         const defaultTrialDays = settings?.defaultTrialDays ?? 14;
         const yearlyPrice = settings?.yearlyPrice ?? 180;
         const monthlyPrice = settings?.monthlyPrice ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const tier2YearlyPrice = settings?.tier2YearlyPrice ?? 240;
+        const tier2MonthlyPrice = settings?.tier2MonthlyPrice ?? (tier2YearlyPrice > 0 ? Math.round((tier2YearlyPrice / 12) * 100) / 100 : 25);
         const renewalMonth = settings?.renewalMonth ?? 1;
         const renewalDay = settings?.renewalDay ?? 1;
 
@@ -3808,6 +3935,7 @@ export async function getPaymentAndTrialSettings() {
             settings: {
                 defaultTrialDays,
                 defaultPlexLibraries: settings?.defaultPlexLibraries ?? "",
+                defaultKidsPlexLibraries: settings?.defaultKidsPlexLibraries ?? "",
                 paymentPaypal: settings?.paymentPaypal ?? "",
                 paymentVenmo: settings?.paymentVenmo ?? "",
                 paymentCashApp: settings?.paymentCashApp ?? "",
@@ -3816,6 +3944,9 @@ export async function getPaymentAndTrialSettings() {
                 subscriptionPrice: settings?.subscriptionPrice ?? `$${yearlyPrice} / year`,
                 yearlyPrice,
                 monthlyPrice,
+                tier2YearlyPrice,
+                tier2MonthlyPrice,
+                availableAddons: settings?.availableAddons ?? null,
                 renewalMonth,
                 renewalDay,
                 billingType: settings?.billingType ?? "YEARLY_PRORATED",
@@ -4084,6 +4215,8 @@ export async function getPublicJoinConfig(refCode?: string) {
                 subscriptionPrice: settings?.subscriptionPrice ?? `$${yearlyPrice} / year`,
                 yearlyPrice,
                 monthlyPrice,
+                tier2YearlyPrice: settings?.tier2YearlyPrice ?? 240,
+                tier2MonthlyPrice: settings?.tier2MonthlyPrice ?? 25,
                 renewalMonth,
                 renewalDay,
                 billingType: settings?.billingType ?? "YEARLY_PRORATED",
@@ -4358,7 +4491,7 @@ export async function updateUserAccountTypeAction(userId: string, accountType: s
 export async function updateUserMembershipTierAction(userId: string, membershipTier: string) {
     try {
         await verifyAdmin();
-        const validTiers = ["STANDARD", "PREMIUM_4K", "VIP_ALL_ACCESS", "FAMILY"];
+        const validTiers = ["STANDARD", "TIER_2_VIP", "TRIAL", "PREMIUM_4K", "VIP_ALL_ACCESS", "FAMILY"];
         const cleanTier = validTiers.includes(membershipTier) ? membershipTier : "STANDARD";
 
         const updatePayload: any = { membershipTier: cleanTier };
@@ -4373,9 +4506,584 @@ export async function updateUserMembershipTierAction(userId: string, membershipT
         });
 
         revalidatePath("/settings/access");
-        return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier}`, user: updated };
+        revalidatePath("/settings/profile");
+        return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier === "TIER_2_VIP" ? "Tier 2 (Managed Support)" : cleanTier}`, user: updated };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update membership tier" };
+    }
+}
+
+/**
+ * Fetches the master pool of Plex libraries allowed for the current logged-in user,
+ * along with their currently selected subset of libraries.
+ */
+export async function getUserAllowedPlexLibrariesAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                plexUsername: true,
+                plexEmail: true,
+                plexLibrarySectionIds: true,
+                selectedPlexLibrarySectionIds: true,
+                accountType: true,
+                membershipTier: true,
+                parentUserId: true
+            }
+        });
+        if (!dbUser) return { success: false, error: "User not found", allowedKeys: [], selectedKeys: [], servers: [] };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        // Determine the allowed keys pool for this user
+        let allowedRawKeys: string[] = [];
+        if (dbUser.accountType === "KID") {
+            if (settings?.defaultKidsPlexLibraries) {
+                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+            } else if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+            }
+        } else {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+            }
+        }
+
+        // Fetch server library sections to provide detailed names & types
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        let allServersWithSections: any[] = [];
+        if (adminToken) {
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            allServersWithSections = srvSections.map(s => ({
+                serverId: s.serverId,
+                serverName: s.serverName,
+                sections: (s.sections || []).map(sec => ({
+                    id: sec.id,
+                    key: sec.key || String(sec.id),
+                    title: sec.title,
+                    type: sec.type,
+                    uniqueKey: `${s.serverId}:${sec.id}`
+                }))
+            }));
+        }
+
+        // If no specific libraries selected, user gets all allowed
+        let selectedKeys: string[] = [];
+        if (dbUser.selectedPlexLibrarySectionIds) {
+            selectedKeys = dbUser.selectedPlexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+        } else {
+            selectedKeys = [...allowedRawKeys];
+        }
+
+        return {
+            success: true,
+            allowedKeys: allowedRawKeys,
+            selectedKeys,
+            servers: allServersWithSections
+        };
+    } catch (e: any) {
+        console.error("[GET-USER-ALLOWED-LIBRARIES-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to load libraries", allowedKeys: [], selectedKeys: [], servers: [] };
+    }
+}
+
+/**
+ * Updates the user's selected subset of Plex libraries (must be within their allowed pool)
+ * and immediately updates the active share on Plex.
+ */
+export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string[]) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id }
+        });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        // Master pool
+        let allowedRawKeys: string[] = [];
+        if (dbUser.accountType === "KID") {
+            if (settings?.defaultKidsPlexLibraries) {
+                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+            } else if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+            }
+        } else {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+            }
+        }
+
+        // If allowedRawKeys is empty (e.g. server owner or unrestricted), allow any valid key
+        const filteredSelected = allowedRawKeys.length > 0
+            ? selectedKeys.filter(k => allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`)))
+            : selectedKeys;
+
+        const savedStr = Array.from(new Set(filteredSelected)).join(",");
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { selectedPlexLibrarySectionIds: savedStr }
+        });
+
+        // Apply immediately to Plex if active
+        if (dbUser.status === "APPROVED" || dbUser.status === "TRIAL") {
+            let adminToken = "";
+            if (settings?.mainPlexToken) {
+                adminToken = decryptData(settings.mainPlexToken);
+            }
+            if (!adminToken) {
+                adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+            }
+            if (adminToken) {
+                await syncUserPlexShareInternal(adminToken, dbUser, filteredSelected);
+            }
+        }
+
+        revalidatePath("/settings/profile");
+        return {
+            success: true,
+            message: "Your shared Plex library preferences have been updated!",
+            selectedKeys: filteredSelected
+        };
+    } catch (e: any) {
+        console.error("[UPDATE-USER-SELECTED-LIBRARIES-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to save library preferences" };
+    }
+}
+
+/**
+ * Fetches all sub-accounts nested under the current user.
+ */
+export async function getUserSubAccountsAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const subAccounts = await prisma.user.findMany({
+            where: { parentUserId: user.id },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                plexUsername: true,
+                plexEmail: true,
+                accountType: true,
+                subAccountLabel: true,
+                status: true,
+                trialEndsAt: true,
+                subscriptionEndsAt: true,
+                createdAt: true,
+                contentPreference: {
+                    select: {
+                        maxContentRating: true,
+                        hideHorror: true,
+                        hideNsfw: true,
+                        hideGore: true,
+                        excludedTags: true
+                    }
+                }
+            },
+            orderBy: { createdAt: "asc" }
+        });
+
+        // Check active add-ons for extra profile allowances
+        const parentUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { enabledAddons: true, membershipTier: true }
+        });
+        const enabledAddonsList: string[] = parentUser?.enabledAddons ? JSON.parse(parentUser.enabledAddons) : [];
+        const extraKidsAllowed = enabledAddonsList.includes("extra_kid_profile") ? 3 : 1;
+        const extraLivingRoomsAllowed = enabledAddonsList.includes("extra_living_room") ? 3 : 1;
+
+        return {
+            success: true,
+            subAccounts,
+            limits: {
+                includedLivingRooms: extraLivingRoomsAllowed,
+                includedKids: extraKidsAllowed,
+                totalActive: subAccounts.length
+            }
+        };
+    } catch (e: any) {
+        console.error("[GET-USER-SUB-ACCOUNTS-ERROR]:", e);
+        return { success: false, subAccounts: [], limits: { includedLivingRooms: 1, includedKids: 1, totalActive: 0 }, error: e.message };
+    }
+}
+
+/**
+ * Creates or updates a nested sub-account (Living Room or Kids).
+ */
+export async function createOrUpdateSubAccountAction(payload: {
+    id?: string;
+    type: "LIVING_ROOM" | "KID";
+    label: string;
+    plexUsernameOrEmail: string;
+}) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const parentUser = await prisma.user.findUnique({ where: { id: user.id } });
+        if (!parentUser) return { success: false, error: "Parent user not found" };
+
+        const cleanType = payload.type === "KID" ? "KID" : "LIVING_ROOM";
+        const cleanLabel = payload.label?.trim() || (cleanType === "KID" ? "Kids Account" : "Living Room Account");
+        const cleanPlexHandle = payload.plexUsernameOrEmail?.trim() || "";
+
+        if (!cleanPlexHandle) {
+            return { success: false, error: "Plex username or email is required for the sub-account." };
+        }
+
+        const isPlexEmail = cleanPlexHandle.includes("@");
+        const plexUsername = isPlexEmail ? null : cleanPlexHandle;
+        const plexEmail = isPlexEmail ? cleanPlexHandle.toLowerCase() : null;
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        if (payload.id) {
+            // Update existing sub-account
+            const existing = await prisma.user.findFirst({
+                where: { id: payload.id, parentUserId: user.id }
+            });
+            if (!existing) return { success: false, error: "Sub-account not found" };
+
+            const updated = await prisma.user.update({
+                where: { id: payload.id },
+                data: {
+                    subAccountLabel: cleanLabel,
+                    plexUsername,
+                    plexEmail,
+                    accountType: cleanType
+                }
+            });
+
+            // Update Plex Share if active
+            if (adminToken && (parentUser.status === "APPROVED" || parentUser.status === "TRIAL")) {
+                const targetKeys = cleanType === "KID"
+                    ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
+                    : (parentUser.selectedPlexLibrarySectionIds || parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                if (targetKeys.length > 0) {
+                    await syncUserPlexShareInternal(adminToken, updated, targetKeys);
+                }
+            }
+
+            revalidatePath("/settings/profile");
+            revalidatePath("/settings/access");
+            return { success: true, message: `Updated sub-account "${cleanLabel}" successfully!`, subAccount: updated };
+        } else {
+            // Create new sub-account
+            // Check limits
+            const existingSubs = await prisma.user.findMany({
+                where: { parentUserId: user.id, accountType: cleanType }
+            });
+            const enabledAddonsList: string[] = parentUser.enabledAddons ? JSON.parse(parentUser.enabledAddons) : [];
+            const maxForType = cleanType === "KID" 
+                ? (enabledAddonsList.includes("extra_kid_profile") ? 3 : 1)
+                : (enabledAddonsList.includes("extra_living_room") ? 3 : 1);
+
+            if (existingSubs.length >= maxForType) {
+                return {
+                    success: false,
+                    error: `You have reached the maximum allowed ${cleanType === "KID" ? "Kids" : "Living Room"} sub-accounts (${maxForType}). Enable an extra profile add-on to add more!`
+                };
+            }
+
+            // Generate unique sub-account username & internal email
+            const randomSuffix = Math.random().toString(36).substring(2, 7);
+            const subUsername = `${parentUser.username}_${cleanType.toLowerCase()}_${randomSuffix}`;
+            const subEmail = `${subUsername}@portalarr.subaccount.local`;
+            const dummyPassword = await hash(Math.random().toString(36), 10);
+
+            // Inherit parent's status and expiration dates
+            const newSub = await prisma.user.create({
+                data: {
+                    username: subUsername,
+                    email: subEmail,
+                    password: dummyPassword,
+                    parentUserId: parentUser.id,
+                    subAccountLabel: cleanLabel,
+                    accountType: cleanType,
+                    status: parentUser.status,
+                    trialEndsAt: parentUser.trialEndsAt,
+                    subscriptionEndsAt: parentUser.subscriptionEndsAt,
+                    convertedAt: parentUser.convertedAt,
+                    plexUsername,
+                    plexEmail,
+                    plexLibrarySectionIds: cleanType === "KID" 
+                        ? (settings?.defaultKidsPlexLibraries || "")
+                        : (parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "")
+                }
+            });
+
+            // Set up default content safety restrictions
+            if (cleanType === "KID") {
+                await prisma.userContentPreference.create({
+                    data: {
+                        userId: newSub.id,
+                        maxContentRating: "PG",
+                        hideHorror: true,
+                        hideNsfw: true,
+                        hideGore: true
+                    }
+                }).catch(() => {});
+            } else if (cleanType === "LIVING_ROOM") {
+                // Severe nudity exclusion by default
+                await prisma.userContentPreference.create({
+                    data: {
+                        userId: newSub.id,
+                        maxContentRating: "ALL",
+                        hideHorror: false,
+                        hideNsfw: true,
+                        hideGore: false,
+                        excludedTags: "IMDb:Severe:Nudity,Severe Nudity,Nudity:Severe"
+                    }
+                }).catch(() => {});
+            }
+
+            // Grant Plex share immediately if parent is active
+            if (adminToken && (parentUser.status === "APPROVED" || parentUser.status === "TRIAL")) {
+                const targetKeys = cleanType === "KID"
+                    ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
+                    : (parentUser.selectedPlexLibrarySectionIds || parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                if (targetKeys.length > 0) {
+                    await syncUserPlexShareInternal(adminToken, newSub, targetKeys);
+                }
+            }
+
+            revalidatePath("/settings/profile");
+            revalidatePath("/settings/access");
+            return { success: true, message: `Created sub-account "${cleanLabel}" for ${cleanPlexHandle}!`, subAccount: newSub };
+        }
+    } catch (e: any) {
+        console.error("[CREATE-OR-UPDATE-SUB-ACCOUNT-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to create sub-account" };
+    }
+}
+
+/**
+ * Deletes a nested sub-account and revokes its Plex shares.
+ */
+export async function deleteSubAccountAction(subAccountId: string) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const subAccount = await prisma.user.findFirst({
+            where: {
+                id: subAccountId,
+                OR: [
+                    { parentUserId: user.id },
+                    ...(user.role === "ADMIN" ? [{ id: subAccountId }] : [])
+                ]
+            }
+        });
+        if (!subAccount) return { success: false, error: "Sub-account not found or unauthorized" };
+
+        // Revoke Plex access
+        await revokePlexAccessForUserInternal(subAccount, "Sub-account deleted.");
+
+        // Delete from DB
+        await prisma.user.delete({ where: { id: subAccountId } });
+
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings/access");
+        return { success: true, message: `Deleted sub-account "${subAccount.subAccountLabel || subAccount.username}".` };
+    } catch (e: any) {
+        console.error("[DELETE-SUB-ACCOUNT-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to delete sub-account" };
+    }
+}
+
+const DEFAULT_ADDONS_CATALOG = [
+    {
+        id: "iptv_livetv",
+        name: "Live TV & IPTV Streams",
+        description: "Stream live broadcast television channels, live sports, and digital TV guides (EPG) directly in your media player.",
+        price: 0,
+        isFree: true,
+        icon: "tv",
+        tag: "Live TV"
+    },
+    {
+        id: "extra_kid_profile",
+        name: "Additional Kids Sub-Account",
+        description: "Set up a 2nd or 3rd dedicated Kids iPad/Tablet profile with curated safe libraries and parental restrictions.",
+        price: 0,
+        isFree: true,
+        icon: "baby",
+        tag: "Household"
+    },
+    {
+        id: "extra_living_room",
+        name: "Additional Living Room Profile",
+        description: "Set up a 2nd Living Room TV profile with shared family filters and nudity exclusion.",
+        price: 0,
+        isFree: true,
+        icon: "monitor",
+        tag: "Household"
+    },
+    {
+        id: "priority_requests",
+        name: "Priority Media Requests",
+        description: "Jump to the front of the download queue with fast-tracked automated grabs for newly requested releases.",
+        price: 0,
+        isFree: true,
+        icon: "sparkles",
+        tag: "Requests"
+    }
+];
+
+/**
+ * Fetches the add-on catalog and the current user's active add-ons.
+ */
+export async function getAvailableAddonsAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        let catalog = DEFAULT_ADDONS_CATALOG;
+        if (settings?.availableAddons) {
+            try {
+                const parsed = JSON.parse(settings.availableAddons);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    catalog = parsed;
+                }
+            } catch (parseErr) {
+                console.warn("[ADDONS-CATALOG-PARSE-WARN]:", parseErr);
+            }
+        }
+
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { enabledAddons: true, membershipTier: true }
+        });
+
+        let userEnabledAddons: string[] = [];
+        if (dbUser?.enabledAddons) {
+            try {
+                userEnabledAddons = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {
+                userEnabledAddons = [];
+            }
+        }
+
+        return {
+            success: true,
+            catalog,
+            userEnabledAddons
+        };
+    } catch (e: any) {
+        console.error("[GET-AVAILABLE-ADDONS-ERROR]:", e);
+        return { success: false, catalog: DEFAULT_ADDONS_CATALOG, userEnabledAddons: [], error: e.message };
+    }
+}
+
+/**
+ * Toggles a Free add-on on or off for the current user.
+ */
+export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+
+        let catalog = DEFAULT_ADDONS_CATALOG;
+        if (settings?.availableAddons) {
+            try {
+                const parsed = JSON.parse(settings.availableAddons);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    catalog = parsed;
+                }
+            } catch (_) {}
+        }
+
+        const targetAddon = catalog.find(a => a.id === addonId);
+        if (!targetAddon) return { success: false, error: "Add-on not found" };
+
+        if (!targetAddon.isFree && targetAddon.price > 0) {
+            return { success: false, error: "This is a paid add-on. Please contact your server administrator to activate." };
+        }
+
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        let enabledList: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                enabledList = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {
+                enabledList = [];
+            }
+        }
+
+        if (enabled) {
+            if (!enabledList.includes(addonId)) enabledList.push(addonId);
+        } else {
+            enabledList = enabledList.filter(id => id !== addonId);
+        }
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { enabledAddons: JSON.stringify(enabledList) }
+        });
+
+        revalidatePath("/settings/profile");
+        return {
+            success: true,
+            message: `${targetAddon.name} is now ${enabled ? "enabled" : "disabled"}!`,
+            enabledAddons: enabledList
+        };
+    } catch (e: any) {
+        console.error("[TOGGLE-FREE-ADDON-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to toggle add-on" };
+    }
+}
+
+/**
+ * Saves the global add-ons catalog (Admin only).
+ */
+export async function saveAddonsCatalogAction(addons: any[]) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const jsonStr = JSON.stringify(addons);
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { availableAddons: jsonStr },
+            create: { id: "global", availableAddons: jsonStr }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return { success: true, message: "Add-ons catalog saved successfully!" };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to save add-ons catalog" };
     }
 }
 

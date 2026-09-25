@@ -94,6 +94,7 @@ export default function AccessSettingsPage() {
     const [paymentSettings, setPaymentSettings] = useState({
         defaultTrialDays: 14,
         defaultPlexLibraries: "",
+        defaultKidsPlexLibraries: "",
         paymentPaypal: "",
         paymentVenmo: "",
         paymentCashApp: "",
@@ -102,6 +103,9 @@ export default function AccessSettingsPage() {
         subscriptionPrice: "$180 / year",
         yearlyPrice: 180,
         monthlyPrice: 15,
+        tier2YearlyPrice: 240,
+        tier2MonthlyPrice: 25,
+        availableAddons: null as string | null,
         renewalMonth: 1,
         renewalDay: 1,
         billingType: "YEARLY_PRORATED",
@@ -112,6 +116,7 @@ export default function AccessSettingsPage() {
         autoSuspendExpiredAccounts: false
     });
     const [defaultSelectedKeys, setDefaultSelectedKeys] = useState<string[]>([]);
+    const [defaultKidsSelectedKeys, setDefaultKidsSelectedKeys] = useState<string[]>([]);
     const [savingSettings, setSavingSettings] = useState(false);
     const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
     const [settingsErrMsg, setSettingsErrMsg] = useState("");
@@ -188,6 +193,13 @@ export default function AccessSettingsPage() {
                         .map((s: string) => s.trim())
                         .filter(Boolean);
                     setDefaultSelectedKeys(keys);
+                }
+                if (res.settings.defaultKidsPlexLibraries) {
+                    const kidsKeys = res.settings.defaultKidsPlexLibraries
+                        .split(",")
+                        .map((s: string) => s.trim())
+                        .filter(Boolean);
+                    setDefaultKidsSelectedKeys(kidsKeys);
                 }
             }
         } catch (e) {
@@ -538,6 +550,43 @@ export default function AccessSettingsPage() {
         });
     };
 
+    const isKidsDefaultSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        if (defaultKidsSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && defaultKidsSelectedKeys.includes(altFullKey)) return true;
+        if (defaultKidsSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && defaultKidsSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
+    };
+
+    const handleToggleKidsDefaultSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        setDefaultKidsSelectedKeys(prev => {
+            const isCurrentlySelected = isKidsDefaultSelected(serverId, sectionId, sectionKey);
+            if (isCurrentlySelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
+            } else {
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
+            }
+        });
+    };
+
     const handleSaveUserLibraries = async () => {
         if (!libModalUser) return;
 
@@ -661,6 +710,7 @@ export default function AccessSettingsPage() {
         const formData = new FormData();
         formData.append("defaultTrialDays", String(paymentSettings.defaultTrialDays));
         formData.append("defaultPlexLibraries", defaultSelectedKeys.join(","));
+        formData.append("defaultKidsPlexLibraries", defaultKidsSelectedKeys.join(","));
         formData.append("paymentPaypal", paymentSettings.paymentPaypal);
         formData.append("paymentVenmo", paymentSettings.paymentVenmo);
         formData.append("paymentCashApp", paymentSettings.paymentCashApp);
@@ -669,6 +719,8 @@ export default function AccessSettingsPage() {
         formData.append("subscriptionPrice", paymentSettings.subscriptionPrice);
         formData.append("yearlyPrice", String(paymentSettings.yearlyPrice));
         formData.append("monthlyPrice", String(paymentSettings.monthlyPrice));
+        formData.append("tier2YearlyPrice", String(paymentSettings.tier2YearlyPrice ?? 240));
+        formData.append("tier2MonthlyPrice", String(paymentSettings.tier2MonthlyPrice ?? 25));
         formData.append("renewalMonth", String(paymentSettings.renewalMonth));
         formData.append("renewalDay", String(paymentSettings.renewalDay));
         formData.append("billingType", paymentSettings.billingType);
@@ -1076,14 +1128,37 @@ export default function AccessSettingsPage() {
 
                                                     {/* STATUS & ATTRIBUTION BADGES */}
                                                     <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center">
+                                                        {user.parentUserId && (
+                                                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs font-bold gap-1">
+                                                                🔗 Sub-Account of @{user.parentUser?.username || "Parent"}
+                                                            </Badge>
+                                                        )}
                                                         {user.accountType && user.accountType !== "STANDARD" && (
                                                             <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs font-semibold">
                                                                 {user.accountType === "KID" ? "👶 Kid Profile" : "📺 Living Room"}
                                                             </Badge>
                                                         )}
-                                                        {user.membershipTier && user.membershipTier !== "STANDARD" && (
+                                                        {user.subAccountLabel && (
+                                                            <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border/40 text-[11px]">
+                                                                "{user.subAccountLabel}"
+                                                            </Badge>
+                                                        )}
+                                                        {user.membershipTier === "TIER_2_VIP" ? (
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-bold">
+                                                                🛡️ Tier 2 (Managed Support)
+                                                            </Badge>
+                                                        ) : user.membershipTier === "STANDARD" ? (
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-semibold">
+                                                                ⭐ Tier 1 (Regular)
+                                                            </Badge>
+                                                        ) : user.membershipTier && (
                                                             <Badge variant="outline" className="bg-cyan-500/15 text-cyan-300 border-cyan-500/40 text-xs font-semibold">
                                                                 {user.membershipTier === "VIP_ALL_ACCESS" ? "👑 VIP All-Access" : user.membershipTier === "PREMIUM_4K" ? "💎 4K UHD" : "👨‍👩‍👧‍👦 Family Tier"}
+                                                            </Badge>
+                                                        )}
+                                                        {user.subAccounts && user.subAccounts.length > 0 && (
+                                                            <Badge variant="outline" className="bg-indigo-500/15 text-indigo-300 border-indigo-500/40 text-[10px] font-semibold">
+                                                                {user.subAccounts.length} Sub-Account{user.subAccounts.length > 1 ? "s" : ""}
                                                             </Badge>
                                                         )}
                                                         {isPending && (
@@ -1257,14 +1332,16 @@ export default function AccessSettingsPage() {
 
                                                         {/* MEMBERSHIP TIER SELECTOR */}
                                                         <Select defaultValue={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
-                                                            <SelectTrigger className="h-8 text-xs w-32 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
+                                                            <SelectTrigger className="h-8 text-xs w-44 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
                                                                 <SelectValue />
                                                             </SelectTrigger>
                                                             <SelectContent>
-                                                                <SelectItem value="STANDARD">Standard Tier</SelectItem>
-                                                                <SelectItem value="PREMIUM_4K">💎 4K UHD</SelectItem>
-                                                                <SelectItem value="VIP_ALL_ACCESS">👑 VIP All-Access</SelectItem>
-                                                                <SelectItem value="FAMILY">👨‍👩‍👧‍👦 Family Tier</SelectItem>
+                                                                <SelectItem value="STANDARD">⭐ Tier 1: Regular Member</SelectItem>
+                                                                <SelectItem value="TIER_2_VIP">🛡️ Tier 2: Managed Support</SelectItem>
+                                                                <SelectItem value="TRIAL">⏱️ Trial Pass</SelectItem>
+                                                                <SelectItem value="PREMIUM_4K">💎 4K UHD (Legacy)</SelectItem>
+                                                                <SelectItem value="VIP_ALL_ACCESS">👑 VIP All-Access (Legacy)</SelectItem>
+                                                                <SelectItem value="FAMILY">👨‍👩‍👧‍👦 Family Tier (Legacy)</SelectItem>
                                                             </SelectContent>
                                                         </Select>
 
@@ -1507,11 +1584,14 @@ export default function AccessSettingsPage() {
                                                 className="bg-background/60 font-mono"
                                                 required
                                             />
-                                            <p className="text-[11px] text-muted-foreground">e.g. 7 or 14 days free pass.</p>
+                                            <p className="text-[11px] text-muted-foreground">Standard time-limited trial pass.</p>
                                         </div>
 
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold">Yearly Subscription Rate ($)</Label>
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 1 Annual Rate ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Tier</Badge>
+                                            </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                                 <Input 
@@ -1528,24 +1608,31 @@ export default function AccessSettingsPage() {
                                                     required
                                                 />
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">Full annual payment (e.g. $180/yr).</p>
+                                            <p className="text-[11px] text-muted-foreground">Regular membership (${paymentSettings.monthlyPrice}/mo breakdown).</p>
                                         </div>
 
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold">Monthly Breakdown Rate ($)</Label>
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 2 Annual Rate ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Support</Badge>
+                                            </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                                 <Input 
                                                     type="number"
                                                     min="0"
-                                                    step="0.5"
-                                                    value={paymentSettings.monthlyPrice}
-                                                    onChange={(e) => setPaymentSettings({ ...paymentSettings, monthlyPrice: parseFloat(e.target.value) || 0 })}
+                                                    step="1"
+                                                    value={paymentSettings.tier2YearlyPrice ?? 240}
+                                                    onChange={(e) => {
+                                                        const y = parseFloat(e.target.value) || 0;
+                                                        const m = y > 0 ? Math.round((y / 12) * 100) / 100 : 0;
+                                                        setPaymentSettings({ ...paymentSettings, tier2YearlyPrice: y, tier2MonthlyPrice: m });
+                                                    }}
                                                     className="pl-9 bg-background/60 font-mono"
                                                     required
                                                 />
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">Calculated proration rate (e.g. $15/mo).</p>
+                                            <p className="text-[11px] text-muted-foreground">Needy/High-support users (${paymentSettings.tier2MonthlyPrice ?? 25}/mo breakdown). Masked as standard membership in user UI.</p>
                                         </div>
                                     </div>
 
@@ -1754,12 +1841,12 @@ export default function AccessSettingsPage() {
                                     </div>
                                 </div>
 
-                                {/* DEFAULT PLEX LIBRARIES SELECTION */}
+                                {/* DEFAULT PLEX LIBRARIES SELECTION (REGULAR / SIGNUPS) */}
                                 <div className="space-y-3 pt-2 border-t border-border/40">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for New Signups</Label>
-                                            <p className="text-[11px] text-muted-foreground">Select which server libraries are automatically granted to newly registered trial users.</p>
+                                            <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Regular Members & Signups</Label>
+                                            <p className="text-[11px] text-muted-foreground">Select which server libraries are automatically granted to newly registered trial users and regular members. Regular members can choose from these in their profile.</p>
                                         </div>
                                         <Button 
                                             type="button" 
@@ -1847,6 +1934,150 @@ export default function AccessSettingsPage() {
                                             })}
                                         </div>
                                     )}
+                                </div>
+
+                                {/* DEFAULT PLEX LIBRARIES SELECTION FOR KIDS ACCOUNTS */}
+                                <div className="space-y-3 pt-2 border-t border-border/40">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Kids Accounts</Label>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-300 border-blue-500/30">Kids Server / Safe Shelf</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Select which server library sections are shared by default when members create a Kids sub-account. Kids accounts inherit this library pool and automatic PG rating restrictions.</p>
+                                        </div>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-7 text-xs text-primary"
+                                            onClick={loadLibraries}
+                                            disabled={loadingLibraries}
+                                        >
+                                            {loadingLibraries ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                                            Refresh Libraries
+                                        </Button>
+                                    </div>
+
+                                    {serverLibraries.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-border/40">
+                                            No Plex libraries detected. Verify your Admin Plex token is configured in Settings.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {serverLibraries.map((srv) => {
+                                                const srvSections = srv.sections || [];
+                                                const srvSelectedCount = srvSections.filter((sec: any) => 
+                                                    isKidsDefaultSelected(srv.serverId, sec.id, sec.key)
+                                                ).length;
+                                                const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
+
+                                                return (
+                                                    <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server className="h-3.5 w-3.5 text-blue-400" />
+                                                                <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-blue-300">
+                                                                    {srvSelectedCount}/{srvSections.length} Kids Default
+                                                                </Badge>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                                onClick={() => {
+                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvRawIds = srvSections.map((sec: any) => String(sec.id));
+                                                                    setDefaultKidsSelectedKeys(prev => {
+                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
+                                                                        return allSrvSelected ? otherKeys : [...otherKeys, ...srvKeys];
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {allSrvSelected ? "Deselect All" : "Select All"}
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {srvSections.map((sec: any) => {
+                                                                const uniqueKey = `${srv.serverId}:${sec.id}`;
+                                                                const isChecked = isKidsDefaultSelected(srv.serverId, sec.id, sec.key);
+                                                                return (
+                                                                    <label 
+                                                                        key={uniqueKey} 
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            handleToggleKidsDefaultSection(srv.serverId, sec.id, sec.key);
+                                                                        }}
+                                                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                                                                            isChecked ? "bg-blue-500/15 border-blue-500/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
+                                                                        }`}
+                                                                    >
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {}}
+                                                                            className="rounded border-border text-blue-500 focus:ring-blue-500 h-3.5 w-3.5 shrink-0 pointer-events-none"
+                                                                        />
+                                                                        <span className="truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ADD-ONS CATALOG INFORMATION */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-400">
+                                            <Sparkles className="h-4 w-4" />
+                                            <span>Add-ons & Household Features (Modular Framework)</span>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-300 border-purple-500/30">
+                                            Free & Paid Add-ons
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Members can activate optional add-ons directly from their user settings page. Free add-ons activate with a 1-click toggle:
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
+                                            <div className="flex items-center justify-between font-bold text-foreground">
+                                                <span>📺 Live TV & IPTV Streams</span>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">Direct live broadcast TV channels and EPG guides.</p>
+                                        </div>
+                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
+                                            <div className="flex items-center justify-between font-bold text-foreground">
+                                                <span>👶 Additional Kids Sub-Account</span>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">Allows 2nd or 3rd dedicated kids iPad/tablet profiles.</p>
+                                        </div>
+                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
+                                            <div className="flex items-center justify-between font-bold text-foreground">
+                                                <span>🛋️ Additional Living Room Profile</span>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">Allows 2nd living room TV profile with severe nudity filter.</p>
+                                        </div>
+                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
+                                            <div className="flex items-center justify-between font-bold text-foreground">
+                                                <span>⚡ Priority Media Requests</span>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">Fast-tracks automated indexer grabs for new requests.</p>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* REQUIRE REFERRAL SWITCH */}

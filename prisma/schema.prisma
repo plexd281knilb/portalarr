@@ -34,6 +34,7 @@ model Settings {
   googleBooksApiKey  String?
   defaultTrialDays   Int       @default(14)
   defaultPlexLibraries String?
+  defaultKidsPlexLibraries String? // Default shared Plex libraries for Kids accounts
   paymentPaypal      String?
   paymentVenmo       String?
   paymentCashApp     String?
@@ -42,6 +43,9 @@ model Settings {
   subscriptionPrice  String?
   yearlyPrice        Float?    @default(180)
   monthlyPrice       Float?    @default(15)
+  tier2YearlyPrice   Float?    @default(240) // Yearly pricing for Tier 2 (Needy / Managed Support)
+  tier2MonthlyPrice  Float?    @default(25)  // Monthly pricing for Tier 2 (Needy / Managed Support)
+  availableAddons    String?   // JSON list of configured add-ons with pricing and free flags
   renewalMonth       Int?      @default(1)
   renewalDay         Int?      @default(1)
   billingType        String?   @default("YEARLY_PRORATED")
@@ -317,8 +321,14 @@ model User {
   referredByUserId       String?
   referredBy             User?     @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
   referrals              User[]    @relation("UserReferrals")
+  parentUserId           String?
+  parentUser             User?     @relation("UserSubAccounts", fields: [parentUserId], references: [id], onDelete: Cascade)
+  subAccounts            User[]    @relation("UserSubAccounts")
+  subAccountLabel        String?   // Label for sub-accounts e.g. "Living Room TV" or "Kids iPad"
   accountType            String    @default("STANDARD") // "STANDARD", "KID", "LIVING_ROOM"
-  membershipTier         String    @default("STANDARD") // "STANDARD", "PREMIUM_4K", "VIP_ALL_ACCESS", "FAMILY"
+  membershipTier         String    @default("STANDARD") // "STANDARD" (Tier 1), "TIER_2_VIP" (Secret Tier 2 - Managed), "TRIAL"
+  selectedPlexLibrarySectionIds String? // User-selected subset of Plex library section keys
+  enabledAddons          String?   // JSON array of active addon IDs e.g. ["iptv", "live_tv"]
   contentPreference      UserContentPreference?
   notificationPreference UserNotificationPreference?
   convertedAt            DateTime? // When trial converted to paying subscriber
