@@ -1277,13 +1277,13 @@ export default function AccessSettingsPage() {
                                                             <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-bold">
                                                                 🛡️ Tier 2 (Managed Support)
                                                             </Badge>
-                                                        ) : user.membershipTier === "STANDARD" ? (
+                                                        ) : user.membershipTier === "TRIAL" ? (
+                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs font-bold">
+                                                                ⏱️ Trial Pass
+                                                            </Badge>
+                                                        ) : (
                                                             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-semibold">
                                                                 ⭐ Tier 1 (Regular)
-                                                            </Badge>
-                                                        ) : user.membershipTier && (
-                                                            <Badge variant="outline" className="bg-cyan-500/15 text-cyan-300 border-cyan-500/40 text-xs font-semibold">
-                                                                {user.membershipTier === "VIP_ALL_ACCESS" ? "👑 VIP All-Access" : user.membershipTier === "PREMIUM_4K" ? "💎 4K UHD" : "👨‍👩‍👧‍👦 Family Tier"}
                                                             </Badge>
                                                         )}
                                                         {user.subAccounts && user.subAccounts.length > 0 && (
@@ -1497,9 +1497,6 @@ export default function AccessSettingsPage() {
                                                                 <SelectItem value="STANDARD">⭐ Tier 1: Regular Member</SelectItem>
                                                                 <SelectItem value="TIER_2_VIP">🛡️ Tier 2: Managed Support</SelectItem>
                                                                 <SelectItem value="TRIAL">⏱️ Trial Pass</SelectItem>
-                                                                <SelectItem value="PREMIUM_4K">💎 4K UHD (Legacy)</SelectItem>
-                                                                <SelectItem value="VIP_ALL_ACCESS">👑 VIP All-Access (Legacy)</SelectItem>
-                                                                <SelectItem value="FAMILY">👨‍👩‍👧‍👦 Family Tier (Legacy)</SelectItem>
                                                             </SelectContent>
                                                         </Select>
 

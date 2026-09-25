@@ -4585,13 +4585,10 @@ export async function updateUserAccountTypeAction(userId: string, accountType: s
 export async function updateUserMembershipTierAction(userId: string, membershipTier: string) {
     try {
         await verifyAdmin();
-        const validTiers = ["STANDARD", "TIER_2_VIP", "TRIAL", "PREMIUM_4K", "VIP_ALL_ACCESS", "FAMILY"];
+        const validTiers = ["STANDARD", "TIER_2_VIP", "TRIAL"];
         const cleanTier = validTiers.includes(membershipTier) ? membershipTier : "STANDARD";
 
         const updatePayload: any = { membershipTier: cleanTier };
-        if (cleanTier === "PREMIUM_4K" || cleanTier === "VIP_ALL_ACCESS") {
-            updatePayload.canRequest4k = true;
-        }
 
         const updated = await prisma.user.update({
             where: { id: userId },
@@ -4601,7 +4598,7 @@ export async function updateUserMembershipTierAction(userId: string, membershipT
 
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
-        return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier === "TIER_2_VIP" ? "Tier 2 (Managed Support)" : cleanTier}`, user: updated };
+        return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier === "TIER_2_VIP" ? "Tier 2 (Managed Support)" : cleanTier === "TRIAL" ? "Trial Pass" : "Tier 1 (Regular Member)"}`, user: updated };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update membership tier" };
     }
@@ -5297,9 +5294,9 @@ export async function requestTierUpgradeAction(targetTier: string, note?: string
         if (!dbUser) return { success: false, error: "User not found" };
 
         const tierTitles: Record<string, string> = {
-            PREMIUM_4K: "4K HDR Dedicated Transcode Tier",
-            VIP_ALL_ACCESS: "VIP All-Access Tier (4K + Live TV / IPTV + Unlimited Quotas)",
-            FAMILY: "Family & Multi-Profile Tier"
+            TIER_2_VIP: "Tier 2: Managed Support (VIP Setup & Remote Assistance)",
+            STANDARD: "Tier 1: Regular Member",
+            TRIAL: "Trial Pass"
         };
         const title = tierTitles[targetTier] || targetTier;
 

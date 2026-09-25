@@ -101,7 +101,7 @@ export default function UserProfilePage() {
 
     // Membership Upgrade Modal State
     const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
-    const [targetTier, setTargetTier] = useState("PREMIUM_4K");
+    const [targetTier, setTargetTier] = useState("TIER_2_VIP");
     const [upgradeNote, setUpgradeNote] = useState("");
     const [submittingUpgrade, setSubmittingUpgrade] = useState(false);
     const [upgradeSuccessMsg, setUpgradeSuccessMsg] = useState("");
@@ -721,20 +721,18 @@ export default function UserProfilePage() {
                                 <Crown className="h-5 w-5 text-indigo-400" /> Membership Tier & Service Access
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Your current plan tier determines 4K stream transcoding access, IPTV channels, and profile features.
+                                Your current plan tier determines your support level, media requests, and library access.
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
                             <Badge variant="outline" className={`text-xs font-bold ${
-                                currentTier === "VIP_ALL_ACCESS" 
+                                currentTier === "TIER_2_VIP" 
                                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
-                                    : currentTier === "PREMIUM_4K"
-                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                                    : currentTier === "FAMILY"
-                                    ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                                    : currentTier === "TRIAL"
+                                    ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
                                     : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                             }`}>
-                                {currentTier === "VIP_ALL_ACCESS" ? "👑 VIP All-Access" : currentTier === "PREMIUM_4K" ? "💎 4K UHD Dedicated" : currentTier === "FAMILY" ? "👨‍👩‍👧‍👦 Family Tier" : "⭐ Standard Access"}
+                                {currentTier === "TIER_2_VIP" ? "🛡️ Tier 2: Managed Support" : currentTier === "TRIAL" ? "⏱️ Trial Pass" : "⭐ Tier 1: Regular Member"}
                             </Badge>
                             {currentAccountType !== "STANDARD" && (
                                 <Badge variant="outline" className="text-xs font-medium bg-muted/40 border-border">
@@ -747,19 +745,21 @@ export default function UserProfilePage() {
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Video Quality</span>
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Plan Tier</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <Tv className="h-4 w-4 text-cyan-400" />
-                                {currentTier === "PREMIUM_4K" || currentTier === "VIP_ALL_ACCESS" || user?.canRequest4k ? "4K UHD + 1080p" : "1080p Full HD"}
+                                <ShieldCheck className="h-4 w-4 text-cyan-400" />
+                                {currentTier === "TIER_2_VIP" ? "Tier 2 (Managed)" : currentTier === "TRIAL" ? "Trial Pass" : "Tier 1 (Regular)"}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">Dedicated NVENC hardware streams.</p>
+                            <p className="text-[10px] text-muted-foreground">
+                                {currentTier === "TIER_2_VIP" ? "Dedicated setup & support." : "Standard self-service access."}
+                            </p>
                         </div>
 
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Media Quotas</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
                                 <Sparkles className="h-4 w-4 text-amber-400" />
-                                {currentTier === "VIP_ALL_ACCESS" ? "Unlimited Requests" : "Standard Weekly Quotas"}
+                                {currentTier === "TIER_2_VIP" ? "Priority Managed Quotas" : "Standard Library Quotas"}
                             </p>
                             <p className="text-[10px] text-muted-foreground">Movie, TV show & book requests.</p>
                         </div>
@@ -767,7 +767,7 @@ export default function UserProfilePage() {
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Profile Safety</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                <Tv className="h-4 w-4 text-emerald-400" />
                                 {currentAccountType === "KID" ? "Child Protection Active" : "Full Library Access"}
                             </p>
                             <p className="text-[10px] text-muted-foreground">Parental rating & genre filters.</p>
@@ -776,7 +776,7 @@ export default function UserProfilePage() {
 
                     <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/40">
                         <p className="text-xs text-muted-foreground">
-                            Want to unlock 4K UHD downloads, dedicated transcode capacity, or extra family profiles?
+                            Looking for dedicated onboarding, managed support, or personalized device assistance?
                         </p>
                         <Button
                             type="button"
@@ -2024,9 +2024,8 @@ export default function UserProfilePage() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="PREMIUM_4K">💎 4K UHD Dedicated Streams & Transcoding</SelectItem>
-                                    <SelectItem value="VIP_ALL_ACCESS">👑 VIP All-Access (4K + Live TV / IPTV + Unlimited)</SelectItem>
-                                    <SelectItem value="FAMILY">👨‍👩‍👧‍👦 Family Tier (Multi-Profile + Kid Locks)</SelectItem>
+                                    <SelectItem value="TIER_2_VIP">🛡️ Tier 2: Managed Support (VIP Setup & Remote Assistance)</SelectItem>
+                                    <SelectItem value="STANDARD">⭐ Tier 1: Regular Member</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
