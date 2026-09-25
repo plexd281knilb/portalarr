@@ -1,25 +1,31 @@
 "use client";
 
 import React, { useState } from "react";
-import { ExternalLink, Copy, Check, DollarSign } from "lucide-react";
+import { ExternalLink, Copy, Check, DollarSign, QrCode, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getPaymentLink, PaymentLinkInfo } from "@/lib/payment-links";
+import { PaymentQrModal } from "@/components/payment-qr-modal";
 
 interface PaymentConfigProps {
     paymentPaypal?: string | null;
     paymentVenmo?: string | null;
     paymentCashApp?: string | null;
     paymentZelle?: string | null;
+    yearlyPrice?: number | null;
+    monthlyPrice?: number | null;
 }
 
 interface PaymentMethodsGridProps {
     config?: PaymentConfigProps | null;
+    username?: string;
     className?: string;
     onCopy?: (text: string, provider: string) => void;
 }
 
-export function PaymentMethodsGrid({ config, className = "", onCopy }: PaymentMethodsGridProps) {
+export function PaymentMethodsGrid({ config, username = "USER", className = "", onCopy }: PaymentMethodsGridProps) {
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
+    const [qrModalOpen, setQrModalOpen] = useState(false);
+    const [selectedProvider, setSelectedProvider] = useState<"paypal" | "venmo" | "cashapp" | "zelle">("venmo");
 
     if (!config) return null;
 
@@ -30,12 +36,15 @@ export function PaymentMethodsGrid({ config, className = "", onCopy }: PaymentMe
         { key: "zelle", value: config.paymentZelle },
     ];
 
-    const activeItems: Array<{ link: PaymentLinkInfo; rawValue: string }> = [];
+    const activeItems: Array<{ link: PaymentLinkInfo; rawValue: string; key: "paypal" | "venmo" | "cashapp" | "zelle" }> = [];
     providers.forEach(({ key, value }) => {
         if (value && value.trim()) {
-            const linkInfo = getPaymentLink(key, value);
+            const linkInfo = getPaymentLink(key, value, {
+                username,
+                amount: config.yearlyPrice || 180,
+            });
             if (linkInfo) {
-                activeItems.push({ link: linkInfo, rawValue: value.trim() });
+                activeItems.push({ link: linkInfo, rawValue: value.trim(), key });
             }
         }
     });
@@ -53,19 +62,35 @@ export function PaymentMethodsGrid({ config, className = "", onCopy }: PaymentMe
         }, 2000);
     };
 
+    const handleOpenQr = (e: React.MouseEvent, key: "paypal" | "venmo" | "cashapp" | "zelle") => {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedProvider(key);
+        setQrModalOpen(true);
+    };
+
     return (
         <div className={`space-y-2.5 ${className}`}>
             <div className="flex items-center justify-between">
                 <p className="font-bold text-foreground text-xs flex items-center gap-1.5">
                     <DollarSign className="h-3.5 w-3.5 text-primary" /> Supported Payment Methods
                 </p>
-                <span className="text-[10px] text-muted-foreground/70 hidden sm:inline-block">
-                    Click to open app or link in a new tab
-                </span>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                        setSelectedProvider(activeItems[0]?.key || "venmo");
+                        setQrModalOpen(true);
+                    }}
+                    className="h-7 px-2 text-[11px] font-semibold text-primary border-primary/30 hover:bg-primary/10 gap-1.5"
+                >
+                    <QrCode className="h-3.5 w-3.5" /> Scan QR Code
+                </Button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
-                {activeItems.map(({ link: item, rawValue }) => {
+                {activeItems.map(({ link: item, rawValue, key }) => {
                     const isCopied = copiedKey === item.provider;
                     return (
                         <div
@@ -93,25 +118,48 @@ export function PaymentMethodsGrid({ config, className = "", onCopy }: PaymentMe
                                 </span>
                             </a>
 
-                            {/* 1-CLICK COPY BUTTON */}
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
-                                onClick={(e) => handleCopyClick(e, rawValue, item.provider)}
-                                title={`Copy ${item.providerName} handle`}
-                            >
-                                {isCopied ? (
-                                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                ) : (
-                                    <Copy className="h-3.5 w-3.5" />
-                                )}
-                            </Button>
+                            <div className="flex items-center gap-1">
+                                {/* SCAN QR BUTTON */}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => handleOpenQr(e, key)}
+                                    title={`Show QR code for ${item.providerName}`}
+                                >
+                                    <QrCode className="h-3.5 w-3.5 text-primary/80" />
+                                </Button>
+
+                                {/* 1-CLICK COPY BUTTON */}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-[11px] font-sans shrink-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => handleCopyClick(e, rawValue, item.provider)}
+                                    title={`Copy ${item.providerName} handle`}
+                                >
+                                    {isCopied ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                    ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                    )}
+                                </Button>
+                            </div>
                         </div>
                     );
                 })}
             </div>
+
+            {/* QR CODE MODAL */}
+            <PaymentQrModal
+                isOpen={qrModalOpen}
+                onClose={() => setQrModalOpen(false)}
+                config={config}
+                username={username}
+                initialProvider={selectedProvider}
+            />
         </div>
     );
 }

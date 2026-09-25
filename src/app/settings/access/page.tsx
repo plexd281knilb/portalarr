@@ -19,7 +19,9 @@ import {
     markUserConverted,
     getReferralStats,
     getPaymentAndTrialSettings,
-    savePaymentAndTrialSettings
+    savePaymentAndTrialSettings,
+    updateUserAccountTypeAction,
+    updateUserMembershipTierAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
@@ -103,7 +105,10 @@ export default function AccessSettingsPage() {
         renewalMonth: 1,
         renewalDay: 1,
         billingType: "YEARLY_PRORATED",
-        requireReferralForSignup: false
+        requireReferralForSignup: false,
+        discordInviteUrl: "",
+        subscriptionGracePeriodDays: 3,
+        membershipTiersEnabled: true
     });
     const [defaultSelectedKeys, setDefaultSelectedKeys] = useState<string[]>([]);
     const [savingSettings, setSavingSettings] = useState(false);
@@ -270,6 +275,16 @@ export default function AccessSettingsPage() {
 
     const handleRoleChange = async (userId: string, newRole: string) => {
         await updateAppUserRole(userId, newRole);
+        loadUsers();
+    };
+
+    const handleAccountTypeChange = async (userId: string, newType: string) => {
+        await updateUserAccountTypeAction(userId, newType);
+        loadUsers();
+    };
+
+    const handleMembershipTierChange = async (userId: string, newTier: string) => {
+        await updateUserMembershipTierAction(userId, newTier);
         loadUsers();
     };
 
@@ -657,6 +672,9 @@ export default function AccessSettingsPage() {
         formData.append("renewalDay", String(paymentSettings.renewalDay));
         formData.append("billingType", paymentSettings.billingType);
         formData.append("requireReferralForSignup", String(paymentSettings.requireReferralForSignup));
+        formData.append("discordInviteUrl", paymentSettings.discordInviteUrl || "");
+        formData.append("subscriptionGracePeriodDays", String(paymentSettings.subscriptionGracePeriodDays ?? 3));
+        formData.append("membershipTiersEnabled", String(paymentSettings.membershipTiersEnabled ?? true));
 
         const res = await savePaymentAndTrialSettings(formData);
         setSavingSettings(false);
@@ -1056,6 +1074,16 @@ export default function AccessSettingsPage() {
 
                                                     {/* STATUS & ATTRIBUTION BADGES */}
                                                     <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center">
+                                                        {user.accountType && user.accountType !== "STANDARD" && (
+                                                            <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs font-semibold">
+                                                                {user.accountType === "KID" ? "👶 Kid Profile" : "📺 Living Room"}
+                                                            </Badge>
+                                                        )}
+                                                        {user.membershipTier && user.membershipTier !== "STANDARD" && (
+                                                            <Badge variant="outline" className="bg-cyan-500/15 text-cyan-300 border-cyan-500/40 text-xs font-semibold">
+                                                                {user.membershipTier === "VIP_ALL_ACCESS" ? "👑 VIP All-Access" : user.membershipTier === "PREMIUM_4K" ? "💎 4K UHD" : "👨‍👩‍👧‍👦 Family Tier"}
+                                                            </Badge>
+                                                        )}
                                                         {isPending && (
                                                             <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-bold">
                                                                 <Clock className="h-3 w-3" /> Pending Approval
@@ -1212,10 +1240,35 @@ export default function AccessSettingsPage() {
                                                         </Button>
                                                     </div>
 
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {/* ACCOUNT TYPE SELECTOR */}
+                                                        <Select defaultValue={user.accountType || "STANDARD"} onValueChange={(val) => handleAccountTypeChange(user.id, val)}>
+                                                            <SelectTrigger className="h-8 text-xs w-32 bg-background/80 border-border/60 font-semibold" title="Account Type & Parental Filter">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="STANDARD">Standard User</SelectItem>
+                                                                <SelectItem value="KID">👶 Kid Profile</SelectItem>
+                                                                <SelectItem value="LIVING_ROOM">📺 Living Room</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        {/* MEMBERSHIP TIER SELECTOR */}
+                                                        <Select defaultValue={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
+                                                            <SelectTrigger className="h-8 text-xs w-32 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="STANDARD">Standard Tier</SelectItem>
+                                                                <SelectItem value="PREMIUM_4K">💎 4K UHD</SelectItem>
+                                                                <SelectItem value="VIP_ALL_ACCESS">👑 VIP All-Access</SelectItem>
+                                                                <SelectItem value="FAMILY">👨‍👩‍👧‍👦 Family Tier</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
                                                         {/* ROLE SELECTOR */}
                                                         <Select defaultValue={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
-                                                            <SelectTrigger className="h-8 text-xs w-28 bg-background/80 border-border/60 font-semibold">
+                                                            <SelectTrigger className="h-8 text-xs w-28 bg-background/80 border-border/60 font-semibold" title="User Permission Role">
                                                                 <SelectValue />
                                                             </SelectTrigger>
                                                             <SelectContent>
@@ -1639,6 +1692,30 @@ export default function AccessSettingsPage() {
                                                 className="bg-background/60 text-xs"
                                             />
                                         </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Discord Server Invite Link</Label>
+                                            <Input 
+                                                placeholder="e.g. https://discord.gg/yourserver"
+                                                value={paymentSettings.discordInviteUrl || ""}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, discordInviteUrl: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">Presented to users during onboarding / join wizard.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Subscription Grace Period (Days)</Label>
+                                            <Input 
+                                                type="number"
+                                                min="0"
+                                                max="30"
+                                                value={paymentSettings.subscriptionGracePeriodDays ?? 3}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, subscriptionGracePeriodDays: parseInt(e.target.value, 10) || 0 })}
+                                                className="bg-background/60 text-xs font-mono"
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">Days allowed past expiration before auto-suspending account.</p>
+                                        </div>
                                     </div>
 
                                     <div className="space-y-1.5 pt-2 border-t border-border/30">
@@ -1757,6 +1834,18 @@ export default function AccessSettingsPage() {
                                     <Switch 
                                         checked={paymentSettings.requireReferralForSignup}
                                         onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, requireReferralForSignup: checked })}
+                                    />
+                                </div>
+
+                                {/* MEMBERSHIP TIERS SWITCH */}
+                                <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-xs font-bold text-foreground">Enable Membership Tiers & Add-ons</Label>
+                                        <p className="text-[11px] text-muted-foreground">Enables 4K dedicated transcode tiers, VIP IPTV access, and family kid profiles.</p>
+                                    </div>
+                                    <Switch 
+                                        checked={paymentSettings.membershipTiersEnabled ?? true}
+                                        onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, membershipTiersEnabled: checked })}
                                     />
                                 </div>
 

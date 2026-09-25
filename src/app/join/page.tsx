@@ -13,7 +13,8 @@ import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
 import { 
     Sparkles, Gift, CheckCircle2, ChevronRight, ChevronLeft, Tv, Tv2, 
     Flame, Monitor, Smartphone, Globe, Shield, User, Mail, Lock, 
-    Loader2, AlertCircle, CreditCard, DollarSign, ArrowRight, Play, ExternalLink, Check, Copy, Calendar
+    Loader2, AlertCircle, CreditCard, DollarSign, ArrowRight, Play, ExternalLink, Check, Copy, Calendar,
+    MessageSquare
 } from "lucide-react";
 
 function JoinWizardContent() {
@@ -418,6 +419,31 @@ function JoinWizardContent() {
                                     To ensure smooth streaming with zero lag or buffering, your device needs one quick setting changed.
                                 </p>
                             </div>
+
+                            {config?.discordInviteUrl && (
+                                <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-2.5 text-xs">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 font-bold text-foreground">
+                                            <MessageSquare className="h-4 w-4 text-indigo-400" />
+                                            <span>Join Our Community Discord</span>
+                                        </div>
+                                        <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-[10px]">
+                                            Community
+                                        </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground leading-relaxed text-[11px]">
+                                        Get instant support, request new titles, receive server downtime alerts, and chat with fellow members.
+                                    </p>
+                                    <a 
+                                        href={config.discordInviteUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all hover:ring-2 hover:ring-indigo-400/40 active:scale-95"
+                                    >
+                                        <MessageSquare className="h-3.5 w-3.5" /> Join Discord Server <ExternalLink className="h-3 w-3 ml-0.5" />
+                                    </a>
+                                </div>
+                            )}
                         </CardContent>
 
                         <CardFooter className="flex gap-3 justify-between pt-2 pb-6">

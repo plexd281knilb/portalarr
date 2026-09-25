@@ -3699,6 +3699,10 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const renewalDay = parseInt((formData.get("renewalDay") as string) || "1", 10) || 1;
         const billingType = (formData.get("billingType") as string)?.trim() || "YEARLY_PRORATED";
         const requireReferralForSignup = formData.get("requireReferralForSignup") === "true";
+        const discordInviteUrl = (formData.get("discordInviteUrl") as string)?.trim() || null;
+        const rawGraceDays = formData.get("subscriptionGracePeriodDays");
+        const subscriptionGracePeriodDays = rawGraceDays ? parseInt(rawGraceDays as string, 10) : 3;
+        const membershipTiersEnabled = formData.get("membershipTiersEnabled") !== "false";
 
         await prisma.settings.upsert({
             where: { id: "global" },
@@ -3716,7 +3720,10 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
                 renewalMonth,
                 renewalDay,
                 billingType,
-                requireReferralForSignup
+                requireReferralForSignup,
+                discordInviteUrl,
+                subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
+                membershipTiersEnabled
             },
             create: {
                 id: "global",
@@ -3733,7 +3740,10 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
                 renewalMonth,
                 renewalDay,
                 billingType,
-                requireReferralForSignup
+                requireReferralForSignup,
+                discordInviteUrl,
+                subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
+                membershipTiersEnabled
             }
         });
 
@@ -3780,7 +3790,10 @@ export async function getPaymentAndTrialSettings() {
                 renewalMonth,
                 renewalDay,
                 billingType: settings?.billingType ?? "YEARLY_PRORATED",
-                requireReferralForSignup: Boolean(settings?.requireReferralForSignup)
+                requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
+                discordInviteUrl: settings?.discordInviteUrl ?? "",
+                subscriptionGracePeriodDays: settings?.subscriptionGracePeriodDays ?? 3,
+                membershipTiersEnabled: settings?.membershipTiersEnabled ?? true
             },
             proratedPreview
         };
@@ -4045,6 +4058,8 @@ export async function getPublicJoinConfig(refCode?: string) {
                 renewalDay,
                 billingType: settings?.billingType ?? "YEARLY_PRORATED",
                 requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
+                discordInviteUrl: settings?.discordInviteUrl ?? "",
+                membershipTiersEnabled: settings?.membershipTiersEnabled ?? true,
                 referrerName,
                 validReferral,
                 proratedBilling,
@@ -4090,6 +4105,279 @@ export async function sendManualEmail(formData: FormData) {
     } catch (e: any) {
         console.error("Email Failed:", e);
         return { error: "Failed to send email. Please check your SMTP settings in the General tab." };
+    }
+}
+
+// ==========================================
+// USER NOTIFICATION & PREFERENCE ACTIONS
+// ==========================================
+
+export async function getUserNotificationPreferencesAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        let pref = await prisma.userNotificationPreference.findUnique({
+            where: { userId: user.id }
+        });
+
+        if (!pref) {
+            pref = await prisma.userNotificationPreference.create({
+                data: {
+                    userId: user.id,
+                    emailMediaReady: true,
+                    emailNewContent: true,
+                    emailAnnouncements: true,
+                    emailSupportTickets: true,
+                    emailSubscriptionReminders: true,
+                    emailReferralRewards: true,
+                    discordMediaReady: false,
+                    discordAnnouncements: false,
+                    discordWebhookUrl: null
+                }
+            });
+        }
+
+        return { success: true, preferences: pref };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to fetch notification preferences" };
+    }
+}
+
+export async function updateUserNotificationPreferencesAction(data: {
+    emailMediaReady?: boolean;
+    emailNewContent?: boolean;
+    emailAnnouncements?: boolean;
+    emailSupportTickets?: boolean;
+    emailSubscriptionReminders?: boolean;
+    emailReferralRewards?: boolean;
+    discordMediaReady?: boolean;
+    discordAnnouncements?: boolean;
+    discordWebhookUrl?: string | null;
+}) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+
+        const updated = await prisma.userNotificationPreference.upsert({
+            where: { userId: user.id },
+            update: {
+                emailMediaReady: data.emailMediaReady ?? true,
+                emailNewContent: data.emailNewContent ?? true,
+                emailAnnouncements: data.emailAnnouncements ?? true,
+                emailSupportTickets: data.emailSupportTickets ?? true,
+                emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
+                emailReferralRewards: data.emailReferralRewards ?? true,
+                discordMediaReady: Boolean(data.discordMediaReady),
+                discordAnnouncements: Boolean(data.discordAnnouncements),
+                discordWebhookUrl: data.discordWebhookUrl?.trim() || null
+            },
+            create: {
+                userId: user.id,
+                emailMediaReady: data.emailMediaReady ?? true,
+                emailNewContent: data.emailNewContent ?? true,
+                emailAnnouncements: data.emailAnnouncements ?? true,
+                emailSupportTickets: data.emailSupportTickets ?? true,
+                emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
+                emailReferralRewards: data.emailReferralRewards ?? true,
+                discordMediaReady: Boolean(data.discordMediaReady),
+                discordAnnouncements: Boolean(data.discordAnnouncements),
+                discordWebhookUrl: data.discordWebhookUrl?.trim() || null
+            }
+        });
+
+        return { success: true, message: "Notification preferences updated successfully!", preferences: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update notification preferences" };
+    }
+}
+
+export async function getUserContentPreferencesAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        let pref = await prisma.userContentPreference.findUnique({
+            where: { userId: user.id }
+        });
+
+        if (!pref) {
+            pref = await prisma.userContentPreference.create({
+                data: {
+                    userId: user.id,
+                    maxContentRating: "ALL",
+                    hideLeavingSoon: false,
+                    hideHorror: false,
+                    hideNsfw: false,
+                    hideGore: false,
+                    excludedGenres: JSON.stringify([]),
+                    excludedTags: JSON.stringify([])
+                }
+            });
+        }
+
+        let parsedGenres: string[] = [];
+        let parsedTags: string[] = [];
+        try {
+            if (pref.excludedGenres) parsedGenres = JSON.parse(pref.excludedGenres);
+            if (pref.excludedTags) parsedTags = JSON.parse(pref.excludedTags);
+        } catch (e) {}
+
+        return {
+            success: true,
+            preferences: {
+                ...pref,
+                excludedGenresList: parsedGenres,
+                excludedTagsList: parsedTags
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to fetch content preferences" };
+    }
+}
+
+export async function updateUserContentPreferencesAction(data: {
+    maxContentRating?: string | null;
+    hideLeavingSoon?: boolean;
+    hideHorror?: boolean;
+    hideNsfw?: boolean;
+    hideGore?: boolean;
+    excludedGenres?: string[];
+    excludedTags?: string[];
+}) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+
+        const updated = await prisma.userContentPreference.upsert({
+            where: { userId: user.id },
+            update: {
+                maxContentRating: data.maxContentRating || "ALL",
+                hideLeavingSoon: Boolean(data.hideLeavingSoon),
+                hideHorror: Boolean(data.hideHorror),
+                hideNsfw: Boolean(data.hideNsfw),
+                hideGore: Boolean(data.hideGore),
+                excludedGenres: JSON.stringify(data.excludedGenres || []),
+                excludedTags: JSON.stringify(data.excludedTags || [])
+            },
+            create: {
+                userId: user.id,
+                maxContentRating: data.maxContentRating || "ALL",
+                hideLeavingSoon: Boolean(data.hideLeavingSoon),
+                hideHorror: Boolean(data.hideHorror),
+                hideNsfw: Boolean(data.hideNsfw),
+                hideGore: Boolean(data.hideGore),
+                excludedGenres: JSON.stringify(data.excludedGenres || []),
+                excludedTags: JSON.stringify(data.excludedTags || [])
+            }
+        });
+
+        return { success: true, message: "Content safety preferences saved successfully!", preferences: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update content preferences" };
+    }
+}
+
+export async function updateUserAccountTypeAction(userId: string, accountType: string) {
+    try {
+        await verifyAdmin();
+        const validTypes = ["STANDARD", "KID", "LIVING_ROOM"];
+        const cleanType = validTypes.includes(accountType) ? accountType : "STANDARD";
+
+        const updated = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                accountType: cleanType,
+                // Automatically enforce kid restrictions if accountType is KID
+                ...(cleanType === "KID"
+                    ? {
+                          canRequest4k: false,
+                          autoApproveMovies: true,
+                          autoApproveTv: true
+                      }
+                    : {})
+            },
+            select: { id: true, username: true, accountType: true, membershipTier: true }
+        });
+
+        // Set default kid content preference if newly assigned
+        if (cleanType === "KID") {
+            await prisma.userContentPreference.upsert({
+                where: { userId },
+                update: {
+                    maxContentRating: "PG",
+                    hideHorror: true,
+                    hideNsfw: true,
+                    hideGore: true
+                },
+                create: {
+                    userId,
+                    maxContentRating: "PG",
+                    hideHorror: true,
+                    hideNsfw: true,
+                    hideGore: true
+                }
+            }).catch(() => {});
+        }
+
+        revalidatePath("/settings/access");
+        return { success: true, message: `Updated ${updated.username} account type to ${cleanType}`, user: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update account type" };
+    }
+}
+
+export async function updateUserMembershipTierAction(userId: string, membershipTier: string) {
+    try {
+        await verifyAdmin();
+        const validTiers = ["STANDARD", "PREMIUM_4K", "VIP_ALL_ACCESS", "FAMILY"];
+        const cleanTier = validTiers.includes(membershipTier) ? membershipTier : "STANDARD";
+
+        const updatePayload: any = { membershipTier: cleanTier };
+        if (cleanTier === "PREMIUM_4K" || cleanTier === "VIP_ALL_ACCESS") {
+            updatePayload.canRequest4k = true;
+        }
+
+        const updated = await prisma.user.update({
+            where: { id: userId },
+            data: updatePayload,
+            select: { id: true, username: true, membershipTier: true, canRequest4k: true }
+        });
+
+        revalidatePath("/settings/access");
+        return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier}`, user: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update membership tier" };
+    }
+}
+
+export async function requestTierUpgradeAction(targetTier: string, note?: string) {
+    try {
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        const tierTitles: Record<string, string> = {
+            PREMIUM_4K: "4K HDR Dedicated Transcode Tier",
+            VIP_ALL_ACCESS: "VIP All-Access Tier (4K + Live TV / IPTV + Unlimited Quotas)",
+            FAMILY: "Family & Multi-Profile Tier"
+        };
+        const title = tierTitles[targetTier] || targetTier;
+
+        // Auto-create support ticket for admin review
+        await prisma.supportTicket.create({
+            data: {
+                name: dbUser.username,
+                email: dbUser.email,
+                issue: `[TIER UPGRADE REQUEST] User requested upgrade to ${title}.\n\nCurrent Tier: ${dbUser.membershipTier || "STANDARD"}\nStatus: ${dbUser.status}\nUser Note: ${note || "No additional note provided."}`,
+                status: "Pending"
+            }
+        });
+
+        return {
+            success: true,
+            message: `Your upgrade request for ${title} has been submitted! An administrator will review your account.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to submit upgrade request" };
     }
 }
 

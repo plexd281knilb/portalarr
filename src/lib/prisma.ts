@@ -551,7 +551,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["seerrEmailNotifyUserApproved", `ALTER TABLE "Settings" ADD COLUMN "seerrEmailNotifyUserApproved" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["seerrEmailNotifyUserDeclined", `ALTER TABLE "Settings" ADD COLUMN "seerrEmailNotifyUserDeclined" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["seerrEmailNotifyUserAvailable", `ALTER TABLE "Settings" ADD COLUMN "seerrEmailNotifyUserAvailable" BOOLEAN NOT NULL DEFAULT 1;`],
-                ["seerrEmailNotifyUserFailed", `ALTER TABLE "Settings" ADD COLUMN "seerrEmailNotifyUserFailed" BOOLEAN NOT NULL DEFAULT 1;`]
+                ["seerrEmailNotifyUserFailed", `ALTER TABLE "Settings" ADD COLUMN "seerrEmailNotifyUserFailed" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["discordInviteUrl", `ALTER TABLE "Settings" ADD COLUMN "discordInviteUrl" TEXT;`],
+                ["subscriptionGracePeriodDays", `ALTER TABLE "Settings" ADD COLUMN "subscriptionGracePeriodDays" INTEGER DEFAULT 3;`],
+                ["membershipTiersEnabled", `ALTER TABLE "Settings" ADD COLUMN "membershipTiersEnabled" BOOLEAN NOT NULL DEFAULT 1;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -596,6 +599,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["referredByUserId", `ALTER TABLE "User" ADD COLUMN "referredByUserId" TEXT;`],
                 ["convertedAt", `ALTER TABLE "User" ADD COLUMN "convertedAt" DATETIME;`],
                 ["lastLogin", `ALTER TABLE "User" ADD COLUMN "lastLogin" DATETIME;`],
+                ["accountType", `ALTER TABLE "User" ADD COLUMN "accountType" TEXT NOT NULL DEFAULT 'STANDARD';`],
+                ["membershipTier", `ALTER TABLE "User" ADD COLUMN "membershipTier" TEXT NOT NULL DEFAULT 'STANDARD';`],
                 ["canRequest", `ALTER TABLE "User" ADD COLUMN "canRequest" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["canRequest4k", `ALTER TABLE "User" ADD COLUMN "canRequest4k" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["autoApproveMovies", `ALTER TABLE "User" ADD COLUMN "autoApproveMovies" BOOLEAN NOT NULL DEFAULT 1;`],
@@ -1088,6 +1093,46 @@ export async function ensureSchemaColumns(): Promise<void> {
             `);
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to create EmailTemplate table:", e.message || e);
+        }
+
+        // --- 10b. USER PREFERENCES (CONTENT & NOTIFICATIONS) ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "UserContentPreference" (
+                    "id" TEXT PRIMARY KEY,
+                    "userId" TEXT NOT NULL UNIQUE,
+                    "excludedGenres" TEXT,
+                    "excludedTags" TEXT,
+                    "maxContentRating" TEXT,
+                    "hideLeavingSoon" BOOLEAN NOT NULL DEFAULT 0,
+                    "hideHorror" BOOLEAN NOT NULL DEFAULT 0,
+                    "hideNsfw" BOOLEAN NOT NULL DEFAULT 0,
+                    "hideGore" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "UserContentPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "UserNotificationPreference" (
+                    "id" TEXT PRIMARY KEY,
+                    "userId" TEXT NOT NULL UNIQUE,
+                    "emailMediaReady" BOOLEAN NOT NULL DEFAULT 1,
+                    "emailNewContent" BOOLEAN NOT NULL DEFAULT 1,
+                    "emailAnnouncements" BOOLEAN NOT NULL DEFAULT 1,
+                    "emailSupportTickets" BOOLEAN NOT NULL DEFAULT 1,
+                    "emailSubscriptionReminders" BOOLEAN NOT NULL DEFAULT 1,
+                    "emailReferralRewards" BOOLEAN NOT NULL DEFAULT 1,
+                    "discordMediaReady" BOOLEAN NOT NULL DEFAULT 0,
+                    "discordAnnouncements" BOOLEAN NOT NULL DEFAULT 0,
+                    "discordWebhookUrl" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "UserNotificationPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] Failed to create User Preferences tables:", e.message || e);
         }
 
         // --- 11. CURATION, AGREGARR & KOMETA (PMM) TABLES & COLUMNS ---

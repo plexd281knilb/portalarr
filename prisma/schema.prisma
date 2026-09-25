@@ -46,6 +46,9 @@ model Settings {
   renewalDay         Int?      @default(1)
   billingType        String?   @default("YEARLY_PRORATED")
   requireReferralForSignup Boolean @default(false)
+  discordInviteUrl   String?   // Discord server invite link for onboarding
+  subscriptionGracePeriodDays Int? @default(3) // Grace period days after subscription expires before suspension
+  membershipTiersEnabled Boolean @default(true)
 
   // Email Notification Controls
   emailNotificationsEnabled   Boolean   @default(true)
@@ -292,7 +295,10 @@ model User {
   referredByUserId       String?
   referredBy             User?     @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
   referrals              User[]    @relation("UserReferrals")
+  accountType            String    @default("STANDARD") // "STANDARD", "KID", "LIVING_ROOM"
+  membershipTier         String    @default("STANDARD") // "STANDARD", "PREMIUM_4K", "VIP_ALL_ACCESS", "FAMILY"
   contentPreference      UserContentPreference?
+  notificationPreference UserNotificationPreference?
   convertedAt            DateTime? // When trial converted to paying subscriber
   lastLogin              DateTime? // Last time the user logged in
   
@@ -630,6 +636,23 @@ model UserContentPreference {
   hideGore         Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model UserNotificationPreference {
+  id                         String   @id @default(cuid())
+  userId                     String   @unique
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailMediaReady            Boolean  @default(true)
+  emailNewContent            Boolean  @default(true)
+  emailAnnouncements         Boolean  @default(true)
+  emailSupportTickets        Boolean  @default(true)
+  emailSubscriptionReminders  Boolean  @default(true)
+  emailReferralRewards       Boolean  @default(true)
+  discordMediaReady          Boolean  @default(false)
+  discordAnnouncements       Boolean  @default(false)
+  discordWebhookUrl          String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 }
 
 model MediaContentAdvisory {

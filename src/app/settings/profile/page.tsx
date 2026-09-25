@@ -2,17 +2,31 @@
 
 import { useState, useEffect } from "react";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
-import { getUserReferralInfo, getPublicJoinConfig, updateCurrentUserKindleEmail } from "@/app/actions";
+import { 
+    getUserReferralInfo, 
+    getPublicJoinConfig, 
+    updateCurrentUserKindleEmail,
+    getUserNotificationPreferencesAction,
+    updateUserNotificationPreferencesAction,
+    getUserContentPreferencesAction,
+    updateUserContentPreferencesAction,
+    requestTierUpgradeAction
+} from "@/app/actions";
 import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { 
     User, Mail, KeyRound, CheckCircle2, XCircle, Loader2, ShieldCheck, 
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
-    CreditCard, Calendar, AlertCircle, Trash2, RefreshCw
+    CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
+    Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -31,6 +45,57 @@ export default function UserProfilePage() {
     const [checkingStatus, setCheckingStatus] = useState(false);
     const [statusSyncMsg, setStatusSyncMsg] = useState("");
     const [statusSyncErr, setStatusSyncErr] = useState("");
+
+    // Change Password State
+    const [passCurrent, setPassCurrent] = useState("");
+    const [passNew, setPassNew] = useState("");
+    const [passMsg, setPassMsg] = useState("");
+    const [passErr, setPassErr] = useState("");
+    const [passLoading, setPassLoading] = useState(false);
+
+    // Send-to-Kindle State
+    const [kindleEmail, setKindleEmail] = useState("");
+    const [kindleSaving, setKindleSaving] = useState(false);
+    const [kindleMsg, setKindleMsg] = useState("");
+    const [kindleErr, setKindleErr] = useState("");
+
+    // Notification Preferences State
+    const [notifPrefs, setNotifPrefs] = useState({
+        emailMediaReady: true,
+        emailNewContent: true,
+        emailAnnouncements: true,
+        emailSupportTickets: true,
+        emailSubscriptionReminders: true,
+        emailReferralRewards: true,
+        discordMediaReady: false,
+        discordAnnouncements: false,
+        discordWebhookUrl: ""
+    });
+    const [savingNotif, setSavingNotif] = useState(false);
+    const [notifMsg, setNotifMsg] = useState("");
+    const [notifErr, setNotifErr] = useState("");
+
+    // Content Safety Preferences State
+    const [contentPrefs, setContentPrefs] = useState({
+        maxContentRating: "ALL",
+        hideLeavingSoon: false,
+        hideHorror: false,
+        hideNsfw: false,
+        hideGore: false,
+        excludedGenresList: [] as string[],
+        excludedTagsList: [] as string[]
+    });
+    const [savingContent, setSavingContent] = useState(false);
+    const [contentMsg, setContentMsg] = useState("");
+    const [contentErr, setContentErr] = useState("");
+
+    // Membership Upgrade Modal State
+    const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+    const [targetTier, setTargetTier] = useState("PREMIUM_4K");
+    const [upgradeNote, setUpgradeNote] = useState("");
+    const [submittingUpgrade, setSubmittingUpgrade] = useState(false);
+    const [upgradeSuccessMsg, setUpgradeSuccessMsg] = useState("");
+    const [upgradeErrMsg, setUpgradeErrMsg] = useState("");
 
     const handleCopy = (text: string, key: string) => {
         if (!text) return;
@@ -61,19 +126,6 @@ export default function UserProfilePage() {
         }
     };
 
-    // Change Password State
-    const [passCurrent, setPassCurrent] = useState("");
-    const [passNew, setPassNew] = useState("");
-    const [passMsg, setPassMsg] = useState("");
-    const [passErr, setPassErr] = useState("");
-    const [passLoading, setPassLoading] = useState(false);
-
-    // Send-to-Kindle State
-    const [kindleEmail, setKindleEmail] = useState("");
-    const [kindleSaving, setKindleSaving] = useState(false);
-    const [kindleMsg, setKindleMsg] = useState("");
-    const [kindleErr, setKindleErr] = useState("");
-
     useEffect(() => {
         async function fetchProfile() {
             setLoading(true);
@@ -91,8 +143,38 @@ export default function UserProfilePage() {
                 if (pConfig?.success && pConfig.config) {
                     setPaymentConfig(pConfig.config);
                 }
+
+                // Load Notification Preferences
+                const notifRes = await getUserNotificationPreferencesAction();
+                if (notifRes?.success && notifRes.preferences) {
+                    setNotifPrefs({
+                        emailMediaReady: Boolean(notifRes.preferences.emailMediaReady),
+                        emailNewContent: Boolean(notifRes.preferences.emailNewContent),
+                        emailAnnouncements: Boolean(notifRes.preferences.emailAnnouncements),
+                        emailSupportTickets: Boolean(notifRes.preferences.emailSupportTickets),
+                        emailSubscriptionReminders: Boolean(notifRes.preferences.emailSubscriptionReminders),
+                        emailReferralRewards: Boolean(notifRes.preferences.emailReferralRewards),
+                        discordMediaReady: Boolean(notifRes.preferences.discordMediaReady),
+                        discordAnnouncements: Boolean(notifRes.preferences.discordAnnouncements),
+                        discordWebhookUrl: notifRes.preferences.discordWebhookUrl || ""
+                    });
+                }
+
+                // Load Content Preferences
+                const contentRes = await getUserContentPreferencesAction();
+                if (contentRes?.success && contentRes.preferences) {
+                    setContentPrefs({
+                        maxContentRating: contentRes.preferences.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(contentRes.preferences.hideLeavingSoon),
+                        hideHorror: Boolean(contentRes.preferences.hideHorror),
+                        hideNsfw: Boolean(contentRes.preferences.hideNsfw),
+                        hideGore: Boolean(contentRes.preferences.hideGore),
+                        excludedGenresList: contentRes.preferences.excludedGenresList || [],
+                        excludedTagsList: contentRes.preferences.excludedTagsList || []
+                    });
+                }
             } catch (e) {
-                console.error(e);
+                console.error("fetchProfile error:", e);
             } finally {
                 setLoading(false);
             }
@@ -157,6 +239,78 @@ export default function UserProfilePage() {
         }
     };
 
+    const handleSaveNotifications = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSavingNotif(true);
+        setNotifMsg("");
+        setNotifErr("");
+        try {
+            const res = await updateUserNotificationPreferencesAction(notifPrefs);
+            if (res.success) {
+                setNotifMsg(res.message || "Notification preferences saved!");
+                setTimeout(() => setNotifMsg(""), 4000);
+            } else {
+                setNotifErr(res.error || "Failed to save preferences");
+            }
+        } catch (err: any) {
+            setNotifErr(err.message || "Error saving preferences");
+        } finally {
+            setSavingNotif(false);
+        }
+    };
+
+    const handleSaveContentSafety = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSavingContent(true);
+        setContentMsg("");
+        setContentErr("");
+        try {
+            const res = await updateUserContentPreferencesAction({
+                maxContentRating: contentPrefs.maxContentRating,
+                hideLeavingSoon: contentPrefs.hideLeavingSoon,
+                hideHorror: contentPrefs.hideHorror,
+                hideNsfw: contentPrefs.hideNsfw,
+                hideGore: contentPrefs.hideGore,
+                excludedGenres: contentPrefs.excludedGenresList,
+                excludedTags: contentPrefs.excludedTagsList
+            });
+            if (res.success) {
+                setContentMsg(res.message || "Content safety preferences saved!");
+                setTimeout(() => setContentMsg(""), 4000);
+            } else {
+                setContentErr(res.error || "Failed to save preferences");
+            }
+        } catch (err: any) {
+            setContentErr(err.message || "Error saving preferences");
+        } finally {
+            setSavingContent(false);
+        }
+    };
+
+    const handleSubmitUpgrade = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSubmittingUpgrade(true);
+        setUpgradeSuccessMsg("");
+        setUpgradeErrMsg("");
+        try {
+            const res = await requestTierUpgradeAction(targetTier, upgradeNote);
+            if (res.success) {
+                setUpgradeSuccessMsg(res.message || "Upgrade request submitted successfully!");
+                setTimeout(() => {
+                    setUpgradeModalOpen(false);
+                    setUpgradeSuccessMsg("");
+                    setUpgradeNote("");
+                }, 2000);
+            } else {
+                setUpgradeErrMsg(res.error || "Failed to submit upgrade request");
+            }
+        } catch (err: any) {
+            setUpgradeErrMsg(err.message || "Error submitting request");
+        } finally {
+            setSubmittingUpgrade(false);
+        }
+    };
+
     const handleCopyInviteLink = () => {
         if (!referralInfo?.referralCode) return;
         const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -184,6 +338,9 @@ export default function UserProfilePage() {
     const hasAtSymbol = cleanKindleInput.includes("@");
     const hasChangedKindle = (user?.kindleEmail || "").trim().toLowerCase() !== cleanKindleInput;
 
+    const currentTier = user?.membershipTier || "STANDARD";
+    const currentAccountType = user?.accountType || "STANDARD";
+
     return (
         <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-6 animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -192,7 +349,7 @@ export default function UserProfilePage() {
                         <User className="h-6 w-6 text-primary" /> Account Profile & Settings
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        Manage your account credentials, Send-to-Kindle delivery address, and invite friends with your personal link.
+                        Manage your account credentials, notifications, membership tier, content safety, and Send-to-Kindle delivery.
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -282,6 +439,90 @@ export default function UserProfilePage() {
                 </CardContent>
             </Card>
 
+            {/* MEMBERSHIP TIER & PERKS CARD */}
+            <Card className="border-indigo-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Crown className="h-5 w-5 text-indigo-400" /> Membership Tier & Service Access
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Your current plan tier determines 4K stream transcoding access, IPTV channels, and profile features.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={`text-xs font-bold ${
+                                currentTier === "VIP_ALL_ACCESS" 
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
+                                    : currentTier === "PREMIUM_4K"
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                                    : currentTier === "FAMILY"
+                                    ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            }`}>
+                                {currentTier === "VIP_ALL_ACCESS" ? "👑 VIP All-Access" : currentTier === "PREMIUM_4K" ? "💎 4K UHD Dedicated" : currentTier === "FAMILY" ? "👨‍👩‍👧‍👦 Family Tier" : "⭐ Standard Access"}
+                            </Badge>
+                            {currentAccountType !== "STANDARD" && (
+                                <Badge variant="outline" className="text-xs font-medium bg-muted/40 border-border">
+                                    {currentAccountType === "KID" ? "👶 Kid Account" : "📺 Living Room"}
+                                </Badge>
+                            )}
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Video Quality</span>
+                            <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                                <Tv className="h-4 w-4 text-cyan-400" />
+                                {currentTier === "PREMIUM_4K" || currentTier === "VIP_ALL_ACCESS" || user?.canRequest4k ? "4K UHD + 1080p" : "1080p Full HD"}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Dedicated NVENC hardware streams.</p>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Media Quotas</span>
+                            <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                                <Sparkles className="h-4 w-4 text-amber-400" />
+                                {currentTier === "VIP_ALL_ACCESS" ? "Unlimited Requests" : "Standard Weekly Quotas"}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Movie, TV show & book requests.</p>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Profile Safety</span>
+                            <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                {currentAccountType === "KID" ? "Child Protection Active" : "Full Library Access"}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Parental rating & genre filters.</p>
+                        </div>
+                    </div>
+
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/40">
+                        <p className="text-xs text-muted-foreground">
+                            Want to unlock 4K UHD downloads, dedicated transcode capacity, or extra family profiles?
+                        </p>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                                setUpgradeModalOpen(true);
+                                setUpgradeSuccessMsg("");
+                                setUpgradeErrMsg("");
+                            }}
+                            className="w-full sm:w-auto text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 shrink-0 transition-all hover:ring-2 hover:ring-indigo-400/40 active:scale-95"
+                        >
+                            <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Request Tier Upgrade
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* SUBSCRIPTION & RENEWAL CARD */}
             <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                 <CardHeader className="pb-3">
@@ -345,9 +586,9 @@ export default function UserProfilePage() {
                         </div>
                     )}
 
-                    {/* PAYMENT HANDLES */}
+                    {/* PAYMENT HANDLES & MODAL */}
                     <div className="pt-2 border-t border-border/40">
-                        <PaymentMethodsGrid config={paymentConfig} />
+                        <PaymentMethodsGrid config={paymentConfig} username={user?.username} />
                     </div>
 
                     {paymentConfig?.paymentInstructions && (
@@ -359,6 +600,292 @@ export default function UserProfilePage() {
                     <p className="text-[11px] text-muted-foreground italic pt-1">
                         💡 When making a payment, remember to include your username <strong className="text-foreground">({user?.username})</strong> in the payment memo.
                     </p>
+                </CardContent>
+            </Card>
+
+            {/* NOTIFICATION PREFERENCES CARD */}
+            <Card id="notifications" className="border-cyan-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Bell className="h-5 w-5 text-cyan-400" /> Notification & Email Preferences
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Choose which updates you want to receive via Email and Discord webhook alerts.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-xs w-fit">
+                            Live Alerts
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSaveNotifications} className="space-y-4">
+                        {notifMsg && (
+                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>{notifMsg}</span>
+                            </div>
+                        )}
+                        {notifErr && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <XCircle className="h-4 w-4 shrink-0" />
+                                <span>{notifErr}</span>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* EMAIL PREFERENCES */}
+                            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+                                <div className="flex items-center gap-2 font-bold text-xs text-foreground uppercase tracking-wider">
+                                    <Mail className="h-4 w-4 text-primary" />
+                                    <span>Email Notifications</span>
+                                </div>
+
+                                <div className="space-y-2.5 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="notif-media-ready" className="text-xs cursor-pointer">
+                                            <span>Media Ready & Downloaded</span>
+                                            <p className="text-[10px] text-muted-foreground">When your movie/show/book request is ready</p>
+                                        </Label>
+                                        <Switch 
+                                            id="notif-media-ready"
+                                            checked={notifPrefs.emailMediaReady} 
+                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailMediaReady: val })} 
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                        <Label htmlFor="notif-new-content" className="text-xs cursor-pointer">
+                                            <span>New Library Content</span>
+                                            <p className="text-[10px] text-muted-foreground">Weekly digests of newly added movies & shows</p>
+                                        </Label>
+                                        <Switch 
+                                            id="notif-new-content"
+                                            checked={notifPrefs.emailNewContent} 
+                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailNewContent: val })} 
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                        <Label htmlFor="notif-announcements" className="text-xs cursor-pointer">
+                                            <span>Server Announcements</span>
+                                            <p className="text-[10px] text-muted-foreground">Maintenance notices and feature releases</p>
+                                        </Label>
+                                        <Switch 
+                                            id="notif-announcements"
+                                            checked={notifPrefs.emailAnnouncements} 
+                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailAnnouncements: val })} 
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                        <Label htmlFor="notif-sub-reminders" className="text-xs cursor-pointer">
+                                            <span>Subscription Reminders</span>
+                                            <p className="text-[10px] text-muted-foreground">Annual renewal & expiration notices</p>
+                                        </Label>
+                                        <Switch 
+                                            id="notif-sub-reminders"
+                                            checked={notifPrefs.emailSubscriptionReminders} 
+                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailSubscriptionReminders: val })} 
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                        <Label htmlFor="notif-referral" className="text-xs cursor-pointer">
+                                            <span>Referral Rewards</span>
+                                            <p className="text-[10px] text-muted-foreground">Alerts when invited friends join or subscribe</p>
+                                        </Label>
+                                        <Switch 
+                                            id="notif-referral"
+                                            checked={notifPrefs.emailReferralRewards} 
+                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailReferralRewards: val })} 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* DISCORD WEBHOOK ALERTS */}
+                            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 font-bold text-xs text-foreground uppercase tracking-wider">
+                                        <MessageSquare className="h-4 w-4 text-indigo-400" />
+                                        <span>Discord Webhook Alerts</span>
+                                    </div>
+
+                                    <div className="space-y-2.5 text-xs">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="notif-discord-ready" className="text-xs cursor-pointer">
+                                                <span>Discord Media Ready Alerts</span>
+                                                <p className="text-[10px] text-muted-foreground">Send to your personal Discord channel</p>
+                                            </Label>
+                                            <Switch 
+                                                id="notif-discord-ready"
+                                                checked={notifPrefs.discordMediaReady} 
+                                                onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, discordMediaReady: val })} 
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                            <Label htmlFor="notif-discord-announcements" className="text-xs cursor-pointer">
+                                                <span>Discord Server News</span>
+                                                <p className="text-[10px] text-muted-foreground">Channel alerts for major server updates</p>
+                                            </Label>
+                                            <Switch 
+                                                id="notif-discord-announcements"
+                                                checked={notifPrefs.discordAnnouncements} 
+                                                onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, discordAnnouncements: val })} 
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5 pt-1 border-t border-border/30">
+                                            <Label htmlFor="notif-webhook-url" className="text-xs font-semibold">Discord Webhook URL (Optional)</Label>
+                                            <Input 
+                                                id="notif-webhook-url"
+                                                type="url"
+                                                placeholder="https://discord.com/api/webhooks/..." 
+                                                value={notifPrefs.discordWebhookUrl}
+                                                onChange={(e) => setNotifPrefs({ ...notifPrefs, discordWebhookUrl: e.target.value })}
+                                                className="bg-background/80 text-xs font-mono"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <p className="text-[10px] text-muted-foreground italic pt-2">
+                                    Create a webhook in Discord: Server Settings &gt; Integrations &gt; Webhooks.
+                                </p>
+                            </div>
+                        </div>
+
+                        <Button
+                            type="submit"
+                            disabled={savingNotif}
+                            className="w-full sm:w-auto font-bold text-xs h-9 bg-cyan-600 hover:bg-cyan-500 text-white gap-2 transition-all hover:ring-2 hover:ring-cyan-400/40 active:scale-95"
+                        >
+                            {savingNotif ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                            Save Notification Preferences
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
+
+            {/* CONTENT SAFETY & FAMILY PROFILE CARD */}
+            <Card id="safety" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Shield className="h-5 w-5 text-amber-400" /> Content Safety & Family Profile
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Configure parental rating ceilings, genre exclusions, and child-safe viewing filters.
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
+                            Parental Control
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSaveContentSafety} className="space-y-4">
+                        {contentMsg && (
+                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>{contentMsg}</span>
+                            </div>
+                        )}
+                        {contentErr && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                <XCircle className="h-4 w-4 shrink-0" />
+                                <span>{contentErr}</span>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold">Maximum Content Rating Ceiling</Label>
+                                <Select 
+                                    value={contentPrefs.maxContentRating} 
+                                    onValueChange={(val) => setContentPrefs({ ...contentPrefs, maxContentRating: val })}
+                                >
+                                    <SelectTrigger className="bg-background/80 text-xs">
+                                        <SelectValue placeholder="Rating limit" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ALL">ALL (No Content Rating Filter)</SelectItem>
+                                        <SelectItem value="G">G / TV-Y / TV-G (Young Children)</SelectItem>
+                                        <SelectItem value="PG">PG / TV-PG (Parental Guidance)</SelectItem>
+                                        <SelectItem value="PG-13">PG-13 / TV-14 (Teens 13+)</SelectItem>
+                                        <SelectItem value="R">R / TV-MA (Mature 17+)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-[11px] text-muted-foreground">Titles exceeding this rating are hidden from discovery and search.</p>
+                            </div>
+
+                            <div className="space-y-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Explicit Content Filters</span>
+                                
+                                <div className="space-y-2 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="safety-hide-horror" className="text-xs cursor-pointer">
+                                            <span>Hide Horror Genre</span>
+                                        </Label>
+                                        <Switch 
+                                            id="safety-hide-horror"
+                                            checked={contentPrefs.hideHorror} 
+                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideHorror: val })} 
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                        <Label htmlFor="safety-hide-nsfw" className="text-xs cursor-pointer">
+                                            <span>Hide Adult / NSFW Content</span>
+                                        </Label>
+                                        <Switch 
+                                            id="safety-hide-nsfw"
+                                            checked={contentPrefs.hideNsfw} 
+                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideNsfw: val })} 
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                        <Label htmlFor="safety-hide-gore" className="text-xs cursor-pointer">
+                                            <span>Hide Extreme Gore / Violence</span>
+                                        </Label>
+                                        <Switch 
+                                            id="safety-hide-gore"
+                                            checked={contentPrefs.hideGore} 
+                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideGore: val })} 
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                                        <Label htmlFor="safety-hide-leaving" className="text-xs cursor-pointer">
+                                            <span>Hide Leaving Soon Badges</span>
+                                        </Label>
+                                        <Switch 
+                                            id="safety-hide-leaving"
+                                            checked={contentPrefs.hideLeavingSoon} 
+                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideLeavingSoon: val })} 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Button
+                            type="submit"
+                            disabled={savingContent}
+                            className="w-full sm:w-auto font-bold text-xs h-9 bg-amber-600 hover:bg-amber-500 text-white gap-2 transition-all hover:ring-2 hover:ring-amber-400/40 active:scale-95"
+                        >
+                            {savingContent ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                            Save Content Safety Settings
+                        </Button>
+                    </form>
                 </CardContent>
             </Card>
 
@@ -651,6 +1178,81 @@ export default function UserProfilePage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* MEMBERSHIP TIER UPGRADE REQUEST MODAL */}
+            <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
+                <DialogContent className="sm:max-w-md bg-slate-950 border border-slate-800 shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
+                            <Sparkles className="h-5 w-5 text-indigo-400" /> Request Membership Tier Upgrade
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            Select the target membership tier you would like to upgrade to. An administrator will review your account and confirm activation.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleSubmitUpgrade} className="space-y-4 py-2">
+                        {upgradeSuccessMsg && (
+                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>{upgradeSuccessMsg}</span>
+                            </div>
+                        )}
+                        {upgradeErrMsg && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <XCircle className="h-4 w-4 shrink-0" />
+                                <span>{upgradeErrMsg}</span>
+                            </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Desired Membership Tier</Label>
+                            <Select value={targetTier} onValueChange={setTargetTier}>
+                                <SelectTrigger className="bg-background/80 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="PREMIUM_4K">💎 4K UHD Dedicated Streams & Transcoding</SelectItem>
+                                    <SelectItem value="VIP_ALL_ACCESS">👑 VIP All-Access (4K + Live TV / IPTV + Unlimited)</SelectItem>
+                                    <SelectItem value="FAMILY">👨‍👩‍👧‍👦 Family Tier (Multi-Profile + Kid Locks)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Note / Special Requests (Optional)</Label>
+                            <Textarea 
+                                rows={3}
+                                placeholder="e.g. Looking for Apple TV 4K HDR playback and Live TV access."
+                                value={upgradeNote}
+                                onChange={(e) => setUpgradeNote(e.target.value)}
+                                className="bg-background/80 text-xs"
+                            />
+                        </div>
+
+                        <DialogFooter className="pt-2 flex sm:justify-between gap-2">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setUpgradeModalOpen(false)}
+                                className="text-xs"
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="submit" 
+                                size="sm"
+                                disabled={submittingUpgrade}
+                                className="font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5"
+                            >
+                                {submittingUpgrade ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                Submit Upgrade Request
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

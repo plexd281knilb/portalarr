@@ -1,5 +1,23 @@
 ### ✨ Recently Released
 
+- **🛡️ User Onboarding, Membership Subscriptions & Authorization (Wizarr Rebuilt):**
+  - **Frictionless User Onboarding (Wizarr Rebuilt):** Seamless, customizable `/join` portal with automated Plex server friend invites, default library access pre-assignment, Discord server auto-join, and guided client setup wizards (Apple TV, Roku, Fire TV, Smart TV, Google TV, Mobile, Web).
+  - **Automated Membership Subscriptions & Payment Tracking (PayPal / Venmo / Zelle — Friends & Family / P2P):**
+    - Native P2P payment routing supporting **PayPal (Friends & Family / PayPal.me)**, **Venmo (@handle / deep links / QR codes)**, **Cash App ($cashtag)**, and **Zelle (email / phone / QR codes)** with zero commercial gateway fees.
+    - Standalone pure-TS SVG QR code generator and interactive modal (`PaymentQrModal`) with payment cadence switcher ($180/year vs $17.50/month), direct app deep links, and pre-filled reconciliation memo tags (e.g. `#PORTALARR-ALICE-OCT2026`).
+    - Automated upcoming renewal reminders, payment confirmation logging with automated IMAP inbox scraper, customizable grace periods (`subscriptionGracePeriodDays`), and automated Plex access suspension upon non-payment.
+  - **Referral Rewards & Automated Account Credits:**
+    - Dedicated referral link tracking with reward rules (e.g., *"Earn 1 Free Month per converted friend"*).
+    - Automated subscription extension / billing postponement upon successful referral conversions with user referral dashboards and metrics tracking.
+  - **Granular Membership Tiers & Service Add-ons:**
+    - Flexible subscription tiers (`STANDARD`, `PREMIUM_4K`, `VIP_ALL_ACCESS`, `FAMILY`) with dedicated 4K transcode gating, Live TV / IPTV access permissions, and self-service user upgrade request workflows.
+  - **Kid Accounts & Shared Living Room Profiles:**
+    - Dedicated **Kid Accounts** (`👶 Kid Profile`) with automated parental rating filters (G / PG / TV-Y7) and safe library restrictions.
+    - Dedicated **Main Living Room / Shared Household Accounts** (`📺 Living Room`) designed for shared TV displays with customizable family-safe content tags and individual user shelf toggles.
+  - **Granular Notification & Email Preference Controls:**
+    - Complete self-service user customization over all incoming communications and alerts in User Profile.
+    - Granular toggle preferences for: Media Request Ready alerts, New Content Added digests, Server Announcements & Maintenance notices, Support Ticket replies, Subscription & Billing renewal reminders, and Referral conversion rewards (delivered via Email, Discord DM, or Webhook).
+
 - **🎨 Curation & Poster Studio Suite (Native Agregarr, Kometa & Maintainerr Replacement):**
   - **Native Agregarr Collections & Smart Hubs:** Built-in collection generator, dynamic smart playlists, and trending hubs (Trakt, TMDb, MDBList, Letterboxd, MyAnimeList, Sonarr, Radarr, IMDb) promoted directly to Plex Home and Recommended screens with zero extra Docker containers. Includes home screen slotting (`!00_`, `!01_`), hub dismissal blacklists, dynamic backdrop/poster synthesis, and placeholder stubs with immunity markers.
   - **Kometa Automated HD Poster Overlays:** High-definition badge and ribbon overlay generator (4K HDR, Dolby Vision, Dolby Atmos, Audio Codecs, Edition tags, Production Studios, IMDb/Rotten Tomatoes parental and rating badges, and dynamic "Leaving Soon" countdown banners). Complete with non-destructive artwork backup & restore vault (`ArtBackup` / `BadgeStats`).
@@ -42,27 +60,7 @@
 
 ### 🚧 Development Roadmap
 
-- **🛡️ Step 1: User Onboarding, Membership Subscriptions & Authorization (Wizarr Replacement)**
-  - **Frictionless User Onboarding (Wizarr Rebuilt):** Seamless, customizable join portal with automated Plex server friend invites, library access pre-assignment, Discord server auto-join, and guided client setup wizards.
-  - **Automated Membership Subscriptions & Payment Tracking (PayPal / Venmo / Zelle — Friends & Family / P2P):**
-    - Native P2P payment routing supporting **PayPal (Friends & Family / PayPal.me)**, **Venmo (@handle / deep links / QR codes)**, and **Zelle (email / phone / QR codes)** with zero commercial gateway fees or account flagging.
-    - Dynamic payment link and QR code generator pre-filling custom memo tags (e.g. `#PORTALARR-USER-NOV2026`) for effortless tracking and reconciliation.
-    - Flexible cadence options: Annual subscriptions (e.g., $180/year) and Monthly contributions with a convenience premium (e.g., $17.50/month).
-    - Automated upcoming renewal reminders, payment confirmation logging (with 1-click admin verification or automated email notification parsing), customizable grace periods, and automated Plex access suspension upon non-payment.
-  - **Referral Rewards & Automated Account Credits:**
-    - Dedicated referral link tracking with reward rules (e.g., *"Earn 1 Free Month per converted friend"*).
-    - Automated subscription extension / billing postponement upon successful referral conversions with user referral dashboards.
-  - **Granular Membership Tiers & Service Add-ons:**
-    - Flexible subscription tiers (e.g., Standard Media, 4K HDR Dedicated Transcode Tier, Live TV / IPTV Stream Integration, Multi-Server Links, Extra Concurrent Streams).
-    - Tier-gated library visibility, auto-applied Plex user labels, and self-service user upgrade portal.
-  - **Kid Accounts & Shared Living Room Profiles:**
-    - Dedicated **Kid Accounts** with automated parental rating filters (G / PG / TV-Y7) and safe library restrictions.
-    - Dedicated **Main Living Room / Shared Household Accounts** designed for shared TV displays with customizable family-safe content tags and individual user shelf toggles.
-  - **Granular Notification & Email Preference Controls:**
-    - Complete self-service user customization over all incoming communications and alerts.
-    - Granular toggle preferences for: Media Request Ready alerts, New Content Added digests, Server Announcements & Maintenance notices, Support Ticket replies, Subscription & Billing renewal reminders, and Referral conversion rewards (delivered via Email, Discord DM, or Web Push).
-
-- **🤖 Step 2: Autonomous AI Support Agent & Deep Server Log Diagnostics**
+- **🤖 Step 1: Autonomous AI Support Agent & Deep Server Log Diagnostics**
   - **Autonomous AI First-Response Support Agent:** Interactive in-app troubleshooting bot acting as the primary support gate before escalating to admin tickets.
   - **Live Stream Diagnostics & Device Remedies:** Inspects active playback telemetry (transcode decisions, codecs, bitrates, audio channels) and delivers tailored client fix steps (e.g., Roku bandwidth throttling, Apple TV direct play toggles, audio sync adjustments).
   - **Self-Service Media & Download Doctor:**
@@ -77,7 +75,7 @@
     - Correlates user playback error timestamps directly with raw server log events to identify root causes (transcode buffer starvation, disk I/O bottlenecks, network drops).
     - Generates 1-click administrative diagnostic reports with proactive server remediation suggestions.
 
-- **📡 Step 3: Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement)**
+- **📡 Step 2: Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement)**
   - **Automated Service Heartbeat & Multi-Protocol Health Checks:**
     - Continuous background polling and health monitoring for all configured media server stack services (Plex Media Server, Tautulli, Glances, Radarr, Sonarr, Prowlarr, Readarr, SABnzbd, qBittorrent, Overseerr, Bazarr, etc.).
     - Support for custom external HTTP/HTTPS endpoints, TCP/UDP port pings, DNS resolution checks, and SSL/TLS certificate expiry tracking.
@@ -90,36 +88,36 @@
     - Clean status overview showing 24-hour, 7-day, and 30-day uptime percentage bars, real-time latency graphs, and historical incident logs.
     - Ability to post scheduled maintenance notices and incident resolution updates directly on the dashboard.
 
-- **⚡ Step 4: Smart Bandwidth Shaper & Transcode Governor**
+- **⚡ Step 3: Smart Bandwidth Shaper & Transcode Governor**
   - **Dynamic Download Throttling:** When active remote Plex streams begin or spike above a threshold (e.g. 80% upload bandwidth), Portalarr automatically throttles qBittorrent and SABnzbd speed limits, ramping them back up once streams conclude.
   - **Transcode Prioritization & GPU Guard:** If hardware NVENC/QuickSync capacity or CPU hits critical thresholds (95%+), intelligently throttle background tasks or prioritize VIP/paying tiers while gracefully coaching standard users to adjust client playback quality.
   - **Direct Play Coach & Network Profiler:** In-app telemetry alerts users with device-tailored tips to enable Direct Play on their specific client hardware (saving server power, GPU cycles, and eliminating buffering).
 
-- **📺 Step 5: Native IPTV & Live TV Stream Manager (xTeVe / Threadfin Replacement)**
+- **📺 Step 4: Native IPTV & Live TV Stream Manager (xTeVe / Threadfin Replacement)**
   - **M3U & XMLTV EPG Aggregator:** Import, filter, and organize IPTV playlists into clean channel bouquets with custom logos, category mappings, and official electronic program guides.
   - **Dead Stream Auto-Pruning & Failover Routing:** Background health checks periodically test stream URLs, filtering out dead feeds and seamlessly routing to backup stream sources.
   - **Virtual HDHomeRun Tuner Emulation:** Emulates a virtual HDHomeRun device so Plex Media Server can ingest curated live TV feeds and sports channels directly into Plex Live TV & DVR.
 
-- **🧹 Step 6: Automated Audio/Video Cleaner & Custom Format Upgrader (TRaSH Guides Engine)**
+- **🧹 Step 5: Automated Audio/Video Cleaner & Custom Format Upgrader (TRaSH Guides Engine)**
   - **TRaSH Guides Scoring & Upgrade Engine:** Automatically tags and scores releases against community-standard profiles, automatically upgrading lower-quality releases to preferred HDR10+/Dolby Vision/properly mastered audio tracks when indexers find upgrades.
   - **Audio Track Normalizer & Compatibility Injector:** Scans video files lacking stereo/AAC compatibility tracks and auto-generates a lightweight secondary stereo AAC track to ensure 100% Direct Play on mobile, web, and Smart TVs without transcoding.
   - **Subtitle & Audio Track Pruner:** Strips unnecessary non-native language commentary tracks and foreign audio/sub streams to conserve disk space and streamline player track selection.
 
-- **💬 Step 7: Native Subtitle Engine & Auto-Sync (Bazarr Replacement)**
+- **💬 Step 6: Native Subtitle Engine & Auto-Sync (Bazarr Replacement)**
   - **Automated Multi-Provider Hunting:** Automatically grabs missing `.srt` subtitles across OpenSubtitles, Subscene, Subdl, and Addic7ed based on user language preferences.
   - **AI Audio-Sync & Offset Alignment:** Built-in audio waveform and speech-to-text alignment (using lightweight Whisper / audio track sync) to fix out-of-sync subtitles automatically.
   - **User Self-Service "Fix Subtitles":** If a user is watching a movie with missing or desynchronized subtitles, they can click a 1-click **"Request / Fix Subtitles"** button on My Plex Hub; Portalarr downloads, cleans, aligns, and injects the `.srt` directly into Plex within seconds.
 
-- **☁️ Step 8: Disaster Recovery, Automated Cloud Backups & Migration Wizard**
+- **☁️ Step 7: Disaster Recovery, Automated Cloud Backups & Migration Wizard**
   - **Automated Database & Config Snapshots:** Scheduled encrypted backups of the SQLite database, custom poster artwork, curated collection rules, and user watch histories.
   - **Cloud & Remote Storage Sync:** 1-click automated backup export to Google Drive, OneDrive, Nextcloud, AWS S3, Backblaze B2, or local NFS/SMB shares.
   - **1-Click Restore & Migration Assistant:** Effortlessly restore or migrate the entire Portalarr deployment onto a new host/Unraid server with zero manual re-entry.
 
-- **🌐 Step 9: Multi-Server Federation & Load-Balanced Failover**
+- **🌐 Step 8: Multi-Server Federation & Load-Balanced Failover**
   - **Plex Server Failover & Health Switching:** If the Primary PMS node goes offline or undergoes maintenance, Portalarr automatically redirects active users or incoming requests to the Secondary PMS node.
   - **Unified Global Search & Cross-Server Availability:** Search across multiple connected Plex servers simultaneously with deduplicated search results, consolidated stream monitoring, and unified library status badges.
 
-- **📊 Step 10: Advanced Analytics, User Engagement & Server Wrapped**
+- **📊 Step 9: Advanced Analytics, User Engagement & Server Wrapped**
   - **Annual "Server Wrapped" Experience:** Beautiful, shareable Spotify-style end-of-year infographics for users showcasing total hours watched, top movies/shows, favorite genres, and peak viewing hours.
   - **Admin Infrastructure Intelligence:** Long-term storage growth projections, transcode vs direct-play efficiency trends, popular request analysis, and indexer health scorecards.
 
