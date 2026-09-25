@@ -1194,8 +1194,24 @@ export default function AccessSettingsPage() {
                                         const isRejected = user.status === "REJECTED";
                                         const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
                                         const userLibraryCount = (() => {
-                                            if (!user.plexLibrarySectionIds) return 0;
-                                            const rawKeys = user.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            let rawKeys: string[] = [];
+                                            if (user.selectedPlexLibrarySectionIds) {
+                                                rawKeys = user.selectedPlexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            } else if (user.plexLibrarySectionIds) {
+                                                rawKeys = user.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            } else if (user.accountType === "KID" && (paymentSettings?.defaultKidsPlexLibraries || defaultKidsSelectedKeys.length > 0)) {
+                                                const raw = paymentSettings?.defaultKidsPlexLibraries || defaultKidsSelectedKeys.join(",");
+                                                rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            } else if ((isTrial || user.status === "TRIAL") && (paymentSettings?.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
+                                                const raw = paymentSettings?.defaultTrialPlexLibraries || defaultTrialSelectedKeys.join(",");
+                                                rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            } else if (paymentSettings?.defaultPlexLibraries || defaultSelectedKeys.length > 0) {
+                                                const raw = paymentSettings?.defaultPlexLibraries || defaultSelectedKeys.join(",");
+                                                rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            } else if (user.status === "APPROVED" && serverLibraries && serverLibraries.length > 0) {
+                                                return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
+                                            }
+
                                             if (rawKeys.length === 0) return 0;
                                             if (serverLibraries && serverLibraries.length > 0) {
                                                 let count = 0;
