@@ -751,32 +751,54 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
             const emailPrefix = u.email.split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "");
             const plexEmailPrefix = (u.plexEmail || "").split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "");
             const uClean = u.username.toLowerCase().replace(/[\s.'_-]+/g, "");
+            const uNoDigits = uClean.replace(/\d+$/, "");
+            const emailNoDigits = emailPrefix.replace(/\d+$/, "");
             const pClean = (u.plexUsername || "").toLowerCase().replace(/[\s.'_-]+/g, "");
             const realClean = (u.name || "").toLowerCase().replace(/[\s.'_-]+/g, "");
             return emailPrefix === strippedSenderName || 
                    plexEmailPrefix === strippedSenderName || 
                    uClean === strippedSenderName || 
+                   uNoDigits === strippedSenderName ||
+                   emailNoDigits === strippedSenderName ||
                    pClean === strippedSenderName ||
                    (realClean && realClean === strippedSenderName);
         });
         if (strippedMatches.length === 1) return strippedMatches[0];
 
-        // D. First Initial + Last Name pattern (e.g. "Jonathan Juliano" -> "jjuliano", "Austin Bamrick" -> "abamrick", "Jeremy Sherman" -> "jsherman", "Dane Heidelman" -> "dheidelman", "David Garza" -> "dgarza", "John McGlone" -> "jmcglone", "Trevor Scarborough" -> "tscarborough", "Edward McDonald" -> "emcdonald")
+        // D. First Initial + Last Name pattern & Shortened First Name patterns
+        // e.g. "Edward McDonald" vs "edwmcdonald", "EdwardMcDonald1"
+        // "Patrick King" vs "patrick.j.king", "patrick304"
+        // "Dane Heidelman" vs "dheidelman", "dheid7"
+        // "Cullin Lassiter" vs "cullin.lassiter@gmail.com", "cwbyzer0"
+        // "David Garza" vs "dgarza"
+        // "Trevor Scarborough" vs "trevscar1121", "trevsky313@gmail.com"
         const nameParts = senderName.split(/\s+/).filter(Boolean);
         if (nameParts.length >= 2) {
             const firstName = nameParts[0];
             const lastName = nameParts[nameParts.length - 1];
             const firstInitialLastName = `${firstName[0]}${lastName}`.replace(/[\s.'_-]+/g, "");
             const firstTwoLastName = `${firstName.slice(0, 2)}${lastName}`.replace(/[\s.'_-]+/g, "");
+            const firstThreeLastName = `${firstName.slice(0, 3)}${lastName}`.replace(/[\s.'_-]+/g, "");
+            const firstThreeLastPrefix = `${firstName.slice(0, 4)}${lastName.slice(0, 4)}`.replace(/[\s.'_-]+/g, "");
 
             const initialMatches = allUsers.filter(u => {
                 const uClean = u.username.toLowerCase().replace(/[\s.'_-]+/g, "");
+                const uNoDigits = uClean.replace(/\d+$/, "");
                 const pClean = (u.plexUsername || "").toLowerCase().replace(/[\s.'_-]+/g, "");
                 const emailPrefix = u.email.split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "");
+                const emailNoDigits = emailPrefix.replace(/\d+$/, "");
+                
                 return uClean === firstInitialLastName || 
+                       uNoDigits === firstInitialLastName ||
                        pClean === firstInitialLastName || 
                        emailPrefix === firstInitialLastName ||
+                       emailNoDigits === firstInitialLastName ||
                        uClean === firstTwoLastName ||
+                       uClean === firstThreeLastName ||
+                       emailPrefix === firstThreeLastName ||
+                       emailNoDigits === firstThreeLastName ||
+                       (firstThreeLastPrefix.length >= 6 && uClean.startsWith(firstThreeLastPrefix)) ||
+                       (firstThreeLastPrefix.length >= 6 && emailPrefix.startsWith(firstThreeLastPrefix)) ||
                        pClean === firstTwoLastName;
             });
             if (initialMatches.length === 1) return initialMatches[0];
@@ -785,11 +807,12 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
         // E. First Name alone if unique (e.g. "Jameson B" -> "jameson")
         const firstNamePart = nameParts[0];
         if (firstNamePart && firstNamePart.length >= 3) {
-            const firstNameMatches = allUsers.filter(u => 
-                u.username.toLowerCase() === firstNamePart || 
-                (u.plexUsername && u.plexUsername.toLowerCase() === firstNamePart) ||
-                u.email.split("@")[0].toLowerCase() === firstNamePart
-            );
+            const firstNameMatches = allUsers.filter(u => {
+                const uClean = u.username.toLowerCase().replace(/[\s.'_-]+/g, "").replace(/\d+$/, "");
+                const emailPrefix = u.email.split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "").replace(/\d+$/, "");
+                const pClean = (u.plexUsername || "").toLowerCase().replace(/[\s.'_-]+/g, "").replace(/\d+$/, "");
+                return uClean === firstNamePart || pClean === firstNamePart || emailPrefix === firstNamePart;
+            });
             if (firstNameMatches.length === 1) {
                 return firstNameMatches[0];
             }

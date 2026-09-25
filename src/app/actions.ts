@@ -3864,7 +3864,8 @@ export async function restoreAllUsersPlexAccessAction() {
         const allServersFullKeys = serversWithSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
         const kidsSectionsFullKeys = (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
         const defaultRawKeys = (settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
-        const masterFullKeys = defaultRawKeys.length > 0 ? defaultRawKeys : allServersFullKeys;
+        // Master full keys encompasses all sections across all discovered Plex servers
+        const masterFullKeys = allServersFullKeys;
 
         const users = await prisma.user.findMany({
             where: {
@@ -3890,19 +3891,12 @@ export async function restoreAllUsersPlexAccessAction() {
             try {
                 let targetKeys: string[] = [];
                 if (user.accountType === "KID") {
-                    targetKeys = kidsSectionsFullKeys.length > 0 ? kidsSectionsFullKeys : masterFullKeys;
+                    targetKeys = kidsSectionsFullKeys.length > 0 ? kidsSectionsFullKeys : allServersFullKeys;
                 } else if (user.selectedPlexLibrarySectionIds) {
                     targetKeys = user.selectedPlexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
                 } else {
-                    // Check if user currently has live keys
-                    const userExistingKeys = (user.plexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
-                    const userServerIds = new Set(userExistingKeys.filter(k => k.includes(":")).map(k => k.split(":")[0]));
-                    // If user was missing one of the servers (e.g. lost Main server), merge with master keys across all servers
-                    if (userServerIds.size < serversWithSections.length) {
-                        targetKeys = Array.from(new Set([...userExistingKeys, ...masterFullKeys]));
-                    } else {
-                        targetKeys = userExistingKeys.length > 0 ? userExistingKeys : masterFullKeys;
-                    }
+                    // Full access across all servers for approved/trial regular users
+                    targetKeys = allServersFullKeys;
                 }
 
                 if (targetKeys.length > 0) {
