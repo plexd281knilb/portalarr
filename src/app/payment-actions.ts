@@ -425,3 +425,54 @@ export async function recheckUserAccessAndPaymentAction() {
         return { success: false, error: e.message || "Failed to recheck access status" };
     }
 }
+
+/**
+ * Delete a single payment transaction
+ */
+export async function deletePaymentTransactionAction(transactionId: string) {
+    try {
+        await verifyAdmin();
+        if (!transactionId) return { success: false, error: "Transaction ID is required." };
+
+        await prisma.paymentTransaction.delete({
+            where: { id: transactionId }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            message: "Payment transaction deleted successfully."
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to delete payment transaction." };
+    }
+}
+
+/**
+ * Purge all unmatched payment transactions (e.g. noise, old records)
+ */
+export async function purgeUnmatchedPaymentTransactionsAction() {
+    try {
+        await verifyAdmin();
+
+        const result = await prisma.paymentTransaction.deleteMany({
+            where: { status: "UNMATCHED" }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            count: result.count,
+            message: `Successfully purged ${result.count} unmatched payment transaction(s).`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to purge unmatched payment transactions." };
+    }
+}
+

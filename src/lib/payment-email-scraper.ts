@@ -71,25 +71,108 @@ export async function testPaymentEmailConnection(config: {
 }
 
 /**
+ * Check if the email subject or body is clearly noise / non-P2P transaction:
+ * - Legal / Class Action settlement notices
+ * - Insurance dividends / rebates / cash back promos
+ * - Debit card purchases / merchant transactions (Walmart, Amazon, Target, etc.)
+ * - Generic bank statements, security alerts, fraud alerts, tax documents (1099)
+ * - Outgoing payments sent by the account owner
+ * - Direct deposits, payroll, refunds, ATM withdrawals
+ */
+function isDisallowedSubjectOrBody(subject: string, text: string): boolean {
+    const combined = `${subject} ${text}`.toLowerCase();
+
+    const disallowedKeywords = [
+        "class action",
+        "class-action",
+        "settlement",
+        "legal notice",
+        "notice of settlement",
+        "dividend payment",
+        "mutual dividend",
+        "cash back",
+        "cashback",
+        "rebate",
+        "claim payment",
+        "qualified auto customers",
+        "purchase with their debit card",
+        "purchase with your debit card",
+        "debit card purchase",
+        "card purchase",
+        "made a purchase",
+        "purchase at",
+        "transaction with",
+        "walmart.com",
+        "walmart",
+        "amazon.com",
+        "target.com",
+        "best buy",
+        "home depot",
+        "costco",
+        "uber eats",
+        "doordash",
+        "instacart",
+        "statement available",
+        "e-statement",
+        "security alert",
+        "fraud alert",
+        "tax document",
+        "form 1099",
+        "1099-k",
+        "1099-misc",
+        "direct deposit",
+        "payroll",
+        "atm withdrawal",
+        "withdrawal of",
+        "you sent a payment",
+        "you paid",
+        "you sent money",
+        "you made a payment",
+        "you transferred",
+        "scheduled transfer",
+        "pre-approved",
+        "special offer",
+        "rate your experience"
+    ];
+
+    for (const kw of disallowedKeywords) {
+        if (combined.includes(kw)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Extract clean payment amount from text or subjects
- * Supports formats: $180.00, $15, 180.00 USD, etc.
+ * Supports formats: $180.00, $180, 180.00 USD, split HTML lines ($ \n 180 \n 00 \n .), etc.
+ * Enforces valid P2P bounds: $0 < amount <= $5,000.00
  */
 function extractAmount(text: string): number | null {
     if (!text) return null;
-    // Look for $180.00 or $180 or $ 180.00
-    const dollarMatch = text.match(/\$\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i);
+
+    // 1. Look for split format (e.g. Venmo HTML text rendering: "$\n180\n00\n." or "$\s*180\s+00\s*\.")
+    const splitMatch = text.match(/\$\s*(\d{1,5})\s*[\r\n\s]+(\d{2})\s*\./);
+    if (splitMatch && splitMatch[1] && splitMatch[2]) {
+        const val = parseFloat(`${splitMatch[1]}.${splitMatch[2]}`);
+        if (!isNaN(val) && val > 0 && val <= 5000) return val;
+    }
+
+    // 2. Look for standard dollar formatting: $180.00 or $180 or $ 180.00 or $1,200.00
+    const dollarMatch = text.match(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i);
     if (dollarMatch && dollarMatch[1]) {
         const clean = dollarMatch[1].replace(/,/g, "");
         const val = parseFloat(clean);
-        if (!isNaN(val) && val > 0) return val;
+        if (!isNaN(val) && val > 0 && val <= 5000) return val;
     }
 
-    // Look for 180.00 USD
-    const usdMatch = text.match(/([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{2})?)\s*(?:USD|dollars)/i);
+    // 3. Look for 180.00 USD or 180 USD or 180.00 dollars
+    const usdMatch = text.match(/([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)\s*(?:USD|dollars)/i);
     if (usdMatch && usdMatch[1]) {
         const clean = usdMatch[1].replace(/,/g, "");
         const val = parseFloat(clean);
-        if (!isNaN(val) && val > 0) return val;
+        if (!isNaN(val) && val > 0 && val <= 5000) return val;
     }
 
     return null;
@@ -103,6 +186,7 @@ function parseVenmoEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null
     const text = parsed.text || parsed.html || "";
     const fromAddress = parsed.from?.text || "";
 
+    // 1. Must be from Venmo or mention Venmo
     const isVenmo = fromAddress.toLowerCase().includes("venmo.com") || 
                     subject.toLowerCase().includes("paid you") || 
                     subject.toLowerCase().includes("completed your request") ||
@@ -110,41 +194,59 @@ function parseVenmoEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null
 
     if (!isVenmo) return null;
 
+    // 2. Reject noise, store purchases, debit card transactions
+    if (isDisallowedSubjectOrBody(subject, text)) return null;
+
+    // 3. Must be an INCOMING payment
+    const isIncoming = /paid you/i.test(subject) || 
+                       /completed your request/i.test(subject) || 
+                       /money credited to your venmo account/i.test(text) ||
+                       /paid you/i.test(text);
+
+    if (!isIncoming) return null;
+
+    // Explicitly reject outgoing / debit card transactions
+    if (/purchase with their debit card/i.test(subject) || /purchase with your debit card/i.test(subject) || /you paid/i.test(subject) || /you sent/i.test(subject)) {
+        return null;
+    }
+
     const amount = extractAmount(subject) || extractAmount(text);
     if (!amount) return null;
 
     // Sender Name extraction
     let senderName = "";
-    // e.g. "John Doe paid you $180.00"
-    const nameMatch = subject.match(/^(.*?)\s+(?:paid you|sent you|completed your request)/i);
+    // e.g. "Jameson B paid you $180.00"
+    const nameMatch = subject.match(/^(.*?)\s+(?:paid you|sent you|completed your request)/i) ||
+                      text.match(/([A-Za-z\s.'-]{2,40})\s+(?:paid you|sent you)/i);
     if (nameMatch && nameMatch[1]) {
         senderName = nameMatch[1].replace(/["']/g, "").trim();
     }
 
     // Note / Memo extraction
     let note = "";
-    // From subject quote: John Doe paid you $180.00 - "Plex renewal for johndoe"
+    // From subject quote: Jameson B paid you $180.00 - "Plex renewal for jameson"
     const subjectNoteMatch = subject.match(/-\s*["“](.*?)["”]/i) || subject.match(/["“](.*?)["”]/i);
     if (subjectNoteMatch && subjectNoteMatch[1]) {
         note = subjectNoteMatch[1].trim();
     } else {
-        // From body: "Note: Plex" or "Note\n..." or "Message: ..."
+        // From body: "Note: Plex" or "Note\n..." or "Message: ..." or "For: ..."
         const bodyNoteMatch = text.match(/(?:Note|Message|For):\s*([^\r\n]+)/i);
         if (bodyNoteMatch && bodyNoteMatch[1]) {
             note = bodyNoteMatch[1].trim();
         }
     }
 
-    // Handle extraction (e.g. @johndoe)
+    // Handle extraction (e.g. @jamesonb) - exclude "Sent to @myhandle"
     let senderHandle = "";
-    const handleMatch = text.match(/@([a-zA-Z0-9_-]{3,30})/);
+    const cleanTextWithoutSentTo = text.replace(/sent to[\s\n\r]*@[a-zA-Z0-9_-]+/gi, "");
+    const handleMatch = cleanTextWithoutSentTo.match(/@([a-zA-Z0-9_-]{3,30})/);
     if (handleMatch && handleMatch[1]) {
         senderHandle = `@${handleMatch[1]}`;
     }
 
     // Transaction ID
     let externalTxId = "";
-    const txMatch = text.match(/(?:Payment ID|Transaction ID|Story ID):\s*([0-9a-zA-Z_-]+)/i) || 
+    const txMatch = text.match(/(?:Transaction ID|Payment ID|Story ID)[\s:\r\n]+([0-9a-zA-Z_-]{8,})/i) || 
                     text.match(/venmo\.com\/story\/([0-9a-zA-Z_-]+)/i);
     if (txMatch && txMatch[1]) {
         externalTxId = txMatch[1].trim();
@@ -176,11 +278,27 @@ function parsePayPalEmail(parsed: ParsedMail, uid: string): ScrapedPayment | nul
     const fromAddress = parsed.from?.text || "";
 
     const isPayPal = fromAddress.toLowerCase().includes("paypal.com") || 
-                     subject.toLowerCase().includes("payment received") ||
-                     subject.toLowerCase().includes("sent you") ||
-                     subject.toLowerCase().includes("you've got money");
+                     text.toLowerCase().includes("paypal.com") ||
+                     subject.toLowerCase().includes("paypal");
 
     if (!isPayPal) return null;
+
+    // Reject noise, store purchases, invoices, security codes
+    if (isDisallowedSubjectOrBody(subject, text)) return null;
+
+    // Must be an incoming payment
+    const isIncoming = /payment received/i.test(subject) ||
+                       /sent you/i.test(subject) ||
+                       /you've got money/i.test(subject) ||
+                       /you received a payment/i.test(subject) ||
+                       /sent you money/i.test(text) ||
+                       /payment received from/i.test(text);
+
+    if (!isIncoming) return null;
+
+    if (/you sent a payment/i.test(subject) || /receipt for your payment/i.test(subject) || /your invoice/i.test(subject)) {
+        return null;
+    }
 
     const amount = extractAmount(subject) || extractAmount(text);
     if (!amount) return null;
@@ -245,18 +363,45 @@ function parseZelleEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null
     const text = parsed.text || parsed.html || "";
     const fromAddress = parsed.from?.text || "";
 
-    const isZelle = subject.toLowerCase().includes("zelle") || 
-                    text.toLowerCase().includes("zelle") ||
-                    fromAddress.toLowerCase().includes("zellepay.com") ||
-                    fromAddress.toLowerCase().includes("chase.com") ||
-                    fromAddress.toLowerCase().includes("bankofamerica.com") ||
-                    fromAddress.toLowerCase().includes("wellsfargo.com") ||
-                    fromAddress.toLowerCase().includes("capitalone.com") ||
-                    fromAddress.toLowerCase().includes("ally.com") ||
-                    fromAddress.toLowerCase().includes("citi.com") ||
-                    fromAddress.toLowerCase().includes("navyfederal.org");
+    // Reject noise, store purchases, debit card transactions, class action notices, dividend notices
+    if (isDisallowedSubjectOrBody(subject, text)) return null;
 
-    if (!isZelle) return null;
+    const isZelleSource = subject.toLowerCase().includes("zelle") || 
+                          text.toLowerCase().includes("zelle") ||
+                          fromAddress.toLowerCase().includes("zellepay.com") ||
+                          fromAddress.toLowerCase().includes("chase.com") ||
+                          fromAddress.toLowerCase().includes("bankofamerica.com") ||
+                          fromAddress.toLowerCase().includes("wellsfargo.com") ||
+                          fromAddress.toLowerCase().includes("capitalone.com") ||
+                          fromAddress.toLowerCase().includes("ally.com") ||
+                          fromAddress.toLowerCase().includes("citi.com") ||
+                          fromAddress.toLowerCase().includes("navyfederal.org") ||
+                          fromAddress.toLowerCase().includes("usbank.com") ||
+                          fromAddress.toLowerCase().includes("pnc.com") ||
+                          fromAddress.toLowerCase().includes("td.com") ||
+                          fromAddress.toLowerCase().includes("truist.com");
+
+    if (!isZelleSource) return null;
+
+    // STRICT CHECK: Bank emails have endless noise; require explicit incoming Zelle payment phrases!
+    const incomingZellePatterns = [
+        /sent you money with zelle/i,
+        /sent you a payment with zelle/i,
+        /has sent you money with zelle/i,
+        /sent you money/i,
+        /sent you \$/i,
+        /has sent you \$/i,
+        /received a zelle payment/i,
+        /zelle payment from/i,
+        /received from (.*?) with zelle/i,
+        /deposited \$[0-9.]+\s*from/i,
+        /money received with zelle/i,
+        /payment from (.*?) has arrived/i,
+        /you received \$[0-9.]+\s*from/i
+    ];
+
+    const hasIncomingZellePhrase = incomingZellePatterns.some(p => p.test(subject) || p.test(text));
+    if (!hasIncomingZellePhrase) return null;
 
     const amount = extractAmount(subject) || extractAmount(text);
     if (!amount) return null;
@@ -264,15 +409,19 @@ function parseZelleEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null
     // Sender Name extraction
     let senderName = "";
     const zelleNameMatch = subject.match(/^(.*?)\s+(?:sent you|has sent you)/i) ||
-                           text.match(/(?:from|Sender:|Sender Name:)\s*([A-Za-z\s]+?)(?:\s+with|\s+via|\s+sent|\.|\r|\n)/i) ||
+                           text.match(/(?:from|Sender:|Sender Name:|payment from)\s*([A-Za-z\s]+?)(?:\s+with|\s+via|\s+sent|\.|\r|\n)/i) ||
                            text.match(/([A-Za-z\s]{2,40})\s+sent you/i);
     if (zelleNameMatch && zelleNameMatch[1]) {
-        senderName = zelleNameMatch[1].replace(/["']/g, "").trim();
+        const cleanName = zelleNameMatch[1].replace(/["']/g, "").trim();
+        // Guard against generic names
+        if (!/^(a class|bank|walmart|zelle|customer|reminder)/i.test(cleanName)) {
+            senderName = cleanName;
+        }
     }
 
     // Memo / Note extraction
     let note = "";
-    const memoMatch = text.match(/(?:Memo|Message|Reason|Note):\s*([^\r\n]+)/i);
+    const memoMatch = text.match(/(?:Memo|Message|Reason|Note|For):\s*([^\r\n]+)/i);
     if (memoMatch && memoMatch[1]) {
         note = memoMatch[1].trim();
     }
@@ -308,6 +457,8 @@ function parseCashAppEmail(parsed: ParsedMail, uid: string): ScrapedPayment | nu
     const text = parsed.text || parsed.html || "";
     const fromAddress = parsed.from?.text || "";
 
+    if (isDisallowedSubjectOrBody(subject, text)) return null;
+
     const isCashApp = fromAddress.toLowerCase().includes("square.com") || 
                       fromAddress.toLowerCase().includes("squareup.com") ||
                       fromAddress.toLowerCase().includes("cash.app") ||
@@ -315,6 +466,17 @@ function parseCashAppEmail(parsed: ParsedMail, uid: string): ScrapedPayment | nu
                       text.toLowerCase().includes("cash.app");
 
     if (!isCashApp) return null;
+
+    const isIncoming = /sent you/i.test(subject) || 
+                       /completed your request/i.test(subject) || 
+                       /you received/i.test(subject) ||
+                       /sent you \$/i.test(text);
+
+    if (!isIncoming) return null;
+
+    if (/you sent/i.test(subject) || /cash card purchase/i.test(subject)) {
+        return null;
+    }
 
     const amount = extractAmount(subject) || extractAmount(text);
     if (!amount) return null;
@@ -438,7 +600,7 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
         if (handleMatch) return handleMatch;
     }
 
-    // 4. Match by Sender Name (Exact match to username or Plex username or name parts)
+    // 4. Match by Sender Name (Exact match or Prefix match)
     if (senderName) {
         const exactNameMatch = allUsers.find(u => 
             u.username.toLowerCase() === senderName || 
@@ -446,13 +608,28 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
         );
         if (exactNameMatch) return exactNameMatch;
 
-        // Try matching email prefix (e.g. "John Doe" -> "johndoe@gmail.com")
-        const strippedSenderName = senderName.replace(/\s+/g, "");
+        // Try matching stripped sender name (e.g. "Jameson B" -> "jamesonb")
+        const strippedSenderName = senderName.replace(/[\s.'-]+/g, "");
         const prefixMatch = allUsers.find(u => {
-            const emailPrefix = u.email.split("@")[0].toLowerCase();
-            return emailPrefix === strippedSenderName || u.username.toLowerCase() === strippedSenderName;
+            const emailPrefix = u.email.split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "");
+            const uClean = u.username.toLowerCase().replace(/[\s.'_-]+/g, "");
+            const pClean = (u.plexUsername || "").toLowerCase().replace(/[\s.'_-]+/g, "");
+            return emailPrefix === strippedSenderName || uClean === strippedSenderName || pClean === strippedSenderName;
         });
         if (prefixMatch) return prefixMatch;
+
+        // Try matching First Name part (e.g. "Jameson B" -> "jameson") if it starts with first name
+        const firstNamePart = senderName.split(/\s+/)[0];
+        if (firstNamePart && firstNamePart.length >= 3) {
+            const firstNameMatches = allUsers.filter(u => 
+                u.username.toLowerCase() === firstNamePart || 
+                (u.plexUsername && u.plexUsername.toLowerCase() === firstNamePart) ||
+                u.email.split("@")[0].toLowerCase().startsWith(firstNamePart)
+            );
+            if (firstNameMatches.length === 1) {
+                return firstNameMatches[0];
+            }
+        }
     }
 
     return null;

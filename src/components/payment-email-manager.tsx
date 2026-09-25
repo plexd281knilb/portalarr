@@ -9,7 +9,9 @@ import {
     scanPaymentEmailsAction, 
     getPaymentTransactions, 
     manuallyAttributePaymentTransaction, 
-    savePaymentEmailScraperConfig 
+    savePaymentEmailScraperConfig,
+    deletePaymentTransactionAction,
+    purgeUnmatchedPaymentTransactionsAction 
 } from "@/app/payment-actions";
 import { getAppUsers } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -268,6 +270,27 @@ export default function PaymentEmailManager() {
             }, 1500);
         } else {
             setAssignErr(res.error || "Failed to attribute transaction.");
+        }
+    };
+
+    const handleDeleteTransaction = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this payment transaction?")) return;
+        const res = await deletePaymentTransactionAction(id);
+        if (res.success) {
+            setTransactions(prev => prev.filter(t => t.id !== id));
+        } else {
+            alert(res.error || "Failed to delete transaction");
+        }
+    };
+
+    const handlePurgeUnmatched = async () => {
+        const unmatchedCount = transactions.filter(t => t.status === "UNMATCHED").length;
+        if (!confirm(`Are you sure you want to purge all unmatched payment transactions (${unmatchedCount} found)? This will permanently remove them.`)) return;
+        const res = await purgeUnmatchedPaymentTransactionsAction();
+        if (res.success) {
+            loadData();
+        } else {
+            alert(res.error || "Failed to purge unmatched transactions");
         }
     };
 
@@ -580,7 +603,18 @@ export default function PaymentEmailManager() {
                             </CardDescription>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            {transactions.some(t => t.status === "UNMATCHED") && (
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={handlePurgeUnmatched}
+                                    className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5"
+                                    title="Purge all unmatched transactions"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" /> Purge Unmatched
+                                </Button>
+                            )}
                             <Select value={txFilter} onValueChange={setTxFilter}>
                                 <SelectTrigger className="h-8 text-xs w-36 bg-background border-border/60">
                                     <SelectValue />
@@ -680,6 +714,16 @@ export default function PaymentEmailManager() {
                                                 </Button>
                                             </div>
                                         )}
+
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            onClick={() => handleDeleteTransaction(tx.id)}
+                                            className="h-8 w-8 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-400 shrink-0"
+                                            title="Delete transaction record"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
                                     </div>
                                 </div>
                             ))}
