@@ -78,9 +78,18 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
 
     // 1. Fetch /api/v2/friends
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const res = await fetch("https://plex.tv/api/v2/friends", {
-            headers: { "Accept": "application/json", "X-Plex-Token": adminToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            headers: { 
+                "Accept": "application/json", 
+                "X-Plex-Token": adminToken, 
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                "User-Agent": "Portalarr/1.0"
+            },
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
         if (res.ok) {
             const list = await res.json();
             if (Array.isArray(list)) {
@@ -92,15 +101,24 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                 }
             }
         }
-    } catch (e) {
-        console.warn("[PLEX-API] /api/v2/friends error:", e);
+    } catch (e: any) {
+        logger.addLog("INFO", "PLEX", `[FRIENDS-API] /api/v2/friends fallback skipped (${e.message || e})`);
     }
 
     // 2. Fetch /api/v2/shared_servers
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const res = await fetch("https://plex.tv/api/v2/shared_servers", {
-            headers: { "Accept": "application/json", "X-Plex-Token": adminToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            headers: { 
+                "Accept": "application/json", 
+                "X-Plex-Token": adminToken, 
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                "User-Agent": "Portalarr/1.0"
+            },
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
         if (res.ok) {
             const list = await res.json();
             if (Array.isArray(list)) {
@@ -112,13 +130,24 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                 }
             }
         }
-    } catch (e) {
-        console.warn("[PLEX-API] /api/v2/shared_servers error:", e);
+    } catch (e: any) {
+        logger.addLog("INFO", "PLEX", `[FRIENDS-API] /api/v2/shared_servers fallback skipped (${e.message || e})`);
     }
 
     // 3. Fetch legacy XML /api/users
     try {
-        const xmlRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${encodeURIComponent(adminToken)}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const xmlRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+            headers: {
+                "Accept": "application/xml, text/xml, */*",
+                "X-Plex-Token": adminToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                "User-Agent": "Portalarr/1.0"
+            },
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         if (xmlRes.ok) {
             const xmlText = await xmlRes.text();
             const userBlocks = xmlText.matchAll(/<User\b([^>]*?)(?:\/>|>[\s\S]*?<\/User>)/gi);
@@ -132,8 +161,8 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                 addFriend(email, username || title, id, thumb, title);
             }
         }
-    } catch (e) {
-        console.warn("[PLEX-API] /api/users XML error:", e);
+    } catch (e: any) {
+        logger.addLog("INFO", "PLEX", `[FRIENDS-API] /api/users XML fallback skipped (${e.message || e})`);
     }
 
     // 4. Fetch canonical server-specific shared_servers XML across owned servers
@@ -142,13 +171,18 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
         await Promise.allSettled(servers.map(async (srv) => {
             if (!srv.clientIdentifier) return;
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
                 const srvRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
                     headers: {
                         "Accept": "application/xml, text/xml, */*",
                         "X-Plex-Token": adminToken,
-                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                    }
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                        "User-Agent": "Portalarr/1.0"
+                    },
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
                 if (srvRes.ok) {
                     const xml = await srvRes.text();
                     const matches = xml.matchAll(/<SharedServer\b([^>]*?)(?:\/>|>[\s\S]*?<\/SharedServer>)/gi);
@@ -195,8 +229,8 @@ export async function getPlexOwnerUser(adminToken: string) {
                 thumb: u.thumb || ""
             };
         }
-    } catch (e) {
-        console.warn("[PLEX-API] Failed to fetch Plex owner user:", e);
+    } catch (e: any) {
+        logger.addLog("INFO", "PLEX", `[PLEX-API] Failed to fetch Plex owner user (${e.message || e})`);
     }
     return null;
 }
@@ -608,14 +642,19 @@ export async function getPlexCloudServersMap(
 
     // 1. Comprehensive discovery from canonical https://plex.tv/api/users
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const usersRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
             headers: {
                 "Accept": "application/xml, text/xml, */*",
                 "X-Plex-Token": adminToken,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                "User-Agent": "Portalarr/1.0"
             },
+            signal: controller.signal,
             cache: "no-store"
         });
+        clearTimeout(timeoutId);
         if (usersRes.ok) {
             const xml = await usersRes.text();
             const serverBlocks = xml.matchAll(/<Server\b([^>]*?)>([\s\S]*?)<\/Server>/gi);
@@ -639,20 +678,25 @@ export async function getPlexCloudServersMap(
                 }
             }
         }
-    } catch (usersErr) {
-        console.warn("[PLEX-API] Failed to fetch /api/users for cloud sections:", usersErr);
+    } catch (usersErr: any) {
+        logger.addLog("INFO", "PLEX", `[CLOUD-MAP] /api/users discovery skipped (${usersErr.message || usersErr})`);
     }
 
     // 2. Discover servers and directUrls from /api/servers
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const srvXmlRes = await fetch(`https://plex.tv/api/servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
             headers: { 
                 "Accept": "application/xml, text/xml, */*",
                 "X-Plex-Token": adminToken, 
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" 
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                "User-Agent": "Portalarr/1.0"
             },
+            signal: controller.signal,
             cache: "no-store"
         });
+        clearTimeout(timeoutId);
         if (srvXmlRes.ok) {
             const xml = await srvXmlRes.text();
             const srvBlocks = xml.matchAll(/<Server\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Server>)/gi);
@@ -1309,14 +1353,19 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
     // In a single fast request, /api/users returns EVERY user, their owned and shared servers,
     // the exact share ID (<Server id="..."/>), machineIdentifier, and all shared sections (<Section id="..." key="..." shared="1"/>)!
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const usersXmlRes = await fetch(`https://plex.tv/api/users?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
             headers: {
                 "Accept": "application/xml, text/xml, */*",
                 "X-Plex-Token": adminToken,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                "User-Agent": "Portalarr/1.0"
             },
+            signal: controller.signal,
             cache: "no-store"
         });
+        clearTimeout(timeoutId);
         if (usersXmlRes.ok) {
             const xmlText = await usersXmlRes.text();
             const userBlocks = xmlText.matchAll(/<User\b([^>]*?)>([\s\S]*?)<\/User>/gi);
@@ -1376,8 +1425,8 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                 }
             }
         }
-    } catch (usersErr) {
-        console.warn("[PLEX-API] Failed to parse /api/users for shared servers:", usersErr);
+    } catch (usersErr: any) {
+        logger.addLog("INFO", "PLEX", `[SHARED-SERVERS] /api/users lookup skipped (${usersErr.message || usersErr})`);
     }
 
     // 2. Supplement with canonical server-specific shared_servers endpoint across owned servers
@@ -1468,14 +1517,19 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
 
     // 3. Supplement with modern JSON from https://plex.tv/api/v2/shared_servers
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const res = await fetch("https://plex.tv/api/v2/shared_servers", {
             headers: {
                 "Accept": "application/json",
                 "X-Plex-Token": adminToken,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app",
+                "User-Agent": "Portalarr/1.0"
             },
+            signal: controller.signal,
             cache: "no-store"
         });
+        clearTimeout(timeoutId);
 
         if (res.ok) {
             const data = await res.json();
