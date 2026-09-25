@@ -398,8 +398,12 @@ export async function getCurationSettingsAction() {
         leavingSoonAutoThresholdDays: settings?.leavingSoonAutoThresholdDays ?? 14,
         leavingSoonAutoHideEmpty: settings?.leavingSoonAutoHideEmpty ?? true,
 
-        // IMDb Parental Advisory Tagging Settings
+        // IMDb Parental Advisory Tagging Settings & Dedicated Schedule
         parentalTaggingEnabled: settings?.parentalTaggingEnabled ?? true,
+        taggingSyncEnabled: settings?.taggingSyncEnabled ?? (settings?.parentalTaggingEnabled ?? (settings?.curationSyncParentalTags ?? true)),
+        taggingSyncSchedule: settings?.taggingSyncSchedule || "daily_3am",
+        taggingLastRunAt: settings?.taggingLastRunAt ? settings.taggingLastRunAt.toISOString() : null,
+        taggingLastRunStatus: safeJsonParse(settings?.taggingLastRunStatus, null),
         parentalTagFormat: settings?.parentalTagFormat || "prefix_category_severity",
         parentalTagPrefix: settings?.parentalTagPrefix || "IMDb",
         parentalTagTarget: settings?.parentalTagTarget || "labels",
@@ -407,7 +411,19 @@ export async function getCurationSettingsAction() {
         parentalCategories: safeJsonParse(settings?.parentalCategories, ["nudity", "violence", "profanity", "alcohol", "frightening"]),
         curationSyncParentalTags: settings?.curationSyncParentalTags ?? true,
 
-        // Curation Scheduler Timer & Automation Settings
+        // Agregarr Dedicated Collection Sync Schedule
+        agregarrSyncEnabled: settings?.agregarrSyncEnabled ?? (settings?.curationSyncCollections ?? true),
+        agregarrSyncSchedule: settings?.agregarrSyncSchedule || settings?.curationSyncSchedule || "every_6_hours",
+        agregarrLastRunAt: settings?.agregarrLastRunAt ? settings.agregarrLastRunAt.toISOString() : (settings?.curationLastRunAt ? settings.curationLastRunAt.toISOString() : null),
+        agregarrLastRunStatus: safeJsonParse(settings?.agregarrLastRunStatus, null),
+
+        // Maintainerr / Prune Dedicated Schedule
+        pruneSyncEnabled: settings?.pruneSyncEnabled ?? (settings?.curationSyncPruning ?? true),
+        pruneSyncSchedule: settings?.pruneSyncSchedule || "daily_5am",
+        pruneLastRunAt: settings?.pruneLastRunAt ? settings.pruneLastRunAt.toISOString() : null,
+        pruneLastRunStatus: safeJsonParse(settings?.pruneLastRunStatus, null),
+
+        // Curation Scheduler Timer & Automation Settings (Legacy/Master Fallback)
         curationSyncEnabled: settings?.curationSyncEnabled ?? true,
         curationSyncSchedule: settings?.curationSyncSchedule || "every_6_hours",
         curationSyncCron: settings?.curationSyncCron || null,
@@ -723,6 +739,12 @@ export async function saveCurationSettingsAction(data: {
     curationSyncReleases?: boolean;
     curationSyncPruning?: boolean;
     curationSyncParentalTags?: boolean;
+    agregarrSyncEnabled?: boolean;
+    agregarrSyncSchedule?: string;
+    pruneSyncEnabled?: boolean;
+    pruneSyncSchedule?: string;
+    taggingSyncEnabled?: boolean;
+    taggingSyncSchedule?: string;
     overlayIncrementalEnabled?: boolean;
     overlayIncrementalSchedule?: string;
     overlayIncrementalBatchSize?: number;
@@ -837,6 +859,18 @@ export async function saveCurationSettingsAction(data: {
         if (data.curationSyncReleases !== undefined) updatePayload.curationSyncReleases = data.curationSyncReleases;
         if (data.curationSyncPruning !== undefined) updatePayload.curationSyncPruning = data.curationSyncPruning;
         if (data.curationSyncParentalTags !== undefined) updatePayload.curationSyncParentalTags = data.curationSyncParentalTags;
+
+        // Agregarr Dedicated Collection Schedule
+        if (data.agregarrSyncEnabled !== undefined) updatePayload.agregarrSyncEnabled = data.agregarrSyncEnabled;
+        if (data.agregarrSyncSchedule !== undefined) updatePayload.agregarrSyncSchedule = data.agregarrSyncSchedule;
+
+        // Maintainerr / Prune Dedicated Schedule
+        if (data.pruneSyncEnabled !== undefined) updatePayload.pruneSyncEnabled = data.pruneSyncEnabled;
+        if (data.pruneSyncSchedule !== undefined) updatePayload.pruneSyncSchedule = data.pruneSyncSchedule;
+
+        // IMDb Parental Tagging Dedicated Schedule
+        if (data.taggingSyncEnabled !== undefined) updatePayload.taggingSyncEnabled = data.taggingSyncEnabled;
+        if (data.taggingSyncSchedule !== undefined) updatePayload.taggingSyncSchedule = data.taggingSyncSchedule;
 
         // Poster Overlays Dual Automation Schedules
         if (data.overlayIncrementalEnabled !== undefined) updatePayload.overlayIncrementalEnabled = data.overlayIncrementalEnabled;
@@ -6142,56 +6176,34 @@ export async function runFullCurationSyncInternal(): Promise<{
             : [];
 
         // 1. Seasonal & Scheduled Collections Sync (Agregarr)
-        if (settings.curationSyncCollections !== false) {
+        if (settings.curationSyncCollections !== false && settings.agregarrSyncEnabled !== false) {
             try {
-                const seasonalRes = await syncSeasonalAndScheduledCollectionsInternal();
-                seasonalCount = seasonalRes.evaluatedCount || 0;
-                details.push(`Evaluated ${seasonalCount} seasonal collection schedules.`);
+                const agregarrRes = await runAgregarrSyncInternal();
+                seasonalCount = agregarrRes.evaluatedCount || 0;
+                details.push(...agregarrRes.details);
             } catch (sErr: any) {
-                details.push(`Seasonal sync error: ${sErr.message}`);
+                details.push(`Agregarr sync error: ${sErr.message}`);
             }
         }
 
         // 2. Leaving Soon Hub Sync (Prune / Storage Management)
-        if (settings.curationSyncPruning !== false) {
+        if (settings.curationSyncPruning !== false && settings.pruneSyncEnabled !== false) {
             try {
-                const leaveRes = await syncLeavingSoonCollectionHubInternal();
-                leavingSoonCount = leaveRes.leavingCount || 0;
-                details.push(`Leaving Soon hub synced: ${leavingSoonCount} items scheduled.`);
+                const pruneRes = await runMaintainerrSyncInternal();
+                leavingSoonCount = pruneRes.leavingCount || 0;
+                details.push(...pruneRes.details);
             } catch (lErr: any) {
-                details.push(`Leaving Soon hub sync error: ${lErr.message}`);
+                details.push(`Maintainerr sync error: ${lErr.message}`);
             }
         }
 
         // 3. Automated IMDb Parental Rating Tags Sync
         let parentalTaggedCount = 0;
-        if (settings.curationSyncParentalTags !== false && settings.parentalTaggingEnabled !== false) {
+        if (settings.curationSyncParentalTags !== false && settings.parentalTaggingEnabled !== false && settings.taggingSyncEnabled !== false) {
             try {
-                const tagOptions: ParentalTaggingOptions = {
-                    enabled: true,
-                    format: (settings?.parentalTagFormat as any) || "prefix_category_severity",
-                    prefix: settings?.parentalTagPrefix || "IMDb",
-                    target: (settings?.parentalTagTarget as any) || "labels",
-                    minSeverity: (settings?.parentalMinSeverity as any) || "Mild",
-                    categories: settings?.parentalCategories ? JSON.parse(settings.parentalCategories) : ["nudity", "violence", "profanity", "alcohol", "frightening"]
-                };
-
-                for (const srv of servers) {
-                    const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
-                    if (!resolved || !resolved.serverUrl) continue;
-                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier);
-                    for (const sec of srvSections) {
-                        try {
-                            const pRes = await applyParentalTagsToLibrary(srv.clientIdentifier, String(sec.key), tagOptions);
-                            if (pRes.success && pRes.taggedCount) {
-                                parentalTaggedCount += pRes.taggedCount;
-                            }
-                        } catch (secErr: any) {
-                            console.warn(`[CURATION-SYNC] Error applying parental tags in ${sec.title}:`, secErr.message);
-                        }
-                    }
-                }
-                details.push(`Applied IMDb parental ratings tags to ${parentalTaggedCount} library items.`);
+                const tagRes = await runParentalTagsSyncInternal();
+                parentalTaggedCount = tagRes.totalTagged || 0;
+                details.push(...tagRes.details);
             } catch (pErr: any) {
                 details.push(`Parental tagging error: ${pErr.message}`);
             }
@@ -6199,34 +6211,11 @@ export async function runFullCurationSyncInternal(): Promise<{
 
         // 4. Poster Overlays & Waterfall Ribbons Sync (Kometa)
         // Executed last so that all newly created Collections, Labels, and Leaving Soon statuses are available for matching
-        if (settings.curationSyncOverlays !== false) {
+        if (settings.curationSyncOverlays !== false && settings.overlayIncrementalEnabled !== false) {
             try {
-                const overlayServers = enabledServersForOverlays.length > 0 
-                    ? servers.filter(s => enabledServersForOverlays.includes(s.clientIdentifier))
-                    : servers;
-
-                for (const srv of overlayServers) {
-                    const resolved = await resolveWorkingPlexServerConnection(srv.clientIdentifier);
-                    if (!resolved || !resolved.serverUrl) continue;
-
-                    const srvSections = await getPlexServerSections(resolved.token, srv.clientIdentifier);
-
-                    for (const sec of srvSections) {
-                        const isSecEnabled = await isSectionEnabledInList(enabledServersForOverlays, srv.clientIdentifier, String(sec.key));
-                        if (!isSecEnabled) {
-                            continue;
-                        }
-                        try {
-                            const res = await applyOverlaysToLibraryInternal(srv.clientIdentifier, String(sec.key));
-                            if (res.success && res.appliedCount) {
-                                overlaysAppliedCount += res.appliedCount;
-                            }
-                        } catch (secErr: any) {
-                            console.warn(`[CURATION-SYNC] Error applying overlays to ${sec.title}:`, secErr.message);
-                        }
-                    }
-                }
-                details.push(`Applied overlays to ${overlaysAppliedCount} new/updated library posters.`);
+                const overlayRes = await runOverlayIncrementalSyncInternal();
+                overlaysAppliedCount = overlayRes.overlaysAppliedCount || 0;
+                details.push(...overlayRes.details);
             } catch (oErr: any) {
                 details.push(`Overlay sync error: ${oErr.message}`);
             }
@@ -6765,35 +6754,47 @@ export async function applyParentalTagsToLibraryAction(
 }
 
 /**
- * Server action to run automated parental tagging sync across enabled sections or a single server/section.
+ * Internal worker to run automated parental tagging sync across enabled sections or a single server/section.
  */
-export async function runParentalTagsSyncAction(serverId?: string, sectionKey?: string) {
+export async function runParentalTagsSyncInternal(targetServerId?: string, targetSectionKey?: string): Promise<{
+    success: boolean;
+    totalTagged: number;
+    totalEvaluated: number;
+    timestamp: string;
+    details: string[];
+    error?: string;
+}> {
+    const details: string[] = [];
+    let totalTagged = 0;
+    let totalEvaluated = 0;
+
     try {
-
-        await verifyAdmin();
-
         await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings) return { success: false, totalTagged: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: ["No global settings"] };
+
         const enabledServersForTagging: string[] = settings?.enabledServersForTagging
             ? JSON.parse(settings.enabledServersForTagging)
             : [];
 
-        const details: string[] = [];
-        let totalTagged = 0;
-        let totalEvaluated = 0;
-
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return { success: false, error: "Plex token not configured." };
+        if (!token) {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { taggingLastRunAt: new Date() }
+            }).catch(() => {});
+            return { success: false, totalTagged: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: ["No Plex token configured"] };
+        }
 
-        const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, serverId);
+        const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, targetServerId);
         
         for (const srv of serversWithSections) {
-            if (serverId && srv.serverId !== serverId) continue;
+            if (targetServerId && srv.serverId !== targetServerId) continue;
             for (const sec of srv.sections || []) {
                 const sKey = String(sec.key);
-                if (sectionKey && sKey !== String(sectionKey)) continue;
+                if (targetSectionKey && sKey !== String(targetSectionKey)) continue;
 
-                const isSecEnabled = isSectionEnabledInList(enabledServersForTagging, srv.serverId, sKey);
+                const isSecEnabled = await isSectionEnabledInList(enabledServersForTagging, srv.serverId, sKey);
                 if (!isSecEnabled) {
                     details.push(`Skipped "${sec.title}" on ${srv.serverName} (Disabled for tagging).`);
                     continue;
@@ -6814,33 +6815,267 @@ export async function runParentalTagsSyncAction(serverId?: string, sectionKey?: 
             }
         }
 
-        const nowIso = new Date().toISOString();
+        const now = new Date();
+        const statusSummary = {
+            type: "tagging",
+            totalTagged,
+            totalEvaluated,
+            timestamp: now.toISOString(),
+            details
+        };
+
         await prisma.settings.update({
             where: { id: "global" },
             data: {
-                curationLastRunAt: nowIso,
-                curationLastRunStatus: JSON.stringify({
-                    type: "tagging",
-                    totalTagged,
-                    totalEvaluated,
-                    timestamp: nowIso,
-                    details
-                })
+                taggingLastRunAt: now,
+                taggingLastRunStatus: JSON.stringify(statusSummary)
             }
         });
 
+        logger.addLog("SUCCESS", "TAGGING", `Parental Tagging Sync completed: ${details.join(" • ")}`);
         return {
             success: true,
             totalTagged,
             totalEvaluated,
-            timestamp: nowIso,
+            timestamp: now.toISOString(),
             details
         };
     } catch (e: any) {
+        logger.addLog("ERROR", "TAGGING", `Parental Tagging Sync failed: ${e.message}`);
         return {
             success: false,
-            error: e.message || "Failed running parental tags sync."
+            totalTagged: 0,
+            totalEvaluated: 0,
+            timestamp: new Date().toISOString(),
+            details: [e.message],
+            error: e.message
         };
+    }
+}
+
+/**
+ * Server action to run automated parental tagging sync across enabled sections or a single server/section.
+ */
+export async function runParentalTagsSyncAction(serverId?: string, sectionKey?: string): Promise<{
+    success: boolean;
+    totalTagged: number;
+    totalEvaluated: number;
+    timestamp: string;
+    details: string[];
+    error?: string;
+}> {
+    try {
+        await verifyAdmin();
+        return await runParentalTagsSyncInternal(serverId, sectionKey);
+    } catch (e: any) {
+        return {
+            success: false,
+            totalTagged: 0,
+            totalEvaluated: 0,
+            timestamp: new Date().toISOString(),
+            details: [e.message],
+            error: e.message
+        };
+    }
+}
+
+/**
+ * Internal worker for Agregarr Seasonal & Scheduled Collections Sync.
+ */
+export async function runAgregarrSyncInternal(targetServerId?: string, targetSectionKey?: string): Promise<{
+    success: boolean;
+    evaluatedCount: number;
+    activeCount: number;
+    details: string[];
+    timestamp: string;
+    error?: string;
+}> {
+    const details: string[] = [];
+    let evaluatedCount = 0;
+    let activeCount = 0;
+
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings) return { success: false, evaluatedCount: 0, activeCount: 0, timestamp: new Date().toISOString(), details: ["No global settings"], error: "No global settings" };
+
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { agregarrLastRunAt: new Date() }
+            }).catch(() => {});
+            return { success: false, evaluatedCount: 0, activeCount: 0, timestamp: new Date().toISOString(), details: ["No Plex token configured"], error: "No Plex token configured" };
+        }
+
+        const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, targetServerId);
+        const enabledServersForCollections: string[] = settings.enabledServersForCollections
+            ? JSON.parse(settings.enabledServersForCollections)
+            : [];
+
+        for (const srv of serversWithSections) {
+            if (targetServerId && srv.serverId !== targetServerId) continue;
+            for (const sec of srv.sections || []) {
+                const sKey = String(sec.key);
+                if (targetSectionKey && sKey !== String(targetSectionKey)) continue;
+
+                const isSecEnabled = await isSectionEnabledInList(enabledServersForCollections, srv.serverId, sKey);
+                if (!isSecEnabled) {
+                    details.push(`Skipped "${sec.title}" on ${srv.serverName} (Disabled for collections).`);
+                    continue;
+                }
+
+                try {
+                    const res = await syncSeasonalAndScheduledCollectionsInternal(srv.serverId, sKey);
+                    if (res && (res as any).evaluatedCount !== undefined) {
+                        evaluatedCount += (res as any).evaluatedCount || 0;
+                        activeCount += (res as any).activeCount || 0;
+                        details.push(`Synced "${sec.title}" (${srv.serverName}): ${(res as any).activeCount || 0} active collections.`);
+                    }
+                } catch (secErr: any) {
+                    details.push(`Error syncing collections in "${sec.title}": ${secErr.message}`);
+                }
+            }
+        }
+
+        const now = new Date();
+        const statusSummary = {
+            success: true,
+            timestamp: now.toISOString(),
+            evaluatedCount,
+            activeCount,
+            details
+        };
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                agregarrLastRunAt: now,
+                agregarrLastRunStatus: JSON.stringify(statusSummary)
+            }
+        });
+
+        logger.addLog("SUCCESS", "AGREGARR", `Agregarr Collection Sync completed: ${details.join(" • ")}`);
+        return { success: true, evaluatedCount, activeCount, timestamp: now.toISOString(), details };
+    } catch (e: any) {
+        logger.addLog("ERROR", "AGREGARR", `Agregarr Collection Sync failed: ${e.message}`);
+        return { success: false, evaluatedCount: 0, activeCount: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
+    }
+}
+
+export async function runAgregarrSyncAction(targetServerId?: string, targetSectionKey?: string): Promise<{
+    success: boolean;
+    evaluatedCount: number;
+    activeCount: number;
+    details: string[];
+    timestamp: string;
+    error?: string;
+}> {
+    try {
+        await verifyAdmin();
+        return await runAgregarrSyncInternal(targetServerId, targetSectionKey);
+    } catch (e: any) {
+        return { success: false, evaluatedCount: 0, activeCount: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
+    }
+}
+
+/**
+ * Internal worker for Maintainerr / Prune Leaving Soon Sync.
+ */
+export async function runMaintainerrSyncInternal(targetServerId?: string, targetSectionKey?: string): Promise<{
+    success: boolean;
+    leavingCount: number;
+    totalEvaluated?: number;
+    details: string[];
+    timestamp: string;
+    error?: string;
+}> {
+    const details: string[] = [];
+    let leavingCount = 0;
+    let totalEvaluated = 0;
+
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings) return { success: false, leavingCount: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: ["No global settings"], error: "No global settings" };
+
+        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+        if (!token) {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: { pruneLastRunAt: new Date() }
+            }).catch(() => {});
+            return { success: false, leavingCount: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: ["No Plex token configured"], error: "No Plex token configured" };
+        }
+
+        const serversWithSections = await getPlexServerLibrarySections(token, settings?.mainPlexUrl || undefined, targetServerId);
+        const enabledServersForPruning: string[] = settings.enabledServersForPruning
+            ? JSON.parse(settings.enabledServersForPruning)
+            : [];
+
+        for (const srv of serversWithSections) {
+            if (targetServerId && srv.serverId !== targetServerId) continue;
+            for (const sec of srv.sections || []) {
+                const sKey = String(sec.key);
+                if (targetSectionKey && sKey !== String(targetSectionKey)) continue;
+
+                const isSecEnabled = await isSectionEnabledInList(enabledServersForPruning, srv.serverId, sKey);
+                if (!isSecEnabled) {
+                    details.push(`Skipped "${sec.title}" on ${srv.serverName} (Disabled for pruning).`);
+                    continue;
+                }
+
+                try {
+                    const res = await syncLeavingSoonCollectionHubInternal(srv.serverId, sKey);
+                    if (res && (res as any).leavingCount !== undefined) {
+                        leavingCount += (res as any).leavingCount || 0;
+                        totalEvaluated += (res as any).evaluatedCount || (res as any).totalEvaluated || 0;
+                        details.push(`Prune scan "${sec.title}" (${srv.serverName}): ${(res as any).leavingCount || 0} leaving soon.`);
+                    }
+                } catch (secErr: any) {
+                    details.push(`Error scanning prune rules in "${sec.title}": ${secErr.message}`);
+                }
+            }
+        }
+
+        const now = new Date();
+        const statusSummary = {
+            success: true,
+            timestamp: now.toISOString(),
+            leavingCount,
+            totalEvaluated,
+            details
+        };
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                pruneLastRunAt: now,
+                pruneLastRunStatus: JSON.stringify(statusSummary)
+            }
+        });
+
+        logger.addLog("SUCCESS", "MAINTAINERR", `Maintainerr Prune Sync completed: ${details.join(" • ")}`);
+        return { success: true, leavingCount, totalEvaluated, timestamp: now.toISOString(), details };
+    } catch (e: any) {
+        logger.addLog("ERROR", "MAINTAINERR", `Maintainerr Prune Sync failed: ${e.message}`);
+        return { success: false, leavingCount: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
+    }
+}
+
+export async function runMaintainerrSyncAction(targetServerId?: string, targetSectionKey?: string): Promise<{
+    success: boolean;
+    leavingCount: number;
+    totalEvaluated?: number;
+    details: string[];
+    timestamp: string;
+    error?: string;
+}> {
+    try {
+        await verifyAdmin();
+        return await runMaintainerrSyncInternal(targetServerId, targetSectionKey);
+    } catch (e: any) {
+        return { success: false, leavingCount: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
     }
 }
 

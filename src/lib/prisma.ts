@@ -554,7 +554,25 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["seerrEmailNotifyUserFailed", `ALTER TABLE "Settings" ADD COLUMN "seerrEmailNotifyUserFailed" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["discordInviteUrl", `ALTER TABLE "Settings" ADD COLUMN "discordInviteUrl" TEXT;`],
                 ["subscriptionGracePeriodDays", `ALTER TABLE "Settings" ADD COLUMN "subscriptionGracePeriodDays" INTEGER DEFAULT 3;`],
-                ["membershipTiersEnabled", `ALTER TABLE "Settings" ADD COLUMN "membershipTiersEnabled" BOOLEAN NOT NULL DEFAULT 1;`]
+                ["membershipTiersEnabled", `ALTER TABLE "Settings" ADD COLUMN "membershipTiersEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["autoSuspendExpiredAccounts", `ALTER TABLE "Settings" ADD COLUMN "autoSuspendExpiredAccounts" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["notifyTrialWelcome", `ALTER TABLE "Settings" ADD COLUMN "notifyTrialWelcome" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["notifyTrialExpiring", `ALTER TABLE "Settings" ADD COLUMN "notifyTrialExpiring" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["notifyTrialExpired", `ALTER TABLE "Settings" ADD COLUMN "notifyTrialExpired" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["notifySubscriptionActive", `ALTER TABLE "Settings" ADD COLUMN "notifySubscriptionActive" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["notifyReferralReward", `ALTER TABLE "Settings" ADD COLUMN "notifyReferralReward" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["agregarrSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "agregarrSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["agregarrSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "agregarrSyncSchedule" TEXT DEFAULT 'every_6_hours';`],
+                ["agregarrLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "agregarrLastRunAt" DATETIME;`],
+                ["agregarrLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "agregarrLastRunStatus" TEXT;`],
+                ["pruneSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "pruneSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["pruneSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "pruneSyncSchedule" TEXT DEFAULT 'daily_5am';`],
+                ["pruneLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "pruneLastRunAt" DATETIME;`],
+                ["pruneLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "pruneLastRunStatus" TEXT;`],
+                ["taggingSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "taggingSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["taggingSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "taggingSyncSchedule" TEXT DEFAULT 'daily_3am';`],
+                ["taggingLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "taggingLastRunAt" DATETIME;`],
+                ["taggingLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "taggingLastRunStatus" TEXT;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -1917,23 +1935,67 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
-      // 4. Agregarr Curation & Parental Tagging Sync
-      if (!(global as any).__PORTALARR_CURATION_RUNNING) {
-        const curationEnabled = settings?.curationSyncEnabled ?? true;
-        const curationSchedule = settings?.curationSyncSchedule || "every_6_hours";
-        const lastCurationRun = settings?.curationLastRunAt;
+      // 4. Agregarr Collections Sync (Independent Studio Schedule)
+      if (!(global as any).__PORTALARR_AGREGARR_RUNNING) {
+        const agregarrEnabled = settings?.agregarrSyncEnabled ?? (settings?.curationSyncCollections ?? true);
+        const agregarrSchedule = settings?.agregarrSyncSchedule || settings?.curationSyncSchedule || "every_6_hours";
+        const lastAgregarrRun = settings?.agregarrLastRunAt || settings?.curationLastRunAt;
 
-        if (curationEnabled && isScheduleDue(curationSchedule, lastCurationRun, now)) {
-          (global as any).__PORTALARR_CURATION_RUNNING = true;
+        if (agregarrEnabled && isScheduleDue(agregarrSchedule, lastAgregarrRun, now)) {
+          (global as any).__PORTALARR_AGREGARR_RUNNING = true;
           (async () => {
             try {
-              console.log(`[CURATION-TIMER] Triggering scheduled curation sync (${curationSchedule})...`);
-              const { runFullCurationSyncInternal } = await import("../app/curation-actions");
-              await runFullCurationSyncInternal();
-            } catch (cErr: any) {
-              console.error("[CURATION-TIMER] Error in curation background runner:", cErr.message || cErr);
+              console.log(`[AGREGARR-TIMER] Triggering scheduled collection sync (${agregarrSchedule})...`);
+              const { runAgregarrSyncInternal } = await import("../app/curation-actions");
+              await runAgregarrSyncInternal();
+            } catch (aErr: any) {
+              console.error("[AGREGARR-TIMER] Error in Agregarr background runner:", aErr.message || aErr);
             } finally {
-              (global as any).__PORTALARR_CURATION_RUNNING = false;
+              (global as any).__PORTALARR_AGREGARR_RUNNING = false;
+            }
+          })();
+        }
+      }
+
+      // 5. Maintainerr / Prune Leaving Soon Sync (Independent Studio Schedule)
+      if (!(global as any).__PORTALARR_PRUNE_RUNNING) {
+        const pruneEnabled = settings?.pruneSyncEnabled ?? (settings?.curationSyncPruning ?? true);
+        const pruneSchedule = settings?.pruneSyncSchedule || "daily_5am";
+        const lastPruneRun = settings?.pruneLastRunAt;
+
+        if (pruneEnabled && isScheduleDue(pruneSchedule, lastPruneRun, now)) {
+          (global as any).__PORTALARR_PRUNE_RUNNING = true;
+          (async () => {
+            try {
+              console.log(`[MAINTAINERR-TIMER] Triggering scheduled prune sync (${pruneSchedule})...`);
+              const { runMaintainerrSyncInternal } = await import("../app/curation-actions");
+              await runMaintainerrSyncInternal();
+            } catch (pErr: any) {
+              console.error("[MAINTAINERR-TIMER] Error in Maintainerr background runner:", pErr.message || pErr);
+            } finally {
+              (global as any).__PORTALARR_PRUNE_RUNNING = false;
+            }
+          })();
+        }
+      }
+
+      // 6. IMDb Parental Rating Tagging Sync (Independent Studio Schedule)
+      if (!(global as any).__PORTALARR_TAGGING_RUNNING) {
+        const taggingEnabled = settings?.taggingSyncEnabled ?? (settings?.parentalTaggingEnabled ?? (settings?.curationSyncParentalTags ?? true));
+        const taggingSchedule = settings?.taggingSyncSchedule || "daily_3am";
+        const lastTaggingRun = settings?.taggingLastRunAt;
+
+        if (taggingEnabled && isScheduleDue(taggingSchedule, lastTaggingRun, now)) {
+          (global as any).__PORTALARR_TAGGING_RUNNING = true;
+          (async () => {
+            try {
+              console.log(`[TAGGING-TIMER] Triggering scheduled IMDb parental tagging sync (${taggingSchedule})...`);
+              const { runParentalTagsSyncInternal } = await import("../app/curation-actions");
+              await runParentalTagsSyncInternal();
+            } catch (tErr: any) {
+              console.error("[TAGGING-TIMER] Error in Tagging background runner:", tErr.message || tErr);
+            } finally {
+              (global as any).__PORTALARR_TAGGING_RUNNING = false;
             }
           })();
         }

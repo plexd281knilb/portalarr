@@ -107,13 +107,19 @@ export default function EmailManagement() {
 
     // Notification preferences state
     const [emailSettings, setEmailSettings] = useState({
-        emailNotificationsEnabled: true,
-        notifyUserApproval: true,
-        notifyAdminNewUserRequest: true,
+        emailNotificationsEnabled: false,
+        notifyUserApproval: false,
+        notifyAdminNewUserRequest: false,
         notifyPasswordReset: true,
-        notifyMediaRequests: true,
-        notifySupportTickets: true,
-        notifySendToKindle: true
+        notifyMediaRequests: false,
+        notifyTrialWelcome: false,
+        notifyTrialExpiring: false,
+        notifyTrialExpired: false,
+        notifySubscriptionActive: false,
+        notifyReferralReward: false,
+        notifySupportTickets: false,
+        notifySendToKindle: false,
+        autoSuspendExpiredAccounts: false
     });
     const [savingEmailSettings, setSavingEmailSettings] = useState(false);
     const [emailSettingsMsg, setEmailSettingsMsg] = useState("");
@@ -1492,6 +1498,91 @@ export default function EmailManagement() {
                                 <Switch
                                     checked={emailSettings.notifySendToKindle}
                                     onCheckedChange={(val) => handleToggleEmailSetting("notifySendToKindle", val)}
+                                    disabled={!emailSettings.emailNotificationsEnabled}
+                                />
+                            </div>
+
+                            {/* 7. Free Trial Welcome */}
+                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                <div className="space-y-1 pr-3">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <Sparkles className="h-4 w-4 text-emerald-400" /> Free Trial Welcome
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                        Email users an onboarding welcome and trial details upon free trial activation.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailSettings.notifyTrialWelcome}
+                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialWelcome", val)}
+                                    disabled={!emailSettings.emailNotificationsEnabled}
+                                />
+                            </div>
+
+                            {/* 8. Trial & Subscription Expiration Reminders */}
+                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                <div className="space-y-1 pr-3">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <Bell className="h-4 w-4 text-amber-400" /> Expiration Reminders
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                        Send advance renewal reminders 3 days before a trial or ongoing subscription expires.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailSettings.notifyTrialExpiring}
+                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialExpiring", val)}
+                                    disabled={!emailSettings.emailNotificationsEnabled}
+                                />
+                            </div>
+
+                            {/* 9. Account Access Paused / Expired Notices */}
+                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                <div className="space-y-1 pr-3">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <BellOff className="h-4 w-4 text-red-400" /> Access Expired Notices
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                        Notify users when their trial or subscription period has concluded and access is paused.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailSettings.notifyTrialExpired}
+                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialExpired", val)}
+                                    disabled={!emailSettings.emailNotificationsEnabled}
+                                />
+                            </div>
+
+                            {/* 10. Subscription / VIP Pass Activation */}
+                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                <div className="space-y-1 pr-3">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <Shield className="h-4 w-4 text-purple-400" /> Subscription / Pass Active
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                        Send confirmation emails when a monthly or annual pass payment is verified and enabled.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailSettings.notifySubscriptionActive}
+                                    onCheckedChange={(val) => handleToggleEmailSetting("notifySubscriptionActive", val)}
+                                    disabled={!emailSettings.emailNotificationsEnabled}
+                                />
+                            </div>
+
+                            {/* 11. Referral Reward Credited */}
+                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                <div className="space-y-1 pr-3">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <Users className="h-4 w-4 text-cyan-400" /> Referral Reward Alerts
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                        Notify members when a friend joins via their referral code and grants them +1 free month credit.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailSettings.notifyReferralReward}
+                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyReferralReward", val)}
                                     disabled={!emailSettings.emailNotificationsEnabled}
                                 />
                             </div>

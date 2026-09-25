@@ -67,6 +67,12 @@ import {
     SEVERITY_LEVELS,
     CustomTagRule
 } from "@/lib/curation/parental-guide-types";
+import {
+    SCHEDULE_OPTIONS,
+    formatScheduleLabel,
+    calculateNextRunTime,
+    formatLastRunDisplay
+} from "@/lib/curation/schedule-helper";
 
 interface PlexServerItem {
     serverId: string;
@@ -246,7 +252,9 @@ export function TaggingStudio() {
         try {
             const res = await saveCurationSettingsAction({
                 curationSyncParentalTags,
-                curationSyncSchedule
+                curationSyncSchedule,
+                taggingSyncEnabled: curationSyncParentalTags,
+                taggingSyncSchedule: curationSyncSchedule
             });
             if (res.success) {
                 setBaselineSettings(prev => prev ? ({
@@ -271,6 +279,8 @@ export function TaggingStudio() {
             const res = await saveCurationSettingsAction({
                 curationSyncParentalTags,
                 curationSyncSchedule,
+                taggingSyncEnabled: curationSyncParentalTags,
+                taggingSyncSchedule: curationSyncSchedule,
                 parentalTaggingEnabled: curationSyncParentalTags,
                 parentalTagFormat: parentalOptions.format,
                 parentalTagPrefix: parentalOptions.prefix,
@@ -314,6 +324,7 @@ export function TaggingStudio() {
                     text: `Tagging Sync Completed: ${res.totalTagged ?? 0} items tagged (${res.totalEvaluated ?? 0} evaluated).`,
                     details: res.details
                 });
+                setCurationLastRunAt(new Date().toISOString());
                 if (selectedServerId && selectedSectionKey) {
                     loadAdvisoryItems();
                     loadAuditData();
@@ -351,8 +362,8 @@ export function TaggingStudio() {
 
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
-                    const loadedSyncTags = settingsRes.curationSyncParentalTags ?? settingsRes.parentalTaggingEnabled ?? true;
-                    const loadedSchedule = settingsRes.curationSyncSchedule || "every_6_hours";
+                    const loadedSyncTags = settingsRes.taggingSyncEnabled ?? settingsRes.curationSyncParentalTags ?? settingsRes.parentalTaggingEnabled ?? true;
+                    const loadedSchedule = settingsRes.taggingSyncSchedule || settingsRes.curationSyncSchedule || "daily_3am";
                     const loadedParentalOpts: ParentalTaggingOptions = {
                         minSeverity: (settingsRes.parentalMinSeverity as any) || "Mild",
                         format: (settingsRes.parentalTagFormat as any) || "prefix_category_severity",
@@ -370,8 +381,8 @@ export function TaggingStudio() {
                         parentalOptions: loadedParentalOpts
                     });
 
-                    setCurationLastRunAt(settingsRes.curationLastRunAt || null);
-                    setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
+                    setCurationLastRunAt(settingsRes.taggingLastRunAt || settingsRes.curationLastRunAt || null);
+                    setCurationLastRunStatus(settingsRes.taggingLastRunStatus || settingsRes.curationLastRunStatus || null);
                     if (settingsRes.enabledServersForTagging) {
                         setEnabledServersForTagging(settingsRes.enabledServersForTagging);
                     }
@@ -812,218 +823,225 @@ export function TaggingStudio() {
             )}
 
             {/* Automated Tagging & Parental Guides Schedule & Automation Card */}
-            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
-                <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <Clock className="h-5 w-5 text-emerald-400" />
-                                <CardTitle className="text-base sm:text-lg font-bold text-white">IMDb Parental Advisory &amp; Rating Tagging Schedule</CardTitle>
-                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                    {curationSyncParentalTags ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
-                                </Badge>
-                                <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
-                                    Target: {parentalOptions.target === "labels" ? "Plex Sharing Labels" : "Plex Genres"}
-                                </Badge>
-                                {isScheduleDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                            </div>
-                            <CardDescription className="text-xs text-slate-400">
-                                Automatically fetches IMDb parental guide advisories and synchronizes content rating labels, genres, and custom tags across enabled Plex libraries on a recurring schedule.
-                            </CardDescription>
-                        </div>
-                        <Button 
-                            size="sm"
-                            onClick={handleSaveSchedule}
-                            disabled={savingSchedule}
-                            className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
-                                isScheduleDirty 
-                                    ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 animate-pulse" 
-                                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40"
-                            }`}
-                        >
-                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule (Unsaved)" : "Save Schedule"}
-                        </Button>
-                    </div>
-                </CardHeader>
-
-                <CardContent className="p-5 space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {/* Pillar 1: IMDb Parental Advisory Synchronization */}
-                        <div className="bg-slate-950/60 border border-emerald-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">🛡️ IMDb Parental Advisory Sync</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
-                                            {curationSyncParentalTags ? `Every ${curationSyncSchedule.replace(/every_/g, '').replace(/_/g, ' ')}` : 'Disabled'}
-                                        </Badge>
-                                        <Switch 
-                                            checked={curationSyncParentalTags}
-                                            onCheckedChange={checked => setCurationSyncParentalTags(checked)}
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    Scans items in enabled libraries, queries IMDb parental content advisories (Nudity, Violence, Profanity, Alcohol, Frightening), and filters by minimum severity rating.
-                                </p>
-                            </div>
-
-                            <div className="space-y-3 pt-1">
+            {(() => {
+                const nextRunInfo = calculateNextRunTime(curationSyncSchedule, curationLastRunAt);
+                return (
+                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
+                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Sync Frequency</label>
-                                    <Select 
-                                        value={curationSyncSchedule || "every_6_hours"} 
-                                        onValueChange={val => setCurationSyncSchedule(val)}
-                                        disabled={!curationSyncParentalTags}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue placeholder="Select Frequency" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
-                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
-                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                            <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
-                                            <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
-                                            <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
-                                            <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Target Libraries Banner */}
-                                <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                            <Layers className="h-3 w-3 text-emerald-400" />
-                                            <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
-                                        </label>
-                                        <button
-                                            type="button"
-                                            onClick={() => setManageLibrariesModalOpen(true)}
-                                            className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
-                                        >
-                                            Manage All &rarr;
-                                        </button>
-                                    </div>
-                                    <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
-                                        {activeEnabledSections.length > 0 ? (
-                                            activeEnabledSections.map(sec => (
-                                                <Badge 
-                                                    key={`${sec.serverId}-${sec.sectionKey}`}
-                                                    className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
-                                                    onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
-                                                    title={`Click to disable/exclude "${sec.title}" from tagging`}
-                                                >
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
-                                                    {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
-                                                    <span>{sec.title}</span>
-                                                    {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
-                                                </Badge>
-                                            ))
-                                        ) : (
-                                            <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Tagging paused)</span>
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <Clock className="h-5 w-5 text-emerald-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-white">IMDb Parental Advisory &amp; Rating Tagging Schedule</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                            {curationSyncParentalTags ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
+                                        </Badge>
+                                        {curationSyncParentalTags && (
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                                                ⏱️ Next: {nextRunInfo.relativeText}
+                                            </Badge>
                                         )}
-                                        {excludedSections.length > 0 && (
-                                            <Badge
-                                                variant="outline"
-                                                onClick={() => setManageLibrariesModalOpen(true)}
-                                                className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
-                                            >
-                                                +{excludedSections.length} excluded
+                                        <Badge className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                            Target: {parentalOptions.target === "labels" ? "Plex Sharing Labels" : "Plex Genres"}
+                                        </Badge>
+                                        {isScheduleDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <Clock3 className="h-3.5 w-3.5 text-emerald-400" />
-                                    Last run: <span className="text-slate-300 font-mono">{curationLastRunAt ? new Date(curationLastRunAt).toLocaleString() : "Never"}</span>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Automatically fetches IMDb parental guide advisories and synchronizes content rating labels, genres, and custom tags across enabled Plex libraries on a recurring schedule.
+                                    </CardDescription>
                                 </div>
                                 <Button 
                                     size="sm"
-                                    onClick={() => handleRunTaggingSync()}
-                                    disabled={runningTaggingSync}
-                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-emerald-950/40 cursor-pointer shrink-0"
+                                    onClick={handleSaveSchedule}
+                                    disabled={savingSchedule}
+                                    className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                        isScheduleDirty 
+                                            ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 animate-pulse" 
+                                            : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40"
+                                    }`}
                                 >
-                                    {runningTaggingSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                                    <span>Run Batch Tagging Now</span>
+                                    {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                                    {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule (Unsaved)" : "Save Schedule"}
                                 </Button>
                             </div>
-                        </div>
+                        </CardHeader>
 
-                        {/* Pillar 2: Plex Target Destination & Sharing Labels */}
-                        <div className="bg-slate-950/60 border border-cyan-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <Tag className="h-4 w-4 text-cyan-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">🏷️ Plex Target &amp; Sharing Access</span>
+                        <CardContent className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {/* Pillar 1: IMDb Parental Advisory Synchronization */}
+                                <div className="bg-slate-950/60 border border-emerald-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">🛡️ IMDb Parental Advisory Sync</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncParentalTags ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                    {curationSyncParentalTags ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
+                                                </Badge>
+                                                <Switch 
+                                                    checked={curationSyncParentalTags}
+                                                    onCheckedChange={checked => setCurationSyncParentalTags(checked)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Scans items in enabled libraries, queries IMDb parental content advisories (Nudity, Violence, Profanity, Alcohol, Frightening), and filters by minimum severity rating.
+                                        </p>
                                     </div>
-                                    <Badge variant="outline" className="text-[10px] font-semibold px-2 py-0.5 border-cyan-500/40 text-cyan-300 bg-cyan-950/30">
-                                        {parentalOptions.format === "prefix_category_severity" ? "Prefix: IMDb" : "Formatted"}
-                                    </Badge>
-                                </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    Applies structured tags directly into Plex sharing labels or genre metadata, enabling parental pin restrictions and granular shared-user account controls.
-                                </p>
-                            </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-center">
-                                <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                                    <span className="text-[10px] text-slate-400 block">Min Severity</span>
-                                    <span className="text-xs font-bold text-amber-300">{parentalOptions.minSeverity || "Mild"}+</span>
+                                    <div className="space-y-3 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Sync Frequency</label>
+                                            <Select 
+                                                value={curationSyncSchedule || "daily_3am"} 
+                                                onValueChange={val => setCurationSyncSchedule(val)}
+                                                disabled={!curationSyncParentalTags}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                    <SelectValue placeholder="Select Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    {SCHEDULE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {/* Target Libraries Banner */}
+                                        <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                                                    <Layers className="h-3 w-3 text-emerald-400" />
+                                                    <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setManageLibrariesModalOpen(true)}
+                                                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                                                >
+                                                    Manage All &rarr;
+                                                </button>
+                                            </div>
+                                            <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                                {activeEnabledSections.length > 0 ? (
+                                                    activeEnabledSections.map(sec => (
+                                                        <Badge 
+                                                            key={`${sec.serverId}-${sec.sectionKey}`}
+                                                            className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                            onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
+                                                            title={`Click to disable/exclude "${sec.title}" from tagging`}
+                                                        >
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                                            {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
+                                                            <span>{sec.title}</span>
+                                                            {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Tagging paused)</span>
+                                                )}
+                                                {excludedSections.length > 0 && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        onClick={() => setManageLibrariesModalOpen(true)}
+                                                        className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                                    >
+                                                        +{excludedSections.length} excluded
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
+                                        </div>
+                                        <Button 
+                                            size="sm"
+                                            onClick={() => handleRunTaggingSync()}
+                                            disabled={runningTaggingSync}
+                                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-emerald-950/40 cursor-pointer shrink-0"
+                                        >
+                                            {runningTaggingSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                            <span>Run Batch Tagging Now</span>
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                                    <span className="text-[10px] text-slate-400 block">Destination</span>
-                                    <span className="text-xs font-bold text-cyan-300 capitalize">{parentalOptions.target || "Labels"}</span>
-                                </div>
-                                <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                                    <span className="text-[10px] text-slate-400 block">Categories</span>
-                                    <span className="text-xs font-bold text-emerald-300">5 Monitored</span>
+
+                                {/* Pillar 2: Plex Target Destination & Sharing Labels */}
+                                <div className="bg-slate-950/60 border border-cyan-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Tag className="h-4 w-4 text-cyan-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">🏷️ Plex Target &amp; Sharing Access</span>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] font-semibold px-2 py-0.5 border-cyan-500/40 text-cyan-300 bg-cyan-950/30">
+                                                {parentalOptions.format === "prefix_category_severity" ? "Prefix: IMDb" : "Formatted"}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Applies structured tags directly into Plex sharing labels or genre metadata, enabling parental pin restrictions and granular shared-user account controls.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-center">
+                                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                                            <span className="text-[10px] text-slate-400 block">Min Severity</span>
+                                            <span className="text-xs font-bold text-amber-300">{parentalOptions.minSeverity || "Mild"}+</span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                                            <span className="text-[10px] text-slate-400 block">Destination</span>
+                                            <span className="text-xs font-bold text-cyan-300 capitalize">{parentalOptions.target || "Labels"}</span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                                            <span className="text-[10px] text-slate-400 block">Categories</span>
+                                            <span className="text-xs font-bold text-emerald-300">5 Monitored</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                                            <span>Nudity • Violence • Profanity • Alcohol • Frightening</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSubTab("parental")}
+                                            className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                                        >
+                                            Configure Rules &rarr;
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                        </CardContent>
 
-                            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-                                <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                                    <span>Nudity • Violence • Profanity • Alcohol • Frightening</span>
+                        {taggingSyncResult && (
+                            <div className={`p-3 text-xs border-t ${taggingSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
+                                {taggingSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                                <div className="space-y-0.5">
+                                    <span className="font-bold">{taggingSyncResult.text}</span>
+                                    {taggingSyncResult.details && taggingSyncResult.details.length > 0 && (
+                                        <p className="text-[11px] opacity-80">{taggingSyncResult.details.join(" • ")}</p>
+                                    )}
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setSubTab("parental")}
-                                    className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
-                                >
-                                    Configure Rules &rarr;
-                                </button>
                             </div>
-                        </div>
-                    </div>
-                </CardContent>
-
-                {taggingSyncResult && (
-                    <div className={`p-3 text-xs border-t ${taggingSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
-                        {taggingSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
-                        <div className="space-y-0.5">
-                            <span className="font-bold">{taggingSyncResult.text}</span>
-                            {taggingSyncResult.details && taggingSyncResult.details.length > 0 && (
-                                <p className="text-[11px] opacity-80">{taggingSyncResult.details.join(" • ")}</p>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </Card>
+                        )}
+                    </Card>
+                );
+            })()}
 
             {/* Sub-Tabs Selector */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">

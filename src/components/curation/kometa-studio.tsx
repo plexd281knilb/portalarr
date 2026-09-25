@@ -97,6 +97,12 @@ import {
     runOverlayIncrementalSyncAction,
     runOverlayRecheckSyncAction
 } from "@/app/curation-actions";
+import {
+    SCHEDULE_OPTIONS,
+    formatScheduleLabel,
+    calculateNextRunTime,
+    formatLastRunDisplay
+} from "@/lib/curation/schedule-helper";
 
 interface PlexServerItem {
     serverId: string;
@@ -3200,300 +3206,310 @@ export function KometaStudio() {
             )}
 
             {/* Automated Periodic Timer Job & Sync Runner */}
-            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
-                isScheduleDirty 
-                    ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
-                    : "border-slate-800"
-            }`}>
-                <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <Clock className="h-5 w-5 text-purple-400" />
-                                <CardTitle className="text-base sm:text-lg font-bold text-white">Poster Overlays Dual Automation Schedules</CardTitle>
-                                {isScheduleDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled || overlayRecheckEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                    {overlayIncrementalEnabled && overlayRecheckEnabled ? 'Dual Schedules Active' : overlayIncrementalEnabled ? 'Incremental Active' : overlayRecheckEnabled ? 'Recheck Active' : 'Schedules Paused'}
-                                </Badge>
-                            </div>
-                            <CardDescription className="text-xs text-slate-400">
-                                Automatically scans for new media imports and performs periodic library rechecks on independent schedules across enabled Plex libraries.
-                            </CardDescription>
-                        </div>
-                        <Button 
-                            size="sm"
-                            onClick={handleSaveSchedule}
-                            disabled={savingSchedule}
-                            className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
-                                isScheduleDirty 
-                                    ? "bg-amber-500 hover:bg-amber-400 text-black font-bold animate-pulse shadow-amber-500/20" 
-                                    : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-950/40"
-                            }`}
-                        >
-                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedules!" : isScheduleDirty ? "Save Schedules *" : "Save Schedules"}
-                        </Button>
-                    </div>
-                </CardHeader>
+            {(() => {
+                const incNext = calculateNextRunTime(overlayIncrementalSchedule, overlayIncrementalLastRunAt);
+                const recheckNext = calculateNextRunTime(overlayRecheckSchedule, overlayRecheckLastRunAt);
 
-                <CardContent className="p-5 space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {/* Schedule 1: Incremental Scan */}
-                        <div className="bg-slate-950/60 border border-purple-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <Zap className="h-4 w-4 text-purple-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">⚡ Incremental Scan (All Changed Items)</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
-                                            {overlayIncrementalEnabled ? `Active (${overlayIncrementalSchedule.replace(/_/g, ' ')})` : 'Disabled'}
+                return (
+                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                        isScheduleDirty 
+                            ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                            : "border-slate-800"
+                    }`}>
+                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <Clock className="h-5 w-5 text-purple-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-white">Poster Overlays Dual Automation Schedules</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled || overlayRecheckEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                            {overlayIncrementalEnabled && overlayRecheckEnabled ? 'Dual Schedules Active' : overlayIncrementalEnabled ? 'Incremental Active' : overlayRecheckEnabled ? 'Recheck Active' : 'Schedules Paused'}
                                         </Badge>
-                                        <Switch 
-                                            checked={overlayIncrementalEnabled}
-                                            onCheckedChange={checked => setOverlayIncrementalEnabled(checked)}
-                                        />
+                                        {overlayIncrementalEnabled && (
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${incNext.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-purple-500/20 text-purple-300 border border-purple-500/30"}`}>
+                                                ⚡ Inc Next: {incNext.relativeText}
+                                            </Badge>
+                                        )}
+                                        {overlayRecheckEnabled && (
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${recheckNext.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"}`}>
+                                                🌙 Recheck Next: {recheckNext.relativeText}
+                                            </Badge>
+                                        )}
+                                        {isScheduleDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
                                     </div>
-                                </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    Fast, high-frequency scan that checks newly added and upgraded media across enabled libraries to apply badges immediately.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
-                                    <Select 
-                                        value={overlayIncrementalSchedule} 
-                                        onValueChange={val => setOverlayIncrementalSchedule(val)}
-                                        disabled={!overlayIncrementalEnabled}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue placeholder="Select Frequency" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
-                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
-                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                            <SelectItem value="daily_3am">🌙 Daily (3:00 AM)</SelectItem>
-                                            <SelectItem value="daily_4am">🌙 Daily (4:00 AM)</SelectItem>
-                                            <SelectItem value="daily_5am">🌙 Daily (5:00 AM)</SelectItem>
-                                            <SelectItem value="weekly_sun">📅 Weekly (Sunday)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Incremental Scope / Batch</label>
-                                    <Select 
-                                        value={String(overlayIncrementalBatchSize)} 
-                                        onValueChange={val => setOverlayIncrementalBatchSize(Number(val))}
-                                        disabled={!overlayIncrementalEnabled}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-purple-300 font-semibold">
-                                            <SelectValue placeholder="Batch Size" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="0">📦 All Changed Items (Default)</SelectItem>
-                                            <SelectItem value="50">📦 50 Items</SelectItem>
-                                            <SelectItem value="100">📦 100 Items</SelectItem>
-                                            <SelectItem value="200">📦 200 Items</SelectItem>
-                                            <SelectItem value="500">📦 500 Items</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <Clock3 className="h-3.5 w-3.5 text-purple-400" />
-                                    Last run: <span className="text-slate-300 font-mono">{overlayIncrementalLastRunAt ? new Date(overlayIncrementalLastRunAt).toLocaleString() : "Never"}</span>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Automatically scans for new media imports and performs periodic library rechecks on independent schedules across enabled Plex libraries.
+                                    </CardDescription>
                                 </div>
                                 <Button 
                                     size="sm"
-                                    onClick={handleRunIncrementalSync}
-                                    disabled={runningIncrementalSync}
-                                    variant="outline"
-                                    className="border-purple-500/40 text-purple-300 hover:text-white hover:bg-purple-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                    onClick={handleSaveSchedule}
+                                    disabled={savingSchedule}
+                                    className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                        isScheduleDirty 
+                                            ? "bg-amber-500 hover:bg-amber-400 text-black font-bold animate-pulse shadow-amber-500/20" 
+                                            : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-950/40"
+                                    }`}
                                 >
-                                    {runningIncrementalSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                                    <span>Run Incremental Now</span>
+                                    {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                                    {scheduleSavedMsg ? "Saved Schedules!" : isScheduleDirty ? "Save Schedules *" : "Save Schedules"}
                                 </Button>
                             </div>
-                        </div>
+                        </CardHeader>
 
-                        {/* Schedule 2: Deep Periodic Recheck */}
-                        <div className="bg-slate-950/60 border border-indigo-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <RotateCcw className="h-4 w-4 text-indigo-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">🌙 Daily Deep Recheck (All Items)</span>
+                        <CardContent className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {/* Schedule 1: Incremental Scan */}
+                                <div className="bg-slate-950/60 border border-purple-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Zap className="h-4 w-4 text-purple-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">⚡ Incremental Scan (All Changed Items)</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayIncrementalEnabled ? 'border-purple-500/40 text-purple-300 bg-purple-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                    {overlayIncrementalEnabled ? `Active (${formatScheduleLabel(overlayIncrementalSchedule)})` : 'Disabled'}
+                                                </Badge>
+                                                <Switch 
+                                                    checked={overlayIncrementalEnabled}
+                                                    onCheckedChange={checked => setOverlayIncrementalEnabled(checked)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Fast, high-frequency scan that checks newly added and upgraded media across enabled libraries to apply badges immediately.
+                                        </p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayRecheckEnabled ? 'border-indigo-500/40 text-indigo-300 bg-indigo-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
-                                            {overlayRecheckEnabled ? `Active (${overlayRecheckSchedule.replace(/_/g, ' ')})` : 'Disabled'}
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
+                                            <Select 
+                                                value={overlayIncrementalSchedule} 
+                                                onValueChange={val => setOverlayIncrementalSchedule(val)}
+                                                disabled={!overlayIncrementalEnabled}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                    <SelectValue placeholder="Select Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    {SCHEDULE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Incremental Scope / Batch</label>
+                                            <Select 
+                                                value={String(overlayIncrementalBatchSize)} 
+                                                onValueChange={val => setOverlayIncrementalBatchSize(Number(val))}
+                                                disabled={!overlayIncrementalEnabled}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-purple-300 font-semibold">
+                                                    <SelectValue placeholder="Batch Size" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    <SelectItem value="0">📦 All Changed Items (Default)</SelectItem>
+                                                    <SelectItem value="50">📦 50 Items</SelectItem>
+                                                    <SelectItem value="100">📦 100 Items</SelectItem>
+                                                    <SelectItem value="200">📦 200 Items</SelectItem>
+                                                    <SelectItem value="500">📦 500 Items</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-purple-400" />
+                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayIncrementalLastRunAt)}</strong></span>
+                                        </div>
+                                        <Button 
+                                            size="sm"
+                                            onClick={handleRunIncrementalSync}
+                                            disabled={runningIncrementalSync}
+                                            variant="outline"
+                                            className="border-purple-500/40 text-purple-300 hover:text-white hover:bg-purple-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                        >
+                                            {runningIncrementalSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                            <span>Run Incremental Now</span>
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Schedule 2: Deep Periodic Recheck */}
+                                <div className="bg-slate-950/60 border border-indigo-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <RotateCcw className="h-4 w-4 text-indigo-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">🌙 Daily Deep Recheck (All Items)</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${overlayRecheckEnabled ? 'border-indigo-500/40 text-indigo-300 bg-indigo-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                    {overlayRecheckEnabled ? `Active (${formatScheduleLabel(overlayRecheckSchedule)})` : 'Disabled'}
+                                                </Badge>
+                                                <Switch 
+                                                    checked={overlayRecheckEnabled}
+                                                    onCheckedChange={checked => setOverlayRecheckEnabled(checked)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Comprehensive full-library maintenance sweep that verifies existing badge hashes, updates dynamic ribbon dates, and processes all catalog items.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Schedule</label>
+                                            <Select 
+                                                value={overlayRecheckSchedule} 
+                                                onValueChange={val => setOverlayRecheckSchedule(val)}
+                                                disabled={!overlayRecheckEnabled}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                    <SelectValue placeholder="Select Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    {SCHEDULE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Recheck Scope</label>
+                                            <Select 
+                                                value={overlayRecheckScope} 
+                                                onValueChange={val => setOverlayRecheckScope(val)}
+                                                disabled={!overlayRecheckEnabled}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                    <SelectValue placeholder="Recheck Scope" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    <SelectItem value="force_all">🔄 All Items (Full Library)</SelectItem>
+                                                    <SelectItem value="daily_recheck">🌙 &gt;24h Old Items</SelectItem>
+                                                    <SelectItem value="weekly_recheck">📅 &gt;7d Old Items</SelectItem>
+                                                    <SelectItem value="monthly_recheck">🗓️ &gt;30d Old Items</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Batch Size</label>
+                                            <Select 
+                                                value={String(overlayRecheckBatchSize)} 
+                                                onValueChange={val => setOverlayRecheckBatchSize(Number(val))}
+                                                disabled={!overlayRecheckEnabled}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-indigo-300 font-semibold">
+                                                    <SelectValue placeholder="Batch Size" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    <SelectItem value="0">📦 All Items (Default)</SelectItem>
+                                                    <SelectItem value="100">📦 100 Items</SelectItem>
+                                                    <SelectItem value="200">📦 200 Items</SelectItem>
+                                                    <SelectItem value="500">📦 500 Items</SelectItem>
+                                                    <SelectItem value="1000">📦 1000 Items</SelectItem>
+                                                    <SelectItem value="2500">📦 2500 Items</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-indigo-400" />
+                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(overlayRecheckLastRunAt)}</strong></span>
+                                        </div>
+                                        <Button 
+                                            size="sm"
+                                            onClick={handleRunRecheckSync}
+                                            disabled={runningRecheckSync}
+                                            variant="outline"
+                                            className="border-indigo-500/40 text-indigo-300 hover:text-white hover:bg-indigo-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                        >
+                                            {runningRecheckSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                                            <span>Run Recheck Now</span>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Target Libraries Banner */}
+                            <div className="pt-3 border-t border-slate-800/80 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                                        <Layers className="h-3 w-3 text-purple-400" />
+                                        <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setManageLibrariesModalOpen(true)}
+                                        className="text-[10px] text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
+                                    >
+                                        Manage All &rarr;
+                                    </button>
+                                </div>
+                                <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                    {activeEnabledSections.length > 0 ? (
+                                        activeEnabledSections.map(sec => (
+                                            <Badge 
+                                                key={`${sec.serverId}-${sec.sectionKey}`}
+                                                className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
+                                                title={`Click to disable/exclude "${sec.title}" from overlays`}
+                                            >
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                                {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
+                                                <span>{sec.title}</span>
+                                                {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                            </Badge>
+                                        ))
+                                    ) : (
+                                        <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Overlays paused)</span>
+                                    )}
+                                    {excludedSections.length > 0 && (
+                                        <Badge
+                                            variant="outline"
+                                            onClick={() => setManageLibrariesModalOpen(true)}
+                                            className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                        >
+                                            +{excludedSections.length} excluded
                                         </Badge>
-                                        <Switch 
-                                            checked={overlayRecheckEnabled}
-                                            onCheckedChange={checked => setOverlayRecheckEnabled(checked)}
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    Comprehensive full-library maintenance sweep that verifies existing badge hashes, updates dynamic ribbon dates, and processes all catalog items.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Schedule</label>
-                                    <Select 
-                                        value={overlayRecheckSchedule} 
-                                        onValueChange={val => setOverlayRecheckSchedule(val)}
-                                        disabled={!overlayRecheckEnabled}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue placeholder="Select Frequency" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
-                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
-                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                            <SelectItem value="daily_3am">🌙 Daily (3:00 AM)</SelectItem>
-                                            <SelectItem value="daily_4am">🌙 Daily (4:00 AM)</SelectItem>
-                                            <SelectItem value="daily_5am">🌙 Daily (5:00 AM)</SelectItem>
-                                            <SelectItem value="weekly_sun">📅 Weekly (Sunday)</SelectItem>
-                                            <SelectItem value="monthly_1st">🗓️ Monthly (1st)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Recheck Scope</label>
-                                    <Select 
-                                        value={overlayRecheckScope} 
-                                        onValueChange={val => setOverlayRecheckScope(val)}
-                                        disabled={!overlayRecheckEnabled}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue placeholder="Recheck Scope" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="force_all">🔄 All Items (Full Library)</SelectItem>
-                                            <SelectItem value="daily_recheck">🌙 &gt;24h Old Items</SelectItem>
-                                            <SelectItem value="weekly_recheck">📅 &gt;7d Old Items</SelectItem>
-                                            <SelectItem value="monthly_recheck">🗓️ &gt;30d Old Items</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Batch Size</label>
-                                    <Select 
-                                        value={String(overlayRecheckBatchSize)} 
-                                        onValueChange={val => setOverlayRecheckBatchSize(Number(val))}
-                                        disabled={!overlayRecheckEnabled}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-indigo-300 font-semibold">
-                                            <SelectValue placeholder="Batch Size" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="0">📦 All Items (Default)</SelectItem>
-                                            <SelectItem value="100">📦 100 Items</SelectItem>
-                                            <SelectItem value="200">📦 200 Items</SelectItem>
-                                            <SelectItem value="500">📦 500 Items</SelectItem>
-                                            <SelectItem value="1000">📦 1000 Items</SelectItem>
-                                            <SelectItem value="2500">📦 2500 Items</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    )}
                                 </div>
                             </div>
+                        </CardContent>
 
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <Clock3 className="h-3.5 w-3.5 text-indigo-400" />
-                                    Last run: <span className="text-slate-300 font-mono">{overlayRecheckLastRunAt ? new Date(overlayRecheckLastRunAt).toLocaleString() : "Never"}</span>
+                        {overlaySyncResult && (
+                            <div className={`p-3.5 text-xs border-t ${overlaySyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
+                                {overlaySyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
+                                <div className="space-y-0.5">
+                                    <span className="font-bold">{overlaySyncResult.text}</span>
+                                    {overlaySyncResult.details && overlaySyncResult.details.length > 0 && (
+                                        <p className="text-[11px] opacity-80">{overlaySyncResult.details.join(" • ")}</p>
+                                    )}
                                 </div>
-                                <Button 
-                                    size="sm"
-                                    onClick={handleRunRecheckSync}
-                                    disabled={runningRecheckSync}
-                                    variant="outline"
-                                    className="border-indigo-500/40 text-indigo-300 hover:text-white hover:bg-indigo-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
-                                >
-                                    {runningRecheckSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                                    <span>Run Recheck Now</span>
-                                </Button>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Target Libraries Banner */}
-                    <div className="pt-3 border-t border-slate-800/80 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                            <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                <Layers className="h-3 w-3 text-purple-400" />
-                                <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
-                            </label>
-                            <button
-                                type="button"
-                                onClick={() => setManageLibrariesModalOpen(true)}
-                                className="text-[10px] text-purple-400 hover:text-purple-300 font-bold underline cursor-pointer"
-                            >
-                                Manage All &rarr;
-                            </button>
-                        </div>
-                        <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
-                            {activeEnabledSections.length > 0 ? (
-                                activeEnabledSections.map(sec => (
-                                    <Badge 
-                                        key={`${sec.serverId}-${sec.sectionKey}`}
-                                        className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
-                                        onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
-                                        title={`Click to disable/exclude "${sec.title}" from overlays`}
-                                    >
-                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
-                                        {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
-                                        <span>{sec.title}</span>
-                                        {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
-                                    </Badge>
-                                ))
-                            ) : (
-                                <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Overlays paused)</span>
-                            )}
-                            {excludedSections.length > 0 && (
-                                <Badge
-                                    variant="outline"
-                                    onClick={() => setManageLibrariesModalOpen(true)}
-                                    className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
-                                >
-                                    +{excludedSections.length} excluded
-                                </Badge>
-                            )}
-                        </div>
-                    </div>
-                </CardContent>
-
-                {overlaySyncResult && (
-                    <div className={`p-3.5 text-xs border-t ${overlaySyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
-                        {overlaySyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
-                        <div className="space-y-0.5">
-                            <span className="font-bold">{overlaySyncResult.text}</span>
-                            {overlaySyncResult.details && overlaySyncResult.details.length > 0 && (
-                                <p className="text-[11px] opacity-80">{overlaySyncResult.details.join(" • ")}</p>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </Card>
+                        )}
+                    </Card>
+                );
+            })()}
 
             {/* Main Overlays & Simulator Card */}
             <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">

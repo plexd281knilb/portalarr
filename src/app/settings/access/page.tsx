@@ -108,7 +108,8 @@ export default function AccessSettingsPage() {
         requireReferralForSignup: false,
         discordInviteUrl: "",
         subscriptionGracePeriodDays: 3,
-        membershipTiersEnabled: true
+        membershipTiersEnabled: true,
+        autoSuspendExpiredAccounts: false
     });
     const [defaultSelectedKeys, setDefaultSelectedKeys] = useState<string[]>([]);
     const [savingSettings, setSavingSettings] = useState(false);
@@ -675,6 +676,7 @@ export default function AccessSettingsPage() {
         formData.append("discordInviteUrl", paymentSettings.discordInviteUrl || "");
         formData.append("subscriptionGracePeriodDays", String(paymentSettings.subscriptionGracePeriodDays ?? 3));
         formData.append("membershipTiersEnabled", String(paymentSettings.membershipTiersEnabled ?? true));
+        formData.append("autoSuspendExpiredAccounts", String(paymentSettings.autoSuspendExpiredAccounts ?? false));
 
         const res = await savePaymentAndTrialSettings(formData);
         setSavingSettings(false);
@@ -1716,6 +1718,28 @@ export default function AccessSettingsPage() {
                                             />
                                             <p className="text-[11px] text-muted-foreground">Days allowed past expiration before auto-suspending account.</p>
                                         </div>
+                                    </div>
+
+                                    {/* AUTO-SUSPEND EXPIRED ACCOUNTS TOGGLE */}
+                                    <div className="p-3.5 rounded-xl border border-border/50 bg-background/40 flex items-center justify-between gap-4">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="auto-suspend-toggle" className="text-xs font-bold text-foreground cursor-pointer">
+                                                    Automatic Access Suspension on Expiration
+                                                </Label>
+                                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${paymentSettings.autoSuspendExpiredAccounts ? "bg-amber-950/40 text-amber-300 border-amber-500/40" : "bg-muted/40 text-muted-foreground border-border/40"}`}>
+                                                    {paymentSettings.autoSuspendExpiredAccounts ? "Active" : "Disabled (Safe Default)"}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground leading-tight">
+                                                When enabled, accounts past their trial or membership date + grace period are automatically suspended and their Plex server shares revoked by the background scheduler. Disabled by default for full manual oversight.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            id="auto-suspend-toggle"
+                                            checked={paymentSettings.autoSuspendExpiredAccounts ?? false}
+                                            onCheckedChange={(val) => setPaymentSettings({ ...paymentSettings, autoSuspendExpiredAccounts: val })}
+                                        />
                                     </div>
 
                                     <div className="space-y-1.5 pt-2 border-t border-border/30">

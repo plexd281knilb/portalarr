@@ -49,15 +49,21 @@ model Settings {
   discordInviteUrl   String?   // Discord server invite link for onboarding
   subscriptionGracePeriodDays Int? @default(3) // Grace period days after subscription expires before suspension
   membershipTiersEnabled Boolean @default(true)
+  autoSuspendExpiredAccounts Boolean @default(false) // Safety switch - OFF by default
 
-  // Email Notification Controls
-  emailNotificationsEnabled   Boolean   @default(true)
-  notifyUserApproval          Boolean   @default(true)
-  notifyAdminNewUserRequest   Boolean   @default(true)
-  notifyPasswordReset         Boolean   @default(true)
-  notifyMediaRequests         Boolean   @default(true)
-  notifySupportTickets        Boolean   @default(true)
-  notifySendToKindle          Boolean   @default(true)
+  // Email Notification Controls (All Automated Emails OFF by default until explicitly enabled)
+  emailNotificationsEnabled   Boolean   @default(false)
+  notifyUserApproval          Boolean   @default(false)
+  notifyAdminNewUserRequest   Boolean   @default(false)
+  notifyPasswordReset         Boolean   @default(true) // User-initiated password reset
+  notifyMediaRequests         Boolean   @default(false)
+  notifyTrialWelcome          Boolean   @default(false)
+  notifyTrialExpiring         Boolean   @default(false)
+  notifyTrialExpired          Boolean   @default(false)
+  notifySubscriptionActive    Boolean   @default(false)
+  notifyReferralReward        Boolean   @default(false)
+  notifySupportTickets        Boolean   @default(false)
+  notifySendToKindle          Boolean   @default(false)
 
   // Curation, Agregarr & Kometa (PMM) Settings
   tmdbApiKey                  String?
@@ -94,13 +100,13 @@ model Settings {
   seerrDiscordNotifyAvailable     Boolean   @default(true)
   seerrDiscordNotifyFailed        Boolean   @default(true)
 
-  // Seerr Email Notification Settings
-  seerrEmailNotifyAdminNewRequest Boolean   @default(true)
-  seerrEmailNotifyUserAutoApproved Boolean  @default(true)
-  seerrEmailNotifyUserApproved    Boolean   @default(true)
-  seerrEmailNotifyUserDeclined    Boolean   @default(true)
-  seerrEmailNotifyUserAvailable   Boolean   @default(true)
-  seerrEmailNotifyUserFailed      Boolean   @default(true)
+  // Seerr Email Notification Settings (Default OFF until enabled)
+  seerrEmailNotifyAdminNewRequest Boolean   @default(false)
+  seerrEmailNotifyUserAutoApproved Boolean  @default(false)
+  seerrEmailNotifyUserApproved    Boolean   @default(false)
+  seerrEmailNotifyUserDeclined    Boolean   @default(false)
+  seerrEmailNotifyUserAvailable   Boolean   @default(false)
+  seerrEmailNotifyUserFailed      Boolean   @default(false)
 
   // Full vs Trial Accounts Request Controls
   seerrFullAutoApprove         Boolean   @default(true) // Full accounts auto-approve in main arrs
@@ -189,9 +195,9 @@ model Settings {
   leavingSoonAutoThresholdDays     Int?      @default(14) // Only show when items leaving within X days
   leavingSoonAutoHideEmpty         Boolean   @default(true) // Auto-hide from Home when 0 items leaving
 
-  // Automated Curation Timer Job & Periodic Sync Controls
+  // Automated Master Curation & Studio Schedules
   curationSyncEnabled              Boolean   @default(true) // Master timer job switch
-  curationSyncSchedule             String?   @default("every_6_hours") // "every_hour", "every_3_hours", "every_6_hours", "every_12_hours", "daily_3am", "custom"
+  curationSyncSchedule             String?   @default("every_6_hours")
   curationSyncCron                 String?   // Custom cron expression
   curationSyncOverlays             Boolean   @default(true) // Auto-scan new items and apply overlays
   curationSyncCollections          Boolean   @default(true) // Auto-sync seasonal & scheduled collections
@@ -200,6 +206,18 @@ model Settings {
   curationSyncParentalTags         Boolean   @default(true) // Auto-apply IMDb parental rating tags
   curationLastRunAt                DateTime?
   curationLastRunStatus            String?   // JSON telemetry summary of last execution
+
+  // Agregarr Dedicated Collection Sync Schedule
+  agregarrSyncEnabled              Boolean   @default(true)
+  agregarrSyncSchedule             String?   @default("every_6_hours") // "every_3_hours", "every_6_hours", "every_12_hours", "daily_4am"
+  agregarrLastRunAt                DateTime?
+  agregarrLastRunStatus            String?
+
+  // Maintainerr / Prune Dedicated Sync Schedule
+  pruneSyncEnabled                 Boolean   @default(true)
+  pruneSyncSchedule                String?   @default("daily_5am") // "daily_5am", "every_12_hours", "every_24_hours", "weekly_sun"
+  pruneLastRunAt                   DateTime?
+  pruneLastRunStatus               String?
 
   // Poster Overlays Dual Automation Schedules (Incremental vs Deep Rechecks)
   overlayIncrementalEnabled        Boolean   @default(true) // Fast incremental scan for new media & upgrades
@@ -212,8 +230,12 @@ model Settings {
   overlayRecheckBatchSize          Int?      @default(200) // Max items per recheck scan
   overlayRecheckLastRunAt          DateTime?
 
-  // IMDb Parental Advisory & Rating Tagging Controls
+  // IMDb Parental Advisory & Rating Tagging Controls & Dedicated Schedule
   parentalTaggingEnabled           Boolean   @default(true)
+  taggingSyncEnabled               Boolean   @default(true)
+  taggingSyncSchedule              String?   @default("daily_3am") // "daily_3am", "daily_4am", "every_12_hours", "every_6_hours", "every_hour"
+  taggingLastRunAt                 DateTime?
+  taggingLastRunStatus             String?
   parentalTagFormat                String?   @default("prefix_category_severity") // "prefix_category_severity", "severity_category", "category_severity_paren", "custom"
   parentalTagPrefix                String?   @default("IMDb")
   parentalTagTarget                String?   @default("labels") // "labels" (Plex Sharing Labels), "genres" (Plex Genres), "both"

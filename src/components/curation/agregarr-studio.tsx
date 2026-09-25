@@ -107,6 +107,7 @@ import {
     toggleCurationLibrarySectionAction,
     toggleAllCurationServerSectionsAction,
     runFullCurationSyncAction,
+    runAgregarrSyncAction,
     getArrInstancesListAction,
     deployFilteredSmartHubAction,
     deployFilteredRecentlyAddedHubAction,
@@ -124,6 +125,12 @@ import {
     COLLECTION_PRESETS,
     CollectionPreset
 } from "@/lib/curation/presets";
+import {
+    SCHEDULE_OPTIONS,
+    formatScheduleLabel,
+    calculateNextRunTime,
+    formatLastRunDisplay
+} from "@/lib/curation/schedule-helper";
 
 export const AGREGARR_BANNER_PRESETS = [
     { id: "downloading_soon", label: "⏳ Downloading Soon", defaultText: "DOWNLOADING SOON", theme: "emerald-green", pos: "bottom" as const },
@@ -427,7 +434,9 @@ export function AgregarrStudio() {
             const res = await saveCurationSettingsAction({
                 curationSyncCollections,
                 curationSyncReleases,
-                curationSyncSchedule
+                curationSyncSchedule,
+                agregarrSyncEnabled: curationSyncCollections,
+                agregarrSyncSchedule: curationSyncSchedule
             });
             if (res.success) {
                 setBaselineSettings(prev => prev ? ({
@@ -453,7 +462,9 @@ export function AgregarrStudio() {
             const res = await saveCurationSettingsAction({
                 curationSyncCollections,
                 curationSyncReleases,
-                curationSyncSchedule
+                curationSyncSchedule,
+                agregarrSyncEnabled: curationSyncCollections,
+                agregarrSyncSchedule: curationSyncSchedule
             });
             if (res.success) {
                 setBaselineSettings({
@@ -484,12 +495,14 @@ export function AgregarrStudio() {
         setRunningCollectionSync(true);
         setCollectionSyncResult(null);
         try {
-            const res = await syncSeasonalAndScheduledCollectionsAction(selectedServerId, selectedSectionKey);
+            const res = await runAgregarrSyncAction(selectedServerId, selectedSectionKey);
             if (res.success) {
                 setCollectionSyncResult({
                     success: true,
-                    text: `Synced Collections & Hubs successfully: ${res.evaluatedCount ?? 0} rules evaluated.`
+                    text: `Agregarr Collection & Hubs Sync Completed: ${res.evaluatedCount ?? 0} items processed across enabled libraries.`,
+                    details: res.details
                 });
+                setCurationLastRunAt(new Date().toISOString());
                 loadCollections();
             } else {
                 setCollectionSyncResult({
@@ -599,9 +612,9 @@ export function AgregarrStudio() {
                             console.warn("Failed parsing banner templates:", e);
                         }
                     }
-                    const loadedSyncColls = settingsRes.curationSyncCollections ?? true;
+                    const loadedSyncColls = settingsRes.agregarrSyncEnabled ?? settingsRes.curationSyncCollections ?? true;
                     const loadedSyncReleases = settingsRes.curationSyncReleases ?? true;
-                    const loadedSchedule = settingsRes.curationSyncSchedule || "every_6_hours";
+                    const loadedSchedule = settingsRes.agregarrSyncSchedule || settingsRes.curationSyncSchedule || "every_6_hours";
 
                     setCurationSyncCollections(loadedSyncColls);
                     setCurationSyncReleases(loadedSyncReleases);
@@ -612,8 +625,8 @@ export function AgregarrStudio() {
                         curationSyncSchedule: loadedSchedule
                     });
 
-                    setCurationLastRunAt(settingsRes.curationLastRunAt || null);
-                    setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
+                    setCurationLastRunAt(settingsRes.agregarrLastRunAt || settingsRes.curationLastRunAt || null);
+                    setCurationLastRunStatus(settingsRes.agregarrLastRunStatus || settingsRes.curationLastRunStatus || null);
                     if (settingsRes.enabledServersForCollections) {
                         setEnabledServersForCollections(settingsRes.enabledServersForCollections);
                     }
@@ -2173,230 +2186,229 @@ export function AgregarrStudio() {
             )}
 
             {/* Automated Collections & Hubs Schedule & Automation Card */}
-            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
-                <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <Clock className="h-5 w-5 text-amber-400" />
-                                <CardTitle className="text-base sm:text-lg font-bold text-white">Collections &amp; Smart Hubs Automation Schedule</CardTitle>
-                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                    {curationSyncCollections ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
-                                </Badge>
-                                {isScheduleDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                            </div>
-                            <CardDescription className="text-xs text-slate-400">
-                                Automatically synchronizes dynamic TMDb/Trakt collections, evaluates seasonal date schedules, updates Plex Home screen ranking (#1-#99), and creates Coming Soon release placeholders across enabled libraries.
-                            </CardDescription>
-                        </div>
-                        <Button 
-                            size="sm"
-                            onClick={handleSaveSchedule}
-                            disabled={savingSchedule}
-                            className={`font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
-                                isScheduleDirty
-                                    ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 animate-pulse"
-                                    : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-950/40"
-                            }`}
-                        >
-                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule (Unsaved)" : "Save Schedule"}
-                        </Button>
-                    </div>
-                </CardHeader>
-
-                <CardContent className="p-5 space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {/* Pillar 1: Dynamic Smart Collections & Home Screen Ranking */}
-                        <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">🌟 Dynamic Collections &amp; Home Hubs</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
-                                            {curationSyncCollections ? `Every ${curationSyncSchedule.replace(/every_/g, '').replace(/_/g, ' ')}` : 'Disabled'}
-                                        </Badge>
-                                        <Switch 
-                                            checked={curationSyncCollections}
-                                            onCheckedChange={checked => setCurationSyncCollections(checked)}
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    Fetches TMDb/Trakt/MDBList trending items, user lists, and applies Plex Home &amp; Recommended hub ordering (#1-#99) across enabled libraries.
-                                </p>
-                            </div>
-
-                            <div className="space-y-3 pt-1">
+            {(() => {
+                const nextRunInfo = calculateNextRunTime(curationSyncSchedule, curationLastRunAt);
+                return (
+                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${isScheduleDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
+                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
-                                    <Select 
-                                        value={curationSyncSchedule || "every_6_hours"} 
-                                        onValueChange={val => setCurationSyncSchedule(val)}
-                                        disabled={!curationSyncCollections}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue placeholder="Select Frequency" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="every_hour">⚡ Every 1 Hour</SelectItem>
-                                            <SelectItem value="every_3_hours">⏱️ Every 3 Hours</SelectItem>
-                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                            <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
-                                            <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
-                                            <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
-                                            <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Target Libraries Banner */}
-                                <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                            <Layers className="h-3 w-3 text-amber-400" />
-                                            <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
-                                        </label>
-                                        <button
-                                            type="button"
-                                            onClick={() => setManageLibrariesModalOpen(true)}
-                                            className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
-                                        >
-                                            Manage All &rarr;
-                                        </button>
-                                    </div>
-                                    <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
-                                        {activeEnabledSections.length > 0 ? (
-                                            activeEnabledSections.map(sec => (
-                                                <Badge 
-                                                    key={`${sec.serverId}-${sec.sectionKey}`}
-                                                    className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
-                                                    onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
-                                                    title={`Click to disable/exclude "${sec.title}" from collections`}
-                                                >
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
-                                                    {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
-                                                    <span>{sec.title}</span>
-                                                    {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
-                                                </Badge>
-                                            ))
-                                        ) : (
-                                            <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Collections paused)</span>
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <Clock className="h-5 w-5 text-amber-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-white">Collections &amp; Smart Hubs Automation Schedule</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                            {curationSyncCollections ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
+                                        </Badge>
+                                        {curationSyncCollections && (
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                                                ⏱️ Next: {nextRunInfo.relativeText}
+                                            </Badge>
                                         )}
-                                        {excludedSections.length > 0 && (
-                                            <Badge
-                                                variant="outline"
-                                                onClick={() => setManageLibrariesModalOpen(true)}
-                                                className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
-                                            >
-                                                +{excludedSections.length} excluded
+                                        {isScheduleDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <Clock3 className="h-3.5 w-3.5 text-amber-400" />
-                                    Last run: <span className="text-slate-300 font-mono">{curationLastRunAt ? new Date(curationLastRunAt).toLocaleString() : "Never"}</span>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Automatically synchronizes dynamic TMDb/Trakt collections, evaluates seasonal date schedules, updates Plex Home screen ranking (#1-#99), and creates Coming Soon release placeholders across enabled libraries.
+                                    </CardDescription>
                                 </div>
                                 <Button 
                                     size="sm"
-                                    onClick={handleRunCollectionSync}
-                                    disabled={runningCollectionSync}
-                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer shrink-0"
+                                    onClick={handleSaveSchedule}
+                                    disabled={savingSchedule}
+                                    className={`font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                        isScheduleDirty
+                                            ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20 animate-pulse"
+                                            : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-950/40"
+                                    }`}
                                 >
-                                    {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-slate-950" />}
-                                    <span>Sync Collections Now</span>
+                                    {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                                    {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule (Unsaved)" : "Save Schedule"}
                                 </Button>
                             </div>
-                        </div>
+                        </CardHeader>
 
-                        {/* Pillar 2: Seasonal Schedules & Coming Soon Placeholders */}
-                        <div className="bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="h-4 w-4 text-sky-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">🗓️ Seasonal Dates &amp; Release Placeholders</span>
+                        <CardContent className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {/* Pillar 1: Dynamic Smart Collections & Home Screen Ranking */}
+                                <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">🌟 Dynamic Collections &amp; Home Hubs</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncCollections ? 'border-amber-500/40 text-amber-300 bg-amber-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                    {curationSyncCollections ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
+                                                </Badge>
+                                                <Switch 
+                                                    checked={curationSyncCollections}
+                                                    onCheckedChange={checked => setCurationSyncCollections(checked)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Fetches TMDb/Trakt/MDBList trending items, user lists, and applies Plex Home &amp; Recommended hub ordering (#1-#99) across enabled libraries.
+                                        </p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncReleases ? 'border-sky-500/40 text-sky-300 bg-sky-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
-                                            {curationSyncReleases ? 'Active' : 'Disabled'}
-                                        </Badge>
-                                        <Switch 
-                                            checked={curationSyncReleases}
-                                            onCheckedChange={checked => setCurationSyncReleases(checked)}
-                                        />
+
+                                    <div className="space-y-3 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Trigger Frequency</label>
+                                            <Select 
+                                                value={curationSyncSchedule || "every_6_hours"} 
+                                                onValueChange={val => setCurationSyncSchedule(val)}
+                                                disabled={!curationSyncCollections}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                    <SelectValue placeholder="Select Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    {SCHEDULE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {/* Target Libraries Banner */}
+                                        <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                                                    <Layers className="h-3 w-3 text-amber-400" />
+                                                    <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setManageLibrariesModalOpen(true)}
+                                                    className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
+                                                >
+                                                    Manage All &rarr;
+                                                </button>
+                                            </div>
+                                            <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                                {activeEnabledSections.length > 0 ? (
+                                                    activeEnabledSections.map(sec => (
+                                                        <Badge 
+                                                            key={`${sec.serverId}-${sec.sectionKey}`}
+                                                            className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                            onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
+                                                            title={`Click to disable/exclude "${sec.title}" from collections`}
+                                                        >
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                                            {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
+                                                            <span>{sec.title}</span>
+                                                            {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Collections paused)</span>
+                                                )}
+                                                {excludedSections.length > 0 && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        onClick={() => setManageLibrariesModalOpen(true)}
+                                                        className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                                    >
+                                                        +{excludedSections.length} excluded
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
+                                        </div>
+                                        <Button 
+                                            size="sm"
+                                            onClick={handleRunCollectionSync}
+                                            disabled={runningCollectionSync}
+                                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3 gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer shrink-0"
+                                        >
+                                            {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-slate-950" />}
+                                            <span>Sync Collections Now</span>
+                                        </Button>
                                     </div>
                                 </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    Evaluates monitored unreleased media from Radarr/Sonarr, generates 1080p dummy video stubs with countdown banner overlays, and automatically cleans up placeholders once downloaded.
-                                </p>
-                            </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Seasonal Schedules</label>
-                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
-                                        {collections.filter(c => c.isSeasonal).length} Active Date Windows
+                                {/* Pillar 2: Seasonal Schedules & Coming Soon Placeholders */}
+                                <div className="bg-slate-950/60 border border-sky-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar className="h-4 w-4 text-sky-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">🗓️ Seasonal Dates &amp; Release Placeholders</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncReleases ? 'border-sky-500/40 text-sky-300 bg-sky-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                    {curationSyncReleases ? 'Active' : 'Disabled'}
+                                                </Badge>
+                                                <Switch 
+                                                    checked={curationSyncReleases}
+                                                    onCheckedChange={checked => setCurationSyncReleases(checked)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Evaluates monitored unreleased media from Radarr/Sonarr, generates 1080p dummy video stubs with countdown banner overlays, and automatically cleans up placeholders once downloaded.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Seasonal Schedules</label>
+                                            <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
+                                                {collections.filter(c => c.isSeasonal).length} Active Date Windows
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Monitored Queue</label>
+                                            <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
+                                                Radarr &amp; Sonarr Monitored
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                                            <span>Auto-Syncs with Radarr &amp; Sonarr Monitored</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSubTab("coming_soon")}
+                                            className="text-[11px] font-bold text-sky-400 hover:text-sky-300 transition-colors cursor-pointer"
+                                        >
+                                            Configure Placeholders &rarr;
+                                        </button>
                                     </div>
                                 </div>
+                            </div>
+                        </CardContent>
 
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Monitored Queue</label>
-                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-sky-300 font-semibold truncate">
-                                        Radarr &amp; Sonarr Monitored
-                                    </div>
+                        {collectionSyncResult && (
+                            <div className={`p-3 text-xs border-t ${collectionSyncResult.success ? 'bg-amber-950/60 border-amber-800 text-amber-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2`}>
+                                {collectionSyncResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-400" />}
+                                <div className="space-y-0.5">
+                                    <span className="font-bold">{collectionSyncResult.text}</span>
+                                    {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
+                                        <p className="text-[11px] opacity-80">{collectionSyncResult.details.join(" • ")}</p>
+                                    )}
                                 </div>
                             </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                <Button 
-                                    size="sm"
-                                    onClick={handleCleanupPlaceholders}
-                                    disabled={cleaningPlaceholders}
-                                    variant="outline"
-                                    className="border-sky-500/40 text-sky-300 hover:text-white hover:bg-sky-950/40 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
-                                >
-                                    {cleaningPlaceholders ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderCheck className="h-3.5 w-3.5" />}
-                                    <span>Clean Acquired Placeholders</span>
-                                </Button>
-                                <Button 
-                                    size="sm"
-                                    onClick={() => setSubTab("coming_soon")}
-                                    variant="outline"
-                                    className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8 px-3 gap-1.5 cursor-pointer shadow-sm shrink-0"
-                                >
-                                    <Calendar className="h-3.5 w-3.5 text-sky-400" />
-                                    <span>Coming Soon Settings &rarr;</span>
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-
-                {collectionSyncResult && (
-                    <div className={`p-3.5 text-xs border-t ${collectionSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
-                        {collectionSyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
-                        <div className="space-y-0.5">
-                            <span className="font-bold">{collectionSyncResult.text}</span>
-                            {collectionSyncResult.details && collectionSyncResult.details.length > 0 && (
-                                <p className="text-[11px] opacity-80">{collectionSyncResult.details.join(" • ")}</p>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </Card>
+                        )}
+                    </Card>
+                );
+            })()}
 
             {/* Agregarr Top Navigation Sub-Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">

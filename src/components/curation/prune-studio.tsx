@@ -59,6 +59,7 @@ import {
     toggleCurationLibrarySectionAction,
     toggleAllCurationServerSectionsAction,
     runFullCurationSyncAction,
+    runMaintainerrSyncAction,
     getLeavingSoonItemsAction,
     markItemLeavingSoonAction,
     unmarkItemLeavingSoonAction,
@@ -74,6 +75,12 @@ import {
     saveSelectedGlancesDiskAction,
     recheckLeavingSoonWatchActivityAction
 } from "@/app/curation-actions";
+import {
+    SCHEDULE_OPTIONS,
+    formatScheduleLabel,
+    calculateNextRunTime,
+    formatLastRunDisplay
+} from "@/lib/curation/schedule-helper";
 
 export interface MaintainerrRulePreset {
     id: string;
@@ -374,6 +381,8 @@ export function PruneStudio() {
             const res = await saveCurationSettingsAction({
                 curationSyncPruning,
                 curationSyncSchedule,
+                pruneSyncEnabled: curationSyncPruning,
+                pruneSyncSchedule: curationSyncSchedule,
                 pruneDryRun,
                 enableAutoPruneDeletion
             });
@@ -436,6 +445,8 @@ export function PruneStudio() {
             if (isScheduleDirty) {
                 payload.curationSyncPruning = curationSyncPruning;
                 payload.curationSyncSchedule = curationSyncSchedule;
+                payload.pruneSyncEnabled = curationSyncPruning;
+                payload.pruneSyncSchedule = curationSyncSchedule;
                 payload.pruneDryRun = pruneDryRun;
                 payload.enableAutoPruneDeletion = enableAutoPruneDeletion;
             }
@@ -508,12 +519,14 @@ export function PruneStudio() {
         setRunningPruneSync(true);
         setPruneSyncResult(null);
         try {
-            const res = await syncLeavingSoonCollectionHubAction(selectedServerId, selectedSectionKey);
+            const res = await runMaintainerrSyncAction(selectedServerId, selectedSectionKey);
             if (res.success) {
                 setPruneSyncResult({
                     success: true,
-                    text: res.message || "Prune evaluation and Leaving Soon hub sync completed."
+                    text: `Maintainerr Prune Sync Completed: ${res.totalEvaluated ?? 0} items evaluated across enabled libraries.`,
+                    details: res.details
                 });
+                setCurationLastRunAt(new Date().toISOString());
                 loadLeavingSoonItems();
             } else {
                 setPruneSyncResult({
@@ -1207,12 +1220,12 @@ export function PruneStudio() {
                     if (savedDiskId) {
                         setSelectedGlancesDiskId(savedDiskId);
                     }
-                    setCurationSyncPruning(settingsRes.curationSyncPruning ?? true);
-                    setCurationSyncSchedule(settingsRes.curationSyncSchedule || "daily_5am");
+                    setCurationSyncPruning(settingsRes.pruneSyncEnabled ?? settingsRes.curationSyncPruning ?? true);
+                    setCurationSyncSchedule(settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_5am");
                     setPruneDryRun(settingsRes.pruneDryRun ?? true);
                     setEnableAutoPruneDeletion(settingsRes.enableAutoPruneDeletion ?? false);
-                    setCurationLastRunAt(settingsRes.curationLastRunAt || null);
-                    setCurationLastRunStatus(settingsRes.curationLastRunStatus || null);
+                    setCurationLastRunAt(settingsRes.pruneLastRunAt || settingsRes.curationLastRunAt || null);
+                    setCurationLastRunStatus(settingsRes.pruneLastRunStatus || settingsRes.curationLastRunStatus || null);
                     if (settingsRes.enabledServersForPruning) {
                         setEnabledServersForPruning(settingsRes.enabledServersForPruning);
                     }
@@ -1844,165 +1857,170 @@ export function PruneStudio() {
             )}
 
             {/* Automated Prune & Leaving Soon Schedule & Automation Card */}
-            <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
-                isScheduleDirty 
-                    ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
-                    : "border-slate-800"
-            }`}>
-                <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <Clock className="h-5 w-5 text-rose-400" />
-                                <CardTitle className="text-base sm:text-lg font-bold text-white">Media Pruning &amp; Retention Automation Schedule</CardTitle>
-                                {isScheduleDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
-                                    {curationSyncPruning ? `Active (${curationSyncSchedule.replace(/_/g, ' ')})` : 'Paused'}
-                                </Badge>
-                                {pruneDryRun ? (
-                                    <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
-                                        🛡️ Dry-Run Safe (Simulate Only)
-                                    </Badge>
-                                ) : (
-                                    <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold px-2 py-0.5">
-                                        ⚠️ Live Deletion Enabled
-                                    </Badge>
-                                )}
-                            </div>
-                            <CardDescription className="text-xs text-slate-400">
-                                Automated recurring evaluation of storage headroom, media watch history, and retention policies across enabled Plex libraries to stage Leaving Soon notices and reclaim disk capacity.
-                            </CardDescription>
-                        </div>
-                        <Button 
-                            size="sm"
-                            onClick={handleSaveSchedule}
-                            disabled={savingSchedule}
-                            className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
-                                isScheduleDirty 
-                                    ? "bg-amber-500 hover:bg-amber-400 text-black font-bold animate-pulse shadow-amber-500/20" 
-                                    : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40"
-                            }`}
-                        >
-                            {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                            {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule *" : "Save Schedule"}
-                        </Button>
-                    </div>
-                </CardHeader>
-
-                <CardContent className="p-5 space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {/* Stage 1: Retention & Leaving Soon Staging */}
-                        <div className="bg-slate-950/60 border border-rose-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
-                                        <span className="font-bold text-slate-100 text-sm">⚠️ Stage 1: Leaving Soon Staging</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
-                                            {curationSyncPruning ? `Every ${curationSyncSchedule.replace(/every_/g, '').replace(/_/g, ' ')}` : 'Disabled'}
+            {(() => {
+                const nextRunInfo = calculateNextRunTime(curationSyncSchedule, curationLastRunAt);
+                return (
+                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                        isScheduleDirty 
+                            ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                            : "border-slate-800"
+                    }`}>
+                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <Clock className="h-5 w-5 text-rose-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-white">Media Pruning &amp; Retention Automation Schedule</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                            {curationSyncPruning ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
                                         </Badge>
-                                        <Switch 
-                                            checked={curationSyncPruning}
-                                            onCheckedChange={checked => setCurationSyncPruning(checked)}
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-400 leading-relaxed">
-                                    Scans storage usage, identifies unwatched media meeting prune criteria, adds items to the '⚠️ Leaving Soon' collection, and overlays countdown banners.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-slate-400">Evaluation Schedule</label>
-                                    <Select 
-                                        value={curationSyncSchedule} 
-                                        onValueChange={val => setCurationSyncSchedule(val)}
-                                        disabled={!curationSyncPruning}
-                                    >
-                                        <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
-                                            <SelectValue placeholder="Select Frequency" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
-                                            <SelectItem value="every_hour">⚡ Every Hour</SelectItem>
-                                            <SelectItem value="every_3_hours">🔄 Every 3 Hours</SelectItem>
-                                            <SelectItem value="every_6_hours">🔄 Every 6 Hours</SelectItem>
-                                            <SelectItem value="every_12_hours">⏳ Every 12 Hours</SelectItem>
-                                            <SelectItem value="daily_3am">🌙 Daily at 3:00 AM</SelectItem>
-                                            <SelectItem value="daily_4am">🌙 Daily at 4:00 AM</SelectItem>
-                                            <SelectItem value="daily_5am">🌙 Daily at 5:00 AM</SelectItem>
-                                            <SelectItem value="weekly_sun">📅 Weekly on Sunday</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                                            <Layers className="h-3 w-3 text-rose-400" />
-                                            <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
-                                        </label>
-                                        <button
-                                            type="button"
-                                            onClick={() => setManageLibrariesModalOpen(true)}
-                                            className="text-[10px] text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
-                                        >
-                                            Manage All &rarr;
-                                        </button>
-                                    </div>
-                                    <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
-                                        {activeEnabledSections.length > 0 ? (
-                                            activeEnabledSections.map(sec => (
-                                                <Badge 
-                                                    key={`${sec.serverId}-${sec.sectionKey}`}
-                                                    className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
-                                                    onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
-                                                    title={`Click to disable/exclude "${sec.title}" from pruning`}
-                                                >
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
-                                                    {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
-                                                    <span>{sec.title}</span>
-                                                    {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
-                                                </Badge>
-                                            ))
-                                        ) : (
-                                            <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Pruning paused)</span>
+                                        {curationSyncPruning && (
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                                                ⏱️ Next: {nextRunInfo.relativeText}
+                                            </Badge>
                                         )}
-                                        {excludedSections.length > 0 && (
-                                            <Badge
-                                                variant="outline"
-                                                onClick={() => setManageLibrariesModalOpen(true)}
-                                                className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
-                                            >
-                                                +{excludedSections.length} excluded
+                                        {pruneDryRun ? (
+                                            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                                🛡️ Dry-Run Safe (Simulate Only)
+                                            </Badge>
+                                        ) : (
+                                            <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                                ⚠️ Live Deletion Enabled
+                                            </Badge>
+                                        )}
+                                        {isScheduleDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <Clock3 className="h-3.5 w-3.5 text-rose-400" />
-                                    Last run: <span className="text-slate-300 font-mono">{curationLastRunAt ? new Date(curationLastRunAt).toLocaleString() : "Never"}</span>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Automated recurring evaluation of storage headroom, media watch history, and retention policies across enabled Plex libraries to stage Leaving Soon notices and reclaim disk capacity.
+                                    </CardDescription>
                                 </div>
                                 <Button 
                                     size="sm"
-                                    onClick={handleRunPruneSync}
-                                    disabled={runningPruneSync}
-                                    className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
+                                    onClick={handleSaveSchedule}
+                                    disabled={savingSchedule}
+                                    className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                        isScheduleDirty 
+                                            ? "bg-amber-500 hover:bg-amber-400 text-black font-bold animate-pulse shadow-amber-500/20" 
+                                            : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40"
+                                    }`}
                                 >
-                                    {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                                    <span>Run Prune Evaluation Now</span>
+                                    {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                                    {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule *" : "Save Schedule"}
                                 </Button>
                             </div>
-                        </div>
+                        </CardHeader>
+
+                        <CardContent className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {/* Stage 1: Retention & Leaving Soon Staging */}
+                                <div className="bg-slate-950/60 border border-rose-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">⚠️ Stage 1: Leaving Soon Staging</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                    {curationSyncPruning ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
+                                                </Badge>
+                                                <Switch 
+                                                    checked={curationSyncPruning}
+                                                    onCheckedChange={checked => setCurationSyncPruning(checked)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Scans storage usage, identifies unwatched media meeting prune criteria, adds items to the '⚠️ Leaving Soon' collection, and overlays countdown banners.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Evaluation Schedule</label>
+                                            <Select 
+                                                value={curationSyncSchedule} 
+                                                onValueChange={val => setCurationSyncSchedule(val)}
+                                                disabled={!curationSyncPruning}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs h-8 text-slate-200">
+                                                    <SelectValue placeholder="Select Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
+                                                    {SCHEDULE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                                                    <Layers className="h-3 w-3 text-rose-400" />
+                                                    <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setManageLibrariesModalOpen(true)}
+                                                    className="text-[10px] text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
+                                                >
+                                                    Manage All &rarr;
+                                                </button>
+                                            </div>
+                                            <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                                {activeEnabledSections.length > 0 ? (
+                                                    activeEnabledSections.map(sec => (
+                                                        <Badge 
+                                                            key={`${sec.serverId}-${sec.sectionKey}`}
+                                                            className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                            onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
+                                                            title={`Click to disable/exclude "${sec.title}" from pruning`}
+                                                        >
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                                            {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
+                                                            <span>{sec.title}</span>
+                                                            {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Pruning paused)</span>
+                                                )}
+                                                {excludedSections.length > 0 && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        onClick={() => setManageLibrariesModalOpen(true)}
+                                                        className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                                    >
+                                                        +{excludedSections.length} excluded
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
+                                        </div>
+                                        <Button 
+                                            size="sm"
+                                            onClick={handleRunPruneSync}
+                                            disabled={runningPruneSync}
+                                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
+                                        >
+                                            {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                            <span>Run Prune Evaluation Now</span>
+                                        </Button>
+                                    </div>
+                                </div>
 
                         {/* Stage 2: Storage Reclamation & Safety Safeguards */}
                         <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
@@ -2066,6 +2084,8 @@ export function PruneStudio() {
                     </div>
                 )}
             </Card>
+        );
+    })()}
 
             {/* Sub-Navigation Tabs */}
             <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">

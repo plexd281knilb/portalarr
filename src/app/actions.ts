@@ -1498,13 +1498,19 @@ export async function getEmailNotificationSettings() {
     return {
         success: true,
         settings: {
-            emailNotificationsEnabled: settings.emailNotificationsEnabled ?? true,
-            notifyUserApproval: settings.notifyUserApproval ?? true,
-            notifyAdminNewUserRequest: settings.notifyAdminNewUserRequest ?? true,
+            emailNotificationsEnabled: settings.emailNotificationsEnabled ?? false,
+            notifyUserApproval: settings.notifyUserApproval ?? false,
+            notifyAdminNewUserRequest: settings.notifyAdminNewUserRequest ?? false,
             notifyPasswordReset: settings.notifyPasswordReset ?? true,
-            notifyMediaRequests: settings.notifyMediaRequests ?? true,
-            notifySupportTickets: settings.notifySupportTickets ?? true,
-            notifySendToKindle: settings.notifySendToKindle ?? true
+            notifyMediaRequests: settings.notifyMediaRequests ?? false,
+            notifyTrialWelcome: settings.notifyTrialWelcome ?? false,
+            notifyTrialExpiring: settings.notifyTrialExpiring ?? false,
+            notifyTrialExpired: settings.notifyTrialExpired ?? false,
+            notifySubscriptionActive: settings.notifySubscriptionActive ?? false,
+            notifyReferralReward: settings.notifyReferralReward ?? false,
+            notifySupportTickets: settings.notifySupportTickets ?? false,
+            notifySendToKindle: settings.notifySendToKindle ?? false,
+            autoSuspendExpiredAccounts: settings.autoSuspendExpiredAccounts ?? false
         }
     };
 }
@@ -1515,8 +1521,14 @@ export async function saveEmailNotificationSettingsAction(data: {
     notifyAdminNewUserRequest?: boolean;
     notifyPasswordReset?: boolean;
     notifyMediaRequests?: boolean;
+    notifyTrialWelcome?: boolean;
+    notifyTrialExpiring?: boolean;
+    notifyTrialExpired?: boolean;
+    notifySubscriptionActive?: boolean;
+    notifyReferralReward?: boolean;
     notifySupportTickets?: boolean;
     notifySendToKindle?: boolean;
+    autoSuspendExpiredAccounts?: boolean;
 }) {
     await verifyAdmin();
     await ensureSchemaColumns();
@@ -1527,8 +1539,14 @@ export async function saveEmailNotificationSettingsAction(data: {
         if (data.notifyAdminNewUserRequest !== undefined) updateData.notifyAdminNewUserRequest = data.notifyAdminNewUserRequest;
         if (data.notifyPasswordReset !== undefined) updateData.notifyPasswordReset = data.notifyPasswordReset;
         if (data.notifyMediaRequests !== undefined) updateData.notifyMediaRequests = data.notifyMediaRequests;
+        if (data.notifyTrialWelcome !== undefined) updateData.notifyTrialWelcome = data.notifyTrialWelcome;
+        if (data.notifyTrialExpiring !== undefined) updateData.notifyTrialExpiring = data.notifyTrialExpiring;
+        if (data.notifyTrialExpired !== undefined) updateData.notifyTrialExpired = data.notifyTrialExpired;
+        if (data.notifySubscriptionActive !== undefined) updateData.notifySubscriptionActive = data.notifySubscriptionActive;
+        if (data.notifyReferralReward !== undefined) updateData.notifyReferralReward = data.notifyReferralReward;
         if (data.notifySupportTickets !== undefined) updateData.notifySupportTickets = data.notifySupportTickets;
         if (data.notifySendToKindle !== undefined) updateData.notifySendToKindle = data.notifySendToKindle;
+        if (data.autoSuspendExpiredAccounts !== undefined) updateData.autoSuspendExpiredAccounts = data.autoSuspendExpiredAccounts;
 
         await prisma.settings.upsert({
             where: { id: "global" },
@@ -2652,26 +2670,34 @@ export async function revokePlexAccessForUserInternal(
 export async function expireDueTrialsAndSubscriptionsInternal() {
     try {
         await ensureSchemaColumns();
-        const now = new Date();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.autoSuspendExpiredAccounts !== true) {
+            // Auto access suspension is disabled by administrator. Do not revoke Plex access or suspend accounts automatically.
+            return { success: true, expiredCount: 0, autoSuspensionDisabled: true };
+        }
 
-        // 1. Find all users whose TRIAL has elapsed
+        const now = new Date();
+        const gracePeriodDays = settings?.subscriptionGracePeriodDays || 0;
+        const cutoffDate = new Date(now.getTime() - gracePeriodDays * 24 * 60 * 60 * 1000);
+
+        // 1. Find all users whose TRIAL has elapsed beyond grace period
         const expiredTrials = await prisma.user.findMany({
             where: {
                 status: "TRIAL",
                 trialEndsAt: {
                     not: null,
-                    lte: now
+                    lte: cutoffDate
                 }
             }
         });
 
-        // 2. Find all approved users whose subscription has elapsed
+        // 2. Find all approved users whose subscription has elapsed beyond grace period
         const expiredSubs = await prisma.user.findMany({
             where: {
                 status: "APPROVED",
                 subscriptionEndsAt: {
                     not: null,
-                    lte: now
+                    lte: cutoffDate
                 }
             }
         });
@@ -3703,6 +3729,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const rawGraceDays = formData.get("subscriptionGracePeriodDays");
         const subscriptionGracePeriodDays = rawGraceDays ? parseInt(rawGraceDays as string, 10) : 3;
         const membershipTiersEnabled = formData.get("membershipTiersEnabled") !== "false";
+        const autoSuspendExpiredAccounts = formData.get("autoSuspendExpiredAccounts") === "true";
 
         await prisma.settings.upsert({
             where: { id: "global" },
@@ -3723,7 +3750,8 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
                 requireReferralForSignup,
                 discordInviteUrl,
                 subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
-                membershipTiersEnabled
+                membershipTiersEnabled,
+                autoSuspendExpiredAccounts
             },
             create: {
                 id: "global",
@@ -3743,7 +3771,8 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
                 requireReferralForSignup,
                 discordInviteUrl,
                 subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
-                membershipTiersEnabled
+                membershipTiersEnabled,
+                autoSuspendExpiredAccounts
             }
         });
 
@@ -3793,7 +3822,8 @@ export async function getPaymentAndTrialSettings() {
                 requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
                 discordInviteUrl: settings?.discordInviteUrl ?? "",
                 subscriptionGracePeriodDays: settings?.subscriptionGracePeriodDays ?? 3,
-                membershipTiersEnabled: settings?.membershipTiersEnabled ?? true
+                membershipTiersEnabled: settings?.membershipTiersEnabled ?? true,
+                autoSuspendExpiredAccounts: settings?.autoSuspendExpiredAccounts ?? false
             },
             proratedPreview
         };
