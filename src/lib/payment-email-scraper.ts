@@ -537,12 +537,47 @@ export function parsePaymentEmail(parsed: ParsedMail, uid: string): ScrapedPayme
 }
 
 /**
+ * Calculate the prorated cost to cover from paymentDate through Jan 1 of the next year.
+ */
+export function getProratedRestOfYearAmount(paymentDate: Date, monthlyPrice: number, yearlyPrice: number): {
+    amount: number;
+    daysRemainingInMonth: number;
+    remainingFullMonths: number;
+} {
+    const year = paymentDate.getFullYear();
+    const month = paymentDate.getMonth(); // 0 = Jan, 11 = Dec
+    const day = paymentDate.getDate();
+    
+    // Days in current payment month
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysRemainingInMonth = Math.max(0, daysInMonth - day);
+    const monthProration = (daysRemainingInMonth / daysInMonth) * monthlyPrice;
+    
+    // Full remaining months after current month in this calendar year
+    const remainingFullMonths = Math.max(0, 11 - month);
+    const fullMonthsAmount = remainingFullMonths * monthlyPrice;
+    
+    const calculatedProrated = Math.round((monthProration + fullMonthsAmount) * 100) / 100;
+    
+    // In Q4 (Oct-Dec), if full yearly price is paid, it covers remainder + full upcoming year
+    const amount = Math.min(yearlyPrice, Math.max(monthlyPrice, calculatedProrated));
+    return {
+        amount,
+        daysRemainingInMonth,
+        remainingFullMonths
+    };
+}
+
+/**
  * Calculate aligned expiration date:
- * - Yearly: ALWAYS January 1st (Jan 1, YYYY at 23:59:59)
- * - Monthly: ALWAYS 1st day of target month (YYYY-MM-01 at 23:59:59)
+ * - Evaluates strictly against paymentDate (the email timestamp) for accurate historical & future calculations.
+ * - Yearly: ALWAYS January 1st (Jan 1, YYYY at 23:59:59).
+ * - Mid-Year Prorated: If totalAmount covers the prorated cost for the remainder of the year (within $5 tolerance),
+ *   credits the user through January 1st of the upcoming year!
+ * - Monthly: ALWAYS 1st day of target month (YYYY-MM-01 at 23:59:59).
  * - Tolerance buffer:
- *   - Yearly ($180 standard): if within a couple of dollars (totalAmount >= yearlyPrice - 5), count as full year
- *   - Monthly ($15 standard): if within a dollar (totalAmount >= monthlyPrice - 1), count as full month
+ *   - Yearly / Rest-of-Year ($180 standard or prorated): within $5 of target rate counts as full fulfillment.
+ *   - Monthly ($15 standard): within $1.00 of monthly rate counts as full fulfillment.
  */
 export function calculateAlignedExpiryDate(params: {
     paymentDate: Date;
@@ -550,34 +585,56 @@ export function calculateAlignedExpiryDate(params: {
     yearlyPrice: number;
     monthlyPrice: number;
     existingExpiry?: Date | null;
-}): { newExpiryDate: Date; periodGrantedText: string; isYearly: boolean; monthsGranted: number } {
+}): { 
+    newExpiryDate: Date; 
+    periodGrantedText: string; 
+    isYearly: boolean; 
+    isProratedRestOfYear: boolean; 
+    monthsGranted: number 
+} {
     const { paymentDate, totalAmount, yearlyPrice, monthlyPrice, existingExpiry } = params;
-    const now = new Date();
-
-    // Tolerance check for Yearly (e.g. $180 - $5 = $175+)
-    const isYearly = totalAmount >= Math.max(1, yearlyPrice - 5);
+    
+    const payMonth = paymentDate.getMonth(); // 0-indexed (0=Jan, 9=Oct, 11=Dec)
+    const payYear = paymentDate.getFullYear();
+    
+    // 1. Check if payment covers the Full Yearly rate (tolerance: >= yearlyPrice - 5)
+    const isFullYearly = totalAmount >= Math.max(1, yearlyPrice - 5);
+    
+    // 2. Check Prorated Rest-of-Year calculation
+    const proratedInfo = getProratedRestOfYearAmount(paymentDate, monthlyPrice, yearlyPrice);
+    // If paid mid-year (Feb - Dec) and totalAmount >= (proratedInfo.amount - 5)
+    const isProratedRestOfYear = !isFullYearly && (totalAmount >= Math.max(1, proratedInfo.amount - 5));
 
     let newExpiryDate: Date;
     let periodGrantedText = "";
+    let isYearly = false;
     let monthsGranted = 1;
 
-    if (isYearly) {
+    // Check if there is an active existing subscription as of paymentDate
+    const hasActiveSubscriptionAtPayment = existingExpiry && existingExpiry.getTime() > paymentDate.getTime();
+
+    if (isFullYearly) {
+        isYearly = true;
         const yearsCount = Math.max(1, Math.round(totalAmount / yearlyPrice));
-        if (existingExpiry && existingExpiry > now) {
-            // Extend existing active subscription by yearsCount, aligned to Jan 1st
+        
+        if (hasActiveSubscriptionAtPayment && existingExpiry) {
+            // Extend existing subscription by yearsCount, anchored to Jan 1st
             const currentExpYear = existingExpiry.getFullYear();
             const targetYear = currentExpYear + yearsCount;
             newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
         } else {
-            // New / expired subscription:
-            // If paying in Oct, Nov, Dec (months 9, 10, 11), covers remainder of current year + next year(s) -> Jan 1 of Y + yearsCount + 1
-            // If paying in Jan - Sep, covers through Jan 1 of next year -> Jan 1 of Y + yearsCount
-            const payMonth = paymentDate.getMonth();
-            const payYear = paymentDate.getFullYear();
+            // New subscription:
+            // If paying in Q4 (Oct, Nov, Dec), covers remainder of current year + next full year -> Jan 1 of Y+2 (e.g. Dec 2025 -> Jan 1, 2027)
+            // If paying in Jan - Sep, covers through Jan 1 of next year -> Jan 1 of Y+1 (e.g. Jan 2026 -> Jan 1, 2027)
             const targetYear = (payMonth >= 9 ? payYear + 1 + yearsCount : payYear + yearsCount);
             newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
         }
         periodGrantedText = `${yearsCount > 1 ? `${yearsCount} Years` : "1 Year"} (Active until Jan 1, ${newExpiryDate.getFullYear()})`;
+    } else if (isProratedRestOfYear) {
+        // Mid-Year Prorated: Credits through Jan 1st of upcoming year
+        const targetYear = payYear + 1;
+        newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
+        periodGrantedText = `Remainder of ${payYear} (Active until Jan 1, ${targetYear})`;
     } else {
         // Monthly calculation with tolerance (e.g. $14+ counts for 1 month @ $15)
         monthsGranted = Math.max(1, Math.round(totalAmount / monthlyPrice));
@@ -585,15 +642,15 @@ export function calculateAlignedExpiryDate(params: {
             monthsGranted = 1;
         }
 
-        if (existingExpiry && existingExpiry > now) {
+        if (hasActiveSubscriptionAtPayment && existingExpiry) {
             // Add onto existing expiry, keeping 1st of month alignment
             newExpiryDate = new Date(existingExpiry);
             newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
             newExpiryDate.setDate(1);
             newExpiryDate.setHours(23, 59, 59, 999);
         } else {
-            // New subscription starting from payment date:
-            // Aligned to 1st of the month following the granted period
+            // New monthly subscription starting from payment date:
+            // Aligned to 1st of the target month
             newExpiryDate = new Date(paymentDate);
             newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted + 1);
             newExpiryDate.setDate(1);
@@ -606,6 +663,7 @@ export function calculateAlignedExpiryDate(params: {
         newExpiryDate,
         periodGrantedText,
         isYearly,
+        isProratedRestOfYear,
         monthsGranted
     };
 }
@@ -785,14 +843,17 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
     });
 
     const now = new Date();
+    const isCurrentlyActive = newExpiryDate > now;
+    const targetStatus = user.role === "ADMIN" ? "APPROVED" : (isCurrentlyActive ? "APPROVED" : "EXPIRED");
+    const convertedAtDate = user.convertedAt || payment.emailDate || now;
 
     // Update User in database
     await prisma.user.update({
         where: { id: user.id },
         data: {
-            status: "APPROVED",
+            status: targetStatus,
             subscriptionEndsAt: newExpiryDate,
-            convertedAt: user.convertedAt || now
+            convertedAt: convertedAtDate
         }
     });
 
@@ -813,12 +874,14 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         }
     }
 
-    // Ensure Plex Sharing access is granted
-    try {
-        const { setUserTrialOrSubscription } = await import("@/app/actions");
-        await setUserTrialOrSubscription(user.id, "CUSTOM", newExpiryDate.toISOString());
-    } catch (plexErr) {
-        logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);
+    // Ensure Plex Sharing access is granted if active
+    if (isCurrentlyActive) {
+        try {
+            const { setUserTrialOrSubscription } = await import("@/app/actions");
+            await setUserTrialOrSubscription(user.id, "CUSTOM", newExpiryDate.toISOString());
+        } catch (plexErr) {
+            logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);
+        }
     }
 
     logger.addLog(
