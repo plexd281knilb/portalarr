@@ -10,6 +10,20 @@
     - **Servarr Synchronized Deletion:** Automatically unmonitors and removes media from Radarr (`DELETE /api/v3/movie/{id}`) and Sonarr (`DELETE /api/v3/series/{id}`) upon live deletion to prevent re-download loops.
     - **Glances Storage Array Integration:** Real-time disk capacity telemetry and mount point inspection.
 
+- **🍿 Native *Seerr Replacement & Media Request Engine (Overseerr / Jellyseerr):**
+  - **All-in-One Movie & TV Media Discovery:** Built-in trending carousels, personalized recommendations, interactive trailer playback, upcoming theatrical/digital releases, and full cast/crew filmographies without needing external Overseerr or Jellyseerr containers (`/discover` & `/requests`).
+  - **1-Click Radarr & Sonarr Dispatch:** Instant request routing to Radarr and Sonarr instances with multi-server root folder, language profile, custom format score tagging, and quality profile mapping.
+  - **Granular Request Quotas & Auto-Approval Engine:** Custom weekly/monthly request limits by user role, auto-approval workflows for trusted accounts, and live request status tracking (`Requested` → `Searching` → `Downloading` → `Available on Plex`).
+  - **Episode-Level & Season-Level TV Monitoring Guides:** Interactive episode guides displaying episode thumbnails, air dates, and individual monitoring switches with dynamic `PUT /api/v3/episode/monitor` sync and automated `EpisodeSearch` triggers.
+  - **Quality-Aware 4K UHD vs 1080p Routing:** Granular 4K permission gating, separate instance dispatch, and quality-aware UI control adaptation.
+  - **Plex Availability & Stream-Ready Notifications:** Multi-channel notification engine dispatching rich Discord embed cards (poster artwork, status colors, 4K badges) and styled HTML emails to users and administrators.
+
+- **📚 Native Readarr Replacement & Unified Book Engine:**
+  - **Native Book Architecture & Relational Schema:** Built on a robust SQLite relational `Author` / `BookSeries` / `Book` schema mirroring Readarr's structural excellence—completely eliminating external Readarr container dependencies. Includes author discographies, series progression tracking, missing installment detection, and automated on-disk folder/file organization.
+  - **Unified Request & Discovery Experience:** Integrated book and audiobook requests directly into the unified *Seerr media discovery interface (`/discover` and `/requests`) alongside Movies & TV. Multi-provider metadata resolution querying Audible, iTunes, Google Books, OpenLibrary, and Goodreads with format badges (`📖 Ebook` vs `🎧 Audiobook`).
+  - **Interactive Ingest & Unlinked Series Matcher (`BookMatchModal`):** Radarr/Sonarr-style interactive metadata matcher inspecting file metadata, confidence scoring candidate matches from local SQLite and online registries, volume linking, high-definition cover selection, optional disk restructuring (`renameBookFileOnDisk`), and automatic request state reconciliation.
+  - **Intelligent Release Scoring & Ingestion:** Multi-tier Torznab indexer search fallback with smart scoring, automatic multi-track audiobook chapter consolidation, multi-disc folder ingestion (`Disc 01/`, `Disc 02/`), ID3 chapter extraction, Send-to-Kindle delivery, in-browser EPUB/comic reader, and floating HTML5 web player with chapter reordering.
+
 - **🤖 Plex & Server Master AI:** Real-time stream telemetry diagnostics, device error troubleshooting (e.g. Roku auto-adjust quality / minimum bandwidth errors), automated step-by-step resolution guides, and 1-click support ticket escalation with full diagnostic snapshot attachments.
 
 - **👁️ View Site As User (Admin Impersonation):** 1-click user view switching from the User Directory (`/settings/access`) with a persistent top warning banner and instant return to admin, enabling administrators to inspect exact user shelves, permissions, watch histories, and dashboard views.
@@ -28,14 +42,7 @@
 
 ### 🚧 Development Roadmap
 
-- **🍿 Step 2: Native *Seerr Replacement (Overseerr / Jellyseerr)**
-  - **All-in-One Movie & TV Media Discovery:** Built-in trending carousels, personalized recommendations, interactive trailer playback, upcoming theatrical/digital releases, and full cast/crew filmographies without needing external Overseerr or Jellyseerr containers.
-  - **1-Click Radarr & Sonarr Dispatch:** Instant request routing to Radarr and Sonarr instances with multi-server root folder, language profile, custom format score tagging, and quality profile mapping.
-  - **Granular Request Quotas & Auto-Approval Engine:** Custom weekly/monthly request limits by user role, auto-approval workflows for trusted accounts, and live request status tracking (`Requested` → `Searching` → `Downloading` → `Available on Plex`).
-  - **Episode-Based & Season-Level TV Quota Engine:** Configurable episode-based and season-based quota counting for trial and full accounts, dynamically aggregating exact episode counts per requested season or TV series via TMDB and Sonarr metadata to accurately deduct against user quota allowances (e.g. requesting a 10-episode season counts as 10 episodes toward an episode-based quota).
-  - **Plex Availability & Stream-Ready Notifications:** Automated background library sync to detect 4K/1080p availability, auto-close fulfilled requests, and dispatch instant ready-to-watch notifications via SMTP email, Discord webhooks, and push notifications.
-
-- **🛡️ Step 3: User Onboarding, Membership Subscriptions & Authorization (Wizarr Replacement)**
+- **🛡️ Step 1: User Onboarding, Membership Subscriptions & Authorization (Wizarr Replacement)**
   - **Frictionless User Onboarding (Wizarr Rebuilt):** Seamless, customizable join portal with automated Plex server friend invites, library access pre-assignment, Discord server auto-join, and guided client setup wizards.
   - **Automated Membership Subscriptions & Payment Tracking (PayPal / Venmo / Zelle — Friends & Family / P2P):**
     - Native P2P payment routing supporting **PayPal (Friends & Family / PayPal.me)**, **Venmo (@handle / deep links / QR codes)**, and **Zelle (email / phone / QR codes)** with zero commercial gateway fees or account flagging.
@@ -55,7 +62,7 @@
     - Complete self-service user customization over all incoming communications and alerts.
     - Granular toggle preferences for: Media Request Ready alerts, New Content Added digests, Server Announcements & Maintenance notices, Support Ticket replies, Subscription & Billing renewal reminders, and Referral conversion rewards (delivered via Email, Discord DM, or Web Push).
 
-- **🤖 Step 4: Autonomous AI Support Agent & Deep Server Log Diagnostics**
+- **🤖 Step 2: Autonomous AI Support Agent & Deep Server Log Diagnostics**
   - **Autonomous AI First-Response Support Agent:** Interactive in-app troubleshooting bot acting as the primary support gate before escalating to admin tickets.
   - **Live Stream Diagnostics & Device Remedies:** Inspects active playback telemetry (transcode decisions, codecs, bitrates, audio channels) and delivers tailored client fix steps (e.g., Roku bandwidth throttling, Apple TV direct play toggles, audio sync adjustments).
   - **Self-Service Media & Download Doctor:**
@@ -70,19 +77,7 @@
     - Correlates user playback error timestamps directly with raw server log events to identify root causes (transcode buffer starvation, disk I/O bottlenecks, network drops).
     - Generates 1-click administrative diagnostic reports with proactive server remediation suggestions.
 
-- **📚 Step 5: Native Readarr Replacement & Unified Book Engine**
-  - **Native Book Architecture & Storage Engine:**
-    - Rebuild the Ebook and Audiobook backend on a robust, native author/series/book schema mirroring Readarr's structural excellence—completely eliminating external Readarr container dependencies.
-    - Comprehensive author discographies, series progression tracking, missing installment detection, multiple edition management, and automated on-disk folder/file organization.
-  - **Unified Request & Discovery Experience:**
-    - Integrates book and audiobook requests directly into the Step 2 unified *Seerr media discovery interface alongside Movies & TV.
-    - Multi-provider metadata resolution querying Audible, iTunes, Google Books, OpenLibrary, and Goodreads with format badges (`📖 Ebook` vs `🎧 Audiobook`).
-  - **Intelligent Release Scoring & Ingestion:**
-    - Multi-tier Torznab indexer search fallback with smart scoring (format, language, narrator, unabridged vs abridged, scene release tagging).
-    - Automatic multi-track audiobook chapter consolidation, multi-disc folder ingestion (`Disc 01/`, `Disc 02/`), ID3 chapter extraction, and high-definition cover art fetching.
-    - Seamless Send-to-Kindle delivery, in-browser EPUB/comic reader with offline caching, and built-in floating HTML5 audio player with chapter reordering.
-
-- **📡 Step 6: Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement)**
+- **📡 Step 3: Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement)**
   - **Automated Service Heartbeat & Multi-Protocol Health Checks:**
     - Continuous background polling and health monitoring for all configured media server stack services (Plex Media Server, Tautulli, Glances, Radarr, Sonarr, Prowlarr, Readarr, SABnzbd, qBittorrent, Overseerr, Bazarr, etc.).
     - Support for custom external HTTP/HTTPS endpoints, TCP/UDP port pings, DNS resolution checks, and SSL/TLS certificate expiry tracking.
@@ -95,36 +90,36 @@
     - Clean status overview showing 24-hour, 7-day, and 30-day uptime percentage bars, real-time latency graphs, and historical incident logs.
     - Ability to post scheduled maintenance notices and incident resolution updates directly on the dashboard.
 
-- **⚡ Step 7: Smart Bandwidth Shaper & Transcode Governor**
+- **⚡ Step 4: Smart Bandwidth Shaper & Transcode Governor**
   - **Dynamic Download Throttling:** When active remote Plex streams begin or spike above a threshold (e.g. 80% upload bandwidth), Portalarr automatically throttles qBittorrent and SABnzbd speed limits, ramping them back up once streams conclude.
   - **Transcode Prioritization & GPU Guard:** If hardware NVENC/QuickSync capacity or CPU hits critical thresholds (95%+), intelligently throttle background tasks or prioritize VIP/paying tiers while gracefully coaching standard users to adjust client playback quality.
   - **Direct Play Coach & Network Profiler:** In-app telemetry alerts users with device-tailored tips to enable Direct Play on their specific client hardware (saving server power, GPU cycles, and eliminating buffering).
 
-- **📺 Step 8: Native IPTV & Live TV Stream Manager (xTeVe / Threadfin Replacement)**
+- **📺 Step 5: Native IPTV & Live TV Stream Manager (xTeVe / Threadfin Replacement)**
   - **M3U & XMLTV EPG Aggregator:** Import, filter, and organize IPTV playlists into clean channel bouquets with custom logos, category mappings, and official electronic program guides.
   - **Dead Stream Auto-Pruning & Failover Routing:** Background health checks periodically test stream URLs, filtering out dead feeds and seamlessly routing to backup stream sources.
   - **Virtual HDHomeRun Tuner Emulation:** Emulates a virtual HDHomeRun device so Plex Media Server can ingest curated live TV feeds and sports channels directly into Plex Live TV & DVR.
 
-- **🧹 Step 9: Automated Audio/Video Cleaner & Custom Format Upgrader (TRaSH Guides Engine)**
+- **🧹 Step 6: Automated Audio/Video Cleaner & Custom Format Upgrader (TRaSH Guides Engine)**
   - **TRaSH Guides Scoring & Upgrade Engine:** Automatically tags and scores releases against community-standard profiles, automatically upgrading lower-quality releases to preferred HDR10+/Dolby Vision/properly mastered audio tracks when indexers find upgrades.
   - **Audio Track Normalizer & Compatibility Injector:** Scans video files lacking stereo/AAC compatibility tracks and auto-generates a lightweight secondary stereo AAC track to ensure 100% Direct Play on mobile, web, and Smart TVs without transcoding.
   - **Subtitle & Audio Track Pruner:** Strips unnecessary non-native language commentary tracks and foreign audio/sub streams to conserve disk space and streamline player track selection.
 
-- **💬 Step 10: Native Subtitle Engine & Auto-Sync (Bazarr Replacement)**
+- **💬 Step 7: Native Subtitle Engine & Auto-Sync (Bazarr Replacement)**
   - **Automated Multi-Provider Hunting:** Automatically grabs missing `.srt` subtitles across OpenSubtitles, Subscene, Subdl, and Addic7ed based on user language preferences.
   - **AI Audio-Sync & Offset Alignment:** Built-in audio waveform and speech-to-text alignment (using lightweight Whisper / audio track sync) to fix out-of-sync subtitles automatically.
   - **User Self-Service "Fix Subtitles":** If a user is watching a movie with missing or desynchronized subtitles, they can click a 1-click **"Request / Fix Subtitles"** button on My Plex Hub; Portalarr downloads, cleans, aligns, and injects the `.srt` directly into Plex within seconds.
 
-- **☁️ Step 11: Disaster Recovery, Automated Cloud Backups & Migration Wizard**
+- **☁️ Step 8: Disaster Recovery, Automated Cloud Backups & Migration Wizard**
   - **Automated Database & Config Snapshots:** Scheduled encrypted backups of the SQLite database, custom poster artwork, curated collection rules, and user watch histories.
   - **Cloud & Remote Storage Sync:** 1-click automated backup export to Google Drive, OneDrive, Nextcloud, AWS S3, Backblaze B2, or local NFS/SMB shares.
   - **1-Click Restore & Migration Assistant:** Effortlessly restore or migrate the entire Portalarr deployment onto a new host/Unraid server with zero manual re-entry.
 
-- **🌐 Step 12: Multi-Server Federation & Load-Balanced Failover**
+- **🌐 Step 9: Multi-Server Federation & Load-Balanced Failover**
   - **Plex Server Failover & Health Switching:** If the Primary PMS node goes offline or undergoes maintenance, Portalarr automatically redirects active users or incoming requests to the Secondary PMS node.
   - **Unified Global Search & Cross-Server Availability:** Search across multiple connected Plex servers simultaneously with deduplicated search results, consolidated stream monitoring, and unified library status badges.
 
-- **📊 Step 13: Advanced Analytics, User Engagement & Server Wrapped**
+- **📊 Step 10: Advanced Analytics, User Engagement & Server Wrapped**
   - **Annual "Server Wrapped" Experience:** Beautiful, shareable Spotify-style end-of-year infographics for users showcasing total hours watched, top movies/shows, favorite genres, and peak viewing hours.
   - **Admin Infrastructure Intelligence:** Long-term storage growth projections, transcode vs direct-play efficiency trends, popular request analysis, and indexer health scorecards.
 

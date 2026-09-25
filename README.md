@@ -42,9 +42,12 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 - **Secure Encryption:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
 - **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
 - **Upcoming Roadmap:**
-  - **Step 1 — Curation & Poster Studio (Agregarr & Kometa Replacement):** Dynamic collection generator, smart playlists, automated poster overlays (4K HDR, Dolby Vision/Atmos), and storage prune engine.
-  - **Step 2 — User Authorization, Personal Visibility & Kid/Living Room Accounts:** Granular user control over personalized tag, genre, and collection visibility, plus dedicated Kid and Shared Household accounts.
-  - **Step 3 — AI Log Ingestion & Deep Server Log Diagnostics:** Automated Plex Media Server, Tautulli, Transcoder, and Arr log ingestion into Portalarr for AI agent error correlation and pinpoint fixes.
+  - **Step 1 — User Onboarding, Membership Subscriptions & Authorization (Wizarr Replacement):** Rebuilt Wizarr onboarding portal, P2P subscription & payment tracking (PayPal / Venmo / Zelle), dynamic QR codes, referral rewards, tiered perks, dedicated Kid & Living Room profiles, and notification preferences.
+  - **Step 2 — Autonomous AI Support Agent & Deep Server Diagnostics:** In-app first-response conversational support bot with autonomous diagnostic tools, 1-click ticket escalation with telemetry, and deep Plex/Tautulli/Arr server log ingestion.
+  - **Step 3 — Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement):** Multi-protocol heartbeat polling (HTTP/HTTPS, TCP/UDP, SSL cert expiry), instant outage alerting (SMTP email, Discord rich embeds, Web Push), and public/admin uptime dashboards.
+  - **Step 4 — Smart Bandwidth Shaper & Transcode Governor:** Dynamic download throttling when remote streams spike, GPU load balancing, and Direct Play client coaching.
+  - **Step 5 — Native IPTV & Live TV Stream Manager (xTeVe / Threadfin Replacement):** M3U/XMLTV bouquet manager, stream failover routing, and virtual HDHomeRun tuner emulation for Plex Live TV.
+  - **Step 6 — Native Subtitle Engine & Auto-Sync (Bazarr Replacement):** Multi-provider subtitle hunting, AI audio-sync waveform alignment, and user self-service "Fix Subtitles".
 
 ## 🛠️ Quick Start
 
