@@ -1144,9 +1144,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                 CREATE TABLE IF NOT EXISTS "UserNotificationPreference" (
                     "id" TEXT PRIMARY KEY,
                     "userId" TEXT NOT NULL UNIQUE,
-                    "emailMediaReady" BOOLEAN NOT NULL DEFAULT 1,
-                    "emailNewContent" BOOLEAN NOT NULL DEFAULT 1,
-                    "emailAnnouncements" BOOLEAN NOT NULL DEFAULT 1,
+                    "emailMediaReady" BOOLEAN NOT NULL DEFAULT 0,
+                    "emailNewContent" BOOLEAN NOT NULL DEFAULT 0,
+                    "emailAnnouncements" BOOLEAN NOT NULL DEFAULT 0,
                     "emailSupportTickets" BOOLEAN NOT NULL DEFAULT 1,
                     "emailSubscriptionReminders" BOOLEAN NOT NULL DEFAULT 1,
                     "emailReferralRewards" BOOLEAN NOT NULL DEFAULT 1,

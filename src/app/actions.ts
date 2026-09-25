@@ -4291,9 +4291,9 @@ export async function getUserNotificationPreferencesAction() {
             pref = await prisma.userNotificationPreference.create({
                 data: {
                     userId: user.id,
-                    emailMediaReady: true,
-                    emailNewContent: true,
-                    emailAnnouncements: true,
+                    emailMediaReady: false,
+                    emailNewContent: false,
+                    emailAnnouncements: false,
                     emailSupportTickets: true,
                     emailSubscriptionReminders: true,
                     emailReferralRewards: true,
@@ -4328,9 +4328,9 @@ export async function updateUserNotificationPreferencesAction(data: {
         const updated = await prisma.userNotificationPreference.upsert({
             where: { userId: user.id },
             update: {
-                emailMediaReady: data.emailMediaReady ?? true,
-                emailNewContent: data.emailNewContent ?? true,
-                emailAnnouncements: data.emailAnnouncements ?? true,
+                emailMediaReady: data.emailMediaReady ?? false,
+                emailNewContent: data.emailNewContent ?? false,
+                emailAnnouncements: data.emailAnnouncements ?? false,
                 emailSupportTickets: data.emailSupportTickets ?? true,
                 emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
                 emailReferralRewards: data.emailReferralRewards ?? true,
@@ -4340,9 +4340,9 @@ export async function updateUserNotificationPreferencesAction(data: {
             },
             create: {
                 userId: user.id,
-                emailMediaReady: data.emailMediaReady ?? true,
-                emailNewContent: data.emailNewContent ?? true,
-                emailAnnouncements: data.emailAnnouncements ?? true,
+                emailMediaReady: data.emailMediaReady ?? false,
+                emailNewContent: data.emailNewContent ?? false,
+                emailAnnouncements: data.emailAnnouncements ?? false,
                 emailSupportTickets: data.emailSupportTickets ?? true,
                 emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
                 emailReferralRewards: data.emailReferralRewards ?? true,

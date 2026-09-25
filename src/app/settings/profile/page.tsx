@@ -69,9 +69,9 @@ export default function UserProfilePage() {
 
     // Notification Preferences State
     const [notifPrefs, setNotifPrefs] = useState({
-        emailMediaReady: true,
-        emailNewContent: true,
-        emailAnnouncements: true,
+        emailMediaReady: false,
+        emailNewContent: false,
+        emailAnnouncements: false,
         emailSupportTickets: true,
         emailSubscriptionReminders: true,
         emailReferralRewards: true,
