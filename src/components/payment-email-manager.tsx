@@ -260,7 +260,8 @@ export default function PaymentEmailManager() {
         setScanning(true);
         setScanResult(null);
         try {
-            const days = parseInt(scanLookback, 10) || 365;
+            const parsed = parseInt(scanLookback, 10);
+            const days = !isNaN(parsed) ? parsed : (config.paymentEmailLookbackDays ?? 365);
             const res = await scanPaymentEmailsAction(sourceId, days);
             setScanResult(res);
             loadData();
@@ -272,22 +273,25 @@ export default function PaymentEmailManager() {
     };
 
     const handleSaveScheduleConfig = async (enabled: boolean, interval: number) => {
+        const parsed = parseInt(scanLookback, 10);
+        const lookbackDays = !isNaN(parsed) ? parsed : (config.paymentEmailLookbackDays ?? 365);
         const formData = new FormData();
         formData.append("paymentEmailAutoScan", String(enabled));
         formData.append("paymentEmailScanInterval", String(interval));
-        formData.append("paymentEmailLookbackDays", String(config.paymentEmailLookbackDays ?? 365));
+        formData.append("paymentEmailLookbackDays", String(lookbackDays));
         await savePaymentEmailScraperConfig(formData);
         setConfig((prev: any) => ({
             ...prev,
             paymentEmailAutoScan: enabled,
-            paymentEmailScanInterval: interval
+            paymentEmailScanInterval: interval,
+            paymentEmailLookbackDays: lookbackDays
         }));
     };
 
     const handleLookbackChange = async (val: string) => {
         setScanLookback(val);
-        const days = parseInt(val, 10);
-        const lookbackDays = isNaN(days) ? 365 : days;
+        const parsed = parseInt(val, 10);
+        const lookbackDays = isNaN(parsed) ? 365 : parsed;
         const formData = new FormData();
         formData.append("paymentEmailAutoScan", String(config.paymentEmailAutoScan ?? true));
         formData.append("paymentEmailScanInterval", String(config.paymentEmailScanInterval ?? 15));

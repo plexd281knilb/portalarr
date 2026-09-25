@@ -206,10 +206,24 @@ export async function testPaymentEmailSourceAction(formData: FormData) {
  * @param sourceId Optional specific source ID
  * @param lookbackDays Number of days to search back (default: 365 days / 1 year)
  */
-export async function scanPaymentEmailsAction(sourceId?: string, lookbackDays: number = 365) {
+export async function scanPaymentEmailsAction(sourceId?: string, lookbackDays?: number) {
     try {
         await verifyAdmin();
-        const result = await scanPaymentEmailsInternal(sourceId, lookbackDays);
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const effectiveLookback = typeof lookbackDays === "number" && !isNaN(lookbackDays)
+            ? lookbackDays
+            : (settings?.paymentEmailLookbackDays ?? 365);
+
+        // Ensure database settings persists the lookback window
+        if (typeof lookbackDays === "number" && !isNaN(lookbackDays)) {
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { paymentEmailLookbackDays: lookbackDays },
+                create: { id: "global", paymentEmailLookbackDays: lookbackDays }
+            }).catch(() => {});
+        }
+
+        const result = await scanPaymentEmailsInternal(sourceId, effectiveLookback);
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
@@ -425,7 +439,8 @@ export async function savePaymentEmailScraperConfig(formData: FormData) {
         const paymentEmailAutoScan = formData.get("paymentEmailAutoScan") === "true";
         const paymentEmailScanInterval = parseInt((formData.get("paymentEmailScanInterval") as string) || "15", 10) || 15;
         const lookbackRaw = formData.get("paymentEmailLookbackDays");
-        const paymentEmailLookbackDays = lookbackRaw !== null ? (parseInt(lookbackRaw as string, 10) || 365) : undefined;
+        const parsedLookback = lookbackRaw !== null && lookbackRaw !== "" ? parseInt(lookbackRaw as string, 10) : undefined;
+        const paymentEmailLookbackDays = parsedLookback !== undefined && !isNaN(parsedLookback) ? parsedLookback : undefined;
 
         const updateData: any = {
             paymentEmailAutoScan,
@@ -438,11 +453,9 @@ export async function savePaymentEmailScraperConfig(formData: FormData) {
         const createData: any = {
             id: "global",
             paymentEmailAutoScan,
-            paymentEmailScanInterval
+            paymentEmailScanInterval,
+            paymentEmailLookbackDays: paymentEmailLookbackDays ?? 365
         };
-        if (paymentEmailLookbackDays !== undefined) {
-            createData.paymentEmailLookbackDays = paymentEmailLookbackDays;
-        }
 
         await prisma.settings.upsert({
             where: { id: "global" },
