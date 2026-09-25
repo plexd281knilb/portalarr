@@ -936,7 +936,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
  * @param sourceId Optional specific source ID
  * @param lookbackDays Number of days to search back (default: 365 days / 1 year; 0 = last 300 messages)
  */
-export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays: number = 365): Promise<{
+export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?: number): Promise<{
     success: boolean;
     totalSources: number;
     scannedMessages: number;
@@ -946,6 +946,11 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays:
     duplicatePaymentsSkipped: number;
     errors: string[];
 }> {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    const effectiveLookbackDays = typeof lookbackDays === "number" 
+        ? lookbackDays 
+        : (settings?.paymentEmailLookbackDays ?? 365);
+
     const whereClause = sourceId ? { id: sourceId, enabled: true } : { enabled: true };
     const sources = await prisma.paymentEmailSource.findMany({ where: whereClause });
 
@@ -960,6 +965,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays:
         await prisma.settings.upsert({
             where: { id: "global" },
             update: {
+                paymentEmailLookbackDays: effectiveLookbackDays,
                 paymentLastScanAt: new Date(),
                 paymentLastScanResult: JSON.stringify({
                     scannedAt: new Date().toISOString(),
@@ -969,11 +975,13 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays:
                     autoAttributed: 0,
                     unmatched: 0,
                     duplicatePaymentsSkipped: 0,
+                    lookbackDays: effectiveLookbackDays,
                     errors: []
                 })
             },
             create: {
                 id: "global",
+                paymentEmailLookbackDays: effectiveLookbackDays,
                 paymentLastScanAt: new Date()
             }
         }).catch(() => {});
@@ -1011,10 +1019,10 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays:
 
             try {
                 let messages;
-                if (lookbackDays && lookbackDays > 0) {
+                if (effectiveLookbackDays && effectiveLookbackDays > 0) {
                     const sinceDate = new Date();
-                    sinceDate.setDate(sinceDate.getDate() - lookbackDays);
-                    logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Scanning source "${src.name}" (${src.user}) in mailbox "${mailboxName}" since ${sinceDate.toLocaleDateString()} (${lookbackDays} days lookback)`);
+                    sinceDate.setDate(sinceDate.getDate() - effectiveLookbackDays);
+                    logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Scanning source "${src.name}" (${src.user}) in mailbox "${mailboxName}" since ${sinceDate.toLocaleDateString()} (${effectiveLookbackDays} days lookback)`);
                     messages = client.fetch(
                         { since: sinceDate },
                         { uid: true, envelope: true, source: true }
@@ -1168,7 +1176,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays:
         autoAttributed,
         unmatched,
         duplicatePaymentsSkipped,
-        lookbackDays,
+        lookbackDays: effectiveLookbackDays,
         errors
     };
 
@@ -1176,11 +1184,13 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays:
     await prisma.settings.upsert({
         where: { id: "global" },
         update: {
+            paymentEmailLookbackDays: effectiveLookbackDays,
             paymentLastScanAt: new Date(),
             paymentLastScanResult: JSON.stringify(summaryResult)
         },
         create: {
             id: "global",
+            paymentEmailLookbackDays: effectiveLookbackDays,
             paymentLastScanAt: new Date(),
             paymentLastScanResult: JSON.stringify(summaryResult)
         }

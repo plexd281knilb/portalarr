@@ -3204,12 +3204,8 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found" };
 
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const savedKeys = user.plexLibrarySectionIds 
-            ? user.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean)
-            : (settings?.defaultPlexLibraries ? settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean) : []);
-
         let adminToken = "";
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         if (settings?.mainPlexToken) {
             adminToken = decryptData(settings.mainPlexToken);
         }
@@ -3218,17 +3214,20 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
         }
 
         if (!adminToken) {
-            return { success: true, selectedKeys: savedKeys, fromPlex: false, hasPlexShare: false };
+            return { success: true, selectedKeys: [], fromPlex: false, hasPlexShare: false };
         }
 
         const { selectedKeys, hasPlexShare } = await getUserPlexSharedLibraries(adminToken, user);
 
         // If we found live keys on Plex, sync them to SQLite
         if (hasPlexShare) {
-            await prisma.user.update({
-                where: { id: userId },
-                data: { plexLibrarySectionIds: selectedKeys.join(",") }
-            });
+            const keysStr = selectedKeys.join(",");
+            if (user.plexLibrarySectionIds !== keysStr) {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { plexLibrarySectionIds: keysStr }
+                });
+            }
             return { 
                 success: true, 
                 selectedKeys, 
@@ -3236,11 +3235,17 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
                 hasPlexShare: true 
             };
         } else {
-            // User share not found on Plex or user suspended: preserve savedKeys without wiping SQLite
+            // User has 0 active shares on Plex: synchronize SQLite to empty string to prevent false counts
+            if (user.plexLibrarySectionIds) {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { plexLibrarySectionIds: "" }
+                });
+            }
             return {
                 success: true,
-                selectedKeys: savedKeys,
-                fromPlex: false,
+                selectedKeys: [],
+                fromPlex: true,
                 hasPlexShare: false
             };
         }
@@ -12611,44 +12616,20 @@ export async function syncPlexFriendsInternal() {
             const userLibraryKeyStr = userLibraryKeys.join(",");
 
             // Match existing user by email, username, name, plexEmail, or plexUsername
-            const cleanAlnum = (str?: string | null) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-            const fEmailAlnum = cleanAlnum(fEmail);
-            const fUserAlnum = cleanAlnum(fUsername);
-            const fTitleAlnum = cleanAlnum(fTitle);
-
+            // Match existing user strictly using matchesPlexUser
             let existingUser = dbUsers.find(u => {
-                const uEmail = (u.email || "").toLowerCase().trim();
-                const uUser = (u.username || "").toLowerCase().trim();
-                const uName = (u.name || "").toLowerCase().trim();
-                const uPlexEmail = (u.plexEmail || "").toLowerCase().trim();
-                const uPlexUser = (u.plexUsername || "").toLowerCase().trim();
-
-                const directMatch = (fEmail && (uEmail === fEmail || uPlexEmail === fEmail)) ||
-                                    (fUsername && (uUser === fUsername.toLowerCase() || uPlexUser === fUsername.toLowerCase())) ||
-                                    (fEmail && uUser === fEmail) ||
-                                    (fUsername && uEmail === fUsername.toLowerCase()) ||
-                                    (fTitle && uName && uName === fTitle.toLowerCase()) ||
-                                    (fTitle && uUser && uUser === fTitle.toLowerCase());
-                if (directMatch) return true;
-
-                // Alphanumeric matching
-                if (fUserAlnum && fUserAlnum.length >= 3) {
-                    if (cleanAlnum(uUser) === fUserAlnum || cleanAlnum(uPlexUser) === fUserAlnum || cleanAlnum(uName) === fUserAlnum) return true;
-                }
-                if (fEmailAlnum && fEmailAlnum.length >= 3) {
-                    if (cleanAlnum(uEmail) === fEmailAlnum || cleanAlnum(uPlexEmail) === fEmailAlnum) return true;
-                }
-                if (fTitleAlnum && fTitleAlnum.length >= 3) {
-                    if (cleanAlnum(uName) === fTitleAlnum || cleanAlnum(uUser) === fTitleAlnum) return true;
-                }
-                // Prefix / Substring matching if length >= 5
-                if (fUserAlnum.length >= 5) {
-                    const uAlnum = cleanAlnum(uUser);
-                    const nAlnum = cleanAlnum(uName);
-                    if (uAlnum.length >= 5 && (uAlnum.startsWith(fUserAlnum) || fUserAlnum.startsWith(uAlnum))) return true;
-                    if (nAlnum.length >= 5 && (nAlnum.startsWith(fUserAlnum) || fUserAlnum.startsWith(nAlnum))) return true;
-                }
-                return false;
+                return matchesPlexUser(u, {
+                    id: friend.id || undefined,
+                    serverId: "",
+                    librarySectionIds: [],
+                    user: { 
+                        id: friend.id ? Number(friend.id) : undefined, 
+                        email: fEmail, 
+                        username: fUsername, 
+                        title: fTitle 
+                    },
+                    invitedEmail: fEmail
+                });
             });
 
             if (existingUser) {
@@ -12672,6 +12653,7 @@ export async function syncPlexFriendsInternal() {
                             where: { id: existingUser.id },
                             data: { plexLibrarySectionIds: "" }
                         }).catch(() => {});
+                        existingUser.plexLibrarySectionIds = "";
                     }
                     continue;
                 }
@@ -12699,17 +12681,15 @@ export async function syncPlexFriendsInternal() {
                 }
 
                 // Auto-fill real name if empty and Plex friend has title/name
-                if (!existingUser.name && friend.title && friend.title !== fUsername && friend.title !== fEmail) {
+                if (!existingUser.name && friend.title && friend.title !== fUsername && friend.title !== fEmail && friend.title.length >= 3) {
                     updateData.name = friend.title.trim();
                     needsUpdate = true;
                 }
 
-                // Update live scanned library access from Plex
-                if (
-                    userLibraryKeyStr && 
-                    existingUser.plexLibrarySectionIds !== userLibraryKeyStr
-                ) {
+                // Update live scanned library access from Plex (accurately syncing empty "" if 0 shares)
+                if ((existingUser.plexLibrarySectionIds || "") !== userLibraryKeyStr) {
                     updateData.plexLibrarySectionIds = userLibraryKeyStr;
+                    existingUser.plexLibrarySectionIds = userLibraryKeyStr;
                     needsUpdate = true;
                 }
 
@@ -12744,7 +12724,7 @@ export async function syncPlexFriendsInternal() {
                 const newUser = await prisma.user.create({
                     data: {
                         username: safeUsername,
-                        name: friend.title && friend.title !== fUsername ? friend.title.trim() : null,
+                        name: friend.title && friend.title !== fUsername && friend.title !== fEmail ? friend.title.trim() : null,
                         email: safeEmail,
                         password: hashedPassword,
                         role: "USER",
@@ -12783,15 +12763,17 @@ export async function syncPlexFriendsInternal() {
                         where: { id: u.id },
                         data: { plexLibrarySectionIds: "" }
                     }).catch(() => {});
+                    u.plexLibrarySectionIds = "";
                 }
                 continue;
             }
 
-            if (liveKeysStr && u.plexLibrarySectionIds !== liveKeysStr) {
+            if (!isImmuneRole && (u.plexLibrarySectionIds || "") !== liveKeysStr) {
                 await prisma.user.update({
                     where: { id: u.id },
                     data: { plexLibrarySectionIds: liveKeysStr }
                 }).catch(() => {});
+                u.plexLibrarySectionIds = liveKeysStr;
                 updatedCount++;
             }
         }

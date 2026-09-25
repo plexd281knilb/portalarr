@@ -1617,83 +1617,87 @@ export function matchesPlexUser(
     target: { id?: number | string | null; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null; name?: string | null; title?: string | null },
     share: PlexSharedServerItem | { user?: { id?: number | string; email?: string; username?: string; title?: string; thumb?: string; name?: string }; invitedEmail?: string }
 ): boolean {
-    // 0. Direct Plex user ID match if available
-    if (target.id && share.user?.id && String(target.id) === String(share.user.id)) {
+    // 0. Direct numeric/string Plex user ID match if available on both sides
+    const targetId = target.id ? String(target.id).trim() : "";
+    const shareId = share.user?.id ? String(share.user.id).trim() : "";
+    if (targetId && shareId && targetId !== "0" && targetId !== "-1" && targetId === shareId) {
         return true;
     }
 
     const clean = (s?: string | null) => (s || "").toLowerCase().trim();
     const alphanumeric = (s?: string | null) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-    const targetCandidates = [
-        target.plexEmail,
-        target.email,
-        target.plexUsername,
-        target.username,
-        target.name,
-        target.title
-    ].map(clean).filter(Boolean);
+    const targetEmails = [target.plexEmail, target.email].map(clean).filter(Boolean);
+    const targetUsernames = [target.plexUsername, target.username].map(clean).filter(Boolean);
 
-    const targetPrefixes = targetCandidates
-        .filter(c => c.includes("@"))
-        .map(c => c.split("@")[0])
-        .filter(Boolean);
+    const shareEmails = [share.user?.email, share.invitedEmail].map(clean).filter(Boolean);
+    const shareUsernames = [share.user?.username].map(clean).filter(Boolean);
 
-    const shareCandidates = [
-        share.user?.email,
-        share.invitedEmail,
-        share.user?.username,
-        share.user?.title,
-        (share.user as any)?.name
-    ].map(clean).filter(Boolean);
-
-    const sharePrefixes = shareCandidates
-        .filter(c => c.includes("@"))
-        .map(c => c.split("@")[0])
-        .filter(Boolean);
-
-    // 1. Direct lowercase string match
-    for (const tc of targetCandidates) {
-        for (const sc of shareCandidates) {
-            if (tc === sc) return true;
+    // 1. Direct lowercase exact email match
+    for (const te of targetEmails) {
+        for (const se of shareEmails) {
+            if (te === se) return true;
         }
     }
 
-    // 2. Email prefix matches username or title
-    for (const tp of targetPrefixes) {
-        for (const sc of shareCandidates) {
-            if (tp === sc) return true;
-        }
-    }
-    for (const sp of sharePrefixes) {
-        for (const tc of targetCandidates) {
-            if (sp === tc) return true;
+    // 2. Direct lowercase exact username match
+    for (const tu of targetUsernames) {
+        for (const su of shareUsernames) {
+            if (tu === su) return true;
         }
     }
 
-    // 3. Alphanumeric match (ignoring dots, underscores, dashes, spaces) if length >= 3
-    const targetAlnum = [...targetCandidates, ...targetPrefixes].map(alphanumeric).filter(s => s.length >= 3);
-    const shareAlnum = [...shareCandidates, ...sharePrefixes].map(alphanumeric).filter(s => s.length >= 3);
-
-    for (const ta of targetAlnum) {
-        for (const sa of shareAlnum) {
-            if (ta === sa) return true;
+    // 3. Exact Email-to-Username or Username-to-Email prefix match (e.g. "trevsky313@gmail.com" matches "trevsky313")
+    for (const te of targetEmails) {
+        const prefix = te.split("@")[0];
+        if (prefix && prefix.length >= 3) {
+            for (const su of shareUsernames) {
+                if (prefix === su) return true;
+            }
         }
     }
-
-    // 4. Substring / Prefix match if length >= 5 (e.g. "trevscar" matching "trevorscarborough")
-    for (const ta of targetAlnum) {
-        if (ta.length >= 5) {
-            for (const sa of shareAlnum) {
-                if (sa.length >= 5) {
-                    if (ta.startsWith(sa) || sa.startsWith(ta) || ta.includes(sa) || sa.includes(ta)) {
-                        return true;
-                    }
-                }
+    for (const se of shareEmails) {
+        const prefix = se.split("@")[0];
+        if (prefix && prefix.length >= 3) {
+            for (const tu of targetUsernames) {
+                if (prefix === tu) return true;
             }
         }
     }
 
+    // 4. Normalized alphanumeric EXACT match for usernames (stripping '.', '_', '-')
+    // E.g. "trev_sky313" === "trevsky313", "black.jordan" === "blackjordan"
+    for (const tu of targetUsernames) {
+        const tuAlnum = alphanumeric(tu);
+        if (tuAlnum.length >= 3) {
+            for (const su of shareUsernames) {
+                const suAlnum = alphanumeric(su);
+                if (suAlnum.length >= 3 && tuAlnum === suAlnum) return true;
+            }
+        }
+    }
+
+    // 5. Normalized alphanumeric EXACT match for email prefixes vs usernames
+    for (const te of targetEmails) {
+        const prefixAlnum = alphanumeric(te.split("@")[0]);
+        if (prefixAlnum.length >= 3) {
+            for (const su of shareUsernames) {
+                const suAlnum = alphanumeric(su);
+                if (suAlnum.length >= 3 && prefixAlnum === suAlnum) return true;
+            }
+        }
+    }
+    for (const se of shareEmails) {
+        const prefixAlnum = alphanumeric(se.split("@")[0]);
+        if (prefixAlnum.length >= 3) {
+            for (const tu of targetUsernames) {
+                const tuAlnum = alphanumeric(tu);
+                if (tuAlnum.length >= 3 && prefixAlnum === tuAlnum) return true;
+            }
+        }
+    }
+
+    // STRICT GUARD: No partial substring matching (startsWith, includes) or generic display name matching.
     return false;
 }
 

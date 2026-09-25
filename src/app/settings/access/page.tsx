@@ -487,26 +487,34 @@ export default function AccessSettingsPage() {
 
         // Pre-fill initial keys from user record, onboarding default, or all libraries if activating
         let initialKeys: string[] = [];
-        if (user.plexLibrarySectionIds) {
-            initialKeys = normalizeKeyList(user.plexLibrarySectionIds
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean));
-        } else if (user.accountType === "KID" && (paymentSettings.defaultKidsPlexLibraries || defaultKidsSelectedKeys.length > 0)) {
-            const kKeys = paymentSettings.defaultKidsPlexLibraries ? paymentSettings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultKidsSelectedKeys;
-            initialKeys = normalizeKeyList(kKeys);
-        } else if ((user.status === "TRIAL" || activatingTrialType?.includes("TRIAL")) && (paymentSettings.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
-            const tKeys = paymentSettings.defaultTrialPlexLibraries ? paymentSettings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultTrialSelectedKeys;
-            initialKeys = normalizeKeyList(tKeys);
-        } else if (paymentSettings.defaultPlexLibraries) {
-            initialKeys = normalizeKeyList(paymentSettings.defaultPlexLibraries
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean));
-        } else if (defaultSelectedKeys.length > 0) {
-            initialKeys = normalizeKeyList(defaultSelectedKeys);
-        } else if (activatingTrialType) {
-            initialKeys = currentServers.flatMap(srv => (srv.sections || []).map((sec: any) => `${srv.serverId}:${sec.id}`));
+        if (activatingTrialType) {
+            if (user.accountType === "KID" && (paymentSettings.defaultKidsPlexLibraries || defaultKidsSelectedKeys.length > 0)) {
+                const kKeys = paymentSettings.defaultKidsPlexLibraries ? paymentSettings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultKidsSelectedKeys;
+                initialKeys = normalizeKeyList(kKeys);
+            } else if (activatingTrialType.includes("TRIAL") && (paymentSettings.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
+                const tKeys = paymentSettings.defaultTrialPlexLibraries ? paymentSettings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultTrialSelectedKeys;
+                initialKeys = normalizeKeyList(tKeys);
+            } else if (paymentSettings.defaultPlexLibraries) {
+                initialKeys = normalizeKeyList(paymentSettings.defaultPlexLibraries
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean));
+            } else if (defaultSelectedKeys.length > 0) {
+                initialKeys = normalizeKeyList(defaultSelectedKeys);
+            } else {
+                initialKeys = currentServers.flatMap(srv => (srv.sections || []).map((sec: any) => `${srv.serverId}:${sec.id}`));
+            }
+        } else {
+            // Normal "Manage Libraries" click: load what is currently in SQLite (or [] if inactive/empty)
+            const isInactive = user.status === "SUSPENDED" || user.status === "EXPIRED" || user.status === "REJECTED" || user.status === "PENDING";
+            if (user.plexLibrarySectionIds && !isInactive) {
+                initialKeys = normalizeKeyList(user.plexLibrarySectionIds
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean));
+            } else {
+                initialKeys = [];
+            }
         }
         setUserSelectedKeys(initialKeys);
 
@@ -514,7 +522,8 @@ export default function AccessSettingsPage() {
         try {
             const res = await fetchUserPlexLibrariesAction(user.id);
             if (res.success && Array.isArray(res.selectedKeys)) {
-                if (res.hasPlexShare || (initialKeys.length === 0 && !activatingTrialType)) {
+                if (!activatingTrialType) {
+                    // Accurately reflect live Plex state (empty array if 0 shares)
                     setUserSelectedKeys(normalizeKeyList(res.selectedKeys));
                 }
             }
@@ -1331,25 +1340,15 @@ export default function AccessSettingsPage() {
                                                 return 0;
                                             }
 
-                                            let rawKeys: string[] = [];
-                                            if (user.selectedPlexLibrarySectionIds) {
-                                                rawKeys = user.selectedPlexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                            } else if (user.plexLibrarySectionIds) {
-                                                rawKeys = user.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                            } else if (user.accountType === "KID" && (paymentSettings?.defaultKidsPlexLibraries || defaultKidsSelectedKeys.length > 0)) {
-                                                const raw = paymentSettings?.defaultKidsPlexLibraries || defaultKidsSelectedKeys.join(",");
-                                                rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                            } else if (isTrial && (paymentSettings?.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
-                                                const raw = paymentSettings?.defaultTrialPlexLibraries || defaultTrialSelectedKeys.join(",");
-                                                rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                            } else if (paymentSettings?.defaultPlexLibraries || defaultSelectedKeys.length > 0) {
-                                                const raw = paymentSettings?.defaultPlexLibraries || defaultSelectedKeys.join(",");
-                                                rawKeys = raw.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                            } else if (user.status === "APPROVED" && serverLibraries && serverLibraries.length > 0) {
-                                                return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
+                                            // Non-admin active user: ONLY count explicit configured/shared libraries
+                                            const explicitKeys = (user.selectedPlexLibrarySectionIds || user.plexLibrarySectionIds || "").trim();
+                                            if (!explicitKeys) {
+                                                return 0;
                                             }
 
+                                            const rawKeys = explicitKeys.split(",").map((s: string) => s.trim()).filter(Boolean);
                                             if (rawKeys.length === 0) return 0;
+
                                             if (serverLibraries && serverLibraries.length > 0) {
                                                 let count = 0;
                                                 for (const srv of serverLibraries) {
@@ -1372,8 +1371,9 @@ export default function AccessSettingsPage() {
                                                         }
                                                     }
                                                 }
-                                                if (count > 0) return count;
+                                                return count;
                                             }
+
                                             return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
                                         })();
 
