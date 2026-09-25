@@ -1812,45 +1812,82 @@ export default function AccessSettingsPage() {
 
                                 {/* LIVE PRORATED CALCULATION PREVIEW BOX */}
                                 <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-emerald-900/20 to-transparent border border-emerald-500/30 space-y-3">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                         <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
                                             <Sparkles className="h-4 w-4" />
                                             <span>Live Prorated Billing Calculation Preview</span>
                                         </div>
-                                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
-                                            Dynamic Engine
-                                        </Badge>
+                                        <div className="flex items-center gap-1.5">
+                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px]">
+                                                Tier 1 Conversion Default
+                                            </Badge>
+                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
+                                                Dynamic Engine
+                                            </Badge>
+                                        </div>
                                     </div>
 
-                                    <div className="text-xs space-y-1.5 text-muted-foreground">
+                                    <div className="text-xs space-y-2 text-muted-foreground">
                                         <p>
                                             If a prospective user signs up today (<strong className="text-foreground">{format(new Date(), "MMM d, yyyy")}</strong>) with a <strong className="text-foreground">{paymentSettings.defaultTrialDays}-day trial</strong> (free through <strong className="text-foreground">{format(new Date(liveProrated.trialEndDate), "MMM d, yyyy")}</strong>):
                                         </p>
                                         
-                                        <div className="p-3 rounded-xl bg-background/60 border border-border/40 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-foreground font-medium">
-                                            <div>
-                                                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Remaining in {liveProrated.trialEndYear}:</span>
-                                                <span className="text-emerald-400 font-bold text-sm">
-                                                    ${liveProrated.amountDueNow}
-                                                </span>
-                                                <span className="text-muted-foreground text-[11px] block">
-                                                    {liveProrated.remainingMonthsText} @ ${liveProrated.monthlyRate}/mo
-                                                </span>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {/* YEARLY PRORATED PREVIEW */}
+                                            <div className="p-3 rounded-xl bg-background/70 border border-emerald-500/30 space-y-1.5 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-emerald-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" /> Annual Plan (Prorated)
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                                        Tier 1 (${liveProrated.yearlyRate}/yr)
+                                                    </Badge>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Due at Trial End (Remainder of {liveProrated.trialEndYear}):</span>
+                                                    <span className="text-emerald-400 font-black text-base">
+                                                        ${liveProrated.amountDueNow.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded-lg space-y-0.5 font-mono">
+                                                    <div>• {liveProrated.daysRemainingInMonth} days in {liveProrated.trialEndMonthName}: <span className="text-foreground font-semibold">${liveProrated.proratedMonthAmount.toFixed(2)}</span> (${liveProrated.dailyRate.toFixed(2)}/day)</div>
+                                                    <div>• {liveProrated.remainingMonthsCount} remaining full mos: <span className="text-foreground font-semibold">${(liveProrated.remainingMonthsCount * liveProrated.monthlyRate).toFixed(2)}</span> (${liveProrated.monthlyRate}/mo)</div>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground pt-0.5">
+                                                    Renews at <strong>${liveProrated.yearlyRate}/year</strong> on <strong>{liveProrated.nextRenewalDate}</strong>.
+                                                </p>
                                             </div>
-                                            <div>
-                                                <span className="text-muted-foreground block text-[10px] uppercase font-bold">Next Annual Renewal:</span>
-                                                <span className="text-foreground font-bold text-sm">
-                                                    ${liveProrated.yearlyRate} / year
-                                                </span>
-                                                <span className="text-muted-foreground text-[11px] block">
-                                                    Due on {liveProrated.nextRenewalDate}
-                                                </span>
+
+                                            {/* MONTHLY PRORATED PREVIEW */}
+                                            <div className="p-3 rounded-xl bg-background/70 border border-purple-500/30 space-y-1.5 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-purple-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                                                        <CreditCard className="h-3 w-3" /> Monthly Plan (Prorated)
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[9px] bg-purple-500/15 text-purple-300 border-purple-500/30">
+                                                        Tier 1 (${liveProrated.monthlyRate}/mo)
+                                                    </Badge>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">1st Partial Month (Due {format(new Date(liveProrated.trialEndDate), "MMM d")}):</span>
+                                                    <span className="text-purple-300 font-black text-base">
+                                                        ${liveProrated.monthlyAmountDueNow.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded-lg space-y-0.5 font-mono">
+                                                    <div>• {liveProrated.daysRemainingInMonth} remaining days in {liveProrated.trialEndMonthName} (${liveProrated.trialEndDay}–{liveProrated.daysInTrialEndMonth})</div>
+                                                    <div>• Daily rate: <span className="text-foreground font-semibold">${liveProrated.dailyRate.toFixed(2)}/day</span> (${liveProrated.monthlyRate} ÷ {liveProrated.daysInTrialEndMonth} days)</div>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground pt-0.5">
+                                                    Renews at standard rate <strong>${liveProrated.monthlyRate}/month</strong> on <strong>{liveProrated.nextMonthlyRenewalDate}</strong>.
+                                                </p>
                                             </div>
                                         </div>
 
-                                        <p className="text-[11px] text-muted-foreground/90 italic pt-1">
-                                            Summary displayed to user: "{liveProrated.breakdownSummary}"
-                                        </p>
+                                        <div className="pt-1 text-[11px] text-muted-foreground/90 italic space-y-1">
+                                            <p><strong>Annual Summary:</strong> "{liveProrated.breakdownSummary}"</p>
+                                            <p><strong>Monthly Summary:</strong> "{liveProrated.monthlyBreakdownSummary}"</p>
+                                        </div>
                                     </div>
                                 </div>
 
