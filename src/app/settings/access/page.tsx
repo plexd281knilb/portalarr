@@ -1205,7 +1205,7 @@ export default function AccessSettingsPage() {
                                         const isRejected = user.status === "REJECTED";
                                         const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
                                         const userLibraryCount = (() => {
-                                            if ((user.role === "ADMIN" || user.role === "SUPER_USER") && serverLibraries && serverLibraries.length > 0) {
+                                            if (user.role === "ADMIN" && serverLibraries && serverLibraries.length > 0) {
                                                 return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
                                             }
 

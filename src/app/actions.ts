@@ -2580,7 +2580,7 @@ export async function revokePlexAccessForUserInternal(
             librarySectionIds: [],
             user: ownerUser,
             invitedEmail: ownerUser.email
-        })) || (user as any).role === "ADMIN" || (user as any).role === "SUPER_USER";
+        })) || (user as any).role === "ADMIN";
 
         if (isOwner) {
             console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is the Plex Server Owner or Administrator.`);
@@ -2667,21 +2667,22 @@ export async function revokePlexAccessForUserInternal(
 
 /**
  * Scans the database for any expired trials or subscriptions and automatically revokes Plex access.
+ * Note: Admins (role === 'ADMIN') and users with manual Permanent Access (subscriptionEndsAt === null && trialEndsAt === null) are strictly preserved.
  */
 export async function expireDueTrialsAndSubscriptionsInternal() {
     try {
         await ensureSchemaColumns();
 
-        // 0. Auto-recover any ADMIN or SUPER_USER whose status was set to EXPIRED or SUSPENDED
-        const superUsers = await prisma.user.findMany({
+        // 0. Auto-recover any ADMIN whose status was set to EXPIRED or SUSPENDED
+        const admins = await prisma.user.findMany({
             where: {
-                role: { in: ["ADMIN", "SUPER_USER"] },
+                role: "ADMIN",
                 status: { in: ["EXPIRED", "SUSPENDED"] }
             }
         });
-        for (const su of superUsers) {
+        for (const a of admins) {
             await prisma.user.update({
-                where: { id: su.id },
+                where: { id: a.id },
                 data: { status: "APPROVED", trialEndsAt: null, subscriptionEndsAt: null }
             }).catch(() => {});
         }
@@ -2696,11 +2697,11 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
         const gracePeriodDays = settings?.subscriptionGracePeriodDays || 0;
         const cutoffDate = new Date(now.getTime() - gracePeriodDays * 24 * 60 * 60 * 1000);
 
-        // 1. Find all users whose TRIAL has elapsed beyond grace period (strictly excluding ADMIN and SUPER_USER)
+        // 1. Find all users whose TRIAL has elapsed beyond grace period (strictly excluding ADMIN)
         const expiredTrials = await prisma.user.findMany({
             where: {
                 status: "TRIAL",
-                role: { notIn: ["ADMIN", "SUPER_USER"] },
+                role: { not: "ADMIN" },
                 trialEndsAt: {
                     not: null,
                     lte: cutoffDate
@@ -2708,11 +2709,12 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
             }
         });
 
-        // 2. Find all approved users whose subscription has elapsed beyond grace period (strictly excluding ADMIN and SUPER_USER)
+        // 2. Find all approved users whose subscription has elapsed beyond grace period (strictly excluding ADMIN).
+        // Users with manual Permanent Access have subscriptionEndsAt === null, so they are not evaluated.
         const expiredSubs = await prisma.user.findMany({
             where: {
                 status: "APPROVED",
-                role: { notIn: ["ADMIN", "SUPER_USER"] },
+                role: { not: "ADMIN" },
                 subscriptionEndsAt: {
                     not: null,
                     lte: cutoffDate
@@ -12542,9 +12544,9 @@ export async function syncPlexFriendsInternal() {
         let updatedCount = 0;
         let revokedCount = 0;
 
-        // Auto-recover any ADMIN or SUPER_USER whose status was inadvertently set to EXPIRED or SUSPENDED
+        // Auto-recover any ADMIN whose status was inadvertently set to EXPIRED or SUSPENDED
         for (const u of dbUsers) {
-            if ((u.role === "ADMIN" || u.role === "SUPER_USER") && (u.status === "EXPIRED" || u.status === "SUSPENDED")) {
+            if (u.role === "ADMIN" && (u.status === "EXPIRED" || u.status === "SUSPENDED")) {
                 await prisma.user.update({
                     where: { id: u.id },
                     data: { status: "APPROVED", trialEndsAt: null, subscriptionEndsAt: null }
@@ -12665,10 +12667,10 @@ export async function syncPlexFriendsInternal() {
             });
 
             if (existingUser) {
-                const isImmuneRole = existingUser.role === "ADMIN" || existingUser.role === "SUPER_USER";
+                const isImmuneRole = existingUser.role === "ADMIN";
                 const userMatchedShares = sharesList.filter(s => matchesPlexUser(existingUser, s));
 
-                // If user is suspended, expired, or rejected in Portalarr, revoke Plex shares ONLY if auto-suspension is enabled and user is not Admin/SuperUser
+                // If user is suspended, expired, or rejected in Portalarr, revoke Plex shares ONLY if auto-suspension is enabled and user is not Admin
                 if (!isImmuneRole && (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED")) {
                     if (settings?.autoSuspendExpiredAccounts === true && userMatchedShares.length > 0) {
                         console.log(`[PLEX-SYNC] User "${existingUser.username}" is ${existingUser.status} but has ${userMatchedShares.length} active Plex shares. Revoking...`);
@@ -12689,7 +12691,7 @@ export async function syncPlexFriendsInternal() {
                 const updateData: any = {};
 
                 // Only promote PENDING users to APPROVED.
-                if (existingUser.status === "PENDING" && existingUser.role !== "ADMIN" && existingUser.role !== "SUPER_USER") {
+                if (existingUser.status === "PENDING" && existingUser.role !== "ADMIN") {
                     updateData.status = "APPROVED";
                     needsUpdate = true;
                 }
@@ -12776,7 +12778,7 @@ export async function syncPlexFriendsInternal() {
 
         // Secondary Pass: Scan actual live Plex library shares for all remaining DB users
         for (const u of dbUsers) {
-            const isImmuneRole = u.role === "ADMIN" || u.role === "SUPER_USER";
+            const isImmuneRole = u.role === "ADMIN";
             if (!isImmuneRole && (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED") && settings?.autoSuspendExpiredAccounts === true) continue;
             const liveKeys = extractUserLiveLibraryKeys(u);
             const liveKeysStr = liveKeys.join(",");
