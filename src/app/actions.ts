@@ -3842,6 +3842,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         await ensureSchemaColumns();
         const defaultTrialDays = parseInt((formData.get("defaultTrialDays") as string) || "14", 10) || 14;
         const defaultPlexLibraries = (formData.get("defaultPlexLibraries") as string)?.trim() || "";
+        const defaultTrialPlexLibraries = (formData.get("defaultTrialPlexLibraries") as string)?.trim() || "";
         const defaultKidsPlexLibraries = (formData.get("defaultKidsPlexLibraries") as string)?.trim() || "";
         const paymentPaypal = (formData.get("paymentPaypal") as string)?.trim() || "";
         const paymentVenmo = (formData.get("paymentVenmo") as string)?.trim() || "";
@@ -3867,6 +3868,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const updateData: any = {
             defaultTrialDays,
             defaultPlexLibraries,
+            defaultTrialPlexLibraries,
             defaultKidsPlexLibraries,
             paymentPaypal,
             paymentVenmo,
@@ -3935,6 +3937,7 @@ export async function getPaymentAndTrialSettings() {
             settings: {
                 defaultTrialDays,
                 defaultPlexLibraries: settings?.defaultPlexLibraries ?? "",
+                defaultTrialPlexLibraries: settings?.defaultTrialPlexLibraries ?? "",
                 defaultKidsPlexLibraries: settings?.defaultKidsPlexLibraries ?? "",
                 paymentPaypal: settings?.paymentPaypal ?? "",
                 paymentVenmo: settings?.paymentVenmo ?? "",
@@ -4079,8 +4082,9 @@ export async function registerTrialUserFromInvite(data: {
             userReferralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
         }
 
-        const rawDefaultKeys = settings?.defaultPlexLibraries 
-            ? settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean)
+        const trialLibConfig = settings?.defaultTrialPlexLibraries || settings?.defaultPlexLibraries || "";
+        const rawDefaultKeys = trialLibConfig 
+            ? trialLibConfig.split(",").map((s: string) => s.trim()).filter(Boolean)
             : [];
 
         const newUser = await prisma.user.create({
@@ -4527,6 +4531,7 @@ export async function getUserAllowedPlexLibrariesAction() {
                 id: true,
                 username: true,
                 email: true,
+                status: true,
                 plexUsername: true,
                 plexEmail: true,
                 plexLibrarySectionIds: true,
@@ -4542,17 +4547,25 @@ export async function getUserAllowedPlexLibrariesAction() {
         
         // Determine the allowed keys pool for this user
         let allowedRawKeys: string[] = [];
-        if (dbUser.accountType === "KID") {
+        if (dbUser.status === "TRIAL") {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultTrialPlexLibraries) {
+                allowedRawKeys = settings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        } else if (dbUser.accountType === "KID") {
             if (settings?.defaultKidsPlexLibraries) {
-                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
             } else if (dbUser.plexLibrarySectionIds) {
-                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
             }
         } else {
             if (dbUser.plexLibrarySectionIds) {
-                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
             } else if (settings?.defaultPlexLibraries) {
-                allowedRawKeys = settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
             }
         }
 
@@ -4584,7 +4597,7 @@ export async function getUserAllowedPlexLibrariesAction() {
         // If no specific libraries selected, user gets all allowed
         let selectedKeys: string[] = [];
         if (dbUser.selectedPlexLibrarySectionIds) {
-            selectedKeys = dbUser.selectedPlexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+            selectedKeys = dbUser.selectedPlexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
         } else {
             selectedKeys = [...allowedRawKeys];
         }
@@ -4618,17 +4631,25 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
         
         // Master pool
         let allowedRawKeys: string[] = [];
-        if (dbUser.accountType === "KID") {
+        if (dbUser.status === "TRIAL") {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultTrialPlexLibraries) {
+                allowedRawKeys = settings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        } else if (dbUser.accountType === "KID") {
             if (settings?.defaultKidsPlexLibraries) {
-                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
             } else if (dbUser.plexLibrarySectionIds) {
-                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
             }
         } else {
             if (dbUser.plexLibrarySectionIds) {
-                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
             } else if (settings?.defaultPlexLibraries) {
-                allowedRawKeys = settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
             }
         }
 
@@ -4924,8 +4945,29 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Stream live broadcast television channels, live sports, and digital TV guides (EPG) directly in your media player.",
         price: 0,
         isFree: true,
+        isAvailable: false,
         icon: "tv",
         tag: "Live TV"
+    },
+    {
+        id: "music_streaming",
+        name: "Music & Hi-Fi Audio Access",
+        description: "Unlimited high-fidelity lossless FLAC & audio streaming with Plexamp support, curated artist playlists, and offline caching.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "music",
+        tag: "Audio"
+    },
+    {
+        id: "books_audiobooks",
+        name: "Books & Audiobooks Access",
+        description: "Full library access for Ebooks, comics, and Audiobooks with instant Send-to-Kindle delivery and in-browser audio player.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "book",
+        tag: "Reading"
     },
     {
         id: "extra_kid_profile",
@@ -4933,6 +4975,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Set up a 2nd or 3rd dedicated Kids iPad/Tablet profile with curated safe libraries and parental restrictions.",
         price: 0,
         isFree: true,
+        isAvailable: true,
         icon: "baby",
         tag: "Household"
     },
@@ -4942,6 +4985,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Set up a 2nd Living Room TV profile with shared family filters and nudity exclusion.",
         price: 0,
         isFree: true,
+        isAvailable: true,
         icon: "monitor",
         tag: "Household"
     },
@@ -4951,6 +4995,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Jump to the front of the download queue with fast-tracked automated grabs for newly requested releases.",
         price: 0,
         isFree: true,
+        isAvailable: true,
         icon: "sparkles",
         tag: "Requests"
     }
@@ -4965,12 +5010,21 @@ export async function getAvailableAddonsAction() {
         const user: any = await verifyUser();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         
-        let catalog = DEFAULT_ADDONS_CATALOG;
+        let catalog = [...DEFAULT_ADDONS_CATALOG];
         if (settings?.availableAddons) {
             try {
                 const parsed = JSON.parse(settings.availableAddons);
                 if (Array.isArray(parsed) && parsed.length > 0) {
-                    catalog = parsed;
+                    const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
+                    catalog = DEFAULT_ADDONS_CATALOG.map(def => {
+                        const existing = parsedMap.get(def.id);
+                        return existing ? { ...def, ...existing } : def;
+                    });
+                    for (const item of parsed) {
+                        if (!catalog.some(c => c.id === item.id)) {
+                            catalog.push(item);
+                        }
+                    }
                 }
             } catch (parseErr) {
                 console.warn("[ADDONS-CATALOG-PARSE-WARN]:", parseErr);
@@ -5011,18 +5065,31 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         const user: any = await verifyUser();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
 
-        let catalog = DEFAULT_ADDONS_CATALOG;
+        let catalog = [...DEFAULT_ADDONS_CATALOG];
         if (settings?.availableAddons) {
             try {
                 const parsed = JSON.parse(settings.availableAddons);
                 if (Array.isArray(parsed) && parsed.length > 0) {
-                    catalog = parsed;
+                    const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
+                    catalog = DEFAULT_ADDONS_CATALOG.map(def => {
+                        const existing = parsedMap.get(def.id);
+                        return existing ? { ...def, ...existing } : def;
+                    });
+                    for (const item of parsed) {
+                        if (!catalog.some(c => c.id === item.id)) {
+                            catalog.push(item);
+                        }
+                    }
                 }
             } catch (_) {}
         }
 
         const targetAddon = catalog.find(a => a.id === addonId);
         if (!targetAddon) return { success: false, error: "Add-on not found" };
+
+        if (targetAddon.isAvailable === false) {
+            return { success: false, error: `${targetAddon.name} is currently not available yet or under maintenance.` };
+        }
 
         if (!targetAddon.isFree && targetAddon.price > 0) {
             return { success: false, error: "This is a paid add-on. Please contact your server administrator to activate." };
@@ -5060,6 +5127,52 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
     } catch (e: any) {
         console.error("[TOGGLE-FREE-ADDON-ERROR]:", e);
         return { success: false, error: e.message || "Failed to toggle add-on" };
+    }
+}
+
+/**
+ * Toggles an add-on's global availability (Admin only).
+ */
+export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvailable: boolean) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        let catalog = [...DEFAULT_ADDONS_CATALOG];
+        if (settings?.availableAddons) {
+            try {
+                const parsed = JSON.parse(settings.availableAddons);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
+                    catalog = DEFAULT_ADDONS_CATALOG.map(def => {
+                        const existing = parsedMap.get(def.id);
+                        return existing ? { ...def, ...existing } : def;
+                    });
+                    for (const item of parsed) {
+                        if (!catalog.some(c => c.id === item.id)) {
+                            catalog.push(item);
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        catalog = catalog.map(a => a.id === addonId ? { ...a, isAvailable } : a);
+        const jsonStr = JSON.stringify(catalog);
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { availableAddons: jsonStr },
+            create: { id: "global", availableAddons: jsonStr }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return { success: true, message: `Add-on availability updated!`, catalog };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update add-on availability" };
     }
 }
 

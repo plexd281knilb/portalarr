@@ -574,6 +574,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["taggingLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "taggingLastRunAt" DATETIME;`],
                 ["taggingLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "taggingLastRunStatus" TEXT;`],
                 ["defaultKidsPlexLibraries", `ALTER TABLE "Settings" ADD COLUMN "defaultKidsPlexLibraries" TEXT;`],
+                ["defaultTrialPlexLibraries", `ALTER TABLE "Settings" ADD COLUMN "defaultTrialPlexLibraries" TEXT;`],
                 ["tier2YearlyPrice", `ALTER TABLE "Settings" ADD COLUMN "tier2YearlyPrice" REAL DEFAULT 240;`],
                 ["tier2MonthlyPrice", `ALTER TABLE "Settings" ADD COLUMN "tier2MonthlyPrice" REAL DEFAULT 25;`],
                 ["availableAddons", `ALTER TABLE "Settings" ADD COLUMN "availableAddons" TEXT;`]

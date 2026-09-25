@@ -21,7 +21,9 @@ import {
     getPaymentAndTrialSettings,
     savePaymentAndTrialSettings,
     updateUserAccountTypeAction,
-    updateUserMembershipTierAction
+    updateUserMembershipTierAction,
+    toggleAdminAddonAvailabilityAction,
+    getAvailableAddonsAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
@@ -39,7 +41,7 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye
+    Eye, Music, BookOpen, Tv, Baby
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import PaymentEmailManager from "@/components/payment-email-manager";
@@ -94,6 +96,7 @@ export default function AccessSettingsPage() {
     const [paymentSettings, setPaymentSettings] = useState({
         defaultTrialDays: 14,
         defaultPlexLibraries: "",
+        defaultTrialPlexLibraries: "",
         defaultKidsPlexLibraries: "",
         paymentPaypal: "",
         paymentVenmo: "",
@@ -116,7 +119,10 @@ export default function AccessSettingsPage() {
         autoSuspendExpiredAccounts: false
     });
     const [defaultSelectedKeys, setDefaultSelectedKeys] = useState<string[]>([]);
+    const [defaultTrialSelectedKeys, setDefaultTrialSelectedKeys] = useState<string[]>([]);
     const [defaultKidsSelectedKeys, setDefaultKidsSelectedKeys] = useState<string[]>([]);
+    const [adminAddonsCatalog, setAdminAddonsCatalog] = useState<any[]>([]);
+    const [togglingAdminAddonId, setTogglingAdminAddonId] = useState<string | null>(null);
     const [savingSettings, setSavingSettings] = useState(false);
     const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
     const [settingsErrMsg, setSettingsErrMsg] = useState("");
@@ -194,6 +200,13 @@ export default function AccessSettingsPage() {
                         .filter(Boolean);
                     setDefaultSelectedKeys(keys);
                 }
+                if (res.settings.defaultTrialPlexLibraries) {
+                    const trialKeys = res.settings.defaultTrialPlexLibraries
+                        .split(",")
+                        .map((s: string) => s.trim())
+                        .filter(Boolean);
+                    setDefaultTrialSelectedKeys(trialKeys);
+                }
                 if (res.settings.defaultKidsPlexLibraries) {
                     const kidsKeys = res.settings.defaultKidsPlexLibraries
                         .split(",")
@@ -201,6 +214,11 @@ export default function AccessSettingsPage() {
                         .filter(Boolean);
                     setDefaultKidsSelectedKeys(kidsKeys);
                 }
+            }
+
+            const addonRes = await getAvailableAddonsAction();
+            if (addonRes && addonRes.success && addonRes.catalog) {
+                setAdminAddonsCatalog(addonRes.catalog);
             }
         } catch (e) {
             console.error("loadPaymentSettings error:", e);
@@ -424,6 +442,12 @@ export default function AccessSettingsPage() {
                 .split(",")
                 .map((s: string) => s.trim())
                 .filter(Boolean));
+        } else if (user.accountType === "KID" && (paymentSettings.defaultKidsPlexLibraries || defaultKidsSelectedKeys.length > 0)) {
+            const kKeys = paymentSettings.defaultKidsPlexLibraries ? paymentSettings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultKidsSelectedKeys;
+            initialKeys = normalizeKeyList(kKeys);
+        } else if ((user.status === "TRIAL" || activatingTrialType?.includes("TRIAL")) && (paymentSettings.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
+            const tKeys = paymentSettings.defaultTrialPlexLibraries ? paymentSettings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultTrialSelectedKeys;
+            initialKeys = normalizeKeyList(tKeys);
         } else if (paymentSettings.defaultPlexLibraries) {
             initialKeys = normalizeKeyList(paymentSettings.defaultPlexLibraries
                 .split(",")
@@ -550,6 +574,43 @@ export default function AccessSettingsPage() {
         });
     };
 
+    const isTrialDefaultSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        if (defaultTrialSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && defaultTrialSelectedKeys.includes(altFullKey)) return true;
+        if (defaultTrialSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && defaultTrialSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
+    };
+
+    const handleToggleTrialDefaultSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        setDefaultTrialSelectedKeys(prev => {
+            const isCurrentlySelected = isTrialDefaultSelected(serverId, sectionId, sectionKey);
+            if (isCurrentlySelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
+            } else {
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
+            }
+        });
+    };
+
     const isKidsDefaultSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
         const fullKey = `${serverId}:${sectionId}`;
         const rawKey = String(sectionId);
@@ -585,6 +646,20 @@ export default function AccessSettingsPage() {
                 return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
             }
         });
+    };
+
+    const handleToggleAdminAddonAvailability = async (addonId: string, isAvailable: boolean) => {
+        setTogglingAdminAddonId(addonId);
+        try {
+            const res = await toggleAdminAddonAvailabilityAction(addonId, isAvailable);
+            if (res.success && res.catalog) {
+                setAdminAddonsCatalog(res.catalog);
+            }
+        } catch (err) {
+            console.error("Failed to toggle addon availability:", err);
+        } finally {
+            setTogglingAdminAddonId(null);
+        }
     };
 
     const handleSaveUserLibraries = async () => {
@@ -710,6 +785,7 @@ export default function AccessSettingsPage() {
         const formData = new FormData();
         formData.append("defaultTrialDays", String(paymentSettings.defaultTrialDays));
         formData.append("defaultPlexLibraries", defaultSelectedKeys.join(","));
+        formData.append("defaultTrialPlexLibraries", defaultTrialSelectedKeys.join(","));
         formData.append("defaultKidsPlexLibraries", defaultKidsSelectedKeys.join(","));
         formData.append("paymentPaypal", paymentSettings.paymentPaypal);
         formData.append("paymentVenmo", paymentSettings.paymentVenmo);
@@ -1572,9 +1648,9 @@ export default function AccessSettingsPage() {
                                         <span>Subscription & Trial Customization</span>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold">Free Trial Duration (Days)</Label>
+                                            <Label className="text-xs font-semibold">Free Trial (Days)</Label>
                                             <Input 
                                                 type="number"
                                                 min="1"
@@ -1589,8 +1665,8 @@ export default function AccessSettingsPage() {
 
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
-                                                <Label className="text-xs font-semibold">Tier 1 Annual Rate ($)</Label>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Tier</Badge>
+                                                <Label className="text-xs font-semibold">Tier 1 Annual ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Yearly</Badge>
                                             </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1601,20 +1677,42 @@ export default function AccessSettingsPage() {
                                                     value={paymentSettings.yearlyPrice}
                                                     onChange={(e) => {
                                                         const y = parseFloat(e.target.value) || 0;
-                                                        const m = y > 0 ? Math.round((y / 12) * 100) / 100 : 0;
-                                                        setPaymentSettings({ ...paymentSettings, yearlyPrice: y, monthlyPrice: m, subscriptionPrice: `$${y} / year` });
+                                                        setPaymentSettings({ ...paymentSettings, yearlyPrice: y, subscriptionPrice: `$${y} / year` });
                                                     }}
                                                     className="pl-9 bg-background/60 font-mono"
                                                     required
                                                 />
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">Regular membership (${paymentSettings.monthlyPrice}/mo breakdown).</p>
+                                            <p className="text-[11px] text-muted-foreground">Standard annual rate.</p>
                                         </div>
 
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
-                                                <Label className="text-xs font-semibold">Tier 2 Annual Rate ($)</Label>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Support</Badge>
+                                                <Label className="text-xs font-semibold">Tier 1 Monthly ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Monthly</Badge>
+                                            </div>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={paymentSettings.monthlyPrice}
+                                                    onChange={(e) => {
+                                                        const m = parseFloat(e.target.value) || 0;
+                                                        setPaymentSettings({ ...paymentSettings, monthlyPrice: m });
+                                                    }}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Manual monthly rate.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 2 Annual ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Yearly</Badge>
                                             </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1625,14 +1723,36 @@ export default function AccessSettingsPage() {
                                                     value={paymentSettings.tier2YearlyPrice ?? 240}
                                                     onChange={(e) => {
                                                         const y = parseFloat(e.target.value) || 0;
-                                                        const m = y > 0 ? Math.round((y / 12) * 100) / 100 : 0;
-                                                        setPaymentSettings({ ...paymentSettings, tier2YearlyPrice: y, tier2MonthlyPrice: m });
+                                                        setPaymentSettings({ ...paymentSettings, tier2YearlyPrice: y });
                                                     }}
                                                     className="pl-9 bg-background/60 font-mono"
                                                     required
                                                 />
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">Needy/High-support users (${paymentSettings.tier2MonthlyPrice ?? 25}/mo breakdown). Masked as standard membership in user UI.</p>
+                                            <p className="text-[11px] text-muted-foreground">Needy annual rate.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 2 Monthly ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Monthly</Badge>
+                                            </div>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={paymentSettings.tier2MonthlyPrice ?? 25}
+                                                    onChange={(e) => {
+                                                        const m = parseFloat(e.target.value) || 0;
+                                                        setPaymentSettings({ ...paymentSettings, tier2MonthlyPrice: m });
+                                                    }}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Needy monthly rate.</p>
                                         </div>
                                     </div>
 
@@ -1822,7 +1942,7 @@ export default function AccessSettingsPage() {
                                                 When enabled, accounts past their trial or membership date + grace period are automatically suspended and their Plex server shares revoked by the background scheduler. Disabled by default for full manual oversight.
                                             </p>
                                         </div>
-                                        <Switch
+                                        <Switch 
                                             id="auto-suspend-toggle"
                                             checked={paymentSettings.autoSuspendExpiredAccounts ?? false}
                                             onCheckedChange={(val) => setPaymentSettings({ ...paymentSettings, autoSuspendExpiredAccounts: val })}
@@ -1841,12 +1961,15 @@ export default function AccessSettingsPage() {
                                     </div>
                                 </div>
 
-                                {/* DEFAULT PLEX LIBRARIES SELECTION (REGULAR / SIGNUPS) */}
+                                {/* DEFAULT PLEX LIBRARIES SELECTION (REGULAR / FULL MEMBERS) */}
                                 <div className="space-y-3 pt-2 border-t border-border/40">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Regular Members & Signups</Label>
-                                            <p className="text-[11px] text-muted-foreground">Select which server libraries are automatically granted to newly registered trial users and regular members. Regular members can choose from these in their profile.</p>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Regular Members & Signups</Label>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-300 border-emerald-500/30">Full Member Shelf</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Select which server libraries are available to regular full members. Members can select from these in their profile.</p>
                                         </div>
                                         <Button 
                                             type="button" 
@@ -1922,6 +2045,104 @@ export default function AccessSettingsPage() {
                                                                             checked={isChecked}
                                                                             onChange={() => {}}
                                                                             className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 shrink-0 pointer-events-none"
+                                                                        />
+                                                                        <span className="truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* DEFAULT PLEX LIBRARIES SELECTION FOR TRIAL ACCOUNTS */}
+                                <div className="space-y-3 pt-2 border-t border-border/40">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Trial Accounts</Label>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-300 border-amber-500/30">Trial Safe Pool / Restricted Shelf</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Select which server library sections are shared with prospective trial users. Trial users are restricted strictly to this pool and cannot access full member libraries.</p>
+                                        </div>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-7 text-xs text-primary"
+                                            onClick={loadLibraries}
+                                            disabled={loadingLibraries}
+                                        >
+                                            {loadingLibraries ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                                            Refresh Libraries
+                                        </Button>
+                                    </div>
+
+                                    {serverLibraries.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-border/40">
+                                            No Plex libraries detected. Verify your Admin Plex token is configured in Settings.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {serverLibraries.map((srv) => {
+                                                const srvSections = srv.sections || [];
+                                                const srvSelectedCount = srvSections.filter((sec: any) => 
+                                                    isTrialDefaultSelected(srv.serverId, sec.id, sec.key)
+                                                ).length;
+                                                const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
+
+                                                return (
+                                                    <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server className="h-3.5 w-3.5 text-amber-400" />
+                                                                <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-amber-300">
+                                                                    {srvSelectedCount}/{srvSections.length} Trial Default
+                                                                </Badge>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                                onClick={() => {
+                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvRawIds = srvSections.map((sec: any) => String(sec.id));
+                                                                    setDefaultTrialSelectedKeys(prev => {
+                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
+                                                                        return allSrvSelected ? otherKeys : [...otherKeys, ...srvKeys];
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {allSrvSelected ? "Deselect All" : "Select All"}
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {srvSections.map((sec: any) => {
+                                                                const uniqueKey = `${srv.serverId}:${sec.id}`;
+                                                                const isChecked = isTrialDefaultSelected(srv.serverId, sec.id, sec.key);
+                                                                return (
+                                                                    <label 
+                                                                        key={uniqueKey} 
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            handleToggleTrialDefaultSection(srv.serverId, sec.id, sec.key);
+                                                                        }}
+                                                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                                                                            isChecked ? "bg-amber-500/15 border-amber-500/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
+                                                                        }`}
+                                                                    >
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {}}
+                                                                            className="rounded border-border text-amber-500 focus:ring-amber-500 h-3.5 w-3.5 shrink-0 pointer-events-none"
                                                                         />
                                                                         <span className="truncate">{sec.title}</span>
                                                                         <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
@@ -2034,49 +2255,76 @@ export default function AccessSettingsPage() {
                                     )}
                                 </div>
 
-                                {/* ADD-ONS CATALOG INFORMATION */}
-                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+                                {/* ADD-ONS CATALOG & AVAILABILITY MANAGER */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-400">
                                             <Sparkles className="h-4 w-4" />
-                                            <span>Add-ons & Household Features (Modular Framework)</span>
+                                            <span>Add-ons & Household Features (Modular Availability Controls)</span>
                                         </div>
                                         <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                            Free & Paid Add-ons
+                                            Live Feature Flags
                                         </Badge>
                                     </div>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
-                                        Members can activate optional add-ons directly from their user settings page. Free add-ons activate with a 1-click toggle:
+                                        Toggle availability for each add-on feature. Add-ons marked as <strong>Available</strong> can be enabled by users on their settings page. Disabled add-ons are locked as "Coming Soon" or hidden from user activation until ready.
                                     </p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
-                                            <div className="flex items-center justify-between font-bold text-foreground">
-                                                <span>📺 Live TV & IPTV Streams</span>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
-                                            </div>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">Direct live broadcast TV channels and EPG guides.</p>
-                                        </div>
-                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
-                                            <div className="flex items-center justify-between font-bold text-foreground">
-                                                <span>👶 Additional Kids Sub-Account</span>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
-                                            </div>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">Allows 2nd or 3rd dedicated kids iPad/tablet profiles.</p>
-                                        </div>
-                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
-                                            <div className="flex items-center justify-between font-bold text-foreground">
-                                                <span>🛋️ Additional Living Room Profile</span>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
-                                            </div>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">Allows 2nd living room TV profile with severe nudity filter.</p>
-                                        </div>
-                                        <div className="p-2.5 rounded-xl border border-border/40 bg-background/40 text-xs">
-                                            <div className="flex items-center justify-between font-bold text-foreground">
-                                                <span>⚡ Priority Media Requests</span>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
-                                            </div>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">Fast-tracks automated indexer grabs for new requests.</p>
-                                        </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                                        {adminAddonsCatalog.map((addon) => {
+                                            const isAvail = addon.isAvailable !== false;
+                                            const isToggling = togglingAdminAddonId === addon.id;
+                                            return (
+                                                <div 
+                                                    key={addon.id} 
+                                                    className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
+                                                        isAvail 
+                                                            ? "bg-background/60 border-border/60" 
+                                                            : "bg-muted/10 border-border/30 opacity-70"
+                                                    }`}
+                                                >
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-2">
+                                                                {addon.icon === "tv" ? (
+                                                                    <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
+                                                                ) : addon.icon === "music" ? (
+                                                                    <Music className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                                ) : addon.icon === "book" ? (
+                                                                    <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                ) : addon.icon === "baby" ? (
+                                                                    <Baby className="h-4 w-4 text-purple-400 shrink-0" />
+                                                                ) : addon.icon === "monitor" ? (
+                                                                    <Monitor className="h-4 w-4 text-indigo-400 shrink-0" />
+                                                                ) : (
+                                                                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                )}
+                                                                <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
+                                                            </div>
+                                                            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 shrink-0 ${addon.isFree ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"}`}>
+                                                                {addon.isFree ? "Free" : `$${addon.price}/mo`}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                                            {addon.description}
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="pt-2 flex items-center justify-between border-t border-border/30 text-xs">
+                                                        <span className={`text-[10px] font-semibold ${isAvail ? "text-emerald-400" : "text-muted-foreground"}`}>
+                                                            {isAvail ? "✅ Available to Users" : "🔒 Disabled / Coming Soon"}
+                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            {isToggling && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                                                            <Switch 
+                                                                checked={isAvail}
+                                                                disabled={isToggling}
+                                                                onCheckedChange={(checked) => handleToggleAdminAddonAvailability(addon.id, checked)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 

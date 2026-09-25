@@ -34,6 +34,7 @@ model Settings {
   googleBooksApiKey  String?
   defaultTrialDays   Int       @default(14)
   defaultPlexLibraries String?
+  defaultTrialPlexLibraries String? // Default shared Plex libraries for Trial accounts
   defaultKidsPlexLibraries String? // Default shared Plex libraries for Kids accounts
   paymentPaypal      String?
   paymentVenmo       String?

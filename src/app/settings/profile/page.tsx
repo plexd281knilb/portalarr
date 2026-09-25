@@ -1188,33 +1188,44 @@ export default function UserProfilePage() {
                             const isEnabled = userEnabledAddons.includes(addon.id);
                             const isToggling = togglingAddonId === addon.id;
                             const isFree = addon.isFree || addon.price === 0;
+                            const isAvailable = addon.isAvailable !== false;
 
                             return (
                                 <div 
                                     key={addon.id}
                                     className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
-                                        isEnabled 
-                                            ? "bg-amber-500/[0.06] border-amber-500/40" 
-                                            : "bg-white/[0.02] border-white/[0.06]"
+                                        !isAvailable 
+                                            ? "bg-muted/10 border-border/30 opacity-75"
+                                            : isEnabled 
+                                                ? "bg-amber-500/[0.06] border-amber-500/40" 
+                                                : "bg-white/[0.02] border-white/[0.06]"
                                     }`}
                                 >
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 {addon.icon === "tv" ? (
-                                                    <Tv className="h-4 w-4 text-cyan-400" />
+                                                    <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
+                                                ) : addon.icon === "music" ? (
+                                                    <Music className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                ) : addon.icon === "book" ? (
+                                                    <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
                                                 ) : addon.icon === "baby" ? (
-                                                    <Baby className="h-4 w-4 text-purple-400" />
+                                                    <Baby className="h-4 w-4 text-purple-400 shrink-0" />
                                                 ) : addon.icon === "monitor" ? (
-                                                    <Monitor className="h-4 w-4 text-indigo-400" />
+                                                    <Monitor className="h-4 w-4 text-indigo-400 shrink-0" />
                                                 ) : addon.icon === "sparkles" ? (
-                                                    <Sparkles className="h-4 w-4 text-amber-400" />
+                                                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
                                                 ) : (
-                                                    <Zap className="h-4 w-4 text-primary" />
+                                                    <Zap className="h-4 w-4 text-primary shrink-0" />
                                                 )}
-                                                <span className="font-bold text-xs text-foreground">{addon.name}</span>
+                                                <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
                                             </div>
-                                            {isFree ? (
+                                            {!isAvailable ? (
+                                                <Badge variant="outline" className="text-[9px] bg-muted/40 text-muted-foreground border-border/40 font-semibold shrink-0">
+                                                    🔒 Coming Soon
+                                                </Badge>
+                                            ) : isFree ? (
                                                 <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-semibold shrink-0">
                                                     ✨ Free
                                                 </Badge>
@@ -1230,38 +1241,49 @@ export default function UserProfilePage() {
                                     </div>
 
                                     <div className="pt-2 flex items-center justify-between border-t border-border/30">
-                                        <span className="text-[11px] font-medium text-muted-foreground">
-                                            {isEnabled ? (
-                                                <span className="text-emerald-400 flex items-center gap-1">
-                                                    <Check className="h-3 w-3" /> Active
+                                        {!isAvailable ? (
+                                            <>
+                                                <span className="text-[11px] font-medium text-muted-foreground italic">
+                                                    Under Development
                                                 </span>
-                                            ) : (
-                                                <span>Inactive</span>
-                                            )}
-                                        </span>
-                                        {isFree ? (
-                                            <div className="flex items-center gap-2">
-                                                {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}
-                                                <Switch
-                                                    checked={isEnabled}
-                                                    disabled={isToggling}
-                                                    onCheckedChange={(checked) => handleToggleFreeAddon(addon.id, checked)}
-                                                />
-                                            </div>
+                                                <Switch checked={false} disabled={true} />
+                                            </>
                                         ) : (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setUpgradeModalOpen(true);
-                                                    setTargetTier(addon.id);
-                                                    setUpgradeNote(`Interested in activating add-on: ${addon.name}`);
-                                                }}
-                                                className="text-xs h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer"
-                                            >
-                                                Request Add-On
-                                            </Button>
+                                            <>
+                                                <span className="text-[11px] font-medium text-muted-foreground">
+                                                    {isEnabled ? (
+                                                        <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                                                            <Check className="h-3 w-3" /> Active
+                                                        </span>
+                                                    ) : (
+                                                        <span>Inactive</span>
+                                                    )}
+                                                </span>
+                                                {isFree ? (
+                                                    <div className="flex items-center gap-2">
+                                                        {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}
+                                                        <Switch
+                                                            checked={isEnabled}
+                                                            disabled={isToggling}
+                                                            onCheckedChange={(checked) => handleToggleFreeAddon(addon.id, checked)}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setUpgradeModalOpen(true);
+                                                            setTargetTier(addon.id);
+                                                            setUpgradeNote(`Interested in activating add-on: ${addon.name}`);
+                                                        }}
+                                                        className="text-xs h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer"
+                                                    >
+                                                        Request Add-On
+                                                    </Button>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </div>
