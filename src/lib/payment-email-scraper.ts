@@ -877,8 +877,13 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
     // Ensure Plex Sharing access is granted if active
     if (isCurrentlyActive) {
         try {
-            const { setUserTrialOrSubscription } = await import("@/app/actions");
-            await setUserTrialOrSubscription(user.id, "CUSTOM", newExpiryDate.toISOString());
+            // If the user's status was ALREADY APPROVED, we already updated their subscription date.
+            // DO NOT re-sync or modify their active Plex shares, preserving all active libraries across all servers.
+            // Only if they were previously EXPIRED, SUSPENDED, PENDING, or TRIAL do we restore their shares.
+            if (user.status === "EXPIRED" || user.status === "SUSPENDED" || user.status === "PENDING" || user.status === "TRIAL") {
+                const { setUserTrialOrSubscription } = await import("@/app/actions");
+                await setUserTrialOrSubscription(user.id, "CUSTOM", newExpiryDate.toISOString());
+            }
         } catch (plexErr) {
             logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);
         }

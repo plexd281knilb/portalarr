@@ -23,7 +23,8 @@ import {
     savePaymentAndTrialSettings,
     updateUserMembershipTierAction,
     toggleAdminAddonAvailabilityAction,
-    getAvailableAddonsAction
+    getAvailableAddonsAction,
+    restoreAllUsersPlexAccessAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
@@ -52,6 +53,8 @@ export default function AccessSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [syncingPlex, setSyncingPlex] = useState(false);
     const [syncMessage, setSyncMessage] = useState("");
+    const [restoringAccess, setRestoringAccess] = useState(false);
+    const [restoreStatusMsg, setRestoreStatusMsg] = useState("");
     const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "TRIAL" | "INACTIVE">("ALL");
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -265,6 +268,20 @@ export default function AccessSettingsPage() {
             loadLibraries();
         } else {
             setSyncMessage(res.error || "Failed to sync Plex friends.");
+        }
+    };
+
+    const handleRestoreAllPlexAccess = async () => {
+        setRestoringAccess(true);
+        setRestoreStatusMsg("");
+        const res = await restoreAllUsersPlexAccessAction();
+        setRestoringAccess(false);
+        if (res.success) {
+            setRestoreStatusMsg(res.message || `Restored Plex libraries for ${res.restoredCount} users.`);
+            loadUsers();
+            loadLibraries();
+        } else {
+            setRestoreStatusMsg(res.error || "Failed to restore Plex libraries.");
         }
     };
 
@@ -1064,17 +1081,42 @@ export default function AccessSettingsPage() {
                                     <CardTitle className="text-xl font-bold">Existing Users & Access Directory</CardTitle>
                                     <CardDescription>Manage user permissions, Plex library shares, trial expiration timers, and Kindle emails.</CardDescription>
                                 </div>
-                                {pendingUsersCount > 0 && (
+                                <div className="flex items-center gap-2 flex-wrap shrink-0">
                                     <Button 
-                                        variant="default" 
+                                        variant="outline" 
                                         size="sm" 
-                                        className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-md active:scale-95"
-                                        onClick={handleApproveAllPending}
+                                        disabled={restoringAccess}
+                                        className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95"
+                                        onClick={handleRestoreAllPlexAccess}
+                                        title="Re-synchronize and restore default Plex libraries across all servers for all active users"
                                     >
-                                        <CheckCheck className="h-4 w-4" /> Approve All Pending ({pendingUsersCount})
+                                        {restoringAccess ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <RefreshCw className="h-4 w-4 text-primary" />}
+                                        Restore All Users' Libraries
                                     </Button>
-                                )}
+                                    {pendingUsersCount > 0 && (
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-md active:scale-95"
+                                            onClick={handleApproveAllPending}
+                                        >
+                                            <CheckCheck className="h-4 w-4" /> Approve All Pending ({pendingUsersCount})
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
+
+                            {restoreStatusMsg && (
+                                <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground">
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <span>{restoreStatusMsg}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setRestoreStatusMsg("")}>
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
 
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
                                 {/* SEARCH INPUT */}

@@ -3637,8 +3637,23 @@ export async function setUserTrialOrSubscription(
                         await revokePlexAccessForUserInternal(child, `Parent account access ${status.toLowerCase()}.`);
                     }
                 } else if (status === "APPROVED" || status === "TRIAL") {
-                    // Restore Plex shares with configured library sections for parent
-                    let rawKeys = (user.selectedPlexLibrarySectionIds || user.plexLibrarySectionIds || settings.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                    // 1. If user has explicit custom selections, use them
+                    let rawKeys: string[] = [];
+                    if (user.selectedPlexLibrarySectionIds) {
+                        rawKeys = user.selectedPlexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                    } else {
+                        // 2. Query live Plex shares to preserve everything the user already has across ALL servers
+                        const livePlex = await getUserPlexSharedLibraries(adminToken, user).catch(() => ({ hasPlexShare: false, selectedKeys: [] as string[] }));
+                        if (livePlex.hasPlexShare && livePlex.selectedKeys.length > 0) {
+                            rawKeys = livePlex.selectedKeys;
+                        } else if (user.plexLibrarySectionIds && user.plexLibrarySectionIds.includes(":")) {
+                            rawKeys = user.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                        } else if (settings?.defaultPlexLibraries) {
+                            rawKeys = settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+                        }
+                    }
+
+                    // 3. Fallback: grant all discovered libraries across all servers
                     if (rawKeys.length === 0) {
                         const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
                         rawKeys = srvSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
@@ -3759,7 +3774,8 @@ export async function syncUserPlexShareInternal(
                 for (const [mapKey, secList] of serverSectionsMap.entries()) {
                     if (mapKey.toLowerCase() === srvId.toLowerCase() || 
                         srvId.toLowerCase().includes(mapKey.toLowerCase()) || 
-                        mapKey.toLowerCase().includes(srvId.toLowerCase())) {
+                        mapKey.toLowerCase().includes(srvId.toLowerCase()) ||
+                        (srv.name && mapKey.toLowerCase() === srv.name.toLowerCase())) {
                         targetSectionIds = secList;
                         break;
                     }
@@ -3775,8 +3791,23 @@ export async function syncUserPlexShareInternal(
             );
 
             if (targetSectionIds.length === 0) {
-                if (match && match.id) {
-                    await removePlexUserShare(adminToken, match.id, srvId);
+                // Safety Guard: Only delete a share if the user status is explicitly SUSPENDED, EXPIRED, or REJECTED,
+                // or if the user/admin explicitly configured selectedPlexLibrarySectionIds and omitted this server.
+                let shouldRemove = false;
+                if (targetUser.id) {
+                    const u = await prisma.user.findUnique({ where: { id: targetUser.id }, select: { status: true, selectedPlexLibrarySectionIds: true } }).catch(() => null);
+                    if (u && (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED")) {
+                        shouldRemove = true;
+                    } else if (u && u.selectedPlexLibrarySectionIds !== null && u.selectedPlexLibrarySectionIds !== undefined) {
+                        shouldRemove = true;
+                    }
+                }
+                if (shouldRemove) {
+                    if (match && match.id) {
+                        await removePlexUserShare(adminToken, match.id, srvId);
+                    }
+                } else if (match && match.id && match.librarySectionIds && match.librarySectionIds.length > 0) {
+                    logger.addLog("INFO", "PLEX", `[SYNC-PLEX-GUARD] Preserved active share on "${srv.name}" (${match.librarySectionIds.length} libraries) for "${targetUser.username}" because target sections were unspecified.`);
                 }
             } else {
                 if (match && match.id) {
@@ -3802,6 +3833,110 @@ export async function syncUserPlexShareInternal(
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err.message };
+    }
+}
+
+/**
+ * Repairs and restores full library access across ALL Plex servers (Main + Backup)
+ * for all approved and active trial users.
+ */
+export async function restoreAllUsersPlexAccessAction() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+        if (!adminToken) {
+            return { success: false, error: "Plex admin token not configured in settings." };
+        }
+
+        const serversWithSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+        if (serversWithSections.length === 0) {
+            return { success: false, error: "No Plex servers discovered." };
+        }
+
+        // Build master list of all section keys across ALL servers (Main & Backup)
+        const allServersFullKeys = serversWithSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
+        const kidsSectionsFullKeys = (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+        const defaultRawKeys = (settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+        const masterFullKeys = defaultRawKeys.length > 0 ? defaultRawKeys : allServersFullKeys;
+
+        const users = await prisma.user.findMany({
+            where: {
+                status: { in: ["APPROVED", "TRIAL"] }
+            }
+        });
+
+        let servers = await getPlexServers(adminToken);
+        if (servers.length === 0) {
+            servers = serversWithSections.map(s => ({
+                name: s.serverName,
+                clientIdentifier: s.serverId,
+                accessToken: adminToken,
+                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            }));
+        }
+        const shares = await getPlexSharedServersList(adminToken);
+
+        let restoredCount = 0;
+        const errors: string[] = [];
+
+        for (const user of users) {
+            try {
+                let targetKeys: string[] = [];
+                if (user.accountType === "KID") {
+                    targetKeys = kidsSectionsFullKeys.length > 0 ? kidsSectionsFullKeys : masterFullKeys;
+                } else if (user.selectedPlexLibrarySectionIds) {
+                    targetKeys = user.selectedPlexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                } else {
+                    // Check if user currently has live keys
+                    const userExistingKeys = (user.plexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
+                    const userServerIds = new Set(userExistingKeys.filter(k => k.includes(":")).map(k => k.split(":")[0]));
+                    // If user was missing one of the servers (e.g. lost Main server), merge with master keys across all servers
+                    if (userServerIds.size < serversWithSections.length) {
+                        targetKeys = Array.from(new Set([...userExistingKeys, ...masterFullKeys]));
+                    } else {
+                        targetKeys = userExistingKeys.length > 0 ? userExistingKeys : masterFullKeys;
+                    }
+                }
+
+                if (targetKeys.length > 0) {
+                    const res = await syncUserPlexShareInternal(adminToken, user, targetKeys, servers, shares);
+                    if (res.success) {
+                        await prisma.user.update({
+                            where: { id: user.id },
+                            data: { plexLibrarySectionIds: targetKeys.join(",") }
+                        }).catch(() => {});
+                        restoredCount++;
+                    } else if (res.error) {
+                        errors.push(`${user.username}: ${res.error}`);
+                    }
+                }
+            } catch (uErr: any) {
+                errors.push(`${user.username}: ${uErr.message}`);
+            }
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        logger.addLog("SUCCESS", "PLEX", `[RESTORE-ALL-ACCESS] Restored full Plex library access for ${restoredCount} users across ${serversWithSections.length} servers.`);
+        return {
+            success: true,
+            message: `Successfully restored Plex library access for ${restoredCount} users across ${serversWithSections.length} servers.`,
+            restoredCount,
+            totalUsers: users.length,
+            serversCount: serversWithSections.length,
+            errors: errors.slice(0, 5)
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to restore user library access" };
     }
 }
 
