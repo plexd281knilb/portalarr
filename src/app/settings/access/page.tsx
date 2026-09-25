@@ -10,6 +10,7 @@ import {
     syncPlexFriendsAction, 
     updateAppUserRole, 
     updateAppUserKindleEmail, 
+    updateAppUserName,
     adminResetUserPassword, 
     approveAllPendingAppUsers,
     fetchPlexServerLibraries,
@@ -144,6 +145,10 @@ export default function AccessSettingsPage() {
     // Inline Edit Kindle Email state
     const [editingKindleUserId, setEditingKindleUserId] = useState<string | null>(null);
     const [kindleEmailInput, setKindleEmailInput] = useState("");
+
+    // Inline Edit Real Name state
+    const [editingNameUserId, setEditingNameUserId] = useState<string | null>(null);
+    const [nameInput, setNameInput] = useState("");
 
     // Impersonation state
     const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
@@ -323,6 +328,13 @@ export default function AccessSettingsPage() {
         await updateAppUserKindleEmail(userId, kindleEmailInput);
         setEditingKindleUserId(null);
         setKindleEmailInput("");
+        loadUsers();
+    };
+
+    const handleSaveName = async (userId: string) => {
+        await updateAppUserName(userId, nameInput);
+        setEditingNameUserId(null);
+        setNameInput("");
         loadUsers();
     };
 
@@ -829,6 +841,7 @@ export default function AccessSettingsPage() {
         const q = searchQuery.toLowerCase().trim();
         const matchSearch = !q || 
             u.username.toLowerCase().includes(q) || 
+            (u.name && u.name.toLowerCase().includes(q)) ||
             (u.email && u.email.toLowerCase().includes(q)) ||
             (u.kindleEmail && u.kindleEmail.toLowerCase().includes(q)) ||
             (u.referredBy?.username && u.referredBy.username.toLowerCase().includes(q)) ||
@@ -1184,13 +1197,54 @@ export default function AccessSettingsPage() {
                                             >
                                                 {/* TOP ROW: USER INFO & BADGES */}
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                                                    <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="flex items-center gap-3 min-w-0 flex-1">
                                                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
                                                             {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
                                                         </div>
-                                                        <div className="min-w-0 space-y-0.5">
+                                                        <div className="min-w-0 space-y-0.5 flex-1">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <span className="font-bold text-base text-foreground truncate">{user.username}</span>
+                                                                {editingNameUserId === user.id ? (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Input 
+                                                                            className="h-6 text-xs bg-background/90 px-1.5 py-0 font-medium w-36" 
+                                                                            placeholder="Real Name (e.g. John Doe)"
+                                                                            value={nameInput}
+                                                                            onChange={(e) => setNameInput(e.target.value)}
+                                                                            autoFocus
+                                                                        />
+                                                                        <Button size="sm" className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 font-semibold" onClick={() => handleSaveName(user.id)}>
+                                                                            Save
+                                                                        </Button>
+                                                                        <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] shrink-0" onClick={() => setEditingNameUserId(null)}>
+                                                                            ✕
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1">
+                                                                        {user.name ? (
+                                                                            <span className="text-xs font-semibold text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                                                                                👤 {user.name}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-[11px] text-muted-foreground/60 italic">
+                                                                                (No Name)
+                                                                            </span>
+                                                                        )}
+                                                                        <Button 
+                                                                            variant="ghost" 
+                                                                            size="icon" 
+                                                                            className="h-5 w-5 text-muted-foreground/70 hover:text-foreground shrink-0"
+                                                                            onClick={() => {
+                                                                                setEditingNameUserId(user.id);
+                                                                                setNameInput(user.name || "");
+                                                                            }}
+                                                                            title="Edit Real Name"
+                                                                        >
+                                                                            <Edit2 className="h-2.5 w-2.5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
                                                                 <Badge variant={user.role === "ADMIN" ? "default" : "secondary"} className="text-[10px] font-bold shrink-0">
                                                                     {user.role || "USER"}
                                                                 </Badge>
@@ -1280,7 +1334,7 @@ export default function AccessSettingsPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* MIDDLE ROW: METADATA GRID (KINDLE, LIBRARIES, DATES) */}
+                                                {/* MIDDLE ROW: METADATA GRID (KINDLE, LIBRARIES, DATES, PAYMENTS) */}
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs bg-background/50 p-2.5 rounded-lg border border-border/40">
                                                     {/* SEND-TO-KINDLE */}
                                                     <div className="flex items-center gap-1.5 min-w-0">
@@ -1338,6 +1392,34 @@ export default function AccessSettingsPage() {
                                                             <span className="text-muted-foreground text-[11px] truncate">
                                                                 (active {format(new Date(user.lastLogin), "MMM d")})
                                                             </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* LAST PAID / PAYMENT SUMMARY */}
+                                                    <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
+                                                        <DollarSign className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                        <span className="text-muted-foreground shrink-0 font-medium">Payment:</span>
+                                                        {user.paymentTransactions && user.paymentTransactions.length > 0 ? (
+                                                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                                                <span className="font-semibold text-emerald-400">
+                                                                    Last Paid: ${user.paymentTransactions[0].amount.toFixed(2)} ({user.paymentTransactions[0].provider})
+                                                                </span>
+                                                                <span className="text-muted-foreground text-[11px]">
+                                                                    on {format(new Date(user.paymentTransactions[0].emailDate), "MMM d, yyyy")}
+                                                                </span>
+                                                                {user.paymentTransactions.length > 1 && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 px-1.5 py-0 font-mono font-semibold" title={`All ${user.paymentTransactions.length} payments: ${user.paymentTransactions.map((p: any) => `$${p.amount.toFixed(2)} (${format(new Date(p.emailDate), "MMM d, yyyy")})`).join(", ")}`}>
+                                                                        Total Paid: ${user.paymentTransactions.reduce((acc: number, p: any) => acc + (p.amount || 0), 0).toFixed(2)} ({user.paymentTransactions.length} payments)
+                                                                    </Badge>
+                                                                )}
+                                                                {user.paymentTransactions[0].subscriptionPeriodGranted && (
+                                                                    <span className="text-muted-foreground/80 text-[11px] italic truncate">
+                                                                        • {user.paymentTransactions[0].subscriptionPeriodGranted}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-muted-foreground italic text-xs">No payments recorded</span>
                                                         )}
                                                     </div>
                                                 </div>

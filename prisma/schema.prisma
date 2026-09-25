@@ -307,6 +307,7 @@ model MediaApp {
 
 model User {
   id                     String    @id @default(cuid())
+  name                   String?   // Real name or display name (e.g. "Jonathan Juliano")
   username               String    @unique
   email                  String    @unique 
   password               String    // Hashed

@@ -537,6 +537,80 @@ export function parsePaymentEmail(parsed: ParsedMail, uid: string): ScrapedPayme
 }
 
 /**
+ * Calculate aligned expiration date:
+ * - Yearly: ALWAYS January 1st (Jan 1, YYYY at 23:59:59)
+ * - Monthly: ALWAYS 1st day of target month (YYYY-MM-01 at 23:59:59)
+ * - Tolerance buffer:
+ *   - Yearly ($180 standard): if within a couple of dollars (totalAmount >= yearlyPrice - 5), count as full year
+ *   - Monthly ($15 standard): if within a dollar (totalAmount >= monthlyPrice - 1), count as full month
+ */
+export function calculateAlignedExpiryDate(params: {
+    paymentDate: Date;
+    totalAmount: number;
+    yearlyPrice: number;
+    monthlyPrice: number;
+    existingExpiry?: Date | null;
+}): { newExpiryDate: Date; periodGrantedText: string; isYearly: boolean; monthsGranted: number } {
+    const { paymentDate, totalAmount, yearlyPrice, monthlyPrice, existingExpiry } = params;
+    const now = new Date();
+
+    // Tolerance check for Yearly (e.g. $180 - $5 = $175+)
+    const isYearly = totalAmount >= Math.max(1, yearlyPrice - 5);
+
+    let newExpiryDate: Date;
+    let periodGrantedText = "";
+    let monthsGranted = 1;
+
+    if (isYearly) {
+        const yearsCount = Math.max(1, Math.round(totalAmount / yearlyPrice));
+        if (existingExpiry && existingExpiry > now) {
+            // Extend existing active subscription by yearsCount, aligned to Jan 1st
+            const currentExpYear = existingExpiry.getFullYear();
+            const targetYear = currentExpYear + yearsCount;
+            newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
+        } else {
+            // New / expired subscription:
+            // If paying in Oct, Nov, Dec (months 9, 10, 11), covers remainder of current year + next year(s) -> Jan 1 of Y + yearsCount + 1
+            // If paying in Jan - Sep, covers through Jan 1 of next year -> Jan 1 of Y + yearsCount
+            const payMonth = paymentDate.getMonth();
+            const payYear = paymentDate.getFullYear();
+            const targetYear = (payMonth >= 9 ? payYear + 1 + yearsCount : payYear + yearsCount);
+            newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
+        }
+        periodGrantedText = `${yearsCount > 1 ? `${yearsCount} Years` : "1 Year"} (Active until Jan 1, ${newExpiryDate.getFullYear()})`;
+    } else {
+        // Monthly calculation with tolerance (e.g. $14+ counts for 1 month @ $15)
+        monthsGranted = Math.max(1, Math.round(totalAmount / monthlyPrice));
+        if (totalAmount < monthlyPrice && totalAmount >= (monthlyPrice - 1)) {
+            monthsGranted = 1;
+        }
+
+        if (existingExpiry && existingExpiry > now) {
+            // Add onto existing expiry, keeping 1st of month alignment
+            newExpiryDate = new Date(existingExpiry);
+            newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
+            newExpiryDate.setDate(1);
+            newExpiryDate.setHours(23, 59, 59, 999);
+        } else {
+            // New subscription starting from payment date:
+            // Aligned to 1st of the month following the granted period
+            newExpiryDate = new Date(paymentDate);
+            newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted + 1);
+            newExpiryDate.setDate(1);
+            newExpiryDate.setHours(23, 59, 59, 999);
+        }
+        periodGrantedText = `${monthsGranted} Month${monthsGranted > 1 ? "s" : ""} (Active until ${newExpiryDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })})`;
+    }
+
+    return {
+        newExpiryDate,
+        periodGrantedText,
+        isYearly,
+        monthsGranted
+    };
+}
+
+/**
  * Match a scraped payment to a User in the database
  */
 export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any | null> {
@@ -544,6 +618,7 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
         select: {
             id: true,
             username: true,
+            name: true,
             email: true,
             plexUsername: true,
             plexEmail: true,
@@ -560,25 +635,20 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
     const senderEmail = (payment.senderEmail || "").toLowerCase().trim();
     const senderHandle = (payment.senderHandle || "").replace(/^[@$]/, "").toLowerCase().trim();
 
-    // 1. Direct match by Username / Plex Username / Referral Code in NOTE
+    // 1. Direct match by Username / Plex Username / Referral Code / Real Name in NOTE
     if (note) {
-        // Strip common prefixes
         const cleanNote = note.replace(/^(?:plex|subscription|sub|for|user|username|payment|renewal|annual|monthly)[\s:=-]+/i, "").trim();
         
         for (const u of allUsers) {
             const uName = u.username.toLowerCase().trim();
+            const realName = (u.name || "").toLowerCase().trim();
             const pName = (u.plexUsername || "").toLowerCase().trim();
             const refCode = (u.referralCode || "").toLowerCase().trim();
 
-            if (uName && (note.includes(uName) || cleanNote === uName)) {
-                return u;
-            }
-            if (pName && (note.includes(pName) || cleanNote === pName)) {
-                return u;
-            }
-            if (refCode && (note.includes(refCode) || cleanNote === refCode)) {
-                return u;
-            }
+            if (uName && (note.includes(uName) || cleanNote === uName)) return u;
+            if (realName && (note.includes(realName) || cleanNote === realName)) return u;
+            if (pName && (note.includes(pName) || cleanNote === pName)) return u;
+            if (refCode && (note.includes(refCode) || cleanNote === refCode)) return u;
         }
     }
 
@@ -595,36 +665,71 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
     if (senderHandle) {
         const handleMatch = allUsers.find(u => 
             u.username.toLowerCase() === senderHandle || 
-            (u.referralCode && u.referralCode.toLowerCase() === senderHandle)
+            (u.referralCode && u.referralCode.toLowerCase() === senderHandle) ||
+            (u.plexUsername && u.plexUsername.toLowerCase() === senderHandle)
         );
         if (handleMatch) return handleMatch;
     }
 
-    // 4. Match by Sender Name (Exact match or Prefix match)
+    // 4. Match by Sender Name
     if (senderName) {
+        // A. Direct Name Match with u.name
+        const exactRealNameMatch = allUsers.find(u => 
+            u.name && u.name.toLowerCase().trim() === senderName
+        );
+        if (exactRealNameMatch) return exactRealNameMatch;
+
+        // B. Direct match with username / plexUsername
         const exactNameMatch = allUsers.find(u => 
             u.username.toLowerCase() === senderName || 
             (u.plexUsername && u.plexUsername.toLowerCase() === senderName)
         );
         if (exactNameMatch) return exactNameMatch;
 
-        // Try matching stripped sender name (e.g. "Jameson B" -> "jamesonb")
-        const strippedSenderName = senderName.replace(/[\s.'-]+/g, "");
-        const prefixMatch = allUsers.find(u => {
+        // C. Clean stripped sender name (e.g. "Jonathan Juliano" -> "jonathanjuliano", "Jameson B" -> "jamesonb")
+        const strippedSenderName = senderName.replace(/[\s.'_-]+/g, "");
+        const strippedMatches = allUsers.filter(u => {
             const emailPrefix = u.email.split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "");
+            const plexEmailPrefix = (u.plexEmail || "").split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "");
             const uClean = u.username.toLowerCase().replace(/[\s.'_-]+/g, "");
             const pClean = (u.plexUsername || "").toLowerCase().replace(/[\s.'_-]+/g, "");
-            return emailPrefix === strippedSenderName || uClean === strippedSenderName || pClean === strippedSenderName;
+            const realClean = (u.name || "").toLowerCase().replace(/[\s.'_-]+/g, "");
+            return emailPrefix === strippedSenderName || 
+                   plexEmailPrefix === strippedSenderName || 
+                   uClean === strippedSenderName || 
+                   pClean === strippedSenderName ||
+                   (realClean && realClean === strippedSenderName);
         });
-        if (prefixMatch) return prefixMatch;
+        if (strippedMatches.length === 1) return strippedMatches[0];
 
-        // Try matching First Name part (e.g. "Jameson B" -> "jameson") if it starts with first name
-        const firstNamePart = senderName.split(/\s+/)[0];
+        // D. First Initial + Last Name pattern (e.g. "Jonathan Juliano" -> "jjuliano", "Austin Bamrick" -> "abamrick", "Jeremy Sherman" -> "jsherman", "Dane Heidelman" -> "dheidelman", "David Garza" -> "dgarza", "John McGlone" -> "jmcglone", "Trevor Scarborough" -> "tscarborough", "Edward McDonald" -> "emcdonald")
+        const nameParts = senderName.split(/\s+/).filter(Boolean);
+        if (nameParts.length >= 2) {
+            const firstName = nameParts[0];
+            const lastName = nameParts[nameParts.length - 1];
+            const firstInitialLastName = `${firstName[0]}${lastName}`.replace(/[\s.'_-]+/g, "");
+            const firstTwoLastName = `${firstName.slice(0, 2)}${lastName}`.replace(/[\s.'_-]+/g, "");
+
+            const initialMatches = allUsers.filter(u => {
+                const uClean = u.username.toLowerCase().replace(/[\s.'_-]+/g, "");
+                const pClean = (u.plexUsername || "").toLowerCase().replace(/[\s.'_-]+/g, "");
+                const emailPrefix = u.email.split("@")[0].toLowerCase().replace(/[\s.'_-]+/g, "");
+                return uClean === firstInitialLastName || 
+                       pClean === firstInitialLastName || 
+                       emailPrefix === firstInitialLastName ||
+                       uClean === firstTwoLastName ||
+                       pClean === firstTwoLastName;
+            });
+            if (initialMatches.length === 1) return initialMatches[0];
+        }
+
+        // E. First Name alone if unique (e.g. "Jameson B" -> "jameson")
+        const firstNamePart = nameParts[0];
         if (firstNamePart && firstNamePart.length >= 3) {
             const firstNameMatches = allUsers.filter(u => 
                 u.username.toLowerCase() === firstNamePart || 
                 (u.plexUsername && u.plexUsername.toLowerCase() === firstNamePart) ||
-                u.email.split("@")[0].toLowerCase().startsWith(firstNamePart)
+                u.email.split("@")[0].toLowerCase() === firstNamePart
             );
             if (firstNameMatches.length === 1) {
                 return firstNameMatches[0];
@@ -636,34 +741,50 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
 }
 
 /**
- * Grant subscription to a matched user based on the payment amount
+ * Grant subscription to a matched user based on the payment amount and cumulative installments
  */
 export async function applySubscriptionForPayment(user: any, payment: ScrapedPayment): Promise<{
     newExpiryDate: Date;
     periodGrantedText: string;
+    totalCumulativeAmount: number;
 }> {
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
     const yearlyPrice = settings?.yearlyPrice || 180;
     const monthlyPrice = settings?.monthlyPrice || 15;
 
-    // Calculate base date: if user has an active future subscription, add onto it!
-    const now = new Date();
+    // Fetch prior payments for this user or sender within the current cycle / past 120 days
+    // to merge multi-part installment payments (e.g. $123.72 + $56.27 = $179.99, or $90 + $90 = $180)
+    const recentPayments = await prisma.paymentTransaction.findMany({
+        where: {
+            OR: [
+                { matchedUserId: user.id },
+                ...(payment.senderName ? [{ senderName: { equals: payment.senderName } }] : []),
+                ...(payment.senderEmail ? [{ senderEmail: { equals: payment.senderEmail } }] : [])
+            ],
+            emailDate: {
+                gte: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000)
+            }
+        }
+    }).catch(() => [] as any[]);
+
+    // Sum past payments in this cycle excluding the current transaction ID
+    const pastInstallmentsSum = recentPayments
+        .filter(p => p.externalTxId !== payment.externalTxId)
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const totalCumulativeAmount = pastInstallmentsSum + payment.amount;
+
     const existingExpiry = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
-    const baseDate = existingExpiry && existingExpiry > now ? existingExpiry : now;
 
-    let newExpiryDate: Date;
-    let periodGrantedText = "";
+    const { newExpiryDate, periodGrantedText } = calculateAlignedExpiryDate({
+        paymentDate: payment.emailDate || new Date(),
+        totalAmount: totalCumulativeAmount,
+        yearlyPrice,
+        monthlyPrice,
+        existingExpiry
+    });
 
-    if (payment.amount >= (yearlyPrice * 0.85)) {
-        // Full 1 Year Subscription
-        newExpiryDate = addYears(baseDate, 1);
-        periodGrantedText = `1 Year (Active until ${newExpiryDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })})`;
-    } else {
-        // Monthly calculation
-        const months = Math.max(1, Math.round(payment.amount / monthlyPrice));
-        newExpiryDate = addMonths(baseDate, months);
-        periodGrantedText = `${months} Month${months > 1 ? "s" : ""} (Active until ${newExpiryDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })})`;
-    }
+    const now = new Date();
 
     // Update User in database
     await prisma.user.update({
@@ -675,6 +796,23 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         }
     });
 
+    // Retroactively update earlier installment transactions in this cycle so they link to this user and note the merged fulfillment
+    if (recentPayments.length > 0) {
+        for (const p of recentPayments) {
+            if (p.externalTxId !== payment.externalTxId && (!p.matchedUserId || p.status === "UNMATCHED")) {
+                await prisma.paymentTransaction.update({
+                    where: { id: p.id },
+                    data: {
+                        matchedUserId: user.id,
+                        status: "PROCESSED",
+                        appliedSubscription: true,
+                        subscriptionPeriodGranted: `Merged with cumulative installment (${periodGrantedText})`
+                    }
+                }).catch(() => {});
+            }
+        }
+    }
+
     // Ensure Plex Sharing access is granted
     try {
         const { setUserTrialOrSubscription } = await import("@/app/actions");
@@ -683,11 +821,16 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);
     }
 
-    logger.addLog("INFO", "SYSTEM", `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" via ${payment.provider} ($${payment.amount.toFixed(2)})`);
+    logger.addLog(
+        "INFO", 
+        "SYSTEM", 
+        `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" (Current: $${payment.amount.toFixed(2)}, Cumulative: $${totalCumulativeAmount.toFixed(2)}) via ${payment.provider}`
+    );
 
     return {
         newExpiryDate,
-        periodGrantedText
+        periodGrantedText,
+        totalCumulativeAmount
     };
 }
 

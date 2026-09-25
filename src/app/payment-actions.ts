@@ -301,6 +301,14 @@ export async function manuallyAttributePaymentTransaction(transactionId: string,
 
         const { periodGrantedText } = await applySubscriptionForPayment(targetUser, scrapedPayment);
 
+        // If target user doesn't have a real name set yet, auto-populate from sender name
+        if (!targetUser.name && tx.senderName && tx.senderName.trim()) {
+            await prisma.user.update({
+                where: { id: targetUser.id },
+                data: { name: tx.senderName.trim() }
+            }).catch(() => {});
+        }
+
         await prisma.paymentTransaction.update({
             where: { id: transactionId },
             data: {

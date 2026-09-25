@@ -610,6 +610,7 @@ export async function ensureSchemaColumns(): Promise<void> {
             const cols = tableInfo.map((c: any) => c.name);
 
             const userAddCols: [string, string][] = [
+                ["name", `ALTER TABLE "User" ADD COLUMN "name" TEXT;`],
                 ["kindleEmail", `ALTER TABLE "User" ADD COLUMN "kindleEmail" TEXT NOT NULL DEFAULT '';`],
                 ["role", `ALTER TABLE "User" ADD COLUMN "role" TEXT NOT NULL DEFAULT 'USER';`],
                 ["status", `ALTER TABLE "User" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'APPROVED';`],

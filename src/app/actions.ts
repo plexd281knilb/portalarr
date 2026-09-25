@@ -2763,6 +2763,7 @@ export async function getAppUsers() {
             select: { 
                 id: true, 
                 username: true, 
+                name: true,
                 email: true, 
                 role: true, 
                 status: true, 
@@ -2783,6 +2784,21 @@ export async function getAppUsers() {
                 referralCode: true,
                 referredByUserId: true,
                 convertedAt: true,
+                paymentTransactions: {
+                    select: {
+                        id: true,
+                        amount: true,
+                        currency: true,
+                        provider: true,
+                        emailDate: true,
+                        status: true,
+                        subscriptionPeriodGranted: true,
+                        senderName: true,
+                        senderEmail: true,
+                        senderHandle: true
+                    },
+                    orderBy: { emailDate: 'desc' }
+                },
                 referredBy: {
                     select: {
                         id: true,
@@ -2799,6 +2815,7 @@ export async function getAppUsers() {
                     select: {
                         id: true,
                         username: true,
+                        name: true,
                         email: true,
                         plexUsername: true,
                         plexEmail: true,
@@ -2824,6 +2841,7 @@ export async function getAppUsers() {
                 select: { 
                     id: true, 
                     username: true, 
+                    name: true,
                     email: true, 
                     role: true, 
                     status: true, 
@@ -2843,7 +2861,22 @@ export async function getAppUsers() {
                     enabledAddons: true,
                     referralCode: true,
                     referredByUserId: true,
-                    convertedAt: true
+                    convertedAt: true,
+                    paymentTransactions: {
+                        select: {
+                            id: true,
+                            amount: true,
+                            currency: true,
+                            provider: true,
+                            emailDate: true,
+                            status: true,
+                            subscriptionPeriodGranted: true,
+                            senderName: true,
+                            senderEmail: true,
+                            senderHandle: true
+                        },
+                        orderBy: { emailDate: 'desc' }
+                    }
                 }
             });
         } catch (innerErr) {
@@ -2980,6 +3013,22 @@ export async function updateAppUserKindleEmail(id: string, kindleEmail: string) 
         return { success: true };
     } catch (e: any) {
         return { error: e.message || "Failed to update Kindle email" };
+    }
+}
+
+export async function updateAppUserName(id: string, name: string) {
+    await verifyAdmin();
+    try {
+        await ensureSchemaColumns();
+        const cleanName = name.trim();
+        await prisma.user.update({
+            where: { id },
+            data: { name: cleanName || null }
+        });
+        revalidatePath("/settings/access");
+        return { success: true };
+    } catch (e: any) {
+        return { error: e.message || "Failed to update user name" };
     }
 }
 
