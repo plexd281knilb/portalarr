@@ -1205,6 +1205,10 @@ export default function AccessSettingsPage() {
                                         const isRejected = user.status === "REJECTED";
                                         const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
                                         const userLibraryCount = (() => {
+                                            if ((user.role === "ADMIN" || user.role === "SUPER_USER") && serverLibraries && serverLibraries.length > 0) {
+                                                return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
+                                            }
+
                                             let rawKeys: string[] = [];
                                             if (user.selectedPlexLibrarySectionIds) {
                                                 rawKeys = user.selectedPlexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
@@ -1236,13 +1240,17 @@ export default function AccessSettingsPage() {
                                                             rawKeys.includes(fullKey) || 
                                                             (altFullKey && rawKeys.includes(altFullKey)) || 
                                                             rawKeys.includes(rawKey) || 
-                                                            (altRawKey && rawKeys.includes(altRawKey))
+                                                            (altRawKey && rawKeys.includes(altRawKey)) ||
+                                                            rawKeys.some(k => {
+                                                                const clean = k.includes(":") ? k.split(":")[1] : k;
+                                                                return clean === String(sec.id) || (sec.key && clean === String(sec.key));
+                                                            })
                                                         ) {
                                                             count++;
                                                         }
                                                     }
                                                 }
-                                                return count;
+                                                if (count > 0) return count;
                                             }
                                             return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
                                         })();

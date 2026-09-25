@@ -2568,22 +2568,23 @@ export async function revokePlexAccessForUserInternal(
             id: friend?.id,
             email: friend?.email || targetEmail,
             username: friend?.username || targetUser,
+            name: friend?.title || (user as any).name,
             plexEmail: user.plexEmail,
             plexUsername: user.plexUsername
         };
 
         const ownerUser = await getPlexOwnerUser(adminToken);
-        const isOwner = ownerUser && matchesPlexUser(matchTarget, {
+        const isOwner = (ownerUser && matchesPlexUser(matchTarget, {
             id: "",
             serverId: "",
             librarySectionIds: [],
             user: ownerUser,
             invitedEmail: ownerUser.email
-        });
+        })) || (user as any).role === "ADMIN" || (user as any).role === "SUPER_USER";
 
         if (isOwner) {
-            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is the Plex Server Owner.`);
-            return { success: true, message: "Plex owner access retained." };
+            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is the Plex Server Owner or Administrator.`);
+            return { success: true, message: "Plex owner/admin access retained." };
         }
 
         logger.addLog("INFO", "PLEX", `[REVOKE-PLEX-ACCESS] Revoking Plex library shares for user "${user.username}" across ${servers.length} servers...`);
@@ -2670,6 +2671,21 @@ export async function revokePlexAccessForUserInternal(
 export async function expireDueTrialsAndSubscriptionsInternal() {
     try {
         await ensureSchemaColumns();
+
+        // 0. Auto-recover any ADMIN or SUPER_USER whose status was set to EXPIRED or SUSPENDED
+        const superUsers = await prisma.user.findMany({
+            where: {
+                role: { in: ["ADMIN", "SUPER_USER"] },
+                status: { in: ["EXPIRED", "SUSPENDED"] }
+            }
+        });
+        for (const su of superUsers) {
+            await prisma.user.update({
+                where: { id: su.id },
+                data: { status: "APPROVED", trialEndsAt: null, subscriptionEndsAt: null }
+            }).catch(() => {});
+        }
+
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (settings?.autoSuspendExpiredAccounts !== true) {
             // Auto access suspension is disabled by administrator. Do not revoke Plex access or suspend accounts automatically.
@@ -2680,10 +2696,11 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
         const gracePeriodDays = settings?.subscriptionGracePeriodDays || 0;
         const cutoffDate = new Date(now.getTime() - gracePeriodDays * 24 * 60 * 60 * 1000);
 
-        // 1. Find all users whose TRIAL has elapsed beyond grace period
+        // 1. Find all users whose TRIAL has elapsed beyond grace period (strictly excluding ADMIN and SUPER_USER)
         const expiredTrials = await prisma.user.findMany({
             where: {
                 status: "TRIAL",
+                role: { notIn: ["ADMIN", "SUPER_USER"] },
                 trialEndsAt: {
                     not: null,
                     lte: cutoffDate
@@ -2691,10 +2708,11 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
             }
         });
 
-        // 2. Find all approved users whose subscription has elapsed beyond grace period
+        // 2. Find all approved users whose subscription has elapsed beyond grace period (strictly excluding ADMIN and SUPER_USER)
         const expiredSubs = await prisma.user.findMany({
             where: {
                 status: "APPROVED",
+                role: { notIn: ["ADMIN", "SUPER_USER"] },
                 subscriptionEndsAt: {
                     not: null,
                     lte: cutoffDate
@@ -3408,6 +3426,7 @@ export async function updateUserPlexLibraries(
             id: friendId,
             email: targetEmail,
             username: targetUser,
+            name: friend?.title || user.name,
             plexEmail: user.plexEmail,
             plexUsername: user.plexUsername
         };
@@ -3749,6 +3768,7 @@ export async function syncUserPlexShareInternal(
             id: friendId,
             email: resolvedEmail,
             username: resolvedUser,
+            name: friend?.title || (targetUser as any).name,
             plexEmail: targetUser.plexEmail,
             plexUsername: targetUser.plexUsername
         };
@@ -12522,6 +12542,20 @@ export async function syncPlexFriendsInternal() {
         let updatedCount = 0;
         let revokedCount = 0;
 
+        // Auto-recover any ADMIN or SUPER_USER whose status was inadvertently set to EXPIRED or SUSPENDED
+        for (const u of dbUsers) {
+            if ((u.role === "ADMIN" || u.role === "SUPER_USER") && (u.status === "EXPIRED" || u.status === "SUSPENDED")) {
+                await prisma.user.update({
+                    where: { id: u.id },
+                    data: { status: "APPROVED", trialEndsAt: null, subscriptionEndsAt: null }
+                }).catch(() => {});
+                u.status = "APPROVED";
+                u.trialEndsAt = null;
+                u.subscriptionEndsAt = null;
+                updatedCount++;
+            }
+        }
+
         const activePlexEmails = new Set<string>();
         const activePlexUsernames = new Set<string>();
 
@@ -12541,7 +12575,8 @@ export async function syncPlexFriendsInternal() {
                 const srv = serversWithSections.find(sv => 
                     (sv.serverId && share.serverId && sv.serverId.toLowerCase() === share.serverId.toLowerCase()) ||
                     (sv.serverName && share.serverName && sv.serverName.toLowerCase() === share.serverName.toLowerCase()) ||
-                    (sv.serverName && share.serverId && sv.serverName.toLowerCase() === share.serverId.toLowerCase())
+                    (sv.serverName && share.serverId && sv.serverName.toLowerCase() === share.serverId.toLowerCase()) ||
+                    (sv.serverId && share.serverName && sv.serverId.toLowerCase() === share.serverName.toLowerCase())
                 ) || (serversWithSections.length === 1 ? serversWithSections[0] : null);
 
                 if (srv) {
@@ -12551,7 +12586,12 @@ export async function syncPlexFriendsInternal() {
                         }
                     } else {
                         for (const secId of (share.librarySectionIds || [])) {
-                            const sec = (srv.sections || []).find((s: any) => s.id === secId || (s.key && String(s.key) === String(secId)));
+                            const sec = (srv.sections || []).find((s: any) => 
+                                s.id === secId || 
+                                (s.key && String(s.key) === String(secId)) ||
+                                (s.key && parseInt(s.key, 10) === secId) ||
+                                String(s.id) === String(secId)
+                            );
                             if (sec) {
                                 liveKeys.push(`${srv.serverId}:${sec.id}`);
                             } else {
@@ -12572,6 +12612,7 @@ export async function syncPlexFriendsInternal() {
         for (const friend of friendsList) {
             const fEmail = (friend.email || "").toLowerCase().trim();
             const fUsername = (friend.username || (fEmail ? fEmail.split('@')[0] : "")).trim();
+            const fTitle = (friend.title || "").trim();
 
             if (!fEmail && !fUsername) continue;
 
@@ -12582,41 +12623,63 @@ export async function syncPlexFriendsInternal() {
             const userLibraryKeys = extractUserLiveLibraryKeys(friend);
             const userLibraryKeyStr = userLibraryKeys.join(",");
 
-            // Match existing user by email, username, plexEmail, or plexUsername
+            // Match existing user by email, username, name, plexEmail, or plexUsername
             const cleanAlnum = (str?: string | null) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
             const fEmailAlnum = cleanAlnum(fEmail);
             const fUserAlnum = cleanAlnum(fUsername);
+            const fTitleAlnum = cleanAlnum(fTitle);
 
             let existingUser = dbUsers.find(u => {
                 const uEmail = (u.email || "").toLowerCase().trim();
                 const uUser = (u.username || "").toLowerCase().trim();
+                const uName = (u.name || "").toLowerCase().trim();
                 const uPlexEmail = (u.plexEmail || "").toLowerCase().trim();
                 const uPlexUser = (u.plexUsername || "").toLowerCase().trim();
 
                 const directMatch = (fEmail && (uEmail === fEmail || uPlexEmail === fEmail)) ||
                                     (fUsername && (uUser === fUsername.toLowerCase() || uPlexUser === fUsername.toLowerCase())) ||
                                     (fEmail && uUser === fEmail) ||
-                                    (fUsername && uEmail === fUsername.toLowerCase());
+                                    (fUsername && uEmail === fUsername.toLowerCase()) ||
+                                    (fTitle && uName && uName === fTitle.toLowerCase()) ||
+                                    (fTitle && uUser && uUser === fTitle.toLowerCase());
                 if (directMatch) return true;
 
-                // Alphanumeric fallback if length >= 3
+                // Alphanumeric matching
                 if (fUserAlnum && fUserAlnum.length >= 3) {
-                    if (cleanAlnum(uUser) === fUserAlnum || cleanAlnum(uPlexUser) === fUserAlnum) return true;
+                    if (cleanAlnum(uUser) === fUserAlnum || cleanAlnum(uPlexUser) === fUserAlnum || cleanAlnum(uName) === fUserAlnum) return true;
                 }
                 if (fEmailAlnum && fEmailAlnum.length >= 3) {
                     if (cleanAlnum(uEmail) === fEmailAlnum || cleanAlnum(uPlexEmail) === fEmailAlnum) return true;
+                }
+                if (fTitleAlnum && fTitleAlnum.length >= 3) {
+                    if (cleanAlnum(uName) === fTitleAlnum || cleanAlnum(uUser) === fTitleAlnum) return true;
+                }
+                // Prefix / Substring matching if length >= 5
+                if (fUserAlnum.length >= 5) {
+                    const uAlnum = cleanAlnum(uUser);
+                    const nAlnum = cleanAlnum(uName);
+                    if (uAlnum.length >= 5 && (uAlnum.startsWith(fUserAlnum) || fUserAlnum.startsWith(uAlnum))) return true;
+                    if (nAlnum.length >= 5 && (nAlnum.startsWith(fUserAlnum) || fUserAlnum.startsWith(nAlnum))) return true;
                 }
                 return false;
             });
 
             if (existingUser) {
-                // If user is suspended, expired, or rejected in Portalarr, make sure any shares on Plex are revoked
+                const isImmuneRole = existingUser.role === "ADMIN" || existingUser.role === "SUPER_USER";
                 const userMatchedShares = sharesList.filter(s => matchesPlexUser(existingUser, s));
-                if (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED") {
-                    if (userMatchedShares.length > 0) {
+
+                // If user is suspended, expired, or rejected in Portalarr, revoke Plex shares ONLY if auto-suspension is enabled and user is not Admin/SuperUser
+                if (!isImmuneRole && (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED")) {
+                    if (settings?.autoSuspendExpiredAccounts === true && userMatchedShares.length > 0) {
                         console.log(`[PLEX-SYNC] User "${existingUser.username}" is ${existingUser.status} but has ${userMatchedShares.length} active Plex shares. Revoking...`);
                         await revokePlexAccessForUserInternal(existingUser, `Account access is ${existingUser.status.toLowerCase()}.`);
                         revokedCount++;
+                    } else if (userLibraryKeyStr && existingUser.plexLibrarySectionIds !== userLibraryKeyStr) {
+                        // If auto-suspension is disabled, keep their live library section IDs accurate
+                        await prisma.user.update({
+                            where: { id: existingUser.id },
+                            data: { plexLibrarySectionIds: userLibraryKeyStr }
+                        }).catch(() => {});
                     }
                     continue;
                 }
@@ -12625,8 +12688,8 @@ export async function syncPlexFriendsInternal() {
                 let needsUpdate = false;
                 const updateData: any = {};
 
-                // Only promote PENDING users to APPROVED. Never un-suspend or un-expire or approve rejected!
-                if (existingUser.status === "PENDING" && existingUser.role !== "ADMIN") {
+                // Only promote PENDING users to APPROVED.
+                if (existingUser.status === "PENDING" && existingUser.role !== "ADMIN" && existingUser.role !== "SUPER_USER") {
                     updateData.status = "APPROVED";
                     needsUpdate = true;
                 }
@@ -12657,9 +12720,6 @@ export async function syncPlexFriendsInternal() {
 
                 // Update live scanned library access from Plex
                 if (
-                    existingUser.status !== "SUSPENDED" && 
-                    existingUser.status !== "EXPIRED" && 
-                    existingUser.status !== "REJECTED" &&
                     userLibraryKeyStr && 
                     existingUser.plexLibrarySectionIds !== userLibraryKeyStr
                 ) {
@@ -12716,7 +12776,8 @@ export async function syncPlexFriendsInternal() {
 
         // Secondary Pass: Scan actual live Plex library shares for all remaining DB users
         for (const u of dbUsers) {
-            if (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED") continue;
+            const isImmuneRole = u.role === "ADMIN" || u.role === "SUPER_USER";
+            if (!isImmuneRole && (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED") && settings?.autoSuspendExpiredAccounts === true) continue;
             const liveKeys = extractUserLiveLibraryKeys(u);
             const liveKeysStr = liveKeys.join(",");
             if (liveKeysStr && u.plexLibrarySectionIds !== liveKeysStr) {

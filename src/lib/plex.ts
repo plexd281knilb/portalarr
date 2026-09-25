@@ -874,10 +874,44 @@ export async function getPlexServerSections(
         return null;
     };
 
+    // Helper to enrich direct PMS sections with canonical Cloud IDs (> 1,000,000) from Plex Cloud map
+    const enrichWithCloudIds = async (secs: PlexLibrarySection[]): Promise<PlexLibrarySection[]> => {
+        if (!secs || secs.length === 0) return secs;
+        try {
+            const cloudMap = await getPlexCloudServersMap(adminToken).catch(() => new Map());
+            const cleanTarget = targetServerIdOrName.toLowerCase().trim();
+            const cloudSrv = cloudMap.get(targetServerIdOrName) || 
+                             Array.from(cloudMap.values()).find(c => 
+                                 c.serverId.toLowerCase() === cleanTarget || 
+                                 c.serverName.toLowerCase() === cleanTarget ||
+                                 c.serverId.toLowerCase().includes(cleanTarget) ||
+                                 cleanTarget.includes(c.serverId.toLowerCase())
+                             );
+            if (cloudSrv && cloudSrv.sections.length > 0) {
+                return secs.map(ds => {
+                    const matchedCloudSec = cloudSrv.sections.find((cs: PlexLibrarySection) => 
+                        (cs.key && ds.key && String(cs.key) === String(ds.key)) ||
+                        (cs.title && ds.title && cs.title.trim().toLowerCase() === ds.title.trim().toLowerCase()) ||
+                        (cs.id && ds.id && cs.id === ds.id)
+                    );
+                    if (matchedCloudSec && matchedCloudSec.id > 1000000) {
+                        return {
+                            ...ds,
+                            id: matchedCloudSec.id, // Canonical Cloud Section ID
+                            key: ds.key || String(matchedCloudSec.key)
+                        };
+                    }
+                    return ds;
+                });
+            }
+        } catch (e) {}
+        return secs;
+    };
+
     // 1. First probe the verified working resolved.serverUrl directly (takes <20ms)
     const directSections = await fetchSectionsFromUrl(resolved.serverUrl);
     if (directSections && directSections.length > 0) {
-        return directSections;
+        return await enrichWithCloudIds(directSections);
     }
 
     // 2. If primary resolved URL failed, probe remaining candidate URLs concurrently in parallel
@@ -888,7 +922,7 @@ export async function getPlexServerSections(
         );
         for (const r of results) {
             if (r.status === "fulfilled" && r.value && r.value.length > 0) {
-                return r.value;
+                return await enrichWithCloudIds(r.value);
             }
         }
     }
@@ -1526,8 +1560,8 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
 }
 
 export function matchesPlexUser(
-    target: { id?: number | string | null; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null },
-    share: PlexSharedServerItem | { user?: { id?: number | string; email?: string; username?: string; title?: string; thumb?: string }; invitedEmail?: string }
+    target: { id?: number | string | null; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null; name?: string | null; title?: string | null },
+    share: PlexSharedServerItem | { user?: { id?: number | string; email?: string; username?: string; title?: string; thumb?: string; name?: string }; invitedEmail?: string }
 ): boolean {
     // 0. Direct Plex user ID match if available
     if (target.id && share.user?.id && String(target.id) === String(share.user.id)) {
@@ -1541,7 +1575,9 @@ export function matchesPlexUser(
         target.plexEmail,
         target.email,
         target.plexUsername,
-        target.username
+        target.username,
+        target.name,
+        target.title
     ].map(clean).filter(Boolean);
 
     const targetPrefixes = targetCandidates
@@ -1553,7 +1589,8 @@ export function matchesPlexUser(
         share.user?.email,
         share.invitedEmail,
         share.user?.username,
-        share.user?.title
+        share.user?.title,
+        (share.user as any)?.name
     ].map(clean).filter(Boolean);
 
     const sharePrefixes = shareCandidates
@@ -1568,7 +1605,7 @@ export function matchesPlexUser(
         }
     }
 
-    // 2. Email prefix matches username
+    // 2. Email prefix matches username or title
     for (const tp of targetPrefixes) {
         for (const sc of shareCandidates) {
             if (tp === sc) return true;
@@ -1580,7 +1617,7 @@ export function matchesPlexUser(
         }
     }
 
-    // 3. Alphanumeric match (ignoring dots, underscores, dashes) if length >= 3
+    // 3. Alphanumeric match (ignoring dots, underscores, dashes, spaces) if length >= 3
     const targetAlnum = [...targetCandidates, ...targetPrefixes].map(alphanumeric).filter(s => s.length >= 3);
     const shareAlnum = [...shareCandidates, ...sharePrefixes].map(alphanumeric).filter(s => s.length >= 3);
 
@@ -1590,12 +1627,25 @@ export function matchesPlexUser(
         }
     }
 
+    // 4. Substring / Prefix match if length >= 5 (e.g. "trevscar" matching "trevorscarborough")
+    for (const ta of targetAlnum) {
+        if (ta.length >= 5) {
+            for (const sa of shareAlnum) {
+                if (sa.length >= 5) {
+                    if (ta.startsWith(sa) || sa.startsWith(ta) || ta.includes(sa) || sa.includes(ta)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
     return false;
 }
 
 export async function findPlexUserFriend(
     adminToken: string,
-    target: { id?: number | string | null; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null }
+    target: { id?: number | string | null; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null; name?: string | null; title?: string | null }
 ): Promise<PlexFriendItem | null> {
     if (!adminToken) return null;
     const friends = await getPlexServerFriends(adminToken);
@@ -1611,7 +1661,7 @@ export async function findPlexUserFriend(
                 id: friend.id ? Number(friend.id) : undefined, 
                 email: friend.email, 
                 username: friend.username, 
-                title: friend.username, 
+                title: friend.title || friend.username, 
                 thumb: friend.thumb 
             },
             invitedEmail: friend.email
@@ -1624,7 +1674,7 @@ export async function findPlexUserFriend(
 
 export async function getUserPlexSharedLibraries(
     adminToken: string, 
-    user: { email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null }
+    user: { id?: number | string | null; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null; name?: string | null; title?: string | null }
 ): Promise<{ matchedShares: PlexSharedServerItem[]; selectedKeys: string[]; hasPlexShare: boolean }> {
     if (!adminToken) return { matchedShares: [], selectedKeys: [], hasPlexShare: false };
 
@@ -1639,8 +1689,10 @@ export async function getUserPlexSharedLibraries(
     for (const share of matchedShares) {
         let srvId = share.serverId;
         let server = serversWithSections.find(srv => 
-            (srv.serverId && share.serverId && srv.serverId === share.serverId) ||
-            (srv.serverName && share.serverName && srv.serverName.toLowerCase() === share.serverName.toLowerCase())
+            (srv.serverId && share.serverId && srv.serverId.toLowerCase() === share.serverId.toLowerCase()) ||
+            (srv.serverName && share.serverName && srv.serverName.toLowerCase() === share.serverName.toLowerCase()) ||
+            (srv.serverName && share.serverId && srv.serverName.toLowerCase() === share.serverId.toLowerCase()) ||
+            (srv.serverId && share.serverName && srv.serverId.toLowerCase() === share.serverName.toLowerCase())
         );
 
         // Fall back to primary server if single server exists
@@ -1659,7 +1711,8 @@ export async function getUserPlexSharedLibraries(
                 // Explicitly shared library sections: match by cloud id OR pms key
                 for (const sec of server.sections) {
                     const isShared = share.librarySectionIds.includes(sec.id) || 
-                                     (sec.key && share.librarySectionIds.includes(parseInt(sec.key, 10)));
+                                     (sec.key && share.librarySectionIds.includes(parseInt(sec.key, 10))) ||
+                                     share.librarySectionIds.some(id => String(id) === String(sec.id) || (sec.key && String(id) === String(sec.key)));
                     if (isShared) {
                         selectedKeys.push(`${srvId}:${sec.id}`);
                     }
