@@ -11,7 +11,8 @@ import {
     manuallyAttributePaymentTransaction, 
     savePaymentEmailScraperConfig,
     deletePaymentTransactionAction,
-    purgeUnmatchedPaymentTransactionsAction 
+    purgeUnmatchedPaymentTransactionsAction,
+    reprocessPaymentTransactionsAction
 } from "@/app/payment-actions";
 import { getAppUsers } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -282,6 +283,23 @@ export default function PaymentEmailManager() {
             setTransactions(prev => prev.filter(t => t.id !== id));
         } else {
             alert(res.error || "Failed to delete transaction");
+        }
+    };
+
+    const [reprocessing, setReprocessing] = useState(false);
+    const [reprocessMsg, setReprocessMsg] = useState("");
+
+    const handleReprocessPayments = async () => {
+        setReprocessing(true);
+        setReprocessMsg("");
+        const res = await reprocessPaymentTransactionsAction();
+        setReprocessing(false);
+        if (res.success) {
+            setReprocessMsg(res.message || "Payments reprocessed successfully!");
+            loadData();
+            setTimeout(() => setReprocessMsg(""), 4000);
+        } else {
+            alert(res.error || "Failed to reprocess payments");
         }
     };
 
@@ -624,6 +642,17 @@ export default function PaymentEmailManager() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                            <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={handleReprocessPayments}
+                                disabled={reprocessing || transactions.length === 0}
+                                className="h-8 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5 font-semibold"
+                                title="Auto-match unmatched payments to members and re-align installment dates"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} /> 
+                                {reprocessing ? "Re-aligning..." : "Auto-Match & Re-align"}
+                            </Button>
                             {transactions.some(t => t.status === "UNMATCHED") && (
                                 <Button 
                                     size="sm" 
@@ -648,6 +677,12 @@ export default function PaymentEmailManager() {
                             </Select>
                         </div>
                     </div>
+                    {reprocessMsg && (
+                        <div className="mt-2 p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>{reprocessMsg}</span>
+                        </div>
+                    )}
                 </CardHeader>
 
                 <CardContent className="p-0">

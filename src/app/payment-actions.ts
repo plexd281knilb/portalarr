@@ -8,7 +8,8 @@ import { logger } from "@/lib/logger";
 import { 
     testPaymentEmailConnection, 
     scanPaymentEmailsInternal, 
-    applySubscriptionForPayment 
+    applySubscriptionForPayment,
+    matchPaymentToUser 
 } from "@/lib/payment-email-scraper";
 
 async function verifyAdmin() {
@@ -330,6 +331,86 @@ export async function manuallyAttributePaymentTransaction(transactionId: string,
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to attribute transaction." };
+    }
+}
+
+/**
+ * Auto-match unmatched payments and re-evaluate all payment subscriptions chronologically
+ */
+export async function reprocessPaymentTransactionsAction() {
+    try {
+        await verifyAdmin();
+        const allTransactions = await prisma.paymentTransaction.findMany({
+            orderBy: { emailDate: "asc" }
+        });
+
+        let matchedCount = 0;
+        let reevaluatedCount = 0;
+
+        for (const tx of allTransactions) {
+            const scrapedPayment = {
+                provider: tx.provider as any,
+                externalTxId: tx.externalTxId || undefined,
+                senderName: tx.senderName || undefined,
+                senderEmail: tx.senderEmail || undefined,
+                senderHandle: tx.senderHandle || undefined,
+                amount: tx.amount,
+                currency: tx.currency,
+                note: tx.note || undefined,
+                emailSubject: tx.emailSubject || "",
+                emailDate: tx.emailDate,
+                emailUid: tx.emailUid || ""
+            };
+
+            let targetUser = null;
+            if (tx.matchedUserId) {
+                targetUser = await prisma.user.findUnique({ where: { id: tx.matchedUserId } });
+            } else {
+                targetUser = await matchPaymentToUser(scrapedPayment);
+            }
+
+            if (targetUser) {
+                const { periodGrantedText } = await applySubscriptionForPayment(targetUser, scrapedPayment);
+
+                // Auto-fill real name if missing
+                if (!targetUser.name && tx.senderName && tx.senderName.trim()) {
+                    await prisma.user.update({
+                        where: { id: targetUser.id },
+                        data: { name: tx.senderName.trim() }
+                    }).catch(() => {});
+                }
+
+                await prisma.paymentTransaction.update({
+                    where: { id: tx.id },
+                    data: {
+                        matchedUserId: targetUser.id,
+                        status: tx.status === "MANUAL" ? "MANUAL" : "PROCESSED",
+                        appliedSubscription: true,
+                        subscriptionPeriodGranted: periodGrantedText
+                    }
+                });
+
+                if (!tx.matchedUserId) {
+                    matchedCount++;
+                } else {
+                    reevaluatedCount++;
+                }
+            }
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            message: `Successfully reprocessed payments: ${matchedCount} newly auto-matched, ${reevaluatedCount} existing re-aligned.`,
+            matchedCount,
+            reevaluatedCount,
+            totalTransactions: allTransactions.length
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to reprocess payment transactions." };
     }
 }
 

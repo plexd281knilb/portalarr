@@ -600,34 +600,31 @@ export function calculateAlignedExpiryDate(params: {
     // 1. Check if payment covers the Full Yearly rate (tolerance: >= yearlyPrice - 5)
     const isFullYearly = totalAmount >= Math.max(1, yearlyPrice - 5);
     
-    // 2. Check Prorated Rest-of-Year calculation
+    // 2. Check Mid-Year Prorated Rest-of-Year calculation (Jan-Sep only)
     const proratedInfo = getProratedRestOfYearAmount(paymentDate, monthlyPrice, yearlyPrice);
-    // If paid mid-year (Feb - Dec) and totalAmount >= (proratedInfo.amount - 5)
-    const isProratedRestOfYear = !isFullYearly && (totalAmount >= Math.max(1, proratedInfo.amount - 5));
+    // Mid-year proration applies if paid Jan-Sep (payMonth < 9) and total covers the rest of the year
+    const isProratedRestOfYear = !isFullYearly && (payMonth < 9) && (totalAmount >= Math.max(1, proratedInfo.amount - 5));
 
     let newExpiryDate: Date;
     let periodGrantedText = "";
     let isYearly = false;
     let monthsGranted = 1;
 
-    // Check if there is an active existing subscription as of paymentDate
-    const hasActiveSubscriptionAtPayment = existingExpiry && existingExpiry.getTime() > paymentDate.getTime();
-
     if (isFullYearly) {
         isYearly = true;
         const yearsCount = Math.max(1, Math.round(totalAmount / yearlyPrice));
         
-        if (hasActiveSubscriptionAtPayment && existingExpiry) {
-            // Extend existing subscription by yearsCount, anchored to Jan 1st
+        // Base target expiration year for this payment:
+        // - If paying in Q4 (Oct, Nov, Dec), it covers remainder of year + next full year (e.g. Dec 2025 + 1 yr = Jan 1, 2027)
+        // - If paying in Jan - Sep, it covers through Jan 1 of next year (e.g. Jan 2026 + 1 yr = Jan 1, 2027)
+        const baseTargetYear = (payMonth >= 9 ? payYear + 1 + (yearsCount - 1) + 1 : payYear + (yearsCount - 1) + 1);
+        
+        if (existingExpiry && existingExpiry.getTime() > paymentDate.getTime()) {
             const currentExpYear = existingExpiry.getFullYear();
-            const targetYear = currentExpYear + yearsCount;
+            const targetYear = Math.max(baseTargetYear, currentExpYear + (currentExpYear >= baseTargetYear ? yearsCount : 0));
             newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
         } else {
-            // New subscription:
-            // If paying in Q4 (Oct, Nov, Dec), covers remainder of current year + next full year -> Jan 1 of Y+2 (e.g. Dec 2025 -> Jan 1, 2027)
-            // If paying in Jan - Sep, covers through Jan 1 of next year -> Jan 1 of Y+1 (e.g. Jan 2026 -> Jan 1, 2027)
-            const targetYear = (payMonth >= 9 ? payYear + 1 + yearsCount : payYear + yearsCount);
-            newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
+            newExpiryDate = new Date(baseTargetYear, 0, 1, 23, 59, 59, 999);
         }
         periodGrantedText = `${yearsCount > 1 ? `${yearsCount} Years` : "1 Year"} (Active until Jan 1, ${newExpiryDate.getFullYear()})`;
     } else if (isProratedRestOfYear) {
@@ -636,25 +633,29 @@ export function calculateAlignedExpiryDate(params: {
         newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
         periodGrantedText = `Remainder of ${payYear} (Active until Jan 1, ${targetYear})`;
     } else {
-        // Monthly calculation with tolerance (e.g. $14+ counts for 1 month @ $15)
+        // Multi-Month / Monthly calculation with tolerance (e.g. $14+ counts for 1 month @ $15)
         monthsGranted = Math.max(1, Math.round(totalAmount / monthlyPrice));
         if (totalAmount < monthlyPrice && totalAmount >= (monthlyPrice - 1)) {
             monthsGranted = 1;
         }
 
-        if (hasActiveSubscriptionAtPayment && existingExpiry) {
-            // Add onto existing expiry, keeping 1st of month alignment
+        if (existingExpiry && existingExpiry.getTime() > paymentDate.getTime()) {
             newExpiryDate = new Date(existingExpiry);
             newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
             newExpiryDate.setDate(1);
             newExpiryDate.setHours(23, 59, 59, 999);
         } else {
-            // New monthly subscription starting from payment date:
-            // Aligned to 1st of the target month
-            newExpiryDate = new Date(paymentDate);
-            newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted + 1);
-            newExpiryDate.setDate(1);
-            newExpiryDate.setHours(23, 59, 59, 999);
+            // If paying in Q4 (e.g. Dec), 6 months ($90) grants through July 1st of next year!
+            if (payMonth >= 9) {
+                newExpiryDate = new Date(payYear + 1, 0, 1, 23, 59, 59, 999);
+                newExpiryDate.setMonth(newExpiryDate.getMonth() + (monthsGranted));
+                newExpiryDate.setDate(1);
+            } else {
+                newExpiryDate = new Date(paymentDate);
+                newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted + 1);
+                newExpiryDate.setDate(1);
+                newExpiryDate.setHours(23, 59, 59, 999);
+            }
         }
         periodGrantedText = `${monthsGranted} Month${monthsGranted > 1 ? "s" : ""} (Active until ${newExpiryDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })})`;
     }
@@ -810,8 +811,13 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
     const yearlyPrice = settings?.yearlyPrice || 180;
     const monthlyPrice = settings?.monthlyPrice || 15;
 
-    // Fetch prior payments for this user or sender within the current cycle / past 120 days
-    // to merge multi-part installment payments (e.g. $123.72 + $56.27 = $179.99, or $90 + $90 = $180)
+    const paymentDate = payment.emailDate ? new Date(payment.emailDate) : new Date();
+
+    // Fetch prior payments for this user or sender within the same installment window / cycle
+    // (e.g. +/- 90 days of paymentDate)
+    const windowStart = new Date(paymentDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const windowEnd = new Date(paymentDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+
     const recentPayments = await prisma.paymentTransaction.findMany({
         where: {
             OR: [
@@ -820,22 +826,22 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
                 ...(payment.senderEmail ? [{ senderEmail: { equals: payment.senderEmail } }] : [])
             ],
             emailDate: {
-                gte: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000)
+                gte: windowStart,
+                lte: windowEnd
             }
         }
     }).catch(() => [] as any[]);
 
     // Sum past payments in this cycle excluding the current transaction ID
-    const pastInstallmentsSum = recentPayments
-        .filter(p => p.externalTxId !== payment.externalTxId)
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
+    const pastInstallments = recentPayments.filter(p => p.externalTxId !== payment.externalTxId);
+    const pastInstallmentsSum = pastInstallments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     const totalCumulativeAmount = pastInstallmentsSum + payment.amount;
 
     const existingExpiry = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
 
     const { newExpiryDate, periodGrantedText } = calculateAlignedExpiryDate({
-        paymentDate: payment.emailDate || new Date(),
+        paymentDate,
         totalAmount: totalCumulativeAmount,
         yearlyPrice,
         monthlyPrice,
@@ -860,12 +866,12 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
     // Retroactively update earlier installment transactions in this cycle so they link to this user and note the merged fulfillment
     if (recentPayments.length > 0) {
         for (const p of recentPayments) {
-            if (p.externalTxId !== payment.externalTxId && (!p.matchedUserId || p.status === "UNMATCHED")) {
+            if (p.externalTxId !== payment.externalTxId) {
                 await prisma.paymentTransaction.update({
                     where: { id: p.id },
                     data: {
                         matchedUserId: user.id,
-                        status: "PROCESSED",
+                        status: p.status === "MANUAL" ? "MANUAL" : "PROCESSED",
                         appliedSubscription: true,
                         subscriptionPeriodGranted: `Merged with cumulative installment (${periodGrantedText})`
                     }
