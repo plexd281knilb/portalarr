@@ -238,9 +238,9 @@ export default function WhatsNewModal({
 
                     {/* Footer */}
                     <div className="p-4 sm:p-5 border-t border-border/40 bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <Button asChild variant="ghost" size="sm" className="text-xs text-purple-400 hover:text-purple-300 gap-1.5 order-2 sm:order-1">
-                            <Link href="/beta">
-                                <span>Explore Beta Services & Roadmap</span>
+                        <Button asChild variant="ghost" size="sm" className="text-xs text-sky-400 hover:text-sky-300 gap-1.5 order-2 sm:order-1">
+                            <Link href="/guides">
+                                <span>View Device Setup Guides</span>
                                 <ArrowRight className="h-3.5 w-3.5" />
                             </Link>
                         </Button>

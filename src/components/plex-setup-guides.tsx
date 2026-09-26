@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle } from "lucide-react";
+import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle, ExternalLink } from "lucide-react";
 import { getPlexSetupGuides } from "@/app/actions";
+import Link from "next/link";
 
 export default function PlexSetupGuides() {
     const [isOpen, setIsOpen] = useState(false);
@@ -122,7 +123,13 @@ export default function PlexSetupGuides() {
                     )}
                 </div>
 
-                <div className="p-4 border-t border-border/40 bg-muted/10 flex justify-end">
+                <div className="p-4 border-t border-border/40 bg-muted/10 flex items-center justify-between">
+                    <Button asChild variant="ghost" size="sm" className="text-xs text-sky-400 hover:text-sky-300 gap-1.5" onClick={() => setIsOpen(false)}>
+                        <Link href="/guides">
+                            <span>Open Full Guides Page</span>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                    </Button>
                     <Button onClick={() => setIsOpen(false)} size="sm" className="font-semibold text-xs px-5">
                         Got It
                     </Button>

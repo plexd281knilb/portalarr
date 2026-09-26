@@ -12781,6 +12781,18 @@ export async function getAdminDetailedStreamsAction() {
                     totalStreamCount += count;
                     const sessions = actResult.data.sessions || [];
                     for (const s of sessions) {
+                        let rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
+                        if (rawThumb && rawThumb.includes("pms_image_proxy")) {
+                            try {
+                                const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
+                                const nested = dummyUrl.searchParams.get("img") || dummyUrl.searchParams.get("url");
+                                if (nested) rawThumb = nested;
+                            } catch (e) {}
+                        }
+                        const thumbUrl = rawThumb
+                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(s.grandparent_title || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
+                            : null;
+
                         allSessions.push({
                             instanceId: t.id,
                             serverName: t.name,
@@ -12793,7 +12805,7 @@ export async function getAdminDetailedStreamsAction() {
                                 : (s.title || "Unknown Media"),
                             mediaType: s.media_type || (s.grandparent_title ? "episode" : "movie"),
                             year: s.year || "",
-                            thumb: s.thumb ? `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(s.thumb)}&width=300&height=450` : null,
+                            thumb: thumbUrl,
                             player: s.player || s.platform || "Plex Client",
                             device: s.device || s.platform || "",
                             ipAddress: s.ip_address || "",

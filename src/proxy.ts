@@ -91,7 +91,7 @@ export async function proxy(req: NextRequest) {
     }
 
     // 7. Strict route protection for TRIAL accounts
-    // Trial accounts have access to: /, /discover, /requests, /settings/profile (guides/password/my plex hub).
+    // Trial accounts have access to: /, /discover, /requests, /guides, /settings/profile (password/my plex hub).
     // They are strictly forbidden from /library (Book Library), /radarr, /sonarr, /beta, /curation, /admin.
     const isTrialUser = userStatus === "TRIAL" || payload.role === "TRIAL" || (payload as any).isTrial === true;
     if (isTrialUser) {

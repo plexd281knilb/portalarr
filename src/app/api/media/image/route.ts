@@ -102,10 +102,50 @@ export async function GET(req: NextRequest) {
             cleanImg = `/${cleanImg}`;
         }
 
+        // 2. Direct Tautulli Resolution (Fast-path if targetServerId matches a Tautulli instance)
+        const tautulliId = searchParams.get("instanceId") || targetServerId;
+        let tautulliInstance = null;
+        if (cleanImg && tautulliId && !tautulliId.startsWith("plex::")) {
+            tautulliInstance = await prisma.tautulliInstance.findUnique({
+                where: { id: tautulliId }
+            }).catch(() => null);
+        }
+        if (cleanImg && tautulliInstance) {
+            let cleanBase = tautulliInstance.url.trim().replace(/\/$/, "").replace(/\/api\/v2\/?$/, "");
+            if (!cleanBase.startsWith("http://") && !cleanBase.startsWith("https://")) {
+                cleanBase = `http://${cleanBase}`;
+            }
+            const apiKey = decryptData(tautulliInstance.apiKey);
+            if (apiKey) {
+                // Tautulli API v2 cmd=pms_image_proxy with dimensions
+                const apiV2Url = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(cleanImg)}&width=300&height=450&fallback=poster`;
+                const v2Res = await tryFetchImage(apiV2Url, {}, 3500);
+                if (v2Res) return v2Res;
+
+                // Tautulli API v2 raw
+                const apiV2UrlRaw = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(cleanImg)}`;
+                const v2RawRes = await tryFetchImage(apiV2UrlRaw, {}, 3000);
+                if (v2RawRes) return v2RawRes;
+
+                // Stripped timestamp variation
+                const strippedThumb = cleanImg.replace(/\/thumb\/[0-9]+$/, "/thumb");
+                if (strippedThumb !== cleanImg) {
+                    const fallbackTautulli = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(strippedThumb)}&width=300&height=450&fallback=poster`;
+                    const fbRes = await tryFetchImage(fallbackTautulli, {}, 2500);
+                    if (fbRes) return fbRes;
+                }
+
+                // Web UI proxy endpoint
+                const targetUrl = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(cleanImg)}&apikey=${encodeURIComponent(apiKey)}`;
+                const tautulliRes = await tryFetchImage(targetUrl, {}, 2000);
+                if (tautulliRes) return tautulliRes;
+            }
+        }
+
         const settings = (await prisma.settings.findFirst()) || (await prisma.settings.findUnique({ where: { id: "global" } }));
         const adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
 
-        // 2. Direct Plex Media Server image resolution using targetServerId or serverUrl
+        // 3. Direct Plex Media Server image resolution using targetServerId or serverUrl
         if (cleanImg && (targetServerId || serverUrl || adminToken)) {
             let candidateUrls: string[] = [];
             let candidateToken = adminToken;
@@ -132,7 +172,8 @@ export async function GET(req: NextRequest) {
                     }
                 }).catch(() => null);
                 if (manual) {
-                    const cleanUrl = manual.url.replace(/\/+$/, "");
+                    let cleanUrl = manual.url.replace(/\/+$/, "");
+                    if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) cleanUrl = `http://${cleanUrl}`;
                     candidateUrls.push(cleanUrl);
                     if (manual.token) {
                         const dec = decryptData(manual.token);
@@ -167,31 +208,26 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // 3. Try Tautulli instance proxy
-        let instance = null;
-        if (cleanImg && targetServerId && !targetServerId.startsWith("plex::")) {
-            instance = await prisma.tautulliInstance.findUnique({
-                where: { id: targetServerId }
-            }).catch(() => null);
-        }
-        if (cleanImg && !instance && !targetServerId.startsWith("plex::")) {
-            instance = await prisma.tautulliInstance.findFirst().catch(() => null);
+        // 4. Try any available Tautulli instance if still unresolved
+        let fallbackInstance = null;
+        if (cleanImg && !targetServerId.startsWith("plex::")) {
+            fallbackInstance = await prisma.tautulliInstance.findFirst().catch(() => null);
         }
 
-        if (cleanImg && instance) {
-            const cleanBase = instance.url.replace(/\/$/, "").replace(/\/api\/v2\/?$/, "");
-            const apiKey = decryptData(instance.apiKey);
+        if (cleanImg && fallbackInstance && fallbackInstance.id !== tautulliInstance?.id) {
+            let cleanBase = fallbackInstance.url.trim().replace(/\/$/, "").replace(/\/api\/v2\/?$/, "");
+            if (!cleanBase.startsWith("http://") && !cleanBase.startsWith("https://")) {
+                cleanBase = `http://${cleanBase}`;
+            }
+            const apiKey = decryptData(fallbackInstance.apiKey);
             if (apiKey) {
-                const targetUrl = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(cleanImg)}&apikey=${encodeURIComponent(apiKey)}`;
-                const tautulliRes = await tryFetchImage(targetUrl, {}, 3000);
-                if (tautulliRes) return tautulliRes;
+                const apiV2Url = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(cleanImg)}&width=300&height=450&fallback=poster`;
+                const v2Res = await tryFetchImage(apiV2Url, {}, 3500);
+                if (v2Res) return v2Res;
 
-                const strippedThumb = cleanImg.replace(/\/thumb\/[0-9]+$/, "/thumb");
-                if (strippedThumb !== cleanImg) {
-                    const fallbackTautulli = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(strippedThumb)}&apikey=${encodeURIComponent(apiKey)}`;
-                    const fbRes = await tryFetchImage(fallbackTautulli, {}, 2500);
-                    if (fbRes) return fbRes;
-                }
+                const targetUrl = `${cleanBase}/pms_image_proxy?img=${encodeURIComponent(cleanImg)}&apikey=${encodeURIComponent(apiKey)}`;
+                const tautulliRes = await tryFetchImage(targetUrl, {}, 2000);
+                if (tautulliRes) return tautulliRes;
             }
         }
 

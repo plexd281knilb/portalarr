@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { fetchPlexPosterBuffer, uploadPlexItemPoster, PlexMediaStreamInfo } from "./plex-analyzer";
+import { IMDB_TOP_250_MOVIES, IMDB_TOP_250_TV } from "./imdb-top250-data";
 
 export interface TieredRibbonItem {
     id?: string;
@@ -624,16 +625,56 @@ export function isRibbonTypeMatching(
 
     // 1. IMDb Top 250 (movies or TV)
     if (t === "imdb_top_250") {
+        // A. Explicit Plex collection or label tag
         const hasTop250 = mediaInfo.collections?.some(c => /top[\s_-]?250/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250/i.test(l));
-        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
         if (hasTop250) return true;
+
+        // B. Official Built-in IMDb Top 250 Movies Master Registry Match (IMDb ID, TMDb ID, or normalized Title + Year)
+        if (mediaInfo.type !== "show") {
+            const cleanImdb = mediaInfo.guids?.imdb ? mediaInfo.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+            const tmdbNum = mediaInfo.guids?.tmdb ? Number(mediaInfo.guids.tmdb) : null;
+            const normTitle = (mediaInfo.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+            const inRegistry = IMDB_TOP_250_MOVIES.some(m => {
+                if (cleanImdb && m.imdbId.toLowerCase() === cleanImdb) return true;
+                if (tmdbNum && m.tmdbId === tmdbNum) return true;
+                if (normTitle && m.year && mediaInfo.year && Math.abs(m.year - mediaInfo.year) <= 1) {
+                    const mNorm = m.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return normTitle === mNorm;
+                }
+                return false;
+            });
+            if (inRegistry) return true;
+        }
+
+        // C. Fallback: High IMDb score threshold (>= 8.3)
+        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
         if (mediaInfo.type !== "show" && score && score >= 8.3) return true;
         return false;
     }
     if (t === "imdb_top_250_tv") {
         const hasTop250 = mediaInfo.collections?.some(c => /top[\s_-]?250|top[\s_-]?tv/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250|top[\s_-]?tv/i.test(l));
-        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
         if (hasTop250) return true;
+
+        // Official Built-in IMDb Top 250 TV Master Registry Match
+        if (mediaInfo.type === "show") {
+            const cleanImdb = mediaInfo.guids?.imdb ? mediaInfo.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+            const tmdbNum = mediaInfo.guids?.tmdb ? Number(mediaInfo.guids.tmdb) : null;
+            const normTitle = (mediaInfo.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+            const inRegistry = IMDB_TOP_250_TV.some(s => {
+                if (cleanImdb && s.imdbId.toLowerCase() === cleanImdb) return true;
+                if (tmdbNum && s.tmdbId === tmdbNum) return true;
+                if (normTitle && s.year && mediaInfo.year && Math.abs(s.year - mediaInfo.year) <= 1) {
+                    const sNorm = s.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return normTitle === sNorm;
+                }
+                return false;
+            });
+            if (inRegistry) return true;
+        }
+
+        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
         if (mediaInfo.type === "show" && score && score >= 8.5) return true;
         return false;
     }

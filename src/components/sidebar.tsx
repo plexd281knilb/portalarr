@@ -128,29 +128,14 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Link>
             )}
 
-            {!isTrial && (
-              <Link href="/beta">
-                <Button
-                  variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                    pathname.startsWith("/beta")
-                      ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
-                  )}
-                >
-                  <Terminal className="mr-2 h-4 w-4 text-purple-400" />
-                  Beta Portal
-                </Button>
-              </Link>
-            )}
-
-            <Link href="/settings/profile#guides">
+            <Link href="/guides">
               <Button
-                variant={pathname === "/settings/profile" && typeof window !== "undefined" && window.location.hash === "#guides" ? "secondary" : "ghost"}
+                variant={pathname.startsWith("/guides") ? "secondary" : "ghost"}
                 className={cn(
                   "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
+                  pathname.startsWith("/guides")
+                    ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(56,189,248,0.2)] ring-1 ring-sky-500/40 font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
                 )}
               >
                 <HelpCircle className="mr-2 h-4 w-4 text-sky-400" />
@@ -453,28 +438,14 @@ export function MobileSidebar() {
                     </Link>
                   )}
 
-                  {!isTrial && (
-                    <Link href="/beta" onClick={() => setIsOpen(false)}>
-                      <Button
-                        variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
-                        className={cn(
-                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                          pathname.startsWith("/beta")
-                            ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
-                        )}
-                      >
-                        <Terminal className="mr-2 h-4 w-4 text-purple-400" /> Beta Portal
-                      </Button>
-                    </Link>
-                  )}
-
-                  <Link href="/settings/profile#guides" onClick={() => setIsOpen(false)}>
+                  <Link href="/guides" onClick={() => setIsOpen(false)}>
                     <Button
-                      variant={pathname === "/settings/profile" && typeof window !== "undefined" && window.location.hash === "#guides" ? "secondary" : "ghost"}
+                      variant={pathname.startsWith("/guides") ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
+                        pathname.startsWith("/guides")
+                          ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(56,189,248,0.2)] ring-1 ring-sky-500/40 font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
                       )}
                     >
                       <HelpCircle className="mr-2 h-4 w-4 text-sky-400" /> Setup Guides

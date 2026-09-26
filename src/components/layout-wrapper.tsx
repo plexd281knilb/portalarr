@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebar } from "@/components/sidebar";
-import { LogOut, LogIn, Settings, LayoutDashboard, Server, BookOpen, User } from "lucide-react";
+import { LogOut, LogIn, Settings, LayoutDashboard, Server, BookOpen, User, HelpCircle } from "lucide-react";
 import { logout, getSession } from "@/app/auth-actions";
 import { checkUserLibraryAccess } from "@/app/actions";
 import { useState, useEffect, Suspense } from "react";
@@ -63,6 +63,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     if (pathname.startsWith("/settings/profile")) return "Account Settings";
     if (pathname.startsWith("/settings/access")) return "Access Control";
     if (pathname.startsWith("/settings")) return "System Settings";
+    if (pathname.startsWith("/guides")) return "Setup Guides";
     if (pathname.startsWith("/beta")) return "Beta Portal";
     return "Portalarr";
   };
@@ -91,21 +92,12 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                         </Button>
                     )}
 
-                    {pathname === "/beta" ? (
-                        <Button asChild variant="ghost" size="sm" className="flex gap-2 hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
-                            <Link href="/" title="Dashboard">
-                                <LayoutDashboard className="h-4 w-4 shrink-0" /> 
-                                <span className="hidden sm:inline font-semibold">Dashboard</span>
-                            </Link>
-                        </Button>
-                    ) : (
-                        <Button asChild variant="ghost" size="sm" className="flex gap-2 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
-                            <Link href="/beta" title="Beta Portal">
-                                <LayoutDashboard className="h-4 w-4 shrink-0" /> 
-                                <span className="hidden md:inline font-semibold">Beta</span>
-                            </Link>
-                        </Button>
-                    )}
+                    <Button asChild variant="ghost" size="sm" className={`flex gap-2 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${pathname.startsWith("/guides") ? "bg-sky-500/15 ring-1 ring-sky-500/40 font-bold" : ""}`}>
+                        <Link href="/guides" title="Plex Device Setup Guides">
+                            <HelpCircle className="h-4 w-4 shrink-0" /> 
+                            <span className="hidden md:inline font-semibold">Guides</span>
+                        </Link>
+                    </Button>
 
                     {/* Account Settings Button */}
                     <Button asChild variant="ghost" size="sm" className="flex gap-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">

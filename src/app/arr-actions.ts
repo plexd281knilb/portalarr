@@ -115,11 +115,11 @@ export async function getArrProfilesAndFolders(appId: string, type?: "radarr" | 
             arrApiGet(decryptedApp, "/api/v3/rootfolder")
         ]);
 
-        const profiles: Array<{ id: number; name: string }> = Array.isArray(profilesRes.data)
+        let profiles: Array<{ id: number; name: string }> = Array.isArray(profilesRes.data)
             ? profilesRes.data.map((p: any) => ({ id: p.id, name: p.name }))
             : [];
 
-        const folders: Array<{ id: number; path: string; freeSpace?: number; freeSpaceFormatted?: string }> = Array.isArray(foldersRes.data)
+        let folders: Array<{ id: number; path: string; freeSpace?: number; freeSpaceFormatted?: string }> = Array.isArray(foldersRes.data)
             ? foldersRes.data.map((f: any) => {
                 let freeFormatted: string | undefined;
                 if (typeof f.freeSpace === "number" && f.freeSpace > 0) {
@@ -134,6 +134,37 @@ export async function getArrProfilesAndFolders(appId: string, type?: "radarr" | 
                 };
             })
             : [];
+
+        // Apply Allowed Quality Profile ID restrictions
+        if (app.allowedQualityProfileIds) {
+            const allowedIds = app.allowedQualityProfileIds
+                .split(",")
+                .map(s => s.trim())
+                .filter(Boolean);
+            if (allowedIds.length > 0) {
+                const filtered = profiles.filter(p => allowedIds.includes(String(p.id)));
+                if (filtered.length > 0) {
+                    profiles = filtered;
+                }
+            }
+        }
+
+        // Apply Allowed Root Folder ID restrictions
+        if (app.allowedRootFolderIds) {
+            const allowedIds = app.allowedRootFolderIds
+                .split(",")
+                .map(s => s.trim())
+                .filter(Boolean);
+            if (allowedIds.length > 0) {
+                const filtered = folders.filter(f => 
+                    allowedIds.includes(String(f.id)) || 
+                    allowedIds.some(af => f.path.toLowerCase().includes(af.toLowerCase()))
+                );
+                if (filtered.length > 0) {
+                    folders = filtered;
+                }
+            }
+        }
 
         return {
             success: true,

@@ -183,17 +183,18 @@ export default function AdminDetailedStreams() {
                                     {/* Left: Poster + User & Media Info */}
                                     <div className="flex items-start gap-3 flex-1 min-w-0">
                                         <div className="relative w-12 h-16 sm:w-14 sm:h-20 rounded-lg overflow-hidden shrink-0 bg-muted/30 border border-white/10 flex items-center justify-center">
-                                            {stream.thumb ? (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
+                                                <Film className="h-5 w-5 text-muted-foreground/30" />
+                                            </div>
+                                            {stream.thumb && (
                                                 <img 
                                                     src={stream.thumb} 
                                                     alt={stream.title} 
-                                                    className="w-full h-full object-cover"
+                                                    className="w-full h-full object-cover relative z-10"
                                                     onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
                                                 />
-                                            ) : (
-                                                <Film className="h-5 w-5 text-muted-foreground/50" />
                                             )}
-                                            <div className="absolute bottom-1 right-1 p-0.5 rounded-full bg-black/80">
+                                            <div className="absolute bottom-1 right-1 p-0.5 rounded-full bg-black/80 z-20">
                                                 {stream.state === "playing" ? (
                                                     <Play className="h-2.5 w-2.5 text-emerald-400 fill-emerald-400" />
                                                 ) : (
