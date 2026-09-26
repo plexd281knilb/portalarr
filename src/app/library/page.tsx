@@ -2532,7 +2532,7 @@ function BookLibraryPageContent() {
           >
             <Link href={activeTab === "audiobooks" ? "/discover?tab=audiobooks" : "/discover?tab=ebooks"}>
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Discover &amp; Request</span>
+              <span>Media Requests</span>
             </Link>
           </Button>
           <Button

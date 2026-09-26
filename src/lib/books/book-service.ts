@@ -512,26 +512,43 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
 
     await Promise.all(fetchTasks);
 
-    // Relevance scoring
+    // Relevance & popularity scoring
     const queryTokens = cleanQuery.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+    const cleanQ = cleanQuery.toLowerCase().replace(/[^a-z0-9]/g, "");
+
     results.sort((a, b) => {
         const aTitleLower = a.title.toLowerCase();
         const aAuthorLower = a.author.toLowerCase();
         const bTitleLower = b.title.toLowerCase();
         const bAuthorLower = b.author.toLowerCase();
 
+        const aCleanTitle = aTitleLower.replace(/[^a-z0-9]/g, "");
+        const bCleanTitle = bTitleLower.replace(/[^a-z0-9]/g, "");
+
         let aScore = 0;
         let bScore = 0;
 
+        // Exact & prefix title matching
+        if (aCleanTitle === cleanQ) aScore += 250;
+        else if (aCleanTitle.startsWith(cleanQ)) aScore += 120;
+
+        if (bCleanTitle === cleanQ) bScore += 250;
+        else if (bCleanTitle.startsWith(cleanQ)) bScore += 120;
+
+        // Token coverage
         for (const token of queryTokens) {
-            if (aTitleLower.includes(token)) aScore += 20;
+            if (aTitleLower.includes(token)) aScore += 25;
             if (aAuthorLower.includes(token)) aScore += 15;
-            if (bTitleLower.includes(token)) bScore += 20;
+            if (bTitleLower.includes(token)) bScore += 25;
             if (bAuthorLower.includes(token)) bScore += 15;
         }
 
-        if (a.coverUrl) aScore += 10;
-        if (b.coverUrl) bScore += 10;
+        // Quality, rating, and cover boost
+        if (a.coverUrl) aScore += 20;
+        if (b.coverUrl) bScore += 20;
+
+        if (a.rating) aScore += Math.round(Number(a.rating) * 10);
+        if (b.rating) bScore += Math.round(Number(b.rating) * 10);
 
         return bScore - aScore;
     });

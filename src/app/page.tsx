@@ -151,7 +151,7 @@ export default async function UserLandingPage() {
             <Card className="h-full flex flex-col border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                        <Compass className="h-5 w-5 text-primary"/> Discover & Requests
+                        <Compass className="h-5 w-5 text-primary"/> Media Requests
                     </CardTitle>
                     <CardDescription>Browse trending titles, watch trailers & request media.</CardDescription>
                 </CardHeader>
@@ -159,7 +159,7 @@ export default async function UserLandingPage() {
                     <Button asChild size="lg" className="w-full text-sm sm:text-base font-bold h-12 sm:h-13 shadow-md transition-all duration-200 bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 hover:ring-2 hover:ring-primary/50 hover:shadow-lg active:scale-98 rounded-xl">
                         <Link href="/discover" className="w-full flex items-center justify-center gap-2">
                             <Compass className="h-5 w-5" />
-                            Discover Movies & TV
+                            Media Requests
                         </Link>
                     </Button>
 

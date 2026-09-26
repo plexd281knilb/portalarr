@@ -32,7 +32,7 @@ export default async function DiscoverPage(props: {
                         </div>
                         <div>
                             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
-                                Discover & Media Requests
+                                Media Requests
                             </h1>
                             <p className="text-xs sm:text-sm text-muted-foreground">
                                 Browse trending movies, popular TV shows, bestselling books, audiobooks, and request media with 1-click automatic download.
@@ -41,7 +41,7 @@ export default async function DiscoverPage(props: {
                     </div>
                 </section>
 
-                {/* All-in-one Discover & Request Hub */}
+                {/* All-in-one Media Requests Hub */}
                 <Suspense fallback={
                     <div className="p-16 text-center space-y-3">
                         <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />

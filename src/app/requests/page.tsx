@@ -19,7 +19,7 @@ export default async function RequestsPage() {
                         </div>
                         <div>
                             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
-                                Media Requests & Dispatch
+                                Media Requests
                             </h1>
                             <p className="text-xs sm:text-sm text-muted-foreground">
                                 Track the real-time download and library availability status of your requested movies and TV series.

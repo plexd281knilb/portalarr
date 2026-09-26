@@ -232,14 +232,23 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     </div>
 
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                        <div className="relative flex-1 sm:w-56">
+                        <div className="relative flex-1 sm:w-64 w-full">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <Input
                                 placeholder="Search requests..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="h-8 pl-8 text-xs bg-background/50 rounded-lg border-border/50"
+                                className="h-9 sm:h-8 pl-8 pr-7 text-xs bg-background/50 rounded-lg border-border/50 w-full"
                             />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm("")}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-0.5"
+                                    aria-label="Clear search"
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
                         <Button
                             size="sm"
@@ -308,7 +317,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     <Film className="h-8 w-8 mx-auto text-muted-foreground opacity-40" />
                     <h3 className="text-sm font-bold text-foreground">No Requests Found</h3>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                        There are currently no media requests matching your selected filters. Browse the discover catalog to request new titles!
+                        There are currently no media requests matching your selected filters. Browse the media catalog to request new titles!
                     </p>
                 </div>
             ) : (

@@ -15,6 +15,7 @@ import {
     getDisneyTrending,
     getNetflixTrending,
     searchTmdbMulti,
+    rankMediaByDownloadLikelihood,
     getTmdbMovieDetailsFull,
     getTmdbTvDetailsFull,
     getTmdbTvSeasonDetails,
@@ -261,6 +262,7 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
         if (isKids) {
             items = filterKidsSafeMedia(items);
         }
+        items = rankMediaByDownloadLikelihood(items, cleanQuery);
         const availabilityMap = await batchCheckMediaAvailability(items, Boolean(isKids));
 
         return {

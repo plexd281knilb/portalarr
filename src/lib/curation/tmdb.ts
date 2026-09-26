@@ -408,7 +408,8 @@ export async function searchTmdbMovie(title: string, year?: number): Promise<Tmd
         const data = await tmdbFetch("/search/movie", params);
         const mapped = (data?.results || []).map(mapTmdbMovie);
         const enriched = await enrichItemsWithCertifications(mapped);
-        return filterAllowedMedia(enriched);
+        const allowed = filterAllowedMedia(enriched);
+        return rankMediaByDownloadLikelihood(allowed, title);
     } catch {
         return [];
     }
@@ -424,7 +425,8 @@ export async function searchTmdbTv(title: string, year?: number): Promise<TmdbMe
         const data = await tmdbFetch("/search/tv", params);
         const mapped = (data?.results || []).map(mapTmdbTv);
         const enriched = await enrichItemsWithCertifications(mapped);
-        return filterAllowedMedia(enriched);
+        const allowed = filterAllowedMedia(enriched);
+        return rankMediaByDownloadLikelihood(allowed, title);
     } catch {
         return [];
     }
@@ -621,6 +623,91 @@ export async function getTmdbVideos(tmdbId: number, mediaType: "movie" | "tv" = 
 }
 
 /**
+ * Ranks search results by likelihood of being wanted/downloaded:
+ * Combines exact query relevance, release year matching, vote count weight,
+ * and TMDb popularity score. Highly popular blockbusters (e.g. 2007 "P.S. I Love You"
+ * with thousands of votes) strongly rank above obscure 1-2 vote releases (e.g. 1981).
+ */
+export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: string): TmdbMediaItem[] {
+    if (!items || items.length <= 1) return items;
+
+    const rawQuery = (query || "").trim().toLowerCase();
+    const cleanQuery = rawQuery.replace(/[^a-z0-9]/g, "");
+    const queryWords = rawQuery.split(/[\s\-_.:,]+/).filter(w => w.length > 0);
+    
+    // Check if query explicitly contains a 4-digit release year (e.g. "ps i love you 1981")
+    const yearMatch = rawQuery.match(/\b(19\d\d|20\d\d)\b/);
+    const targetYear = yearMatch ? yearMatch[1] : null;
+
+    const scored = items.map(item => {
+        let score = 0;
+
+        const title = (item.title || "").trim().toLowerCase();
+        const origTitle = (item.originalTitle || "").trim().toLowerCase();
+        const cleanTitle = title.replace(/[^a-z0-9]/g, "");
+        const cleanOrig = origTitle.replace(/[^a-z0-9]/g, "");
+        const itemYear = item.releaseDate ? item.releaseDate.split("-")[0] : "";
+
+        // 1. Explicit Year Matching (if user explicitly included a year in search query)
+        if (targetYear && itemYear === targetYear) {
+            score += 1500;
+        }
+
+        // 2. Exact Title Match
+        if (cleanTitle === cleanQuery || cleanOrig === cleanQuery) {
+            score += 1000;
+        } else if (cleanTitle.startsWith(cleanQuery) || cleanOrig.startsWith(cleanQuery)) {
+            score += 400;
+        } else if (cleanTitle.includes(cleanQuery) || cleanOrig.includes(cleanQuery)) {
+            score += 200;
+        }
+
+        // 3. Query word coverage in title
+        if (queryWords.length > 0) {
+            const matchedWords = queryWords.filter(w => title.includes(w) || origTitle.includes(w));
+            score += (matchedWords.length / queryWords.length) * 150;
+        }
+
+        // 4. Popularity & Vote Count Weight (Crucial for ranking blockbusters above obscure releases)
+        // Logarithmic vote count provides exponential separation:
+        // 0 votes -> 0
+        // 2 votes -> ~9 pts
+        // 10 votes -> ~30 pts
+        // 100 votes -> ~60 pts
+        // 1,000 votes -> ~90 pts
+        // 3,500 votes (e.g. 2007 P.S. I Love You) -> ~106 pts
+        // 10,000+ votes -> ~120+ pts
+        const voteCount = Math.max(0, Number(item.voteCount) || 0);
+        const voteScore = Math.log10(voteCount + 1) * 30;
+
+        // TMDb popularity scaled (0 to ~200)
+        const pop = Math.max(0, Number(item.popularity) || 0);
+        const popScore = Math.min(200, pop * 2);
+
+        score += voteScore + popScore;
+
+        // 5. Quality & Completeness Adjustments
+        // Missing poster penalty (obscure/unreleased database entries)
+        if (!item.posterPath) {
+            score -= 200;
+        }
+        // Zero votes penalty
+        if (voteCount === 0) {
+            score -= 50;
+        }
+        // Missing release date penalty
+        if (!item.releaseDate) {
+            score -= 30;
+        }
+
+        return { item, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.map(s => s.item);
+}
+
+/**
  * Multi-Search across Movies, TV Shows, and People
  */
 export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMediaItem[]> {
@@ -649,7 +736,8 @@ export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMedi
         }
         // Enrich search items with certification ratings in parallel
         const enriched = await enrichItemsWithCertifications(items);
-        return filterAllowedMedia(enriched);
+        const allowed = filterAllowedMedia(enriched);
+        return rankMediaByDownloadLikelihood(allowed, query);
     } catch {
         return [];
     }

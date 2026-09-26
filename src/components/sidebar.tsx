@@ -96,7 +96,7 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 )}
               >
                 <Compass className="mr-2 h-4 w-4 text-primary" />
-                Discover & Requests
+                Media Requests
               </Button>
             </Link>
 
@@ -393,7 +393,7 @@ export function MobileSidebar() {
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
                       )}
                     >
-                      <Compass className="mr-2 h-4 w-4 text-primary" /> Discover & Requests
+                      <Compass className="mr-2 h-4 w-4 text-primary" /> Media Requests
                     </Button>
                   </Link>
 

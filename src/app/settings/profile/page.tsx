@@ -638,7 +638,7 @@ export default function UserProfilePage() {
         );
     }
 
-    const isTrial = user?.status === "TRIAL";
+    const isTrial = user?.status === "TRIAL" || user?.membershipTier === "TRIAL";
     const daysLeft = isTrial && user?.trialEndsAt ? Math.max(0, differenceInDays(new Date(user.trialEndsAt), new Date())) : null;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const inviteUrl = referralInfo?.inviteUrl || (referralInfo?.referralCode ? (paymentConfig?.appUrl ? `${paymentConfig.appUrl}/join?ref=${referralInfo.referralCode}` : `${origin}/join?ref=${referralInfo.referralCode}`) : "");
@@ -648,15 +648,9 @@ export default function UserProfilePage() {
     const hasAtSymbol = cleanKindleInput.includes("@");
     const hasChangedKindle = (user?.kindleEmail || "").trim().toLowerCase() !== cleanKindleInput;
 
-    const currentTier = user?.membershipTier || "STANDARD";
     const currentAccountType = user?.accountType || "STANDARD";
-    const isTier2 = currentTier === "TIER_2_VIP";
-    const effectiveYearlyPrice = isTier2 
-        ? (paymentConfig?.tier2YearlyPrice ?? 240) 
-        : (paymentConfig?.yearlyPrice ?? 180);
-    const effectiveMonthlyPrice = isTier2
-        ? (paymentConfig?.tier2MonthlyPrice ?? 25)
-        : (paymentConfig?.monthlyPrice ?? 15);
+    const effectiveYearlyPrice = paymentConfig?.yearlyPrice ?? 180;
+    const effectiveMonthlyPrice = paymentConfig?.monthlyPrice ?? 15;
 
     return (
         <div className="space-y-4 sm:space-y-6 max-w-5xl 2xl:max-w-6xl 3xl:max-w-7xl mx-auto p-3 sm:p-6 w-full min-w-0 animate-in fade-in duration-500">
@@ -666,7 +660,7 @@ export default function UserProfilePage() {
                         <User className="h-6 w-6 text-primary shrink-0" /> Account Profile & Settings
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        Manage your account credentials, notifications, membership tier, content safety, and Send-to-Kindle delivery.
+                        Manage your account credentials, notifications, account status, content safety, and Send-to-Kindle delivery.
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto">
@@ -756,28 +750,26 @@ export default function UserProfilePage() {
                 </CardContent>
             </Card>
 
-            {/* MEMBERSHIP TIER & PERKS CARD */}
+            {/* ACCOUNT STATUS & ACCESS CARD */}
             <Card className="border-indigo-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Crown className="h-5 w-5 text-indigo-400" /> Membership Tier & Service Access
+                                <Crown className="h-5 w-5 text-indigo-400" /> Account Status & Access Level
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Your current plan tier determines your support level, media requests, and library access.
+                                Your account status determines your support level, media requests, and library access.
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
                             <Badge variant="outline" className={`text-xs font-bold ${
-                                currentTier === "TIER_2_VIP" 
+                                isTrial 
                                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
-                                    : currentTier === "TRIAL"
-                                    ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
                                     : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                             }`}>
-                                {currentTier === "TIER_2_VIP" ? "🛡️ Tier 2: Managed Support" : currentTier === "TRIAL" ? "⏱️ Trial Pass" : "⭐ Tier 1: Regular Member"}
+                                {isTrial ? "⏱️ Trial User" : "⭐ Full User"}
                             </Badge>
                             {currentAccountType !== "STANDARD" && (
                                 <Badge variant="outline" className="text-xs font-medium bg-muted/40 border-border">
@@ -790,13 +782,13 @@ export default function UserProfilePage() {
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Plan Tier</span>
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Account Status</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <ShieldCheck className="h-4 w-4 text-cyan-400" />
-                                {currentTier === "TIER_2_VIP" ? "Tier 2 (Managed)" : currentTier === "TRIAL" ? "Trial Pass" : "Tier 1 (Regular)"}
+                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : "text-emerald-400"}`} />
+                                {isTrial ? "Trial User" : "Full User"}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                                {currentTier === "TIER_2_VIP" ? "Dedicated setup & support." : "Standard self-service access."}
+                                {isTrial ? "Temporary trial access pass." : "Full active membership."}
                             </p>
                         </div>
 
@@ -804,7 +796,7 @@ export default function UserProfilePage() {
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Media Quotas</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
                                 <Sparkles className="h-4 w-4 text-amber-400" />
-                                {currentTier === "TIER_2_VIP" ? "Priority Managed Quotas" : "Standard Library Quotas"}
+                                {isTrial ? "Trial Requests Active" : "Full Library Quotas"}
                             </p>
                             <p className="text-[10px] text-muted-foreground">Movie, TV show & book requests.</p>
                         </div>
@@ -819,29 +811,29 @@ export default function UserProfilePage() {
                         </div>
                     </div>
 
-                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/40">
-                        <p className="text-xs text-muted-foreground">
-                            Looking for dedicated onboarding, managed support, or personalized device assistance?
-                        </p>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                                setUpgradeModalOpen(true);
-                                setUpgradeSuccessMsg("");
-                                setUpgradeErrMsg("");
-                            }}
-                            className="w-full sm:w-auto text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 shrink-0 transition-all hover:ring-2 hover:ring-indigo-400/40 active:scale-95"
-                        >
-                            <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Request Tier Upgrade
-                        </Button>
-                    </div>
+                    {isTrial && (
+                        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/40">
+                            <p className="text-xs text-muted-foreground">
+                                Ready to activate full permanent membership? Annual and monthly billing options are available below.
+                            </p>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
+                                }}
+                                className="w-full sm:w-auto text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5 shrink-0 transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95"
+                            >
+                                <CreditCard className="h-3.5 w-3.5 text-emerald-400" /> View Subscription Options
+                            </Button>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
             {/* SUBSCRIPTION & RENEWAL CARD */}
-            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+            <Card id="billing" className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
@@ -1254,7 +1246,7 @@ export default function UserProfilePage() {
                             </CardDescription>
                         </div>
                         <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
-                            {userEnabledAddons.length} Enabled
+                            {userEnabledAddons.filter((id) => addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").some((a) => a.id === id)).length} of {addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").length} Enabled
                         </Badge>
                     </div>
                 </CardHeader>
@@ -1273,111 +1265,95 @@ export default function UserProfilePage() {
                     )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        {addonsCatalog.map((addon) => {
-                            const isEnabled = userEnabledAddons.includes(addon.id);
-                            const isToggling = togglingAddonId === addon.id;
-                            const isFree = addon.isFree || addon.price === 0;
-                            const isAvailable = addon.isAvailable !== false;
+                        {addonsCatalog
+                            .filter((addon) => addon.isAvailable !== false && !addon.comingSoon && addon.status !== "coming_soon")
+                            .map((addon) => {
+                                const isEnabled = userEnabledAddons.includes(addon.id);
+                                const isToggling = togglingAddonId === addon.id;
+                                const isFree = addon.isFree || addon.price === 0;
 
-                            return (
-                                <div 
-                                    key={addon.id}
-                                    className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
-                                        !isAvailable 
-                                            ? "bg-muted/10 border-border/30 opacity-75"
-                                            : isEnabled 
+                                return (
+                                    <div 
+                                        key={addon.id}
+                                        className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
+                                            isEnabled 
                                                 ? "bg-amber-500/[0.06] border-amber-500/40" 
                                                 : "bg-white/[0.02] border-white/[0.06]"
-                                    }`}
-                                >
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                {addon.icon === "tv" ? (
-                                                    <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
-                                                ) : addon.icon === "music" ? (
-                                                    <Music className="h-4 w-4 text-emerald-400 shrink-0" />
-                                                ) : addon.icon === "book" ? (
-                                                    <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
-                                                ) : addon.icon === "baby" ? (
-                                                    <Baby className="h-4 w-4 text-purple-400 shrink-0" />
-                                                ) : addon.icon === "monitor" ? (
-                                                    <Monitor className="h-4 w-4 text-indigo-400 shrink-0" />
-                                                ) : addon.icon === "sparkles" ? (
-                                                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                        }`}
+                                    >
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    {addon.icon === "tv" ? (
+                                                        <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
+                                                    ) : addon.icon === "music" ? (
+                                                        <Music className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                    ) : addon.icon === "book" ? (
+                                                        <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                    ) : addon.icon === "baby" ? (
+                                                        <Baby className="h-4 w-4 text-purple-400 shrink-0" />
+                                                    ) : addon.icon === "monitor" ? (
+                                                        <Monitor className="h-4 w-4 text-indigo-400 shrink-0" />
+                                                    ) : addon.icon === "sparkles" ? (
+                                                        <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                                    ) : (
+                                                        <Zap className="h-4 w-4 text-primary shrink-0" />
+                                                    )}
+                                                    <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
+                                                </div>
+                                                {isFree ? (
+                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-semibold shrink-0">
+                                                        ✨ Free
+                                                    </Badge>
                                                 ) : (
-                                                    <Zap className="h-4 w-4 text-primary shrink-0" />
+                                                    <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold shrink-0">
+                                                        ${addon.price}/mo
+                                                    </Badge>
                                                 )}
-                                                <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
                                             </div>
-                                            {!isAvailable ? (
-                                                <Badge variant="outline" className="text-[9px] bg-muted/40 text-muted-foreground border-border/40 font-semibold shrink-0">
-                                                    🔒 Coming Soon
-                                                </Badge>
-                                            ) : isFree ? (
-                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-semibold shrink-0">
-                                                    ✨ Free
-                                                </Badge>
+                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                {addon.description}
+                                            </p>
+                                        </div>
+
+                                        <div className="pt-2 flex items-center justify-between border-t border-border/30">
+                                            <span className="text-[11px] font-medium text-muted-foreground">
+                                                {isEnabled ? (
+                                                    <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                                                        <Check className="h-3 w-3" /> Active
+                                                    </span>
+                                                ) : (
+                                                    <span>Inactive</span>
+                                                )}
+                                            </span>
+                                            {isFree ? (
+                                                <div className="flex items-center gap-2">
+                                                    {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}
+                                                    <Switch
+                                                        checked={isEnabled}
+                                                        disabled={isToggling}
+                                                        onCheckedChange={(checked) => handleToggleFreeAddon(addon.id, checked)}
+                                                    />
+                                                </div>
                                             ) : (
-                                                <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold shrink-0">
-                                                    ${addon.price}/mo
-                                                </Badge>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setUpgradeModalOpen(true);
+                                                        setTargetTier(addon.id);
+                                                        setUpgradeNote(`Interested in activating add-on: ${addon.name}`);
+                                                    }}
+                                                    className="text-xs h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer"
+                                                >
+                                                    Request Add-On
+                                                </Button>
                                             )}
                                         </div>
-                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                            {addon.description}
-                                        </p>
                                     </div>
-
-                                    <div className="pt-2 flex items-center justify-between border-t border-border/30">
-                                        {!isAvailable ? (
-                                            <>
-                                                <span className="text-[11px] font-medium text-muted-foreground italic">
-                                                    Under Development
-                                                </span>
-                                                <Switch checked={false} disabled={true} />
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="text-[11px] font-medium text-muted-foreground">
-                                                    {isEnabled ? (
-                                                        <span className="text-emerald-400 flex items-center gap-1 font-semibold">
-                                                            <Check className="h-3 w-3" /> Active
-                                                        </span>
-                                                    ) : (
-                                                        <span>Inactive</span>
-                                                    )}
-                                                </span>
-                                                {isFree ? (
-                                                    <div className="flex items-center gap-2">
-                                                        {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}
-                                                        <Switch
-                                                            checked={isEnabled}
-                                                            disabled={isToggling}
-                                                            onCheckedChange={(checked) => handleToggleFreeAddon(addon.id, checked)}
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            setUpgradeModalOpen(true);
-                                                            setTargetTier(addon.id);
-                                                            setUpgradeNote(`Interested in activating add-on: ${addon.name}`);
-                                                        }}
-                                                        className="text-xs h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer"
-                                                    >
-                                                        Request Add-On
-                                                    </Button>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
                     </div>
                 </CardContent>
             </Card>
@@ -2046,10 +2022,10 @@ export default function UserProfilePage() {
                 <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                            <Sparkles className="h-5 w-5 text-indigo-400" /> Request Membership Tier Upgrade
+                            <Sparkles className="h-5 w-5 text-indigo-400" /> Request Feature or Add-On
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
-                            Select the target membership tier you would like to upgrade to. An administrator will review your account and confirm activation.
+                            Submit a request to the server administrator to enable this feature or add-on for your account.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2068,16 +2044,12 @@ export default function UserProfilePage() {
                         )}
 
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Desired Membership Tier</Label>
-                            <Select value={targetTier} onValueChange={setTargetTier}>
-                                <SelectTrigger className="bg-background/80 text-xs">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="TIER_2_VIP">🛡️ Tier 2: Managed Support (VIP Setup & Remote Assistance)</SelectItem>
-                                    <SelectItem value="STANDARD">⭐ Tier 1: Regular Member</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <Label className="text-xs font-semibold">Requested Feature</Label>
+                            <Input 
+                                readOnly 
+                                value={addonsCatalog.find(a => a.id === targetTier)?.name || "Optional Feature"} 
+                                className="bg-background/80 text-xs font-medium text-foreground cursor-not-allowed" 
+                            />
                         </div>
 
                         <div className="space-y-1.5">

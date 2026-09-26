@@ -291,7 +291,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         }`}
                     >
                         <Clapperboard className="h-4 w-4 shrink-0" />
-                        <span className="truncate">🎬 Main Discovery</span>
+                        <span className="truncate">🎬 Main Requests</span>
                     </button>
 
                     <button
@@ -320,7 +320,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     ) : (
                         <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-3 py-1 rounded-full whitespace-nowrap">
                             <Sparkles className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                            <span>Unified Media & Book Engine</span>
+                            <span>Unified Media Request Engine</span>
                         </div>
                     )}
                 </div>
@@ -341,7 +341,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         onClick={() => handleTabChange("discover")}
                     >
                         <Compass className="h-4 w-4 mr-1.5" />
-                        Discover
+                        Browse
                     </Button>
 
                     <Button
@@ -416,8 +416,8 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 </div>
 
                 {/* Instant Search Bar */}
-                <div className="relative flex-1 md:max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <div className="relative w-full md:w-80 lg:w-96 min-w-0">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-muted-foreground pointer-events-none" />
                     <Input
                         placeholder={
                             activeTab === "ebooks" 
@@ -430,11 +430,23 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         }
                         value={searchQuery}
                         onChange={(e) => handleSearch(e.target.value)}
-                        className="h-9 pl-9 pr-4 text-xs bg-background/60 rounded-xl border-border/60 focus:ring-1 focus:ring-primary shadow-sm"
+                        className="h-11 sm:h-10 pl-10 pr-9 text-sm bg-background/70 rounded-xl border-border/60 focus:ring-2 focus:ring-primary/40 shadow-sm w-full placeholder:text-muted-foreground/70"
                     />
-                    {isSearching && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                    )}
+                    {isSearching ? (
+                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    ) : searchQuery ? (
+                        <button
+                            onClick={() => {
+                                setSearchQuery("");
+                                setSearchResults([]);
+                                setBookSearchResults([]);
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-1 rounded-full hover:bg-muted/40 transition-colors"
+                            title="Clear search"
+                        >
+                            ✕
+                        </button>
+                    ) : null}
                 </div>
             </div>
 

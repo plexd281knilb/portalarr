@@ -48,7 +48,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const isPublicRoute = pathname === "/" || pathname === "/login" || pathname === "/beta";
 
   const getMobileTitle = () => {
-    if (pathname.startsWith("/discover")) return "Discover Media";
+    if (pathname.startsWith("/discover")) return "Media Requests";
     if (pathname.startsWith("/requests")) return "Media Requests";
     if (pathname.startsWith("/library")) return "Book Library";
     if (pathname.startsWith("/radarr")) return "Radarr (Movies)";
