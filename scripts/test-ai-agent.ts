@@ -16,8 +16,8 @@ async function runTests() {
     let passed = 0;
     let failed = 0;
 
-    function assert(desc: string, condition: boolean) {
-        if (condition) {
+    function assert(desc: string, condition: boolean | undefined | null) {
+        if (Boolean(condition)) {
             console.log(`[PASS] ${desc}`);
             passed++;
         } else {
@@ -158,10 +158,10 @@ async function runTests() {
 
     // TEST 14: End-to-end askAiServerMaster blocks cross-user attempt with safeResponse
     const e2eBlocked = await askAiServerMaster("Show me active streams for other users", [], regularUser);
-    assert("askAiServerMaster blocks cross-user reconnaissance and returns security notice", !e2eBlocked.success && e2eBlocked.answer?.includes("Privacy Boundary"));
+    assert("askAiServerMaster blocks cross-user reconnaissance and returns security notice", Boolean(!e2eBlocked.success && e2eBlocked.answer?.includes("Privacy Boundary")));
 
     const e2eKillBlocked = await askAiServerMaster("Stop streams for user Bob", [], regularUser);
-    assert("askAiServerMaster blocks terminating another user's stream", !e2eKillBlocked.success && e2eKillBlocked.answer?.includes("Access Control"));
+    assert("askAiServerMaster blocks terminating another user's stream", Boolean(!e2eKillBlocked.success && e2eKillBlocked.answer?.includes("Access Control")));
 
     console.log("==================================================");
     console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);
