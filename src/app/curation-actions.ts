@@ -4034,6 +4034,7 @@ export async function saveOverlayRuleAction(data: {
     showLeavingSoon?: boolean;
     badgeScale?: number;
     categoryScales?: string | Record<string, number>;
+    badgeBackdrops?: string | Record<string, boolean>;
     customBadgeIds?: string[];
     layerPriorityOrder?: string[] | string | any;
     enabled?: boolean;
@@ -4073,6 +4074,12 @@ export async function saveOverlayRuleAction(data: {
                 ? data.categoryScales
                 : null;
 
+        const serializedBadgeBackdrops = typeof data.badgeBackdrops === "object" && data.badgeBackdrops !== null
+            ? JSON.stringify(data.badgeBackdrops)
+            : typeof data.badgeBackdrops === "string"
+                ? data.badgeBackdrops
+                : null;
+
         const ruleData = {
             name: generatedName,
             serverId: data.serverId || null,
@@ -4109,6 +4116,7 @@ export async function saveOverlayRuleAction(data: {
             showLeavingSoon: data.showLeavingSoon ?? true,
             badgeScale: data.badgeScale ?? 1.0,
             categoryScales: serializedCategoryScales,
+            badgeBackdrops: serializedBadgeBackdrops,
             customBadgeIds: data.customBadgeIds ? JSON.stringify(data.customBadgeIds) : null,
             layerPriorityOrder: serializedLayerOrder,
             enabled: data.enabled ?? true
@@ -4207,6 +4215,13 @@ export async function getActiveOverlayOptionsHelper(
         } catch (e) {}
     }
 
+    let ruleBadgeBackdrops: Record<string, boolean> | undefined;
+    if ((rule as any)?.badgeBackdrops) {
+        try {
+            ruleBadgeBackdrops = typeof (rule as any).badgeBackdrops === "string" ? JSON.parse((rule as any).badgeBackdrops) : (rule as any).badgeBackdrops;
+        } catch (e) {}
+    }
+
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
 
     const defaultRibbons = [
@@ -4251,6 +4266,7 @@ export async function getActiveOverlayOptionsHelper(
         dovetailResolutionHdr: ruleDovetail,
         badgeScale: (rule?.badgeScale as number) || 1.0,
         categoryScales: ruleCategoryScales,
+        badgeBackdrops: ruleBadgeBackdrops,
         customBadges: activeCustomBadges.map(cb => ({
             id: cb.id,
             name: cb.name,
@@ -4335,6 +4351,13 @@ export async function applyOverlaysToLibraryInternal(
                 } catch (e) {}
             }
 
+            let ruleBadgeBackdrops: Record<string, boolean> | undefined;
+            if ((rule as any).badgeBackdrops) {
+                try {
+                    ruleBadgeBackdrops = typeof (rule as any).badgeBackdrops === "string" ? JSON.parse((rule as any).badgeBackdrops) : (rule as any).badgeBackdrops;
+                } catch (e) {}
+            }
+
             overlayOpts = {
                 showResolution: rule.showResolution,
                 showHdr: rule.showHdr,
@@ -4375,6 +4398,7 @@ export async function applyOverlaysToLibraryInternal(
                 dovetailResolutionHdr: ruleDovetail,
                 badgeScale: (rule.badgeScale as number) || 1.0,
                 categoryScales: ruleCategoryScales,
+                badgeBackdrops: ruleBadgeBackdrops,
                 customBadges: activeCustomBadges.map(cb => ({
                     id: cb.id,
                     name: cb.name,
@@ -6140,6 +6164,7 @@ export async function applyOverlayToSingleItemAction(
         showLeavingSoon?: boolean;
         badgeScale?: number;
         categoryScales?: Record<string, number> | string;
+        badgeBackdrops?: Record<string, boolean> | string;
         customBadgeIds?: string[];
         layerPriorityOrder?: string[];
     }
@@ -6203,6 +6228,7 @@ export async function applyOverlayToSingleItemAction(
                 dovetailResolutionHdr: options?.dovetailResolutionHdr ?? true,
                 badgeScale: options?.badgeScale ?? 1.0,
                 categoryScales: effectiveCategoryScales,
+                badgeBackdrops: options?.badgeBackdrops,
                 showResolution: options?.showResolution ?? true,
                 showHdr: options?.showHdr ?? true,
                 showAudio: options?.showAudio ?? true,

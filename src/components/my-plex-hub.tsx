@@ -23,6 +23,7 @@ export default function MyPlexHub() {
     const [streamToKill, setStreamToKill] = useState<any>(null);
     const [killingStream, setKillingStream] = useState(false);
     const [killMessage, setKillMessage] = useState<string | null>(null);
+    const [showActiveStreams, setShowActiveStreams] = useState(false);
     const [serversModalOpen, setServersModalOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
 
@@ -150,7 +151,31 @@ export default function MyPlexHub() {
             {/* --- ACTIVE STREAMS & TRANSCODE DOCTOR --- */}
             {activeStreams.length > 0 ? (
                 <div className="space-y-3">
-                    {activeStreams.map((stream: any, idx: number) => {
+                    <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-emerald-950/30 via-[#14141c] to-[#101017] border border-emerald-500/30 rounded-xl">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                            </span>
+                            <span className="text-xs sm:text-sm font-semibold text-foreground">
+                                {activeStreams.length} Active Stream{activeStreams.length > 1 ? "s" : ""} in Progress
+                            </span>
+                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                Live Now
+                            </Badge>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowActiveStreams(!showActiveStreams)}
+                            className="text-xs h-7 gap-1.5 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                        >
+                            {showActiveStreams ? "Hide Streams" : `View Active Streams (${activeStreams.length})`}
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showActiveStreams ? "rotate-180" : ""}`} />
+                        </Button>
+                    </div>
+
+                    {showActiveStreams && activeStreams.map((stream: any, idx: number) => {
                         const diagnosis: StreamDiagnosis = stream.diagnosis;
                         const isTranscoding = stream.videoDecision === "transcode";
                         const isAudioOnly = stream.audioDecision === "transcode" && !isTranscoding;

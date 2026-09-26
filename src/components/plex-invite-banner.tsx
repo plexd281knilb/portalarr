@@ -33,7 +33,7 @@ export default function PlexInviteBanner({
 }: PlexInviteBannerProps) {
     const [copied, setCopied] = useState(false);
     const [origin, setOrigin] = useState(appUrl || "");
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
     const [canShare, setCanShare] = useState(false);
 
     useEffect(() => {
@@ -46,8 +46,8 @@ export default function PlexInviteBanner({
             setCanShare(!!navigator.share);
             
             const savedState = localStorage.getItem("portalarr_invite_banner_collapsed");
-            if (savedState === "true") {
-                setIsCollapsed(true);
+            if (savedState === "false") {
+                setIsCollapsed(false);
             }
         }
     }, [appUrl]);

@@ -58,6 +58,7 @@ export interface OverlayOptions {
     ratingsPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-center" | "bottom-center";
     badgeScale?: number;
     categoryScales?: Record<string, number>;
+    badgeBackdrops?: Record<string, boolean> | string;
     resolutionScale?: number;
     hdrScale?: number;
     codecScale?: number;
@@ -1517,6 +1518,40 @@ export async function applyOverlaysToPoster(
     const overlays: { input: Buffer | string; top?: number; left?: number }[] = [];
     let renderedRibbonCorner: string | null = null;
 
+    let parsedBadgeBackdrops: Record<string, boolean> = {};
+    if (options.badgeBackdrops) {
+        if (typeof options.badgeBackdrops === "string") {
+            try {
+                parsedBadgeBackdrops = JSON.parse(options.badgeBackdrops);
+            } catch (e) {}
+        } else if (typeof options.badgeBackdrops === "object") {
+            parsedBadgeBackdrops = options.badgeBackdrops;
+        }
+    }
+
+    const applyBadgeBackdrop = async (
+        badgeBuf: Buffer,
+        w: number,
+        h: number,
+        scale: number
+    ): Promise<{ buf: Buffer; w: number; h: number }> => {
+        const padX = Math.max(10, Math.round(14 * scale));
+        const padY = Math.max(6, Math.round(8 * scale));
+        const totalW = w + padX * 2;
+        const totalH = h + padY * 2;
+        const radius = Math.max(6, Math.round(10 * scale));
+        const backdropSvg = Buffer.from(
+            `<svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg">` +
+            `<rect x="0" y="0" width="${totalW}" height="${totalH}" rx="${radius}" ry="${radius}" fill="#000000" fill-opacity="0.92" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.5"/>` +
+            `</svg>`
+        );
+        const compositeBuf = await sharp(backdropSvg)
+            .composite([{ input: badgeBuf, left: padX, top: padY }])
+            .png()
+            .toBuffer();
+        return { buf: Buffer.from(compositeBuf), w: totalW, h: totalH };
+    };
+
     // 1. Leaving Soon Banner / Ribbon (Only when explicitly configured by Prune Studio with banner text / days)
     const isItemLeavingSoon = Boolean(
         options.placeholderText ||
@@ -1889,7 +1924,21 @@ export async function applyOverlaysToPoster(
                         cbBuffer = await sharp(cbBuffer).ensureAlpha().linear(cb.opacity, 0).toBuffer();
                     }
 
-                    buckets[cbPos]?.push({ buf: cbBuffer, w: cbWidth, h: cbHeight, layerKey: primaryLayerKey });
+                    const hasBackdrop = Boolean(
+                        parsedBadgeBackdrops[primaryLayerKey] ||
+                        badgeCats.some(c => parsedBadgeBackdrops[c])
+                    );
+
+                    let finalW = cbWidth;
+                    let finalH = cbHeight;
+                    if (hasBackdrop) {
+                        const backdropRes = await applyBadgeBackdrop(cbBuffer, cbWidth, cbHeight, effectiveScale);
+                        cbBuffer = Buffer.from(backdropRes.buf) as any;
+                        finalW = backdropRes.w;
+                        finalH = backdropRes.h;
+                    }
+
+                    buckets[cbPos]?.push({ buf: cbBuffer, w: finalW, h: finalH, layerKey: primaryLayerKey });
                 }
             } catch (err) {
                 logger.addLog("WARN", "CURATION", `Failed to load custom badge ${cb.name}: ${err}`);
@@ -1931,9 +1980,21 @@ export async function applyOverlaysToPoster(
                 h = Math.round(h * effectiveScale);
             }
 
-            const buf = await sharp(fullPath)
+            let buf = await sharp(fullPath)
                 .resize(w, h, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
                 .toBuffer();
+
+            const hasBackdrop = Boolean(
+                parsedBadgeBackdrops[layerKey] ||
+                (layerKey === "resolution" && shouldCombineResHdr && parsedBadgeBackdrops["hdr"])
+            );
+
+            if (hasBackdrop) {
+                const backdropRes = await applyBadgeBackdrop(buf, w, h, effectiveScale);
+                buf = Buffer.from(backdropRes.buf) as any;
+                w = backdropRes.w;
+                h = backdropRes.h;
+            }
 
             buckets[pos].push({
                 buf,
@@ -2128,6 +2189,7 @@ export function computeMediaOverlayHash(
         theme: options.theme,
         badgeScale: options.badgeScale,
         categoryScales: options.categoryScales,
+        badgeBackdrops: options.badgeBackdrops ? (typeof options.badgeBackdrops === "string" ? options.badgeBackdrops : JSON.stringify(options.badgeBackdrops)) : "",
         positions: {
             resolution: options.resolutionPosition,
             hdr: options.hdrPosition,

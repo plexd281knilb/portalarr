@@ -340,18 +340,19 @@ export async function fetchMediaCertification(id: number, mediaType: "movie" | "
                 }
             }
 
-            // Also check all countries for adult/18/19 ratings
-            for (const countryRel of data.results) {
-                if (countryRel?.release_dates && Array.isArray(countryRel.release_dates)) {
-                    for (const rel of countryRel.release_dates) {
-                        const c = (rel.certification || "").trim();
-                        if (c) {
-                            if (!foundCert) foundCert = c;
-                            else if (/\b(18\+|19\+|18|19|r18|cat\s*iii|xxx)\b/i.test(c)) {
+            // If no US rating found, fall back to other countries
+            if (!foundCert) {
+                for (const countryRel of data.results) {
+                    if (countryRel?.release_dates && Array.isArray(countryRel.release_dates)) {
+                        for (const rel of countryRel.release_dates) {
+                            const c = (rel.certification || "").trim();
+                            if (c) {
                                 foundCert = c;
+                                break;
                             }
                         }
                     }
+                    if (foundCert) break;
                 }
             }
             return foundCert;
@@ -361,12 +362,12 @@ export async function fetchMediaCertification(id: number, mediaType: "movie" | "
             if (usRating?.rating && typeof usRating.rating === "string" && usRating.rating.trim()) {
                 foundRating = usRating.rating.trim();
             }
-            for (const cr of data.results) {
-                const r = (cr.rating || "").trim();
-                if (r) {
-                    if (!foundRating) foundRating = r;
-                    else if (/\b(18\+|19\+|18|19|r18|tv-ma)\b/i.test(r)) {
+            if (!foundRating) {
+                for (const cr of data.results) {
+                    const r = (cr.rating || "").trim();
+                    if (r) {
                         foundRating = r;
+                        break;
                     }
                 }
             }
@@ -713,27 +714,55 @@ export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: str
 export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMediaItem[]> {
     if (!query || !query.trim()) return [];
     try {
-        const data = await tmdbFetch("/search/multi", {
-            query: query.trim(),
-            page,
-            include_adult: "false"
-        });
-        if (!data?.results || !Array.isArray(data.results)) return [];
+        const cleanQuery = query.trim();
+        const [multiData, movieData] = await Promise.all([
+            tmdbFetch("/search/multi", {
+                query: cleanQuery,
+                page,
+                include_adult: "false"
+            }),
+            page === 1 ? tmdbFetch("/search/movie", {
+                query: cleanQuery,
+                page: 1,
+                include_adult: "false"
+            }) : Promise.resolve(null)
+        ]);
 
         const items: TmdbMediaItem[] = [];
-        for (const item of data.results) {
-            if (item.media_type === "movie") {
-                items.push(mapTmdbMovie(item));
-            } else if (item.media_type === "tv") {
-                items.push(mapTmdbTv(item));
-            } else if (item.media_type === "person" && Array.isArray(item.known_for)) {
-                // Flatten notable items for person searches
-                for (const kf of item.known_for) {
-                    if (kf.media_type === "movie") items.push(mapTmdbMovie(kf));
-                    else if (kf.media_type === "tv") items.push(mapTmdbTv(kf));
+        const seenKeys = new Set<string>();
+
+        const addItem = (it: TmdbMediaItem) => {
+            const key = `${it.mediaType}-${it.id}`;
+            if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                items.push(it);
+            }
+        };
+
+        // Add movie-specific direct search results first to ensure blockbuster accuracy
+        if (movieData?.results && Array.isArray(movieData.results)) {
+            for (const m of movieData.results) {
+                addItem(mapTmdbMovie(m));
+            }
+        }
+
+        // Add multi-search results (movies, tv, and notable works)
+        if (multiData?.results && Array.isArray(multiData.results)) {
+            for (const item of multiData.results) {
+                if (item.media_type === "movie") {
+                    addItem(mapTmdbMovie(item));
+                } else if (item.media_type === "tv") {
+                    addItem(mapTmdbTv(item));
+                } else if (item.media_type === "person" && Array.isArray(item.known_for)) {
+                    // Flatten notable items for person searches
+                    for (const kf of item.known_for) {
+                        if (kf.media_type === "movie") addItem(mapTmdbMovie(kf));
+                        else if (kf.media_type === "tv") addItem(mapTmdbTv(kf));
+                    }
                 }
             }
         }
+
         // Enrich search items with certification ratings in parallel
         const enriched = await enrichItemsWithCertifications(items);
         const allowed = filterAllowedMedia(enriched);

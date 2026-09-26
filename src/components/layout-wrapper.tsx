@@ -45,9 +45,10 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     checkAccess();
   }, [pathname]);
   
-  const isPublicRoute = pathname === "/" || pathname === "/login" || pathname === "/beta";
+  const isPublicRoute = pathname === "/login" || pathname === "/join" || pathname.startsWith("/join/") || pathname === "/pending";
 
   const getMobileTitle = () => {
+    if (pathname === "/") return "Dashboard";
     if (pathname.startsWith("/discover")) return "Media Requests";
     if (pathname.startsWith("/requests")) return "Media Requests";
     if (pathname.startsWith("/library")) return "Book Library";

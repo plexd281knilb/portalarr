@@ -102,19 +102,17 @@ export function isNc17OrDisallowedRating(rating?: string | null): boolean {
     if (!rating) return false;
     const clean = rating.trim().toUpperCase().replace(/^US[:\/]/, "").replace(/[^A-Z0-9\-\+]/g, "");
     
-    // Explicit global adult / extreme ratings (US and International)
+    // Explicit global adult / extreme ratings (US NC-17, X, XXX, AO, UK R18, Porno)
     if (clean === "NC-17" || clean === "NC17" || clean.includes("NC-17") || 
         clean === "X" || clean === "XXX" || clean === "AO" || clean === "ADULT" || 
         clean === "PORNO" || clean === "PORN" ||
-        clean === "18" || clean === "18+" || clean === "18A" || clean === "18R" ||
-        clean === "19" || clean === "19+" || 
         clean === "R18" || clean === "R18+" || clean === "R-18" || clean === "R-19" ||
         clean === "CATIII" || clean === "CATEGORYIII" || clean === "III") {
         return true;
     }
 
-    // Pattern match for numeric adult ratings (e.g. 18, 18+, 19, 19+, R18+, Cat III)
-    return /\b(18\+|19\+|r18\+|r-18|cat\s*iii|xxx|nc-17)\b/i.test(rating);
+    // Pattern match for extreme adult ratings (e.g. Cat III, XXX, NC-17, AO)
+    return /\b(cat\s*iii|xxx|nc-17|\bao\b)\b/i.test(rating);
 }
 
 export function isAdultOrMatureRating(rating?: string | null): boolean {
@@ -129,6 +127,8 @@ export function isAdultOrMatureRating(rating?: string | null): boolean {
         clean === "TV-MA" || clean.startsWith("TV-MA") || clean === "TV-14" || clean.startsWith("TV-14") ||
         clean === "16" || clean === "16+" || clean === "16A" || clean === "R-16" ||
         clean === "15" || clean === "15+" || clean === "MA15+" || clean === "MA 15+" ||
+        clean === "18" || clean === "18+" || clean === "18A" || clean === "18R" ||
+        clean === "19" || clean === "19+" ||
         clean === "M" || clean.startsWith("M/") ||
         clean === "NR" || clean === "UR" || clean === "UNRATED" || clean === "NOT RATED" || clean === "NOT-RATED") {
         return true;

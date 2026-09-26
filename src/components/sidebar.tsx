@@ -22,7 +22,8 @@ import {
   Trash2,
   Tag,
   Compass,
-  Inbox
+  Inbox,
+  HelpCircle
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -32,20 +33,30 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   const isLogsActive = pathname === "/settings" && currentTab === "logs"
   const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperUser, setIsSuperUser] = useState(false)
+  const [isTrial, setIsTrial] = useState(false)
   const [role, setRole] = useState("")
 
   useEffect(() => {
     getSession().then((session) => {
       if (session) {
         const userRole = (session.role as string) || "";
+        const userStatus = (session.status as string) || "";
+        const trial = userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true;
         setRole(userRole);
         setIsAdmin(userRole === "ADMIN");
+        setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
+        setIsTrial(trial);
       } else {
         setIsAdmin(false);
+        setIsSuperUser(false);
+        setIsTrial(false);
         setRole("");
       }
     }).catch(() => {
       setIsAdmin(false);
+      setIsSuperUser(false);
+      setIsTrial(false);
       setRole("");
     });
   }, [pathname]);
@@ -100,50 +111,69 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            <Link href="/library">
+            {!isTrial && (
+              <Link href="/library">
+                <Button
+                  variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                    pathname.startsWith("/library")
+                      ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                  )}
+                >
+                  <BookOpen className="mr-2 h-4 w-4 text-emerald-400" />
+                  Book Library
+                </Button>
+              </Link>
+            )}
+
+            {!isTrial && (
+              <Link href="/beta">
+                <Button
+                  variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                    pathname.startsWith("/beta")
+                      ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
+                  )}
+                >
+                  <Terminal className="mr-2 h-4 w-4 text-purple-400" />
+                  Beta Portal
+                </Button>
+              </Link>
+            )}
+
+            <Link href="/settings/profile#guides">
               <Button
-                variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
+                variant={pathname === "/settings/profile" && typeof window !== "undefined" && window.location.hash === "#guides" ? "secondary" : "ghost"}
                 className={cn(
                   "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/library")
-                    ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                  "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
                 )}
               >
-                <BookOpen className="mr-2 h-4 w-4 text-emerald-400" />
-                Book Library
+                <HelpCircle className="mr-2 h-4 w-4 text-sky-400" />
+                Setup Guides
               </Button>
             </Link>
 
-            <Link href="/beta">
-              <Button
-                variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/beta")
-                    ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
-                )}
-              >
-                <Terminal className="mr-2 h-4 w-4 text-purple-400" />
-                Beta Portal
-              </Button>
-            </Link>
-
-            <Link href="/admin/tickets">
-              <Button
-                variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/admin/tickets")
-                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                )}
-              >
-                <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
-                Support Tickets
-              </Button>
-            </Link>
+            {isAdmin && (
+              <Link href="/admin/tickets">
+                <Button
+                  variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                    pathname.startsWith("/admin/tickets")
+                      ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                  )}
+                >
+                  <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
+                  Support Tickets
+                </Button>
+              </Link>
+            )}
 
             <Link href="/settings/profile">
               <Button
@@ -160,7 +190,7 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            {(isAdmin || role === "SUPER_USER") && (
+            {(isAdmin || isSuperUser) && (
               <>
                 <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Media Apps
@@ -317,20 +347,30 @@ export function MobileSidebar() {
   const isLogsActive = pathname === "/settings" && currentTab === "logs";
   const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive;
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperUser, setIsSuperUser] = useState(false);
+  const [isTrial, setIsTrial] = useState(false);
   const [role, setRole] = useState("");
 
   useEffect(() => {
     getSession().then((session) => {
       if (session) {
         const userRole = (session.role as string) || "";
+        const userStatus = (session.status as string) || "";
+        const trial = userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true;
         setRole(userRole);
         setIsAdmin(userRole === "ADMIN");
+        setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
+        setIsTrial(trial);
       } else {
         setIsAdmin(false);
+        setIsSuperUser(false);
+        setIsTrial(false);
         setRole("");
       }
     }).catch(() => {
       setIsAdmin(false);
+      setIsSuperUser(false);
+      setIsTrial(false);
       setRole("");
     });
   }, [pathname]);
@@ -397,47 +437,65 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
 
-                  <Link href="/library" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/library")
-                          ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
-                      )}
-                    >
-                      <BookOpen className="mr-2 h-4 w-4 text-emerald-400" /> Book Library
-                    </Button>
-                  </Link>
+                  {!isTrial && (
+                    <Link href="/library" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
+                        className={cn(
+                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                          pathname.startsWith("/library")
+                            ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                        )}
+                      >
+                        <BookOpen className="mr-2 h-4 w-4 text-emerald-400" /> Book Library
+                      </Button>
+                    </Link>
+                  )}
 
-                  <Link href="/beta" onClick={() => setIsOpen(false)}>
+                  {!isTrial && (
+                    <Link href="/beta" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
+                        className={cn(
+                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                          pathname.startsWith("/beta")
+                            ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
+                        )}
+                      >
+                        <Terminal className="mr-2 h-4 w-4 text-purple-400" /> Beta Portal
+                      </Button>
+                    </Link>
+                  )}
+
+                  <Link href="/settings/profile#guides" onClick={() => setIsOpen(false)}>
                     <Button
-                      variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
+                      variant={pathname === "/settings/profile" && typeof window !== "undefined" && window.location.hash === "#guides" ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/beta")
-                          ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
+                        "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
                       )}
                     >
-                      <Terminal className="mr-2 h-4 w-4 text-purple-400" /> Beta Portal
+                      <HelpCircle className="mr-2 h-4 w-4 text-sky-400" /> Setup Guides
                     </Button>
                   </Link>
                   
-                  <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/admin/tickets")
-                          ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                      )}
-                    >
-                      <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
-                    </Button>
-                  </Link>
+                  {isAdmin && (
+                    <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                        className={cn(
+                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                          pathname.startsWith("/admin/tickets")
+                            ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                        )}
+                      >
+                        <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
+                      </Button>
+                    </Link>
+                  )}
 
                   <Link href="/settings/profile" onClick={() => setIsOpen(false)}>
                     <Button
@@ -453,7 +511,7 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
 
-                  {(isAdmin || role === "SUPER_USER") && (
+                  {(isAdmin || isSuperUser) && (
                     <>
                       <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                         Media Apps

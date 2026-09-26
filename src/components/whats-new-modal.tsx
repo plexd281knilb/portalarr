@@ -17,6 +17,7 @@ interface WhatsNewModalProps {
     roadmapText: string;
     triggerButton?: boolean;
     buttonClassName?: string;
+    userRole?: "ADMIN" | "SUPER_USER" | "USER" | "TRIAL";
 }
 
 // Simple deterministic hash function for strings
@@ -30,37 +31,115 @@ function simpleHash(str: string): string {
     return hash.toString();
 }
 
+function filterRoadmapByRole(markdown: string, role?: string): string {
+    if (!markdown || !role || role === "ADMIN") return markdown;
+
+    const lines = markdown.split("\n");
+    const filtered: string[] = [];
+    let skippingSection = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim().toLowerCase();
+
+        // Check for header boundaries
+        if (line.startsWith("#")) {
+            skippingSection = false;
+            if (role === "TRIAL") {
+                if (
+                    trimmed.includes("book") || 
+                    trimmed.includes("audiobook") || 
+                    trimmed.includes("kindle") ||
+                    trimmed.includes("radarr") ||
+                    trimmed.includes("sonarr") ||
+                    trimmed.includes("curation") ||
+                    trimmed.includes("admin") ||
+                    trimmed.includes("payment") ||
+                    trimmed.includes("kometa") ||
+                    trimmed.includes("maintainerr")
+                ) {
+                    skippingSection = true;
+                    continue;
+                }
+            } else if (role === "USER" || role === "SUPER_USER") {
+                if (
+                    trimmed.includes("admin only") ||
+                    trimmed.includes("payment scraping") ||
+                    trimmed.includes("payment calculation") ||
+                    trimmed.includes("zero trust") ||
+                    trimmed.includes("schema migration")
+                ) {
+                    skippingSection = true;
+                    continue;
+                }
+            }
+        }
+
+        if (skippingSection) continue;
+
+        // Individual bullet filtering
+        if (role === "TRIAL") {
+            if (
+                trimmed.includes("book library") ||
+                trimmed.includes("send-to-kindle") ||
+                trimmed.includes("audiobook") ||
+                trimmed.includes("radarr") ||
+                trimmed.includes("sonarr") ||
+                trimmed.includes("payment formula") ||
+                trimmed.includes("imap payment") ||
+                trimmed.includes("cloudflare zero trust")
+            ) {
+                continue;
+            }
+        } else if (role === "USER" || role === "SUPER_USER") {
+            if (
+                trimmed.includes("payment scraping") ||
+                trimmed.includes("imap payment formula") ||
+                trimmed.includes("cloudflare security policy") ||
+                trimmed.includes("admin edge proxy")
+            ) {
+                continue;
+            }
+        }
+
+        filtered.push(line);
+    }
+
+    const result = filtered.join("\n").trim();
+    return result || "Welcome to Portalarr! Check out the media discovery and streaming features.";
+}
+
 export default function WhatsNewModal({ 
     roadmapText, 
     triggerButton = true,
-    buttonClassName
+    buttonClassName,
+    userRole
 }: WhatsNewModalProps) {
     const [open, setOpen] = useState(false);
     const [hasUnseenUpdate, setHasUnseenUpdate] = useState(false);
+    const effectiveText = filterRoadmapByRole(roadmapText, userRole);
 
     useEffect(() => {
-        if (!roadmapText || roadmapText.trim() === "") return;
+        if (!effectiveText || effectiveText.trim() === "") return;
 
         try {
-            const currentHash = simpleHash(roadmapText.trim());
-            const storedHash = localStorage.getItem("portalarr_last_seen_roadmap");
+            const currentHash = simpleHash(effectiveText.trim());
+            const storedHash = localStorage.getItem(`portalarr_last_seen_roadmap_${userRole || "all"}`);
 
             if (storedHash !== currentHash) {
                 setHasUnseenUpdate(true);
-                // Open popup automatically for the user on first visit after update
-                setOpen(true);
             }
         } catch (e) {
             console.warn("Could not access localStorage for update check:", e);
         }
-    }, [roadmapText]);
+    }, [effectiveText, userRole]);
 
     const handleDismiss = () => {
         setOpen(false);
         try {
-            if (roadmapText) {
-                const currentHash = simpleHash(roadmapText.trim());
-                localStorage.setItem("portalarr_last_seen_roadmap", currentHash);
+            if (effectiveText) {
+                const currentHash = simpleHash(effectiveText.trim());
+                localStorage.setItem(`portalarr_last_seen_roadmap_${userRole || "all"}`, currentHash);
                 setHasUnseenUpdate(false);
             }
         } catch (e) {}
@@ -111,7 +190,7 @@ export default function WhatsNewModal({
 
                     {/* Scrollable Markdown Content */}
                     <div className="flex-1 overflow-y-auto p-5 sm:p-6 text-sm leading-relaxed space-y-4">
-                        {roadmapText ? (
+                        {effectiveText ? (
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm, remarkBreaks]}
                                 rehypePlugins={[rehypeRaw]}
@@ -148,7 +227,7 @@ export default function WhatsNewModal({
                                     ),
                                 }}
                             >
-                                {roadmapText}
+                                {effectiveText}
                             </ReactMarkdown>
                         ) : (
                             <div className="text-center py-8 text-muted-foreground text-sm">

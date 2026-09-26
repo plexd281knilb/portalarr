@@ -49,6 +49,7 @@ import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
 import EmailManagement from "@/components/email-management";
 import { SeerrSettingsPanel } from "@/components/seerr/seerr-settings-panel";
+import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -1418,6 +1419,9 @@ function SettingsPageContent() {
                             </form>
                         </CardContent>
                     </Card>
+
+                    {/* CLOUDFLARE ACCESS & EDGE SECURITY POLICY PATHS */}
+                    <CloudflarePolicyCard />
 
                     <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                         <div className="space-y-6">

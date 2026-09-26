@@ -4448,6 +4448,53 @@ export async function syncUserPlexShareInternal(
 }
 
 /**
+ * Bulk updates subscription or trial status for multiple users simultaneously.
+ * Ideal for setting multiple selected users to subscribed through the end of the year or custom date.
+ */
+export async function bulkSetUsersTrialOrSubscriptionAction(
+    userIds: string[], 
+    type: "REST_OF_YEAR" | "1_YEAR" | "30_DAYS" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL", 
+    customDateOrDays?: string | number
+) {
+    try {
+        await verifyAdmin();
+        if (!userIds || userIds.length === 0) {
+            return { success: false, error: "No users selected for bulk update." };
+        }
+
+        let updatedCount = 0;
+        let failedCount = 0;
+        const errors: string[] = [];
+
+        for (const userId of userIds) {
+            try {
+                const res = await setUserTrialOrSubscription(userId, type, customDateOrDays);
+                if (res.success) {
+                    updatedCount++;
+                } else {
+                    failedCount++;
+                    errors.push(`${userId}: ${res.error}`);
+                }
+            } catch (err: any) {
+                failedCount++;
+                errors.push(`${userId}: ${err.message}`);
+            }
+        }
+
+        revalidatePath("/settings/access");
+        return {
+            success: true,
+            updatedCount,
+            failedCount,
+            errors: errors.slice(0, 5),
+            message: `Successfully updated ${updatedCount} user(s)${failedCount > 0 ? `, ${failedCount} failed` : ""}.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed bulk updating users" };
+    }
+}
+
+/**
  * Repairs and restores full library access across ALL Plex servers (Main + Backup)
  * for all approved and active trial users.
  */
@@ -12564,8 +12611,22 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
         const session = await verifyUser();
         if (session.role === "ADMIN") return true;
 
+        // Trial accounts never have access to the Book Library
+        if (session.status === "TRIAL" || (session as any).isTrial === true) {
+            return false;
+        }
+
         const username = (session.username as string).toLowerCase();
-        
+
+        // Full accounts must configure Send-to-Kindle or opt for Direct Download bypass
+        const user = await prisma.user.findUnique({
+            where: { username: session.username as string },
+            select: { kindleEmail: true }
+        });
+        if (!user?.kindleEmail || user.kindleEmail.trim() === "") {
+            return false;
+        }
+
         const libs = await prisma.library.findMany().catch(() => []);
 
         const filtered = libs.filter(lib => {
@@ -12580,6 +12641,214 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
         return filtered.length > 0;
     } catch (e) {
         return false;
+    }
+}
+
+/**
+ * Self-service setup for Book Library access.
+ * Users can either provide their Send-to-Kindle email address or choose to bypass
+ * (direct download / personal email delivery).
+ */
+export async function setupBookLibraryAccessAction(options: { kindleEmail?: string; bypassKindle?: boolean }) {
+    try {
+        const session = await verifyUser();
+        const user = await prisma.user.findUnique({
+            where: { username: session.username as string }
+        });
+
+        if (!user) {
+            return { success: false, error: "User not found." };
+        }
+
+        if (user.status === "TRIAL") {
+            return { success: false, error: "Trial accounts do not have access to the Book Library. Please upgrade to a full account." };
+        }
+
+        let newKindleEmail = user.kindleEmail || "";
+        if (options.bypassKindle) {
+            newKindleEmail = user.kindleEmail && user.kindleEmail.trim() !== "" ? user.kindleEmail : "DIRECT_DOWNLOAD";
+        } else if (options.kindleEmail) {
+            newKindleEmail = options.kindleEmail.trim();
+        }
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { kindleEmail: newKindleEmail }
+        });
+
+        // Ensure user is not restricted in any library
+        const libs = await prisma.library.findMany();
+        for (const lib of libs) {
+            const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
+            if (restricted.includes(user.username.toLowerCase())) {
+                const cleanedRestricted = restricted.filter(u => u !== user.username.toLowerCase()).join(",");
+                await prisma.library.update({
+                    where: { id: lib.id },
+                    data: { restrictedUsers: cleanedRestricted }
+                });
+            }
+        }
+
+        revalidatePath("/");
+        revalidatePath("/library");
+        revalidatePath("/settings/profile");
+
+        return { 
+            success: true, 
+            kindleEmail: newKindleEmail,
+            message: options.bypassKindle 
+                ? "Book Library access unlocked! You can now download books directly or send them to personal email." 
+                : "Send-to-Kindle email saved! Book Library access unlocked."
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to setup book library access." };
+    }
+}
+
+/**
+ * Self-service toggle for Super User access.
+ * Gives full accounts direct access to Radarr & Sonarr to fix and manage their own media.
+ * Trial accounts are strictly blocked.
+ */
+export async function toggleSelfSuperUserAction() {
+    try {
+        const session = await verifyUser();
+        const user = await prisma.user.findUnique({
+            where: { username: session.username as string }
+        });
+
+        if (!user) {
+            return { success: false, error: "User not found." };
+        }
+
+        if (user.status === "TRIAL") {
+            return { success: false, error: "Trial accounts cannot enable Super User access. Please upgrade to a full account." };
+        }
+
+        if (user.role === "ADMIN") {
+            return { success: true, isSuperUser: true, role: "ADMIN", message: "You are already a Platform Administrator." };
+        }
+
+        const newRole = user.role === "SUPER_USER" ? "USER" : "SUPER_USER";
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { role: newRole }
+        });
+
+        const { createSession } = await import("./auth-actions");
+        await createSession(user.id, user.username, newRole, user.status);
+
+        revalidatePath("/");
+        revalidatePath("/settings/profile");
+
+        return { 
+            success: true, 
+            isSuperUser: newRole === "SUPER_USER",
+            role: newRole,
+            message: newRole === "SUPER_USER" 
+                ? "Super User mode enabled! You now have direct access to Radarr & Sonarr." 
+                : "Standard User mode restored."
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed toggling Super User mode." };
+    }
+}
+
+/**
+ * Detailed real-time stream monitor and server performance metrics for Admins.
+ * Fetches all active sessions across all Tautulli instances without filtering to a single user.
+ */
+export async function getAdminDetailedStreamsAction() {
+    try {
+        await verifyAdmin();
+        const [tautulliInstances, glances] = await Promise.all([
+            prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
+        ]);
+
+        const allSessions: any[] = [];
+        let totalStreamCount = 0;
+
+        for (const t of tautulliInstances) {
+            let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+            const apiKey = decryptData(t.apiKey);
+            const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+
+            try {
+                const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
+                if (actResult.ok && actResult.data) {
+                    const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
+                    totalStreamCount += count;
+                    const sessions = actResult.data.sessions || [];
+                    for (const s of sessions) {
+                        allSessions.push({
+                            instanceId: t.id,
+                            serverName: t.name,
+                            sessionKey: String(s.session_key || ""),
+                            sessionId: String(s.session_id || ""),
+                            user: s.friendly_name || s.user || "Plex User",
+                            email: s.email || "",
+                            title: s.grandparent_title 
+                                ? `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}` 
+                                : (s.title || "Unknown Media"),
+                            mediaType: s.media_type || (s.grandparent_title ? "episode" : "movie"),
+                            year: s.year || "",
+                            thumb: s.thumb ? `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=pms_image_proxy&img=${encodeURIComponent(s.thumb)}&width=300&height=450` : null,
+                            player: s.player || s.platform || "Plex Client",
+                            device: s.device || s.platform || "",
+                            ipAddress: s.ip_address || "",
+                            videoDecision: (s.video_decision || "direct play").toLowerCase(),
+                            audioDecision: (s.audio_decision || "direct play").toLowerCase(),
+                            videoCodec: (s.video_codec || "").toUpperCase(),
+                            audioCodec: (s.audio_codec || "").toUpperCase(),
+                            streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate) / 1000) : 0,
+                            transcodeHwRequested: !!s.transcode_hw_requested,
+                            transcodeHwDecoding: s.transcode_hw_decoding || "",
+                            transcodeHwEncoding: s.transcode_hw_encoding || "",
+                            progressPercent: s.progress_percent ? Number(s.progress_percent) : 0,
+                            state: s.state || "playing"
+                        });
+                    }
+                }
+            } catch (err: any) {
+                console.warn(`[ADMIN-STREAMS] Failed to fetch activity for Tautulli "${t.name}":`, err.message || err);
+            }
+        }
+
+        // Glances
+        const glancesStats: any[] = [];
+        for (const g of glances) {
+            let clean = cleanUrl(g.url?.trim() || "");
+            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                clean = `http://${clean}`;
+            }
+            const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
+            try {
+                const resCpu = await fetch(`${baseGlances}/api/3/cpu`, { next: { revalidate: 5 } }).catch(() => null);
+                const resMem = await fetch(`${baseGlances}/api/3/mem`, { next: { revalidate: 5 } }).catch(() => null);
+                if (resCpu && resCpu.ok && resMem && resMem.ok) {
+                    const cpu = await resCpu.json();
+                    const mem = await resMem.json();
+                    glancesStats.push({
+                        name: g.name,
+                        online: true,
+                        cpu: Math.round(cpu.total ?? (cpu.user + (cpu.system || 0))),
+                        ram: Math.round(mem.percent ?? ((mem.used / mem.total) * 100))
+                    });
+                }
+            } catch {
+                glancesStats.push({ name: g.name, online: false, cpu: 0, ram: 0 });
+            }
+        }
+
+        return {
+            success: true,
+            totalStreams: totalStreamCount,
+            sessions: allSessions,
+            glances: glancesStats
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed fetching admin streams" };
     }
 }
 

@@ -1280,6 +1280,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "showEdition" BOOLEAN NOT NULL DEFAULT 0,
                     "showStudio" BOOLEAN NOT NULL DEFAULT 0,
                     "showContentRating" BOOLEAN NOT NULL DEFAULT 0,
+                    "badgeScale" REAL DEFAULT 1.0,
+                    "categoryScales" TEXT,
+                    "badgeBackdrops" TEXT,
                     "customBadgeIds" TEXT,
                     "layerPriorityOrder" TEXT,
                     "enabled" BOOLEAN NOT NULL DEFAULT 1,
@@ -1317,6 +1320,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     ["showContentRating", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "showContentRating" BOOLEAN NOT NULL DEFAULT 0;`],
                     ["badgeScale", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "badgeScale" REAL DEFAULT 1.0;`],
                     ["categoryScales", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "categoryScales" TEXT;`],
+                    ["badgeBackdrops", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "badgeBackdrops" TEXT;`],
                     ["customBadgeIds", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "customBadgeIds" TEXT;`],
                     ["layerPriorityOrder", `ALTER TABLE "MediaOverlayRule" ADD COLUMN "layerPriorityOrder" TEXT;`]
                 ];

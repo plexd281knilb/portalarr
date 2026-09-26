@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
+import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
 import { format, differenceInDays } from "date-fns";
 
@@ -63,6 +64,7 @@ export default function UserProfilePage() {
 
     // Send-to-Kindle State
     const [kindleEmail, setKindleEmail] = useState("");
+    const [bypassKindle, setBypassKindle] = useState(false);
     const [kindleSaving, setKindleSaving] = useState(false);
     const [kindleMsg, setKindleMsg] = useState("");
     const [kindleErr, setKindleErr] = useState("");
@@ -172,7 +174,12 @@ export default function UserProfilePage() {
                 const u = await getCurrentUser();
                 setUser(u);
                 if (u?.kindleEmail) {
-                    setKindleEmail(u.kindleEmail);
+                    if (u.kindleEmail === "DIRECT_DOWNLOAD") {
+                        setBypassKindle(true);
+                        setKindleEmail("");
+                    } else {
+                        setKindleEmail(u.kindleEmail);
+                    }
                 }
                 const ref = await getUserReferralInfo();
                 if (ref?.success) {
@@ -464,15 +471,20 @@ export default function UserProfilePage() {
         setKindleMsg("");
         setKindleErr("");
 
-        const res = await updateCurrentUserKindleEmail(kindleEmail);
+        const targetEmail = bypassKindle ? "DIRECT_DOWNLOAD" : kindleEmail;
+        const res = await updateCurrentUserKindleEmail(targetEmail);
         setKindleSaving(false);
 
         if (res?.error) {
             setKindleErr(res.error);
         } else if (res?.success) {
-            setKindleMsg(res.message || "Your Send-to-Kindle email address has been updated successfully!");
-            setUser((prev: any) => ({ ...prev, kindleEmail: res.kindleEmail }));
-            setKindleEmail(res.kindleEmail || "");
+            setKindleMsg(bypassKindle 
+                ? "Direct download & browser reading bypass unlocked! Book Library access granted."
+                : (res.message || "Your Send-to-Kindle email address has been updated successfully!"));
+            setUser((prev: any) => ({ ...prev, kindleEmail: targetEmail }));
+            if (!bypassKindle) {
+                setKindleEmail(res.kindleEmail || "");
+            }
         }
     };
 
@@ -646,7 +658,8 @@ export default function UserProfilePage() {
     const cleanKindleInput = kindleEmail.trim().toLowerCase();
     const isKindleDomain = cleanKindleInput.endsWith("@kindle.com") || cleanKindleInput.endsWith("@free.kindle.com");
     const hasAtSymbol = cleanKindleInput.includes("@");
-    const hasChangedKindle = (user?.kindleEmail || "").trim().toLowerCase() !== cleanKindleInput;
+    const currentEffectiveKindle = bypassKindle ? "DIRECT_DOWNLOAD" : cleanKindleInput;
+    const hasChangedKindle = (user?.kindleEmail || "").trim().toLowerCase() !== currentEffectiveKindle.toLowerCase();
 
     const currentAccountType = user?.accountType || "STANDARD";
     const effectiveYearlyPrice = paymentConfig?.yearlyPrice ?? 180;
@@ -1766,43 +1779,69 @@ export default function UserProfilePage() {
                             </div>
                         )}
 
-                        <div className="space-y-2">
+                        {/* BYPASS KINDLE OPTION */}
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 space-y-2">
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="kindleEmailInput" className="text-xs font-semibold text-foreground">
-                                    Send-to-Kindle Email Address
+                                <Label htmlFor="bypassKindleToggle" className="text-xs font-semibold cursor-pointer">
+                                    <span>Bypass Kindle (Direct Phone/PC Download & Browser Reading)</span>
+                                    <p className="text-[10px] text-muted-foreground">Don't have an Amazon Kindle? Enable this to download books directly or stream audiobooks without a Kindle email.</p>
                                 </Label>
-                                {cleanKindleInput && (
-                                    isKindleDomain ? (
-                                        <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
-                                            <CheckCircle2 className="h-3 w-3" /> Kindle domain recognized
-                                        </span>
-                                    ) : hasAtSymbol ? (
-                                        <span className="text-[11px] text-amber-400 flex items-center gap-1 font-medium">
-                                            <AlertCircle className="h-3 w-3" /> Kindle addresses typically end with @kindle.com
-                                        </span>
-                                    ) : null
-                                )}
-                            </div>
-                            <div className="relative">
-                                <Input
-                                    id="kindleEmailInput"
-                                    type="email"
-                                    value={kindleEmail}
-                                    onChange={(e) => {
-                                        setKindleEmail(e.target.value);
+                                <Switch 
+                                    id="bypassKindleToggle"
+                                    checked={bypassKindle}
+                                    onCheckedChange={(val) => {
+                                        setBypassKindle(val);
                                         if (kindleMsg) setKindleMsg("");
                                         if (kindleErr) setKindleErr("");
                                     }}
-                                    placeholder="e.g. yourusername@kindle.com"
-                                    className="bg-background/80 font-mono text-xs pr-10 border-border/60"
-                                    autoComplete="email"
                                 />
-                                <MailCheck className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                             </div>
-                            <p className="text-[11px] text-muted-foreground">
-                                Find your Kindle email on your device under <strong className="text-foreground">Settings &gt; Your Account &gt; Send-to-Kindle Email</strong>, or on Amazon under <strong className="text-foreground">Manage Your Content and Devices &gt; Preferences</strong>.
-                            </p>
                         </div>
+
+                        {!bypassKindle ? (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="kindleEmailInput" className="text-xs font-semibold text-foreground">
+                                        Send-to-Kindle Email Address
+                                    </Label>
+                                    {cleanKindleInput && (
+                                        isKindleDomain ? (
+                                            <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+                                                <CheckCircle2 className="h-3 w-3" /> Kindle domain recognized
+                                            </span>
+                                        ) : hasAtSymbol ? (
+                                            <span className="text-[11px] text-amber-400 flex items-center gap-1 font-medium">
+                                                <AlertCircle className="h-3 w-3" /> Kindle addresses typically end with @kindle.com
+                                            </span>
+                                        ) : null
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <Input
+                                        id="kindleEmailInput"
+                                        type="email"
+                                        value={kindleEmail}
+                                        onChange={(e) => {
+                                            setKindleEmail(e.target.value);
+                                            if (kindleMsg) setKindleMsg("");
+                                            if (kindleErr) setKindleErr("");
+                                        }}
+                                        placeholder="e.g. yourusername@kindle.com"
+                                        className="bg-background/80 font-mono text-xs pr-10 border-border/60"
+                                        autoComplete="email"
+                                    />
+                                    <MailCheck className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Find your Kindle email on your device under <strong className="text-foreground">Settings &gt; Your Account &gt; Send-to-Kindle Email</strong>, or on Amazon under <strong className="text-foreground">Manage Your Content and Devices &gt; Preferences</strong>.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                <span>Direct download & browser reading bypass is selected. Click Save to unlock full Book & Audiobook Library access.</span>
+                            </div>
+                        )}
 
                         <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
                             <Button
@@ -1816,7 +1855,7 @@ export default function UserProfilePage() {
                                     </>
                                 ) : (
                                     <>
-                                        <BookOpen className="h-4 w-4" /> {user?.kindleEmail ? "Update Kindle Email" : "Save Kindle Email"}
+                                        <BookOpen className="h-4 w-4" /> {bypassKindle ? "Save Direct Access" : (user?.kindleEmail ? "Update Kindle Email" : "Save Kindle Email")}
                                     </>
                                 )}
                             </Button>
@@ -1877,6 +1916,22 @@ export default function UserProfilePage() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* SUPER USER ACCESS CARD */}
+            {isTrial ? (
+                <Card className="border-border/40 bg-[#121218]/60 backdrop-blur-md opacity-80">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-bold flex items-center gap-2 text-muted-foreground">
+                            <Lock className="h-4 w-4" /> Super User Access (Requires Active Membership)
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                            Super user access (Radarr/Sonarr integration, manual release fixes) is reserved for active full members and is unavailable during the free trial.
+                        </CardDescription>
+                    </CardHeader>
+                </Card>
+            ) : (
+                <SuperUserCard initialRole={user?.role} />
+            )}
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* ACCOUNT INFORMATION CARD */}

@@ -33,11 +33,12 @@ import {
     bulkApproveAdminApprovalsAction,
     bulkRejectAdminApprovalsAction,
     getApprovalSettingsAction,
-    saveApprovalSettingsAction
+    saveApprovalSettingsAction,
+    bulkSetUsersTrialOrSubscriptionAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,7 +52,7 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby
+    Eye, Music, BookOpen, Tv, Baby, X
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import PaymentEmailManager from "@/components/payment-email-manager";
@@ -99,6 +100,14 @@ export default function AccessSettingsPage() {
     const [subActionLoading, setSubActionLoading] = useState(false);
     const [subSuccessMsg, setSubSuccessMsg] = useState("");
     const [subErrMsg, setSubErrMsg] = useState("");
+
+    // Bulk User Selection & Action state
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [bulkUpdating, setBulkUpdating] = useState(false);
+    const [bulkSuccessMsg, setBulkSuccessMsg] = useState("");
+    const [bulkErrMsg, setBulkErrMsg] = useState("");
+    const [showBulkCustomModal, setShowBulkCustomModal] = useState(false);
+    const [bulkCustomDate, setBulkCustomDate] = useState("");
 
     // Referral Stats & Leaderboard state
     const [referralStats, setReferralStats] = useState<any>(null);
@@ -1003,6 +1012,54 @@ export default function AccessSettingsPage() {
         }
     };
 
+    // Bulk User Selection Handlers
+    const toggleSelectUser = (userId: string) => {
+        setSelectedUserIds(prev => 
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
+
+    const handleSelectAllFiltered = (filtered: any[]) => {
+        const filteredIds = filtered.map(u => u.id);
+        const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedUserIds.includes(id));
+        if (allSelected) {
+            setSelectedUserIds(prev => prev.filter(id => !filteredIds.includes(id)));
+        } else {
+            setSelectedUserIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+        }
+    };
+
+    const handleClearSelected = () => {
+        setSelectedUserIds([]);
+    };
+
+    const handleBulkSetSubscription = async (
+        type: "REST_OF_YEAR" | "1_YEAR" | "30_DAYS" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL",
+        customVal?: string | number
+    ) => {
+        if (selectedUserIds.length === 0) return;
+        setBulkUpdating(true);
+        setBulkSuccessMsg("");
+        setBulkErrMsg("");
+        try {
+            const res = await bulkSetUsersTrialOrSubscriptionAction(selectedUserIds, type, customVal);
+            if (res.success) {
+                setBulkSuccessMsg(res.message || `Updated ${res.updatedCount} user(s) successfully!`);
+                setSelectedUserIds([]);
+                await loadUsers();
+                setTimeout(() => setBulkSuccessMsg(""), 6000);
+            } else {
+                setBulkErrMsg(res.error || "Failed to bulk update users.");
+                setTimeout(() => setBulkErrMsg(""), 6000);
+            }
+        } catch (e: any) {
+            setBulkErrMsg(e.message || "Failed to bulk update users.");
+            setTimeout(() => setBulkErrMsg(""), 6000);
+        } finally {
+            setBulkUpdating(false);
+        }
+    };
+
     // Save Payment & Onboarding Defaults
     const handleSaveOnboardingSettings = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1445,6 +1502,159 @@ export default function AccessSettingsPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3.5">
+                                {/* BULK ACTION ALERTS */}
+                                {bulkSuccessMsg && (
+                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs flex items-center justify-between text-emerald-200 animate-in fade-in-50">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                            <span>{bulkSuccessMsg}</span>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 cursor-pointer" onClick={() => setBulkSuccessMsg("")}>✕</Button>
+                                    </div>
+                                )}
+                                {bulkErrMsg && (
+                                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs flex items-center justify-between text-red-200 animate-in fade-in-50">
+                                        <div className="flex items-center gap-2">
+                                            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                            <span>{bulkErrMsg}</span>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 cursor-pointer" onClick={() => setBulkErrMsg("")}>✕</Button>
+                                    </div>
+                                )}
+
+                                {/* BULK SELECTION & ACTIONS TOOLBAR */}
+                                {!loading && filteredUsers.length > 0 && (
+                                    <div className="space-y-2.5">
+                                        {/* Master Select Bar */}
+                                        <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 bg-muted/20 rounded-xl border border-border/40 text-xs">
+                                            <div className="flex items-center gap-2.5">
+                                                <input
+                                                    type="checkbox"
+                                                    id="bulk-select-all"
+                                                    checked={filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u.id))}
+                                                    onChange={() => handleSelectAllFiltered(filteredUsers)}
+                                                    className="h-4 w-4 rounded border-slate-750 bg-slate-950 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
+                                                />
+                                                <label htmlFor="bulk-select-all" className="font-semibold text-foreground cursor-pointer select-none">
+                                                    Select All Filtered ({filteredUsers.length})
+                                                </label>
+                                                {selectedUserIds.length > 0 && (
+                                                    <Badge variant="outline" className="text-[11px] bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold px-2 py-0.5">
+                                                        {selectedUserIds.length} user{selectedUserIds.length === 1 ? "" : "s"} selected
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {selectedUserIds.length > 0 && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleClearSelected}
+                                                    className="h-6 text-[11px] text-muted-foreground hover:text-foreground px-2 cursor-pointer"
+                                                >
+                                                    Deselect All
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {/* Action Bar when users selected */}
+                                        {selectedUserIds.length > 0 && (
+                                            <div className="p-3.5 bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-slate-950/70 rounded-xl border border-amber-500/50 shadow-lg space-y-2.5 animate-in fade-in-50">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                                        <span className="text-xs font-bold text-amber-200">
+                                                            Bulk Actions for {selectedUserIds.length} Selected User{selectedUserIds.length === 1 ? "" : "s"}:
+                                                        </span>
+                                                    </div>
+                                                    {bulkUpdating && (
+                                                        <span className="text-xs text-amber-300 flex items-center gap-1.5 font-medium animate-pulse">
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing bulk update...
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-wrap pt-1">
+                                                    {/* Primary User-Requested Action: Subscribed through End of Year */}
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("REST_OF_YEAR")}
+                                                        className="h-8 px-3 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all gap-1.5 cursor-pointer"
+                                                    >
+                                                        <Calendar className="h-3.5 w-3.5 text-black" />
+                                                        Subscribed Through End of {new Date().getFullYear()} (Dec 31)
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("1_YEAR")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-200 gap-1.5 cursor-pointer"
+                                                    >
+                                                        <Clock className="h-3.5 w-3.5" />
+                                                        +1 Full Year
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("30_DAYS")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-white/5 text-foreground gap-1.5 cursor-pointer"
+                                                    >
+                                                        +30 Days
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("PERMANENT")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-300 gap-1.5 cursor-pointer"
+                                                    >
+                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        Permanent / Lifetime
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => {
+                                                            const now = new Date();
+                                                            const eoy = new Date(now.getFullYear(), 11, 31);
+                                                            setBulkCustomDate(format(eoy, "yyyy-MM-dd"));
+                                                            setShowBulkCustomModal(true);
+                                                        }}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-white/5 text-purple-300 gap-1.5 cursor-pointer"
+                                                    >
+                                                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                                                        Custom Date...
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("SUSPENDED")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-red-500/30 hover:bg-red-500/10 text-red-300 gap-1.5 cursor-pointer sm:ml-auto"
+                                                    >
+                                                        <PauseCircle className="h-3.5 w-3.5" />
+                                                        Suspend Selected
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {loading ? (
                                     <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
                                         <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
@@ -1559,7 +1769,9 @@ export default function AccessSettingsPage() {
                                             <div 
                                                 key={user.id} 
                                                 className={`p-4 rounded-xl border transition-all duration-200 space-y-3 ${
-                                                    hasSecurityLeak
+                                                    selectedUserIds.includes(user.id)
+                                                        ? "bg-amber-500/10 border-amber-500/80 shadow-md shadow-amber-500/10 ring-1 ring-amber-500/50"
+                                                        : hasSecurityLeak
                                                         ? "bg-red-950/30 border-2 border-red-500 shadow-lg shadow-red-950/50"
                                                         : isPending 
                                                         ? "bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60" 
@@ -1610,6 +1822,13 @@ export default function AccessSettingsPage() {
                                                 {/* TOP ROW: USER INFO & BADGES */}
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                                                     <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedUserIds.includes(user.id)}
+                                                            onChange={() => toggleSelectUser(user.id)}
+                                                            className="w-4 h-4 rounded border-border/60 bg-muted/30 text-amber-500 focus:ring-amber-500/50 cursor-pointer accent-amber-500 shrink-0"
+                                                            title={`Select ${user.username} for bulk actions`}
+                                                        />
                                                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
                                                             {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
                                                         </div>
@@ -4105,6 +4324,139 @@ export default function AccessSettingsPage() {
                     </div>
                 );
             })()}
+
+            {/* BULK CUSTOM DATE EXPIRATION MODAL */}
+            {showBulkCustomModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                    <Card className="w-full max-w-md border-amber-500/30 bg-[#0f0f13] text-foreground shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400" />
+                        <CardHeader className="pb-3 pt-5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                                        <Calendar className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-base font-bold flex items-center gap-1.5">
+                                            Bulk Set Subscription Expiration
+                                        </CardTitle>
+                                        <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                                            Applying to <span className="font-bold text-amber-300">{selectedUserIds.length} selected user{selectedUserIds.length === 1 ? "" : "s"}</span>
+                                        </CardDescription>
+                                    </div>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setShowBulkCustomModal(false)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-foreground/90">
+                                    Subscription Expiration Date (Until 23:59:59)
+                                </label>
+                                <Input
+                                    type="date"
+                                    value={bulkCustomDate}
+                                    onChange={(e) => setBulkCustomDate(e.target.value)}
+                                    className="bg-black/40 border-border/60 text-sm font-mono h-10"
+                                    min={format(new Date(), "yyyy-MM-dd")}
+                                />
+                                <p className="text-[11px] text-muted-foreground">
+                                    All selected users will be set to <span className="text-emerald-400 font-semibold">APPROVED</span> status with active access until this date ends.
+                                </p>
+                            </div>
+
+                            {/* Quick Presets */}
+                            <div className="space-y-1.5 pt-1 border-t border-border/40">
+                                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                    Quick Presets
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-amber-500/30 hover:bg-amber-500/10 text-amber-200 justify-start"
+                                        onClick={() => {
+                                            const now = new Date();
+                                            setBulkCustomDate(format(new Date(now.getFullYear(), 11, 31), "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        Dec 31, {new Date().getFullYear()} (End of Year)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        onClick={() => {
+                                            const now = new Date();
+                                            setBulkCustomDate(format(new Date(now.getFullYear() + 1, 11, 31), "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        Dec 31, {new Date().getFullYear() + 1}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        onClick={() => {
+                                            const d = new Date();
+                                            d.setDate(d.getDate() + 90);
+                                            setBulkCustomDate(format(d, "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        +90 Days
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        onClick={() => {
+                                            const d = new Date();
+                                            d.setFullYear(d.getFullYear() + 1);
+                                            setBulkCustomDate(format(d, "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        +1 Year
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                        <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-black/20">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowBulkCustomModal(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={bulkUpdating || !bulkCustomDate}
+                                onClick={async () => {
+                                    setShowBulkCustomModal(false);
+                                    await handleBulkSetSubscription("CUSTOM", bulkCustomDate);
+                                }}
+                                className="bg-amber-500 hover:bg-amber-400 text-black font-bold shadow-md shadow-amber-500/20 gap-1.5 cursor-pointer"
+                            >
+                                {bulkUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                Apply to {selectedUserIds.length} User{selectedUserIds.length === 1 ? "" : "s"}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }

@@ -2,33 +2,35 @@
 
 import { useState, useEffect } from "react";
 import { getCurrentUser } from "@/app/auth-actions";
-import { submitLibraryAccessRequest } from "@/app/actions";
+import { setupBookLibraryAccessAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { BookOpen, X, Loader2, Check, ShieldAlert } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { BookOpen, X, Loader2, Check, ShieldAlert, Download, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function RequestLibraryAccess() {
+    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [loadingProfile, setLoadingProfile] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [successMsg, setSuccessMsg] = useState("");
     const [error, setError] = useState("");
 
-    const [userEmail, setUserEmail] = useState("");
     const [userKindleEmail, setUserKindleEmail] = useState("");
-    const [hasExistingEmail, setHasExistingEmail] = useState(false);
+    const [bypassKindle, setBypassKindle] = useState(false);
 
     useEffect(() => {
         async function fetchProfile() {
             try {
                 const profile = await getCurrentUser();
                 if (profile) {
-                    setUserEmail(profile.email || "");
-                    setUserKindleEmail(profile.kindleEmail || "");
-                    if (profile.email) {
-                        setHasExistingEmail(true);
+                    if (profile.kindleEmail && profile.kindleEmail !== "DIRECT_DOWNLOAD") {
+                        setUserKindleEmail(profile.kindleEmail);
+                    } else if (profile.kindleEmail === "DIRECT_DOWNLOAD") {
+                        setBypassKindle(true);
                     }
                 }
             } catch (e) {
@@ -37,7 +39,9 @@ export default function RequestLibraryAccess() {
                 setLoadingProfile(false);
             }
         }
-        fetchProfile();
+        if (isOpen) {
+            fetchProfile();
+        }
     }, [isOpen]);
 
     async function handleSubmit(e: React.FormEvent) {
@@ -46,18 +50,23 @@ export default function RequestLibraryAccess() {
         setError("");
         
         try {
-            const res = await submitLibraryAccessRequest(userEmail, userKindleEmail);
+            const res = await setupBookLibraryAccessAction({
+                kindleEmail: bypassKindle ? undefined : userKindleEmail,
+                bypassKindle
+            });
             if (res && !res.success) {
-                setError(res.error || "Failed to submit access request.");
+                setError(res.error || "Failed to setup library access.");
             } else {
                 setSuccess(true);
+                setSuccessMsg(res.message || "Book Library access unlocked!");
                 setTimeout(() => {
                     setIsOpen(false);
                     setSuccess(false);
-                }, 3000);
+                    router.push("/library");
+                }, 1500);
             }
         } catch (err: any) {
-            setError(err.message || "Failed to submit access request.");
+            setError(err.message || "Failed to setup library access.");
         } finally {
             setSubmitting(false);
         }
@@ -67,10 +76,10 @@ export default function RequestLibraryAccess() {
         <>
             <Button 
                 onClick={() => setIsOpen(true)}
-                className="w-full text-base font-semibold h-12 shadow-lg transition-all bg-emerald-500 hover:bg-emerald-600 text-black hover:ring-2 hover:ring-emerald-400/50 active:scale-95"
+                className="w-full text-sm sm:text-base font-semibold h-11 sm:h-12 shadow-md transition-all bg-emerald-500 hover:bg-emerald-600 text-black hover:ring-2 hover:ring-emerald-400/50 active:scale-95 rounded-xl cursor-pointer"
             >
-                <BookOpen className="mr-2 h-5 w-5" />
-                Request Book Library Access
+                <BookOpen className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                Setup Book Library Access
             </Button>
 
             {isOpen && (
@@ -79,19 +88,19 @@ export default function RequestLibraryAccess() {
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="absolute right-3 top-3 h-8 w-8 hover:ring-1 hover:ring-border active:scale-95 transition-all"
+                            className="absolute right-3 top-3 h-8 w-8 hover:ring-1 hover:ring-border active:scale-95 transition-all text-muted-foreground hover:text-foreground"
                             onClick={() => setIsOpen(false)}
                             disabled={submitting}
                         >
                             <X className="h-4 w-4" />
                         </Button>
 
-                        <CardHeader className="pb-4">
+                        <CardHeader className="pb-3 pt-5">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-emerald-400">
-                                <BookOpen className="h-5 w-5 text-emerald-400" /> Request Library Access
+                                <BookOpen className="h-5 w-5 text-emerald-400" /> Unlock Book & Audiobook Library
                             </CardTitle>
-                            <CardDescription>
-                                Submit a request to the administrator to access the book shelves.
+                            <CardDescription className="text-xs text-muted-foreground">
+                                Choose how you want to receive your books (Kindle wireless delivery or direct download).
                             </CardDescription>
                         </CardHeader>
 
@@ -102,68 +111,84 @@ export default function RequestLibraryAccess() {
                                     <p className="text-xs text-muted-foreground">Loading account details...</p>
                                 </div>
                             ) : success ? (
-                                <div className="flex flex-col items-center justify-center py-8 space-y-3 text-center">
+                                <div className="flex flex-col items-center justify-center py-8 space-y-3 text-center animate-in zoom-in-95 duration-200">
                                     <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]">
                                         <Check className="h-6 w-6" />
                                     </div>
-                                    <h3 className="font-semibold text-sm text-foreground">Request Sent!</h3>
+                                    <h3 className="font-semibold text-sm text-foreground">{successMsg}</h3>
                                     <p className="text-xs text-muted-foreground max-w-xs">
-                                        Your request has been emailed to the administrator. They will assign you to the correct library.
+                                        Opening the Book Library now...
                                     </p>
                                 </div>
                             ) : (
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     {error && (
-                                        <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-500 font-medium flex gap-2">
+                                        <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex gap-2">
                                             <ShieldAlert className="h-4 w-4 shrink-0" />
                                             <span>{error}</span>
                                         </div>
                                     )}
 
-                                    {!hasExistingEmail && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="reqEmail" className="text-xs font-semibold">Your Personal Email</Label>
-                                            <Input
-                                                id="reqEmail"
-                                                type="email"
-                                                placeholder="you@domain.com"
-                                                value={userEmail}
-                                                onChange={(e) => setUserEmail(e.target.value)}
-                                                required
-                                            />
-                                            <p className="text-[10px] text-muted-foreground">
-                                                Please provide your email address to receive delivery reports.
-                                            </p>
+                                    {/* Option 1: Send-to-Kindle */}
+                                    <div className={`p-3.5 rounded-xl border transition-all space-y-2 ${!bypassKindle ? "bg-emerald-950/20 border-emerald-500/40" : "bg-muted/10 border-border/40 opacity-70"}`}>
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="reqKindleEmail" className="text-xs font-bold flex items-center gap-1.5 text-foreground cursor-pointer">
+                                                <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                                                Send-to-Kindle Email
+                                            </Label>
+                                            <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">Wireless Delivery</span>
                                         </div>
-                                    )}
-
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="reqKindleEmail" className="text-xs font-semibold">Send-to-Kindle Email</Label>
                                         <Input
                                             id="reqKindleEmail"
                                             type="email"
-                                            placeholder="e.g. name@kindle.com"
+                                            placeholder="e.g. yourname@kindle.com"
                                             value={userKindleEmail}
-                                            onChange={(e) => setUserKindleEmail(e.target.value)}
-                                            required
+                                            onChange={(e) => {
+                                                setUserKindleEmail(e.target.value);
+                                                if (e.target.value) setBypassKindle(false);
+                                            }}
+                                            disabled={bypassKindle}
+                                            className="bg-black/40 border-border/60 text-xs h-9"
                                         />
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Your Kindle email address. Ask the admin for the server's sending address to approve it on Amazon.
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                            Find your Send-to-Kindle address in Amazon Account → Manage Devices.
                                         </p>
+                                    </div>
+
+                                    {/* Option 2: Direct Download Bypass */}
+                                    <div 
+                                        onClick={() => setBypassKindle(!bypassKindle)}
+                                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${bypassKindle ? "bg-purple-950/30 border-purple-500/50 ring-1 ring-purple-500/40" : "bg-muted/10 border-border/40 hover:bg-muted/20"}`}
+                                    >
+                                        <input 
+                                            type="checkbox"
+                                            checked={bypassKindle}
+                                            onChange={(e) => setBypassKindle(e.target.checked)}
+                                            className="mt-0.5 rounded border-border text-purple-500 focus:ring-purple-400 accent-purple-500 cursor-pointer"
+                                        />
+                                        <div className="space-y-0.5">
+                                            <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                                <Download className="h-3.5 w-3.5 text-purple-400" />
+                                                Bypass Kindle (Direct Phone/PC Download)
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                I don't have a Kindle or prefer downloading .EPUB / .MP3 directly to my phone or computer.
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <Button 
                                         type="submit" 
-                                        disabled={submitting} 
-                                        className="w-full text-black font-bold mt-2 bg-emerald-500 hover:bg-emerald-600 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-lg active:scale-95 transition-all"
+                                        disabled={submitting || (!bypassKindle && !userKindleEmail)} 
+                                        className="w-full text-black font-bold h-10 mt-1 bg-emerald-500 hover:bg-emerald-400 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-lg active:scale-95 transition-all cursor-pointer"
                                     >
                                         {submitting ? (
                                             <>
                                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Sending Request...
+                                                Unlocking Access...
                                             </>
                                         ) : (
-                                            "Submit Request"
+                                            "Unlock Book Library Access"
                                         )}
                                     </Button>
                                 </form>

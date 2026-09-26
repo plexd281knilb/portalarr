@@ -236,6 +236,41 @@ export function KometaStudio() {
             [category]: Math.max(0.4, Math.min(2.0, Number(scale.toFixed(2))))
         }));
     };
+    const DEFAULT_BADGE_BACKDROPS: Record<string, boolean> = {
+        resolution: true,
+        hdr: false,
+        codec: false,
+        audio: false,
+        channels: false,
+        edition: true,
+        studio: false,
+        contentRating: false,
+        ratings: false
+    };
+    const [simBadgeBackdrops, setSimBadgeBackdrops] = useState<Record<string, boolean>>(DEFAULT_BADGE_BACKDROPS);
+    const toggleBadgeBackdrop = (category: string) => {
+        setSimBadgeBackdrops(prev => ({
+            ...prev,
+            [category]: !prev[category]
+        }));
+    };
+    const setAllBadgeBackdrops = (enabled: boolean) => {
+        setSimBadgeBackdrops({
+            resolution: enabled,
+            hdr: enabled,
+            codec: enabled,
+            audio: enabled,
+            channels: enabled,
+            edition: enabled,
+            studio: enabled,
+            contentRating: enabled,
+            ratings: enabled
+        });
+    };
+    const [simResolutionSample, setSimResolutionSample] = useState<"4K" | "1080p">("1080p");
+    const [simEditionSample, setSimEditionSample] = useState<string>("EXTENDED");
+    const [simPosterTheme, setSimPosterTheme] = useState<"dark" | "light">("dark");
+
     const [simTheme, setSimTheme] = useState<"glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson">("glass");
     const [seedingBadges, setSeedingBadges] = useState(false);
     const [syncingOfficialBadges, setSyncingOfficialBadges] = useState(false);
@@ -868,6 +903,19 @@ export function KometaStudio() {
             } catch (e) {}
         } else {
             setSimCategoryScales(DEFAULT_CATEGORY_SCALES);
+        }
+
+        if (targetRule.badgeBackdrops) {
+            try {
+                const parsed = typeof targetRule.badgeBackdrops === "string"
+                    ? JSON.parse(targetRule.badgeBackdrops)
+                    : targetRule.badgeBackdrops;
+                if (parsed && typeof parsed === "object") {
+                    setSimBadgeBackdrops({ ...DEFAULT_BADGE_BACKDROPS, ...parsed });
+                }
+            } catch (e) {}
+        } else {
+            setSimBadgeBackdrops(DEFAULT_BADGE_BACKDROPS);
         }
 
         if (targetRule.layerPriorityOrder) {
@@ -1541,12 +1589,12 @@ export function KometaStudio() {
         const realRating = simSelectedRealItem?.detectedBadges?.contentRating || simSelectedRealItem?.contentRating;
 
         const simDetected = {
-            resolution: simShowResolution ? (realRes || "4K") : undefined,
+            resolution: simShowResolution ? (realRes || simResolutionSample) : undefined,
             hdr: simShowHdr ? (realHdr || "DV") : undefined,
             codec: simShowCodec ? (realCodec || "HEVC") : undefined,
             audio: simShowAudio ? (realAudio || "ATMOS") : undefined,
             audioChannels: simShowChannels ? (realChannels || "7.1") : undefined,
-            edition: simShowEdition ? (realEdition || "IMAX") : undefined,
+            edition: simShowEdition ? (realEdition || simEditionSample) : undefined,
             studio: simShowStudio ? (realStudio || "HBO") : undefined,
             contentRating: simShowRating ? (realRating || "PG-13") : undefined
         };
@@ -1555,8 +1603,27 @@ export function KometaStudio() {
             const catScale = simCategoryScales[category] ?? 1.0;
             const effectiveScale = (simBadgeScale || 1.0) * catScale;
             const origin = pos.includes("left") ? "left center" : pos.includes("right") ? "right center" : "center";
+            const hasBackdrop = Boolean(
+                simBadgeBackdrops[category] || 
+                (category === "resolution" && isDovetailed && simBadgeBackdrops.hdr)
+            );
 
             if (badge) {
+                const imgElement = (
+                    <img 
+                        src={`/api/curation/badges/${encodeURIComponent(badge.id)}`}
+                        alt={badge.name}
+                        className="max-h-7 max-w-[125px] object-contain drop-shadow-md"
+                        onError={(e) => {
+                            const el = e.currentTarget;
+                            el.style.display = "none";
+                            if (el.nextElementSibling) {
+                                (el.nextElementSibling as HTMLElement).style.display = "flex";
+                            }
+                        }}
+                    />
+                );
+
                 return (
                     <div 
                         key={`custom-badge-${badge.id}`} 
@@ -1566,18 +1633,13 @@ export function KometaStudio() {
                             transformOrigin: origin 
                         }}
                     >
-                        <img 
-                            src={`/api/curation/badges/${encodeURIComponent(badge.id)}`}
-                            alt={badge.name}
-                            className="max-h-7 max-w-[125px] object-contain drop-shadow-md"
-                            onError={(e) => {
-                                const el = e.currentTarget;
-                                el.style.display = "none";
-                                if (el.nextElementSibling) {
-                                    (el.nextElementSibling as HTMLElement).style.display = "flex";
-                                }
-                            }}
-                        />
+                        {hasBackdrop ? (
+                            <div className="bg-black/92 px-2.5 py-1 rounded-lg border border-white/20 shadow-xl shadow-black/90 flex items-center justify-center backdrop-blur-md">
+                                {imgElement}
+                            </div>
+                        ) : (
+                            imgElement
+                        )}
                         <div style={{ display: "none" }}>
                             {vectorFallbackJsx}
                         </div>
@@ -1594,7 +1656,13 @@ export function KometaStudio() {
                         transformOrigin: origin 
                     }}
                 >
-                    {vectorFallbackJsx}
+                    {hasBackdrop ? (
+                        <div className="bg-black/92 p-0.5 rounded-lg border border-white/20 shadow-xl shadow-black/90 flex items-center justify-center backdrop-blur-md">
+                            {vectorFallbackJsx}
+                        </div>
+                    ) : (
+                        vectorFallbackJsx
+                    )}
                 </div>
             );
         };
@@ -2322,7 +2390,8 @@ export function KometaStudio() {
                 tieredRibbons: simTieredRibbons,
                 maxRibbonTiers: simMaxRibbonTiers,
                 categoryScales: simCategoryScales,
-                layerPriorityOrder: layerPriorityOrder
+                layerPriorityOrder: layerPriorityOrder,
+                badgeBackdrops: simBadgeBackdrops
             };
 
             const res = await saveOverlayRuleAction(payload);
@@ -2388,7 +2457,8 @@ export function KometaStudio() {
                 tieredRibbons: simTieredRibbons,
                 maxRibbonTiers: simMaxRibbonTiers,
                 categoryScales: simCategoryScales,
-                layerPriorityOrder: layerPriorityOrder
+                layerPriorityOrder: layerPriorityOrder,
+                badgeBackdrops: simBadgeBackdrops
             };
 
             const saveRes = await saveOverlayRuleAction(payload);
@@ -2928,7 +2998,8 @@ export function KometaStudio() {
                 ribbonText: simRibbonText,
                 tieredRibbons: simTieredRibbons,
                 maxRibbonTiers: simMaxRibbonTiers,
-                layerPriorityOrder: layerPriorityOrder
+                layerPriorityOrder: layerPriorityOrder,
+                badgeBackdrops: simBadgeBackdrops
             });
             if (res.success) {
                 setSingleItemMsg({ success: true, text: res.message || "Overlay applied to item successfully!" });
@@ -3652,13 +3723,36 @@ export function KometaStudio() {
                                 <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                                     <Eye className="h-4 w-4 text-purple-400" /> Live Poster Simulator
                                 </span>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                            if (simPosterTheme === "dark") {
+                                                setSimPosterTheme("light");
+                                                setSimPosterImage("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80");
+                                            } else {
+                                                setSimPosterTheme("dark");
+                                                setSimPosterImage("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+                                            }
+                                        }}
+                                        className={`h-7 text-[11px] gap-1.5 border transition-all cursor-pointer ${
+                                            simPosterTheme === "light"
+                                                ? "border-amber-400 bg-amber-500/20 text-amber-200 shadow-sm"
+                                                : "border-slate-700 bg-slate-900/80 text-slate-300 hover:text-white"
+                                        }`}
+                                        title="Toggle between a dark and bright movie poster to test 1080p and badge contrast"
+                                    >
+                                        <Palette className="h-3.5 w-3.5 text-amber-400" />
+                                        {simPosterTheme === "light" ? "Bright Poster (Testing 1080p)" : "Dark Poster"}
+                                    </Button>
                                     <Button
                                         type="button"
                                         size="sm"
                                         variant="outline"
                                         onClick={() => setPosterPickerModalOpen(true)}
-                                        className="h-7 text-[11px] gap-1.5 border-purple-500/40 hover:bg-purple-950/40 text-purple-200 hover:text-purple-100"
+                                        className="h-7 text-[11px] gap-1.5 border-purple-500/40 hover:bg-purple-950/40 text-purple-200 hover:text-purple-100 cursor-pointer"
                                     >
                                         <ImageIcon className="h-3.5 w-3.5 text-purple-400" /> Pull Poster from Plex
                                     </Button>
@@ -3851,10 +3945,48 @@ export function KometaStudio() {
 
                             {/* Comprehensive Poster Badge Toggles with Positions */}
                             <div className="space-y-3.5 p-5 bg-slate-950/60 rounded-2xl border border-slate-800 shadow-inner">
-                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 flex-wrap gap-2">
                                     <span className="text-xs font-bold text-white flex items-center gap-2">
                                         <Sliders className="h-4 w-4 text-purple-400" /> Comprehensive Poster Badge Toggles &amp; Positions
                                     </span>
+                                    {/* Quick presets for Black Backgrounds */}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[10px] text-slate-400 font-medium mr-1">Black Backing:</span>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                setSimBadgeBackdrops(prev => ({
+                                                    ...prev,
+                                                    resolution: true,
+                                                    edition: true
+                                                }));
+                                            }}
+                                            className="h-6 px-2 text-[10px] bg-slate-900 border border-slate-750 hover:bg-slate-800 text-amber-300 hover:text-amber-200 cursor-pointer"
+                                            title="Enable black background for Resolution (1080p) & Edition cuts"
+                                        >
+                                            Res &amp; Editions ON
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => setAllBadgeBackdrops(true)}
+                                            className="h-6 px-2 text-[10px] bg-slate-900 border border-slate-750 hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                                        >
+                                            All ON
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => setAllBadgeBackdrops(false)}
+                                            className="h-6 px-2 text-[10px] bg-slate-900 border border-slate-750 hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                                        >
+                                            Clear All
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
@@ -3897,6 +4029,53 @@ export function KometaStudio() {
                                                         {Math.round((simCategoryScales.resolution ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
+                                            </div>
+                                            {/* Preview Sample 1080p vs 4K */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Sample Preview:</span>
+                                                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-md border border-slate-800">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSimResolutionSample("1080p")}
+                                                        className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors cursor-pointer ${
+                                                            simResolutionSample === "1080p" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                                        }`}
+                                                    >
+                                                        1080p
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSimResolutionSample("4K")}
+                                                        className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors cursor-pointer ${
+                                                            simResolutionSample === "4K" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                                        }`}
+                                                    >
+                                                        4K
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                    {simBadgeBackdrops.resolution && (
+                                                        <span className="text-[9px] text-amber-400/80 font-mono">(1080p visible)</span>
+                                                    )}
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("resolution")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.resolution
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.resolution ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.resolution ? "Black ON" : "None"}
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -3941,6 +4120,24 @@ export function KometaStudio() {
                                                     </span>
                                                 </div>
                                             </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("hdr")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.hdr
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.hdr ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.hdr ? "Black ON" : "None"}
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3983,6 +4180,24 @@ export function KometaStudio() {
                                                         {Math.round((simCategoryScales.codec ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
+                                            </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("codec")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.codec
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.codec ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.codec ? "Black ON" : "None"}
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -4027,6 +4242,24 @@ export function KometaStudio() {
                                                     </span>
                                                 </div>
                                             </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("audio")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.audio
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.audio ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.audio ? "Black ON" : "None"}
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -4069,6 +4302,24 @@ export function KometaStudio() {
                                                         {Math.round((simCategoryScales.channels ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
+                                            </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("channels")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.channels
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.channels ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.channels ? "Black ON" : "None"}
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -4113,6 +4364,47 @@ export function KometaStudio() {
                                                     </span>
                                                 </div>
                                             </div>
+                                            {/* Preview Sample Edition Switcher */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium shrink-0">Sample Preview:</span>
+                                                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-md border border-slate-800">
+                                                    {["IMAX", "EXTENDED", "UNRATED"].map((ed) => (
+                                                        <button
+                                                            key={ed}
+                                                            type="button"
+                                                            onClick={() => setSimEditionSample(ed)}
+                                                            className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-colors cursor-pointer ${
+                                                                simEditionSample === ed ? "bg-purple-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                                            }`}
+                                                        >
+                                                            {ed}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                    {simBadgeBackdrops.edition && (
+                                                        <span className="text-[9px] text-amber-400/80 font-mono">(High Contrast)</span>
+                                                    )}
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("edition")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.edition
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.edition ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.edition ? "Black ON" : "None"}
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -4155,6 +4447,24 @@ export function KometaStudio() {
                                                         {Math.round((simCategoryScales.studio ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
+                                            </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("studio")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.studio
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.studio ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.studio ? "Black ON" : "None"}
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -4199,6 +4509,24 @@ export function KometaStudio() {
                                                     </span>
                                                 </div>
                                             </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("contentRating")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.contentRating
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.contentRating ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.contentRating ? "Black ON" : "None"}
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -4241,6 +4569,24 @@ export function KometaStudio() {
                                                         {Math.round((simCategoryScales.ratings ?? 1.0) * 100)}%
                                                     </span>
                                                 </div>
+                                            </div>
+                                            {/* Black Background Backdrop Toggle */}
+                                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/40">
+                                                <span className="text-[11px] text-slate-400 font-medium">Black Background:</span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => toggleBadgeBackdrop("ratings")}
+                                                    className={`h-6 px-2.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                                                        simBadgeBackdrops.ratings
+                                                            ? "bg-black text-amber-300 border-amber-500/50 shadow-sm shadow-black"
+                                                            : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                                                    }`}
+                                                >
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${simBadgeBackdrops.ratings ? "bg-amber-400" : "bg-slate-600"}`} />
+                                                    {simBadgeBackdrops.ratings ? "Black ON" : "None"}
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>

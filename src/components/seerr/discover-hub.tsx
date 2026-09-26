@@ -93,11 +93,87 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
 
     // Search state
     const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedQuery, setDebouncedQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
     const [searchResults, setSearchResults] = useState<TmdbMediaItem[]>([]);
     const [searchAvailabilityMap, setSearchAvailabilityMap] = useState<Record<number, MediaAvailabilityStatus>>({});
     const [bookSearchResults, setBookSearchResults] = useState<BookDiscoveryItem[]>([]);
     const [bookSearchAvailabilityMap, setBookSearchAvailabilityMap] = useState<Record<string, any>>({});
+
+    // Debounce search by 1000ms (waits until user has stopped typing for a full second)
+    useEffect(() => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed) {
+            setDebouncedQuery("");
+            setSearchResults([]);
+            setBookSearchResults([]);
+            setIsSearching(false);
+            return;
+        }
+
+        setIsSearching(true);
+        const timer = setTimeout(() => {
+            setDebouncedQuery(trimmed);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // Execute search action once debouncedQuery is established
+    useEffect(() => {
+        if (!debouncedQuery) {
+            setIsSearching(false);
+            return;
+        }
+
+        let isCancelled = false;
+        const executeSearch = async () => {
+            setIsSearching(true);
+            try {
+                if (activeTab === "ebooks" || activeTab === "audiobooks") {
+                    const bookRes = await searchBooksAction(debouncedQuery, activeTab === "ebooks" ? "ebook" : "audiobook");
+                    if (!isCancelled && bookRes.success && bookRes.items) {
+                        setBookSearchResults(bookRes.items);
+                        setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
+                    }
+                } else {
+                    const [mediaRes, bookRes] = await Promise.all([
+                        searchMediaAction(debouncedQuery, 1, section === "kids"),
+                        searchBooksAction(debouncedQuery, "all")
+                    ]);
+
+                    if (!isCancelled) {
+                        if (mediaRes.success && mediaRes.items) {
+                            setSearchResults(mediaRes.items);
+                            setSearchAvailabilityMap(mediaRes.availabilityMap || {});
+                        }
+                        if (bookRes.success && bookRes.items) {
+                            setBookSearchResults(bookRes.items);
+                            setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
+                        }
+                    }
+                }
+            } catch (e) {
+            } finally {
+                if (!isCancelled) {
+                    setIsSearching(false);
+                }
+            }
+        };
+
+        executeSearch();
+        return () => {
+            isCancelled = true;
+        };
+    }, [debouncedQuery, activeTab, section]);
+
+    // Allow user to immediately execute search on Enter keypress without waiting for the 1s debounce
+    const handleImmediateSearch = () => {
+        const trimmed = searchQuery.trim();
+        if (trimmed && trimmed !== debouncedQuery) {
+            setDebouncedQuery(trimmed);
+        }
+    };
 
     // Selected item for Movie/TV Detail Modal
     const [selectedMedia, setSelectedMedia] = useState<{ id: number; type: "movie" | "tv"; certification?: string } | null>(null);
@@ -123,6 +199,9 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     const handleTabChange = (tab: "discover" | "movies" | "tv" | "ebooks" | "audiobooks" | "requests") => {
         setActiveTab(tab);
         setSearchQuery("");
+        setDebouncedQuery("");
+        setSearchResults([]);
+        setBookSearchResults([]);
         if (typeof window !== "undefined") {
             const url = new URL(window.location.href);
             if (tab === "discover") {
@@ -143,6 +222,9 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     const handleSectionChange = (sec: "main" | "kids") => {
         setSection(sec);
         setSearchQuery("");
+        setDebouncedQuery("");
+        setSearchResults([]);
+        setBookSearchResults([]);
         if (typeof window !== "undefined") {
             const url = new URL(window.location.href);
             if (sec === "kids") {
@@ -211,40 +293,6 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
         }
     };
 
-    const handleSearch = async (query: string) => {
-        setSearchQuery(query);
-        if (!query.trim()) {
-            setSearchResults([]);
-            setBookSearchResults([]);
-            return;
-        }
-        setIsSearching(true);
-        try {
-            if (activeTab === "ebooks" || activeTab === "audiobooks") {
-                const bookRes = await searchBooksAction(query.trim(), activeTab === "ebooks" ? "ebook" : "audiobook");
-                if (bookRes.success && bookRes.items) {
-                    setBookSearchResults(bookRes.items);
-                    setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
-                }
-            } else {
-                const [mediaRes, bookRes] = await Promise.all([
-                    searchMediaAction(query.trim(), 1, section === "kids"),
-                    searchBooksAction(query.trim(), "all")
-                ]);
-
-                if (mediaRes.success && mediaRes.items) {
-                    setSearchResults(mediaRes.items);
-                    setSearchAvailabilityMap(mediaRes.availabilityMap || {});
-                }
-                if (bookRes.success && bookRes.items) {
-                    setBookSearchResults(bookRes.items);
-                    setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
-                }
-            }
-        } catch (e) {} finally {
-            setIsSearching(false);
-        }
-    };
 
     const handleQuickRequest = async (item: TmdbMediaItem) => {
         try {
@@ -429,7 +477,13 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 : "Search movies, TV shows, books, authors..."
                         }
                         value={searchQuery}
-                        onChange={(e) => handleSearch(e.target.value)}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleImmediateSearch();
+                            }
+                        }}
                         className="h-11 sm:h-10 pl-10 pr-9 text-sm bg-background/70 rounded-xl border-border/60 focus:ring-2 focus:ring-primary/40 shadow-sm w-full placeholder:text-muted-foreground/70"
                     />
                     {isSearching ? (
@@ -438,6 +492,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         <button
                             onClick={() => {
                                 setSearchQuery("");
+                                setDebouncedQuery("");
                                 setSearchResults([]);
                                 setBookSearchResults([]);
                             }}
@@ -455,13 +510,18 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 <div className="space-y-6">
                     <div className="flex items-center justify-between px-1">
                         <h2 className="text-base sm:text-lg font-bold text-foreground">
-                            Search Results for "{searchQuery}" ({searchResults.length + bookSearchResults.length})
+                            Search Results for "{debouncedQuery || searchQuery}" ({searchResults.length + bookSearchResults.length})
                         </h2>
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setSearchQuery("")}
-                            className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                                setSearchQuery("");
+                                setDebouncedQuery("");
+                                setSearchResults([]);
+                                setBookSearchResults([]);
+                            }}
+                            className="h-8 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                         >
                             Clear Search
                         </Button>

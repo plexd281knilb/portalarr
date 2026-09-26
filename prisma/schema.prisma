@@ -624,6 +624,7 @@ model MediaOverlayRule {
   showContentRating Boolean   @default(false)
   badgeScale        Float?    @default(1.0)
   categoryScales    String?   // JSON map of individual badge scales per category
+  badgeBackdrops    String?   // JSON map of boolean flags for individual badge black backgrounds per category e.g. {"resolution":true,"edition":true}
   customBadgeIds    String?   // JSON array of CustomBadge IDs to apply
   layerPriorityOrder String?  // JSON array of layer IDs ordered by priority
   enabled           Boolean   @default(true)

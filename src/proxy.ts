@@ -90,6 +90,27 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/", req.url));
     }
 
+    // 7. Strict route protection for TRIAL accounts
+    // Trial accounts have access to: /, /discover, /requests, /settings/profile (guides/password/my plex hub).
+    // They are strictly forbidden from /library (Book Library), /radarr, /sonarr, /beta, /curation, /admin.
+    const isTrialUser = userStatus === "TRIAL" || payload.role === "TRIAL" || (payload as any).isTrial === true;
+    if (isTrialUser) {
+      if (
+        pathname.startsWith("/library") || 
+        pathname.startsWith("/radarr") || 
+        pathname.startsWith("/sonarr") || 
+        pathname.startsWith("/beta") ||
+        pathname.startsWith("/curation") ||
+        pathname.startsWith("/admin") ||
+        (pathname.startsWith("/api/books") && !pathname.includes("/stream"))
+      ) {
+        if (pathname.startsWith("/api")) {
+          return NextResponse.json({ error: "Trial accounts cannot access this service. Please upgrade to a full account." }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL("/", req.url));
+      }
+    }
+
     return NextResponse.next();
   } catch (err) {
     // Invalid session, clean up session cookie and redirect/return 401
