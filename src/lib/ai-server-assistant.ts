@@ -5,9 +5,21 @@ import {
     StreamTelemetry, 
     DetectedIssue, 
     AiChatMessage, 
-    AiAssistantResponse 
+    AiAssistantResponse,
+    AgentActionReport,
+    MediaStreamInspection,
+    StreamPatternInsight
 } from "@/lib/ai-server-assistant-types";
 import { getPlexOwnerUser, getPlexServerFriends, getPlexServers } from "@/lib/plex";
+import { analyzeStreamPatterns } from "@/lib/ai-stream-patterns";
+import { 
+    inspectMediaStreams, 
+    searchAndGrabRadarrReplacement, 
+    searchAndGrabSonarrReplacement, 
+    redownloadBookWithDiagnostics, 
+    cleanMediaSearchQuery 
+} from "@/lib/ai-media-diagnostics";
+import { logAgentEvent } from "@/lib/ai-agent-guardrails";
 
 function cleanUrl(url: string): string {
     if (!url) return "";
@@ -260,38 +272,40 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
 
                                 if (isMatch) {
                                     seenSessionKeys.add(sKey);
-                                    const player = s.Player?.title || s.Player?.device || s.Player?.platform || "Plex Device";
+                                    const player = s.Player?.title || s.Player?.product || s.Player?.device || "Plex Client";
                                     recentDevicesSet.add(player);
 
-                                    const ts = s.TranscodeSession;
-                                    const transDecision = ts ? (ts.videoDecision === "copy" && ts.audioDecision === "copy" ? "direct stream" : "transcode") : "direct play";
+                                    const part = s.Media?.[0]?.Part?.[0];
+                                    const transDecision = s.TranscodeSession 
+                                        ? (s.TranscodeSession.videoDecision === "copy" ? "direct stream" : "transcode")
+                                        : "direct play";
 
-                                    activeStreams.push({
+                                    const stream: StreamTelemetry = {
                                         sessionKey: sKey,
-                                        sessionId: s.Session?.id ? String(s.Session.id) : undefined,
+                                        sessionId: s.Session?.id,
                                         title: s.title || "Media Item",
                                         year: s.year ? String(s.year) : undefined,
-                                        mediaType: s.type || (s.grandparentTitle ? "episode" : "movie"),
+                                        mediaType: s.type || "movie",
                                         player: player,
                                         platform: s.Player?.platform || player,
                                         deviceType: s.Player?.device || player,
                                         ipAddress: s.Player?.address,
-                                        videoResolution: ts?.videoResolution || s.Media?.[0]?.videoResolution || "1080p",
+                                        videoResolution: s.Media?.[0]?.videoResolution || "1080p",
                                         sourceResolution: s.Media?.[0]?.videoResolution || "1080p",
-                                        videoCodec: ts?.videoCodec || s.Media?.[0]?.videoCodec,
-                                        audioCodec: ts?.sourceAudioCodec || s.Media?.[0]?.audioCodec,
-                                        streamAudioCodec: ts?.audioCodec,
-                                        streamBitrate: Number(ts?.bitrate || s.Media?.[0]?.bitrate || 0),
+                                        videoCodec: s.Media?.[0]?.videoCodec,
+                                        audioCodec: s.Media?.[0]?.audioCodec,
+                                        streamBitrate: s.Media?.[0]?.bitrate ? Number(s.Media?.[0]?.bitrate) : undefined,
                                         transcodeDecision: transDecision as any,
-                                        transcodeSpeed: ts?.speed ? String(ts.speed) : undefined,
-                                        transcodeHwRequested: !!ts?.transcodeHwRequested,
-                                        transcodeReason: ts?.transcodeHwDecodingTitle || ts?.context,
-                                        subtitleDecision: ts?.subtitleDecision,
-                                        subtitleCodec: ts?.subtitleCodec,
-                                        percentComplete: s.viewOffset && s.duration ? Math.round((Number(s.viewOffset) / Number(s.duration)) * 100) : 0,
-                                        state: s.Player?.state || "playing",
+                                        transcodeSpeed: s.TranscodeSession?.speed ? String(s.TranscodeSession.speed) : undefined,
+                                        transcodeHwRequested: !!s.TranscodeSession?.transcodeHwRequested,
+                                        transcodeReason: s.TranscodeSession?.transcodeHwDecodingTitle || s.TranscodeSession?.videoDecision,
+                                        subtitleDecision: part?.Stream?.find((st: any) => st.streamType === 3 && st.selected)?.decision,
+                                        subtitleCodec: part?.Stream?.find((st: any) => st.streamType === 3 && st.selected)?.codec,
+                                        percentComplete: s.viewOffset && s.duration ? Math.round((s.viewOffset / s.duration) * 100) : 0,
+                                        state: s.Player?.state === "paused" ? "paused" : "playing",
                                         serverName: srv.name
-                                    });
+                                    };
+                                    activeStreams.push(stream);
                                 }
                             }
                         }
@@ -301,52 +315,50 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
         } catch (e) {}
     }
 
-    // Sort watch history
-    recentWatchHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // 3. Automated Issue Detection Engine
+    // 3. Evaluate Real-Time Diagnostic Rules for User's Active Streams
     const detectedIssues: DetectedIssue[] = [];
     const primary = activeStreams[0] || null;
 
     if (primary) {
-        const pPlayerLower = (primary.player + " " + primary.platform).toLowerCase();
-        const isRoku = pPlayerLower.includes("roku");
-        const isFireTv = pPlayerLower.includes("fire") || pPlayerLower.includes("aft");
-        const isAppleTv = pPlayerLower.includes("apple") || pPlayerLower.includes("tvos");
-        const isWeb = pPlayerLower.includes("chrome") || pPlayerLower.includes("firefox") || pPlayerLower.includes("safari") || pPlayerLower.includes("web");
+        const isRoku = /roku/i.test(primary.player) || /roku/i.test(primary.platform);
+        const isFireTv = /fire/i.test(primary.player) || /aft/i.test(primary.platform);
+        const isAppleTv = /apple/i.test(primary.player) || /tvos/i.test(primary.platform);
+        const isWeb = /web|chrome|firefox|safari|edge/i.test(primary.player) || /web/i.test(primary.platform);
         const isTranscoding = primary.transcodeDecision === "transcode";
 
-        // Issue A: Roku Auto Adjust Quality & Quality Cap
-        if (isRoku) {
+        // Issue A: Roku "Auto Adjust Quality" bug / "not enough bandwidth"
+        if (isRoku && (isTranscoding || primary.streamBitrate && primary.streamBitrate < 500)) {
             detectedIssues.push({
                 id: "roku-auto-adjust",
                 type: "roku_auto_adjust",
-                severity: isTranscoding ? "error" : "warning",
-                title: "Roku Auto Adjust Quality Bug Detected",
-                summary: "Roku Plex apps have an 'Auto Adjust Quality' feature that frequently crashes playback or drops stream quality to an unsupported bitrate.",
-                deviceAffected: primary.player || "Roku Device",
-                quickFix: "Turn OFF 'Auto Adjust Quality' and set Remote Streaming to 'Original' in Roku Plex Settings.",
+                severity: "error",
+                title: "Roku Auto Adjust Quality Bug / Buffering",
+                summary: "Roku's 'Auto Adjust Quality' frequently drops bitrate below the server's minimum threshold (103kbps), crashing or buffering streams.",
+                deviceAffected: primary.player,
+                quickFix: "Turn OFF 'Auto Adjust Quality' and set Remote Streaming to 'Original' in your Roku Plex settings.",
                 fixGuideId: "roku",
                 steps: [
-                    "1. On your Roku remote, open the Plex app",
-                    "2. Navigate to your Profile Avatar / Settings (Gear ⚙️) → Video",
-                    "3. Turn 'Auto Adjust Quality' to OFF",
-                    "4. Set 'Remote Streaming' to 'Original' (or Maximum)",
-                    "5. Set 'Direct Play' to 'Force' or 'Auto'",
-                    "6. Restart video playback"
+                    "1. Open the Plex app on your Roku",
+                    "2. Click your Avatar / Settings ⚙️ icon in the top corner",
+                    "3. Select Video Quality",
+                    "4. Turn 'Auto Adjust Quality' → OFF",
+                    "5. Set 'Remote Streaming' → 'Original' (or Maximum)",
+                    "6. Set 'Direct Play' → 'Force' or 'Auto'"
                 ]
             });
         }
 
-        // Issue B: 2 Mbps / 720p Remote Quality Limit
-        const isCapped = (primary.streamBitrate && primary.streamBitrate <= 2200) || 
-                         (primary.videoResolution?.includes("720") && !primary.sourceResolution?.includes("720") && !primary.sourceResolution?.includes("480"));
-        if (isTranscoding && isCapped) {
+        // Issue B: 2 Mbps / 720p Remote Cap
+        const is720pCapped = (primary.videoResolution === "720p" || (primary.streamBitrate && primary.streamBitrate <= 2100)) &&
+                             primary.sourceResolution && primary.sourceResolution !== "720p" && primary.sourceResolution !== "sd" && primary.sourceResolution !== "480p" &&
+                             isTranscoding;
+
+        if (is720pCapped) {
             detectedIssues.push({
                 id: "bandwidth-cap-720p",
                 type: "bandwidth_cap_720p",
                 severity: "error",
-                title: "2 Mbps (720p) Quality Cap Enforced",
+                title: "Forced 720p (2 Mbps) Remote Quality Limit",
                 summary: `Your ${primary.player} is using Plex's default 2 Mbps remote cap, forcing the server to downscale from ${primary.sourceResolution?.toUpperCase() || "HD"} to 720p.`,
                 deviceAffected: primary.player,
                 quickFix: "Change 'Remote Streaming Quality' from 2 Mbps / 720p to 'Maximum / Original'.",
@@ -418,6 +430,9 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
         }
     }
 
+    // 4. Compute Stream Pattern Insights across history
+    const patternInsights = analyzeStreamPatterns(activeStreams, recentWatchHistory);
+
     return {
         username: safeUsername,
         email: safeEmail,
@@ -429,6 +444,7 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
         recentWatchHistory: recentWatchHistory.slice(0, 10),
         serversOnlineCount: Math.max(serversOnlineCount, tautullis.length),
         detectedIssues,
+        patternInsights,
         generatedAt: new Date().toISOString()
     };
 }
@@ -463,6 +479,99 @@ export async function askAiServerMaster(
         };
     }
 
+    const actionsTaken: AgentActionReport[] = [];
+    let mediaInspection: MediaStreamInspection | undefined;
+
+    // --- STEP 1: AUTONOMOUS MEDIA FILE & LANGUAGE INSPECTION ---
+    const lowerQ = question.toLowerCase();
+    const isLanguageOrMediaIssue = 
+        lowerQ.includes("spanish") ||
+        lowerQ.includes("language") ||
+        lowerQ.includes("audio") ||
+        lowerQ.includes("soundtrack") ||
+        lowerQ.includes("dub") ||
+        lowerQ.includes("track") ||
+        lowerQ.includes("redownload") ||
+        lowerQ.includes("re-download") ||
+        lowerQ.includes("replace") ||
+        lowerQ.includes("broken") ||
+        lowerQ.includes("sandlot") ||
+        lowerQ.includes("corrupt") ||
+        lowerQ.includes("wrong audio") ||
+        lowerQ.includes("foreign");
+
+    if (isLanguageOrMediaIssue) {
+        const { title: candidateTitle, year: candidateYear } = cleanMediaSearchQuery(question);
+        const resolvedTitle = candidateTitle || snapshot.primaryActiveStream?.title;
+
+        if (resolvedTitle && resolvedTitle.length > 1) {
+            try {
+                mediaInspection = await inspectMediaStreams(resolvedTitle, user);
+
+                actionsTaken.push({
+                    action: "INSPECT_MEDIA",
+                    status: "SUCCESS",
+                    target: mediaInspection.title,
+                    summary: `Inspected Plex container: Found ${mediaInspection.audioTracks.length} audio tracks (${mediaInspection.audioTracks.map(t => t.displayTitle).join(", ")}). Verdict: ${mediaInspection.verdict}.`,
+                    details: mediaInspection,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+
+                // If English audio is truly missing, automatically attempt Radarr search & replace
+                if (mediaInspection.verdict === "MISSING_LANGUAGE_TRACK") {
+                    const grabResult = await searchAndGrabRadarrReplacement(
+                        mediaInspection.title, 
+                        candidateYear || (mediaInspection.year ? parseInt(mediaInspection.year, 10) : undefined),
+                        "Missing English audio track / Spanish only file",
+                        user
+                    );
+
+                    if (grabResult.success) {
+                        actionsTaken.push({
+                            action: "RADARR_SEARCH_GRAB",
+                            status: "SUCCESS",
+                            target: mediaInspection.title,
+                            summary: `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality}, ${grabResult.sizeFormatted}) on indexer "${grabResult.indexer}" and queued download in Radarr.`,
+                            details: grabResult,
+                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        });
+                    } else if (grabResult.escalated) {
+                        actionsTaken.push({
+                            action: "ESCALATE_ADMIN_TICKET",
+                            status: "ESCALATED",
+                            target: mediaInspection.title,
+                            summary: `Admin Escalated: Support Ticket #${grabResult.ticketId} created with complete container telemetry. No safe English releases met criteria on indexers.`,
+                            ticketId: grabResult.ticketId,
+                            details: grabResult,
+                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        });
+                    }
+                }
+            } catch (inspectErr: any) {
+                logAgentEvent("WARN", `Autonomous inspection error: ${inspectErr.message}`);
+            }
+        }
+    }
+
+    // Check for book redownload inquiry
+    if (lowerQ.includes("book") && (lowerQ.includes("redownload") || lowerQ.includes("fix") || lowerQ.includes("download"))) {
+        const { title: bookTitle } = cleanMediaSearchQuery(question);
+        if (bookTitle) {
+            try {
+                const bookRes = await redownloadBookWithDiagnostics(bookTitle, undefined, user);
+                if (bookRes.success) {
+                    actionsTaken.push({
+                        action: "REDOWNLOAD_BOOK",
+                        status: "SUCCESS",
+                        target: bookTitle,
+                        summary: `Dispatched automated book search & download for "${bookTitle}".`,
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                }
+            } catch (bErr: any) {}
+        }
+    }
+
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
@@ -488,30 +597,42 @@ ${snapshot.primaryActiveStream ? `
 ` : "  * No active stream currently playing."}
 
 - Recent Devices Used: ${snapshot.recentDevices.length > 0 ? snapshot.recentDevices.join(", ") : "None detected"}
+- Chronic Pattern Insights: ${snapshot.patternInsights && snapshot.patternInsights.length > 0 ? snapshot.patternInsights.map(p => `[${p.patternType.toUpperCase()}] ${p.description}`).join(" | ") : "Optimal stream patterns."}
 - Auto-Detected Diagnostic Issues: ${snapshot.detectedIssues.length > 0 ? snapshot.detectedIssues.map(i => `[${i.severity.toUpperCase()}] ${i.title}: ${i.quickFix}`).join(" | ") : "None. Stream health is optimal."}
 
+${actionsTaken.length > 0 ? `
+AUTONOMOUS AGENT ACTIONS PERFORMED BY PORTALARR:
+${actionsTaken.map(a => `- [${a.status}] ${a.action} on "${a.target}": ${a.summary}`).join("\n")}
+` : ""}
+
+${mediaInspection ? `
+MEDIA CONTAINER INSPECTION REPORT:
+- Title: "${mediaInspection.title}" (${mediaInspection.mediaType})
+- Verdict: ${mediaInspection.verdict}
+- Summary: ${mediaInspection.diagnosisSummary}
+- Audio Tracks Found: ${mediaInspection.audioTracks.map(t => `${t.displayTitle} (${t.language}) [Selected: ${t.selected}]`).join(", ")}
+- Has English Audio Track: ${mediaInspection.hasEnglishAudio}
+- Has Spanish Audio Track: ${mediaInspection.hasSpanishAudio}
+${mediaInspection.recommendedClientSteps ? `- Recommended Player Fix Steps:\n${mediaInspection.recommendedClientSteps.join("\n")}` : ""}
+` : ""}
+
 CORE PLEX MASTER KNOWLEDGE & DIAGNOSTIC RULES:
-1. Roku "Auto Adjust Quality" Bug / "not enough bandwidth" / "minimum bandwidth of 103kbps":
-   - Problem: The Roku Plex app's "Auto Adjust Quality" algorithm tries to dynamically step down quality below the server's minimum transcode threshold (e.g. 103kbps or 200kbps), causing Plex to reject playback with "not enough bandwidth for any playback of this item. can not convert to below minimum bandwidth".
-   - Fix: In Roku Plex App → Settings ⚙️ → Video → Turn "Auto Adjust Quality" OFF. Change "Remote Streaming" to "Original" (or Maximum). Set "Direct Play" to "Force" or "Auto".
-2. 2 Mbps (720p) Default Remote Limit:
-   - Problem: Plex client default forces 2 Mbps / 720p cap, converting 4K/1080p to downscaled 720p with buffering.
-   - Fix: Settings → Video Quality → Set "Remote Streaming Quality" to "Maximum" / "Original".
-3. Subtitle Burn-In:
-   - Problem: PGS/VOBSUB/ASS subtitles force CPU video transcode.
-   - Fix: Select SRT text subtitles, or Settings → Subtitles → set "Burn Subtitles" to "Only Image Formats".
-4. Audio Transcoding & TrueHD / 7.1:
-   - Direct Stream (video Direct Play + audio transcode) is normal for TV speakers. If receiver has surround, enable Audio Passthrough (HDMI).
-5. Web Browser Playback:
-   - Web browsers cannot play HEVC/H.265 natively; recommend Plex Desktop App for Windows/Mac.
-6. Buffering / Stutter:
+1. Multi-Track Audio (e.g. The Sandlot Spanish vs English):
+   - When a media file contains an English audio track alongside Spanish, advise the user on how to switch audio tracks on their specific player.
+   - If English audio was missing, explain that Portalarr autonomous engine has already queried Radarr, evaluated releases, and dispatched an English replacement (or escalated to the admin with a support ticket).
+2. Roku "Auto Adjust Quality" Bug / "not enough bandwidth" / "minimum bandwidth of 103kbps":
+   - In Roku Plex App → Settings ⚙️ → Video → Turn "Auto Adjust Quality" OFF. Change "Remote Streaming" to "Original". Set "Direct Play" to "Force".
+3. 2 Mbps (720p) Default Remote Limit:
+   - Settings → Video Quality → Set "Remote Streaming Quality" to "Maximum" / "Original".
+4. Subtitle Burn-In:
+   - Select SRT text subtitles, or Settings → Subtitles → set "Burn Subtitles" to "Only Image Formats".
+5. Buffering / Stutter:
    - Check if transcode speed is < 1.0x, verify 5GHz Wi-Fi or Ethernet connection, and force Direct Play.
 
 INSTRUCTIONS:
-- Directly address the user's question, incorporating their actual active stream or recent device details if relevant.
-- Provide numbered, easy-to-follow steps with exact Plex menu names.
-- Keep the tone encouraging, technical yet accessible, and structured with clean markdown bolding and bullet points.
-- If the issue cannot be resolved through client settings, encourage them to submit a Support Ticket via the Portalarr dashboard.`;
+- Directly answer the user's inquiry, highlighting any autonomous actions already performed (inspections, Radarr downloads, or admin escalations).
+- Provide numbered, easy-to-follow steps with exact player menu names.
+- Keep the tone encouraging, technical yet accessible, and structured with clean markdown bolding and bullet points.`;
 
     // 1. Google Gemini Provider
     const geminiKey = rawKey || process.env.GEMINI_API_KEY || "";
@@ -547,7 +668,7 @@ INSTRUCTIONS:
                     body: JSON.stringify({
                         system_instruction: { parts: [{ text: systemPrompt }] },
                         contents: contents,
-                        generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+                        generationConfig: { temperature: 0.2, maxOutputTokens: 1400 }
                     }),
                     signal: controller.signal
                 });
@@ -561,13 +682,13 @@ INSTRUCTIONS:
                             success: true,
                             answer: text.trim(),
                             diagnostics: snapshot,
-                            providerUsed: `Gemini (${activeModel})`
+                            providerUsed: `Gemini (${activeModel})`,
+                            actionsTaken,
+                            mediaInspection
                         };
                     }
                 }
-            } catch (e: any) {
-                // Continue to next model or knowledge base fallback
-            }
+            } catch (e: any) {}
         }
     }
 
@@ -596,7 +717,7 @@ INSTRUCTIONS:
                     model: activeModel,
                     messages: messages,
                     temperature: 0.2,
-                    max_tokens: 1200
+                    max_tokens: 1400
                 }),
                 signal: controller.signal
             });
@@ -610,31 +731,115 @@ INSTRUCTIONS:
                         success: true,
                         answer: text.trim(),
                         diagnostics: snapshot,
-                        providerUsed: `OpenAI (${activeModel})`
+                        providerUsed: `OpenAI (${activeModel})`,
+                        actionsTaken,
+                        mediaInspection
                     };
                 }
             }
-        } catch (e: any) {
-            // Fall back to knowledge base
-        }
+        } catch (e: any) {}
     }
 
     // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Guaranteed Instant Response)
-    const heuristicAnswer = resolvePlexMasterHeuristic(question, snapshot);
+    const heuristicAnswer = resolvePlexMasterHeuristic(question, snapshot, actionsTaken, mediaInspection);
     return {
         success: true,
         answer: heuristicAnswer,
         diagnostics: snapshot,
-        providerUsed: "Built-in Plex Master Engine"
+        providerUsed: "Built-in Plex Master Autonomous Engine",
+        actionsTaken,
+        mediaInspection
     };
 }
 
-function resolvePlexMasterHeuristic(question: string, snapshot: UserDiagnosticSnapshot): string {
+function resolvePlexMasterHeuristic(
+    question: string, 
+    snapshot: UserDiagnosticSnapshot,
+    actionsTaken: AgentActionReport[] = [],
+    mediaInspection?: MediaStreamInspection
+): string {
     const q = question.toLowerCase();
     const primary = snapshot.primaryActiveStream;
     const deviceName = primary?.player || snapshot.recentDevices[0] || "your Roku / Plex device";
 
-    // 1. Roku Quality / Auto-adjust / Minimum bandwidth error (e.g. 103kbps error)
+    // --- CASE 1: MEDIA INSPECTION VERDICT: AUDIO TRACK EXISTS (CLIENT SWITCH NEEDED) ---
+    if (mediaInspection && mediaInspection.verdict === "AUDIO_EXISTS_CLIENT_FIX") {
+        const engTrack = mediaInspection.audioTracks.find(t => 
+            t.language.toLowerCase() === "english" || t.languageCode === "eng" || t.languageCode === "en"
+        );
+        const engDesc = engTrack ? engTrack.displayTitle || "English" : "English Audio Track";
+        const currentDesc = mediaInspection.activeAudioTrack ? mediaInspection.activeAudioTrack.displayTitle : "Spanish Track";
+
+        return `### 🎧 Audio Track Diagnostic: *${mediaInspection.title}*
+
+I inspected the media file on disk (**${mediaInspection.files[0]?.file || mediaInspection.title}**). 
+
+**Good news! The file already contains a high-definition English audio track.**
+
+---
+
+#### 🔍 Container Stream Analysis:
+* **Current Active Track:** ❌ \`${currentDesc}\`
+* **Available Tracks in File:**
+${mediaInspection.audioTracks.map(t => `  * **${t.displayTitle}** ${t.selected ? '*(Currently Selected)*' : t.language.toLowerCase() === 'english' ? '🚀 *(English Available)*' : ''}`).join('\n')}
+
+Your Plex client is currently defaulting to the Spanish audio track, which is why you are hearing Spanish. **No redownload is required!**
+
+---
+
+#### 🛠️ How to Switch to English on **${deviceName}**:
+${(mediaInspection.recommendedClientSteps || [
+    `1. Start playing "${mediaInspection.title}"`,
+    "2. Press Up or Down on your remote to bring up the playback menu",
+    "3. Select the Audio / Subtitle selector (💬 or Gear ⚙️ icon)",
+    `4. Under Audio Stream, switch to "${engDesc}"`,
+    "5. Resume playback to enjoy English audio!"
+]).map(s => `- ${s}`).join("\n")}
+
+> **💡 Pro Tip:** To permanently default to English for all movies, open **Plex Web / Client Settings ⚙️ → Audio & Subtitles**, and set **Preferred Audio Language** to **English**.`;
+    }
+
+    // --- CASE 2: MEDIA INSPECTION VERDICT: MISSING LANGUAGE TRACK (RADARR SEARCH / ESCALATION) ---
+    if (mediaInspection && mediaInspection.verdict === "MISSING_LANGUAGE_TRACK") {
+        const radarrGrab = actionsTaken.find(a => a.action === "RADARR_SEARCH_GRAB" && a.status === "SUCCESS");
+        const escalation = actionsTaken.find(a => a.action === "ESCALATE_ADMIN_TICKET");
+
+        if (radarrGrab) {
+            return `### 🚀 Replacement Download Dispatched to Radarr: *${mediaInspection.title}*
+
+I inspected the server media file and verified that it **only contains Spanish audio** (${mediaInspection.audioTracks.map(t => t.displayTitle).join(", ")}). There is no English audio track in the current file.
+
+---
+
+#### 🤖 Autonomous Remediation Taken:
+* **Container Check:** Verified 0 English audio tracks in \`${mediaInspection.files[0]?.file || mediaInspection.title}\`.
+* **Indexer Search:** Queried Radarr indexers for verified releases containing English audio and matching our quality profile.
+* **Selected Release:** \`${radarrGrab.details?.releaseTitle || radarrGrab.target}\`
+* **Quality & Size:** **${radarrGrab.details?.quality || "1080p"}** (${radarrGrab.details?.sizeFormatted || "HD"})
+* **Indexer:** **${radarrGrab.details?.indexer || "Prowlarr"}**
+* **Status:** **Dispatched to Radarr Download Queue** ✅
+
+Once the download completes, Radarr will automatically upgrade the file on disk and replace the Spanish-only copy in Plex!`;
+        }
+
+        if (escalation) {
+            return `### 🚨 Missing English Audio Escalated to Admin: *${mediaInspection.title}*
+
+I inspected the media file on disk and verified that it **only contains Spanish audio** (${mediaInspection.audioTracks.map(t => t.displayTitle).join(", ")}).
+
+---
+
+#### 🤖 Autonomous Actions Taken:
+1. **Container Inspection:** Inspected Plex stream tracks: English audio is completely missing from the file.
+2. **Radarr Indexer Search:** Searched connected indexers for an English replacement release.
+3. **Safety Guardrails:** All candidate releases on indexers were rejected (either foreign-only, CAM quality, or lacking seeders).
+4. **Admin Escalation:** Automatically created **Support Ticket #${escalation.ticketId}** with full diagnostic logs and dispatched an email notification to the server administrator.
+
+The administrator has been alerted and will manually source a verified English release of *${mediaInspection.title}* for you!`;
+        }
+    }
+
+    // --- CASE 3: ROKU QUALITY / AUTO ADJUST / 103kbps ERROR ---
     if (
         q.includes("minimum bandwidth") || 
         q.includes("103kbps") || 
@@ -652,7 +857,7 @@ function resolvePlexMasterHeuristic(question: string, snapshot: UserDiagnosticSn
 This is a well-known **Roku Plex App bug** caused by the **"Auto Adjust Quality"** setting. 
 
 #### 🔍 Why this happens:
-When bandwidth fluctuates even slightly, Roku's *Auto Adjust Quality* feature attempts to continuously downscale the stream below the server's hard minimum threshold (**103 kbps**). The Plex Media Server rejects this impossible bitrate and aborts the stream with this exact error.
+When bandwidth fluctuates even slightly, Roku's *Auto Adjust Quality* feature attempts to dynamically step down quality below the server's hard minimum threshold (**103 kbps**). The Plex Media Server rejects this impossible bitrate and aborts the stream with this exact error.
 
 ---
 
@@ -671,7 +876,7 @@ When bandwidth fluctuates even slightly, Roku's *Auto Adjust Quality* feature at
 > Forcing **Original Quality** stops the server from attempting to transcode the video into lower bitrates, allowing your Roku to stream directly from disk with **100% native quality, zero buffering, and zero CPU load on the server**.`;
     }
 
-    // 2. Buffering / Stuttering
+    // --- CASE 4: BUFFERING / STUTTERING ---
     if (q.includes("buffer") || q.includes("stutter") || q.includes("lag") || q.includes("freeze") || q.includes("slow")) {
         const transcodeNote = primary?.transcodeDecision === "transcode" 
             ? `\n* **Active Stream Detected:** You are currently transcoding *${primary.title}* on *${primary.player}* (Transcode Speed: ${primary.transcodeSpeed || "N/A"}).`
@@ -696,7 +901,7 @@ Buffering is almost always caused by **forced transcoding** over a restricted re
 *If buffering continues, run the **Server Speed Test** in My Plex Hub to verify your connection speed.*`;
     }
 
-    // 3. Audio / No Sound / Audio Transcode
+    // --- CASE 5: AUDIO PLAYBACK ---
     if (q.includes("audio") || q.includes("sound") || q.includes("surround") || q.includes("volume") || q.includes("voices") || q.includes("quiet")) {
         return `### 🔊 Audio Playback & Dialogue Optimization
 
@@ -711,7 +916,7 @@ Buffering is almost always caused by **forced transcoding** over a restricted re
    * In Plex audio settings, enable **"Boost Dialogue" (Large/Medium)** to make voices crystal clear during action scenes.`;
     }
 
-    // 4. Subtitles
+    // --- CASE 6: SUBTITLES ---
     if (q.includes("subtitle") || q.includes("sub") || q.includes("captions") || q.includes("pgs") || q.includes("srt")) {
         return `### 💬 Subtitle Optimization Guide
 
@@ -727,7 +932,7 @@ Buffering is almost always caused by **forced transcoding** over a restricted re
    * In the playback controls, click Subtitles (💬) → **Search Subtitles** → Select an English [SRT] file.`;
     }
 
-    // 5. General / Default Assistance
+    // --- DEFAULT SERVER MASTER DIAGNOSTICS ---
     return `### 🤖 Plex & Server Master Diagnostics
 
 Hello **${snapshot.username}**! I have checked your server telemetry and connection status:
@@ -735,11 +940,12 @@ Hello **${snapshot.username}**! I have checked your server telemetry and connect
 * **Active Streams:** ${snapshot.activeStreamsCount > 0 ? `Currently playing "${primary?.title}" on ${primary?.player}` : "No active streams currently running"}
 * **Detected Devices:** ${snapshot.recentDevices.length > 0 ? snapshot.recentDevices.join(", ") : "Plex Client"}
 * **Server Health:** All ${snapshot.serversOnlineCount} media server nodes are online and operational.
+${snapshot.patternInsights && snapshot.patternInsights.length > 0 ? `* **Stream Insights:** ${snapshot.patternInsights[0].description}` : ""}
 
 #### Quick Recommended Settings for Best Playback:
 1. **Remote Streaming Quality:** Always set to **"Maximum / Original"** in your Plex App Settings ⚙️ to eliminate server transcoding.
 2. **Auto Adjust Quality:** Turn **OFF** to avoid unexpected resolution drops.
 3. **Direct Play:** Ensure **"Direct Play" & "Direct Stream"** are enabled.
 
-*Need personalized troubleshooting? Ask me about specific error messages, device setup guides (Roku, Apple TV, Fire TV), audio sync, or subtitles!*`;
+*Need personalized troubleshooting? Ask me about specific error messages, device setup guides (Roku, Apple TV, Fire TV), audio language issues, or subtitles!*`;
 }

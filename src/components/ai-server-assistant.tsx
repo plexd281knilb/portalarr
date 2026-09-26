@@ -37,7 +37,12 @@ import {
     ArrowRight, 
     SlidersHorizontal,
     Maximize2,
-    RotateCcw
+    RotateCcw,
+    Film,
+    Download,
+    Languages,
+    Volume2,
+    ShieldCheck
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -122,7 +127,9 @@ export function AiServerAssistant() {
                     content: res.answer,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     diagnosticsSnapshot: res.diagnostics,
-                    providerUsed: res.providerUsed
+                    providerUsed: res.providerUsed,
+                    actionsTaken: res.actionsTaken,
+                    mediaInspection: res.mediaInspection
                 };
                 setMessages([...updatedHistory, assistantMsg]);
                 if (res.diagnostics) {
@@ -180,6 +187,7 @@ export function AiServerAssistant() {
     };
 
     const quickPrompts = [
+        { label: "⚾ The Sandlot (Spanish Audio Check)", query: "The Sandlot is in Spanish only. Can you check if English audio is available or replace it?" },
         { label: "📺 Roku 'Quality Too Low' Fix", query: "Why is my Roku giving an error saying quality is too low or crashing when playing a movie?" },
         { label: "⚡ Why is my stream buffering?", query: "Why is my stream buffering and how do I get 100% Direct Play?" },
         { label: "🔊 Audio & Dialogue Optimization", query: "Dialogue is too quiet or audio is transcoding. How do I fix it?" },
@@ -189,6 +197,7 @@ export function AiServerAssistant() {
 
     const activeStream = snapshot?.primaryActiveStream;
     const detectedIssues = snapshot?.detectedIssues || [];
+    const patternInsights = snapshot?.patternInsights || [];
 
     return (
         <>
@@ -207,7 +216,7 @@ export function AiServerAssistant() {
                         </Badge>
                     </div>
                     <CardDescription className="text-xs text-muted-foreground">
-                        Instant diagnostics, playback fixes &amp; server help.
+                        Instant diagnostics, playback fixes, stream inspection &amp; server help.
                     </CardDescription>
                 </CardHeader>
                 
@@ -260,7 +269,7 @@ export function AiServerAssistant() {
                             <Input
                                 value={quickQuestion}
                                 onChange={(e) => setQuickQuestion(e.target.value)}
-                                placeholder="e.g. Why is Roku getting an error?"
+                                placeholder="e.g. Why is The Sandlot in Spanish?"
                                 className="h-9 text-xs bg-background/60 pr-8"
                             />
                             <Button 
@@ -301,11 +310,11 @@ export function AiServerAssistant() {
                                     <DialogTitle className="text-lg font-bold flex items-center gap-2">
                                         <span>Plex &amp; Server Master AI</span>
                                         <Badge variant="outline" className="text-[10px] font-bold bg-purple-950/60 text-purple-300 border-purple-500/50">
-                                            v3.0 Telemetry
+                                            v3.1 Autonomous
                                         </Badge>
                                     </DialogTitle>
                                     <DialogDescription className="text-xs text-muted-foreground">
-                                        Personalized stream health diagnostics, device setting fixes, and live server assistance.
+                                        Personalized stream health diagnostics, stream track inspection, Radarr auto-repair &amp; live assistance.
                                     </DialogDescription>
                                 </div>
                             </div>
@@ -378,6 +387,32 @@ export function AiServerAssistant() {
                                 </Button>
                             </div>
                         )}
+
+                        {/* Chronic Pattern Insights Banner (if detected) */}
+                        {patternInsights.length > 0 && (
+                            <div className="mt-2 p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/30 flex items-start justify-between gap-3 text-xs text-purple-200">
+                                <div className="flex items-start gap-2">
+                                    <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                    <div>
+                                        <h4 className="font-bold text-purple-300 text-[11px] flex items-center gap-1.5">
+                                            <span>Stream Insight: {patternInsights[0].title}</span>
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-purple-500/40 text-purple-300 bg-purple-950/40">
+                                                {patternInsights[0].occurrenceCount} Session(s)
+                                            </Badge>
+                                        </h4>
+                                        <p className="text-[10px] text-purple-200/80 leading-relaxed">{patternInsights[0].description}</p>
+                                    </div>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleSend(`How do I permanently fix: ${patternInsights[0].title}? Provide exact device settings for ${patternInsights[0].affectedDevices.join(", ")}.`)}
+                                    className="h-6 text-[10px] border-purple-500/40 text-purple-300 hover:bg-purple-950/40 shrink-0 font-semibold"
+                                >
+                                    Optimize
+                                </Button>
+                            </div>
+                        )}
                     </DialogHeader>
 
                     {/* Chat Messages Feed */}
@@ -390,7 +425,7 @@ export function AiServerAssistant() {
                                 <div className="max-w-md space-y-1.5">
                                     <h3 className="text-base font-bold text-foreground">How can I help with your media playback today?</h3>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
-                                        Ask me any question about playback errors, buffering, Roku/FireTV/AppleTV quality settings, transcoding, or audio sync.
+                                        Ask me any question about playback errors, buffering, Roku/FireTV/AppleTV quality settings, language audio tracks, or movie redownloads.
                                     </p>
                                 </div>
 
@@ -451,6 +486,95 @@ export function AiServerAssistant() {
                                                 )}
                                             </div>
                                         </div>
+
+                                        {/* Autonomous Action Badges (if any) */}
+                                        {msg.actionsTaken && msg.actionsTaken.length > 0 && (
+                                            <div className="space-y-1.5 pb-2 border-b border-border/30">
+                                                {msg.actionsTaken.map((act, aIdx) => (
+                                                    <div 
+                                                        key={aIdx}
+                                                        className={`p-2 rounded-xl text-[11px] flex items-start gap-2 border ${
+                                                            act.action === "RADARR_SEARCH_GRAB" 
+                                                                ? "bg-purple-950/40 border-purple-500/40 text-purple-200" 
+                                                                : act.action === "ESCALATE_ADMIN_TICKET"
+                                                                ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
+                                                                : "bg-cyan-950/30 border-cyan-500/30 text-cyan-200"
+                                                        }`}
+                                                    >
+                                                        {act.action === "RADARR_SEARCH_GRAB" ? (
+                                                            <Download className="h-3.5 w-3.5 text-purple-400 shrink-0 mt-0.5" />
+                                                        ) : act.action === "ESCALATE_ADMIN_TICKET" ? (
+                                                            <LifeBuoy className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                                        ) : (
+                                                            <Film className="h-3.5 w-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <div className="font-semibold flex items-center gap-1.5 flex-wrap">
+                                                                <span>{act.target}</span>
+                                                                <Badge variant="outline" className={`text-[9px] px-1 py-0 uppercase ${
+                                                                    act.status === "SUCCESS" ? "bg-emerald-950/60 text-emerald-300 border-emerald-500/40" :
+                                                                    act.status === "ESCALATED" ? "bg-amber-950/60 text-amber-300 border-amber-500/40" :
+                                                                    "bg-slate-800 text-slate-300 border-slate-700"
+                                                                }`}>
+                                                                    {act.status}
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="text-[10px] opacity-80 mt-0.5 leading-relaxed">{act.summary}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Media Stream Container Inspection Card (if any) */}
+                                        {msg.mediaInspection && msg.mediaInspection.audioTracks && msg.mediaInspection.audioTracks.length > 0 && (
+                                            <div className="p-3 rounded-xl bg-[#12121c] border border-cyan-500/30 space-y-2 text-[11px]">
+                                                <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-1.5">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <Languages className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                                                        <span className="font-bold text-white truncate">{msg.mediaInspection.title}</span>
+                                                        {msg.mediaInspection.year && <span className="text-muted-foreground text-[10px]">({msg.mediaInspection.year})</span>}
+                                                    </div>
+                                                    <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${
+                                                        msg.mediaInspection.verdict === "AUDIO_EXISTS_CLIENT_FIX" 
+                                                            ? "bg-emerald-950/60 text-emerald-300 border-emerald-500/40 font-bold"
+                                                            : msg.mediaInspection.verdict === "MISSING_LANGUAGE_TRACK"
+                                                            ? "bg-amber-950/60 text-amber-300 border-amber-500/40 font-bold"
+                                                            : "bg-cyan-950/60 text-cyan-300 border-cyan-500/40 font-bold"
+                                                    }`}>
+                                                        {msg.mediaInspection.verdict === "AUDIO_EXISTS_CLIENT_FIX" ? "English In File" :
+                                                         msg.mediaInspection.verdict === "MISSING_LANGUAGE_TRACK" ? "Spanish Only" : "Verified"}
+                                                    </Badge>
+                                                </div>
+
+                                                {/* Audio Track Pills */}
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] text-muted-foreground font-semibold block">Detected Audio Streams:</span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {msg.mediaInspection.audioTracks.map((tr, tIdx) => {
+                                                            const isEnglish = tr.language.toLowerCase() === "english" || tr.languageCode === "eng";
+                                                            return (
+                                                                <div 
+                                                                    key={tIdx} 
+                                                                    className={`px-2 py-1 rounded-md text-[10px] flex items-center gap-1.5 border ${
+                                                                        tr.selected 
+                                                                            ? "bg-amber-500/15 border-amber-500/40 text-amber-200" 
+                                                                            : isEnglish
+                                                                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200 font-semibold"
+                                                                            : "bg-background/60 border-border/40 text-muted-foreground"
+                                                                    }`}
+                                                                >
+                                                                    <Volume2 className={`h-3 w-3 shrink-0 ${isEnglish ? "text-emerald-400" : tr.selected ? "text-amber-400" : "text-muted-foreground"}`} />
+                                                                    <span>{tr.displayTitle}</span>
+                                                                    {tr.selected && <span className="text-[9px] uppercase font-bold text-amber-400">(Active)</span>}
+                                                                    {isEnglish && !tr.selected && <span className="text-[9px] uppercase font-bold text-emerald-400">(Available)</span>}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div className="prose prose-invert prose-xs max-w-none text-xs leading-relaxed break-words">
                                             <ReactMarkdown
@@ -516,7 +640,7 @@ export function AiServerAssistant() {
                                 </div>
                                 <div className="p-3.5 rounded-2xl bg-[#161622] border border-border/50 text-xs text-muted-foreground flex items-center gap-2.5 shadow-md">
                                     <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
-                                    <span>Analyzing stream telemetry &amp; generating step-by-step fix...</span>
+                                    <span>Inspecting streams, evaluating indexers &amp; generating step-by-step fix...</span>
                                 </div>
                             </div>
                         )}
@@ -527,7 +651,7 @@ export function AiServerAssistant() {
                     {messages.length > 0 && (
                         <div className="px-4 py-1.5 border-t border-border/30 bg-[#12121a] flex items-center gap-1.5 overflow-x-auto text-[10px]">
                             <span className="text-muted-foreground shrink-0 font-semibold">Quick Ask:</span>
-                            {quickPrompts.slice(0, 3).map((p, idx) => (
+                            {quickPrompts.slice(0, 4).map((p, idx) => (
                                 <button
                                     key={idx}
                                     type="button"
@@ -561,7 +685,7 @@ export function AiServerAssistant() {
                             <Input
                                 value={inputQuestion}
                                 onChange={(e) => setInputQuestion(e.target.value)}
-                                placeholder="Describe your issue (e.g. Roku auto adjust error, buffering, no sound)..."
+                                placeholder="Describe your issue (e.g. The Sandlot is in Spanish, Roku quality error, buffering)..."
                                 className="h-10 text-xs bg-background/80 border-border/60 focus:border-purple-500"
                                 disabled={loading}
                             />
