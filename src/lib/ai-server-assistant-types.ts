@@ -128,6 +128,12 @@ export interface UserDiagnosticSnapshot {
     serversOnlineCount: number;
     detectedIssues: DetectedIssue[];
     patternInsights?: StreamPatternInsight[];
+    linkedSubAccounts?: Array<{
+        id: string;
+        username: string;
+        label?: string;
+        accountType: string;
+    }>;
     generatedAt: string;
 }
 

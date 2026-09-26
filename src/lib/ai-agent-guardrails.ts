@@ -198,3 +198,190 @@ export function logAgentEvent(
     const detailStr = details ? ` | Details: ${JSON.stringify(details)}` : "";
     logger.addLog(level, "AI_AGENT", `🤖 ${summary}${detailStr}`);
 }
+
+export interface PrivacyGuardrailCheckResult {
+    allowed: boolean;
+    violationType?: "CROSS_USER_RECONNAISSANCE" | "CROSS_USER_STREAM_TERMINATION" | "UNAUTHORIZED_ACCESS_MODIFICATION" | "CROSS_USER_INFO_DISCLOSURE";
+    targetAttempted?: string;
+    reason?: string;
+    safeResponse?: string;
+}
+
+/**
+ * Strict privacy and authorization guardrail for the AI Server Master.
+ * Ensures:
+ * 1. No user can view or ask about another user's active streams or watch history.
+ * 2. No user can terminate another user's stream or shut off another user's access.
+ * 3. Users can ONLY ask questions about their own account and directly linked sub-accounts (e.g. kids, living room).
+ * 4. Only ADMINS have server-wide oversight permissions.
+ */
+export function validateUserCrossBoundaryQuery(
+    question: string,
+    currentUser: any,
+    linkedSubAccounts: Array<{ id: string; username: string; email?: string; plexUsername?: string | null; subAccountLabel?: string | null; accountType?: string }> = []
+): PrivacyGuardrailCheckResult {
+    const q = (question || "").toLowerCase().trim();
+    if (!q) return { allowed: true };
+
+    const isAdmin = currentUser?.role === "ADMIN";
+    // Admins have full server management rights
+    if (isAdmin) {
+        return { allowed: true };
+    }
+
+    const callerUsername = (currentUser?.username || "").toLowerCase().trim();
+    const callerEmail = (currentUser?.email || "").toLowerCase().trim();
+
+    // Build the set of allowed identity tokens for this caller
+    const allowedTokens = new Set<string>();
+    if (callerUsername) allowedTokens.add(callerUsername);
+    if (callerEmail) allowedTokens.add(callerEmail);
+    allowedTokens.add("me");
+    allowedTokens.add("my");
+    allowedTokens.add("mine");
+    allowedTokens.add("myself");
+    allowedTokens.add("i");
+    allowedTokens.add("our");
+    allowedTokens.add("us");
+    allowedTokens.add("self");
+
+    // Add all linked sub-account identifiers (e.g. kids, living room)
+    for (const sub of linkedSubAccounts) {
+        if (sub.username) allowedTokens.add(sub.username.toLowerCase().trim());
+        if (sub.email) allowedTokens.add(sub.email.toLowerCase().trim());
+        if (sub.plexUsername) allowedTokens.add(sub.plexUsername.toLowerCase().trim());
+        if (sub.subAccountLabel) {
+            const labelNorm = sub.subAccountLabel.toLowerCase().trim();
+            allowedTokens.add(labelNorm);
+            for (const word of labelNorm.split(/\s+/)) {
+                if (word.length > 2) allowedTokens.add(word);
+            }
+        }
+        if (sub.accountType) {
+            allowedTokens.add(sub.accountType.toLowerCase().trim());
+            if (sub.accountType === "KID") {
+                allowedTokens.add("kid");
+                allowedTokens.add("kids");
+                allowedTokens.add("child");
+                allowedTokens.add("children");
+            }
+            if (sub.accountType === "LIVING_ROOM") {
+                allowedTokens.add("living room");
+                allowedTokens.add("livingroom");
+                allowedTokens.add("tv");
+            }
+        }
+    }
+
+    // Helper: Checks if a target name is allowed
+    const isTargetAllowed = (target: string): boolean => {
+        const cleaned = target.toLowerCase().replace(/['"’]/g, "").trim();
+        if (!cleaned) return true;
+        if (allowedTokens.has(cleaned)) return true;
+        // Check if any allowed token contains this target or vice versa
+        for (const token of allowedTokens) {
+            if (token && token.length > 2 && (cleaned.includes(token) || token.includes(cleaned))) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // 1. UNAUTHORIZED ACCESS MODIFICATION (Shut off / disable / ban / revoke access)
+    // Non-admin users are strictly forbidden from modifying any user's server access.
+    const accessModRegex = /\b(?:shut\s*off|turn\s*off|disable|revoke|remove|delete|ban|kick|suspend|cut\s*off|lock\s*out)\s+(?:access|account|membership|profile|privileges)?\s*(?:for|to|of)?\s*([a-zA-Z0-9_\-\.@]+)?/i;
+    if (accessModRegex.test(q) && (q.includes("access") || q.includes("account") || q.includes("user") || q.includes("privilege"))) {
+        const accessMatches = q.match(accessModRegex);
+        const target = (accessMatches?.[1] || "").trim();
+        return {
+            allowed: false,
+            violationType: "UNAUTHORIZED_ACCESS_MODIFICATION",
+            targetAttempted: target || "another user",
+            reason: "Non-admin users cannot shut off or modify account access for any user.",
+            safeResponse: `🔒 **Administrative Privilege Required:** Modifying server access, revoking accounts, or shutting off user privileges requires Administrator permissions. You do not have permission to alter access for **${target || "other users"}**.`
+        };
+    }
+
+    // 2. CROSS-USER STREAM TERMINATION (Stop streams for other users / stop stream for x user)
+    // "stop streams for x user", "kill x's stream", "pause stream for x", "stop streams for other users"
+    const streamKillPatterns = [
+        /\b(?:stop|kill|terminate|end|pause|abort|drop)\s+(?:the\s+)?(?:active\s+)?(?:streams?|playback|sessions?|watching)\s+(?:for|of|on)\s+([a-zA-Z0-9_\-\.@\s]+)/i,
+        /\b(?:stop|kill|terminate|end|pause)\s+([a-zA-Z0-9_\-\.@]+)(?:'s|\s+user)\s+(?:streams?|playback|sessions?)/i,
+        /\b(?:stop|kill|terminate|end|pause)\s+(?:streams?\s+for\s+)?(other\s+users?|all\s+users?|everyone|everybody|someone\s+else)\b/i
+    ];
+
+    for (const pattern of streamKillPatterns) {
+        const match = q.match(pattern);
+        if (match) {
+            const rawTarget = (match[1] || "").trim();
+            // Check if target is a broad other-users group
+            if (/\b(other\s+users?|all\s+users?|everyone|everybody|someone\s+else)\b/i.test(rawTarget)) {
+                return {
+                    allowed: false,
+                    violationType: "CROSS_USER_STREAM_TERMINATION",
+                    targetAttempted: rawTarget,
+                    reason: "Users cannot terminate streams for other users or all users.",
+                    safeResponse: `🔒 **Access Control Enforcement:** You cannot terminate streams belonging to other users. You only have permission to stop active streams on your own account and your directly linked family sub-accounts.`
+                };
+            }
+
+            // Check if specific target is NOT self and NOT in linked sub-accounts
+            if (rawTarget && !isTargetAllowed(rawTarget)) {
+                return {
+                    allowed: false,
+                    violationType: "CROSS_USER_STREAM_TERMINATION",
+                    targetAttempted: rawTarget,
+                    reason: `User "${rawTarget}" is not the caller or an authorized linked sub-account.`,
+                    safeResponse: `🔒 **Access Control Enforcement:** You cannot terminate playback sessions for user **${rawTarget}**. You only have permission to control playback on your own account and your directly linked family sub-accounts (such as Kids or Living Room devices).`
+                };
+            }
+        }
+    }
+
+    // 3. CROSS-USER RECONNAISSANCE / INFORMATION DISCLOSURE (Show active streams for other users)
+    // "show me active streams for other users", "who else is streaming", "what is user x watching", "show other users' streams"
+    const crossReconPatterns = [
+        /\b(?:show|list|get|tell|see|view|check)\s+(?:me\s+)?(?:the\s+)?(?:active\s+)?streams?\s+(?:for|of|by|from)\s+(?:the\s+)?(other\s+users?|all\s+users?|everyone|everybody|someone\s+else)\b/i,
+        /\b(?:who\s+else|what\s+other\s+users?|which\s+other\s+users?)\s+(?:is|are)\s+(?:streaming|watching|playing|online|active)\b/i,
+        /\b(?:who\s+is|who's)\s+(?:watching|streaming|playing|on\s+plex|on\s+the\s+server)\b/i,
+        /\b(?:show|list|view|see)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?other\s+users?\b/i,
+        /\b(?:what\s+is|what's|show|check|view)\s+([a-zA-Z0-9_\-\.@]+)(?:'s|\s+user)?\s+(?:streams?|playback|watching|history|activity)\b/i,
+        /\b(?:show|list|get|see)\s+(?:me\s+)?(?:active\s+)?streams?\s+(?:for|of|by)\s+([a-zA-Z0-9_\-\.@]+)/i
+    ];
+
+    for (const pattern of crossReconPatterns) {
+        const match = q.match(pattern);
+        if (match) {
+            const rawTarget = (match[1] || "").trim();
+            // Check broad "other users" phrase
+            if (!rawTarget || /\b(other\s+users?|all\s+users?|everyone|everybody|someone\s+else)\b/i.test(rawTarget) || q.includes("who else") || q.includes("who is watching") || q.includes("who is on plex")) {
+                return {
+                    allowed: false,
+                    violationType: "CROSS_USER_RECONNAISSANCE",
+                    targetAttempted: rawTarget || "other users",
+                    reason: "Users cannot query active streams or watch activity for other users.",
+                    safeResponse: `🔒 **Privacy Boundary Enforcement:** You do not have permission to view active streams, playback sessions, or watch activity for other users. In Portalarr, users are strictly isolated to their own accounts and directly linked family profiles (such as Kids or Living Room devices).`
+                };
+            }
+
+            // Check if specific target is NOT self and NOT in linked sub-accounts
+            if (rawTarget && !isTargetAllowed(rawTarget)) {
+                // If it's a media search or server test, don't confuse a movie title with a username
+                const mediaTokens = ["plex", "server", "movie", "show", "film", "episode", "music", "audiobook", "book"];
+                if (mediaTokens.includes(rawTarget.toLowerCase())) {
+                    continue;
+                }
+
+                return {
+                    allowed: false,
+                    violationType: "CROSS_USER_INFO_DISCLOSURE",
+                    targetAttempted: rawTarget,
+                    reason: `User "${rawTarget}" is outside the caller's authorized account boundary.`,
+                    safeResponse: `🔒 **Privacy Boundary Enforcement:** You do not have permission to inspect playback sessions, watch history, or account details for user **${rawTarget}**. You can only view stream health for your own account and your directly linked family profiles.`
+                };
+            }
+        }
+    }
+
+    return { allowed: true };
+}

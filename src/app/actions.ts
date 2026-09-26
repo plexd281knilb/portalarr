@@ -15146,6 +15146,23 @@ export async function getUserPlexHubData() {
         }
     }
 
+    // Expand user aliases with linked sub-accounts (e.g. kids, living room) if caller is primary account
+    if (user?.id && !user?.parentUserId) {
+        try {
+            const subAccounts = await prisma.user.findMany({
+                where: { parentUserId: user.id },
+                select: { username: true, email: true, plexUsername: true, plexEmail: true, subAccountLabel: true }
+            });
+            for (const sub of subAccounts) {
+                if (sub.username) userAliases.add(sub.username.toLowerCase().trim());
+                if (sub.email) userAliases.add(sub.email.toLowerCase().trim());
+                if (sub.plexUsername) userAliases.add(sub.plexUsername.toLowerCase().trim());
+                if (sub.plexEmail) userAliases.add(sub.plexEmail.toLowerCase().trim());
+                if (sub.subAccountLabel) userAliases.add(sub.subAccountLabel.toLowerCase().trim());
+            }
+        } catch (e) {}
+    }
+
     // Portalarr Reading/Listening statistics
     const [userRequests, userKindleLogs, accessibleLibraries] = await Promise.all([
         prisma.bookRequest.findMany({
@@ -15721,6 +15738,23 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         }
     }
 
+    // Expand user aliases with linked sub-accounts (e.g. kids, living room) if caller is primary account
+    if (user?.id && !user?.parentUserId) {
+        try {
+            const subAccounts = await prisma.user.findMany({
+                where: { parentUserId: user.id },
+                select: { username: true, email: true, plexUsername: true, plexEmail: true, subAccountLabel: true }
+            });
+            for (const sub of subAccounts) {
+                if (sub.username) userAliases.add(sub.username.toLowerCase().trim());
+                if (sub.email) userAliases.add(sub.email.toLowerCase().trim());
+                if (sub.plexUsername) userAliases.add(sub.plexUsername.toLowerCase().trim());
+                if (sub.plexEmail) userAliases.add(sub.plexEmail.toLowerCase().trim());
+                if (sub.subAccountLabel) userAliases.add(sub.subAccountLabel.toLowerCase().trim());
+            }
+        } catch (e) {}
+    }
+
     // CASE 1: Direct Plex Media Server Stream Termination via Plex Token
     if (instanceId.startsWith("plex::")) {
         const parts = instanceId.split("::");
@@ -15776,7 +15810,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                             (isAdmin && (!sessionUser || sessionUser === "local" || sessionUser === "admin"));
 
             if (!isOwner && !isAdmin) {
-                return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
+                return { success: false, error: "Unauthorized: You can only terminate playback sessions for your own account and directly linked family sub-accounts." };
             }
 
             const sessionId = targetSession.Session?.id ? String(targetSession.Session.id) : undefined;
@@ -15838,9 +15872,9 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                         userAliases.has(sessionFriendly) ||
                         (isAdmin && (sessionUserId === "0" || sessionUser === "local" || sessionUser === "admin"));
 
-        if (!isOwner && !isAdmin) {
-            return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
-        }
+            if (!isOwner && !isAdmin) {
+                return { success: false, error: "Unauthorized: You can only terminate playback sessions for your own account and directly linked family sub-accounts." };
+            }
 
         // 2. Execute termination via Tautulli
         const sessionKeyParam = targetSession.session_key ? `&session_key=${encodeURIComponent(String(targetSession.session_key))}` : `&session_key=${encodeURIComponent(sessionKey)}`;

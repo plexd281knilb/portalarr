@@ -19,7 +19,7 @@ import {
     redownloadBookWithDiagnostics, 
     cleanMediaSearchQuery 
 } from "@/lib/ai-media-diagnostics";
-import { logAgentEvent } from "@/lib/ai-agent-guardrails";
+import { logAgentEvent, validateUserCrossBoundaryQuery } from "@/lib/ai-agent-guardrails";
 import { runDeepPlexPlaybackHealthCheck, PlexPlaybackDiagnosticReport } from "@/lib/plex-playback-probe";
 
 function cleanUrl(url: string): string {
@@ -79,6 +79,32 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
     const userAliases = new Set<string>();
     if (safeUsername) userAliases.add(safeUsername.toLowerCase().trim());
     if (safeEmail) userAliases.add(safeEmail.toLowerCase().trim());
+
+    // Query linked sub-accounts (e.g. kids, living room) for primary accounts
+    let linkedSubAccounts: any[] = [];
+    if (user?.id && !user?.parentUserId) {
+        try {
+            linkedSubAccounts = await prisma.user.findMany({
+                where: { parentUserId: user.id },
+                select: {
+                    id: true,
+                    username: true,
+                    email: true,
+                    plexUsername: true,
+                    plexEmail: true,
+                    subAccountLabel: true,
+                    accountType: true
+                }
+            });
+            for (const sub of linkedSubAccounts) {
+                if (sub.username) userAliases.add(sub.username.toLowerCase().trim());
+                if (sub.email) userAliases.add(sub.email.toLowerCase().trim());
+                if (sub.plexUsername) userAliases.add(sub.plexUsername.toLowerCase().trim());
+                if (sub.plexEmail) userAliases.add(sub.plexEmail.toLowerCase().trim());
+                if (sub.subAccountLabel) userAliases.add(sub.subAccountLabel.toLowerCase().trim());
+            }
+        } catch (e) {}
+    }
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
     const tautullis = await prisma.tautulliInstance.findMany().catch(() => []);
@@ -446,6 +472,12 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
         serversOnlineCount: Math.max(serversOnlineCount, tautullis.length),
         detectedIssues,
         patternInsights,
+        linkedSubAccounts: linkedSubAccounts.map((s: any) => ({
+            id: s.id,
+            username: s.username,
+            label: s.subAccountLabel || s.accountType,
+            accountType: s.accountType
+        })),
         generatedAt: new Date().toISOString()
     };
 }
@@ -476,6 +508,7 @@ export async function askAiServerMaster(
             recentWatchHistory: [],
             serversOnlineCount: 1,
             detectedIssues: [],
+            linkedSubAccounts: [],
             generatedAt: new Date().toISOString()
         };
     }
@@ -485,6 +518,104 @@ export async function askAiServerMaster(
     let playbackProbe: PlexPlaybackDiagnosticReport | undefined;
 
     const lowerQ = question.toLowerCase();
+
+    // --- STEP -1: PRIVACY & USER ISOLATION BOUNDARY GUARDRAIL ---
+    // Strict isolation: Users can ONLY ask questions about/affect their own account or directly linked sub-accounts.
+    const authCheck = validateUserCrossBoundaryQuery(question, user, snapshot.linkedSubAccounts || []);
+    if (!authCheck.allowed) {
+        logAgentEvent("WARN", `Security Violation Blocked for user "${user?.username || 'anonymous'}": ${authCheck.violationType} - "${question}"`);
+        return {
+            success: false,
+            answer: authCheck.safeResponse || "🔒 **Privacy Boundary:** You do not have permission to view or manage other users' streams.",
+            diagnostics: snapshot,
+            providerUsed: "Portalarr Privacy & Security Guardrail",
+            actionsTaken: [{
+                action: "STREAM_PATTERN_DIAGNOSTIC",
+                status: "FAILED",
+                target: "Security Boundary",
+                summary: `Unauthorized Cross-User Request Blocked: ${authCheck.reason}`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }]
+        };
+    }
+
+    // --- STEP -0.5: STREAM TERMINATION FOR AUTHORIZED ACCOUNTS (SELF & LINKED SUB-ACCOUNTS) ---
+    const isStopStreamQuery = 
+        (/\b(stop|kill|terminate|end|pause|abort)\s+(the\s+)?(stream|playback|session|movie|show)\b/i.test(question) ||
+         /\b(stop|kill|terminate|end|pause)\s+my\s+(stream|playback|movie|show|session)\b/i.test(question) ||
+         /\b(stop|kill|terminate|end|pause)\s+(the\s+)?(kids?|living\s*room)\s+(stream|playback|session)\b/i.test(question)) &&
+        !lowerQ.includes("probe") && !lowerQ.includes("ping");
+
+    if (isStopStreamQuery) {
+        let targetStream: StreamTelemetry | undefined;
+        if (lowerQ.includes("living room") || lowerQ.includes("livingroom")) {
+            targetStream = snapshot.activeStreams.find(s => 
+                s.player?.toLowerCase().includes("living") || 
+                s.deviceType?.toLowerCase().includes("living") ||
+                s.platform?.toLowerCase().includes("living")
+            );
+        } else if (lowerQ.includes("kid") || lowerQ.includes("child")) {
+            targetStream = snapshot.activeStreams.find(s => 
+                s.player?.toLowerCase().includes("kid") || 
+                s.deviceType?.toLowerCase().includes("kid")
+            );
+        }
+
+        if (!targetStream) {
+            targetStream = snapshot.primaryActiveStream || snapshot.activeStreams[0];
+        }
+
+        if (targetStream && targetStream.sessionKey) {
+            try {
+                const { killUserStream } = await import("@/app/actions");
+                const instanceId = targetStream.serverName ? `tautulli::${targetStream.serverName}` : "plex";
+                const killRes = await killUserStream(instanceId, targetStream.sessionKey);
+
+                if (killRes.success) {
+                    actionsTaken.push({
+                        action: "STREAM_PATTERN_DIAGNOSTIC",
+                        status: "SUCCESS",
+                        target: targetStream.title,
+                        summary: `Autonomous Stream Termination: Ended active playback of "${targetStream.title}" on ${targetStream.player}.`,
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+
+                    return {
+                        success: true,
+                        answer: `### ⏹️ Stream Terminated Successfully
+
+I have stopped active playback for:
+* **Media:** *${targetStream.title}*
+* **Device / Player:** ${targetStream.player}
+* **Account:** Authorized profile for **${snapshot.username}**
+
+Playback has been safely ended on the server.`,
+                        diagnostics: snapshot,
+                        providerUsed: "Built-in Stream Management Engine",
+                        actionsTaken
+                    };
+                } else {
+                    return {
+                        success: false,
+                        answer: `⚠️ **Could Not Terminate Stream:** ${killRes.error || "Server did not acknowledge termination request."}`,
+                        diagnostics: snapshot,
+                        providerUsed: "Built-in Stream Management Engine"
+                    };
+                }
+            } catch (kErr: any) {
+                logAgentEvent("WARN", `Failed to terminate stream autonomously: ${kErr.message}`);
+            }
+        } else {
+            return {
+                success: true,
+                answer: `### ℹ️ No Active Stream Found
+
+There are currently no active playback sessions running on your account or your authorized linked family sub-accounts to stop.`,
+                diagnostics: snapshot,
+                providerUsed: "Built-in Stream Management Engine"
+            };
+        }
+    }
 
     // --- STEP 0: ACTIVE PLAYBACK SYNTHETIC PROBE ---
     // Triggered when users ask "is plex working?", "is plex down?", "can plex play anything?", "test playback", "ping servers", etc.
@@ -631,6 +762,12 @@ ${snapshot.primaryActiveStream ? `
 - Recent Devices Used: ${snapshot.recentDevices.length > 0 ? snapshot.recentDevices.join(", ") : "None detected"}
 - Chronic Pattern Insights: ${snapshot.patternInsights && snapshot.patternInsights.length > 0 ? snapshot.patternInsights.map(p => `[${p.patternType.toUpperCase()}] ${p.description}`).join(" | ") : "Optimal stream patterns."}
 - Auto-Detected Diagnostic Issues: ${snapshot.detectedIssues.length > 0 ? snapshot.detectedIssues.map(i => `[${i.severity.toUpperCase()}] ${i.title}: ${i.quickFix}`).join(" | ") : "None. Stream health is optimal."}
+
+STRICT USER PRIVACY & CROSS-USER ISOLATION POLICY:
+- Authenticated User: "${snapshot.username}" (Role: ${snapshot.role})
+- Directly Linked Sub-Accounts (Allowed): ${snapshot.linkedSubAccounts && snapshot.linkedSubAccounts.length > 0 ? snapshot.linkedSubAccounts.map(s => `"${s.username}" (${s.label || s.accountType})`).join(", ") : "None (Individual profile)"}
+- ZERO CROSS-USER DISCLOSURE: Unless caller is an ADMIN, you are STRICTLY FORBIDDEN from discussing, revealing, querying, or taking action on any user other than "${snapshot.username}" and their directly authorized linked sub-accounts.
+- If the user asks about other users' streams, watch history, or accounts, or asks to terminate another user's stream or shut off their access, refuse immediately with Portalarr's privacy policy.
 
 ${actionsTaken.length > 0 ? `
 AUTONOMOUS AGENT ACTIONS PERFORMED BY PORTALARR:
