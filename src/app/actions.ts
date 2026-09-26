@@ -16100,3 +16100,22 @@ export async function askAiServerMasterAction(
     }
 }
 
+export async function verifyPlexPlaybackHealthAction() {
+    try {
+        const { runDeepPlexPlaybackHealthCheck } = await import("@/lib/plex-playback-probe");
+        return await runDeepPlexPlaybackHealthCheck();
+    } catch (e: any) {
+        console.error("verifyPlexPlaybackHealthAction error:", e);
+        return { 
+            success: false, 
+            error: e.message || "Failed to execute Plex playback probe",
+            timestamp: new Date().toISOString(),
+            totalServers: 0,
+            operationalServers: 0,
+            allCanPlay: false,
+            servers: [],
+            summary: `Error executing playback probe: ${e.message}`
+        };
+    }
+}
+

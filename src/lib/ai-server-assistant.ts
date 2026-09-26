@@ -20,6 +20,7 @@ import {
     cleanMediaSearchQuery 
 } from "@/lib/ai-media-diagnostics";
 import { logAgentEvent } from "@/lib/ai-agent-guardrails";
+import { runDeepPlexPlaybackHealthCheck, PlexPlaybackDiagnosticReport } from "@/lib/plex-playback-probe";
 
 function cleanUrl(url: string): string {
     if (!url) return "";
@@ -481,9 +482,40 @@ export async function askAiServerMaster(
 
     const actionsTaken: AgentActionReport[] = [];
     let mediaInspection: MediaStreamInspection | undefined;
+    let playbackProbe: PlexPlaybackDiagnosticReport | undefined;
+
+    const lowerQ = question.toLowerCase();
+
+    // --- STEP 0: ACTIVE PLAYBACK SYNTHETIC PROBE ---
+    // Triggered when users ask "is plex working?", "is plex down?", "can plex play anything?", "test playback", "ping servers", etc.
+    const isPlaybackProbeQuery = 
+        lowerQ.includes("is plex working") ||
+        lowerQ.includes("is plex up") ||
+        lowerQ.includes("is the server up") ||
+        lowerQ.includes("is the server working") ||
+        lowerQ.includes("plex working") ||
+        lowerQ.includes("plex down") ||
+        lowerQ.includes("server down") ||
+        lowerQ.includes("can plex play") ||
+        lowerQ.includes("ping plex") ||
+        lowerQ.includes("test playback") ||
+        lowerQ.includes("test plex");
+
+    if (isPlaybackProbeQuery) {
+        try {
+            playbackProbe = await runDeepPlexPlaybackHealthCheck();
+            actionsTaken.push({
+                action: "STREAM_PATTERN_DIAGNOSTIC",
+                status: playbackProbe.allCanPlay ? "SUCCESS" : "FAILED",
+                target: "Plex Playback Probe",
+                summary: `Deep Playback Synthetic Probe: ${playbackProbe.operationalServers}/${playbackProbe.totalServers} servers operational. Can Stream: ${playbackProbe.allCanPlay ? "YES" : "NO"}`,
+                details: playbackProbe,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+        } catch (e: any) {}
+    }
 
     // --- STEP 1: AUTONOMOUS MEDIA FILE & LANGUAGE INSPECTION ---
-    const lowerQ = question.toLowerCase();
     const isLanguageOrMediaIssue = 
         lowerQ.includes("spanish") ||
         lowerQ.includes("language") ||
@@ -616,6 +648,17 @@ MEDIA CONTAINER INSPECTION REPORT:
 ${mediaInspection.recommendedClientSteps ? `- Recommended Player Fix Steps:\n${mediaInspection.recommendedClientSteps.join("\n")}` : ""}
 ` : ""}
 
+${playbackProbe ? `
+SYNTHETIC PLAYBACK PROBE RESULTS:
+- Total Servers Tested: ${playbackProbe.totalServers}
+- Fully Operational (Web API + Database + Media Disk Streaming): ${playbackProbe.operationalServers}
+- Overall Status: ${playbackProbe.allCanPlay ? "ALL SYSTEMS OPERATIONAL" : "PLAYBACK DEGRADED OR OFFLINE"}
+- Can Actually Play Files: ${playbackProbe.allCanPlay ? "YES" : "NO"}
+- Summary: ${playbackProbe.summary}
+- Server Details:
+${playbackProbe.servers.map((s: any) => `  * [${s.serverName}] Overall: ${s.overallStatus}, Web API Ping: ${s.apiPingMs}ms, DB Latency: ${s.databaseLatencyMs}ms, Disk Playback Test: ${s.playbackTest?.canPlayMedia ? `PASS (${s.playbackTest.bytesRead} bytes read in ${s.playbackTest.readLatencyMs}ms from "${s.playbackTest.testedTitle || "Sample Media"}")` : `FAIL (${s.playbackTest?.error || "Cannot stream file from disk"})`}, Transcoder: ${s.transcodeTest?.ready ? "Ready" : "Degraded"}`).join("\n")}
+` : ""}
+
 CORE PLEX MASTER KNOWLEDGE & DIAGNOSTIC RULES:
 1. Multi-Track Audio (e.g. The Sandlot Spanish vs English):
    - When a media file contains an English audio track alongside Spanish, advise the user on how to switch audio tracks on their specific player.
@@ -684,7 +727,8 @@ INSTRUCTIONS:
                             diagnostics: snapshot,
                             providerUsed: `Gemini (${activeModel})`,
                             actionsTaken,
-                            mediaInspection
+                            mediaInspection,
+                            playbackProbe
                         };
                     }
                 }
@@ -733,7 +777,8 @@ INSTRUCTIONS:
                         diagnostics: snapshot,
                         providerUsed: `OpenAI (${activeModel})`,
                         actionsTaken,
-                        mediaInspection
+                        mediaInspection,
+                        playbackProbe
                     };
                 }
             }
@@ -741,14 +786,15 @@ INSTRUCTIONS:
     }
 
     // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Guaranteed Instant Response)
-    const heuristicAnswer = resolvePlexMasterHeuristic(question, snapshot, actionsTaken, mediaInspection);
+    const heuristicAnswer = resolvePlexMasterHeuristic(question, snapshot, actionsTaken, mediaInspection, playbackProbe);
     return {
         success: true,
         answer: heuristicAnswer,
         diagnostics: snapshot,
         providerUsed: "Built-in Plex Master Autonomous Engine",
         actionsTaken,
-        mediaInspection
+        mediaInspection,
+        playbackProbe
     };
 }
 
@@ -756,11 +802,59 @@ function resolvePlexMasterHeuristic(
     question: string, 
     snapshot: UserDiagnosticSnapshot,
     actionsTaken: AgentActionReport[] = [],
-    mediaInspection?: MediaStreamInspection
+    mediaInspection?: MediaStreamInspection,
+    playbackProbe?: PlexPlaybackDiagnosticReport
 ): string {
     const q = question.toLowerCase();
     const primary = snapshot.primaryActiveStream;
     const deviceName = primary?.player || snapshot.recentDevices[0] || "your Roku / Plex device";
+
+    // --- CASE 0: DEEP PLAYBACK SYNTHETIC PROBE ---
+    if (playbackProbe && playbackProbe.servers.length > 0) {
+        const statusEmoji = playbackProbe.allCanPlay ? "🟢" : playbackProbe.operationalServers > 0 ? "🟡" : "🔴";
+        const statusTitle = playbackProbe.allCanPlay 
+            ? "All Servers Verified Operational & Streaming from Disk" 
+            : playbackProbe.operationalServers > 0 
+                ? "Partial Playback Outage / Degraded Disk Storage" 
+                : "Plex Server Playback Outage";
+
+        const serverCards = playbackProbe.servers.map(s => {
+            const isOp = s.overallStatus === "OPERATIONAL";
+            const sBadge = isOp ? "✅ OPERATIONAL" : s.apiStatus !== "DOWN" ? "⚠️ STORAGE / DB ISSUE" : "❌ UNREACHABLE";
+            const diskBadge = s.playbackTest.canPlayMedia
+                ? `✅ Physical Disk Streaming Verified (${s.playbackTest.bytesRead} bytes read in ${s.playbackTest.readLatencyMs}ms)`
+                : `❌ Media Disk Read Failed (${s.playbackTest.error || "Storage offline"})`;
+            const dbBadge = s.databaseStatus === "OK" 
+                ? `✅ SQLite DB: ${s.databaseLatencyMs}ms (${s.sectionsCount} sections)` 
+                : `❌ SQLite DB Issue (${s.databaseStatus})`;
+            const transcodeBadge = s.transcodeTest.ready 
+                ? `✅ Transcode Engine Ready (${s.transcodeTest.latencyMs}ms)` 
+                : `⚠️ Transcoder Issue (${s.transcodeTest.error || "Degraded"})`;
+
+            return `#### 🖥️ Server: **${s.serverName}** (${sBadge})
+* **Web API Listener:** \`${s.apiPingMs}ms\` (${s.apiStatus}) • Connection: \`${s.connectionUri}\` (${s.isLocal ? "Local LAN" : s.isRelay ? "Plex Relay" : "Remote Direct"})
+* **Database Responsiveness:** ${dbBadge}
+* **Physical Media Storage Read:** ${diskBadge}
+* **Transcode Subsystem:** ${transcodeBadge}
+${s.playbackTest.testedTitle ? `* *Sample Media Tested:* \`${s.playbackTest.testedTitle}\`` : ""}`;
+        }).join("\n\n---\n\n");
+
+        const hasFalsePositive = playbackProbe.servers.some(s => s.apiStatus === "OK" && !s.playbackTest.canPlayMedia);
+
+        return `### ${statusEmoji} Server Health & Playback Diagnostic: **${statusTitle}**
+
+I ran an **active synthetic playback probe** against your media server infrastructure. 
+
+Unlike standard port pings (which report "online" even if storage shares disconnect or databases freeze), this diagnostic connects to PMS, queries the SQLite database, and **physically streams byte chunks of real media from the storage disk**.
+
+---
+
+${serverCards}
+
+---
+
+${hasFalsePositive ? `> ⚠️ **Storage Disconnect Alert:** One or more servers are accepting network pings, but **failed to read media from the storage disk**. This typically indicates an unmounted network share (NFS/SMB), disconnected drive pool, or permissions issue.` : `> 💡 **Playback Verdict:** ${playbackProbe.allCanPlay ? `All ${playbackProbe.operationalServers} server(s) are confirmed able to stream media directly to devices right now with zero disk read or database errors.` : "Some servers cannot stream media right now."}`}`;
+    }
 
     // --- CASE 1: MEDIA INSPECTION VERDICT: AUDIO TRACK EXISTS (CLIENT SWITCH NEEDED) ---
     if (mediaInspection && mediaInspection.verdict === "AUDIO_EXISTS_CLIENT_FIX") {

@@ -99,6 +99,11 @@ async function runTests() {
     assert("askAiServerMaster includes providerUsed", !!res.providerUsed);
     assert("askAiServerMaster includes diagnostics", !!res.diagnostics);
 
+    // TEST 6: Playback Synthetic Probe Query
+    const probeRes = await askAiServerMaster("Is Plex working right now? Test actual file playback and disk access.", [], { username: "Dom", role: "ADMIN" });
+    assert("askAiServerMaster handles playback probe queries", probeRes.success && !!probeRes.answer);
+    assert("Playback probe query executes and provides answer", !!probeRes.playbackProbe || !!probeRes.answer);
+
     console.log("==================================================");
     console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);
     console.log("==================================================");

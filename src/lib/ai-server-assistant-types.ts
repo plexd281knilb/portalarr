@@ -139,6 +139,7 @@ export interface AiChatMessage {
     providerUsed?: string;
     actionsTaken?: AgentActionReport[];
     mediaInspection?: MediaStreamInspection;
+    playbackProbe?: any;
 }
 
 export interface AiAssistantResponse {
@@ -148,5 +149,6 @@ export interface AiAssistantResponse {
     providerUsed?: string;
     actionsTaken?: AgentActionReport[];
     mediaInspection?: MediaStreamInspection;
+    playbackProbe?: any;
     error?: string;
 }

@@ -42,7 +42,12 @@ import {
     Download,
     Languages,
     Volume2,
-    ShieldCheck
+    ShieldCheck,
+    Server,
+    HardDrive,
+    Database,
+    PlayCircle,
+    XCircle
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -129,7 +134,8 @@ export function AiServerAssistant() {
                     diagnosticsSnapshot: res.diagnostics,
                     providerUsed: res.providerUsed,
                     actionsTaken: res.actionsTaken,
-                    mediaInspection: res.mediaInspection
+                    mediaInspection: res.mediaInspection,
+                    playbackProbe: res.playbackProbe
                 };
                 setMessages([...updatedHistory, assistantMsg]);
                 if (res.diagnostics) {
@@ -187,6 +193,7 @@ export function AiServerAssistant() {
     };
 
     const quickPrompts = [
+        { label: "🟢 Is Plex Working? (Playback Test)", query: "Is Plex working right now? Test actual file playback and disk access for each server." },
         { label: "⚾ The Sandlot (Spanish Audio Check)", query: "The Sandlot is in Spanish only. Can you check if English audio is available or replace it?" },
         { label: "📺 Roku 'Quality Too Low' Fix", query: "Why is my Roku giving an error saying quality is too low or crashing when playing a movie?" },
         { label: "⚡ Why is my stream buffering?", query: "Why is my stream buffering and how do I get 100% Direct Play?" },
@@ -572,6 +579,119 @@ export function AiServerAssistant() {
                                                             );
                                                         })}
                                                     </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Playback Synthetic Health Probe Diagnostic Card (if any) */}
+                                        {msg.playbackProbe && msg.playbackProbe.servers && msg.playbackProbe.servers.length > 0 && (
+                                            <div className="p-3 rounded-xl bg-[#12121c] border border-purple-500/30 space-y-2.5 text-[11px]">
+                                                <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <PlayCircle className="h-4 w-4 text-purple-400 shrink-0" />
+                                                        <span className="font-bold text-white truncate">Synthetic Playback Probe</span>
+                                                        <span className="text-[10px] text-muted-foreground">({msg.playbackProbe.operationalServers}/{msg.playbackProbe.totalServers} Operational)</span>
+                                                    </div>
+                                                    <Badge variant="outline" className={`text-[9px] px-2 py-0.5 font-bold uppercase ${
+                                                        msg.playbackProbe.allCanPlay 
+                                                            ? "bg-emerald-950/60 text-emerald-300 border-emerald-500/40" 
+                                                            : msg.playbackProbe.operationalServers > 0
+                                                            ? "bg-amber-950/60 text-amber-300 border-amber-500/40"
+                                                            : "bg-rose-950/60 text-rose-300 border-rose-500/40"
+                                                    }`}>
+                                                        {msg.playbackProbe.allCanPlay ? "Stream Verified" : "Storage Degraded"}
+                                                    </Badge>
+                                                </div>
+
+                                                {/* Server Cards */}
+                                                <div className="space-y-2">
+                                                    {msg.playbackProbe.servers.map((srv: any, sIdx: number) => {
+                                                        const isOp = srv.overallStatus === "OPERATIONAL";
+                                                        const canPlay = srv.playbackTest?.canPlayMedia;
+                                                        return (
+                                                            <div 
+                                                                key={sIdx}
+                                                                className={`p-2.5 rounded-lg border text-[11px] space-y-1.5 ${
+                                                                    isOp 
+                                                                        ? "bg-emerald-950/15 border-emerald-500/30" 
+                                                                        : srv.apiStatus !== "DOWN" 
+                                                                        ? "bg-amber-950/20 border-amber-500/40" 
+                                                                        : "bg-rose-950/20 border-rose-500/40"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                                        <Server className={`h-3.5 w-3.5 shrink-0 ${isOp ? "text-emerald-400" : "text-amber-400"}`} />
+                                                                        <span className="font-bold text-white truncate">{srv.serverName}</span>
+                                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-border/50 text-muted-foreground">
+                                                                            {srv.apiPingMs}ms
+                                                                        </Badge>
+                                                                        {srv.isLocal && (
+                                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-cyan-500/40 text-cyan-300 bg-cyan-950/30">
+                                                                                LAN
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                    <Badge variant="outline" className={`text-[9px] px-1.5 py-0 font-semibold uppercase ${
+                                                                        isOp ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/40" :
+                                                                        srv.apiStatus !== "DOWN" ? "bg-amber-950/40 text-amber-300 border-amber-500/40" :
+                                                                        "bg-rose-950/40 text-rose-300 border-rose-500/40"
+                                                                    }`}>
+                                                                        {isOp ? "Operational" : srv.apiStatus !== "DOWN" ? "Disk / DB Alert" : "Offline"}
+                                                                    </Badge>
+                                                                </div>
+
+                                                                {/* Test Matrix */}
+                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1 text-[10px]">
+                                                                    {/* Disk Streaming Probe */}
+                                                                    <div className={`p-1.5 rounded flex items-center gap-1.5 border ${
+                                                                        canPlay ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-200" : "bg-rose-950/40 border-rose-500/40 text-rose-200 font-semibold"
+                                                                    }`}>
+                                                                        <HardDrive className="h-3 w-3 shrink-0" />
+                                                                        <div className="truncate">
+                                                                            <span className="block font-semibold">Disk Stream: {canPlay ? "PASS" : "FAIL"}</span>
+                                                                            <span className="text-[9px] opacity-80 truncate block">
+                                                                                {canPlay ? `${srv.playbackTest.bytesRead}B in ${srv.playbackTest.readLatencyMs}ms` : (srv.playbackTest.error || "Storage unmounted")}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* SQLite DB Probe */}
+                                                                    <div className={`p-1.5 rounded flex items-center gap-1.5 border ${
+                                                                        srv.databaseStatus === "OK" ? "bg-background/50 border-border/40 text-slate-300" : "bg-amber-950/40 border-amber-500/40 text-amber-200 font-semibold"
+                                                                    }`}>
+                                                                        <Database className="h-3 w-3 shrink-0 text-purple-400" />
+                                                                        <div className="truncate">
+                                                                            <span className="block font-semibold">DB: {srv.databaseStatus}</span>
+                                                                            <span className="text-[9px] opacity-80 truncate block">
+                                                                                {srv.databaseLatencyMs ? `${srv.databaseLatencyMs}ms (${srv.sectionsCount} libs)` : "Locked / Timeout"}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Transcode Engine */}
+                                                                    <div className={`p-1.5 rounded flex items-center gap-1.5 border ${
+                                                                        srv.transcodeTest?.ready ? "bg-background/50 border-border/40 text-slate-300" : "bg-amber-950/40 border-amber-500/40 text-amber-200"
+                                                                    }`}>
+                                                                        <Activity className="h-3 w-3 shrink-0 text-cyan-400" />
+                                                                        <div className="truncate">
+                                                                            <span className="block font-semibold">Transcoder: {srv.transcodeTest?.ready ? "Ready" : "Degraded"}</span>
+                                                                            <span className="text-[9px] opacity-80 truncate block">
+                                                                                {srv.transcodeTest?.ready ? `${srv.transcodeTest.latencyMs}ms latency` : (srv.transcodeTest?.error || "Offline")}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {srv.playbackTest?.testedTitle && (
+                                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 pt-0.5">
+                                                                        <Film className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+                                                                        <span className="truncate">Streamed live chunk from: <strong className="text-slate-300 font-medium">{srv.playbackTest.testedTitle}</strong></span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
