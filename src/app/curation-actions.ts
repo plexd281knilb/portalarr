@@ -149,7 +149,10 @@ function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null, 
     }
     if (rawTokens.length === 0) return false;
 
-    const norm = (s: string) => s.toLowerCase().replace(/[-_\s]+/g, "");
+    // Strip optional "exclude " prefix if present (e.g. "exclude nudity severe" -> "nudity severe")
+    rawTokens = rawTokens.map(t => t.replace(/^exclude\s+/i, "").trim());
+
+    const norm = (s: string) => s.toLowerCase().replace(/[-_\s:]+/g, "");
     const normalizedTokens = new Set(rawTokens.map(norm));
 
     const excludesPlaceholders = !allowPlaceholders && rawTokens.some(t => 
@@ -164,6 +167,32 @@ function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null, 
         return true;
     }
 
+    // Check advisory levels directly on item if available in memory
+    const checkAdvisorySeverity = (cat: string, targetSev: string) => {
+        const itemSev = (
+            it.advisory?.[cat] || 
+            it.parentalAdvisory?.[cat] || 
+            it[`${cat}Level`] || 
+            ""
+        ).toString().toLowerCase();
+        if (!itemSev || itemSev === "none") return false;
+        if (targetSev === "severe") return itemSev === "severe";
+        if (targetSev === "moderate") return itemSev === "severe" || itemSev === "moderate";
+        if (targetSev === "mild") return itemSev === "severe" || itemSev === "moderate" || itemSev === "mild";
+        return itemSev.includes(targetSev);
+    };
+
+    for (const token of rawTokens) {
+        const tNorm = norm(token);
+        for (const cat of ["nudity", "violence", "profanity", "alcohol", "frightening"]) {
+            if (tNorm.includes(cat)) {
+                if (tNorm.includes("severe") && checkAdvisorySeverity(cat, "severe")) return true;
+                if (tNorm.includes("moderate") && checkAdvisorySeverity(cat, "moderate")) return true;
+                if (tNorm.includes("mild") && checkAdvisorySeverity(cat, "mild")) return true;
+            }
+        }
+    }
+
     const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
     const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
 
@@ -172,11 +201,20 @@ function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null, 
         if (rawTokens.includes(l) || normalizedTokens.has(normL)) return true;
         if (excludesPlaceholders && (normL.includes("trailer") || normL.includes("placeholder") || normL.includes("coming"))) return true;
         if (excludesLeavingSoon && normL.includes("leaving")) return true;
+
+        for (const token of rawTokens) {
+            const tNorm = norm(token);
+            if (normL.includes(tNorm) || tNorm.includes(normL)) return true;
+        }
     }
 
     for (const c of itCollections) {
         const normC = norm(c);
         if (rawTokens.includes(c) || normalizedTokens.has(normC)) return true;
+        for (const token of rawTokens) {
+            const tNorm = norm(token);
+            if (normC.includes(tNorm) || tNorm.includes(normC)) return true;
+        }
     }
 
     return false;
@@ -1405,7 +1443,8 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 collection.sectionKey || "",
                 subtype,
                 collection.title,
-                collection.maxItems || 25
+                collection.maxItems || 25,
+                collection.excludedLabels || undefined
             );
             if (deployRes.success) {
                 let itemCount = 0;
@@ -1842,7 +1881,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 collection.serverId || "",
                 collection.sectionKey || "",
                 (collection.sourceQuery || "recently_added") as any,
-                collection.title
+                collection.title,
+                collection.maxItems || 25,
+                collection.excludedLabels || undefined
             );
             if (deployRes.success) {
                 return {
@@ -2629,10 +2670,64 @@ export async function updateCollectionPlacementAction(data: {
                         collectionMode: updated.collectionMode || "default"
                     }
                 );
+
+                // If this is a Smart Hub collection, update its filter URI in Plex with the latest excluded labels
+                if (updated.sourceType === "plex_smart" || updated.category === "Plex Smart") {
+                    try {
+                        const subtype = (updated.sourceQuery || "recently_added") as any;
+                        await deployFilteredSmartHubInternal(
+                            updated.serverId,
+                            updated.sectionKey,
+                            subtype,
+                            updated.title,
+                            updated.maxItems || 25,
+                            updated.excludedLabels || undefined
+                        );
+                    } catch (hubErr: any) {
+                        console.warn("[PLACEMENT-SYNC] Failed updating smart collection filter URI in Plex:", hubErr.message);
+                    }
+                }
             }
         }
 
         return { success: true, collection: updated, message: `Placement settings for "${updated.title}" saved and synced to Plex.` };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * 1-Click Server Action to update excluded labels on an active collection and immediately re-sync to Plex.
+ */
+export async function updateCollectionExcludedLabelsAction(collectionId: string, excludedLabels: string) {
+    try {
+        await verifyAdmin();
+        const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
+        if (!collection) return { success: false, error: "Collection not found." };
+
+        const updated = await prisma.mediaCollection.update({
+            where: { id: collectionId },
+            data: { excludedLabels }
+        });
+
+        // If this is a Smart Hub collection, update its filter URI in Plex immediately
+        if ((updated.sourceType === "plex_smart" || updated.category === "Plex Smart") && updated.serverId && updated.sectionKey) {
+            try {
+                const subtype = (updated.sourceQuery || "recently_added") as any;
+                await deployFilteredSmartHubInternal(
+                    updated.serverId,
+                    updated.sectionKey,
+                    subtype,
+                    updated.title,
+                    updated.maxItems || 25,
+                    updated.excludedLabels || undefined
+                );
+            } catch (hubErr: any) {
+                console.warn("[EXCLUDED-LABELS-SYNC] Failed updating smart collection filter URI in Plex:", hubErr.message);
+            }
+        }
+
+        return { success: true, collection: updated, message: `Excluded labels updated for "${updated.title}".` };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -9828,7 +9923,8 @@ export async function deployFilteredSmartHubInternal(
     sectionKey: string,
     subtype: FilteredHubSubtype = "recently_added",
     customTitle?: string,
-    maxItems: number = 25
+    maxItems: number = 25,
+    excludedLabels?: string
 ): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string; itemCount?: number }> {
     try {
         await ensureSchemaColumns();
@@ -9908,6 +10004,39 @@ export async function deployFilteredSmartHubInternal(
                 filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
             } else {
                 filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=${trailerLabel}&label!=${comingSoonLabel}&editionTitle!=Trailer${limitParam}`;
+            }
+        }
+
+        // Append custom excluded labels if configured (e.g. IMDb-Nudity: Severe, leaving-soon)
+        if (excludedLabels && excludedLabels.trim()) {
+            const rawTokens = excludedLabels.split(",").map(s => s.trim().replace(/^exclude\s+/i, "")).filter(Boolean);
+            const addedLabels = new Set<string>(["trailer-placeholder", "coming soon-placeholder"]);
+            for (const rawLbl of rawTokens) {
+                const lblLower = rawLbl.toLowerCase();
+                if (!addedLabels.has(lblLower)) {
+                    addedLabels.add(lblLower);
+                    filterUri += `&label!=${encodeURIComponent(rawLbl)}`;
+                }
+
+                // If token contains parental category + severity, also include standard variations so Plex filters regardless of format
+                for (const cat of ["nudity", "violence", "profanity", "alcohol", "frightening"]) {
+                    if (lblLower.includes(cat) && lblLower.includes("severe")) {
+                        const capCat = cat.charAt(0).toUpperCase() + cat.slice(1);
+                        const variants = [
+                            `IMDb-${capCat}: Severe`,
+                            `Severe ${capCat}`,
+                            `${capCat} (Severe)`,
+                            `${capCat}: Severe`,
+                            `${cat} severe`
+                        ];
+                        for (const v of variants) {
+                            if (!addedLabels.has(v.toLowerCase())) {
+                                addedLabels.add(v.toLowerCase());
+                                filterUri += `&label!=${encodeURIComponent(v)}`;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -10085,7 +10214,7 @@ export async function deployFilteredSmartHubInternal(
                     promotedToRecommended: true,
                     promotedToSharedHome: true,
                     sortPrefix: existingDb.sortPrefix || sortPrefix,
-                    excludedLabels: "trailer-placeholder",
+                    excludedLabels: excludedLabels !== undefined ? excludedLabels : (existingDb.excludedLabels || "trailer-placeholder"),
                     isIgnored: false,
                     lastSyncedAt: new Date()
                 }
@@ -10110,7 +10239,7 @@ export async function deployFilteredSmartHubInternal(
                     promotedToSharedHome: true,
                     orderIndex: 0,
                     sortPrefix,
-                    excludedLabels: "trailer-placeholder",
+                    excludedLabels: excludedLabels !== undefined ? excludedLabels : "trailer-placeholder",
                     isIgnored: false,
                     lastSyncedAt: new Date()
                 }
@@ -10136,11 +10265,12 @@ export async function deployFilteredSmartHubAction(
     sectionKey: string,
     subtype: FilteredHubSubtype = "recently_added",
     customTitle?: string,
-    maxItems: number = 25
+    maxItems: number = 25,
+    excludedLabels?: string
 ): Promise<{ success: boolean; message: string; error?: string; collectionRatingKey?: string; itemCount?: number }> {
     try {
         await verifyAdmin();
-        return await deployFilteredSmartHubInternal(serverId, sectionKey, subtype, customTitle, maxItems);
+        return await deployFilteredSmartHubInternal(serverId, sectionKey, subtype, customTitle, maxItems, excludedLabels);
     } catch (e: any) {
         return { success: false, message: e.message, error: e.message };
     }

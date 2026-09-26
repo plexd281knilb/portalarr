@@ -119,8 +119,10 @@ import {
     deleteAllPlexCollectionsAction,
     getYouTubeCookiesStatusAction,
     saveYouTubeCookiesAction,
-    toggleSkipYouTubeTrailerDownloadsAction
+    toggleSkipYouTubeTrailerDownloadsAction,
+    updateCollectionExcludedLabelsAction
 } from "@/app/curation-actions";
+import { ExcludedLabelsSelector } from "./excluded-labels-selector";
 import {
     COLLECTION_PRESETS,
     CollectionPreset
@@ -249,6 +251,13 @@ export function AgregarrStudio() {
     const [placementIncludePlaceholders, setPlacementIncludePlaceholders] = useState<boolean>(false);
     const [savingPlacement, setSavingPlacement] = useState(false);
     const [placementSavedMsg, setPlacementSavedMsg] = useState<string | null>(null);
+
+    // Quick Excluded Labels Modal States (Direct from Collection Card)
+    const [quickLabelsModalOpen, setQuickLabelsModalOpen] = useState(false);
+    const [quickLabelsCollection, setQuickLabelsCollection] = useState<any | null>(null);
+    const [quickLabelsValue, setQuickLabelsValue] = useState<string>("");
+    const [savingQuickLabels, setSavingQuickLabels] = useState(false);
+    const [quickLabelsSavedMsg, setQuickLabelsSavedMsg] = useState<string | null>(null);
 
     // Collection Level Direct Placeholder Generation Loading States
     const [generatingCollPlaceholdersId, setGeneratingCollPlaceholdersId] = useState<string | null>(null);
@@ -901,6 +910,39 @@ export function AgregarrStudio() {
             setPlacementSavedMsg(`⚠️ ${err.message || "Failed saving placement."}`);
         } finally {
             setSavingPlacement(false);
+        }
+    };
+
+    // Open Quick Excluded Labels Modal
+    const handleOpenQuickLabelsModal = (coll: any) => {
+        setQuickLabelsCollection(coll);
+        setQuickLabelsValue(coll.excludedLabels || "");
+        setQuickLabelsSavedMsg(null);
+        setQuickLabelsModalOpen(true);
+    };
+
+    // Save Quick Excluded Labels & Sync to Plex
+    const handleSaveQuickLabels = async () => {
+        if (!quickLabelsCollection) return;
+        setSavingQuickLabels(true);
+        setQuickLabelsSavedMsg(null);
+        try {
+            const res = await updateCollectionExcludedLabelsAction(quickLabelsCollection.id, quickLabelsValue);
+            if (res.success) {
+                setQuickLabelsSavedMsg("✓ Excluded labels updated and synced to Plex!");
+                setCollections(prev => prev.map(c => c.id === quickLabelsCollection.id ? { ...c, excludedLabels: quickLabelsValue } : c));
+                setTimeout(() => {
+                    setQuickLabelsModalOpen(false);
+                    loadCollections();
+                }, 800);
+            } else {
+                setQuickLabelsSavedMsg(`⚠️ ${res.error || "Failed updating excluded labels."}`);
+            }
+        } catch (err: any) {
+            console.error("Failed saving excluded labels:", err);
+            setQuickLabelsSavedMsg(`⚠️ ${err.message || "Failed updating excluded labels."}`);
+        } finally {
+            setSavingQuickLabels(false);
         }
     };
 
@@ -2820,6 +2862,24 @@ export function AgregarrStudio() {
                                                     <p className="text-[11px] text-slate-400 line-clamp-1" title={coll.summary || coll.sourceQuery}>
                                                         {coll.summary || coll.sourceQuery || "No summary configured."}
                                                     </p>
+                                                    {coll.excludedLabels && (
+                                                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                                            <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-0.5">
+                                                                <Tag className="h-2.5 w-2.5 text-rose-400" /> Excluded:
+                                                            </span>
+                                                            {String(coll.excludedLabels).split(",").map((s: string) => s.trim().replace(/^exclude\s+/i, "")).filter(Boolean).map((tag: string) => (
+                                                                <button
+                                                                    key={tag}
+                                                                    type="button"
+                                                                    onClick={() => handleOpenQuickLabelsModal(coll)}
+                                                                    className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0 rounded border border-rose-900/60 bg-rose-950/40 text-rose-300 font-mono hover:bg-rose-900/60 transition-colors cursor-pointer"
+                                                                    title={`Click to edit excluded labels for "${coll.title}"`}
+                                                                >
+                                                                    <span>{tag}</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                     {collPlaceholderMsg && collPlaceholderMsg.id === coll.id && (
                                                         <div className={`mt-1 p-1.5 rounded-md text-[10px] font-semibold flex items-center gap-1.5 ${
                                                             collPlaceholderMsg.success ? "bg-emerald-950/60 text-emerald-300 border border-emerald-800/60" : "bg-rose-950/60 text-rose-300 border border-rose-800/60"
@@ -2948,6 +3008,23 @@ export function AgregarrStudio() {
                                                         <span className="hidden sm:inline">Gen Stubs</span>
                                                     </Button>
                                                 )}
+
+                                                {/* Exclude Labels Quick Action */}
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleOpenQuickLabelsModal(coll)}
+                                                    className={`text-[11px] h-8 px-2.5 gap-1 border transition-all cursor-pointer ${
+                                                        coll.excludedLabels
+                                                            ? "border-rose-900/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 hover:text-rose-100 shadow-sm"
+                                                            : "border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white"
+                                                    }`}
+                                                    title={`Quick-exclude Plex labels, content advisories, or trailers for "${coll.title}"`}
+                                                >
+                                                    <Tag className="h-3.5 w-3.5 text-rose-400" />
+                                                    <span>Exclude Labels</span>
+                                                </Button>
 
                                                 {/* Placement Details & Actions */}
                                                 <Button
@@ -4704,23 +4781,14 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Excluded Labels */}
-                        <div className="space-y-2 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Tag className="h-3.5 w-3.5 text-rose-400" /> Excluded Plex Labels
-                                </Label>
-                                <span className="text-[10px] text-slate-400 font-mono">Ignore matching media</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400">
-                                Exclude media items tagged with these Plex labels (e.g. placeholder trailers, leaving soon, extras).
-                            </p>
-                            <Input
-                                value={inspectExcludedLabels}
-                                onChange={(e) => setInspectExcludedLabels(e.target.value)}
-                                placeholder="e.g. trailer-placeholder, trailers, coming_soon, leaving-soon, extras"
-                                className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
-                            />
-                        </div>
+                        <ExcludedLabelsSelector
+                            value={inspectExcludedLabels}
+                            onChange={setInspectExcludedLabels}
+                            serverId={selectedServerId}
+                            sectionKey={selectedSectionKey}
+                            title="Excluded Plex Labels"
+                            description="Exclude media items tagged with these Plex labels or content advisories (e.g. exclude nudity severe, trailers, leaving soon)."
+                        />
 
                         {/* Coming Soon Placeholders & Trailer Stubs */}
                         <div className="space-y-2 p-3.5 bg-slate-950 rounded-xl border border-slate-800">
@@ -5126,23 +5194,14 @@ export function AgregarrStudio() {
                         </div>
 
                         {/* Section 7: Excluded Plex Labels */}
-                        <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                    <Tag className="h-3.5 w-3.5 text-rose-400" /> Excluded Plex Labels
-                                </Label>
-                                <span className="text-[10px] text-slate-400 font-mono">Ignore matching media</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400">
-                                Exclude media items tagged with these Plex labels (e.g. placeholder trailers, leaving soon, extras).
-                            </p>
-                            <Input
-                                value={placementExcludedLabels}
-                                onChange={(e) => setPlacementExcludedLabels(e.target.value)}
-                                placeholder="e.g. trailer-placeholder, trailers, coming_soon, leaving-soon, extras"
-                                className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
-                            />
-                        </div>
+                        <ExcludedLabelsSelector
+                            value={placementExcludedLabels}
+                            onChange={setPlacementExcludedLabels}
+                            serverId={selectedServerId}
+                            sectionKey={selectedSectionKey}
+                            title="Excluded Plex Labels"
+                            description="Exclude media items tagged with these Plex labels or content advisories (e.g. exclude nudity severe, trailer stubs, leaving soon). Selected titles will be filtered out."
+                        />
 
                         {/* Section 8: Coming Soon Placeholders & Trailer Stubs */}
                         <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
@@ -5183,6 +5242,57 @@ export function AgregarrStudio() {
                         >
                             {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                             <span>Save &amp; Sync Placement to Plex</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ========================================================================= */}
+            {/* QUICK EXCLUDED LABELS MODAL (DIRECT FROM COLLECTION CARD) */}
+            {/* ========================================================================= */}
+            <Dialog open={quickLabelsModalOpen} onOpenChange={setQuickLabelsModalOpen}>
+                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-5 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-rose-400" />
+                            <span>Exclude Plex Labels: {quickLabelsCollection?.title}</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Quick-select any label generated across Portalarr curation tabs (Parental Advisories, Placeholders, Prune, Specs) or live Plex tags to exclude them from this collection.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto py-2 pr-1">
+                        <ExcludedLabelsSelector
+                            value={quickLabelsValue}
+                            onChange={setQuickLabelsValue}
+                            serverId={selectedServerId}
+                            sectionKey={selectedSectionKey}
+                            title="Active Exclusions"
+                            description="Media items with these labels or content advisories will be excluded from this collection."
+                        />
+
+                        {quickLabelsSavedMsg && (
+                            <div className="mt-3 p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-300 flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                <span>{quickLabelsSavedMsg}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setQuickLabelsModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={savingQuickLabels}
+                            onClick={handleSaveQuickLabels}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                        >
+                            {savingQuickLabels ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            <span>Save &amp; Sync to Plex</span>
                         </Button>
                     </DialogFooter>
                 </DialogContent>
