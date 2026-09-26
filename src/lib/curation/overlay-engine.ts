@@ -623,7 +623,7 @@ export function isRibbonTypeMatching(
 ): boolean {
     const t = (type || "").toLowerCase().trim();
 
-    // 1. IMDb Top 250 (movies or TV)
+    // 1. IMDb Top 250 (movies or TV) - Strict Registry Matching
     if (t === "imdb_top_250") {
         // A. Explicit Plex collection or label tag
         const hasTop250 = mediaInfo.collections?.some(c => /top[\s_-]?250/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?250/i.test(l));
@@ -647,9 +647,6 @@ export function isRibbonTypeMatching(
             if (inRegistry) return true;
         }
 
-        // C. Fallback: High IMDb score threshold (>= 8.3)
-        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-        if (mediaInfo.type !== "show" && score && score >= 8.3) return true;
         return false;
     }
     if (t === "imdb_top_250_tv") {
@@ -674,12 +671,10 @@ export function isRibbonTypeMatching(
             if (inRegistry) return true;
         }
 
-        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-        if (mediaInfo.type === "show" && score && score >= 8.5) return true;
         return false;
     }
 
-    // 1b. IMDb Top 150 (movies or TV)
+    // 1b. IMDb Top 150 (movies or TV) - Strict Registry Matching
     if (t === "imdb_top_150") {
         // A. Explicit Plex collection or label tag
         const hasTop150 = mediaInfo.collections?.some(c => /top[\s_-]?150/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?150/i.test(l));
@@ -704,9 +699,6 @@ export function isRibbonTypeMatching(
             if (inRegistry) return true;
         }
 
-        // C. Fallback: High IMDb score threshold (>= 8.4)
-        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-        if (mediaInfo.type !== "show" && score && score >= 8.4) return true;
         return false;
     }
     if (t === "imdb_top_150_tv") {
@@ -732,8 +724,6 @@ export function isRibbonTypeMatching(
             if (inRegistry) return true;
         }
 
-        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
-        if (mediaInfo.type === "show" && score && score >= 8.6) return true;
         return false;
     }
 

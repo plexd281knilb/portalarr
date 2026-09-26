@@ -61,6 +61,7 @@ import { CurationNavHeader } from "./curation-nav-header";
 import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
 import { KometaOverlaysGuideModal } from "./kometa-overlays-guide-modal";
 import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { IMDB_TOP_250_MOVIES, IMDB_TOP_250_TV } from "@/lib/curation/imdb-top250-data";
 import {
     getPlexServersAndSectionsAction,
     getPlexServerSectionsAction,
@@ -958,10 +959,10 @@ export function KometaStudio() {
 
     // Authentic Kometa Waterfall Ribbon Evaluation Engine
     const WATERFALL_PRESET_OPTIONS = [
-        { value: "imdb_top_250", label: "🏆 IMDb Top 250 (Rank ≤ 250 / Score ≥ 8.3)", defaultText: "IMDb TOP 250", defaultTheme: "gold" as const },
-        { value: "imdb_top_150", label: "🌟 IMDb Top 150 (Rank ≤ 150 / Score ≥ 8.4)", defaultText: "IMDb TOP 150", defaultTheme: "gold" as const },
-        { value: "imdb_top_250_tv", label: "📺 IMDb Top 250 TV (Rank ≤ 250 / Score ≥ 8.5)", defaultText: "IMDb TOP TV", defaultTheme: "gold" as const },
-        { value: "imdb_top_150_tv", label: "📺 IMDb Top 150 TV (Rank ≤ 150 / Score ≥ 8.6)", defaultText: "IMDb TOP 150", defaultTheme: "gold" as const },
+        { value: "imdb_top_250", label: "🏆 IMDb Top 250 (Rank ≤ 250)", defaultText: "IMDb TOP 250", defaultTheme: "gold" as const },
+        { value: "imdb_top_150", label: "🌟 IMDb Top 150 (Rank ≤ 150)", defaultText: "IMDb TOP 150", defaultTheme: "gold" as const },
+        { value: "imdb_top_250_tv", label: "📺 IMDb Top 250 TV (Rank ≤ 250)", defaultText: "IMDb TOP TV", defaultTheme: "gold" as const },
+        { value: "imdb_top_150_tv", label: "📺 IMDb Top 150 TV (Rank ≤ 150)", defaultText: "IMDb TOP 150", defaultTheme: "gold" as const },
         { value: "certified_fresh", label: "🍅 RT: Certified Fresh (≥ 75%)", defaultText: "CERTIFIED FRESH", defaultTheme: "crimson" as const },
         { value: "rt_fresh", label: "🍅 RT: Fresh (≥ 60%)", defaultText: "RT FRESH", defaultTheme: "crimson" as const },
         { value: "metacritic_must_see", label: "Ⓜ️ Metacritic: Must-See (≥ 81)", defaultText: "MUST-SEE", defaultTheme: "emerald" as const },
@@ -1026,40 +1027,90 @@ export function KometaStudio() {
             let ruleLabel = tier.text || type;
 
             if (type === "imdb_top_250") {
-                ruleLabel = "IMDb Top 250 (Score ≥ 8.3)";
+                ruleLabel = "IMDb Top 250 (Rank ≤ 250)";
                 if (item) {
                     const hasTop250Collection = item.collections?.some(c => /top[\s_-]?250/i.test(c)) || item.labels?.some(l => /top[\s_-]?250/i.test(l));
-                    const score = item.imdbRating ?? item.rating;
-                    if (hasTop250Collection) isMatch = true;
-                    else if (item.type !== "show" && score && score >= 8.3) isMatch = true;
+                    if (hasTop250Collection) {
+                        isMatch = true;
+                    } else if (item.type !== "show") {
+                        const cleanImdb = item.guids?.imdb ? item.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+                        const tmdbNum = item.guids?.tmdb ? Number(item.guids.tmdb) : null;
+                        const normTitle = (item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                        isMatch = IMDB_TOP_250_MOVIES.some(m => {
+                            if (cleanImdb && m.imdbId.toLowerCase() === cleanImdb) return true;
+                            if (tmdbNum && m.tmdbId === tmdbNum) return true;
+                            if (normTitle && m.year && item.year && Math.abs(m.year - item.year) <= 1) {
+                                return normTitle === m.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            }
+                            return false;
+                        });
+                    }
                 } else if (simFallback.ratings) {
                     isMatch = true;
                 }
             } else if (type === "imdb_top_250_tv") {
-                ruleLabel = "IMDb Top TV (Score ≥ 8.5)";
+                ruleLabel = "IMDb Top 250 TV (Rank ≤ 250)";
                 if (item) {
                     const hasTop250Collection = item.collections?.some(c => /top[\s_-]?250|top[\s_-]?tv/i.test(c)) || item.labels?.some(l => /top[\s_-]?250|top[\s_-]?tv/i.test(l));
-                    const score = item.imdbRating ?? item.rating;
-                    if (hasTop250Collection) isMatch = true;
-                    else if (item.type === "show" && score && score >= 8.5) isMatch = true;
+                    if (hasTop250Collection) {
+                        isMatch = true;
+                    } else if (item.type === "show") {
+                        const cleanImdb = item.guids?.imdb ? item.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+                        const tmdbNum = item.guids?.tmdb ? Number(item.guids.tmdb) : null;
+                        const normTitle = (item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                        isMatch = IMDB_TOP_250_TV.some(s => {
+                            if (cleanImdb && s.imdbId.toLowerCase() === cleanImdb) return true;
+                            if (tmdbNum && s.tmdbId === tmdbNum) return true;
+                            if (normTitle && s.year && item.year && Math.abs(s.year - item.year) <= 1) {
+                                return normTitle === s.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            }
+                            return false;
+                        });
+                    }
                 }
             } else if (type === "imdb_top_150") {
-                ruleLabel = "IMDb Top 150 (Score ≥ 8.4)";
+                ruleLabel = "IMDb Top 150 (Rank ≤ 150)";
                 if (item) {
                     const hasTop150Collection = item.collections?.some(c => /top[\s_-]?150/i.test(c)) || item.labels?.some(l => /top[\s_-]?150/i.test(l));
-                    const score = item.imdbRating ?? item.rating;
-                    if (hasTop150Collection) isMatch = true;
-                    else if (item.type !== "show" && score && score >= 8.4) isMatch = true;
+                    if (hasTop150Collection) {
+                        isMatch = true;
+                    } else if (item.type !== "show") {
+                        const cleanImdb = item.guids?.imdb ? item.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+                        const tmdbNum = item.guids?.tmdb ? Number(item.guids.tmdb) : null;
+                        const normTitle = (item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                        isMatch = IMDB_TOP_250_MOVIES.some(m => {
+                            if (m.rank > 150) return false;
+                            if (cleanImdb && m.imdbId.toLowerCase() === cleanImdb) return true;
+                            if (tmdbNum && m.tmdbId === tmdbNum) return true;
+                            if (normTitle && m.year && item.year && Math.abs(m.year - item.year) <= 1) {
+                                return normTitle === m.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            }
+                            return false;
+                        });
+                    }
                 } else if (simFallback.ratings) {
                     isMatch = true;
                 }
             } else if (type === "imdb_top_150_tv") {
-                ruleLabel = "IMDb Top 150 TV (Score ≥ 8.6)";
+                ruleLabel = "IMDb Top 150 TV (Rank ≤ 150)";
                 if (item) {
                     const hasTop150Collection = item.collections?.some(c => /top[\s_-]?150|top[\s_-]?tv/i.test(c)) || item.labels?.some(l => /top[\s_-]?150|top[\s_-]?tv/i.test(l));
-                    const score = item.imdbRating ?? item.rating;
-                    if (hasTop150Collection) isMatch = true;
-                    else if (item.type === "show" && score && score >= 8.6) isMatch = true;
+                    if (hasTop150Collection) {
+                        isMatch = true;
+                    } else if (item.type === "show") {
+                        const cleanImdb = item.guids?.imdb ? item.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+                        const tmdbNum = item.guids?.tmdb ? Number(item.guids.tmdb) : null;
+                        const normTitle = (item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                        isMatch = IMDB_TOP_250_TV.some(s => {
+                            if (s.rank > 150) return false;
+                            if (cleanImdb && s.imdbId.toLowerCase() === cleanImdb) return true;
+                            if (tmdbNum && s.tmdbId === tmdbNum) return true;
+                            if (normTitle && s.year && item.year && Math.abs(s.year - item.year) <= 1) {
+                                return normTitle === s.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            }
+                            return false;
+                        });
+                    }
                 }
             } else if (type === "certified_fresh") {
                 ruleLabel = "RT Certified Fresh (≥ 75%)";
