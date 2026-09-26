@@ -648,6 +648,53 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{errorMessage}", description: "Description of the download or dispatch error", sampleValue: "No indexer release matches custom quality cutoff." },
             { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
         ]
+    },
+    {
+        id: "admin_user_access_revoked",
+        name: "User Role / Access Change Alert (Admins)",
+        description: "Sent to server administrators whenever a user's role is demoted or their access is expired, suspended, or revoked.",
+        category: "AUTH",
+        defaultSubject: "⚠️ User Access / Role Update: {username} ({statusChange})",
+        defaultBody: `<h2>User Access / Role Update ⚠️</h2>
+<p>An account access or role change has occurred for <strong>{username}</strong>:</p>
+
+<div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #92400e;">User:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{username} ({email})</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Status:</td>
+            <td style="padding: 6px 0; color: #b45309; font-weight: bold;">{oldStatus} &rarr; {newStatus}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Role:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{oldRole} &rarr; {newRole}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Reason:</td>
+            <td style="padding: 6px 0; color: #334155;">{reason}</td>
+        </tr>
+    </table>
+</div>
+
+<p>You can review this user's permissions, restore access, or edit account details in Access Control.</p>
+<div style="text-align: center; margin: 24px 0;">
+    <a href="{accessUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">Open Access Control</a>
+</div>`,
+        variables: [
+            { key: "{username}", description: "Username of the affected user", sampleValue: "jordan_reader" },
+            { key: "{email}", description: "Email of the affected user", sampleValue: "jordan@example.com" },
+            { key: "{statusChange}", description: "Summary of status transition", sampleValue: "APPROVED -> EXPIRED" },
+            { key: "{oldStatus}", description: "Previous account status", sampleValue: "APPROVED" },
+            { key: "{newStatus}", description: "New account status", sampleValue: "EXPIRED" },
+            { key: "{oldRole}", description: "Previous user role", sampleValue: "USER" },
+            { key: "{newRole}", description: "New user role", sampleValue: "USER" },
+            { key: "{reason}", description: "Reason for the role or access change", sampleValue: "Trial period elapsed beyond grace period" },
+            { key: "{accessUrl}", description: "URL to the Access Control management page", sampleValue: "https://portal.example.com/settings/access" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
     }
 ];
 

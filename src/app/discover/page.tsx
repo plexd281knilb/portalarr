@@ -23,7 +23,7 @@ export default async function DiscoverPage(props: {
 
     return (
         <div className="min-h-screen bg-background flex flex-col">
-            <main className="flex-1 p-3 sm:p-5 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+            <main className="flex-1 p-2.5 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full space-y-4 sm:space-y-6 min-w-0">
                 {/* Header Section */}
                 <section className="space-y-1 sm:space-y-2 py-2 sm:py-4">
                     <div className="flex items-center gap-3">

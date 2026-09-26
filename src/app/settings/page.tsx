@@ -1120,14 +1120,14 @@ function SettingsPageContent() {
     }
 
     return (
-        <div className={`space-y-6 p-3 sm:p-5 lg:p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
+        <div className={`space-y-6 p-3 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
             <div>
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">System Settings</h2>
                 <p className="text-xs sm:text-sm text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 w-full max-w-6xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
                     <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80 min-w-0">
                         <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">General & Setup</span>
@@ -3739,8 +3739,8 @@ function SettingsPageContent() {
 
             {/* UNSAVED CHANGES MODAL */}
             <Dialog open={leaveModalOpen} onOpenChange={(open) => { if (!open) { setLeaveModalOpen(false); setPendingNavigation(null); } }}>
-                <DialogContent className="sm:max-w-md bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
-                    <DialogHeader>
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
+                    <DialogHeader className="shrink-0">
                         <div className="flex items-center gap-2 text-amber-500 mb-1">
                             <AlertTriangle className="h-5 w-5" />
                             <DialogTitle className="text-lg font-bold">Unsaved Changes</DialogTitle>
@@ -3750,7 +3750,7 @@ function SettingsPageContent() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-2 py-2">
+                    <div className="space-y-2 py-2 flex-1 overflow-y-auto min-h-0">
                         <div className="text-xs font-semibold text-slate-300">Modified Sections:</div>
                         <div className="flex flex-wrap gap-1.5">
                             {unsavedSections.map((sec) => (

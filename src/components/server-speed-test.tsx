@@ -147,7 +147,7 @@ export default function ServerSpeedTest() {
                     Speed Test
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl">
+            <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                 <DialogHeader className="pb-3 border-b border-border/40">
                     <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                         <Gauge className="h-5 w-5 text-primary" />

@@ -1840,20 +1840,23 @@ export async function sendBroadcastEmailAction(payload: {
             appUrl
         });
 
-        try {
-            await transporter.sendMail({
-                from: senderEmail,
-                to: user.email,
-                subject: personalizedSubject,
-                html: personalizedHtml
-            });
+        const mailRes = await sendOrQueueEmail({
+            to: user.email,
+            subject: personalizedSubject,
+            html: personalizedHtml,
+            templateId: "broadcast",
+            targetUser: user.username,
+            userId: user.id
+        });
+
+        if (mailRes.success) {
             sentCount++;
-        } catch (mailErr: any) {
+        } else {
             failCount++;
             failures.push({
                 username: user.username,
                 email: user.email,
-                error: mailErr.message || "Failed to send email"
+                error: mailRes.error || "Failed to send or queue email"
             });
         }
     }
@@ -2658,6 +2661,93 @@ export async function revokePlexAccessForUserInternal(
 }
 
 /**
+ * Notifies the administrator(s) whenever any user loses roles or access (e.g. demotion, suspension, expiration, or revocation).
+ * Always records a high-visibility system audit log in logger.ts, and dispatches an admin alert email if SMTP is configured.
+ */
+export async function notifyAdminUserRoleOrAccessChange(params: {
+    username: string;
+    email?: string | null;
+    oldRole?: string;
+    newRole?: string;
+    oldStatus?: string;
+    newStatus?: string;
+    reason: string;
+    revokedLibrariesCount?: number;
+}) {
+    try {
+        const username = params.username || "Unknown User";
+        const email = params.email || "No Email";
+        const oldStatus = params.oldStatus || "UNKNOWN";
+        const newStatus = params.newStatus || "UNKNOWN";
+        const oldRole = params.oldRole || "USER";
+        const newRole = params.newRole || "USER";
+        const statusChange = `${oldStatus} -> ${newStatus}`;
+
+        // 1. Always record a high-priority system audit log entry
+        logger.addLog(
+            "WARN",
+            "AUTH",
+            `⚠️ [USER ACCESS/ROLE CHANGE] User "${username}" (${email}): Status [${statusChange}], Role [${oldRole} -> ${newRole}]. Reason: ${params.reason}`
+        );
+
+        // 2. Dispatch email notification to admins if SMTP is enabled
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            return { success: true, emailed: false, reason: "SMTP not configured" };
+        }
+        if (settings.emailNotificationsEnabled === false) {
+            return { success: true, emailed: false, reason: "Email notifications disabled" };
+        }
+
+        const admins = await prisma.user.findMany({
+            where: { role: "ADMIN" }
+        }).catch(() => []);
+
+        const adminEmails = admins.map(a => a.email).filter(Boolean);
+        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+
+        const { renderEmailTemplate } = await import("../lib/email-templates");
+        const appUrl = await getAppUrl();
+        const { subject, html } = await renderEmailTemplate("admin_user_access_revoked", {
+            username,
+            email,
+            statusChange,
+            oldStatus,
+            newStatus,
+            oldRole,
+            newRole,
+            reason: params.reason,
+            appUrl,
+            accessUrl: `${appUrl}/settings/access`
+        });
+
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: recipientEmails.join(", "),
+            subject,
+            html
+        });
+
+        console.log(`[AUTH-AUDIT] Admin notification email dispatched for user access/role change on "${username}".`);
+        return { success: true, emailed: true };
+    } catch (e: any) {
+        console.error("[AUTH-AUDIT] Error sending admin access/role change notification:", e.message || e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
  * Scans the database for any expired trials or subscriptions and automatically revokes Plex access.
  * Note: Admins (role === 'ADMIN') and users with manual Permanent Access (subscriptionEndsAt === null && trialEndsAt === null) are strictly preserved.
  */
@@ -2723,6 +2813,46 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
             try {
                 console.log(`[TRIAL-EXPIRATION] Processing expiration for user "${u.username}" (Status: ${u.status}, TrialEnd: ${u.trialEndsAt?.toISOString() || 'N/A'}, SubEnd: ${u.subscriptionEndsAt?.toISOString() || 'N/A'})...`);
                 
+                // If Plex approval gate is active, stage the revocation in Admin Approval Queue instead of revoking immediately
+                if (settings?.requireApprovalForPlexChanges !== false) {
+                    const existing = await prisma.adminApproval.findFirst({
+                        where: {
+                            userId: u.id,
+                            type: "PLEX_ACCESS_REVOKE",
+                            status: "PENDING"
+                        }
+                    });
+                    if (!existing) {
+                        await prisma.adminApproval.create({
+                            data: {
+                                type: "PLEX_ACCESS_REVOKE",
+                                status: "PENDING",
+                                title: `Revoke Plex Access: Expired Account (${u.username})`,
+                                description: `Trial/Subscription expired. Current status: ${u.status}. Pending admin approval before revoking Plex library access.`,
+                                targetUser: u.username,
+                                targetEmail: u.email,
+                                userId: u.id,
+                                payload: JSON.stringify({
+                                    userId: u.id,
+                                    action: "EXPIRE_SUSPEND",
+                                    reason: `Trial or subscription period ended (Grace period: ${gracePeriodDays} days).`
+                                })
+                            }
+                        });
+                        logger.addLog("INFO", "APPROVAL", `Staged Plex access revocation for expired user "${u.username}" in Admin Approval Queue.`);
+                        await notifyAdminUserRoleOrAccessChange({
+                            username: u.username,
+                            email: u.email,
+                            oldStatus: u.status,
+                            newStatus: "PENDING_REVOCATION",
+                            oldRole: u.role,
+                            newRole: u.role,
+                            reason: `Trial or subscription period ended (Grace period: ${gracePeriodDays} days). Action staged in Admin Approval Queue for review.`
+                        }).catch(e => console.warn("[TRIAL-EXPIRATION] Admin notification warning:", e.message));
+                    }
+                    continue;
+                }
+
                 await prisma.user.update({
                     where: { id: u.id },
                     data: {
@@ -2733,6 +2863,17 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
 
                 await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on Portalarr.");
                 logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
+
+                // Notify administrator of user expiration and access revocation
+                await notifyAdminUserRoleOrAccessChange({
+                    username: u.username,
+                    email: u.email,
+                    oldStatus: u.status,
+                    newStatus: "EXPIRED",
+                    oldRole: u.role,
+                    newRole: u.role,
+                    reason: `Trial or subscription period ended (Grace period: ${gracePeriodDays} days). Plex access automatically suspended.`
+                }).catch(e => console.warn("[TRIAL-EXPIRATION] Admin notification warning:", e.message));
 
                 // Cascade expiration to nested sub-accounts
                 const subAccounts = await prisma.user.findMany({ where: { parentUserId: u.id } });
@@ -2746,6 +2887,15 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                             }
                         });
                         await revokePlexAccessForUserInternal(sub, "Parent account subscription has expired.");
+                        await notifyAdminUserRoleOrAccessChange({
+                            username: sub.username,
+                            email: sub.email,
+                            oldStatus: sub.status,
+                            newStatus: "EXPIRED",
+                            oldRole: sub.role,
+                            newRole: sub.role,
+                            reason: `Parent account "${u.username}" subscription expired. Sub-account access suspended.`
+                        }).catch(() => {});
                     } catch (subErr: any) {
                         console.warn(`[TRIAL-EXPIRATION] Failed to expire sub-account "${sub.username}":`, subErr.message);
                     }
@@ -2970,6 +3120,15 @@ export async function rejectAppUser(id: string) {
 
         if (user) {
             await revokePlexAccessForUserInternal(user, "Account access rejected by administrator.");
+            await notifyAdminUserRoleOrAccessChange({
+                username: user.username,
+                email: user.email,
+                oldStatus: user.status,
+                newStatus: "REJECTED",
+                oldRole: user.role,
+                newRole: user.role,
+                reason: "Account access rejected by administrator."
+            }).catch(() => {});
         }
 
         revalidatePath("/settings/access");
@@ -2987,6 +3146,15 @@ export async function deleteAppUser(id: string) {
         const user = await prisma.user.findUnique({ where: { id } });
         if (user) {
             await revokePlexAccessForUserInternal(user, "Account deleted by administrator.");
+            await notifyAdminUserRoleOrAccessChange({
+                username: user.username,
+                email: user.email,
+                oldStatus: user.status,
+                newStatus: "DELETED",
+                oldRole: user.role,
+                newRole: "DELETED",
+                reason: "User account deleted by administrator."
+            }).catch(() => {});
         }
 
         await prisma.user.delete({ where: { id } });
@@ -3002,10 +3170,24 @@ export async function deleteAppUser(id: string) {
 export async function updateAppUserRole(id: string, role: string) {
     await verifyAdmin();
     try {
+        const targetUser = await prisma.user.findUnique({ where: { id } });
         await prisma.user.update({
             where: { id },
             data: { role }
         });
+
+        if (targetUser && targetUser.role !== role) {
+            await notifyAdminUserRoleOrAccessChange({
+                username: targetUser.username,
+                email: targetUser.email,
+                oldStatus: targetUser.status,
+                newStatus: targetUser.status,
+                oldRole: targetUser.role,
+                newRole: role,
+                reason: `User role changed from ${targetUser.role} to ${role} by administrator.`
+            }).catch(() => {});
+        }
+
         revalidatePath("/settings/access");
         return { success: true };
     } catch (e: any) {
@@ -3123,11 +3305,12 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
                 appUrl
             });
 
-            await transporter.sendMail({
-                from: senderEmail,
+            await sendOrQueueEmail({
                 to: ticket.email,
                 subject,
-                html
+                html,
+                templateId: "ticket_update",
+                targetUser: ticket.name
             });
         }
     }
@@ -3255,7 +3438,7 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
     }
 }
 
-export async function updateUserPlexLibraries(
+export async function executePlexLibraryAccessUpdateInternal(
     userId: string, 
     selectedKeys: (string | number)[],
     activationType?: "APPROVED" | "PERMANENT" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "CUSTOM" | "KEEP_SUSPENDED",
@@ -3527,6 +3710,424 @@ export async function updateUserPlexLibraries(
     } catch (e: any) {
         console.error("[UPDATE-USER-PLEX-LIBRARIES-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to update user libraries" };
+    }
+}
+
+export async function updateUserPlexLibraries(
+    userId: string, 
+    selectedKeys: (string | number)[],
+    activationType?: "APPROVED" | "PERMANENT" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "CUSTOM" | "KEEP_SUSPENDED",
+    customDateOrDays?: string | number,
+    bypassApproval?: boolean
+): Promise<{ success: boolean; message?: string; error?: string; staged?: boolean; approvalId?: string }> {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const requireApproval = (settings?.requireApprovalForPlexChanges ?? true) && !bypassApproval;
+
+        if (!requireApproval) {
+            return await executePlexLibraryAccessUpdateInternal(userId, selectedKeys, activationType, customDateOrDays);
+        }
+
+        // Calculate differences between existing Plex shares and proposed keys
+        const currentKeys = (user.plexLibrarySectionIds || "").split(",").map(k => k.trim()).filter(Boolean);
+        const proposedKeys = selectedKeys.map(k => String(k).trim()).filter(Boolean);
+
+        const addedKeys = proposedKeys.filter(k => !currentKeys.includes(k));
+        const removedKeys = currentKeys.filter(k => !proposedKeys.includes(k));
+
+        if (addedKeys.length === 0 && removedKeys.length === 0 && !activationType) {
+            return { success: true, message: "No Plex library changes detected." };
+        }
+
+        const type = removedKeys.length > 0 && addedKeys.length === 0 ? "PLEX_ACCESS_REVOKE" : "PLEX_ACCESS_GRANT";
+        const title = `Plex Access: ${user.username} (+${addedKeys.length}, -${removedKeys.length})${activationType ? ` [${activationType}]` : ''}`;
+        const description = `Proposed: ${proposedKeys.length} libraries. Added: ${addedKeys.length > 0 ? addedKeys.join(", ") : "none"}, Removed: ${removedKeys.length > 0 ? removedKeys.join(", ") : "none"}${activationType ? `, Activation: ${activationType}` : ""}`;
+
+        const approval = await prisma.adminApproval.create({
+            data: {
+                type,
+                status: "PENDING",
+                title,
+                description,
+                targetUser: user.username,
+                targetEmail: user.email,
+                userId: user.id,
+                payload: JSON.stringify({
+                    userId,
+                    selectedKeys: proposedKeys,
+                    activationType,
+                    customDateOrDays,
+                    addedKeys,
+                    removedKeys,
+                    previousKeys: currentKeys
+                })
+            }
+        });
+
+        logger.addLog("INFO", "APPROVAL", `Plex access change for "${user.username}" staged for admin approval (ID: ${approval.id}).`);
+        return { 
+            success: true, 
+            staged: true, 
+            approvalId: approval.id, 
+            message: `Plex library access changes for "${user.username}" staged in Admin Approval Queue for review.` 
+        };
+    } catch (e: any) {
+        console.error("[UPDATE-USER-PLEX-LIBRARIES-WRAPPER-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to update or stage user Plex libraries" };
+    }
+}
+
+export async function sendOrQueueEmail(options: {
+    to: string | string[];
+    subject: string;
+    html: string;
+    text?: string;
+    templateId?: string;
+    targetUser?: string;
+    userId?: string;
+    bypassApproval?: boolean;
+}): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string }> {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        
+        // If email notifications globally disabled and not bypassing approval
+        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval) {
+            console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
+            return { success: true, sent: false, queued: false };
+        }
+
+        const requireApproval = (settings?.requireApprovalForEmails ?? true) && !options.bypassApproval;
+
+        if (requireApproval) {
+            const approval = await prisma.adminApproval.create({
+                data: {
+                    type: "EMAIL",
+                    status: "PENDING",
+                    title: `Email: ${options.subject}`,
+                    description: `To: ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`,
+                    targetUser: options.targetUser || null,
+                    targetEmail: Array.isArray(options.to) ? options.to[0] : options.to,
+                    userId: options.userId || null,
+                    payload: JSON.stringify({
+                        to: options.to,
+                        subject: options.subject,
+                        html: options.html,
+                        text: options.text,
+                        templateId: options.templateId,
+                        targetUser: options.targetUser
+                    })
+                }
+            });
+            logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(", ") : options.to} queued for admin approval (ID: ${approval.id}).`);
+            return { success: true, queued: true, approvalId: approval.id };
+        }
+
+        // Send email immediately via SMTP
+        if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+            return { success: false, error: "SMTP settings not configured" };
+        }
+
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text
+        });
+
+        logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`);
+        return { success: true, sent: true };
+    } catch (e: any) {
+        console.error("[EMAIL-GATE-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to send or queue email" };
+    }
+}
+
+export async function getAdminApprovalsAction(params?: {
+    status?: string;
+    type?: string;
+    page?: number;
+    pageSize?: number;
+}) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const page = params?.page || 1;
+        const pageSize = params?.pageSize || 25;
+        const skip = (page - 1) * pageSize;
+
+        const where: any = {};
+        if (params?.status && params.status !== "ALL") {
+            where.status = params.status;
+        }
+        if (params?.type && params.type !== "ALL") {
+            where.type = params.type;
+        }
+
+        const [approvals, totalCount, pendingCount, approvedCount, rejectedCount] = await Promise.all([
+            prisma.adminApproval.findMany({
+                where,
+                orderBy: { createdAt: "desc" },
+                skip,
+                take: pageSize,
+                include: { user: { select: { id: true, username: true, email: true, status: true, role: true } } }
+            }),
+            prisma.adminApproval.count({ where }),
+            prisma.adminApproval.count({ where: { status: "PENDING" } }),
+            prisma.adminApproval.count({ where: { status: "APPROVED" } }),
+            prisma.adminApproval.count({ where: { status: "REJECTED" } })
+        ]);
+
+        return {
+            success: true,
+            approvals,
+            totalCount,
+            pendingCount,
+            approvedCount,
+            rejectedCount,
+            page,
+            pageSize,
+            totalPages: Math.ceil(totalCount / pageSize) || 1
+        };
+    } catch (e: any) {
+        console.error("[GET-ADMIN-APPROVALS-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to retrieve approvals" };
+    }
+}
+
+export async function getAdminApprovalCountsAction() {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const pendingCount = await prisma.adminApproval.count({ where: { status: "PENDING" } });
+        const totalCount = await prisma.adminApproval.count();
+        return { success: true, pendingCount, totalCount };
+    } catch (e: any) {
+        return { success: false, pendingCount: 0, totalCount: 0 };
+    }
+}
+
+export async function approveAdminApprovalAction(approvalId: string) {
+    try {
+        const session: any = await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const approval = await prisma.adminApproval.findUnique({
+            where: { id: approvalId },
+            include: { user: true }
+        });
+
+        if (!approval) return { success: false, error: "Approval request not found" };
+        if (approval.status !== "PENDING") {
+            return { success: false, error: `This item has already been ${approval.status.toLowerCase()}.` };
+        }
+
+        let payload: any = {};
+        try {
+            payload = JSON.parse(approval.payload);
+        } catch {
+            return { success: false, error: "Invalid approval payload format." };
+        }
+
+        // Execute action based on type
+        if (approval.type === "EMAIL") {
+            const sendRes = await sendOrQueueEmail({
+                to: payload.to,
+                subject: payload.subject,
+                html: payload.html,
+                text: payload.text,
+                templateId: payload.templateId,
+                targetUser: payload.targetUser,
+                bypassApproval: true
+            });
+            if (!sendRes.success) {
+                return { success: false, error: `Email dispatch failed: ${sendRes.error}` };
+            }
+        } else if (approval.type === "PLEX_ACCESS_GRANT" || approval.type === "PLEX_ACCESS_REVOKE") {
+            if (payload.action === "EXPIRE_SUSPEND") {
+                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                if (targetUser) {
+                    await prisma.user.update({
+                        where: { id: targetUser.id },
+                        data: { status: "EXPIRED", plexLibrarySectionIds: "" }
+                    });
+                    await revokePlexAccessForUserInternal(targetUser, payload.reason || "Subscription/trial ended.");
+                }
+            } else {
+                const updateRes = await executePlexLibraryAccessUpdateInternal(
+                    payload.userId,
+                    payload.selectedKeys,
+                    payload.activationType,
+                    payload.customDateOrDays
+                );
+                if (!updateRes.success) {
+                    return { success: false, error: `Plex update failed: ${updateRes.error}` };
+                }
+            }
+        }
+
+        await prisma.adminApproval.update({
+            where: { id: approvalId },
+            data: {
+                status: "APPROVED",
+                approvedBy: session.username || "Admin",
+                approvedAt: new Date()
+            }
+        });
+
+        logger.addLog("INFO", "APPROVAL", `Administrator ${session.username || 'Admin'} approved "${approval.title}" (ID: ${approval.id}).`);
+        revalidatePath("/settings/access");
+        return { success: true, message: `Successfully approved and applied: ${approval.title}` };
+    } catch (e: any) {
+        console.error("[APPROVE-ADMIN-APPROVAL-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to approve action" };
+    }
+}
+
+export async function rejectAdminApprovalAction(approvalId: string, reason?: string) {
+    try {
+        const session: any = await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const approval = await prisma.adminApproval.findUnique({ where: { id: approvalId } });
+        if (!approval) return { success: false, error: "Approval request not found" };
+        if (approval.status !== "PENDING") {
+            return { success: false, error: `This item has already been ${approval.status.toLowerCase()}.` };
+        }
+
+        await prisma.adminApproval.update({
+            where: { id: approvalId },
+            data: {
+                status: "REJECTED",
+                approvedBy: session.username || "Admin",
+                rejectionReason: reason || "Rejected by administrator."
+            }
+        });
+
+        logger.addLog("WARN", "APPROVAL", `Administrator ${session.username || 'Admin'} rejected "${approval.title}" (Reason: ${reason || 'None'}).`);
+        revalidatePath("/settings/access");
+        return { success: true, message: `Rejected: ${approval.title}` };
+    } catch (e: any) {
+        console.error("[REJECT-ADMIN-APPROVAL-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to reject action" };
+    }
+}
+
+export async function bulkApproveAdminApprovalsAction(ids: string[]) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        let approved = 0;
+        let failed = 0;
+        const errors: string[] = [];
+
+        for (const id of ids) {
+            const res = await approveAdminApprovalAction(id);
+            if (res.success) {
+                approved++;
+            } else {
+                failed++;
+                errors.push(`${id}: ${res.error}`);
+            }
+        }
+
+        revalidatePath("/settings/access");
+        return { 
+            success: true, 
+            approvedCount: approved, 
+            failedCount: failed, 
+            errors: errors.slice(0, 5),
+            message: `Approved ${approved} item(s)${failed > 0 ? `, ${failed} failed` : ''}.` 
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Bulk approval failed" };
+    }
+}
+
+export async function bulkRejectAdminApprovalsAction(ids: string[], reason?: string) {
+    try {
+        const session: any = await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const res = await prisma.adminApproval.updateMany({
+            where: {
+                id: { in: ids },
+                status: "PENDING"
+            },
+            data: {
+                status: "REJECTED",
+                approvedBy: session.username || "Admin",
+                rejectionReason: reason || "Bulk rejected by administrator."
+            }
+        });
+
+        revalidatePath("/settings/access");
+        return { success: true, rejectedCount: res.count, message: `Rejected ${res.count} item(s).` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Bulk rejection failed" };
+    }
+}
+
+export async function getApprovalSettingsAction() {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        return {
+            success: true,
+            requireApprovalForPlexChanges: settings?.requireApprovalForPlexChanges ?? true,
+            requireApprovalForEmails: settings?.requireApprovalForEmails ?? true
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            requireApprovalForPlexChanges: true,
+            requireApprovalForEmails: true
+        };
+    }
+}
+
+export async function saveApprovalSettingsAction(data: {
+    requireApprovalForPlexChanges?: boolean;
+    requireApprovalForEmails?: boolean;
+}) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const updateData: any = {};
+        if (typeof data.requireApprovalForPlexChanges === "boolean") {
+            updateData.requireApprovalForPlexChanges = data.requireApprovalForPlexChanges;
+        }
+        if (typeof data.requireApprovalForEmails === "boolean") {
+            updateData.requireApprovalForEmails = data.requireApprovalForEmails;
+        }
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: updateData
+        });
+
+        revalidatePath("/settings/access");
+        return { success: true, message: "Approval workflow settings saved successfully!" };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update approval settings" };
     }
 }
 
@@ -4879,9 +5480,9 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
             }
         }
 
-        // If allowedRawKeys is empty (e.g. server owner or unrestricted), allow any valid key
-        const filteredSelected = allowedRawKeys.length > 0
-            ? selectedKeys.filter(k => allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`)))
+        // If allowedRawKeys is empty or user is admin, allow any valid key
+        const filteredSelected = (allowedRawKeys.length > 0 && dbUser.role !== "ADMIN")
+            ? selectedKeys.filter(k => allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`) || ak === k))
             : selectedKeys;
 
         const savedStr = Array.from(new Set(filteredSelected)).join(",");
@@ -6923,13 +7524,15 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
             appUrl
         });
 
-        await transporter.sendMail({
-            from: senderEmail,
+        await sendOrQueueEmail({
             to: requester.email,
             subject,
-            html
+            html,
+            templateId: "media_ready",
+            targetUser: requester.username,
+            userId: requester.id
         });
-        console.log(`[SMTP-NOTIFICATION] Sent request completion email to ${requester.email} for "${title}"`);
+        console.log(`[SMTP-NOTIFICATION] Sent or queued request completion email to ${requester.email} for "${title}"`);
     } catch (e: any) {
         console.error("[SMTP-NOTIFICATION] Failed to send request completion email:", e.message || e);
     }
@@ -12642,6 +13245,16 @@ export async function syncPlexFriendsInternal() {
                         console.warn(`[SECURITY-AUDIT] Inactive user "${existingUser.username}" (${existingUser.status}) had ${userMatchedShares.length} active Plex shares (${userLibraryKeys.length} libraries). Revoking immediately...`);
                         logger.addLog("ERROR", "SECURITY", `🚨 [SECURITY BREACH REMEDIATED] Inactive user "${existingUser.username}" (${existingUser.status}) had ${userMatchedShares.length} active Plex shares. Automatically revoked.`);
                         await revokePlexAccessForUserInternal(existingUser, `Account access is ${existingUser.status.toLowerCase()} (unauthorized share purged).`);
+                        await notifyAdminUserRoleOrAccessChange({
+                            username: existingUser.username,
+                            email: existingUser.email,
+                            oldStatus: existingUser.status,
+                            newStatus: existingUser.status,
+                            oldRole: existingUser.role,
+                            newRole: existingUser.role,
+                            reason: `Active Plex shares purged: User is in ${existingUser.status} state.`,
+                            revokedLibrariesCount: userLibraryKeys.length
+                        }).catch(() => {});
                         revokedCount++;
                         securityLeaksRemediatedCount++;
                         if (!securityAlertUsers.includes(existingUser.username)) {
@@ -12752,6 +13365,16 @@ export async function syncPlexFriendsInternal() {
                     console.warn(`[SECURITY-AUDIT] Secondary scan: Inactive user "${u.username}" (${u.status}) had ${liveKeys.length} active Plex libraries. Revoking...`);
                     logger.addLog("ERROR", "SECURITY", `🚨 [SECURITY BREACH REMEDIATED] Inactive user "${u.username}" (${u.status}) had ${liveKeys.length} active Plex libraries. Automatically revoked.`);
                     await revokePlexAccessForUserInternal(u, `Account access is ${u.status.toLowerCase()} (unauthorized share purged).`);
+                    await notifyAdminUserRoleOrAccessChange({
+                        username: u.username,
+                        email: u.email,
+                        oldStatus: u.status,
+                        newStatus: u.status,
+                        oldRole: u.role,
+                        newRole: u.role,
+                        reason: `Active Plex shares purged during secondary scan: User is in ${u.status} state.`,
+                        revokedLibrariesCount: liveKeys.length
+                    }).catch(() => {});
                     revokedCount++;
                     securityLeaksRemediatedCount++;
                     if (!securityAlertUsers.includes(u.username)) {
@@ -12813,6 +13436,15 @@ export async function forceRevokePlexAccessAction(userId: string) {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found." };
         const res = await revokePlexAccessForUserInternal(user, "Administrator forced immediate revocation of Plex access.");
+        await notifyAdminUserRoleOrAccessChange({
+            username: user.username,
+            email: user.email,
+            oldStatus: user.status,
+            newStatus: user.status,
+            oldRole: user.role,
+            newRole: user.role,
+            reason: "Administrator forced immediate revocation of Plex library access."
+        }).catch(() => {});
         await prisma.user.update({
             where: { id: userId },
             data: { plexLibrarySectionIds: "" }

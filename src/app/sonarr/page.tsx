@@ -517,7 +517,7 @@ export default function SonarrPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto pb-12 w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-2xl font-bold text-cyan-400">
@@ -635,7 +635,7 @@ export default function SonarrPage() {
               </div>
 
               {/* Search Results */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-4 pt-4">
                 {searchResults.map((series: any) => {
                   const coverImg =
                     series.images?.find((i: any) => i.coverType === "poster")
@@ -817,7 +817,7 @@ export default function SonarrPage() {
                       </Button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-4">
                     {filteredLibrary.map((series: any) => {
                       const coverImg =
                         series.images?.find(
@@ -1088,7 +1088,7 @@ export default function SonarrPage() {
 
       {/* INTERACTIVE RELEASE MODAL */}
       <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 bg-[#121218] border-border/60">
+        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
             <DialogTitle className="text-lg font-bold text-cyan-400">
               Releases - {activeSeries?.title}{" "}
@@ -1213,15 +1213,15 @@ export default function SonarrPage() {
 
       {/* MANAGE SEASONS MODAL */}
       <Dialog open={seasonsModalOpen} onOpenChange={setSeasonsModalOpen}>
-        <DialogContent className="max-w-md bg-[#121218] border-border/60">
-          <DialogHeader>
+        <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
+          <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
             <DialogTitle className="text-cyan-400 font-bold">Manage Seasons</DialogTitle>
             <DialogDescription>
               {activeSeasonsSeries?.title} ({activeSeasonsSeries?.year})
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
+          <div className="space-y-4 py-4 px-6 flex-1 overflow-y-auto pr-4">
             {activeSeasons
               .filter((s: any) => s.seasonNumber > 0)
               .map((season: any) => (
@@ -1268,7 +1268,7 @@ export default function SonarrPage() {
               ))}
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-border/40">
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-border/40 shrink-0">
             <Button
               variant="outline"
               onClick={() => setSeasonsModalOpen(false)}
@@ -1291,7 +1291,7 @@ export default function SonarrPage() {
 
       {/* MANAGE EPISODES MODAL */}
       <Dialog open={episodesModalOpen} onOpenChange={setEpisodesModalOpen}>
-        <DialogContent className="max-w-xl max-h-[80vh] flex flex-col p-0 bg-[#121218] border-border/60">
+        <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
             <DialogTitle className="text-cyan-400 font-bold">
               Season {activeSeasonNumberForEpisodes} Episodes

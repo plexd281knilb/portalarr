@@ -443,17 +443,6 @@ export async function sendUserApprovalEmail(userEmail: string, username: string)
       return;
     }
 
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort || 587,
-      secure: settings.smtpPort === 465,
-      auth: {
-        user: settings.smtpUser,
-        pass: decryptData(settings.smtpPass)
-      }
-    });
-
     const appUrl = await getAppUrl();
     const { subject, html } = await renderEmailTemplate("user_approval", {
       username,
@@ -462,11 +451,13 @@ export async function sendUserApprovalEmail(userEmail: string, username: string)
       loginUrl: `${appUrl}/login`
     });
 
-    await transporter.sendMail({
-      from: senderEmail,
+    const { sendOrQueueEmail } = await import("./actions");
+    await sendOrQueueEmail({
       to: userEmail,
       subject,
-      html
+      html,
+      templateId: "user_approval",
+      targetUser: username
     });
   } catch (err) {
     console.error("[AUTH] Failed to send approval email to user:", err);

@@ -80,7 +80,7 @@ export default function ActiveDownloads() {
                         No active downloads at the moment. All queues are idle.
                     </div>
                 ) : (
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-[380px] sm:max-h-[420px] lg:max-h-[500px] 3xl:max-h-[650px] overflow-y-auto pr-1">
                         {allQueueItems.map((item: any, idx: number) => {
                             // Normalize data between SABnzbd/NZBGet and Arr apps if necessary
                             const title = item.filename || item.title || "Unknown Download";

@@ -21,6 +21,7 @@ export type LogCategory =
     | "SETTINGS"
     | "SEERR"
     | "BOOK_ENGINE"
+    | "APPROVAL"
     | "PLEX_HUB"; // backward compatibility
 
 export interface SystemLogEntry {

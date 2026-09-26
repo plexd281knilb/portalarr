@@ -25,7 +25,15 @@ import {
     toggleAdminAddonAvailabilityAction,
     getAvailableAddonsAction,
     restoreAllUsersPlexAccessAction,
-    forceRevokePlexAccessAction
+    forceRevokePlexAccessAction,
+    getAdminApprovalsAction,
+    getAdminApprovalCountsAction,
+    approveAdminApprovalAction,
+    rejectAdminApprovalAction,
+    bulkApproveAdminApprovalsAction,
+    bulkRejectAdminApprovalsAction,
+    getApprovalSettingsAction,
+    saveApprovalSettingsAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
@@ -156,6 +164,159 @@ export default function AccessSettingsPage() {
     // Impersonation state
     const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
 
+    // Admin Approval Queue State
+    const [approvals, setApprovals] = useState<any[]>([]);
+    const [approvalCounts, setApprovalCounts] = useState({ pendingCount: 0, approvedCount: 0, rejectedCount: 0, totalCount: 0 });
+    const [loadingApprovals, setLoadingApprovals] = useState(false);
+    const [approvalFilterStatus, setApprovalFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
+    const [approvalFilterType, setApprovalFilterType] = useState<"ALL" | "EMAIL" | "PLEX_ACCESS_GRANT" | "PLEX_ACCESS_REVOKE">("ALL");
+    const [approvalSettings, setApprovalSettings] = useState({ requireApprovalForPlexChanges: true, requireApprovalForEmails: true });
+    const [savingApprovalSettings, setSavingApprovalSettings] = useState(false);
+    const [processingApprovalId, setProcessingApprovalId] = useState<string | null>(null);
+    const [emailPreviewApproval, setEmailPreviewApproval] = useState<any | null>(null);
+    const [approvalSuccessMsg, setApprovalSuccessMsg] = useState("");
+    const [approvalErrMsg, setApprovalErrMsg] = useState("");
+    const [selectedApprovalIds, setSelectedApprovalIds] = useState<string[]>([]);
+
+    const loadApprovalCounts = async () => {
+        try {
+            const counts = await getAdminApprovalCountsAction();
+            if (counts && counts.success) {
+                setApprovalCounts(prev => ({ ...prev, pendingCount: counts.pendingCount, totalCount: counts.totalCount }));
+            }
+        } catch (e) {
+            console.error("loadApprovalCounts error:", e);
+        }
+    };
+
+    const loadApprovals = async () => {
+        setLoadingApprovals(true);
+        try {
+            const res = await getAdminApprovalsAction({
+                status: approvalFilterStatus,
+                type: approvalFilterType,
+                page: 1,
+                pageSize: 50
+            });
+            if (res && res.success && res.approvals) {
+                setApprovals(res.approvals);
+                setApprovalCounts({
+                    pendingCount: res.pendingCount || 0,
+                    approvedCount: res.approvedCount || 0,
+                    rejectedCount: res.rejectedCount || 0,
+                    totalCount: res.totalCount || 0
+                });
+            }
+            const settingsRes = await getApprovalSettingsAction();
+            if (settingsRes && settingsRes.success) {
+                setApprovalSettings({
+                    requireApprovalForPlexChanges: settingsRes.requireApprovalForPlexChanges,
+                    requireApprovalForEmails: settingsRes.requireApprovalForEmails
+                });
+            }
+        } catch (e: any) {
+            console.error("loadApprovals error:", e);
+        } finally {
+            setLoadingApprovals(false);
+        }
+    };
+
+    const handleApproveItem = async (id: string) => {
+        setProcessingApprovalId(id);
+        setApprovalSuccessMsg("");
+        setApprovalErrMsg("");
+        try {
+            const res = await approveAdminApprovalAction(id);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Approved successfully!");
+                loadApprovals();
+                loadUsers();
+            } else {
+                setApprovalErrMsg(res.error || "Approval failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Approval failed.");
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
+
+    const handleRejectItem = async (id: string, reason?: string) => {
+        setProcessingApprovalId(id);
+        setApprovalSuccessMsg("");
+        setApprovalErrMsg("");
+        try {
+            const res = await rejectAdminApprovalAction(id, reason);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Rejected successfully.");
+                loadApprovals();
+            } else {
+                setApprovalErrMsg(res.error || "Rejection failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Rejection failed.");
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
+
+    const handleBulkApprove = async () => {
+        if (selectedApprovalIds.length === 0) return;
+        setLoadingApprovals(true);
+        try {
+            const res = await bulkApproveAdminApprovalsAction(selectedApprovalIds);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Selected items approved.");
+                setSelectedApprovalIds([]);
+                loadApprovals();
+                loadUsers();
+            } else {
+                setApprovalErrMsg(res.error || "Bulk approval failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Bulk approval failed.");
+        } finally {
+            setLoadingApprovals(false);
+        }
+    };
+
+    const handleBulkReject = async () => {
+        if (selectedApprovalIds.length === 0) return;
+        setLoadingApprovals(true);
+        try {
+            const res = await bulkRejectAdminApprovalsAction(selectedApprovalIds);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Selected items rejected.");
+                setSelectedApprovalIds([]);
+                loadApprovals();
+            } else {
+                setApprovalErrMsg(res.error || "Bulk rejection failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Bulk rejection failed.");
+        } finally {
+            setLoadingApprovals(false);
+        }
+    };
+
+    const handleToggleApprovalSetting = async (key: "requireApprovalForPlexChanges" | "requireApprovalForEmails", value: boolean) => {
+        setSavingApprovalSettings(true);
+        try {
+            const updated = { ...approvalSettings, [key]: value };
+            setApprovalSettings(updated);
+            const res = await saveApprovalSettingsAction(updated);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Settings updated.");
+            } else {
+                setApprovalErrMsg(res.error || "Failed to update settings.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Failed to update settings.");
+        } finally {
+            setSavingApprovalSettings(false);
+        }
+    };
+
     const loadUsers = async () => {
         setLoading(true);
         try {
@@ -238,17 +399,24 @@ export default function AccessSettingsPage() {
         loadLibraries();
         loadReferrals();
         loadPaymentSettings();
+        loadApprovalCounts();
 
         if (typeof window !== "undefined") {
             const params = new URLSearchParams(window.location.search);
             const search = params.get("search");
             if (search) setSearchQuery(search);
             const tab = params.get("tab");
-            if (tab && ["users", "referrals", "onboarding"].includes(tab)) {
+            if (tab && ["users", "referrals", "onboarding", "scraper", "approvals"].includes(tab)) {
                 setActiveTab(tab);
             }
         }
     }, []);
+
+    useEffect(() => {
+        if (activeTab === "approvals") {
+            loadApprovals();
+        }
+    }, [activeTab, approvalFilterStatus, approvalFilterType]);
 
     const [revokingUserId, setRevokingUserId] = useState<string | null>(null);
 
@@ -768,11 +936,12 @@ export default function AccessSettingsPage() {
             setLibSuccessMsg(res.message || "Plex libraries updated successfully!");
             loadUsers();
             loadReferrals();
+            loadApprovalCounts();
             setTimeout(() => {
                 setLibModalUser(null);
                 setPendingTrialActivation(null);
                 setLibSuccessMsg("");
-            }, 1200);
+            }, 1400);
         } else {
             setLibErrMsg(res.error || "Failed to update libraries on Plex.");
         }
@@ -928,7 +1097,7 @@ export default function AccessSettingsPage() {
     });
 
     return (
-        <div className="space-y-6 max-w-5xl">
+        <div className="space-y-6 w-full min-w-0">
             <div>
                 <h3 className="text-xl font-bold tracking-tight text-emerald-400">Access Control & User Directory</h3>
                 <p className="text-sm text-muted-foreground">
@@ -938,7 +1107,7 @@ export default function AccessSettingsPage() {
 
             {/* TOP NAVIGATION TABS */}
             <Tabs defaultValue="users" value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-4 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
                     <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
                     </TabsTrigger>
@@ -949,7 +1118,16 @@ export default function AccessSettingsPage() {
                         <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Payment & Onboarding</span>
                     </TabsTrigger>
                     <TabsTrigger value="scraper" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
-                        <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Email Payment Scraper</span>
+                        <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Email Scraper</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="approvals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
+                        <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0" />
+                        <span className="truncate">Approval Queue</span>
+                        {approvalCounts.pendingCount > 0 && (
+                            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-black animate-pulse">
+                                {approvalCounts.pendingCount}
+                            </span>
+                        )}
                     </TabsTrigger>
                 </TabsList>
 
@@ -1199,9 +1377,9 @@ export default function AccessSettingsPage() {
                                 </div>
                             )}
 
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-2 min-w-0">
                                 {/* SEARCH INPUT */}
-                                <div className="relative flex-1 min-w-[200px]">
+                                <div className="relative flex-1 min-w-0 sm:min-w-[220px]">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input 
                                         placeholder="Search by username, email, referrer..." 
@@ -1212,11 +1390,11 @@ export default function AccessSettingsPage() {
                                 </div>
 
                                 {/* STATUS FILTER BUTTONS */}
-                                <div className="flex flex-wrap gap-1 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs shrink-0">
+                                <div className="flex flex-wrap sm:flex-nowrap lg:flex-wrap overflow-x-auto no-scrollbar gap-1 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs w-full lg:w-auto max-w-full">
                                     <Button 
                                         variant={filterStatus === "ALL" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95 font-semibold"
+                                        className="h-7 text-xs px-2.5 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
                                         onClick={() => setFilterStatus("ALL")}
                                     >
                                         All ({users.length})
@@ -1224,7 +1402,7 @@ export default function AccessSettingsPage() {
                                     <Button 
                                         variant={filterStatus === "PENDING" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 text-amber-400 transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95 font-semibold"
+                                        className="h-7 text-xs px-2.5 text-amber-400 transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
                                         onClick={() => setFilterStatus("PENDING")}
                                     >
                                         Pending ({users.filter(u => u.status === "PENDING").length})
@@ -1232,7 +1410,7 @@ export default function AccessSettingsPage() {
                                     <Button 
                                         variant={filterStatus === "TRIAL" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 text-blue-400 transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold"
+                                        className="h-7 text-xs px-2.5 text-blue-400 transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
                                         onClick={() => setFilterStatus("TRIAL")}
                                     >
                                         Trials ({users.filter(u => u.status === "TRIAL").length})
@@ -1240,7 +1418,7 @@ export default function AccessSettingsPage() {
                                     <Button 
                                         variant={filterStatus === "APPROVED" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 text-emerald-400 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 font-semibold"
+                                        className="h-7 text-xs px-2.5 text-emerald-400 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
                                         onClick={() => setFilterStatus("APPROVED")}
                                     >
                                         Subscribed ({users.filter(u => u.status === "APPROVED" || !u.status).length})
@@ -1248,7 +1426,7 @@ export default function AccessSettingsPage() {
                                     <Button 
                                         variant={filterStatus === "INACTIVE" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className={`h-7 text-xs px-2.5 transition-all duration-200 active:scale-95 font-semibold ${
+                                        className={`h-7 text-xs px-2.5 transition-all duration-200 active:scale-95 font-semibold whitespace-nowrap shrink-0 ${
                                             usersWithSecurityLeaks.length > 0 
                                                 ? "text-red-400 font-bold hover:ring-2 hover:ring-red-500/50" 
                                                 : "text-red-400 hover:ring-2 hover:ring-red-400/40"
@@ -2731,6 +2909,361 @@ export default function AccessSettingsPage() {
                 <TabsContent value="scraper" className="space-y-6 animate-in fade-in-50 duration-200">
                     <PaymentEmailManager />
                 </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 5: ADMIN APPROVAL QUEUE & ACTION STAGING GATE */}
+                {/* ========================================================================= */}
+                <TabsContent value="approvals" className="space-y-6 animate-in fade-in-50 duration-200">
+                    {/* Header info */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                <ShieldAlert className="h-5 w-5 text-amber-400" />
+                                Admin Approval Center & Action Staging Gate
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                                Review, approve, or reject pending system actions before they execute on live Plex servers or send emails to users.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={loadApprovals}
+                                disabled={loadingApprovals}
+                                className="h-9 gap-1.5 text-xs font-semibold"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${loadingApprovals ? "animate-spin" : ""}`} />
+                                Refresh
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Notification Messages */}
+                    {approvalSuccessMsg && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-medium flex items-center justify-between">
+                            <span>{approvalSuccessMsg}</span>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-emerald-400" onClick={() => setApprovalSuccessMsg("")}>✕</Button>
+                        </div>
+                    )}
+                    {approvalErrMsg && (
+                        <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium flex items-center justify-between">
+                            <span>{approvalErrMsg}</span>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-rose-400" onClick={() => setApprovalErrMsg("")}>✕</Button>
+                        </div>
+                    )}
+
+                    {/* KPI STATS CARDS */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Pending Review</span>
+                                <Clock className="h-4 w-4 text-amber-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-amber-400">{approvalCounts.pendingCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Actions awaiting review</span>
+                        </Card>
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Approved & Applied</span>
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-emerald-400">{approvalCounts.approvedCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Authorized by admins</span>
+                        </Card>
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Rejected</span>
+                                <XCircle className="h-4 w-4 text-rose-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-rose-400">{approvalCounts.rejectedCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Dismissed or blocked</span>
+                        </Card>
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Total Staged</span>
+                                <Shield className="h-4 w-4 text-blue-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-blue-400">{approvalCounts.totalCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Lifetime audit history</span>
+                        </Card>
+                    </div>
+
+                    {/* APPROVAL WORKFLOW GOVERNANCE TOGGLES */}
+                    <Card className="border-border/60 bg-[#121218] shadow-md">
+                        <CardHeader className="pb-3 border-b border-border/40">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                                Action Approval Gates & Governance
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Configure which actions require explicit admin review before affecting real servers or users.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted/20 rounded-xl border border-border/40">
+                                <div className="space-y-0.5">
+                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                                        <FolderCheck className="h-3.5 w-3.5 text-blue-400" />
+                                        Require Admin Approval for Plex Access Changes
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        When enabled, all modifications to user Plex library shares (granting new access, removing libraries, or expired account revocations) are staged in this queue instead of pushing immediately to live Plex servers.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={approvalSettings.requireApprovalForPlexChanges}
+                                    onCheckedChange={(checked) => handleToggleApprovalSetting("requireApprovalForPlexChanges", checked)}
+                                    disabled={savingApprovalSettings}
+                                />
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted/20 rounded-xl border border-border/40">
+                                <div className="space-y-0.5">
+                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                                        <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                                        Require Admin Approval for Outgoing Emails
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        When enabled, all automated notifications (welcome emails, account approvals, media request alerts, ticket updates, broadcasts) are held in this queue until approved before dispatching via SMTP.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={approvalSettings.requireApprovalForEmails}
+                                    onCheckedChange={(checked) => handleToggleApprovalSetting("requireApprovalForEmails", checked)}
+                                    disabled={savingApprovalSettings}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* FILTER & BULK ACTIONS BAR */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#121218] border border-border/50 rounded-xl">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-semibold">Filter Status:</span>
+                            <div className="flex items-center gap-1">
+                                {(["PENDING", "APPROVED", "REJECTED", "ALL"] as const).map(st => (
+                                    <Button
+                                        key={st}
+                                        type="button"
+                                        size="sm"
+                                        variant={approvalFilterStatus === st ? "default" : "outline"}
+                                        onClick={() => setApprovalFilterStatus(st)}
+                                        className="h-7 px-2.5 text-[11px] font-semibold"
+                                    >
+                                        {st === "PENDING" ? `Pending (${approvalCounts.pendingCount})` : st}
+                                    </Button>
+                                ))}
+                            </div>
+                            <span className="text-xs text-muted-foreground font-semibold ml-2">Type:</span>
+                            <Select value={approvalFilterType} onValueChange={(val: any) => setApprovalFilterType(val)}>
+                                <SelectTrigger className="h-7 w-[150px] text-[11px] bg-background/60">
+                                    <SelectValue placeholder="All Types" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All Types</SelectItem>
+                                    <SelectItem value="EMAIL">✉️ Outgoing Emails</SelectItem>
+                                    <SelectItem value="PLEX_ACCESS_GRANT">🟢 Plex Grants</SelectItem>
+                                    <SelectItem value="PLEX_ACCESS_REVOKE">🔴 Plex Revocations</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {approvalFilterStatus === "PENDING" && approvals.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={loadingApprovals}
+                                    onClick={() => {
+                                        const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
+                                        setSelectedApprovalIds(pendingIds);
+                                        handleBulkApprove();
+                                    }}
+                                    className="h-7 px-2.5 text-[11px] font-semibold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
+                                >
+                                    <CheckCheck className="h-3.5 w-3.5" />
+                                    Approve All ({approvals.filter(a => a.status === "PENDING").length})
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={loadingApprovals}
+                                    onClick={() => {
+                                        const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
+                                        setSelectedApprovalIds(pendingIds);
+                                        handleBulkReject();
+                                    }}
+                                    className="h-7 px-2.5 text-[11px] font-semibold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5"
+                                >
+                                    <XCircle className="h-3.5 w-3.5" />
+                                    Reject All
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* APPROVAL ITEMS LIST */}
+                    {loadingApprovals ? (
+                        <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-[#121218] border border-border/40 rounded-xl">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <p className="text-xs text-muted-foreground font-medium">Loading approval queue...</p>
+                        </div>
+                    ) : approvals.length === 0 ? (
+                        <Card className="bg-[#121218] border-border/40 p-12 text-center">
+                            <div className="flex flex-col items-center justify-center space-y-2 max-w-sm mx-auto">
+                                <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30 text-emerald-400">
+                                    <Check className="h-6 w-6" />
+                                </div>
+                                <h4 className="text-sm font-bold text-foreground">Queue is Clear</h4>
+                                <p className="text-xs text-muted-foreground">
+                                    No actions match your current filter ({approvalFilterStatus.toLowerCase()}). New Plex modifications or outgoing emails requiring approval will appear here.
+                                </p>
+                            </div>
+                        </Card>
+                    ) : (
+                        <div className="space-y-3">
+                            {approvals.map((item) => {
+                                const isPending = item.status === "PENDING";
+                                const isApproved = item.status === "APPROVED";
+                                const isRejected = item.status === "REJECTED";
+                                const isEmail = item.type === "EMAIL";
+                                const isPlexGrant = item.type === "PLEX_ACCESS_GRANT";
+                                const isPlexRevoke = item.type === "PLEX_ACCESS_REVOKE";
+
+                                return (
+                                    <Card
+                                        key={item.id}
+                                        className={`transition-all duration-200 border ${
+                                            isPending 
+                                                ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/60" 
+                                                : isApproved 
+                                                    ? "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50" 
+                                                    : "border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50"
+                                        }`}
+                                    >
+                                        <CardContent className="pt-5 pb-5">
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                <div className="space-y-1.5 flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {isEmail ? (
+                                                            <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 gap-1 text-[11px] font-bold">
+                                                                <Mail className="h-3 w-3" /> Outgoing Email
+                                                            </Badge>
+                                                        ) : isPlexGrant ? (
+                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 gap-1 text-[11px] font-bold">
+                                                                <FolderCheck className="h-3 w-3" /> Plex Share Grant
+                                                            </Badge>
+                                                        ) : isPlexRevoke ? (
+                                                            <Badge variant="outline" className="bg-rose-500/10 text-rose-400 border-rose-500/30 gap-1 text-[11px] font-bold">
+                                                                <XCircle className="h-3 w-3" /> Plex Share Revoke
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 gap-1 text-[11px] font-bold">
+                                                                <Shield className="h-3 w-3" /> {item.type}
+                                                            </Badge>
+                                                        )}
+
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`text-[10px] font-black uppercase px-2 py-0.5 ${
+                                                                isPending 
+                                                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse" 
+                                                                    : isApproved 
+                                                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50" 
+                                                                        : "bg-rose-500/20 text-rose-300 border-rose-500/50"
+                                                            }`}
+                                                        >
+                                                            {item.status}
+                                                        </Badge>
+
+                                                        <span className="text-[11px] text-muted-foreground ml-auto sm:ml-0">
+                                                            {format(new Date(item.createdAt), "MMM d, yyyy h:mm a")}
+                                                        </span>
+                                                    </div>
+
+                                                    <h5 className="font-bold text-sm text-foreground break-words">{item.title}</h5>
+
+                                                    {item.description && (
+                                                        <p className="text-xs text-muted-foreground break-words">{item.description}</p>
+                                                    )}
+
+                                                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-1">
+                                                        {item.targetUser && (
+                                                            <span><strong>User:</strong> {item.targetUser}</span>
+                                                        )}
+                                                        {item.targetEmail && (
+                                                            <span><strong>Email:</strong> {item.targetEmail}</span>
+                                                        )}
+                                                        {isApproved && (
+                                                            <span className="text-emerald-400 font-medium">
+                                                                ✓ Approved by {item.approvedBy || "Admin"} on {item.approvedAt ? format(new Date(item.approvedAt), "MMM d, h:mm a") : "N/A"}
+                                                            </span>
+                                                        )}
+                                                        {isRejected && (
+                                                            <span className="text-rose-400 font-medium">
+                                                                ✕ Rejected by {item.approvedBy || "Admin"}{item.rejectionReason ? `: ${item.rejectionReason}` : ""}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Action Buttons */}
+                                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                    {isEmail && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setEmailPreviewApproval(item)}
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 hover:bg-muted/30"
+                                                        >
+                                                            <Eye className="h-3.5 w-3.5 text-primary" />
+                                                            Preview
+                                                        </Button>
+                                                    )}
+
+                                                    {isPending && (
+                                                        <>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                onClick={() => handleApproveItem(item.id)}
+                                                                disabled={processingApprovalId === item.id}
+                                                                className="h-8 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 shadow-sm active:scale-95"
+                                                            >
+                                                                {processingApprovalId === item.id ? (
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <Check className="h-3.5 w-3.5" />
+                                                                )}
+                                                                Approve
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleRejectItem(item.id)}
+                                                                disabled={processingApprovalId === item.id}
+                                                                className="h-8 px-3 text-xs font-bold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5 active:scale-95"
+                                                            >
+                                                                <XCircle className="h-3.5 w-3.5" />
+                                                                Reject
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                    )}
+                </TabsContent>
             </Tabs>
 
             {/* ========================================================================= */}
@@ -3487,6 +4020,91 @@ export default function AccessSettingsPage() {
                     </Card>
                 </div>
             )}
+
+            {/* ========================================================================= */}
+            {/* EMAIL PREVIEW MODAL */}
+            {/* ========================================================================= */}
+            {emailPreviewApproval && (() => {
+                let p: any = {};
+                try {
+                    p = JSON.parse(emailPreviewApproval.payload);
+                } catch {}
+
+                return (
+                    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <Card className="w-full max-w-2xl bg-[#121218] border-border/60 shadow-2xl flex flex-col max-h-[90vh]">
+                            <CardHeader className="pb-3 border-b border-border/40 shrink-0">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                                        <Mail className="h-5 w-5 text-primary" />
+                                        Preview Outgoing Email
+                                    </CardTitle>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => setEmailPreviewApproval(null)}
+                                    >
+                                        ✕
+                                    </Button>
+                                </div>
+                                <CardDescription className="text-xs space-y-1 pt-1">
+                                    <div><strong>Subject:</strong> {p.subject || emailPreviewApproval.title}</div>
+                                    <div><strong>Recipient:</strong> {Array.isArray(p.to) ? p.to.join(", ") : p.to || emailPreviewApproval.targetEmail}</div>
+                                    {p.templateId && <div><strong>Template:</strong> <code className="text-primary">{p.templateId}</code></div>}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-1 overflow-y-auto p-4 space-y-3">
+                                <div className="rounded-xl border border-border/40 bg-white text-black p-4 overflow-x-auto min-h-[250px]">
+                                    {p.html ? (
+                                        <div dangerouslySetInnerHTML={{ __html: p.html }} />
+                                    ) : (
+                                        <pre className="text-xs whitespace-pre-wrap font-sans text-gray-800">{p.text || "No preview content available."}</pre>
+                                    )}
+                                </div>
+                            </CardContent>
+                            <div className="p-4 border-t border-border/40 flex items-center justify-between shrink-0 bg-[#0d0d12]">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEmailPreviewApproval(null)}
+                                >
+                                    Close
+                                </Button>
+                                {emailPreviewApproval.status === "PENDING" && (
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                handleRejectItem(emailPreviewApproval.id);
+                                                setEmailPreviewApproval(null);
+                                            }}
+                                            className="border-rose-500/40 text-rose-400 hover:bg-rose-500/10 font-semibold"
+                                        >
+                                            Reject
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => {
+                                                handleApproveItem(emailPreviewApproval.id);
+                                                setEmailPreviewApproval(null);
+                                            }}
+                                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+                                        >
+                                            <Check className="h-3.5 w-3.5 mr-1.5" />
+                                            Approve & Send Now
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

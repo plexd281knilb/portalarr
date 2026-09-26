@@ -330,7 +330,7 @@ export default function MyPlexHub() {
                         </h3>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-3.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-3.5 lg:gap-4">
                         {watchHistory.map((item: any) => (
                             <div 
                                 key={item.id} 
@@ -381,10 +381,10 @@ export default function MyPlexHub() {
             {/* --- TRANSCODE DOCTOR MODAL --- */}
             {selectedStreamForDiagnosis && (
                 <Dialog open={!!selectedStreamForDiagnosis} onOpenChange={(open) => !open && setSelectedStreamForDiagnosis(null)}>
-                    <DialogContent className="max-w-xl bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl">
-                        <DialogHeader className="pb-3 border-b border-border/40">
-                            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                                <Stethoscope className="h-5 w-5 text-primary" />
+                    <DialogContent className="w-[95vw] sm:max-w-xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 overflow-hidden">
+                        <DialogHeader className="pb-3 border-b border-border/40 shrink-0">
+                            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
+                                <Stethoscope className="h-5 w-5 text-primary shrink-0" />
                                 Stream Health & Transcode Doctor
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground">
@@ -392,7 +392,7 @@ export default function MyPlexHub() {
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="space-y-4 py-2">
+                        <div className="space-y-4 py-2 flex-1 overflow-y-auto pr-1">
                             {/* Diagnosis Status Card */}
                             <div className={`p-4 rounded-xl border ${
                                 selectedStreamForDiagnosis.diagnosis.badgeColor === "emerald" ? "bg-emerald-500/10 border-emerald-500/30" :
@@ -488,10 +488,10 @@ export default function MyPlexHub() {
             {/* --- KILL STREAM CONFIRMATION MODAL --- */}
             {streamToKill && (
                 <Dialog open={!!streamToKill} onOpenChange={(open) => !open && setStreamToKill(null)}>
-                    <DialogContent className="max-w-md bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl">
+                    <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                         <DialogHeader className="pb-3 border-b border-border/40">
-                            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-rose-400">
-                                <ShieldAlert className="h-5 w-5 text-rose-500" />
+                            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-rose-400">
+                                <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0" />
                                 Terminate Stuck Playback Session?
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground">
@@ -538,10 +538,10 @@ export default function MyPlexHub() {
 
             {/* --- CONNECTED SERVERS MODAL --- */}
             <Dialog open={serversModalOpen} onOpenChange={setServersModalOpen}>
-                <DialogContent className="max-w-md bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl">
+                <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                     <DialogHeader className="pb-3 border-b border-border/40">
-                        <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                            <Server className="h-5 w-5 text-primary" />
+                        <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
+                            <Server className="h-5 w-5 text-primary shrink-0" />
                             Connected Media Servers
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
@@ -549,7 +549,7 @@ export default function MyPlexHub() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="py-2 space-y-2.5 max-h-[60vh] overflow-y-auto">
+                    <div className="py-2 space-y-2.5 max-h-[55vh] overflow-y-auto">
                         {safeData.servers && safeData.servers.length > 0 ? (
                             safeData.servers.map((srv: any, idx: number) => (
                                 <div 

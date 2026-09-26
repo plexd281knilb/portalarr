@@ -244,32 +244,77 @@ export default function UserProfilePage() {
     }, []);
 
     // --- LIBRARY PREFERENCE HANDLERS ---
-    const isSectionAllowed = (uniqueKey: string, id: number | string) => {
-        if (!allowedLibraries || allowedLibraries.length === 0) return true;
-        const idStr = String(id);
+    const isSectionAllowed = (sec: any, server?: any) => {
+        if (user?.role === "ADMIN" || !allowedLibraries || allowedLibraries.length === 0) return true;
+        const secId = String(sec?.id ?? "");
+        const secKey = String(sec?.key ?? "");
+        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
+        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
+        const title = String(sec?.title ?? "").toLowerCase().trim();
+
         return (
             allowedLibraries.includes(uniqueKey) ||
-            allowedLibraries.includes(idStr) ||
-            allowedLibraries.some(ak => ak.endsWith(`:${idStr}`))
+            allowedLibraries.includes(uniqueServerKey) ||
+            allowedLibraries.includes(secId) ||
+            allowedLibraries.includes(secKey) ||
+            allowedLibraries.some(ak => {
+                const akClean = String(ak).trim();
+                return (
+                    akClean === secId ||
+                    akClean === secKey ||
+                    akClean.endsWith(`:${secId}`) ||
+                    akClean.endsWith(`:${secKey}`) ||
+                    akClean.toLowerCase() === title
+                );
+            })
         );
     };
 
-    const isSectionSelected = (uniqueKey: string, id: number | string) => {
-        const idStr = String(id);
+    const isSectionSelected = (sec: any, server?: any) => {
+        const secId = String(sec?.id ?? "");
+        const secKey = String(sec?.key ?? "");
+        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
+        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
+        const title = String(sec?.title ?? "").toLowerCase().trim();
+
         return (
             selectedLibraries.includes(uniqueKey) ||
-            selectedLibraries.includes(idStr) ||
-            selectedLibraries.some(sk => sk.endsWith(`:${idStr}`))
+            selectedLibraries.includes(uniqueServerKey) ||
+            selectedLibraries.includes(secId) ||
+            selectedLibraries.includes(secKey) ||
+            selectedLibraries.some(sk => {
+                const skClean = String(sk).trim();
+                return (
+                    skClean === secId ||
+                    skClean === secKey ||
+                    skClean.endsWith(`:${secId}`) ||
+                    skClean.endsWith(`:${secKey}`) ||
+                    skClean.toLowerCase() === title
+                );
+            })
         );
     };
 
-    const handleToggleLibrary = (uniqueKey: string, id: number | string) => {
-        const isSelected = isSectionSelected(uniqueKey, id);
-        const idStr = String(id);
+    const handleToggleLibrary = (sec: any, server?: any) => {
+        const isSelected = isSectionSelected(sec, server);
+        const secId = String(sec?.id ?? "");
+        const secKey = String(sec?.key ?? "");
+        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
+        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
+        const targetKey = uniqueKey || secId || secKey;
+
         if (isSelected) {
-            setSelectedLibraries(prev => prev.filter(k => k !== uniqueKey && k !== idStr && !k.endsWith(`:${idStr}`)));
+            setSelectedLibraries(prev => prev.filter(k => 
+                k !== targetKey && 
+                k !== uniqueKey && 
+                k !== uniqueServerKey && 
+                k !== secId && 
+                k !== secKey && 
+                !k.endsWith(`:${secId}`) && 
+                !k.endsWith(`:${secKey}`)
+            ));
         } else {
-            setSelectedLibraries(prev => Array.from(new Set([...prev, uniqueKey])));
+            setSelectedLibraries(prev => Array.from(new Set([...prev, targetKey])));
         }
     };
 
@@ -277,8 +322,8 @@ export default function UserProfilePage() {
         const allKeys: string[] = [];
         for (const srv of serverLibraries) {
             for (const sec of srv.sections || []) {
-                if (isSectionAllowed(sec.uniqueKey, sec.id)) {
-                    allKeys.push(sec.uniqueKey);
+                if (isSectionAllowed(sec, srv)) {
+                    allKeys.push(sec.uniqueKey || `${srv.serverId}:${sec.id}`);
                 }
             }
         }
@@ -614,27 +659,27 @@ export default function UserProfilePage() {
         : (paymentConfig?.monthlyPrice ?? 15);
 
     return (
-        <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-6 animate-in fade-in duration-500">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
+        <div className="space-y-4 sm:space-y-6 max-w-5xl 2xl:max-w-6xl 3xl:max-w-7xl mx-auto p-3 sm:p-6 w-full min-w-0 animate-in fade-in duration-500">
+            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 min-w-0">
+                <div className="space-y-1 min-w-0 flex-1 max-w-2xl">
                     <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
-                        <User className="h-6 w-6 text-primary" /> Account Profile & Settings
+                        <User className="h-6 w-6 text-primary shrink-0" /> Account Profile & Settings
                     </h1>
                     <p className="text-muted-foreground text-sm">
                         Manage your account credentials, notifications, membership tier, content safety, and Send-to-Kindle delivery.
                     </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={handleRecheckStatus}
                         disabled={checkingStatus}
-                        className="h-9 px-3 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+                        className="h-9 px-3 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs flex-1 sm:flex-initial"
                         title="Ping payment email inboxes to verify new Venmo/PayPal/Zelle payments and refresh access"
                     >
                         <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin text-emerald-400" : ""}`} />
-                        {checkingStatus ? "Checking Payment Emails..." : "Check Access & Payment Status"}
+                        <span>{checkingStatus ? "Checking Payment Emails..." : "Check Access & Payment Status"}</span>
                     </Button>
                     <ServerSpeedTest />
                     <PlexSetupGuides />
@@ -890,7 +935,9 @@ export default function UserProfilePage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <Badge variant="outline" className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-xs w-fit">
-                                {selectedLibraries.length} Libraries Selected
+                                {serverLibraries.length > 0 
+                                    ? serverLibraries.reduce((total, srv) => total + (srv.sections || []).filter((sec: any) => isSectionSelected(sec, srv)).length, 0)
+                                    : selectedLibraries.length} Libraries Selected
                             </Badge>
                         </div>
                     </div>
@@ -944,7 +991,10 @@ export default function UserProfilePage() {
 
                                 <div className="space-y-3">
                                     {serverLibraries.map((server) => {
-                                        const allowedSections = (server.sections || []).filter((sec: any) => isSectionAllowed(sec.uniqueKey, sec.id));
+                                        let allowedSections = (server.sections || []).filter((sec: any) => isSectionAllowed(sec, server));
+                                        if (allowedSections.length === 0 && (user?.role === "ADMIN" || allowedLibraries.length === 0)) {
+                                            allowedSections = server.sections || [];
+                                        }
                                         if (allowedSections.length === 0) return null;
 
                                         return (
@@ -960,12 +1010,12 @@ export default function UserProfilePage() {
 
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                                                     {allowedSections.map((sec: any) => {
-                                                        const isSelected = isSectionSelected(sec.uniqueKey, sec.id);
+                                                        const isSelected = isSectionSelected(sec, server);
                                                         return (
                                                             <button
-                                                                key={sec.uniqueKey || sec.id}
+                                                                key={sec.uniqueKey || sec.id || sec.key}
                                                                 type="button"
-                                                                onClick={() => handleToggleLibrary(sec.uniqueKey, sec.id)}
+                                                                onClick={() => handleToggleLibrary(sec, server)}
                                                                 className={`p-2.5 rounded-lg border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
                                                                     isSelected
                                                                         ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-xs"
@@ -1993,8 +2043,8 @@ export default function UserProfilePage() {
 
             {/* MEMBERSHIP TIER UPGRADE REQUEST MODAL */}
             <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
-                <DialogContent className="sm:max-w-md bg-slate-950 border border-slate-800 shadow-2xl">
-                    <DialogHeader>
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                             <Sparkles className="h-5 w-5 text-indigo-400" /> Request Membership Tier Upgrade
                         </DialogTitle>
@@ -2003,7 +2053,7 @@ export default function UserProfilePage() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleSubmitUpgrade} className="space-y-4 py-2">
+                    <form onSubmit={handleSubmitUpgrade} className="space-y-4 py-2 flex-1 overflow-y-auto min-h-0">
                         {upgradeSuccessMsg && (
                             <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -2041,7 +2091,7 @@ export default function UserProfilePage() {
                             />
                         </div>
 
-                        <DialogFooter className="pt-2 flex sm:justify-between gap-2">
+                        <DialogFooter className="pt-2 flex sm:justify-between gap-2 shrink-0">
                             <Button 
                                 type="button" 
                                 variant="ghost" 
@@ -2067,8 +2117,8 @@ export default function UserProfilePage() {
 
             {/* SUB-ACCOUNT ADD / EDIT MODAL */}
             <Dialog open={subModalOpen} onOpenChange={setSubModalOpen}>
-                <DialogContent className="sm:max-w-md bg-slate-950 border border-slate-800 shadow-2xl">
-                    <DialogHeader>
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                             <Users className="h-5 w-5 text-purple-400" />
                             {subEditingId ? "Edit Household Sub-Account" : "Add Household Sub-Account"}
@@ -2078,7 +2128,7 @@ export default function UserProfilePage() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleSaveSubAccount} className="space-y-4 py-2">
+                    <form onSubmit={handleSaveSubAccount} className="space-y-4 py-2 flex-1 overflow-y-auto min-h-0">
                         {subModalMsg && (
                             <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -2168,8 +2218,8 @@ export default function UserProfilePage() {
 
             {/* DELETE SUB-ACCOUNT CONFIRM DIALOG */}
             <Dialog open={Boolean(deleteSubConfirmId)} onOpenChange={(open) => !open && setDeleteSubConfirmId(null)}>
-                <DialogContent className="sm:max-w-md bg-slate-950 border border-slate-800 shadow-2xl">
-                    <DialogHeader>
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
                             <AlertTriangle className="h-5 w-5 text-red-400" /> Remove Household Sub-Account?
                         </DialogTitle>
@@ -2177,7 +2227,7 @@ export default function UserProfilePage() {
                             Are you sure you want to remove this sub-account? This will immediately revoke their Plex server access and delete the sub-profile.
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="pt-2 flex sm:justify-between gap-2">
+                    <DialogFooter className="pt-2 flex sm:justify-between gap-2 shrink-0">
                         <Button 
                             type="button" 
                             variant="ghost" 

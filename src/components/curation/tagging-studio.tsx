@@ -23,6 +23,7 @@ import {
     Flame,
     Zap,
     Check,
+    CheckCheck,
     X,
     Loader2,
     Clock,
@@ -741,21 +742,21 @@ export function TaggingStudio() {
 
                         {/* Active Library Control Bar */}
                         {currentSections.length > 0 && selectedSectionKey && (
-                            <div className="mt-2 pt-3 border-t border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-slate-950/70 p-3 rounded-xl border border-slate-800/90">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg border shrink-0 ${
+                            <div className="mt-3 pt-4 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-slate-950/70 p-4 sm:p-5 rounded-2xl border border-slate-800/90 min-w-0">
+                                <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+                                    <div className={`p-2.5 rounded-xl border shrink-0 ${
                                         isSectionEnabled(selectedServerId, selectedSectionKey)
-                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950/30'
                                             : 'bg-slate-800 border-slate-700 text-slate-400'
                                     }`}>
-                                        {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                                        {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
                                     </div>
-                                    <div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-xs font-black text-white">
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                                            <span className="text-xs sm:text-sm font-black text-white tracking-tight break-words">
                                                 {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
                                             </span>
-                                            <Badge className={`text-[10px] font-bold ${
+                                            <Badge className={`text-[10px] font-bold px-2 py-0.5 shrink-0 ${
                                                 isSectionEnabled(selectedServerId, selectedSectionKey)
                                                     ? 'bg-emerald-600 text-white'
                                                     : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -763,7 +764,7 @@ export function TaggingStudio() {
                                                 {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 TAGGING ACTIVE' : '⚪ EXCLUDED / DISABLED'}
                                             </Badge>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey)
                                                 ? 'This library section will automatically receive IMDb parental guide tags and custom tag rules.'
                                                 : 'This library section is excluded and will be skipped during automated tagging sync.'}
@@ -771,11 +772,18 @@ export function TaggingStudio() {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 flex-wrap shrink-0 w-full md:w-auto justify-end">
+                                <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end min-w-0">
                                     {/* Primary Switch */}
-                                    <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-                                        <Label htmlFor="sec-master-toggle-tagging" className="text-xs font-bold text-slate-300 cursor-pointer">
-                                            {isSectionEnabled(selectedServerId, selectedSectionKey) ? 'Enabled' : 'Disabled'}
+                                    <div className="flex items-center gap-2.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-slate-800 shadow-sm shrink-0">
+                                        <Label htmlFor="sec-master-toggle-tagging" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey) ? (
+                                                <span className="text-emerald-400 font-extrabold flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                    Enabled
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-400 font-semibold">Disabled</span>
+                                            )}
                                         </Label>
                                         <Switch
                                             id="sec-master-toggle-tagging"
@@ -785,24 +793,34 @@ export function TaggingStudio() {
                                     </div>
 
                                     {/* Batch Server Controls */}
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleToggleAllSectionsOnServer(true)}
-                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
-                                    >
-                                        Enable All
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleToggleAllSectionsOnServer(false)}
-                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-300"
-                                    >
-                                        Disable All
-                                    </Button>
+                                    <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-sm shrink-0">
+                                        <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
+                                            Server:
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleToggleAllSectionsOnServer(true)}
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                            title="Enable tagging for all library sections on this server"
+                                        >
+                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-400" />
+                                            Enable All
+                                        </Button>
+                                        <div className="w-[1px] h-4 bg-slate-800 my-auto" />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleToggleAllSectionsOnServer(false)}
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
+                                            title="Disable tagging for all library sections on this server"
+                                        >
+                                            <XCircle className="h-3 w-3 mr-1 text-rose-400" />
+                                            Disable All
+                                        </Button>
+                                    </div>
 
                                     {/* Scoped Runner for Selected Library */}
                                     <Button
@@ -810,7 +828,7 @@ export function TaggingStudio() {
                                         size="sm"
                                         disabled={runningTaggingSync}
                                         onClick={() => handleRunTaggingSync(selectedServerId, selectedSectionKey)}
-                                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/40 cursor-pointer"
+                                        className="h-9 px-3.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/40 cursor-pointer shrink-0 transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95"
                                     >
                                         {runningTaggingSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Zap className="h-3.5 w-3.5 mr-1.5 text-white" />}
                                         <span>Tag Library #{selectedSectionKey}</span>
@@ -1769,8 +1787,8 @@ export function TaggingStudio() {
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
-                <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-slate-100 p-6 space-y-4">
-                    <DialogHeader className="pb-2 border-b border-slate-800">
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
                         <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                             <Layers className="h-5 w-5 text-emerald-400" />
                             <span>Configure Target Tagging Libraries</span>
@@ -1780,7 +1798,7 @@ export function TaggingStudio() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                    <div className="space-y-4 flex-1 overflow-y-auto min-h-0 pr-1 py-2">
                         {servers.map(srv => {
                             const srvSections = srv.sections || [];
                             return (

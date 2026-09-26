@@ -225,7 +225,7 @@ export function BookMatchModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
-      <Card className="w-full max-w-3xl border-zinc-800 bg-[#121318]/95 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <Card className="w-[96vw] sm:max-w-3xl border-zinc-800 bg-[#121318]/95 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Modal Header */}
         <CardHeader className="pb-3 border-b border-zinc-800/80 bg-zinc-900/50 flex-shrink-0">
           <div className="flex items-center justify-between">

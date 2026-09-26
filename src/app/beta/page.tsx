@@ -33,12 +33,12 @@ export default function BetaPage() {
     if (loading) {
         return (
             <div className="min-h-screen bg-background flex flex-col animate-in fade-in duration-500">
-                <main className="flex-1 p-6 max-w-5xl mx-auto w-full space-y-8 mt-8">
+                <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 space-y-8 mt-4 sm:mt-6">
                     <div className="space-y-4">
                         <Skeleton className="h-12 w-2/3" />
                         <Skeleton className="h-6 w-1/2" />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-6">
                         <Card className="flex flex-col p-6 space-y-4"><Skeleton className="h-6 w-1/3"/><Skeleton className="h-24 w-full"/><Skeleton className="h-10 w-full"/></Card>
                         <Card className="flex flex-col p-6 space-y-4"><Skeleton className="h-6 w-1/3"/><Skeleton className="h-24 w-full"/><Skeleton className="h-10 w-full"/></Card>
                     </div>
@@ -49,7 +49,7 @@ export default function BetaPage() {
 
     return (
         <div className="min-h-screen bg-background flex flex-col animate-in fade-in duration-500">
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-8 pb-12 mt-4 sm:mt-6">
+            <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 space-y-8 pb-12 mt-4 sm:mt-6">
                 <div className="space-y-3">
                     <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 bg-clip-text text-transparent flex items-center gap-3">
                         🧪 Beta Testing & Services
@@ -59,7 +59,7 @@ export default function BetaPage() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-6">
                     {betaCards.length === 0 ? (
                         <div className="col-span-full text-center p-12 text-muted-foreground border rounded-2xl border-dashed border-border/50 bg-muted/10">
                             No beta tests are currently active. Check back later!

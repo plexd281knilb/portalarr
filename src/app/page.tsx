@@ -84,7 +84,7 @@ export default async function UserLandingPage() {
           </div>
       )}
 
-      <main className="flex-1 p-3 sm:p-5 lg:p-8 max-w-7xl mx-auto w-full space-y-5 sm:space-y-6 lg:space-y-8 animate-in fade-in duration-500">
+      <main className="flex-1 p-2.5 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full space-y-4 sm:space-y-6 lg:space-y-8 animate-in fade-in duration-500 min-w-0">
         
         <section className="text-center space-y-2 sm:space-y-3 py-3 sm:py-5 lg:py-6">
             <h1 className="text-2xl sm:text-3xl lg:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">

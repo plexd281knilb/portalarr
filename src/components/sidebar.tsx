@@ -47,8 +47,8 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   }, [pathname]);
 
   return (
-    <div className={cn("pb-12 h-screen border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none", className)}>
-      <div className="space-y-4 py-4">
+    <div className={cn("h-full border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none min-h-0", className)}>
+      <div className="flex-1 overflow-y-auto space-y-4 py-4">
         <div className="px-3 py-2">
           <div className="flex items-center gap-2.5 px-3 mb-6">
             <div className="h-8 w-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(52,211,153,0.3)]">
@@ -343,8 +343,8 @@ export function MobileSidebar() {
               </Button>
             </div>
 
-            <div className="flex-1 px-3 pb-4 flex flex-col justify-between">
-              <div>
+            <div className="flex-1 px-3 pb-4 flex flex-col justify-between min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto pr-1">
                 <div className="flex items-center gap-2.5 px-3 mb-6">
                   <div className="h-8 w-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(52,211,153,0.3)]">
                     <BookOpen className="h-4 w-4" />
@@ -352,8 +352,8 @@ export function MobileSidebar() {
                   <div>
                     <h2 className="text-base font-extrabold tracking-tight text-foreground flex items-center gap-1.5">
                       Portalarr
-                      <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-primary/20 text-primary border border-primary/30">
-                        v2.0
+                      <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        v3.0-beta
                       </span>
                     </h2>
                     <p className="text-[10px] text-muted-foreground font-medium">Media Ecosystem Portal</p>

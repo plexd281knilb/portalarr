@@ -177,7 +177,7 @@ export function BookDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border/60 shadow-2xl p-0 overflow-y-auto sm:rounded-2xl">
+            <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[85vh] bg-card/95 backdrop-blur-xl border border-border/60 shadow-2xl p-0 overflow-y-auto sm:rounded-2xl">
                 {/* Header Background Banner */}
                 <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-purple-950/60 via-indigo-950/40 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/15 via-transparent to-transparent" />

@@ -49,7 +49,7 @@ export default function PlexSetupGuides() {
                     Setup Guides
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
+            <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 border-b border-border/40">
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                         <Sparkles className="h-5 w-5 text-primary" />

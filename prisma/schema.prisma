@@ -56,6 +56,10 @@ model Settings {
   membershipTiersEnabled Boolean @default(true)
   autoSuspendExpiredAccounts Boolean @default(false) // Safety switch - OFF by default
 
+  // Admin Approval Gates (Requires admin manual approval before Plex changes or emails occur)
+  requireApprovalForPlexChanges Boolean @default(true) // Require manual admin review before Plex library access is granted/revoked
+  requireApprovalForEmails      Boolean @default(true) // Require manual admin review before outgoing emails are dispatched
+
   // Email Notification Controls (All Automated Emails OFF by default until explicitly enabled)
   emailNotificationsEnabled   Boolean   @default(false)
   notifyUserApproval          Boolean   @default(false)
@@ -349,6 +353,7 @@ model User {
   createdAt              DateTime  @default(now())
   paymentTransactions    PaymentTransaction[]
   mediaRequests          MediaRequest[]
+  adminApprovals         AdminApproval[]
 }
 
 model SupportTicket {
@@ -823,4 +828,27 @@ model MediaRequest {
   @@index([requestedByUsername])
   @@index([requestedByUserId])
   @@index([mediaType])
+}
+
+model AdminApproval {
+  id              String    @id @default(cuid())
+  type            String    // "EMAIL", "PLEX_ACCESS_GRANT", "PLEX_ACCESS_REVOKE", "ACCOUNT_SUSPEND", "ROLE_CHANGE"
+  status          String    @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  title           String
+  description     String?
+  targetUser      String?
+  targetEmail     String?
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payload         String    // JSON encoded
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([userId])
+  @@index([createdAt])
 }

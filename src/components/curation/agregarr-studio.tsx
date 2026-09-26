@@ -19,6 +19,7 @@ import {
     Eye,
     Save,
     Check,
+    CheckCheck,
     X,
     FolderOpen,
     Loader2,
@@ -2146,21 +2147,21 @@ export function AgregarrStudio() {
 
                         {/* Active Library Control Bar */}
                         {currentSections.length > 0 && selectedSectionKey && (
-                            <div className="mt-2 pt-3 border-t border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-slate-950/70 p-3 rounded-xl border border-slate-800/90">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg border shrink-0 ${
+                            <div className="mt-3 pt-4 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-slate-950/70 p-4 sm:p-5 rounded-2xl border border-slate-800/90 min-w-0">
+                                <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+                                    <div className={`p-2.5 rounded-xl border shrink-0 ${
                                         isSectionEnabled(selectedServerId, selectedSectionKey)
-                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950/30'
                                             : 'bg-slate-800 border-slate-700 text-slate-400'
                                     }`}>
-                                        {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                                        {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
                                     </div>
-                                    <div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-xs font-black text-white">
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                                            <span className="text-xs sm:text-sm font-black text-white tracking-tight break-words">
                                                 {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
                                             </span>
-                                            <Badge className={`text-[10px] font-bold ${
+                                            <Badge className={`text-[10px] font-bold px-2 py-0.5 shrink-0 ${
                                                 isSectionEnabled(selectedServerId, selectedSectionKey)
                                                     ? 'bg-emerald-600 text-white'
                                                     : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -2168,7 +2169,7 @@ export function AgregarrStudio() {
                                                 {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 COLLECTIONS ACTIVE' : '⚪ EXCLUDED / DISABLED'}
                                             </Badge>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
                                             {isSectionEnabled(selectedServerId, selectedSectionKey)
                                                 ? 'This library section will automatically sync collections & Coming Soon hubs to Plex Home.'
                                                 : 'This library section is excluded and will be skipped during all collection sync operations.'}
@@ -2176,11 +2177,18 @@ export function AgregarrStudio() {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 flex-wrap shrink-0 w-full md:w-auto justify-end">
+                                <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end min-w-0">
                                     {/* Primary Switch */}
-                                    <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
-                                        <Label htmlFor="sec-master-toggle-agregarr" className="text-xs font-bold text-slate-300 cursor-pointer">
-                                            {isSectionEnabled(selectedServerId, selectedSectionKey) ? 'Enabled' : 'Disabled'}
+                                    <div className="flex items-center gap-2.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-slate-800 shadow-sm shrink-0">
+                                        <Label htmlFor="sec-master-toggle-agregarr" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey) ? (
+                                                <span className="text-emerald-400 font-extrabold flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                    Enabled
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-400 font-semibold">Disabled</span>
+                                            )}
                                         </Label>
                                         <Switch
                                             id="sec-master-toggle-agregarr"
@@ -2190,24 +2198,34 @@ export function AgregarrStudio() {
                                     </div>
 
                                     {/* Batch Server Controls */}
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleToggleAllSectionsOnServer(true)}
-                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
-                                    >
-                                        Enable All
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleToggleAllSectionsOnServer(false)}
-                                        className="h-8 text-xs border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-300"
-                                    >
-                                        Disable All
-                                    </Button>
+                                    <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-sm shrink-0">
+                                        <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
+                                            Server:
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleToggleAllSectionsOnServer(true)}
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                            title="Enable collections sync for all library sections on this server"
+                                        >
+                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-400" />
+                                            Enable All
+                                        </Button>
+                                        <div className="w-[1px] h-4 bg-slate-800 my-auto" />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleToggleAllSectionsOnServer(false)}
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
+                                            title="Disable collections sync for all library sections on this server"
+                                        >
+                                            <XCircle className="h-3 w-3 mr-1 text-rose-400" />
+                                            Disable All
+                                        </Button>
+                                    </div>
 
                                     {/* Scoped Runner for Selected Library */}
                                     <Button
@@ -2215,7 +2233,7 @@ export function AgregarrStudio() {
                                         size="sm"
                                         disabled={runningCollectionSync}
                                         onClick={handleRunCollectionSync}
-                                        className="h-8 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-950/40"
+                                        className="h-9 px-3.5 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-950/40 cursor-pointer shrink-0 transition-all hover:ring-2 hover:ring-amber-300/40 active:scale-95"
                                     >
                                         {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Zap className="h-3.5 w-3.5 mr-1.5 text-slate-950" />}
                                         <span>Sync Library #{selectedSectionKey}</span>
@@ -3184,7 +3202,7 @@ export function AgregarrStudio() {
                     </div>
 
                     {/* Presets Card Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 gap-3.5">
                         {filteredPresets.map(preset => {
                             return (
                                 <div
@@ -4237,8 +4255,8 @@ export function AgregarrStudio() {
             {/* MODAL 1: COLLECTION MEDIA INSPECTOR MODAL (Live items, dates, stubs) */}
             {/* ========================================================================= */}
             <Dialog open={mediaInspectorModalOpen} onOpenChange={setMediaInspectorModalOpen}>
-                <DialogContent className="max-w-5xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-col gap-1.5">
+                <DialogContent className="w-[96vw] sm:max-w-5xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-col gap-1.5 shrink-0">
                         <div className="flex items-center justify-between">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <Eye className="h-5 w-5 text-amber-400" />
@@ -4483,8 +4501,8 @@ export function AgregarrStudio() {
             {/* MODAL 2: CREATE CUSTOM COLLECTION MODAL */}
             {/* ========================================================================= */}
             <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
                         <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                             <Plus className="h-5 w-5 text-amber-400" />
                             <span>Create Custom Collection</span>
@@ -4599,8 +4617,8 @@ export function AgregarrStudio() {
             {/* MODAL 3: INSPECT PRESET BLUEPRINT MODAL */}
             {/* ========================================================================= */}
             <Dialog open={inspectModalOpen} onOpenChange={setInspectModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
-                    <DialogHeader className="pb-2 border-b border-slate-800">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
                         <div className="flex items-center justify-between">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <Trophy className="h-5 w-5 text-amber-400" />
@@ -4847,8 +4865,8 @@ export function AgregarrStudio() {
             {/* MODAL 4: AGREGARR COLLECTION PLACEMENT & VISIBILITY MODAL */}
             {/* ========================================================================= */}
             <Dialog open={placementModalOpen} onOpenChange={setPlacementModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
                         <div className="flex items-center justify-between">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <Settings2 className="h-5 w-5 text-amber-400" />
@@ -5251,8 +5269,8 @@ export function AgregarrStudio() {
             {/* QUICK EXCLUDED LABELS MODAL (DIRECT FROM COLLECTION CARD) */}
             {/* ========================================================================= */}
             <Dialog open={quickLabelsModalOpen} onOpenChange={setQuickLabelsModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-5 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-5 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
                         <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                             <Tag className="h-4 w-4 text-rose-400" />
                             <span>Exclude Plex Labels: {quickLabelsCollection?.title}</span>
@@ -5302,8 +5320,8 @@ export function AgregarrStudio() {
             {/* MODAL 5: PLACEHOLDER / BANNER CREATION MODAL */}
             {/* ========================================================================= */}
             <Dialog open={placeholderModalOpen} onOpenChange={setPlaceholderModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col p-6 overflow-hidden">
-                    <DialogHeader className="pb-2 border-b border-slate-800 flex flex-row items-center justify-between">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <Tag className="h-5 w-5 text-amber-400" />
@@ -5507,8 +5525,8 @@ export function AgregarrStudio() {
             {/* MODAL 6: YOUTUBE TRAILER PLAYER MODAL */}
             {/* ========================================================================= */}
             <Dialog open={trailerModalOpen} onOpenChange={setTrailerModalOpen}>
-                <DialogContent className="max-w-4xl bg-slate-950 border-slate-800 text-slate-100 p-6 overflow-hidden">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between">
+                <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <Play className="h-4 w-4 text-rose-500 fill-rose-500" />
@@ -5593,8 +5611,8 @@ export function AgregarrStudio() {
             {/* MODAL 8: FILTERED SMART HUBS DEPLOYER MODAL */}
             {/* ========================================================================= */}
             <Dialog open={filteredHubsModalOpen} onOpenChange={setFilteredHubsModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-6 overflow-hidden max-h-[90vh] flex flex-col">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden max-h-[85vh] flex flex-col">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <Clapperboard className="h-5 w-5 text-cyan-400" />
@@ -5742,8 +5760,8 @@ export function AgregarrStudio() {
             {/* MODAL 9: IGNORIED & DISMISSED HUBS MANAGER MODAL */}
             {/* ========================================================================= */}
             <Dialog open={dismissedHubsModalOpen} onOpenChange={setDismissedHubsModalOpen}>
-                <DialogContent className="max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-6 overflow-hidden max-h-[90vh] flex flex-col">
-                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between">
+                <DialogContent className="w-[96vw] sm:max-w-2xl bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden max-h-[85vh] flex flex-col">
+                    <DialogHeader className="pb-3 border-b border-slate-800 flex flex-row items-center justify-between shrink-0">
                         <div className="space-y-0.5">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <EyeOff className="h-5 w-5 text-amber-400" />
@@ -5845,8 +5863,8 @@ export function AgregarrStudio() {
             {/* MODAL 10: YOUTUBE COOKIES PASTE / UPLOAD MODAL */}
             {/* ========================================================================= */}
             <Dialog open={cookieModalOpen} onOpenChange={setCookieModalOpen}>
-                <DialogContent className="max-w-xl bg-slate-950 border-slate-800 text-slate-100 p-6">
-                    <DialogHeader className="pb-3 border-b border-slate-800">
+                <DialogContent className="w-[96vw] sm:max-w-xl max-h-[85vh] flex flex-col bg-slate-950 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
                         <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                             <FileText className="h-5 w-5 text-red-500" />
                             <span>Configure YouTube Cookies (youtube-cookies.txt)</span>
@@ -5856,7 +5874,7 @@ export function AgregarrStudio() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="py-3 space-y-3">
+                    <div className="py-3 space-y-3 flex-1 overflow-y-auto min-h-0">
                         <div className="space-y-1.5">
                             <Label className="text-xs text-slate-300 font-semibold flex items-center justify-between">
                                 <span>Netscape Cookie Text:</span>
@@ -5907,8 +5925,8 @@ export function AgregarrStudio() {
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
-                <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-slate-100 p-6 space-y-4">
-                    <DialogHeader className="pb-2 border-b border-slate-800">
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col bg-slate-900 border-slate-800 text-slate-100 p-4 sm:p-6 overflow-hidden">
+                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
                         <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                             <Layers className="h-5 w-5 text-amber-400" />
                             <span>Configure Target Collection Libraries</span>
@@ -5918,7 +5936,7 @@ export function AgregarrStudio() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                    <div className="space-y-4 flex-1 overflow-y-auto min-h-0 pr-1 py-2">
                         {servers.map(srv => {
                             const srvSections = srv.sections || [];
                             return (

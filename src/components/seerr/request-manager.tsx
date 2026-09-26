@@ -312,7 +312,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
                     {filteredRequests.map((req) => {
                         const isMovie = req.mediaType === "movie";
                         const isTv = req.mediaType === "tv";

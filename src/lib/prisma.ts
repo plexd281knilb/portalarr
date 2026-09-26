@@ -579,7 +579,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["defaultTrialPlexLibraries", `ALTER TABLE "Settings" ADD COLUMN "defaultTrialPlexLibraries" TEXT;`],
                 ["tier2YearlyPrice", `ALTER TABLE "Settings" ADD COLUMN "tier2YearlyPrice" REAL DEFAULT 240;`],
                 ["tier2MonthlyPrice", `ALTER TABLE "Settings" ADD COLUMN "tier2MonthlyPrice" REAL DEFAULT 25;`],
-                ["availableAddons", `ALTER TABLE "Settings" ADD COLUMN "availableAddons" TEXT;`]
+                ["availableAddons", `ALTER TABLE "Settings" ADD COLUMN "availableAddons" TEXT;`],
+                ["requireApprovalForPlexChanges", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForPlexChanges" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["requireApprovalForEmails", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForEmails" BOOLEAN NOT NULL DEFAULT 1;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -1723,6 +1725,35 @@ export async function ensureSchemaColumns(): Promise<void> {
             }
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Author/BookSeries/Book table check error:", e.message || e);
+        }
+
+        // --- 14. ADMIN APPROVAL QUEUE TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "AdminApproval" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "type" TEXT NOT NULL,
+                    "status" TEXT NOT NULL DEFAULT 'PENDING',
+                    "title" TEXT NOT NULL,
+                    "description" TEXT,
+                    "targetUser" TEXT,
+                    "targetEmail" TEXT,
+                    "userId" TEXT,
+                    "payload" TEXT NOT NULL,
+                    "approvedBy" TEXT,
+                    "approvedAt" DATETIME,
+                    "rejectionReason" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminApproval_status_idx" ON "AdminApproval"("status");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminApproval_type_idx" ON "AdminApproval"("type");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminApproval_userId_idx" ON "AdminApproval"("userId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminApproval_createdAt_idx" ON "AdminApproval"("createdAt");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] AdminApproval table check error:", e.message || e);
         }
 
         schemaPatchCompleted = true;

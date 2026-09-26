@@ -74,9 +74,9 @@ export function PaymentQrModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md bg-[#101018] border-border/60 text-foreground p-0 overflow-hidden shadow-2xl">
-                <div className="p-6 space-y-4">
-                    <DialogHeader className="space-y-1 text-left">
+            <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col bg-[#101018] border-border/60 text-foreground p-0 overflow-hidden shadow-2xl">
+                <div className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto min-h-0">
+                    <DialogHeader className="space-y-1 text-left shrink-0">
                         <div className="flex items-center justify-between">
                             <DialogTitle className="text-lg font-bold flex items-center gap-2">
                                 <QrCode className="h-5 w-5 text-primary" /> Scan to Pay (P2P Direct)

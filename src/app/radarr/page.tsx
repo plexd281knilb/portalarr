@@ -410,7 +410,7 @@ export default function RadarrPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto pb-12 w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-2xl font-bold text-blue-400">Radarr (Movies)</h3>
@@ -526,7 +526,7 @@ export default function RadarrPage() {
               </div>
 
               {/* Search Results */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-4 lg:gap-5 pt-4">
                 {searchResults.map((movie: any) => {
                   const coverImg =
                     movie.images?.find((i: any) => i.coverType === "poster")
@@ -717,7 +717,7 @@ export default function RadarrPage() {
                       </Button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-4">
                     {filteredLibrary.map((movie: any) => {
                       const coverImg =
                         movie.images?.find((i: any) => i.coverType === "poster")
@@ -1015,7 +1015,7 @@ export default function RadarrPage() {
 
       {/* INTERACTIVE RELEASE MODAL */}
       <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 bg-[#121218] border-border/60">
+        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
             <DialogTitle className="text-lg font-bold text-blue-400">Interactive Search</DialogTitle>
             <DialogDescription>

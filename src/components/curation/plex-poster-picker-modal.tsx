@@ -236,9 +236,9 @@ export function PlexPosterPickerModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-5xl max-h-[90vh] bg-slate-950 border-slate-800 text-white flex flex-col p-6 overflow-hidden shadow-2xl shadow-purple-950/40">
+            <DialogContent className="w-[96vw] sm:max-w-5xl max-h-[85vh] bg-slate-950 border-slate-800 text-white flex flex-col p-4 sm:p-6 overflow-hidden shadow-2xl shadow-purple-950/40">
                 {/* Header */}
-                <DialogHeader className="pb-3 border-b border-slate-800/80">
+                <DialogHeader className="pb-3 border-b border-slate-800/80 shrink-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <DialogTitle className="text-lg font-black flex items-center gap-2 text-white">
@@ -437,7 +437,7 @@ export function PlexPosterPickerModal({
                 </div>
 
                 {/* Media Cards Grid */}
-                <div className="flex-1 overflow-y-auto pr-1 -mr-1 min-h-[340px] max-h-[58vh]">
+                <div className="flex-1 overflow-y-auto pr-1 -mr-1 min-h-[300px]">
                     {loading && items.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-56 gap-2 text-slate-400">
                             <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
@@ -462,7 +462,7 @@ export function PlexPosterPickerModal({
                             )}
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 pb-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-3.5 pb-2">
                             {filteredItems.map((it) => {
                                 const isSelected = it.ratingKey === selectedKey;
                                 const res = it.detectedBadges?.resolution || it.media?.[0]?.videoResolution || "1080p";

@@ -113,8 +113,8 @@ function JoinWizardContent() {
     const trialDays = config?.defaultTrialDays || 14;
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#12121c] to-[#0a0a0f] p-4 sm:p-6">
-            <div className="w-full max-w-2xl space-y-6">
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#12121c] to-[#0a0a0f] p-3 sm:p-6">
+            <div className="w-full max-w-2xl sm:max-w-3xl space-y-6 transition-all duration-300">
                 
                 {/* STEP INDICATOR */}
                 <div className="flex items-center justify-center gap-2 sm:gap-4 text-xs font-bold text-muted-foreground">

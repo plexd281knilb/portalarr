@@ -2572,46 +2572,69 @@ function BookLibraryPageContent() {
         onValueChange={handleTabChange}
         className="w-full space-y-6"
       >
-        <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
+        <TabsList className="flex flex-wrap sm:flex-nowrap overflow-x-auto no-scrollbar w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger
             value="libs"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <BookOpen className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Ebooks</span>
+            <BookOpen className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span className="truncate">Ebooks</span>
           </TabsTrigger>
           <TabsTrigger
             value="audiobooks"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400 data-[state=active]:text-slate-950" /> <span>Audiobooks</span>
+            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400 data-[state=active]:text-slate-950" /> <span className="truncate">Audiobooks</span>
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
               value="manage"
-              className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+              className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
             >
-              <Plus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Manage</span>
+              <Plus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span className="truncate">Manage</span>
             </TabsTrigger>
           )}
           <TabsTrigger
             value="kindle"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
             <Mail className="h-4 w-4 text-cyan-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
-            <span>Kindle</span>
+            <span className="truncate">Kindle</span>
           </TabsTrigger>
           <TabsTrigger
             value="help"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(192,132,252,0.35)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(192,132,252,0.35)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
             <HelpCircle className="h-4 w-4 text-purple-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
-            <span>Help & Guide</span>
+            <span className="truncate">Help & Guide</span>
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="libs" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
-            <div className="md:col-span-4 lg:col-span-3 space-y-4">
+          {/* Mobile & Tablet Horizontal Ebook Library Bar */}
+          {ebookLibraries.length > 0 && (
+            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-xl w-full">
+              {ebookLibraries.map((lib) => {
+                const isSelected = selectedLibrary?.id === lib.id;
+                return (
+                  <button
+                    key={lib.id}
+                    onClick={() => setSelectedLibrary(lib)}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? "bg-primary text-slate-950 shadow-md font-extrabold"
+                        : "bg-slate-950/60 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800"
+                    }`}
+                  >
+                    <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate max-w-[150px]">{lib.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 lg:gap-6">
+            <div className="hidden xl:block xl:col-span-3 space-y-4">
               <Card className="border-muted/60 bg-muted/10">
                 <CardHeader className="py-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -2659,17 +2682,17 @@ function BookLibraryPageContent() {
               </Card>
             </div>
 
-            <div className="md:col-span-8 lg:col-span-9 space-y-6">
+            <div className="w-full xl:col-span-9 space-y-6 min-w-0">
               {selectedLibrary ? (
                 <>
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
                       <div className="relative w-full sm:flex-1">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                         <Input
                           type="search"
                           placeholder="Search books by title or author..."
-                          className="pl-9 bg-muted/20"
+                          className="pl-9 h-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-400 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm font-medium w-full shadow-sm rounded-xl"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -2953,7 +2976,7 @@ function BookLibraryPageContent() {
                                   </Button>
                                 )}
                               </h3>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                                 {seriesBooks.map((book) =>
                                   renderBookCard(book),
                                 )}
@@ -2965,7 +2988,7 @@ function BookLibraryPageContent() {
                                     <Library className="h-3 w-3" /> Missing from
                                     Series
                                   </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
+                                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
                                     {actualMissing.map(
                                       (book: any, i: number) => {
                                         const extMissing = extractSeriesInfo(book.title, "", [seriesName]);
@@ -3090,7 +3113,7 @@ function BookLibraryPageContent() {
                               {standaloneBooks.length === 1 ? "Book" : "Books"}
                             </Badge>
                           </h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                             {standaloneBooks
                               .slice(
                                 0,
@@ -3106,7 +3129,7 @@ function BookLibraryPageContent() {
                       )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                       {sortedBooks
                         .slice(0, visibleCount)
                         .map((book) => renderBookCard(book))}
@@ -3139,8 +3162,31 @@ function BookLibraryPageContent() {
         </TabsContent>
 
         <TabsContent value="audiobooks" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
-            <div className="md:col-span-4 lg:col-span-3 space-y-4">
+          {/* Mobile & Tablet Horizontal Audiobook Library Bar */}
+          {audiobookLibraries.length > 0 && (
+            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-xl w-full">
+              {audiobookLibraries.map((lib) => {
+                const isSelected = selectedLibrary?.id === lib.id;
+                return (
+                  <button
+                    key={lib.id}
+                    onClick={() => setSelectedLibrary(lib)}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? "bg-amber-400 text-slate-950 shadow-md font-extrabold"
+                        : "bg-slate-950/60 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800"
+                    }`}
+                  >
+                    <Headphones className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate max-w-[150px]">{lib.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 lg:gap-6">
+            <div className="hidden xl:block xl:col-span-3 space-y-4">
               <Card className="border-muted/60 bg-muted/10 overflow-hidden">
                 <CardHeader className="py-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -3205,17 +3251,17 @@ function BookLibraryPageContent() {
               </Card>
             </div>
 
-            <div className="md:col-span-8 lg:col-span-9 space-y-6">
+            <div className="w-full xl:col-span-9 space-y-6 min-w-0">
               {selectedLibrary && selectedLibrary.mediaType === "audiobook" ? (
                 <>
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
                       <div className="relative w-full sm:flex-1">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                         <Input
                           type="search"
                           placeholder="Search audiobooks by title or author..."
-                          className="pl-9 bg-muted/20"
+                          className="pl-9 h-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-400 focus:border-amber-400/80 focus:ring-1 focus:ring-amber-400/40 text-sm font-medium w-full shadow-sm rounded-xl"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -3224,7 +3270,7 @@ function BookLibraryPageContent() {
                         <select
                           value={sortBy}
                           onChange={(e) => handleSortChange(e.target.value)}
-                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-muted/60 bg-muted/20 text-foreground hover:bg-muted/30 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
+                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-xl border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
                         >
                           <option
                             value="recent"
@@ -3320,7 +3366,7 @@ function BookLibraryPageContent() {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                       {sortedBooks
                         .slice(0, visibleCount)
                         .map((book) => renderAudiobookCard(book))}
@@ -4833,7 +4879,7 @@ function BookLibraryPageContent() {
           }}
         >
           <Card
-            className="w-full max-w-2xl max-h-[88vh] flex flex-col border-amber-500/30 bg-slate-955 text-slate-100 shadow-2xl overflow-hidden cursor-default"
+            className="w-[96vw] sm:max-w-2xl max-h-[85vh] flex flex-col border-amber-500/30 bg-slate-955 text-slate-100 shadow-2xl overflow-hidden cursor-default"
             onClick={(e) => e.stopPropagation()}
           >
             <CardHeader className="border-b border-slate-800 pb-4 bg-slate-900/60">

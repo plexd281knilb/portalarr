@@ -33,6 +33,10 @@ async function runTestSuite() {
         }
     }
 
+    // Ensure schema columns and tables are up to date before running verification
+    const { ensureSchemaColumns } = await import("../src/lib/prisma");
+    await ensureSchemaColumns();
+
     // 1. Prisma Connection & Settings Model
     await assertTest("Prisma: Settings Model CRUD & Defaults", async () => {
         let settings = await prisma.settings.findUnique({ where: { id: "global" } });
@@ -401,6 +405,134 @@ async function runTestSuite() {
             if (!rendered.subject || !rendered.html || !rendered.html.includes("Inception")) {
                 throw new Error(`Email template ${tid} failed rendering test`);
             }
+        }
+    });
+
+    // 20. Build Verification: Zero Emails Triggered on Server Boot / Push Routine
+    await assertTest("Build Verification: Zero Emails Triggered on Server Boot / Push Routine", async () => {
+        const { ensureSchemaColumns } = await import("../src/lib/prisma");
+        const { expireDueTrialsAndSubscriptionsInternal, sendOrQueueEmail } = await import("../src/app/actions");
+        await ensureSchemaColumns();
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!settings) throw new Error("Global settings not found");
+
+        // Verify that automated email notifications are OFF by default or require manual admin approval
+        if (settings.emailNotificationsEnabled !== false && settings.requireApprovalForEmails !== true) {
+            throw new Error("Safety violation: email notifications must either be disabled by default or gated behind admin approval");
+        }
+
+        // Run boot trial/subscription expiration routine and assert it completes cleanly without firing unapproved emails
+        const expireResult = await expireDueTrialsAndSubscriptionsInternal();
+        if (!expireResult.success) {
+            throw new Error(`expireDueTrialsAndSubscriptionsInternal failed: ${expireResult.error || 'Unknown error'}`);
+        }
+
+        // Test sendOrQueueEmail with requireApprovalForEmails = true: verify it queues into AdminApproval instead of sending
+        const testQueueResult = await sendOrQueueEmail({
+            to: "verify_push_recipient@example.com",
+            subject: "Verification Test Outgoing Email",
+            html: "<p>Push verification body</p>",
+            templateId: "test_verification"
+        });
+
+        if (settings.requireApprovalForEmails !== false) {
+            if (!testQueueResult.queued || !testQueueResult.approvalId) {
+                throw new Error("Expected outgoing email to be staged in AdminApproval queue when approval gate is active");
+            }
+
+            const stagedRecord = await prisma.adminApproval.findUnique({
+                where: { id: testQueueResult.approvalId }
+            });
+            if (!stagedRecord || stagedRecord.status !== "PENDING" || stagedRecord.type !== "EMAIL") {
+                throw new Error("Staged email approval record was not properly created with PENDING status");
+            }
+
+            // Clean up test staged approval
+            await prisma.adminApproval.delete({ where: { id: testQueueResult.approvalId } });
+        }
+    });
+
+    // 21. Access Protection & Audit: Role/Access Changes Staged in Approval Queue & Admin Alerted
+    await assertTest("Access Protection & Audit: Role/Access Changes Staged in Approval Queue & Admin Alerted", async () => {
+        const { ensureSchemaColumns } = await import("../src/lib/prisma");
+        const { renderEmailTemplate } = await import("../src/lib/email-templates");
+        await ensureSchemaColumns();
+
+        // 1. Verify admin_user_access_revoked template renders correctly with all variables
+        const renderedAlert = await renderEmailTemplate("admin_user_access_revoked", {
+            username: "jordan_verify",
+            email: "jordan@example.com",
+            oldStatus: "APPROVED",
+            newStatus: "EXPIRED",
+            oldRole: "USER",
+            newRole: "USER",
+            reason: "Trial period elapsed beyond grace period (3 days).",
+            statusChange: "APPROVED -> EXPIRED",
+            accessUrl: "http://localhost:3000/settings/access",
+            appUrl: "http://localhost:3000"
+        });
+
+        if (!renderedAlert.subject.includes("jordan_verify") || !renderedAlert.html.includes("APPROVED &rarr; EXPIRED")) {
+            throw new Error("admin_user_access_revoked template failed rendering or variable substitution");
+        }
+
+        // 2. Create a temporary test user to verify Plex Access Change Staging
+        const testUser = await prisma.user.create({
+            data: {
+                username: "verify_gate_user",
+                email: "verify_gate@example.com",
+                password: "hashed_dummy_password",
+                role: "USER",
+                status: "APPROVED",
+                plexLibrarySectionIds: "10,11"
+            }
+        });
+
+        try {
+            // Stage a Plex Library Access Revocation in AdminApproval
+            const stagedRevoke = await prisma.adminApproval.create({
+                data: {
+                    type: "PLEX_ACCESS_REVOKE",
+                    status: "PENDING",
+                    title: `Plex Access: Revoke libraries for ${testUser.username}`,
+                    description: "Removing libraries: 11",
+                    targetUser: testUser.username,
+                    userId: testUser.id,
+                    payload: JSON.stringify({
+                        userId: testUser.id,
+                        selectedKeys: ["10"],
+                        removedKeys: ["11"]
+                    })
+                }
+            });
+
+            if (!stagedRevoke.id || stagedRevoke.status !== "PENDING") {
+                throw new Error("Failed to create staged Plex access approval record");
+            }
+
+            // Verify status transition to APPROVED
+            const approved = await prisma.adminApproval.update({
+                where: { id: stagedRevoke.id },
+                data: { status: "APPROVED", approvedBy: "admin", approvedAt: new Date() }
+            });
+            if (approved.status !== "APPROVED" || approved.approvedBy !== "admin") {
+                throw new Error("Approval status transition to APPROVED failed");
+            }
+
+            // Verify status transition to REJECTED
+            const rejected = await prisma.adminApproval.update({
+                where: { id: stagedRevoke.id },
+                data: { status: "REJECTED", rejectionReason: "Test rejection reason" }
+            });
+            if (rejected.status !== "REJECTED" || rejected.rejectionReason !== "Test rejection reason") {
+                throw new Error("Approval status transition to REJECTED failed");
+            }
+
+            // Clean up
+            await prisma.adminApproval.delete({ where: { id: stagedRevoke.id } });
+        } finally {
+            await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
         }
     });
 

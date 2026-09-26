@@ -590,34 +590,34 @@ export default function PaymentEmailManager() {
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-300">
+        <div className="space-y-6 animate-in fade-in duration-300 w-full min-w-0">
             {/* --- TOP CONTROL PANEL & SCANNER STATUS --- */}
             <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-md relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="space-y-1">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
+                        <div className="space-y-1 min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                                <span className="p-1.5 rounded-lg bg-primary/20 text-primary border border-primary/30">
+                                <span className="p-1.5 rounded-lg bg-primary/20 text-primary border border-primary/30 shrink-0">
                                     <Mail className="h-5 w-5" />
                                 </span>
                                 <CardTitle className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                                     Automated Payment Email Scraper & Verification
                                 </CardTitle>
-                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold">
+                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold shrink-0">
                                     {sources.filter(s => s.enabled).length} Active Sources
                                 </Badge>
                             </div>
-                            <CardDescription className="text-xs sm:text-sm">
+                            <CardDescription className="text-xs sm:text-sm max-w-3xl">
                                 Scrapes inbound payment confirmation emails from Venmo, PayPal, Zelle, and Cash App across multiple email accounts. Automatically attributes subscription payments to users and grants Plex library access.
                             </CardDescription>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto shrink-0">
                             <div className="flex items-center gap-1.5 bg-background/60 p-1 rounded-lg border border-border/60">
                                 <span className="text-[10px] text-muted-foreground uppercase font-bold px-1.5 hidden sm:inline">Lookback:</span>
                                 <Select value={scanLookback} onValueChange={handleLookbackChange}>
-                                    <SelectTrigger className="h-7 text-xs w-36 bg-background border-border/40 font-medium">
+                                    <SelectTrigger className="h-8 text-xs w-full sm:w-36 bg-background border-border/40 font-medium">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -634,7 +634,7 @@ export default function PaymentEmailManager() {
                             <Button 
                                 onClick={() => handleRunScan()} 
                                 disabled={scanning || sources.length === 0}
-                                className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-2 text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer h-9 px-3.5"
+                                className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-2 text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer h-9 px-3.5 whitespace-nowrap shrink-0"
                             >
                                 <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
                                 {scanning ? "Scanning Emails..." : "Scan All Emails Now"}
@@ -645,7 +645,7 @@ export default function PaymentEmailManager() {
 
                 <CardContent className="space-y-4 pt-0">
                     {/* Telemetry Summary & Schedule Controls */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 rounded-xl bg-black/40 border border-border/40 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3.5 rounded-xl bg-black/40 border border-border/40 text-xs">
                         <div className="space-y-1">
                             <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider block">Auto-Scan Schedule</span>
                             <div className="flex items-center gap-2.5">
@@ -732,22 +732,22 @@ export default function PaymentEmailManager() {
             {/* --- SECTION 1: CONFIGURED EMAIL SOURCES --- */}
             <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                 <CardHeader className="pb-3 border-b border-border/40">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0">
+                        <div className="min-w-0 flex-1">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Server className="h-5 w-5 text-primary" /> Connected Email Inboxes ({sources.length})
+                                <Server className="h-5 w-5 text-primary shrink-0" /> Connected Email Inboxes ({sources.length})
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Add one or multiple email accounts that receive payment notifications from Venmo, PayPal, Zelle, or Cash App.
                             </CardDescription>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
                             <Button 
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleOpenAddModal("gmail")}
-                                className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5"
+                                className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5 shrink-0"
                             >
                                 <Plus className="h-3.5 w-3.5" /> Add Gmail
                             </Button>
@@ -755,7 +755,7 @@ export default function PaymentEmailManager() {
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleOpenAddModal("outlook")}
-                                className="h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-blue-500/30 gap-1.5"
+                                className="h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-blue-500/30 gap-1.5 shrink-0"
                             >
                                 <Plus className="h-3.5 w-3.5" /> Add Outlook
                             </Button>
@@ -763,7 +763,7 @@ export default function PaymentEmailManager() {
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleOpenAddModal("custom")}
-                                className="h-8 text-xs border-border/60 hover:bg-white/10 gap-1.5"
+                                className="h-8 text-xs border-border/60 hover:bg-white/10 gap-1.5 shrink-0"
                             >
                                 <Plus className="h-3.5 w-3.5" /> Custom IMAP
                             </Button>
@@ -883,41 +883,41 @@ export default function PaymentEmailManager() {
             {/* --- SECTION 2: SCANNED PAYMENT TRANSACTIONS & ATTRIBUTION --- */}
             <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                 <CardHeader className="pb-3 border-b border-border/40 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-0.5">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0">
+                        <div className="space-y-0.5 min-w-0">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <DollarSign className="h-5 w-5 text-emerald-400" /> Payment Transactions Stream ({transactions.length})
+                                <DollarSign className="h-5 w-5 text-emerald-400 shrink-0" /> <span className="truncate">Payment Transactions Stream ({transactions.length})</span>
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Inbound payments detected from Venmo, PayPal, Zelle, and Cash App notification emails.
                             </CardDescription>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                             <Button 
                                 size="sm" 
                                 variant="outline" 
                                 onClick={handleReprocessPayments}
                                 disabled={reprocessing || transactions.length === 0}
-                                className="h-8 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5 font-semibold"
+                                className="h-8 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5 font-semibold flex-1 sm:flex-initial"
                                 title="Auto-match unmatched payments to members and re-align installment dates"
                             >
                                 <RefreshCw className={`h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} /> 
-                                {reprocessing ? "Re-aligning..." : "Auto-Match & Re-align"}
+                                <span>{reprocessing ? "Re-aligning..." : "Auto-Match & Re-align"}</span>
                             </Button>
                             {transactions.some(t => t.status === "UNMATCHED") && (
                                 <Button 
                                     size="sm" 
                                     variant="outline" 
                                     onClick={handlePurgeUnmatched}
-                                    className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5"
+                                    className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5 flex-1 sm:flex-initial"
                                     title="Purge all unmatched transactions"
                                 >
-                                    <Trash2 className="h-3.5 w-3.5" /> Purge Unmatched
+                                    <Trash2 className="h-3.5 w-3.5" /> <span>Purge Unmatched</span>
                                 </Button>
                             )}
                             <Select value={txFilter} onValueChange={setTxFilter}>
-                                <SelectTrigger className="h-8 text-xs w-36 bg-background border-border/60">
+                                <SelectTrigger className="h-8 text-xs w-full sm:w-36 bg-background border-border/60">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1018,11 +1018,11 @@ export default function PaymentEmailManager() {
                             {transactions.map((tx) => (
                                 <div 
                                     key={tx.id} 
-                                    className={`p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${
+                                    className={`p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-colors ${
                                         selectedTxIds.includes(tx.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-white/[0.02]"
                                     }`}
                                 >
-                                    <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                                    <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 flex-1">
                                         {/* Selection Checkbox */}
                                         <button
                                             type="button"
@@ -1045,13 +1045,13 @@ export default function PaymentEmailManager() {
                                             {getProviderBadge(tx.provider)}
                                         </div>
 
-                                        <div className="space-y-1 min-w-0 flex-1">
+                                        <div className="space-y-1.5 min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="font-extrabold text-base text-foreground">
                                                     ${tx.amount.toFixed(2)} {tx.currency}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">•</span>
-                                                <span className="text-xs font-semibold text-foreground truncate">
+                                                <span className="text-xs font-semibold text-foreground truncate max-w-full sm:max-w-md">
                                                     From: {tx.senderName || tx.senderHandle || tx.senderEmail || "Unknown Sender"}
                                                 </span>
                                                 {tx.senderHandle && (
@@ -1063,7 +1063,7 @@ export default function PaymentEmailManager() {
 
                                             {/* Note / Memo */}
                                             {tx.note && (
-                                                <div className="p-2 rounded-lg bg-muted/30 border border-border/40 text-xs text-foreground/90 font-mono">
+                                                <div className="p-2 rounded-lg bg-muted/30 border border-border/40 text-xs text-foreground/90 font-mono break-words">
                                                     <span className="text-[10px] text-muted-foreground font-sans uppercase font-bold mr-1.5">Note:</span>
                                                     "{tx.note}"
                                                 </div>
@@ -1074,7 +1074,7 @@ export default function PaymentEmailManager() {
                                                     <Clock className="h-3 w-3" /> {format(new Date(tx.emailDate), "MMM d, yyyy • h:mm a")}
                                                 </span>
                                                 <span>•</span>
-                                                <span className="truncate max-w-xs text-muted-foreground/80">
+                                                <span className="truncate max-w-xs sm:max-w-md text-muted-foreground/80">
                                                     Subject: {tx.emailSubject}
                                                 </span>
                                             </div>
@@ -1082,10 +1082,10 @@ export default function PaymentEmailManager() {
                                     </div>
 
                                     {/* Right: Attribution Status & Action Buttons */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 shrink-0 self-end md:self-auto">
+                                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0 self-stretch xl:self-auto justify-end pt-3 xl:pt-0 border-t xl:border-t-0 border-border/30">
                                         {tx.matchedUser ? (
                                             <>
-                                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-0.5 sm:text-right">
+                                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-0.5 sm:text-right flex-1 sm:flex-initial min-w-0">
                                                     <div className="flex items-center gap-1.5 sm:justify-end">
                                                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                                                         <span className="font-bold text-emerald-400 truncate max-w-[140px]">

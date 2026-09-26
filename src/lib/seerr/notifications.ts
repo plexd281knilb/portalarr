@@ -402,14 +402,17 @@ export async function sendSeerrEmailNotification(
             requestedBy: requesterUser.username
         });
 
-        await transporter.sendMail({
-            from: senderEmail,
+        const { sendOrQueueEmail } = await import("../../app/actions");
+        await sendOrQueueEmail({
             to: requesterUser.email,
             subject,
-            html
+            html,
+            templateId,
+            targetUser: requesterUser.username,
+            userId: requesterUser.id
         });
 
-        logger.addLog("INFO", "SEERR", `Dispatched ${templateId} email to ${requesterUser.email} for "${request.title}"`);
+        logger.addLog("INFO", "SEERR", `Dispatched or staged ${templateId} email for ${requesterUser.email} ("${request.title}")`);
         return { success: true };
     } catch (e: any) {
         logger.addLog("ERROR", "SEERR", `Failed sending Seerr email notification: ${e.message}`);

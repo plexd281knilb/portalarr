@@ -111,7 +111,7 @@ export function SeriesDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl bg-card/95 backdrop-blur-xl border border-border/60 shadow-2xl p-0 overflow-hidden sm:rounded-2xl max-h-[90vh] flex flex-col">
+            <DialogContent className="w-[96vw] sm:max-w-4xl lg:max-w-5xl 3xl:max-w-6xl bg-card/95 backdrop-blur-xl border border-border/60 shadow-2xl p-0 overflow-hidden sm:rounded-2xl max-h-[85vh] flex flex-col">
                 {/* Header Banner */}
                 <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-indigo-950/80 via-purple-950/60 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/20 via-transparent to-transparent" />
