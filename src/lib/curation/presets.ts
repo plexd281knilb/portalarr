@@ -73,6 +73,20 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSortPrefix: "!05_"
     },
     {
+        id: "imdb-top-150-movies",
+        title: "IMDb Top 150 Movies",
+        type: "smart",
+        category: "awards",
+        description: "The top 150 highest-rated movies of all time according to IMDb user ratings.",
+        icon: "Star",
+        sourceType: "mdblist",
+        sourceQuery: "top-imdb-150",
+        mediaType: "movie",
+        defaultSort: "rating",
+        defaultHomeOrder: 5,
+        defaultSortPrefix: "!05_"
+    },
+    {
         id: "imdb-top-250-tv",
         title: "IMDb Top 250 TV Shows",
         type: "smart",
@@ -81,6 +95,20 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         icon: "Tv",
         sourceType: "mdblist",
         sourceQuery: "top-imdb-tv",
+        mediaType: "show",
+        defaultSort: "rating",
+        defaultHomeOrder: 6,
+        defaultSortPrefix: "!06_"
+    },
+    {
+        id: "imdb-top-150-tv",
+        title: "IMDb Top 150 TV Shows",
+        type: "smart",
+        category: "awards",
+        description: "The top 150 highest-rated television shows according to IMDb.",
+        icon: "Tv",
+        sourceType: "mdblist",
+        sourceQuery: "top-imdb-tv-150",
         mediaType: "show",
         defaultSort: "rating",
         defaultHomeOrder: 6,
@@ -1221,6 +1249,16 @@ export const DEFAULT_BUILTIN_BADGE_DEFINITIONS: BuiltinBadgeDefinition[] = [
         svgContent: `<svg width="150" height="46" viewBox="0 0 150 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gtop" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="100%" stop-color="#ca8a04"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="146" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gtop)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="142" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><rect x="12" y="11" width="30" height="22" rx="3.5" fill="#f5c518"/><text x="27" y="26" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="10" fill="#000" text-anchor="middle">IMDb</text><text x="92" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="12" fill="#facc15" text-anchor="middle">TOP 250</text></svg>`
     },
     {
+        id: "builtin_badge_imdb_top150",
+        name: "IMDb Top 150",
+        category: "ratings",
+        position: "bottom-left",
+        matchRule: "imdb_top_150",
+        width: 150,
+        height: 46,
+        svgContent: `<svg width="150" height="46" viewBox="0 0 150 46" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gtop150" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fef08a"/><stop offset="100%" stop-color="#ca8a04"/></linearGradient><filter id="sh" x="-15%" y="-15%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/></filter></defs><rect x="2" y="2" width="146" height="42" rx="8" fill="rgba(8, 12, 22, 0.94)" stroke="url(#gtop150)" stroke-width="1.8" filter="url(#sh)"/><line x1="8" y1="5" x2="142" y2="5" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" stroke-linecap="round"/><rect x="12" y="11" width="30" height="22" rx="3.5" fill="#f5c518"/><text x="27" y="26" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="10" fill="#000" text-anchor="middle">IMDb</text><text x="92" y="28" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="12" fill="#facc15" text-anchor="middle">TOP 150</text></svg>`
+    },
+    {
         id: "builtin_badge_metacritic_must_see",
         name: "Metacritic Must-See",
         category: "ratings",
@@ -1261,6 +1299,16 @@ export const DEFAULT_BUILTIN_BADGE_DEFINITIONS: BuiltinBadgeDefinition[] = [
         width: 180,
         height: 180,
         svgContent: `<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ribbonTop250Grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fde047"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#a16207"/></linearGradient><filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/></filter></defs><g filter="url(#ribbonShadow)"><polygon points="45,0 180,135 180,180 0,0" fill="url(#ribbonTop250Grad)"/><line x1="50" y1="0" x2="180" y2="130" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/><line x1="10" y1="0" x2="180" y2="170" stroke="rgba(0,0,0,0.4)" stroke-width="2"/><g transform="translate(100, 75) rotate(45)"><text x="0" y="0" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="11" fill="#000000" text-anchor="middle">IMDb TOP 250</text><text x="0" y="11" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="800" font-size="7.5" fill="#1c1917" text-anchor="middle">- ALL-TIME BEST -</text></g></g></svg>`
+    },
+    {
+        id: "builtin_badge_ribbon_top150",
+        name: "IMDb Top 150 (Ribbon)",
+        category: "ribbon",
+        position: "top-right",
+        matchRule: "imdb_top_150",
+        width: 180,
+        height: 180,
+        svgContent: `<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ribbonTop150Grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#fde047"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#a16207"/></linearGradient><filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/></filter></defs><g filter="url(#ribbonShadow)"><polygon points="45,0 180,135 180,180 0,0" fill="url(#ribbonTop150Grad)"/><line x1="50" y1="0" x2="180" y2="130" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/><line x1="10" y1="0" x2="180" y2="170" stroke="rgba(0,0,0,0.4)" stroke-width="2"/><g transform="translate(100, 75) rotate(45)"><text x="0" y="0" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="900" font-size="11" fill="#000000" text-anchor="middle">IMDb TOP 150</text><text x="0" y="11" font-family="Arial, Helvetica, 'DejaVu Sans', sans-serif" font-weight="800" font-size="7.5" fill="#1c1917" text-anchor="middle">- CRITICS' BEST -</text></g></g></svg>`
     },
     {
         id: "builtin_badge_ribbon_cannes",

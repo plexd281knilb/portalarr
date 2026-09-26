@@ -958,8 +958,10 @@ export function KometaStudio() {
 
     // Authentic Kometa Waterfall Ribbon Evaluation Engine
     const WATERFALL_PRESET_OPTIONS = [
-        { value: "imdb_top_250", label: "🏆 IMDb Top 250 (Score ≥ 8.0)", defaultText: "IMDb TOP 250", defaultTheme: "gold" as const },
-        { value: "imdb_top_250_tv", label: "📺 IMDb Top TV Shows (Score ≥ 8.0)", defaultText: "IMDb TOP TV", defaultTheme: "gold" as const },
+        { value: "imdb_top_250", label: "🏆 IMDb Top 250 (Rank ≤ 250 / Score ≥ 8.3)", defaultText: "IMDb TOP 250", defaultTheme: "gold" as const },
+        { value: "imdb_top_150", label: "🌟 IMDb Top 150 (Rank ≤ 150 / Score ≥ 8.4)", defaultText: "IMDb TOP 150", defaultTheme: "gold" as const },
+        { value: "imdb_top_250_tv", label: "📺 IMDb Top 250 TV (Rank ≤ 250 / Score ≥ 8.5)", defaultText: "IMDb TOP TV", defaultTheme: "gold" as const },
+        { value: "imdb_top_150_tv", label: "📺 IMDb Top 150 TV (Rank ≤ 150 / Score ≥ 8.6)", defaultText: "IMDb TOP 150", defaultTheme: "gold" as const },
         { value: "certified_fresh", label: "🍅 RT: Certified Fresh (≥ 75%)", defaultText: "CERTIFIED FRESH", defaultTheme: "crimson" as const },
         { value: "rt_fresh", label: "🍅 RT: Fresh (≥ 60%)", defaultText: "RT FRESH", defaultTheme: "crimson" as const },
         { value: "metacritic_must_see", label: "Ⓜ️ Metacritic: Must-See (≥ 81)", defaultText: "MUST-SEE", defaultTheme: "emerald" as const },
@@ -1040,6 +1042,24 @@ export function KometaStudio() {
                     const score = item.imdbRating ?? item.rating;
                     if (hasTop250Collection) isMatch = true;
                     else if (item.type === "show" && score && score >= 8.5) isMatch = true;
+                }
+            } else if (type === "imdb_top_150") {
+                ruleLabel = "IMDb Top 150 (Score ≥ 8.4)";
+                if (item) {
+                    const hasTop150Collection = item.collections?.some(c => /top[\s_-]?150/i.test(c)) || item.labels?.some(l => /top[\s_-]?150/i.test(l));
+                    const score = item.imdbRating ?? item.rating;
+                    if (hasTop150Collection) isMatch = true;
+                    else if (item.type !== "show" && score && score >= 8.4) isMatch = true;
+                } else if (simFallback.ratings) {
+                    isMatch = true;
+                }
+            } else if (type === "imdb_top_150_tv") {
+                ruleLabel = "IMDb Top 150 TV (Score ≥ 8.6)";
+                if (item) {
+                    const hasTop150Collection = item.collections?.some(c => /top[\s_-]?150|top[\s_-]?tv/i.test(c)) || item.labels?.some(l => /top[\s_-]?150|top[\s_-]?tv/i.test(l));
+                    const score = item.imdbRating ?? item.rating;
+                    if (hasTop150Collection) isMatch = true;
+                    else if (item.type === "show" && score && score >= 8.6) isMatch = true;
                 }
             } else if (type === "certified_fresh") {
                 ruleLabel = "RT Certified Fresh (≥ 75%)";
@@ -1328,7 +1348,7 @@ export function KometaStudio() {
             return true;
         }
 
-        if (c === "imdb_top_250" || c === "imdb" || c === "imdbtop250") return true;
+        if (c === "imdb_top_250" || c === "imdb_top_150" || c === "imdb" || c === "imdbtop250" || c === "imdbtop150") return true;
         if (c === "rt_fresh" || c === "criticfresh" || c === "audiencefresh") return true;
         if (c === "metacritic_must_see" || c === "metacritic" || c === "metacritictop") return true;
         if (c === "tmdb" || c === "trakt") return true;

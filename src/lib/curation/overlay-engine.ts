@@ -13,7 +13,7 @@ export interface TieredRibbonItem {
     id?: string;
     text?: string;
     theme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
-    type?: "imdb_top_250" | "imdb_top_250_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see" | "auto_quality" | "auto_edition" | "leaving_soon" | "custom" | string;
+    type?: "imdb_top_250" | "imdb_top_150" | "imdb_top_250_tv" | "imdb_top_150_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see" | "auto_quality" | "auto_edition" | "leaving_soon" | "custom" | string;
     condition?: string;
     matchRule?: string;
     enabled?: boolean;
@@ -76,7 +76,7 @@ export interface OverlayOptions {
     ribbonPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
     ribbonTheme?: "crimson" | "emerald" | "purple" | "gold" | "cyan" | "pink" | "glass" | "orange";
     ribbonText?: string;
-    ribbonType?: "auto_quality" | "auto_edition" | "leaving_soon" | "custom" | "imdb_top_250" | "imdb_top_250_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see";
+    ribbonType?: "auto_quality" | "auto_edition" | "leaving_soon" | "custom" | "imdb_top_250" | "imdb_top_150" | "imdb_top_250_tv" | "imdb_top_150_tv" | "certified_fresh" | "rt_fresh" | "oscar_winner" | "academy_award" | "emmy_winner" | "golden_globe" | "critics_choice" | "bafta_winner" | "cannes_winner" | "metacritic_must_see";
     tieredRibbons?: TieredRibbonItem[];
     maxRibbonTiers?: number;
     theme?: "glass" | "gold" | "classic" | "minimal" | "cyber" | "crimson";
@@ -679,6 +679,64 @@ export function isRibbonTypeMatching(
         return false;
     }
 
+    // 1b. IMDb Top 150 (movies or TV)
+    if (t === "imdb_top_150") {
+        // A. Explicit Plex collection or label tag
+        const hasTop150 = mediaInfo.collections?.some(c => /top[\s_-]?150/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?150/i.test(l));
+        if (hasTop150) return true;
+
+        // B. Official Built-in IMDb Top 250 Movies Master Registry Match (filtered to rank <= 150)
+        if (mediaInfo.type !== "show") {
+            const cleanImdb = mediaInfo.guids?.imdb ? mediaInfo.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+            const tmdbNum = mediaInfo.guids?.tmdb ? Number(mediaInfo.guids.tmdb) : null;
+            const normTitle = (mediaInfo.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+            const inRegistry = IMDB_TOP_250_MOVIES.some(m => {
+                if (m.rank > 150) return false;
+                if (cleanImdb && m.imdbId.toLowerCase() === cleanImdb) return true;
+                if (tmdbNum && m.tmdbId === tmdbNum) return true;
+                if (normTitle && m.year && mediaInfo.year && Math.abs(m.year - mediaInfo.year) <= 1) {
+                    const mNorm = m.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return normTitle === mNorm;
+                }
+                return false;
+            });
+            if (inRegistry) return true;
+        }
+
+        // C. Fallback: High IMDb score threshold (>= 8.4)
+        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
+        if (mediaInfo.type !== "show" && score && score >= 8.4) return true;
+        return false;
+    }
+    if (t === "imdb_top_150_tv") {
+        const hasTop150 = mediaInfo.collections?.some(c => /top[\s_-]?150|top[\s_-]?tv/i.test(c)) || mediaInfo.labels?.some(l => /top[\s_-]?150|top[\s_-]?tv/i.test(l));
+        if (hasTop150) return true;
+
+        // Official Built-in IMDb Top 250 TV Master Registry Match (filtered to rank <= 150)
+        if (mediaInfo.type === "show") {
+            const cleanImdb = mediaInfo.guids?.imdb ? mediaInfo.guids.imdb.toLowerCase().replace(/^(tt)?/, "tt") : "";
+            const tmdbNum = mediaInfo.guids?.tmdb ? Number(mediaInfo.guids.tmdb) : null;
+            const normTitle = (mediaInfo.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+            const inRegistry = IMDB_TOP_250_TV.some(s => {
+                if (s.rank > 150) return false;
+                if (cleanImdb && s.imdbId.toLowerCase() === cleanImdb) return true;
+                if (tmdbNum && s.tmdbId === tmdbNum) return true;
+                if (normTitle && s.year && mediaInfo.year && Math.abs(s.year - mediaInfo.year) <= 1) {
+                    const sNorm = s.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return normTitle === sNorm;
+                }
+                return false;
+            });
+            if (inRegistry) return true;
+        }
+
+        const score = mediaInfo.imdbRating ?? mediaInfo.rating;
+        if (mediaInfo.type === "show" && score && score >= 8.6) return true;
+        return false;
+    }
+
     // 2. Rotten Tomatoes Certified Fresh / RT Fresh
     if (t === "certified_fresh") {
         const rtCrit = mediaInfo.rtCriticsRating ?? options.ratingsSource?.rtCritics;
@@ -752,8 +810,12 @@ export function resolveRibbonPresetTextAndTheme(
     switch (type) {
         case "imdb_top_250":
             return { text: "IMDb TOP 250", theme: "gold" };
+        case "imdb_top_150":
+            return { text: "IMDb TOP 150", theme: "gold" };
         case "imdb_top_250_tv":
             return { text: "IMDb TOP TV", theme: "gold" };
+        case "imdb_top_150_tv":
+            return { text: "IMDb TOP 150", theme: "gold" };
         case "certified_fresh":
             return { text: "CERTIFIED FRESH", theme: "crimson" };
         case "rt_fresh":

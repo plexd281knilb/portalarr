@@ -1782,9 +1782,18 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 }
             }
 
-            // Built-in Official IMDb Top 250 Registry & High-Rating Fallback
-            if (!matched && (collection.title.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb"))) {
-                const builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+            // Built-in Official IMDb Top 250 / 150 Registry & High-Rating Fallback
+            const isImdbTop = collection.title.toLowerCase().includes("top 250") || 
+                              collection.title.toLowerCase().includes("top 150") || 
+                              collection.sourceQuery?.includes("250") || 
+                              collection.sourceQuery?.includes("150") || 
+                              collection.sourceQuery?.includes("top-imdb");
+            if (!matched && isImdbTop) {
+                let builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+                const isTop150 = collection.title.toLowerCase().includes("150") || collection.sourceQuery?.includes("150");
+                if (isTop150) {
+                    builtinList = builtinList.filter(b => b.rank <= 150);
+                }
                 const builtinTmdbIds = new Set(builtinList.map(b => String(b.tmdbId)));
                 const builtinImdbIds = new Set(builtinList.map(b => b.imdbId.toLowerCase()));
                 const builtinTitles = new Set(builtinList.map(b => b.title.toLowerCase().trim()));
@@ -2198,9 +2207,15 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     (it.title && titles.includes(it.title.toLowerCase().trim()))
                 );
             } else {
-                if (sourceQuery === "top-imdb-250" || sourceQuery === "top-imdb-tv" || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("top 250"))) {
-                    executionMethod = "Official Built-in IMDb Top 250 Master Registry: Matching against verified IMDb & TMDb IDs and library items.";
-                    const builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+                const isTop150 = sourceQuery === "top-imdb-150" || sourceQuery === "top-imdb-150-tv" || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("top 150"));
+                const isTop250 = sourceQuery === "top-imdb-250" || sourceQuery === "top-imdb-tv" || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("top 250"));
+                if (isTop150 || isTop250) {
+                    const topLimit = isTop150 ? 150 : 250;
+                    executionMethod = `Official Built-in IMDb Top ${topLimit} Master Registry: Matching against verified IMDb & TMDb IDs and library items.`;
+                    let builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+                    if (isTop150) {
+                        builtinList = builtinList.filter(b => b.rank <= 150);
+                    }
                     const builtinTmdbIds = new Set(builtinList.map(b => String(b.tmdbId)));
                     const builtinImdbIds = new Set(builtinList.map(b => b.imdbId.toLowerCase()));
                     const builtinTitles = new Set(builtinList.map(b => b.title.toLowerCase().trim()));
@@ -7377,6 +7392,7 @@ function inferBadgeCategoryAndRule(filePath: string, filename: string): {
         else if (/venice/i.test(baseLower)) rule = "venice_winner";
         else if (/spirit/i.test(baseLower)) rule = "spirit_winner";
         else if (/rotten/i.test(baseLower)) rule = "rt_fresh";
+        else if (/imdb.*150|top.*150/i.test(baseLower)) rule = "imdb_top_150";
         else if (/imdb/i.test(baseLower)) rule = "imdb_top_250";
         else if (/metacritic/i.test(baseLower)) rule = "metacritic_must_see";
         else if (/netflix/i.test(baseLower)) rule = "netflix";
@@ -7461,6 +7477,7 @@ function inferBadgeCategoryAndRule(filePath: string, filename: string): {
     if (fullLower.includes("/rating/") || fullLower.includes("audience") || /score|tomato|rotten|imdb|metacritic|tmdb|trakt|letterboxd|anidb|omdb|mal\b/i.test(fullLower)) {
         let rule = "imdb";
         if (/imdbtop250/i.test(baseLower)) rule = "imdb_top_250";
+        else if (/imdbtop150|imdb.*150/i.test(baseLower)) rule = "imdb_top_150";
         else if (/imdbtop1000/i.test(baseLower)) rule = "imdb_top_1000";
         else if (/imdbtop100/i.test(baseLower)) rule = "imdb_top_100";
         else if (/imdbtop/i.test(baseLower)) rule = "imdb_top";
@@ -9463,8 +9480,17 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 }
             }
 
-            if (candidateItems.length === 0 && (collection.title?.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb"))) {
-                const builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+            const isImdbTop = collection.title?.toLowerCase().includes("top 250") || 
+                              collection.title?.toLowerCase().includes("top 150") || 
+                              collection.sourceQuery?.includes("250") || 
+                              collection.sourceQuery?.includes("150") || 
+                              collection.sourceQuery?.includes("top-imdb");
+            if (candidateItems.length === 0 && isImdbTop) {
+                let builtinList = getBuiltinImdbTopList(isTvSection ? "show" : "movie");
+                const isTop150 = collection.title?.toLowerCase().includes("150") || collection.sourceQuery?.includes("150");
+                if (isTop150) {
+                    builtinList = builtinList.filter(b => b.rank <= 150);
+                }
                 candidateItems = builtinList.map(b => ({
                     id: b.tmdbId,
                     title: b.title,
@@ -10572,8 +10598,17 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 items = await getMdblistItems(collection.sourceQuery);
             }
             if (!items || items.length === 0) {
-                if (collection.title?.toLowerCase().includes("top 250") || collection.sourceQuery?.includes("250") || collection.sourceQuery?.includes("top-imdb")) {
-                    const builtinList = getBuiltinImdbTopList(isTv ? "show" : "movie");
+                const isImdbTop = collection.title?.toLowerCase().includes("top 250") || 
+                                  collection.title?.toLowerCase().includes("top 150") || 
+                                  collection.sourceQuery?.includes("250") || 
+                                  collection.sourceQuery?.includes("150") || 
+                                  collection.sourceQuery?.includes("top-imdb");
+                if (isImdbTop) {
+                    let builtinList = getBuiltinImdbTopList(isTv ? "show" : "movie");
+                    const isTop150 = collection.title?.toLowerCase().includes("150") || collection.sourceQuery?.includes("150");
+                    if (isTop150) {
+                        builtinList = builtinList.filter(b => b.rank <= 150);
+                    }
                     items = builtinList.map(b => ({
                         tmdbId: b.tmdbId,
                         imdbId: b.imdbId,
