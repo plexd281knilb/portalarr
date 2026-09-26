@@ -33,6 +33,7 @@ async function tmdbFetch(endpoint: string, params: Record<string, string | numbe
     const query = new URLSearchParams({
         api_key: apiKey.trim(),
         language: "en-US",
+        include_adult: "false",
         ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
     });
 
@@ -63,12 +64,13 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
     let certification: string | undefined;
 
     // Parse release dates and certifications if available
-    if (m.release_dates?.results) {
+    if (m.release_dates?.results && Array.isArray(m.release_dates.results)) {
+        // First check US release
         const usReleases = m.release_dates.results.find((r: any) => r.iso_3166_1 === "US") || m.release_dates.results[0];
         if (usReleases?.release_dates) {
             for (const rel of usReleases.release_dates) {
-                if (rel.certification && !certification) {
-                    certification = rel.certification;
+                if (rel.certification && typeof rel.certification === "string" && rel.certification.trim() && !certification) {
+                    certification = rel.certification.trim();
                 }
                 // Type 3 = Theatrical, Type 4 = Digital, Type 5 = Physical
                 if (rel.type === 3 && !theatricalDate) {
@@ -76,6 +78,23 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
                 }
                 if (rel.type === 4 && !digitalDate) {
                     digitalDate = rel.release_date ? rel.release_date.split("T")[0] : undefined;
+                }
+            }
+        }
+
+        // Also check international releases to catch numeric/foreign adult ratings (18, 19, R18+, Cat III, etc.)
+        for (const countryRel of m.release_dates.results) {
+            if (countryRel?.release_dates) {
+                for (const rel of countryRel.release_dates) {
+                    const c = (rel.certification || "").trim();
+                    if (c) {
+                        if (!certification) {
+                            certification = c;
+                        } else if (/\b(18\+|19\+|18|19|r18|cat\s*iii|xxx)\b/i.test(c)) {
+                            // Elevate to adult rating if any regional board flagged it as 18/19/adult
+                            certification = c;
+                        }
+                    }
                 }
             }
         }
@@ -109,6 +128,7 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
         genreIds: m.genre_ids || (m.genres?.map((g: any) => g.id) || []),
         genres: m.genres?.map((g: any) => g.name),
         certification,
+        adult: Boolean(m.adult),
         imdbId: m.imdb_id || m.external_ids?.imdb_id
     };
 }
@@ -118,9 +138,21 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
  */
 function mapTmdbTv(t: any): TmdbMediaItem {
     let certification: string | undefined;
-    if (t.content_ratings?.results) {
+    if (t.content_ratings?.results && Array.isArray(t.content_ratings.results)) {
         const usRating = t.content_ratings.results.find((r: any) => r.iso_3166_1 === "US");
-        if (usRating) certification = usRating.rating;
+        if (usRating?.rating) {
+            certification = usRating.rating.trim();
+        }
+        for (const cr of t.content_ratings.results) {
+            const r = (cr.rating || "").trim();
+            if (r) {
+                if (!certification) {
+                    certification = r;
+                } else if (/\b(18\+|19\+|18|19|r18|tv-ma)\b/i.test(r)) {
+                    certification = r;
+                }
+            }
+        }
     }
 
     return {
@@ -138,6 +170,7 @@ function mapTmdbTv(t: any): TmdbMediaItem {
         genreIds: t.genre_ids || (t.genres?.map((g: any) => g.id) || []),
         genres: t.genres?.map((g: any) => g.name),
         certification,
+        adult: Boolean(t.adult),
         imdbId: t.external_ids?.imdb_id
     };
 }
@@ -296,19 +329,48 @@ export async function fetchMediaCertification(id: number, mediaType: "movie" | "
         if (!data?.results || !Array.isArray(data.results)) return undefined;
 
         if (mediaType === "movie") {
-            const usRelease = data.results.find((r: any) => r.iso_3166_1 === "US") || data.results[0];
+            let foundCert: string | undefined;
+            const usRelease = data.results.find((r: any) => r.iso_3166_1 === "US");
             if (usRelease?.release_dates && Array.isArray(usRelease.release_dates)) {
                 for (const rel of usRelease.release_dates) {
                     if (rel.certification && typeof rel.certification === "string" && rel.certification.trim()) {
-                        return rel.certification.trim();
+                        foundCert = rel.certification.trim();
+                        break;
                     }
                 }
             }
-        } else {
-            const usRating = data.results.find((r: any) => r.iso_3166_1 === "US") || data.results[0];
-            if (usRating?.rating && typeof usRating.rating === "string" && usRating.rating.trim()) {
-                return usRating.rating.trim();
+
+            // Also check all countries for adult/18/19 ratings
+            for (const countryRel of data.results) {
+                if (countryRel?.release_dates && Array.isArray(countryRel.release_dates)) {
+                    for (const rel of countryRel.release_dates) {
+                        const c = (rel.certification || "").trim();
+                        if (c) {
+                            if (!foundCert) foundCert = c;
+                            else if (/\b(18\+|19\+|18|19|r18|cat\s*iii|xxx)\b/i.test(c)) {
+                                foundCert = c;
+                            }
+                        }
+                    }
+                }
             }
+            return foundCert;
+        } else {
+            let foundRating: string | undefined;
+            const usRating = data.results.find((r: any) => r.iso_3166_1 === "US");
+            if (usRating?.rating && typeof usRating.rating === "string" && usRating.rating.trim()) {
+                foundRating = usRating.rating.trim();
+            }
+            for (const cr of data.results) {
+                const r = (cr.rating || "").trim();
+                if (r) {
+                    if (!foundRating) foundRating = r;
+                    else if (/\b(18\+|19\+|18|19|r18|tv-ma)\b/i.test(r)) {
+                        foundRating = r;
+                    }
+                }
+            }
+            return foundRating;
         }
     } catch {
         return undefined;

@@ -80,14 +80,15 @@ export async function getAccessibleLibrariesForUser(username?: string, email?: s
 export async function batchCheckBookAvailability(
     items: BookDiscoveryItem[],
     username?: string,
-    email?: string
+    email?: string,
+    targetLibraryId?: string
 ): Promise<Record<string, { status: BookAvailabilityStatus; bookId?: string; requestId?: string; libraryName?: string; libraryId?: string; filePath?: string; fileType?: string }>> {
     const resultMap: Record<string, any> = {};
     if (!items || items.length === 0) return resultMap;
 
     try {
         const accessibleLibs = await getAccessibleLibrariesForUser(username, email);
-        const accessibleLibIds = new Set(accessibleLibs.map(l => l.id));
+        const accessibleLibIds = targetLibraryId ? new Set([targetLibraryId]) : new Set(accessibleLibs.map(l => l.id));
         const libNameMap = new Map(accessibleLibs.map(l => [l.id, l.name]));
 
         // Fetch existing books in accessible libraries

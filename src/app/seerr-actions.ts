@@ -807,6 +807,23 @@ export async function submitMediaRequestAction(payload: {
         }
 
         // Check if request already exists
+        // Content & Rating Validation Guardrails
+        if (isNc17OrDisallowedRating(payload.contentRating) || containsAdultWords(payload.title) || containsAdultWords(payload.overview)) {
+            return {
+                success: false,
+                error: "Adult or sexually explicit content cannot be requested."
+            };
+        }
+
+        if (payload.isKids) {
+            if (isAdultOrMatureRating(payload.contentRating) || !isKidsSafeRating(payload.contentRating)) {
+                return {
+                    success: false,
+                    error: `This content has a mature rating (${payload.contentRating || "18+"}) and cannot be requested for the Kids library.`
+                };
+            }
+        }
+
         const existing = await prisma.mediaRequest.findFirst({
             where: {
                 tmdbId: payload.tmdbId,
@@ -933,17 +950,24 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
             }
         });
 
-        // 3. Fetch books in library to check availability
+        // 3. Fetch books in library with libraryId to check shelf-scoped availability
         const allBooks = await prisma.book.findMany({
             where: { fileType: { not: "missing" } },
-            select: { id: true, title: true, author: true, mediaType: true }
+            select: { id: true, title: true, author: true, mediaType: true, libraryId: true }
         });
 
-        const libraryBookSet = new Set<string>();
+        // Index books by exact target library shelf: `${mType}:${normTitle}:${libraryId}`
+        const libraryBookByLibSet = new Set<string>();
+        // Index books globally across all shelves: `${mType}:${normTitle}`
+        const libraryBookAnySet = new Set<string>();
+
         for (const b of allBooks) {
             const mType = (b.mediaType === "audiobook") ? "audiobook" : "ebook";
             const normT = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
-            libraryBookSet.add(`${mType}:${normT}`);
+            if (b.libraryId) {
+                libraryBookByLibSet.add(`${mType}:${normT}:${b.libraryId}`);
+            }
+            libraryBookAnySet.add(`${mType}:${normT}`);
         }
 
         // Index existing media requests by normalized key
@@ -965,12 +989,23 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
             const match = mediaReqMap.get(`${mType}:${normTitle}:${normUser}`) ||
                           mediaReqMap.get(`${mType}:${normTitle}`);
 
+            // Determine target library: prefer BookRequest.libraryId, fallback to match.bookLibraryId
+            const targetLibId = br.libraryId || match?.bookLibraryId || null;
+
+            // Strict shelf-scoped availability check:
+            // If targetLibId is known, ONLY mark inLibrary if present in that specific library!
+            let inLibrary = false;
+            if (targetLibId) {
+                inLibrary = libraryBookByLibSet.has(`${mType}:${normTitle}:${targetLibId}`);
+            } else {
+                inLibrary = libraryBookAnySet.has(`${mType}:${normTitle}`);
+            }
+
             // Determine effective status
             let mappedStatus = "PENDING";
             const brStatus = (br.status || "").toLowerCase();
-            const inLibrary = libraryBookSet.has(`${mType}:${normTitle}`);
 
-            if (inLibrary || brStatus === "downloaded" || brStatus === "available") {
+            if (inLibrary) {
                 mappedStatus = "AVAILABLE";
             } else if (brStatus === "searching") {
                 mappedStatus = "SEARCHING";
@@ -980,6 +1015,10 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                 mappedStatus = "APPROVED";
             } else if (brStatus === "failed" || brStatus === "rejected") {
                 mappedStatus = "FAILED";
+            } else if (brStatus === "downloaded" || brStatus === "available") {
+                // If marked downloaded/available in BookRequest but missing from the target shelf,
+                // do NOT falsely mark AVAILABLE in Shelf. Mark SEARCHING so it gets acquired.
+                mappedStatus = "SEARCHING";
             }
 
             if (!match) {
@@ -995,12 +1034,12 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                         bookAuthor: br.author || null,
                         bookSeries: br.series || null,
                         bookVolume: br.volumeNumber || null,
-                        bookLibraryId: br.libraryId || null,
+                        bookLibraryId: targetLibId,
                         sendToKindle: Boolean(br.sendToKindle),
                         posterPath: br.coverUrl || null,
                         releaseYear: br.publishYear || null,
                         status: mappedStatus,
-                        downloadProgress: mappedStatus === "AVAILABLE" ? 100 : null,
+                        downloadProgress: mappedStatus === "AVAILABLE" ? 100 : (mappedStatus === "DOWNLOADING" ? 50 : null),
                         createdAt: br.createdAt || new Date()
                     }
                 }).catch(() => null);
@@ -1009,14 +1048,15 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                     mediaReqMap.set(`${mType}:${normTitle}:${normUser}`, created);
                 }
             } else {
-                // Synchronize status if out of sync
-                if (match.status !== mappedStatus && (mappedStatus === "AVAILABLE" || match.status === "PENDING" || match.status === "APPROVED")) {
+                // Synchronize status if out of sync (allows reverting false positive AVAILABLE states)
+                if (match.status !== mappedStatus || match.bookLibraryId !== targetLibId) {
                     await prisma.mediaRequest.update({
                         where: { id: match.id },
                         data: {
                             status: mappedStatus,
-                            downloadProgress: mappedStatus === "AVAILABLE" ? 100 : match.downloadProgress,
-                            availableAt: mappedStatus === "AVAILABLE" ? (match.availableAt || new Date()) : match.availableAt
+                            bookLibraryId: targetLibId || match.bookLibraryId,
+                            downloadProgress: mappedStatus === "AVAILABLE" ? 100 : (mappedStatus === "FAILED" ? 0 : match.downloadProgress),
+                            availableAt: mappedStatus === "AVAILABLE" ? (match.availableAt || new Date()) : null
                         }
                     }).catch(() => {});
                 }

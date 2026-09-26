@@ -9781,28 +9781,142 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl, req?.libraryId);
         const resolvedLibId = targetLib?.id;
         
+        logger.addLog("INFO", "AUTO_GRAB", `📚 Initiating auto-grab for "${title}" by ${author || "Unknown Author"} (${reqMediaType.toUpperCase()}) -> Target shelf: "${targetLib?.name || "Default"}" [ID: ${resolvedLibId || "none"}]`);
+
         // Instant Fulfill: Check if book is already downloaded in the TARGET library
         const normTitleReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (normTitleReq.length > 2 && resolvedLibId) {
-            const allBooks = await prisma.book.findMany({
+        if (normTitleReq.length > 2 && resolvedLibId && targetLib) {
+            const allBooksInTarget = await prisma.book.findMany({
                 where: { mediaType: reqMediaType, libraryId: resolvedLibId }
             });
-            const existingBook = allBooks.find(b => {
+            const existingBook = allBooksInTarget.find(b => {
                 if (b.fileType === "missing") return false;
                 const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 return normB === normTitleReq || (normTitleReq.length > 5 && normB.includes(normTitleReq));
             });
 
             if (existingBook) {
-                console.log(`[AUTO-DOWNLOAD] Book "${title}" already exists in target library! Fulfilling request ${requestId} immediately.`);
+                logger.addLog("SUCCESS", "AUTO_GRAB", `✅ Book "${title}" already exists in target shelf "${targetLib.name}". Fulfilling request immediately.`);
                 await prisma.bookRequest.update({
                     where: { id: requestId },
                     data: { status: "Downloaded" }
                 });
+                await prisma.mediaRequest.updateMany({
+                    where: {
+                        mediaType: reqMediaType,
+                        title: { contains: title }
+                    },
+                    data: { status: "AVAILABLE", downloadProgress: 100 }
+                }).catch(() => {});
                 sendRequestCompletionNotification(req, existingBook).catch(() => {});
                 return;
             }
+
+            // --------------------------------------------------------------------------------------
+            // MULTI-LIBRARY INSTANT SYNC / CLONE:
+            // If the requested book already exists in another shelf on disk, copy it into the target shelf!
+            // --------------------------------------------------------------------------------------
+            const otherShelfBooks = await prisma.book.findMany({
+                where: {
+                    mediaType: reqMediaType,
+                    libraryId: { not: resolvedLibId },
+                    fileType: { not: "missing" }
+                },
+                include: { library: true }
+            });
+
+            const donorBook = otherShelfBooks.find(b => {
+                const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                return (normB === normTitleReq || (normTitleReq.length > 5 && normB.includes(normTitleReq))) &&
+                       b.filePath && fs.existsSync(b.filePath);
+            });
+
+            if (donorBook && donorBook.filePath && fs.existsSync(donorBook.filePath)) {
+                logger.addLog("INFO", "AUTO_GRAB", `⚡ Cross-Library Sync: Found existing copy of "${title}" in "${donorBook.library?.name || "another shelf"}". Syncing into "${targetLib.name}"...`);
+                try {
+                    const sanitize = (str: string) => str.replace(/[<>:"/\|?*\x00-\x1F]/g, "").trim();
+                    const seriesTag = req?.series ? `[${sanitize(req.series)}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
+                    const cleanAuthorStr = sanitize(author || donorBook.author || "Unknown Author");
+                    const cleanTitleStr = sanitize(title || donorBook.title);
+                    const targetFolder = path.join(targetLib.path, cleanAuthorStr, `${seriesTag}${cleanTitleStr}`);
+
+                    if (!fs.existsSync(targetFolder)) {
+                        fs.mkdirSync(targetFolder, { recursive: true });
+                    }
+
+                    const isDir = fs.statSync(donorBook.filePath).isDirectory();
+                    let destPath = targetFolder;
+                    if (isDir) {
+                        fs.cpSync(donorBook.filePath, targetFolder, { recursive: true });
+                    } else {
+                        const fileName = path.basename(donorBook.filePath);
+                        destPath = path.join(targetFolder, fileName);
+                        fs.copyFileSync(donorBook.filePath, destPath);
+                    }
+
+                    // Remove .portalarr-missing marker if present
+                    const missingMarker = path.join(targetFolder, ".portalarr-missing");
+                    if (fs.existsSync(missingMarker)) {
+                        try { fs.unlinkSync(missingMarker); } catch {}
+                    }
+
+                    // Clean up any missing stub record in DB for this folder
+                    await prisma.book.deleteMany({
+                        where: {
+                            libraryId: resolvedLibId,
+                            filePath: targetFolder,
+                            fileType: "missing"
+                        }
+                    }).catch(() => {});
+
+                    // Resolve or link relational author & series
+                    let authorId: string | undefined;
+                    let seriesId: string | undefined;
+                    try {
+                        const resolved = await resolveOrLinkAuthorAndSeries(donorBook.author || author, req?.series || donorBook.series, req?.volumeNumber || donorBook.volumeNumber);
+                        authorId = resolved.authorId;
+                        seriesId = resolved.seriesId;
+                    } catch (e) {}
+
+                    const syncedBook = await prisma.book.create({
+                        data: {
+                            title: title,
+                            author: donorBook.author || author || "Unknown Author",
+                            series: req?.series || donorBook.series || null,
+                            volumeNumber: req?.volumeNumber ? String(req.volumeNumber) : (donorBook.volumeNumber || null),
+                            authorId: authorId || null,
+                            seriesId: seriesId || null,
+                            filePath: destPath,
+                            fileType: donorBook.fileType || (reqMediaType === "audiobook" ? "mp3" : "epub"),
+                            fileSize: donorBook.fileSize || 0,
+                            mediaType: reqMediaType,
+                            libraryId: resolvedLibId,
+                            coverUrl: donorBook.coverUrl || req?.coverUrl || null
+                        }
+                    });
+
+                    logger.addLog("SUCCESS", "AUTO_GRAB", `🎉 Instant Cross-Library Fulfillment: Successfully cloned "${title}" from "${donorBook.library?.name}" into "${targetLib.name}" shelf!`);
+
+                    await prisma.bookRequest.update({
+                        where: { id: requestId },
+                        data: { status: "Downloaded" }
+                    });
+                    await prisma.mediaRequest.updateMany({
+                        where: {
+                            mediaType: reqMediaType,
+                            title: { contains: title }
+                        },
+                        data: { status: "AVAILABLE", downloadProgress: 100 }
+                    }).catch(() => {});
+
+                    sendRequestCompletionNotification(req, syncedBook).catch(() => {});
+                    return;
+                } catch (cloneErr: any) {
+                    logger.addLog("WARN", "AUTO_GRAB", `Cross-library clone attempt encountered error: ${cloneErr.message}. Proceeding to search indexers.`);
+                }
+            }
         }
+
         // Update status to Searching while Prowlarr fetches
         await prisma.bookRequest.update({
             where: { id: requestId },
@@ -9887,6 +10001,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             where: { type: "prowlarr" }
         });
         if (!prowlarrApp) {
+            logger.addLog("WARN", "AUTO_GRAB", "⚠️ Prowlarr indexer app is not configured under Portalarr Settings.");
             await prisma.bookRequest.update({
                 where: { id: requestId },
                 data: { status: "Failed - Prowlarr is not configured under settings" }
@@ -9900,13 +10015,15 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const cleanAuthorBase = (author && author !== "Unknown Author" ? author : "").trim();
         const queryText = cleanAuthorBase ? `${cleanTitleBase} ${cleanAuthorBase}` : cleanTitleBase;
 
+        logger.addLog("INFO", "AUTO_GRAB", `🔍 Querying Prowlarr indexers for "${queryText}" (Category: "${category}")...`);
+
         // Tier 1: Title + Author (using executeProwlarrSearch for multi-tier Torznab fallbacks)
         let results = await executeProwlarrSearch(queryText, reqMediaType, prowlarrUrl, prowlarrKey);
         let candidates = await filterReleasesForMediaType(results, reqMediaType);
 
         // Tier 2: Title Only (using executeProwlarrSearch for multi-tier Torznab fallbacks)
         if (candidates.length === 0 && cleanTitleBase && cleanTitleBase !== queryText) {
-            console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleBase}"`);
+            logger.addLog("INFO", "AUTO_GRAB", `🔄 Tier 1 search returned 0 candidates. Retrying with Title-only query: "${cleanTitleBase}"...`);
             results = await executeProwlarrSearch(cleanTitleBase, reqMediaType, prowlarrUrl, prowlarrKey);
             candidates = await filterReleasesForMediaType(results, reqMediaType);
         }
@@ -9942,18 +10059,27 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             };
         }).filter((r: any) => r && !r.rejected && r.matchQuality !== "mismatch" && r.totalScore >= 35);
 
+        logger.addLog("INFO", "AUTO_GRAB", `📊 Evaluated ${candidates.length} indexer releases. ${evaluatedCandidates.length} eligible candidates met threshold.`);
+
         if (evaluatedCandidates.length === 0) {
-            console.log(`[AUTO-DOWNLOAD] No valid matching releases found on indexers for "${title}" by "${author}". Rejecting mismatches.`);
+            logger.addLog("WARN", "AUTO_GRAB", `⚠️ No valid matching ${reqMediaType} release found on indexers for "${title}" by "${author || "Unknown Author"}".`);
             await prisma.bookRequest.update({
                 where: { id: requestId },
                 data: { status: `Failed - No matching ${reqMediaType} release found for "${title}" by "${author || "Unknown Author"}"` }
             });
+            await prisma.mediaRequest.updateMany({
+                where: {
+                    mediaType: reqMediaType,
+                    title: { contains: title }
+                },
+                data: { status: "FAILED", downloadProgress: 0 }
+            }).catch(() => {});
             return;
         }
 
         evaluatedCandidates.sort((a: any, b: any) => b.totalScore - a.totalScore);
         const selectedRelease = evaluatedCandidates[0];
-        console.log(`[AUTO-DOWNLOAD] Selected release for grab (Score: ${selectedRelease.totalScore}, Quality: ${selectedRelease.matchQuality}): ${selectedRelease.title}`);
+        logger.addLog("SUCCESS", "AUTO_GRAB", `🎯 Selected best release: "${selectedRelease.title}" (Score: ${selectedRelease.totalScore}, Quality: ${selectedRelease.matchQuality}, Protocol: ${selectedRelease.protocol.toUpperCase()})`);
 
         let downloadId = "";
         if (selectedRelease.protocol === "usenet") {
@@ -10000,10 +10126,19 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             }
         }
 
+        logger.addLog("SUCCESS", "AUTO_GRAB", `🚀 Queued release to ${selectedRelease.protocol.toUpperCase()} downloader (${category}). Launching monitor...`);
+
         await prisma.bookRequest.update({
             where: { id: requestId },
             data: { status: "Downloading" }
         });
+        await prisma.mediaRequest.updateMany({
+            where: {
+                mediaType: reqMediaType,
+                title: { contains: title }
+            },
+            data: { status: "DOWNLOADING", downloadProgress: 10 }
+        }).catch(() => {});
 
         // Launch background downloader polling and failover task
         monitorAndRetryDownload(requestId, evaluatedCandidates, 0, downloadId).catch(err => {
@@ -10011,11 +10146,17 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         });
         
     } catch (e: any) {
-        console.error(`[AUTO-DOWNLOAD] Error:`, e);
+        logger.addLog("ERROR", "AUTO_GRAB", `❌ Auto-grab failed for "${title}": ${e.message}`);
         await prisma.bookRequest.update({
             where: { id: requestId },
             data: { status: `Failed - ${e.message || "Unknown error during download client push"}` }
         });
+        await prisma.mediaRequest.updateMany({
+            where: {
+                title: { contains: title }
+            },
+            data: { status: "FAILED", downloadProgress: 0 }
+        }).catch(() => {});
     }
 }
 
