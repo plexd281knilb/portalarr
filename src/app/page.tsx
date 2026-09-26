@@ -97,35 +97,38 @@ export default async function UserLandingPage() {
             {/* Quick action bar with What's New Popup & Direct navigation */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 <WhatsNewModal roadmapText={roadmapText} triggerButton={true} />
-                <Link href="/beta">
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-border/60 bg-white/[0.02] hover:bg-purple-500/10 hover:text-purple-300 hover:border-purple-500/40 active:scale-95 transition-all shadow-sm"
-                    >
+                <Button 
+                    asChild
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-border/60 bg-white/[0.02] hover:bg-purple-500/10 hover:text-purple-300 hover:border-purple-500/40 active:scale-95 transition-all shadow-sm"
+                >
+                    <Link href="/beta">
                         <span>Beta Services</span>
-                    </Button>
-                </Link>
+                    </Link>
+                </Button>
                 {isLoggedIn && (
-                    <a href="#my-plex-hub">
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-border/60 bg-white/[0.02] hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/40 active:scale-95 transition-all shadow-sm"
-                        >
-                            <span>My Plex Hub</span>
-                        </Button>
-                    </a>
-                )}
-                <a href="#downloads">
                     <Button 
+                        asChild
                         variant="outline" 
                         size="sm" 
-                        className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-border/60 bg-white/[0.02] hover:bg-blue-500/10 hover:text-blue-300 hover:border-blue-500/40 active:scale-95 transition-all shadow-sm"
+                        className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-border/60 bg-white/[0.02] hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/40 active:scale-95 transition-all shadow-sm"
                     >
-                        <span>Downloads</span>
+                        <a href="#my-plex-hub">
+                            <span>My Plex Hub</span>
+                        </a>
                     </Button>
-                </a>
+                )}
+                <Button 
+                    asChild
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-border/60 bg-white/[0.02] hover:bg-blue-500/10 hover:text-blue-300 hover:border-blue-500/40 active:scale-95 transition-all shadow-sm"
+                >
+                    <a href="#downloads">
+                        <span>Downloads</span>
+                    </a>
+                </Button>
             </div>
         </section>
 
@@ -153,22 +156,22 @@ export default async function UserLandingPage() {
                     <CardDescription>Browse trending titles, watch trailers & request media.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-center space-y-3">
-                    <Link href="/discover" className="w-full block">
-                        <Button size="lg" className="w-full text-sm sm:text-base font-bold h-12 sm:h-13 shadow-md transition-all duration-200 bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 hover:ring-2 hover:ring-primary/50 hover:shadow-lg active:scale-98 rounded-xl">
+                    <Button asChild size="lg" className="w-full text-sm sm:text-base font-bold h-12 sm:h-13 shadow-md transition-all duration-200 bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2 hover:ring-2 hover:ring-primary/50 hover:shadow-lg active:scale-98 rounded-xl">
+                        <Link href="/discover" className="w-full flex items-center justify-center gap-2">
                             <Compass className="h-5 w-5" />
                             Discover Movies & TV
-                        </Button>
-                    </Link>
+                        </Link>
+                    </Button>
 
                     {isLoggedIn && (
                         <div>
                             {hasAccess ? (
-                                <Link href="/library" className="w-full block">
-                                    <Button size="lg" variant="outline" className="w-full text-sm sm:text-base font-semibold h-11 sm:h-12 shadow-sm transition-all duration-200 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center gap-2 hover:ring-1 hover:ring-emerald-400/50 active:scale-98 rounded-xl">
+                                <Button asChild size="lg" variant="outline" className="w-full text-sm sm:text-base font-semibold h-11 sm:h-12 shadow-sm transition-all duration-200 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 flex items-center justify-center gap-2 hover:ring-1 hover:ring-emerald-400/50 active:scale-98 rounded-xl">
+                                    <Link href="/library" className="w-full flex items-center justify-center gap-2">
                                         <BookOpen className="h-4 w-4 text-emerald-400" />
                                         Access Book Library
-                                    </Button>
-                                </Link>
+                                    </Link>
+                                </Button>
                             ) : (
                                 <RequestLibraryAccess />
                             )}

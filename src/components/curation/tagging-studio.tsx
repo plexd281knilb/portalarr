@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
+import { ServerGuardRailsModal } from "./server-guard-rails-modal";
 import {
     getPlexServersAndSectionsAction,
     getPlexServerSectionsAction,
@@ -83,6 +84,7 @@ interface PlexServerItem {
 
 export function TaggingStudio() {
     const [subTab, setSubTab] = useState<"parental" | "custom_rules" | "audit">("parental");
+    const [guardRailsOpen, setGuardRailsOpen] = useState(false);
     const [loading, setLoading] = useState(true);
 
     // Server & Section Navigation
@@ -1061,8 +1063,8 @@ export function TaggingStudio() {
                 );
             })()}
 
-            {/* Sub-Tabs Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
+            {/* Sub-Tabs & Guard Rails Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
                 <button
                     type="button"
                     onClick={() => setSubTab("parental")}
@@ -1100,6 +1102,19 @@ export function TaggingStudio() {
                 >
                     <Tag className="h-4 w-4 shrink-0" />
                     <span className="truncate">Tag Audit &amp; Cleanup</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setGuardRailsOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-slate-800/80 hover:bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 shadow-sm hover:ring-1 hover:ring-emerald-400/40 active:scale-95"
+                    title="Configure Kid-Safe, Family, and Content Rating Server Guard Rails"
+                >
+                    <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <span className="truncate">Server Guard Rails</span>
+                    <Badge variant="outline" className="hidden sm:inline-flex text-[9px] px-1 py-0 border-emerald-500/40 text-emerald-300 bg-emerald-950/30">
+                        Plex
+                    </Badge>
                 </button>
             </div>
 
@@ -1935,6 +1950,14 @@ export function TaggingStudio() {
                     </div>
                 </div>
             )}
+
+            {/* Server Guard Rails Configuration Modal */}
+            <ServerGuardRailsModal
+                open={guardRailsOpen}
+                onOpenChange={setGuardRailsOpen}
+                servers={servers.map(s => ({ serverId: s.serverId, serverName: s.serverName }))}
+                initialServerId={selectedServerId}
+            />
         </div>
     );
 }

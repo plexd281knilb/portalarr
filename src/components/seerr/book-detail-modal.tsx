@@ -365,13 +365,13 @@ export function BookDetailModal({
 
                         <div className="flex items-center gap-2">
                             {status === "AVAILABLE" ? (
-                                <Link href="/library">
-                                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 shadow-md">
+                                <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 shadow-md">
+                                    <Link href={activeBook?.mediaType === "audiobook" ? "/library?tab=audiobooks" : "/library?tab=ebooks"}>
                                         <BookOpen className="h-3.5 w-3.5" />
                                         <span>Open in Bookshelf</span>
                                         <ExternalLink className="h-3 w-3 opacity-60" />
-                                    </Button>
-                                </Link>
+                                    </Link>
+                                </Button>
                             ) : (status === "DOWNLOADING" || (requestMessage && status === "REQUESTED")) ? (
                                 <Button size="sm" disabled className="bg-cyan-600/50 text-white text-xs gap-1.5 font-semibold">
                                     <Download className="h-3.5 w-3.5 animate-pulse" />

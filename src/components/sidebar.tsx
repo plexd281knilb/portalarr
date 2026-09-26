@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { logout, getSession } from "@/app/auth-actions" 
@@ -27,6 +27,10 @@ import {
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const currentTab = searchParams?.get("tab")
+  const isLogsActive = pathname === "/settings" && currentTab === "logs"
+  const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive
   const [isAdmin, setIsAdmin] = useState(false)
   const [role, setRole] = useState("")
 
@@ -259,10 +263,10 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
 
                 <Link href="/settings">
                   <Button
-                    variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"}
+                    variant={isSettingsActive ? "secondary" : "ghost"}
                     className={cn(
                       "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/settings") && pathname !== "/settings/profile"
+                      isSettingsActive
                         ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
                     )}
@@ -274,10 +278,10 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
 
                 <Link href="/settings?tab=logs">
                   <Button
-                    variant={pathname.includes("tab=logs") ? "secondary" : "ghost"}
+                    variant={isLogsActive ? "secondary" : "ghost"}
                     className={cn(
                       "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.includes("tab=logs")
+                      isLogsActive
                         ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
                         : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
                     )}
@@ -308,6 +312,10 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
 export function MobileSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams?.get("tab");
+  const isLogsActive = pathname === "/settings" && currentTab === "logs";
+  const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive;
   const [isAdmin, setIsAdmin] = useState(false);
   const [role, setRole] = useState("");
 
@@ -542,10 +550,10 @@ export function MobileSidebar() {
 
                       <Link href="/settings" onClick={() => setIsOpen(false)}>
                         <Button
-                          variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"}
+                          variant={isSettingsActive ? "secondary" : "ghost"}
                           className={cn(
                             "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/settings") && pathname !== "/settings/profile"
+                            isSettingsActive
                               ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
                               : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
                           )}
@@ -556,10 +564,10 @@ export function MobileSidebar() {
 
                       <Link href="/settings?tab=logs" onClick={() => setIsOpen(false)}>
                         <Button
-                          variant={pathname.includes("tab=logs") ? "secondary" : "ghost"}
+                          variant={isLogsActive ? "secondary" : "ghost"}
                           className={cn(
                             "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.includes("tab=logs")
+                            isLogsActive
                               ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
                               : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
                           )}

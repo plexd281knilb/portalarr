@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
     getSeerrSettingsAction, 
     updateSeerrSettingsAction, 
@@ -60,7 +61,12 @@ interface ArrAppData {
     folders: ArrAppFolder[];
 }
 
-export function SeerrSettingsPanel() {
+interface SeerrSettingsPanelProps {
+    onNavigateTab?: (tab: string) => void;
+}
+
+export function SeerrSettingsPanel({ onNavigateTab }: SeerrSettingsPanelProps = {}) {
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [refreshingAppId, setRefreshingAppId] = useState<string | null>(null);
@@ -1156,12 +1162,16 @@ export function SeerrSettingsPanel() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                asChild
-                                className="h-7 text-[11px] gap-1 border-primary/30 text-primary hover:bg-primary/10 self-start sm:self-auto"
+                                onClick={() => {
+                                    if (onNavigateTab) {
+                                        onNavigateTab("emails");
+                                    } else {
+                                        router.push("/settings?tab=emails");
+                                    }
+                                }}
+                                className="h-7 text-[11px] gap-1.5 border-primary/30 text-primary hover:bg-primary/10 self-start sm:self-auto cursor-pointer"
                             >
-                                <a href="/settings" target="_blank" rel="noreferrer">
-                                    <ExternalLink className="h-3 w-3" /> Customize Email Templates
-                                </a>
+                                <Mail className="h-3 w-3" /> Customize Email Templates
                             </Button>
                         </div>
 

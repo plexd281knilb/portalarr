@@ -126,26 +126,26 @@ export default function AdminTicketsPage() {
                             </div>
                             
                             <div className="flex flex-wrap gap-2 pt-1">
-                                <Link href={`/settings/access?search=${encodeURIComponent(ticket.email)}`} passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
+                                <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
+                                    <Link href={`/settings/access?search=${encodeURIComponent(ticket.email)}`}>
                                         <UserCog className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Manage User
-                                    </Button>
-                                </Link>
-                                <Link href="/radarr" passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500/40 active:scale-95 transition-all duration-200">
+                                    </Link>
+                                </Button>
+                                <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500/40 active:scale-95 transition-all duration-200">
+                                    <Link href="/radarr">
                                         <Film className="h-3.5 w-3.5 mr-1.5 text-blue-400" /> Radarr (Movies)
-                                    </Button>
-                                </Link>
-                                <Link href="/sonarr" passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:ring-2 hover:ring-cyan-500/40 active:scale-95 transition-all duration-200">
+                                    </Link>
+                                </Button>
+                                <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:ring-2 hover:ring-cyan-500/40 active:scale-95 transition-all duration-200">
+                                    <Link href="/sonarr">
                                         <Tv className="h-3.5 w-3.5 mr-1.5 text-cyan-400" /> Sonarr (TV)
-                                    </Button>
-                                </Link>
-                                <Link href="/library" passHref>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs font-semibold border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-500/40 active:scale-95 transition-all duration-200">
+                                    </Link>
+                                </Button>
+                                <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-500/40 active:scale-95 transition-all duration-200">
+                                    <Link href="/library">
                                         <BookOpen className="h-3.5 w-3.5 mr-1.5 text-purple-400" /> Book Library
-                                    </Button>
-                                </Link>
+                                    </Link>
+                                </Button>
                             </div>
 
                             <form onSubmit={(e) => handleUpdate(e, ticket.id)} className="space-y-4 pt-4 border-t border-border/40 border-dashed">

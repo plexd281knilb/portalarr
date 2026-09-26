@@ -3687,7 +3687,7 @@ function SettingsPageContent() {
                 </TabsContent>
 
                 <TabsContent value="requests">
-                    <SeerrSettingsPanel />
+                    <SeerrSettingsPanel onNavigateTab={handleTabChange} />
                 </TabsContent>
 
                 <TabsContent value="logs">
