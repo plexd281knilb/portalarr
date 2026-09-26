@@ -203,11 +203,15 @@ function SettingsPageContent() {
         aiProvider: "default",
         aiApiKey: "",
         aiModel: "gemini-1.5-flash",
-        aiAutoResolve: true
+        aiAutoResolve: true,
+        aiAutonomyLevel: "autonomous",
+        aiMaxDailyGrabs: 3
     });
     const [aiProviderSelect, setAiProviderSelect] = useState("default");
     const [aiModelInput, setAiModelInput] = useState("gemini-1.5-flash");
     const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
+    const [aiAutonomyLevel, setAiAutonomyLevel] = useState<"advisory" | "assisted" | "autonomous">("autonomous");
+    const [aiMaxDailyGrabs, setAiMaxDailyGrabs] = useState<number>(3);
     const [aiApiKeyInput, setAiApiKeyInput] = useState("");
     const [showAiKey, setShowAiKey] = useState(false);
     const [showPlexKey, setShowPlexKey] = useState(false);
@@ -248,6 +252,8 @@ function SettingsPageContent() {
         aiProvider: string;
         aiModel: string;
         aiAutoResolve: boolean;
+        aiAutonomyLevel: string;
+        aiMaxDailyGrabs: number;
         aiApiKey: string;
         roadmapText: string;
         betaText: string;
@@ -299,6 +305,8 @@ function SettingsPageContent() {
         aiProviderSelect !== initialDataRef.current.aiProvider ||
         aiModelInput !== initialDataRef.current.aiModel ||
         aiAutoResolveSwitch !== initialDataRef.current.aiAutoResolve ||
+        aiAutonomyLevel !== initialDataRef.current.aiAutonomyLevel ||
+        aiMaxDailyGrabs !== initialDataRef.current.aiMaxDailyGrabs ||
         aiApiKeyInput !== initialDataRef.current.aiApiKey
     ) : false;
 
@@ -844,6 +852,8 @@ function SettingsPageContent() {
             const aiProviderVal = ai?.aiProvider || "default";
             const aiModelVal = ai?.aiModel || "gemini-2.5-flash";
             const aiAutoResolveVal = ai?.aiAutoResolve ?? true;
+            const aiAutonomyVal = (ai?.aiAutonomyLevel as "advisory" | "assisted" | "autonomous") || "autonomous";
+            const aiMaxGrabsVal = ai?.aiMaxDailyGrabs ?? 3;
             const aiApiKeyVal = ai?.aiApiKey || "";
 
             if (ai) {
@@ -851,11 +861,15 @@ function SettingsPageContent() {
                 setAiProviderSelect(aiProviderVal);
                 setAiModelInput(aiModelVal);
                 setAiAutoResolveSwitch(aiAutoResolveVal);
+                setAiAutonomyLevel(aiAutonomyVal);
+                setAiMaxDailyGrabs(aiMaxGrabsVal);
                 setAiApiKeyInput(aiApiKeyVal);
             } else {
                 setAiProviderSelect("default");
                 setAiModelInput("gemini-2.5-flash");
                 setAiAutoResolveSwitch(true);
+                setAiAutonomyLevel("autonomous");
+                setAiMaxDailyGrabs(3);
                 setAiApiKeyInput("");
             }
 
@@ -879,6 +893,8 @@ function SettingsPageContent() {
                 aiProvider: aiProviderVal,
                 aiModel: aiModelVal,
                 aiAutoResolve: aiAutoResolveVal,
+                aiAutonomyLevel: aiAutonomyVal,
+                aiMaxDailyGrabs: aiMaxGrabsVal,
                 aiApiKey: aiApiKeyVal,
                 roadmapText: roadmapTextVal,
                 betaText: betaTextVal,
@@ -971,6 +987,8 @@ function SettingsPageContent() {
                 formData.append("aiProvider", aiProviderSelect);
                 formData.append("aiModel", aiModelInput);
                 formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                formData.append("aiAutonomyLevel", aiAutonomyLevel);
+                formData.append("aiMaxDailyGrabs", String(aiMaxDailyGrabs));
                 formData.append("aiApiKey", aiApiKeyInput);
                 promises.push(saveAiAgentSettings(formData));
             }
@@ -1023,6 +1041,8 @@ function SettingsPageContent() {
         setAiProviderSelect(init.aiProvider);
         setAiModelInput(init.aiModel);
         setAiAutoResolveSwitch(init.aiAutoResolve);
+        setAiAutonomyLevel((init.aiAutonomyLevel as any) || "autonomous");
+        setAiMaxDailyGrabs(init.aiMaxDailyGrabs ?? 3);
         setAiApiKeyInput(init.aiApiKey);
         setRoadmapText(init.roadmapText);
         setBetaText(init.betaText);
@@ -2554,10 +2574,10 @@ function SettingsPageContent() {
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <CardTitle className="flex items-center gap-2 text-purple-400">
-                                                <Bot className="h-5 w-5 text-purple-400"/> AI Metadata Agent
+                                                <Bot className="h-5 w-5 text-purple-400"/> AI Metadata Agent & Support Assistant
                                             </CardTitle>
                                             <CardDescription>
-                                                Automated AI agent to analyze messy release folder names and extract official book titles, authors, and cover art queries.
+                                                Configure the AI engine for media metadata extraction and set the autonomy level for the AI Support Bot.
                                             </CardDescription>
                                         </div>
                                         <div className="flex items-center gap-1.5">
@@ -2581,6 +2601,8 @@ function SettingsPageContent() {
                                             formData.append("aiProvider", aiProviderSelect);
                                             formData.append("aiModel", aiModelInput);
                                             formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                                            formData.append("aiAutonomyLevel", aiAutonomyLevel);
+                                            formData.append("aiMaxDailyGrabs", String(aiMaxDailyGrabs));
                                             formData.append("aiApiKey", aiApiKeyInput);
                                             const res = await saveAiAgentSettings(formData);
                                             if (res.success) {
@@ -2753,6 +2775,218 @@ function SettingsPageContent() {
                                             <Label htmlFor="ai-auto-resolve" className="cursor-pointer text-xs font-medium">
                                                 Auto-run AI Resolution during library scans
                                             </Label>
+                                        </div>
+
+                                        {/* AI SUPPORT BOT AUTONOMY & CAPABILITY SLIDER */}
+                                        <div className="pt-4 border-t border-purple-500/20 space-y-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                <div>
+                                                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-purple-300">
+                                                        <Sliders className="h-4 w-4 text-purple-400" /> AI Support Bot Autonomy Level
+                                                    </Label>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                                        Controls what troubleshooting, playback probes, and self-healing actions the AI Support Bot is permitted to execute.
+                                                    </p>
+                                                </div>
+                                                <Badge className={`text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto border ${
+                                                    aiAutonomyLevel === "advisory"
+                                                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                                                        : aiAutonomyLevel === "assisted"
+                                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                                                }`}>
+                                                    {aiAutonomyLevel === "advisory" && "🔍 Level 1: Advisory (Passive)"}
+                                                    {aiAutonomyLevel === "assisted" && "🛡️ Level 2: Assisted (Guided)"}
+                                                    {aiAutonomyLevel === "autonomous" && "⚡ Level 3: Full Autonomous"}
+                                                </Badge>
+                                            </div>
+
+                                            {/* Interactive Range Track Slider */}
+                                            <div className="space-y-2 px-1">
+                                                <div className="relative flex items-center select-none">
+                                                    <input 
+                                                        type="range" 
+                                                        min={1} 
+                                                        max={3} 
+                                                        step={1}
+                                                        value={aiAutonomyLevel === "advisory" ? 1 : aiAutonomyLevel === "assisted" ? 2 : 3}
+                                                        onChange={(e) => {
+                                                            const val = Number(e.target.value);
+                                                            if (val === 1) setAiAutonomyLevel("advisory");
+                                                            else if (val === 2) setAiAutonomyLevel("assisted");
+                                                            else setAiAutonomyLevel("autonomous");
+                                                        }}
+                                                        className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                                                    />
+                                                </div>
+                                                {/* Stepper Labels */}
+                                                <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setAiAutonomyLevel("advisory")}
+                                                        className={`transition-colors font-medium text-left ${aiAutonomyLevel === "advisory" ? "text-sky-400 font-bold" : "hover:text-foreground"}`}
+                                                    >
+                                                        1. Advisory
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setAiAutonomyLevel("assisted")}
+                                                        className={`transition-colors font-medium text-center ${aiAutonomyLevel === "assisted" ? "text-amber-400 font-bold" : "hover:text-foreground"}`}
+                                                    >
+                                                        2. Assisted
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setAiAutonomyLevel("autonomous")}
+                                                        className={`transition-colors font-medium text-right ${aiAutonomyLevel === "autonomous" ? "text-emerald-400 font-bold" : "hover:text-foreground"}`}
+                                                    >
+                                                        3. Full Autonomous
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Clickable Level Cards Grid */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                                                {/* Tier 1 */}
+                                                <div 
+                                                    onClick={() => setAiAutonomyLevel("advisory")}
+                                                    className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
+                                                        aiAutonomyLevel === "advisory"
+                                                            ? "border-sky-500/80 bg-sky-950/30 text-sky-100 ring-1 ring-sky-500/50 shadow-sm"
+                                                            : "border-white/10 bg-black/20 hover:border-sky-500/30 text-muted-foreground"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between font-semibold">
+                                                        <span className="flex items-center gap-1.5 text-sky-300">
+                                                            <Eye className="h-3.5 w-3.5" /> Level 1: Advisory
+                                                        </span>
+                                                        {aiAutonomyLevel === "advisory" && <Check className="h-3.5 w-3.5 text-sky-400" />}
+                                                    </div>
+                                                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                                        Passive diagnostics and device coaching only. Explains transcode telemetry & client buffer issues.
+                                                    </p>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
+                                                        <div className="text-emerald-400/90">✓ Stream telemetry & setup guides</div>
+                                                        <div className="text-neutral-500">✗ No stream kills or file grabs</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Tier 2 */}
+                                                <div 
+                                                    onClick={() => setAiAutonomyLevel("assisted")}
+                                                    className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
+                                                        aiAutonomyLevel === "assisted"
+                                                            ? "border-amber-500/80 bg-amber-950/30 text-amber-100 ring-1 ring-amber-500/50 shadow-sm"
+                                                            : "border-white/10 bg-black/20 hover:border-amber-500/30 text-muted-foreground"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between font-semibold">
+                                                        <span className="flex items-center gap-1.5 text-amber-300">
+                                                            <Shield className="h-3.5 w-3.5" /> Level 2: Assisted
+                                                        </span>
+                                                        {aiAutonomyLevel === "assisted" && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                                                    </div>
+                                                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                                        Proactive container inspections & synthetic probes. Stops user streams on command; requests confirmation before downloads.
+                                                    </p>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
+                                                        <div className="text-emerald-400/90">✓ Probes & user stream kills</div>
+                                                        <div className="text-amber-400/90">⚠️ Prompts confirmation for grabs</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Tier 3 */}
+                                                <div 
+                                                    onClick={() => setAiAutonomyLevel("autonomous")}
+                                                    className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
+                                                        aiAutonomyLevel === "autonomous"
+                                                            ? "border-emerald-500/80 bg-emerald-950/30 text-emerald-100 ring-1 ring-emerald-500/50 shadow-sm"
+                                                            : "border-white/10 bg-black/20 hover:border-emerald-500/30 text-muted-foreground"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between font-semibold">
+                                                        <span className="flex items-center gap-1.5 text-emerald-300">
+                                                            <Zap className="h-3.5 w-3.5" /> Level 3: Autonomous
+                                                        </span>
+                                                        {aiAutonomyLevel === "autonomous" && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                                                    </div>
+                                                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                                        Full auto-pilot self-healing. Auto-terminates stuck playback, grabs replacement English media in Radarr/Sonarr, and auto-escalates tickets.
+                                                    </p>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
+                                                        <div className="text-emerald-400/90">✓ Auto Radarr/Sonarr grabs</div>
+                                                        <div className="text-emerald-400/90">✓ Auto ticket escalation + probes</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* MAX RADARR & SONARR INTERACTIONS SLIDER */}
+                                            <div className="pt-3 border-t border-purple-500/20 space-y-3">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                    <div>
+                                                        <Label className="text-sm font-semibold flex items-center gap-1.5 text-purple-300">
+                                                            <Activity className="h-4 w-4 text-purple-400" /> Max Daily Radarr / Sonarr Interactions
+                                                        </Label>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                                            Safety rate limit on automated replacement searches & downloads the AI can dispatch to Radarr & Sonarr per user within a 24-hour window.
+                                                        </p>
+                                                    </div>
+                                                    <Badge className="text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                                        {aiMaxDailyGrabs} grabs / user / 24h
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="space-y-2 px-1">
+                                                    <div className="relative flex items-center select-none">
+                                                        <input 
+                                                            type="range" 
+                                                            min={1} 
+                                                            max={10} 
+                                                            step={1}
+                                                            value={aiMaxDailyGrabs}
+                                                            onChange={(e) => setAiMaxDailyGrabs(Number(e.target.value))}
+                                                            className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                                                        />
+                                                    </div>
+                                                    <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(1)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 1 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            1 (Conservative)
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(3)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 3 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            3 (Default)
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(5)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 5 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            5 (Moderate)
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(10)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 10 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            10 (Max)
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-2.5 rounded-lg bg-neutral-900/40 border border-neutral-800/60 text-[11px] text-muted-foreground flex items-center gap-2">
+                                                <Shield className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                <span>
+                                                    <strong>Security Boundary:</strong> Regardless of autonomy level, strict user isolation is always enforced: non-admin users can never view or terminate streams belonging to other users.
+                                                </span>
+                                            </div>
                                         </div>
 
                                         {testAiResult && (

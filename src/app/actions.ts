@@ -11386,7 +11386,9 @@ export async function getAiAgentSettings() {
         aiProvider: settings?.aiProvider || "default",
         aiApiKey: settings?.aiApiKey ? decryptData(settings.aiApiKey) : "",
         aiModel: settings?.aiModel || "gemini-2.5-flash",
-        aiAutoResolve: settings?.aiAutoResolve ?? true
+        aiAutoResolve: settings?.aiAutoResolve ?? true,
+        aiAutonomyLevel: settings?.aiAutonomyLevel || "autonomous",
+        aiMaxDailyGrabs: settings?.aiMaxDailyGrabs ?? 3
     };
 }
 
@@ -11397,6 +11399,8 @@ export async function saveAiAgentSettings(formData: FormData) {
         const aiApiKeyRaw = (formData.get("aiApiKey") as string) || "";
         const aiModel = (formData.get("aiModel") as string) || "gemini-2.5-flash";
         const aiAutoResolve = formData.get("aiAutoResolve") === "true";
+        const aiAutonomyLevel = (formData.get("aiAutonomyLevel") as string) || "autonomous";
+        const aiMaxDailyGrabs = parseInt(formData.get("aiMaxDailyGrabs") as string, 10) || 3;
 
         const encryptedKey = aiApiKeyRaw ? encryptData(aiApiKeyRaw) : null;
 
@@ -11407,13 +11411,17 @@ export async function saveAiAgentSettings(formData: FormData) {
                 aiProvider,
                 aiApiKey: encryptedKey,
                 aiModel,
-                aiAutoResolve
+                aiAutoResolve,
+                aiAutonomyLevel,
+                aiMaxDailyGrabs
             },
             update: {
                 aiProvider,
                 aiApiKey: encryptedKey,
                 aiModel,
-                aiAutoResolve
+                aiAutoResolve,
+                aiAutonomyLevel,
+                aiMaxDailyGrabs
             }
         });
 

@@ -304,8 +304,11 @@ export async function searchAndGrabRadarrReplacement(
 }> {
     const userIdentifier = user?.username || user?.email || "anonymous";
 
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+    const maxGrabs = settings?.aiMaxDailyGrabs ?? 3;
+
     // 1. Guardrail Rate Limit Check
-    const rateLimit = checkAgentRateLimit(userIdentifier);
+    const rateLimit = checkAgentRateLimit(userIdentifier, maxGrabs);
     if (!rateLimit.allowed) {
         logAgentEvent("WARN", `Rate limit prevented Radarr replacement for "${title}" by "${userIdentifier}": ${rateLimit.reason}`);
         return {
@@ -479,7 +482,7 @@ export async function searchAndGrabRadarrReplacement(
     }
 
     // 7. Record grab action for rate limiting and audit
-    recordAgentGrabAction(userIdentifier, "RADARR_REPLACE", title);
+    recordAgentGrabAction(userIdentifier, "RADARR_REPLACE", title, maxGrabs);
 
     const sizeGb = bestCandidate.size ? (bestCandidate.size / (1024 * 1024 * 1024)).toFixed(2) + " GB" : "Unknown size";
     const qualityName = bestCandidate.quality?.quality?.name || "1080p";
@@ -514,7 +517,10 @@ export async function searchAndGrabSonarrReplacement(
 }> {
     const userIdentifier = user?.username || user?.email || "anonymous";
 
-    const rateLimit = checkAgentRateLimit(userIdentifier);
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+    const maxGrabs = settings?.aiMaxDailyGrabs ?? 3;
+
+    const rateLimit = checkAgentRateLimit(userIdentifier, maxGrabs);
     if (!rateLimit.allowed) {
         return { success: false, error: rateLimit.reason };
     }
@@ -559,7 +565,7 @@ export async function searchAndGrabSonarrReplacement(
             name: "SeriesSearch",
             seriesId
         });
-        recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title} S${seasonNumber || 1}E${episodeNumber || 1}`);
+        recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title} S${seasonNumber || 1}E${episodeNumber || 1}`, maxGrabs);
         return {
             success: true,
             releaseTitle: `${title} - Season ${seasonNumber || 1}`,
@@ -579,7 +585,11 @@ export async function redownloadBookWithDiagnostics(
     user?: any
 ): Promise<{ success: boolean; error?: string }> {
     const userIdentifier = user?.username || user?.email || "anonymous";
-    const rateLimit = checkAgentRateLimit(userIdentifier);
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+    const maxGrabs = settings?.aiMaxDailyGrabs ?? 3;
+
+    const rateLimit = checkAgentRateLimit(userIdentifier, maxGrabs);
     if (!rateLimit.allowed) {
         return { success: false, error: rateLimit.reason };
     }
@@ -592,7 +602,7 @@ export async function redownloadBookWithDiagnostics(
 
         if (existingReq) {
             await autoDownloadBookRequest(existingReq.id, existingReq.title, existingReq.author || author || "");
-            recordAgentGrabAction(userIdentifier, "BOOK_REPLACE", title);
+            recordAgentGrabAction(userIdentifier, "BOOK_REPLACE", title, maxGrabs);
             return { success: true };
         } else {
             // Create a book request and trigger auto download
@@ -605,7 +615,7 @@ export async function redownloadBookWithDiagnostics(
                 }
             });
             await autoDownloadBookRequest(newReq.id, title, author || "");
-            recordAgentGrabAction(userIdentifier, "BOOK_REPLACE", title);
+            recordAgentGrabAction(userIdentifier, "BOOK_REPLACE", title, maxGrabs);
             return { success: true };
         }
     } catch (e: any) {

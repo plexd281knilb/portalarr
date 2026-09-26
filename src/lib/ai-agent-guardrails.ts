@@ -29,7 +29,8 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
  * Checks if a user is within their automated redownload / grab quota.
  * Prevents malicious or infinite loop download flooding.
  */
-export function checkAgentRateLimit(userIdentifier: string): RateLimitCheckResult {
+export function checkAgentRateLimit(userIdentifier: string, maxGrabs?: number): RateLimitCheckResult {
+    const limit = typeof maxGrabs === "number" && maxGrabs > 0 ? maxGrabs : MAX_AUTOMATED_GRABS_PER_24H;
     const safeId = (userIdentifier || "anonymous").toLowerCase().trim();
     const now = Date.now();
     const history = userActionHistory.get(safeId) || [];
@@ -38,7 +39,7 @@ export function checkAgentRateLimit(userIdentifier: string): RateLimitCheckResul
     const activeHistory = history.filter(item => (now - item.timestamp) < TWENTY_FOUR_HOURS_MS);
     userActionHistory.set(safeId, activeHistory);
 
-    if (activeHistory.length >= MAX_AUTOMATED_GRABS_PER_24H) {
+    if (activeHistory.length >= limit) {
         const oldest = activeHistory[0];
         const resetMs = (oldest.timestamp + TWENTY_FOUR_HOURS_MS) - now;
         const resetInMinutes = Math.max(1, Math.ceil(resetMs / (60 * 1000)));
@@ -47,20 +48,21 @@ export function checkAgentRateLimit(userIdentifier: string): RateLimitCheckResul
             allowed: false,
             remaining: 0,
             resetInMinutes,
-            reason: `Automated replacement rate limit reached (${MAX_AUTOMATED_GRABS_PER_24H} grabs in 24 hours). Please wait ${resetInMinutes} minutes or contact your server administrator.`
+            reason: `Automated Radarr/Sonarr interaction rate limit reached (${limit} grabs in 24 hours). Please wait ${resetInMinutes} minutes or contact your server administrator.`
         };
     }
 
     return {
         allowed: true,
-        remaining: MAX_AUTOMATED_GRABS_PER_24H - activeHistory.length
+        remaining: limit - activeHistory.length
     };
 }
 
 /**
  * Records an automated grab action for rate limiting and auditing.
  */
-export function recordAgentGrabAction(userIdentifier: string, actionType: string, targetTitle: string): void {
+export function recordAgentGrabAction(userIdentifier: string, actionType: string, targetTitle: string, maxGrabs?: number): void {
+    const limit = typeof maxGrabs === "number" && maxGrabs > 0 ? maxGrabs : MAX_AUTOMATED_GRABS_PER_24H;
     const safeId = (userIdentifier || "anonymous").toLowerCase().trim();
     const now = Date.now();
     const history = userActionHistory.get(safeId) || [];
@@ -76,7 +78,7 @@ export function recordAgentGrabAction(userIdentifier: string, actionType: string
     logger.addLog(
         "INFO",
         "AI_AGENT",
-        `[Guardrail] Recorded autonomous action "${actionType}" for media "${targetTitle}" by user "${safeId}". (Used: ${history.length}/${MAX_AUTOMATED_GRABS_PER_24H} in 24h)`
+        `[Guardrail] Recorded autonomous action "${actionType}" for media "${targetTitle}" by user "${safeId}". (Used: ${history.length}/${limit} in 24h)`
     );
 }
 

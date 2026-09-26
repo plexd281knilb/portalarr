@@ -517,6 +517,9 @@ export async function askAiServerMaster(
     let mediaInspection: MediaStreamInspection | undefined;
     let playbackProbe: PlexPlaybackDiagnosticReport | undefined;
 
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+    const autonomyLevel = settings?.aiAutonomyLevel || "autonomous";
+
     const lowerQ = question.toLowerCase();
 
     // --- STEP -1: PRIVACY & USER ISOLATION BOUNDARY GUARDRAIL ---
@@ -563,6 +566,21 @@ export async function askAiServerMaster(
 
         if (!targetStream) {
             targetStream = snapshot.primaryActiveStream || snapshot.activeStreams[0];
+        }
+
+        if (autonomyLevel === "advisory") {
+            return {
+                success: true,
+                answer: `### ℹ️ Stream Termination Advisory (Level 1: Advisory Mode)
+
+The server AI is currently set to **Level 1: Advisory Mode**. Automatic server stream termination is disabled.
+
+To stop playback for *${targetStream?.title || "your active stream"}*:
+* Open **[My Plex Hub](/my-plex)** and click **Stop Stream** on your active session.
+* Or stop playback directly within your client app on **${targetStream?.player || "your device"}**.`,
+                diagnostics: snapshot,
+                providerUsed: "Built-in Stream Management Engine (Advisory Mode)"
+            };
         }
 
         if (targetStream && targetStream.sessionKey) {
@@ -680,32 +698,52 @@ There are currently no active playback sessions running on your account or your 
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });
 
-                // If English audio is truly missing, automatically attempt Radarr search & replace
+                // If English audio is truly missing, handle based on autonomy level
                 if (mediaInspection.verdict === "MISSING_LANGUAGE_TRACK") {
-                    const grabResult = await searchAndGrabRadarrReplacement(
-                        mediaInspection.title, 
-                        candidateYear || (mediaInspection.year ? parseInt(mediaInspection.year, 10) : undefined),
-                        "Missing English audio track / Spanish only file",
-                        user
-                    );
+                    if (autonomyLevel === "autonomous") {
+                        const grabResult = await searchAndGrabRadarrReplacement(
+                            mediaInspection.title, 
+                            candidateYear || (mediaInspection.year ? parseInt(mediaInspection.year, 10) : undefined),
+                            "Missing English audio track / Spanish only file",
+                            user
+                        );
 
-                    if (grabResult.success) {
+                        if (grabResult.success) {
+                            actionsTaken.push({
+                                action: "RADARR_SEARCH_GRAB",
+                                status: "SUCCESS",
+                                target: mediaInspection.title,
+                                summary: `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality}, ${grabResult.sizeFormatted}) on indexer "${grabResult.indexer}" and queued download in Radarr.`,
+                                details: grabResult,
+                                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            });
+                        } else if (grabResult.escalated) {
+                            actionsTaken.push({
+                                action: "ESCALATE_ADMIN_TICKET",
+                                status: "ESCALATED",
+                                target: mediaInspection.title,
+                                summary: `Admin Escalated: Support Ticket #${grabResult.ticketId} created with complete container telemetry. No safe English releases met criteria on indexers.`,
+                                ticketId: grabResult.ticketId,
+                                details: grabResult,
+                                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            });
+                        }
+                    } else if (autonomyLevel === "assisted") {
                         actionsTaken.push({
-                            action: "RADARR_SEARCH_GRAB",
+                            action: "INSPECT_MEDIA",
                             status: "SUCCESS",
                             target: mediaInspection.title,
-                            summary: `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality}, ${grabResult.sizeFormatted}) on indexer "${grabResult.indexer}" and queued download in Radarr.`,
-                            details: grabResult,
+                            summary: `Assisted Inspection: Confirmed missing English audio track. In Level 2 (Assisted Mode), the AI has flagged this item and drafted a replacement request. User confirmation required before queuing in Radarr.`,
+                            details: mediaInspection,
                             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         });
-                    } else if (grabResult.escalated) {
+                    } else {
                         actionsTaken.push({
-                            action: "ESCALATE_ADMIN_TICKET",
-                            status: "ESCALATED",
+                            action: "INSPECT_MEDIA",
+                            status: "SUCCESS",
                             target: mediaInspection.title,
-                            summary: `Admin Escalated: Support Ticket #${grabResult.ticketId} created with complete container telemetry. No safe English releases met criteria on indexers.`,
-                            ticketId: grabResult.ticketId,
-                            details: grabResult,
+                            summary: `Advisory Telemetry: Container audio track inspection completed. Automated downloads are disabled in Level 1 (Advisory Mode).`,
+                            details: mediaInspection,
                             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         });
                     }
@@ -721,13 +759,23 @@ There are currently no active playback sessions running on your account or your 
         const { title: bookTitle } = cleanMediaSearchQuery(question);
         if (bookTitle) {
             try {
-                const bookRes = await redownloadBookWithDiagnostics(bookTitle, undefined, user);
-                if (bookRes.success) {
+                if (autonomyLevel === "autonomous") {
+                    const bookRes = await redownloadBookWithDiagnostics(bookTitle, undefined, user);
+                    if (bookRes.success) {
+                        actionsTaken.push({
+                            action: "REDOWNLOAD_BOOK",
+                            status: "SUCCESS",
+                            target: bookTitle,
+                            summary: `Dispatched automated book search & download for "${bookTitle}".`,
+                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        });
+                    }
+                } else {
                     actionsTaken.push({
-                        action: "REDOWNLOAD_BOOK",
+                        action: "STREAM_PATTERN_DIAGNOSTIC",
                         status: "SUCCESS",
                         target: bookTitle,
-                        summary: `Dispatched automated book search & download for "${bookTitle}".`,
+                        summary: `Book Re-request Guidance: In ${autonomyLevel === "assisted" ? "Level 2 (Assisted)" : "Level 1 (Advisory)"} mode, automated grabs are not auto-triggered. Please request or download via the Library tab.`,
                         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     });
                 }
@@ -735,7 +783,6 @@ There are currently no active playback sessions running on your account or your 
         }
     }
 
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = settings?.aiModel || "gemini-2.5-flash";
@@ -743,6 +790,12 @@ There are currently no active playback sessions running on your account or your 
     // Build context-rich prompt
     const systemPrompt = `You are the elite "Plex & Server Master AI" for the private media ecosystem "Portalarr".
 You provide friendly, authoritative, step-by-step troubleshooting, optimization advice, and diagnostic fixes for Plex users and server administrators.
+
+AI AUTONOMY & PERMISSION LEVEL:
+- Configured Server Autonomy Level: ${autonomyLevel.toUpperCase()}
+${autonomyLevel === "advisory" ? "- Level 1 (Advisory Mode): You are in read-only advisory mode. You CANNOT execute server mutations, stream terminations, or downloads. Provide diagnostic insights, transcode guidance, and device troubleshooting advice." : ""}
+${autonomyLevel === "assisted" ? "- Level 2 (Assisted Mode): You can run synthetic playback checks and container inspections, and provide guided recommendations. You can terminate the user's active stream if requested, but prompt confirmation before triggering file downloads." : ""}
+${autonomyLevel === "autonomous" ? "- Level 3 (Full Autonomous Mode): You have full self-healing authority within user privacy boundaries. You can terminate stuck playback sessions upon request, search and grab replacement releases in Radarr/Sonarr, and auto-escalate support tickets." : ""}
 
 USER & REAL-TIME STREAM CONTEXT:
 - Username: ${snapshot.username} (Role: ${snapshot.role})
