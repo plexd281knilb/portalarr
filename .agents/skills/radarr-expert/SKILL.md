@@ -79,3 +79,10 @@ See detailed runbook: [movie-model-and-decisions.md](./references/movie-model-an
    - Query `/api/v3/queue?page=1&pageSize=1000` and match `record.movieId` against active requests to compute exact download progress percentages (`((size - sizeleft) / size) * 100`).
 7. **Fast TMDB Lookup & Monitored State**:
    - Query `/api/v3/movie` and index movies by `tmdbId` to instantly check if a movie is `monitored` and whether it `hasFile` across 1080p and 4K instances.
+8. **Autonomous AI Replacement Grabs & Rate Limiting Guardrails**:
+   - In self-healing workflows (`searchAndGrabRadarrReplacement`), the AI bot can query indexers and dispatch grabs directly to Radarr (`POST /api/v3/release`).
+   - Candidate releases undergo strict validation: rejection of bootleg formats (CAM, TS, Telecine, Screener), foreign-only releases (when English audio is required), zero-seeder torrents, and files outside safety size caps (400MB to 95GB).
+   - Rate limit guardrails (`checkAgentRateLimit`) enforce sliding 24-hour quotas configurable via `Settings.aiMaxDailyGrabs` (1 to 10 grabs/day) to prevent infinite download loops or indexer query exhaustion.
+9. **Admin Ticket Fallback Escalation**:
+   - When no release candidate passes qualification scoring, the agent creates an Admin Support Ticket with attached container telemetry and indexer search diagnostics, alerting administrators without degrading media quality.
+

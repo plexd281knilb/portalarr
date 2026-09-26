@@ -82,6 +82,20 @@ Portalarr's native Seerr engine unifies all media types into a single mission co
 - **Missing from Your Series Discovery**: Discovered unacquired installments from the user's book and audiobook series automatically surface in the *Seerr discovery feed as high-priority suggestions.
 - **Bi-Directional Request Mirroring**: `syncMediaRequestsQueueAndAvailabilityInternal` periodically reconciles legacy `BookRequest` records into `MediaRequest`, synchronizing download progress and availability states.
 
+### 8. Likelihood-to-Download Popularity Re-ranking in TMDb Search
+- **Search Relevance Problem**: TMDb's default keyword searches return results primarily by raw token match, frequently ranking obscure, low-vote releases (e.g. 1981 release with 2 votes) ahead of iconic blockbusters (e.g. 2007 blockbuster *P.S. I Love You* with 3,500+ votes).
+- **Popularity & Likelihood Algorithm** (`src/lib/curation/tmdb.ts`):
+  Each search candidate is evaluated and sorted by a weighted likelihood-to-download score:
+  $$\text{score} = \text{voteBonus} + (\text{voteAverage} \times 10) + \text{recencyBonus} + \text{exactTitleBonus}$$
+  where:
+  - $\text{voteBonus} = \min(\log_{10}(\text{voteCount} + 1) \times 35, 150)$ (logarithmic scale rewards popular blockbusters without allowing runaway million-vote titles to permanently bury niche requests).
+  - $\text{exactTitleBonus} = 40$ when normalized candidate title exactly equals the user's search query.
+  - $\text{recencyBonus}$: Up to $+15$ for recent films released in the modern streaming era.
+
+### 9. Unified Branding & Mobile Search Input Responsiveness
+- **Standardized Naming**: All navigation bars, breadcrumbs, page titles, and sidebars standardize on **"Media Requests"** (retiring fragmented labels like "Discovery & Requests").
+- **Responsive Search Input Sizing**: On mobile screens, search inputs without flex width wrappers collapse to illegibly small widths. Always style request search inputs with `w-full max-w-full sm:w-[320px] md:w-[420px]` within `flex-wrap gap-2` toolbars.
+
 ---
 
 ## Common Gotchas & Troubleshooting
