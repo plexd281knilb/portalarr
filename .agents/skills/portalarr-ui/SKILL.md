@@ -191,6 +191,30 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 12. Scrollable TabsList & Device Selector Patterns (Negative Coordinate Overflow Protection)
+- **Radix UI `TabsList` Default Justification**:
+  - `TabsList` in `src/components/ui/tabs.tsx` defaults to `justify-center`.
+  - When placing multiple tabs (e.g. 7+ device guides, indexers, or categories totaling >800px) inside a horizontal scroll container (`overflow-x-auto`), **never rely on default justification or `w-full` with `justify-center`**.
+  - **The Negative Coordinates Bug**: If a centered flex container overflows horizontally, the browser centers the items and pushes the initial items into negative X coordinates (`x < 0`). Because standard LTR browsers cannot scroll into negative scroll offsets, the first item(s) (e.g., Apple TV) become permanently cut off and unreachable even when scrolling all the way to the left.
+- **The Mandatory Solution**:
+  - Always explicitly pass `justify-start` to `TabsList` inside horizontal scrolling containers:
+    ```tsx
+    <div ref={tabsRef} className="overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent scroll-smooth">
+        <TabsList className="inline-flex items-center justify-start gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-2xl min-w-full w-max h-auto">
+            {items.map(item => (
+                <TabsTrigger key={item.id} value={item.id} className="... shrink-0">
+                    ...
+                </TabsTrigger>
+            ))}
+        </TabsList>
+    </div>
+    ```
+  - For wrapped lists, also specify `flex-wrap items-center justify-start` to ensure left-alignment across line breaks.
+- **Chevron Scroll Controls**:
+  - When tab lists exceed normal screen boundaries, provide subtle left (`ChevronLeft`) and right (`ChevronRight`) scroll buttons that programmatically execute `tabsRef.current.scrollBy({ left: -260, behavior: 'smooth' })`.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

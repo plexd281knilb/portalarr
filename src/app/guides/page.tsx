@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { 
     Tv, 
@@ -20,7 +20,9 @@ import {
     Zap, 
     SlidersHorizontal,
     Subtitles,
-    Volume2
+    Volume2,
+    ChevronLeft,
+    ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +36,15 @@ export default function GuidesPage() {
     const [guides, setGuides] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<string>("appletv");
+
+    const deviceTabsRef = useRef<HTMLDivElement>(null);
+
+    const scrollTabs = (direction: "left" | "right") => {
+        if (deviceTabsRef.current) {
+            const offset = direction === "left" ? -250 : 250;
+            deviceTabsRef.current.scrollBy({ left: offset, behavior: "smooth" });
+        }
+    };
 
     useEffect(() => {
         getPlexSetupGuides().then(g => {
@@ -148,14 +159,44 @@ export default function GuidesPage() {
 
                 {/* DEVICE GUIDES TABS */}
                 {guides.length > 0 && (
-                    <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-                        <div className="overflow-x-auto pb-1">
-                            <TabsList className="flex items-center gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-2xl w-max sm:w-full h-auto">
+                    <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
+                        <div className="flex items-center justify-between gap-2 px-1">
+                            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                                Select Your Streaming Device:
+                            </span>
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="h-7 w-7 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                    onClick={() => scrollTabs("left")}
+                                    title="Scroll devices left"
+                                >
+                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="h-7 w-7 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                    onClick={() => scrollTabs("right")}
+                                    title="Scroll devices right"
+                                >
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div 
+                            ref={deviceTabsRef} 
+                            className="overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent scroll-smooth"
+                        >
+                            <TabsList className="inline-flex items-center justify-start gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-2xl min-w-full w-max h-auto">
                                 {guides.map(guide => (
                                     <TabsTrigger 
                                         key={guide.id} 
                                         value={guide.id} 
-                                        className="flex items-center gap-2 py-2.5 px-3.5 text-xs font-semibold data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all rounded-xl shrink-0"
+                                        className="flex items-center gap-2 py-2.5 px-3.5 text-xs font-semibold data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all rounded-xl shrink-0 cursor-pointer"
                                     >
                                         {getDeviceIcon(guide.id)}
                                         <span>{guide.name}</span>

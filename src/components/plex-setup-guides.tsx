@@ -75,7 +75,7 @@ export default function PlexSetupGuides() {
 
                     {guides.length > 0 && (
                         <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-                            <TabsList className="flex flex-wrap items-center gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-xl w-full h-auto">
+                            <TabsList className="flex flex-wrap items-center justify-start gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-xl w-full h-auto">
                                 {guides.map(guide => (
                                     <TabsTrigger 
                                         key={guide.id} 
