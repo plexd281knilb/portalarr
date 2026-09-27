@@ -695,12 +695,12 @@ export async function getUserRequestQuotaAction() {
                 movies: {
                     used: recentMovieCount,
                     limit: movieLimit, // 0 = unlimited
-                    remaining: movieLimit === 0 ? 999 : Math.max(0, movieLimit - recentMovieCount)
+                    remaining: movieLimit === 0 ? null : Math.max(0, movieLimit - recentMovieCount)
                 },
                 tv: {
                     used: recentTvCount,
                     limit: tvLimit, // 0 = unlimited
-                    remaining: tvLimit === 0 ? 999 : Math.max(0, tvLimit - recentTvCount)
+                    remaining: tvLimit === 0 ? null : Math.max(0, tvLimit - recentTvCount)
                 }
             }
         };

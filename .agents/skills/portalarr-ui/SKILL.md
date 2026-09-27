@@ -216,6 +216,24 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 13. Media Request Quota Visibility & Zero-Limit Suppression Rules
+- **Strict Zero-Limit Suppression**:
+  - In Seerr and media request workflows, a quota limit of `0` denotes unlimited requests (e.g. Full Members or Admins).
+  - Users without a quota limit (`limit === 0` or unlimited) **MUST NEVER** see any quota counter or label. Never display confusing strings like `"Quota: 999 of Unlimited"`.
+  - The backend `getUserRequestQuotaAction` returns `remaining: null` when `limit === 0`.
+- **Frontend Guard Pattern**:
+  - In request modals (`media-detail-modal.tsx`), strictly guard quota text by:
+    ```tsx
+    {quotaInfo && quotaInfo.limit > 0 && quotaInfo.remaining !== null && (
+        <span className="text-xs text-muted-foreground font-medium">
+            Quota: <strong className="text-foreground">{quotaInfo.remaining}</strong> of {quotaInfo.limit}
+        </span>
+    )}
+    ```
+  - In trial dashboard views (`trial-dashboard-view.tsx`), wrap quota pills in `{(movieQuota.limit > 0 || tvQuota.limit > 0) && ...}` and guard each pill with `limit > 0` and `remaining ?? 0`.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

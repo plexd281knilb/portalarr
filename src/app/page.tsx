@@ -68,7 +68,7 @@ export default async function UserLandingPage() {
     ]);
 
     // Request quota for trial / user accounts
-    let quota = { movies: { remaining: 3, limit: 3, used: 0 }, tv: { remaining: 3, limit: 3, used: 0 } };
+    let quota: any = { movies: { remaining: 3, limit: 3, used: 0 }, tv: { remaining: 3, limit: 3, used: 0 } };
     if (isLoggedIn) {
         try {
             const qRes = await getUserRequestQuotaAction();

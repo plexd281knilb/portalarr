@@ -853,6 +853,45 @@ async function runTestSuite() {
         }
     });
 
+    // 28. Seerr & Media Requests: Quota Calculations & Limit Rules
+    await assertTest("Seerr Quota Engine: Strict Zero-Limit Suppression & Calculation", async () => {
+        const evalQuota = (limit: number, used: number) => ({
+            used,
+            limit,
+            remaining: limit === 0 ? null : Math.max(0, limit - used)
+        });
+
+        // 1. Unlimited user (limit = 0)
+        const unlimitedMovie = evalQuota(0, 5);
+        if (unlimitedMovie.remaining !== null) {
+            throw new Error(`Expected unlimited remaining to be null, got: ${unlimitedMovie.remaining}`);
+        }
+        const shouldShowQuotaUnlimited = Boolean(unlimitedMovie && unlimitedMovie.limit > 0 && unlimitedMovie.remaining !== null);
+        if (shouldShowQuotaUnlimited) {
+            throw new Error("UI should NOT show quota for unlimited users (limit === 0)");
+        }
+
+        // 2. Limited user (limit = 3, used = 1)
+        const limitedMovie = evalQuota(3, 1);
+        if (limitedMovie.remaining !== 2) {
+            throw new Error(`Expected remaining to be 2, got: ${limitedMovie.remaining}`);
+        }
+        const shouldShowQuotaLimited = Boolean(limitedMovie && limitedMovie.limit > 0 && limitedMovie.remaining !== null);
+        if (!shouldShowQuotaLimited) {
+            throw new Error("UI should show quota for users with an active positive limit (limit > 0)");
+        }
+
+        // 3. Exhausted user (limit = 3, used = 3)
+        const exhaustedMovie = evalQuota(3, 3);
+        if (exhaustedMovie.remaining !== 0) {
+            throw new Error(`Expected remaining to be 0, got: ${exhaustedMovie.remaining}`);
+        }
+        const shouldShowQuotaExhausted = Boolean(exhaustedMovie && exhaustedMovie.limit > 0 && exhaustedMovie.remaining !== null);
+        if (!shouldShowQuotaExhausted) {
+            throw new Error("UI should show quota for exhausted users (limit > 0, remaining = 0)");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

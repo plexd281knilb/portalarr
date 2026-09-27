@@ -958,9 +958,9 @@ export function MediaDetailModal({
                                                     </Badge>
                                                 )}
 
-                                                {quotaInfo && (
+                                                {quotaInfo && quotaInfo.limit > 0 && quotaInfo.remaining !== null && quotaInfo.remaining !== undefined && (
                                                     <span className="text-xs text-muted-foreground font-medium">
-                                                        Quota: <strong className="text-foreground">{quotaInfo.remaining}</strong> of {quotaInfo.limit === 0 ? "Unlimited" : quotaInfo.limit}
+                                                        Quota: <strong className="text-foreground">{quotaInfo.remaining}</strong> of {quotaInfo.limit}
                                                     </span>
                                                 )}
                                             </div>

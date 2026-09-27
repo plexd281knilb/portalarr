@@ -149,35 +149,41 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {/* QUOTA COUNTER PILLS */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                                    <Film className="h-3 w-3 text-cyan-400" /> Movie Requests Left
-                                </span>
-                                <div className="text-lg font-bold text-foreground">
-                                    {movieQuota.remaining} <span className="text-xs text-muted-foreground font-normal">of {movieQuota.limit} allowed</span>
+                    {(movieQuota.limit > 0 || tvQuota.limit > 0) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {movieQuota.limit > 0 && (
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                                            <Film className="h-3 w-3 text-cyan-400" /> Movie Requests Left
+                                        </span>
+                                        <div className="text-lg font-bold text-foreground">
+                                            {movieQuota.remaining ?? 0} <span className="text-xs text-muted-foreground font-normal">of {movieQuota.limit} allowed</span>
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className="text-xs font-semibold bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                                        {(movieQuota.remaining ?? 0) > 0 ? "Available" : "Limit Reached"}
+                                    </Badge>
                                 </div>
-                            </div>
-                            <Badge variant="outline" className="text-xs font-semibold bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
-                                {movieQuota.remaining > 0 ? "Available" : "Limit Reached"}
-                            </Badge>
-                        </div>
+                            )}
 
-                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                                    <Tv className="h-3 w-3 text-purple-400" /> TV Show Requests Left
-                                </span>
-                                <div className="text-lg font-bold text-foreground">
-                                    {tvQuota.remaining} <span className="text-xs text-muted-foreground font-normal">of {tvQuota.limit} allowed</span>
+                            {tvQuota.limit > 0 && (
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                                            <Tv className="h-3 w-3 text-purple-400" /> TV Show Requests Left
+                                        </span>
+                                        <div className="text-lg font-bold text-foreground">
+                                            {tvQuota.remaining ?? 0} <span className="text-xs text-muted-foreground font-normal">of {tvQuota.limit} allowed</span>
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className="text-xs font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
+                                        {(tvQuota.remaining ?? 0) > 0 ? "Available" : "Limit Reached"}
+                                    </Badge>
                                 </div>
-                            </div>
-                            <Badge variant="outline" className="text-xs font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
-                                {tvQuota.remaining > 0 ? "Available" : "Limit Reached"}
-                            </Badge>
+                            )}
                         </div>
-                    </div>
+                    )}
 
                     <Button asChild size="lg" className="w-full h-11 text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm rounded-xl">
                         <Link href="/discover" className="flex items-center justify-center gap-2">
