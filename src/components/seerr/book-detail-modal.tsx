@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BookDiscoveryItem } from "@/lib/books/book-types";
 import { 
     submitBookOrAudiobookRequestAction, 
@@ -31,7 +31,9 @@ import {
     Sparkles, 
     AlertCircle, 
     ExternalLink,
-    ArrowLeft
+    ArrowLeft,
+    ChevronLeft,
+    ChevronRight
 } from "lucide-react";
 import Link from "next/link";
 
@@ -64,6 +66,14 @@ export function BookDetailModal({
     // Similar Books State
     const [similarBooks, setSimilarBooks] = useState<BookDiscoveryItem[]>([]);
     const [loadingSimilar, setLoadingSimilar] = useState(false);
+    const similarCarouselRef = useRef<HTMLDivElement>(null);
+
+    const scrollSimilar = (direction: "left" | "right") => {
+        if (similarCarouselRef.current) {
+            const offset = direction === "left" ? -240 : 240;
+            similarCarouselRef.current.scrollBy({ left: offset, behavior: "smooth" });
+        }
+    };
 
     useEffect(() => {
         if (open && item) {
@@ -177,47 +187,48 @@ export function BookDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[85vh] bg-card/95 backdrop-blur-xl border border-border/60 shadow-2xl p-0 overflow-y-auto sm:rounded-2xl">
-                {/* Header Background Banner */}
-                <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-purple-950/60 via-indigo-950/40 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/15 via-transparent to-transparent" />
-                    
-                    <div className="relative z-10 flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                            {history.length > 0 && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={handleGoBack}
-                                    className="h-7 px-2.5 text-xs font-semibold rounded-lg bg-black/40 border-white/20 text-foreground hover:bg-black/60 gap-1 backdrop-blur-md"
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-2xl scrollbar-thin text-foreground">
+                <div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">
+                    {/* Header Background Banner */}
+                    <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-purple-950/60 via-indigo-950/40 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/15 via-transparent to-transparent" />
+                        
+                        <div className="relative z-10 flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2">
+                                {history.length > 0 && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleGoBack}
+                                        className="h-7 px-2.5 text-xs font-semibold rounded-lg bg-black/40 border-white/20 text-foreground hover:bg-black/60 gap-1 backdrop-blur-md"
+                                    >
+                                        <ArrowLeft className="h-3 w-3" />
+                                        <span>Back</span>
+                                    </Button>
+                                )}
+                                <Badge 
+                                    className={`text-xs font-bold px-3 py-1 border shadow-md backdrop-blur-md ${
+                                        isAudiobook 
+                                            ? "bg-amber-500/25 text-amber-300 border-amber-500/40" 
+                                            : "bg-purple-500/25 text-purple-300 border-purple-500/40"
+                                    }`}
                                 >
-                                    <ArrowLeft className="h-3 w-3" />
-                                    <span>Back</span>
-                                </Button>
+                                    {isAudiobook ? "🎧 AUDIOBOOK" : "📖 EBOOK"}
+                                </Badge>
+                            </div>
+
+                            {activeBook.publishYear && (
+                                <span className="text-xs font-semibold text-muted-foreground bg-black/40 px-2.5 py-1 rounded-full border border-white/10 backdrop-blur-md">
+                                    {activeBook.publishYear}
+                                </span>
                             )}
-                            <Badge 
-                                className={`text-xs font-bold px-3 py-1 border shadow-md backdrop-blur-md ${
-                                    isAudiobook 
-                                        ? "bg-amber-500/25 text-amber-300 border-amber-500/40" 
-                                        : "bg-purple-500/25 text-purple-300 border-purple-500/40"
-                                }`}
-                            >
-                                {isAudiobook ? "🎧 AUDIOBOOK" : "📖 EBOOK"}
-                            </Badge>
                         </div>
-
-                        {activeBook.publishYear && (
-                            <span className="text-xs font-semibold text-muted-foreground bg-black/40 px-2.5 py-1 rounded-full border border-white/10 backdrop-blur-md">
-                                {activeBook.publishYear}
-                            </span>
-                        )}
                     </div>
-                </div>
 
-                {/* Main Body */}
-                <div className="p-4 sm:p-6 space-y-5 -mt-12 relative z-20">
-                    <div className="flex flex-col sm:flex-row gap-5">
-                        {/* 2:3 Vertical Cover Artwork */}
+                    {/* Main Body */}
+                    <div className="p-4 sm:p-6 space-y-5 -mt-12 relative z-20 min-w-0 w-full overflow-x-hidden">
+                        <div className="flex flex-col sm:flex-row gap-5">
+                            {/* 2:3 Vertical Cover Artwork */}
                         <div className="shrink-0 w-32 sm:w-40 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border border-white/15 bg-muted/60 relative mx-auto sm:mx-0">
                             {activeBook.coverUrl ? (
                                 <img
@@ -291,20 +302,20 @@ export function BookDetailModal({
 
                     {/* Overview / Description */}
                     {activeBook.overview && (
-                        <div className="space-y-1 bg-muted/20 p-3.5 rounded-xl border border-border/30 text-xs sm:text-sm text-muted-foreground max-h-36 overflow-y-auto leading-relaxed">
+                        <div className="space-y-1 bg-muted/20 p-3.5 rounded-xl border border-border/30 text-xs sm:text-sm text-muted-foreground max-h-36 overflow-y-auto leading-relaxed min-w-0">
                             <p>{activeBook.overview}</p>
                         </div>
                     )}
 
                     {/* Request Options & Destination Selector */}
                     {status === "NOT_AVAILABLE" && !requestMessage && (
-                        <div className="space-y-3 p-3.5 bg-muted/30 rounded-xl border border-border/50">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-3 p-3.5 bg-muted/30 rounded-xl border border-border/50 min-w-0">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
                                 {/* Destination Library */}
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5 min-w-0">
                                     <Label className="text-xs font-medium text-muted-foreground">Target Library Shelf</Label>
                                     <Select value={selectedLibraryId} onValueChange={setSelectedLibraryId}>
-                                        <SelectTrigger className="h-9 text-xs bg-background/60">
+                                        <SelectTrigger className="h-9 text-xs bg-background/60 w-full min-w-0">
                                             <SelectValue placeholder="Select library shelf..." />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -319,18 +330,19 @@ export function BookDetailModal({
 
                                 {/* Send-to-Kindle Toggle (for Ebooks) */}
                                 {!isAudiobook && (
-                                    <div className="flex items-center justify-between p-2 rounded-lg bg-background/50 border border-border/40">
-                                        <div className="space-y-0.5">
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-background/50 border border-border/40 min-w-0">
+                                        <div className="space-y-0.5 min-w-0 pr-2">
                                             <Label htmlFor="send-kindle" className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                                                <Send className="h-3 w-3 text-purple-400" />
-                                                <span>Auto-Send to Kindle</span>
+                                                <Send className="h-3 w-3 text-purple-400 shrink-0" />
+                                                <span className="truncate">Auto-Send to Kindle</span>
                                             </Label>
-                                            <p className="text-[10px] text-muted-foreground">Mails EPUB to your Kindle when ready</p>
+                                            <p className="text-[10px] text-muted-foreground truncate">Mails EPUB to your Kindle when ready</p>
                                         </div>
                                         <Switch 
                                             id="send-kindle"
                                             checked={sendToKindle}
                                             onCheckedChange={setSendToKindle}
+                                            className="shrink-0"
                                         />
                                     </div>
                                 )}
@@ -340,45 +352,36 @@ export function BookDetailModal({
 
                     {/* Status Messages */}
                     {requestMessage && (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-medium min-w-0">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{requestMessage}</span>
                         </div>
                     )}
                     {requestError && (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-medium">
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-medium min-w-0">
                             <AlertCircle className="h-4 w-4 shrink-0" />
                             <span>{requestError}</span>
                         </div>
                     )}
 
-                    {/* Action Buttons Row */}
-                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40">
-                        <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => onOpenChange(false)}
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                        >
-                            Close
-                        </Button>
-
+                    {/* Action Buttons Row (Primary Action First on Left) */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40 min-w-0">
                         <div className="flex items-center gap-2">
                             {status === "AVAILABLE" ? (
-                                <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 shadow-md">
+                                <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 shadow-md h-9 px-4">
                                     <Link href={activeBook?.mediaType === "audiobook" ? "/library?tab=audiobooks" : "/library?tab=ebooks"}>
                                         <BookOpen className="h-3.5 w-3.5" />
                                         <span>Open in Bookshelf</span>
-                                        <ExternalLink className="h-3 w-3 opacity-60" />
+                                        <ExternalLink className="h-3 w-3 opacity-60 ml-0.5" />
                                     </Link>
                                 </Button>
                             ) : (status === "DOWNLOADING" || (requestMessage && status === "REQUESTED")) ? (
-                                <Button size="sm" disabled className="bg-cyan-600/50 text-white text-xs gap-1.5 font-semibold">
+                                <Button size="sm" disabled className="bg-cyan-600/50 text-white text-xs gap-1.5 font-semibold h-9 px-4">
                                     <Download className="h-3.5 w-3.5 animate-pulse" />
                                     <span>Searching / Downloading Release...</span>
                                 </Button>
                             ) : status === "REQUESTED" ? (
-                                <Button size="sm" disabled className="bg-amber-600/50 text-white text-xs gap-1.5 font-semibold">
+                                <Button size="sm" disabled className="bg-amber-600/50 text-white text-xs gap-1.5 font-semibold h-9 px-4">
                                     <Clock className="h-3.5 w-3.5" />
                                     <span>Request Pending</span>
                                 </Button>
@@ -387,7 +390,7 @@ export function BookDetailModal({
                                     size="sm" 
                                     onClick={handleRequest}
                                     disabled={requesting}
-                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-1.5 shadow-lg shadow-primary/20 px-4 h-9"
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5 shadow-lg shadow-primary/20 px-5 h-9 active:scale-95 transition-all"
                                 >
                                     {requesting ? (
                                         <>
@@ -403,28 +406,61 @@ export function BookDetailModal({
                                 </Button>
                             )}
                         </div>
+
+                        <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => onOpenChange(false)}
+                            className="text-xs text-muted-foreground hover:text-foreground h-9 px-3"
+                        >
+                            Close
+                        </Button>
                     </div>
 
                     {/* SIMILAR BOOKS & RECOMMENDATIONS CAROUSEL */}
-                    <div className="pt-4 border-t border-border/40 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-purple-400" />
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="pt-4 border-t border-border/40 space-y-3 min-w-0 w-full overflow-hidden">
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <Sparkles className="h-4 w-4 text-purple-400 shrink-0" />
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground truncate">
                                     Similar Books & Recommendations
                                 </h4>
+                                {similarBooks.length > 0 && (
+                                    <Badge variant="outline" className="text-[10px] font-semibold text-muted-foreground border-white/10 shrink-0">
+                                        {similarBooks.length} titles
+                                    </Badge>
+                                )}
                             </div>
+
+                            {/* Carousel Navigation Buttons */}
                             {similarBooks.length > 0 && (
-                                <span className="text-[11px] font-semibold text-muted-foreground/70">
-                                    {similarBooks.length} titles
-                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="h-6 w-6 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                        onClick={() => scrollSimilar("left")}
+                                        title="Scroll left"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="h-6 w-6 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                        onClick={() => scrollSimilar("right")}
+                                        title="Scroll right"
+                                    >
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
                             )}
                         </div>
 
                         {loadingSimilar ? (
-                            <div className="flex gap-3 overflow-hidden py-1">
+                            <div className="flex gap-3 overflow-hidden py-1 w-full min-w-0">
                                 {[...Array(5)].map((_, i) => (
-                                    <div key={i} className="w-24 sm:w-28 shrink-0 space-y-2 animate-pulse">
+                                    <div key={i} className="w-24 sm:w-28 shrink-0 space-y-2 animate-pulse min-w-0">
                                         <div className="aspect-[2/3] w-full rounded-xl bg-muted/40 border border-white/5" />
                                         <div className="h-3 w-3/4 bg-muted/40 rounded" />
                                         <div className="h-2.5 w-1/2 bg-muted/30 rounded" />
@@ -436,7 +472,10 @@ export function BookDetailModal({
                                 No additional recommendations found for this title.
                             </p>
                         ) : (
-                            <div className="flex gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+                            <div 
+                                ref={similarCarouselRef}
+                                className="flex gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent scroll-smooth w-full min-w-0"
+                            >
                                 {similarBooks.map((sim, idx) => {
                                     const simIsAudio = sim.mediaType === "audiobook";
                                     const simStatus = sim.availability?.status;
@@ -444,7 +483,7 @@ export function BookDetailModal({
                                         <div
                                             key={idx}
                                             onClick={() => handleSelectSimilarBook(sim)}
-                                            className="w-24 sm:w-28 shrink-0 group cursor-pointer rounded-xl bg-[#121218] border border-border/40 hover:border-primary/60 transition-all hover:scale-[1.03] shadow-md p-1.5 flex flex-col justify-between"
+                                            className="w-24 sm:w-28 shrink-0 group cursor-pointer rounded-xl bg-[#121218] border border-border/40 hover:border-primary/60 transition-all hover:scale-[1.03] shadow-md p-1.5 flex flex-col justify-between min-w-0"
                                         >
                                             <div className="aspect-[2/3] w-full rounded-lg overflow-hidden bg-muted/30 relative border border-white/5">
                                                 {sim.coverUrl ? (
@@ -495,7 +534,8 @@ export function BookDetailModal({
                         )}
                     </div>
                 </div>
-            </DialogContent>
+            </div>
+        </DialogContent>
         </Dialog>
     );
 }

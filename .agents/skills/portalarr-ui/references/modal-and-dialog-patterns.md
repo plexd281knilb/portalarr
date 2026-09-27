@@ -9,12 +9,20 @@ Modals and dialogs are critical throughout Portalarr for media details, requests
 Radix UI's default `DialogContent` includes `sm:max-w-lg`. If you simply add `max-w-6xl` to `className`, `tailwind-merge` will prioritize `sm:max-w-lg` at screen widths $\ge 640\text{px}$, causing the modal to render cramped and narrow!
 
 ### Standard Wide Modal Specification
-For wide media modals (such as `MediaDetailModal`, `EpisodeGuideModal`, `CollectionBuilderModal`, `SettingsModal`):
+For wide media and book modals (such as `MediaDetailModal`, `BookDetailModal`, `EpisodeGuideModal`, `CollectionBuilderModal`, `SettingsModal`):
 ```tsx
 <DialogContent
-  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground focus:outline-none"
+  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground focus:outline-none"
 >
 ```
+
+> [!CRITICAL]
+> **CSS Grid `min-w-0` Intrinsic Width Blowout**: Radix UI's `DialogPrimitive.Content` renders as a CSS Grid (`grid w-full ...`). In CSS Grid, children default to `min-width: auto`. If an inner section contains a horizontal scrolling carousel with 20+ items (e.g. "Similar Books & Recommendations" with 24 items), the intrinsic width calculation overrides `max-width`, causing the entire modal to expand horizontally to 3,000+ pixels!
+> **Mandatory Fix**:
+> 1. Always place a root wrapper with `<div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">` directly inside `DialogContent`.
+> 2. Ensure all inner wrappers and carousels include `min-w-0 w-full`.
+> 3. Provide left/right chevron buttons for smooth horizontal carousel scrolling.
+> 4. In the action button row, place the primary Request action (`Request Ebook` / `Request Audiobook` / `Request Movie`) **FIRST on the left**, so users never have to search or scroll horizontally to find the button.
 
 ### Standard Medium Modal Specification
 For confirmation dialogs, quick actions, single-item edits, or auth prompts:

@@ -78,7 +78,7 @@ export function AuthorDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[96vw] sm:max-w-4xl lg:max-w-5xl 3xl:max-w-6xl bg-card/95 backdrop-blur-xl border border-border/60 shadow-2xl p-0 overflow-hidden sm:rounded-2xl max-h-[85vh] flex flex-col">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-2xl flex flex-col min-w-0 scrollbar-thin text-foreground">
                 {/* Header Background */}
                 <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-purple-950/80 via-background/90 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-purple-600/20 via-transparent to-transparent" />
@@ -177,16 +177,17 @@ export function AuthorDetailModal({
                         </div>
                     ) : activeTab === "works" ? (
                         author?.books && author.books.length > 0 ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 min-w-0">
                                 {author.books.map((book, idx) => (
-                                    <BookCard
-                                        key={idx}
-                                        item={book}
-                                        availability={book.availability}
-                                        onSelect={() => {
-                                            if (onSelectBook) onSelectBook(book);
-                                        }}
-                                    />
+                                    <div key={idx} className="min-w-0">
+                                        <BookCard
+                                            item={book}
+                                            availability={book.availability}
+                                            onSelect={() => {
+                                                if (onSelectBook) onSelectBook(book);
+                                            }}
+                                        />
+                                    </div>
                                 ))}
                             </div>
                         ) : (
