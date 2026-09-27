@@ -602,7 +602,7 @@ function SettingsPageContent() {
         try {
             setPlexLinkMsg("Requesting authorization PIN from Plex...");
             const pin = await getPlexPin();
-            const authUrl = `https://app.plex.tv/auth/#!?clientID=portalarr-custom-dashboard-app&code=${pin.code}&context[device][product]=Portalarr`;
+            const authUrl = `https://app.plex.tv/auth/#!?clientID=domshomelab-dashboard-app&code=${pin.code}&context[device][product]=DomsHomeLab`;
             popup.location.href = authUrl;
             setPlexLinkMsg("Waiting for sign-in in popup...");
 
@@ -1229,7 +1229,7 @@ function SettingsPageContent() {
                                         <Globe className="h-5 w-5 text-primary"/> Public Web Address (Base URL)
                                     </CardTitle>
                                     <CardDescription>
-                                        Set the canonical public URL for Portalarr. This base address is used for invite friends referral links, user account approvals, email buttons, and notification links so you don't have to rely on automatic host header detection.
+                                        Set the canonical public URL for DomsHomeLab. This base address is used for invite friends referral links, user account approvals, email buttons, and notification links so you don't have to rely on automatic host header detection.
                                     </CardDescription>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1.5 shrink-0">
@@ -1337,7 +1337,7 @@ function SettingsPageContent() {
                                         <Globe className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                                     </div>
                                     <p className="text-[11px] text-muted-foreground">
-                                        Example: <code className="text-primary font-mono">https://home.mydomain.com</code> or <code className="text-primary font-mono">http://192.168.1.50:3000</code>. If not specified, Portalarr attempts to auto-detect the domain from incoming request headers.
+                                        Example: <code className="text-primary font-mono">https://home.domshomelab.com</code> or <code className="text-primary font-mono">http://192.168.1.50:3000</code>. If not specified, DomsHomeLab attempts to auto-detect the domain from incoming request headers.
                                     </p>
                                 </div>
 
@@ -1548,7 +1548,7 @@ function SettingsPageContent() {
                                                 name="smtpFrom" 
                                                 value={smtpFromInput} 
                                                 onChange={(e) => setSmtpFromInput(e.target.value)} 
-                                                placeholder="portalarr@domain.com" 
+                                                placeholder="dom@domshomelab.com" 
                                                 autoComplete="off" 
                                                 data-1p-ignore="true" 
                                                 data-lpignore="true"
@@ -2022,7 +2022,7 @@ function SettingsPageContent() {
                                                 </Button>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground">
-                                                If this server uses a different Plex account or token, paste its <code>X-Plex-Token</code> here. Otherwise, Portalarr will use your Global Admin Plex Token.
+                                                If this server uses a different Plex account or token, paste its <code>X-Plex-Token</code> here. Otherwise, the dashboard will use your Global Admin Plex Token.
                                             </p>
                                         </div>
 

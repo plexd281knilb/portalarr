@@ -169,6 +169,24 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 11. White-Label & Domain Brand Isolation (`DomsHomeLab` & `d281knilb`)
+- **Brand Identity Mandate**:
+  - Homelab / Portal / Domain brand: **`DomsHomeLab`** (accessible at `home.domshomelab.com`).
+  - Media server name: **`d281knilb`** (the canonical Plex server).
+  - Outgoing email sender header: `"DomsHomeLab (d281knilb)" <${smtpFrom || smtpUser}>`.
+- **Zero Generic Branding Leakage in User Communications**:
+  - Never allow internal/generic software names (e.g. "Portalarr") to appear in outgoing email subjects, email body text, email header banners, or user-facing UI views. Users must instantly recognize the communications as coming directly from their trusted server host to prevent confusion or spam reports.
+  - Email header banner: `DOMS<span style="color: #6366f1;">HOMELAB</span>` with subtitle `d281knilb Media Server & Dashboard`.
+  - Email footer: `DomsHomeLab • d281knilb Media Server • Open Dashboard` and `© {year} DomsHomeLab. All rights reserved.`.
+- **Payment Reconciliation Memo Tags**:
+  - Generated memo tags strictly format as `#DOMSHOMELAB-USERNAME-MONTHYEAR` (e.g. `#DOMSHOMELAB-ALEX-OCT2026`).
+  - Payment scrapers retain backwards-compatible substring matching for `#DOMSHOMELAB-`, `#D281KNILB-`, and legacy `#PORTALARR-`.
+- **Client & Device Dialogs**:
+  - In Plex stream termination messages, prompt kill alerts as: `"Stream ended by user via DomsHomeLab My Plex Hub"`.
+  - In Plex OAuth flow, register client application name as `DomsHomeLab`.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

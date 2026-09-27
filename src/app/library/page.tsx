@@ -2440,7 +2440,7 @@ function BookLibraryPageContent() {
                   </div>
                   <p className="text-xs text-red-200 leading-relaxed">
                     Amazon will silently delete your books unless you whitelist
-                    our server. You <strong>MUST</strong> add the Portalarr
+                    our server. You <strong>MUST</strong> add the DomsHomeLab (d281knilb)
                     server email address to your Amazon "Approved Personal
                     Document E-mail List" before saving.
                   </p>
@@ -3457,7 +3457,7 @@ function BookLibraryPageContent() {
                           onChange={(e) => setLibPath(e.target.value)}
                         />
                         <p className="text-[10px] text-muted-foreground">
-                          Folder directory inside Portalarr Docker mapped to
+                          Folder directory inside server Docker container mapped to
                           your Unraid share.
                         </p>
                       </div>

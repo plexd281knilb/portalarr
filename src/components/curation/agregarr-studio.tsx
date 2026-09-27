@@ -1902,7 +1902,7 @@ export function AgregarrStudio() {
 
     const handleDeleteAllCollections = async () => {
         if (!selectedServerId || !selectedSectionKey) return;
-        const confirmMsg = `Are you sure you want to completely delete ALL (${collections.length}) collections and hubs in this library section from Plex and Portalarr? This will remove all collection tags from items in Plex.`;
+        const confirmMsg = `Are you sure you want to completely delete ALL (${collections.length}) collections and hubs in this library section from Plex and DomsHomeLab? This will remove all collection tags from items in Plex.`;
         if (!confirm(confirmMsg)) return;
 
         setDeletingAllCollections(true);
@@ -2729,7 +2729,7 @@ export function AgregarrStudio() {
                                         variant="outline"
                                         onClick={handleImportPlexCollections}
                                         className="border-slate-700 hover:bg-slate-800 text-xs h-7 gap-1 text-slate-300 hover:text-white cursor-pointer"
-                                        title="Import existing native Plex collections and hubs into Portalarr Agregarr Studio"
+                                        title="Import existing native Plex collections and hubs into DomsHomeLab Agregarr Studio"
                                     >
                                         <RefreshCw className="h-3 w-3 text-sky-400" />
                                         <span>Import from Plex</span>
@@ -2753,7 +2753,7 @@ export function AgregarrStudio() {
                                             disabled={deletingAllCollections}
                                             onClick={handleDeleteAllCollections}
                                             className="border-rose-800/60 hover:bg-rose-950/40 text-xs h-7 gap-1 text-rose-300 hover:text-rose-200 cursor-pointer"
-                                            title="Delete ALL collections and hubs in this section from Plex and Portalarr to start fresh"
+                                            title="Delete ALL collections and hubs in this section from Plex and DomsHomeLab to start fresh"
                                         >
                                             {deletingAllCollections ? <Loader2 className="h-3 w-3 animate-spin text-rose-400" /> : <Trash2 className="h-3 w-3 text-rose-400" />}
                                             <span>Reset &amp; Delete All</span>
@@ -5276,7 +5276,7 @@ export function AgregarrStudio() {
                             <span>Exclude Plex Labels: {quickLabelsCollection?.title}</span>
                         </DialogTitle>
                         <DialogDescription className="text-xs text-slate-400">
-                            Quick-select any label generated across Portalarr curation tabs (Parental Advisories, Placeholders, Prune, Specs) or live Plex tags to exclude them from this collection.
+                            Quick-select any label generated across DomsHomeLab curation tabs (Parental Advisories, Placeholders, Prune, Specs) or live Plex tags to exclude them from this collection.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -5793,7 +5793,7 @@ export function AgregarrStudio() {
                                 <EyeOff className="h-8 w-8 mx-auto text-slate-700" />
                                 <p className="text-xs font-medium text-slate-400">No hubs or collections are currently blacklisted.</p>
                                 <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                                    When you delete collections or auto-generated Plex hubs in Portalarr, they are registered here so they stay permanently gone.
+                                    When you delete collections or auto-generated Plex hubs in DomsHomeLab, they are registered here so they stay permanently gone.
                                 </p>
                             </div>
                         ) : (
@@ -5870,7 +5870,7 @@ export function AgregarrStudio() {
                             <span>Configure YouTube Cookies (youtube-cookies.txt)</span>
                         </DialogTitle>
                         <DialogDescription className="text-xs text-slate-400 leading-relaxed">
-                            Paste the contents of your exported Netscape format cookies text below. Portalarr will save this to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-red-400">data/youtube-cookies.txt</code> and pass it to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-300">yt-dlp --cookies</code> for authenticated 1080p trailer downloads.
+                            Paste the contents of your exported Netscape format cookies text below. DomsHomeLab will save this to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-red-400">data/youtube-cookies.txt</code> and pass it to <code className="bg-slate-900 px-1 py-0.2 rounded font-mono text-amber-300">yt-dlp --cookies</code> for authenticated 1080p trailer downloads.
                         </DialogDescription>
                     </DialogHeader>
 

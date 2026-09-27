@@ -1336,7 +1336,7 @@ export default function PaymentEmailManager() {
                                 <User className="h-5 w-5 text-primary" /> {assignModalTx.matchedUserId ? "Reassign Payment to Member" : "Manually Assign Payment"}
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Select the member who sent this payment. Portalarr will grant their subscription and update their Plex access.
+                                Select the member who sent this payment. DomsHomeLab will grant their subscription and update their Plex access.
                             </CardDescription>
                         </CardHeader>
 
@@ -1532,7 +1532,7 @@ export default function PaymentEmailManager() {
                             <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-muted-foreground flex items-center gap-2">
                                 <Sparkles className="h-4 w-4 text-primary shrink-0" />
                                 <span>
-                                    Portalarr will calculate the subscription tier from the combined <strong>${selectedTotalAmount.toFixed(2)}</strong> total and update Plex access accordingly.
+                                    DomsHomeLab will calculate the subscription tier from the combined <strong>${selectedTotalAmount.toFixed(2)}</strong> total and update Plex access accordingly.
                                 </span>
                             </div>
                         </CardContent>

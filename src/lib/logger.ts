@@ -124,7 +124,7 @@ class SystemLogger {
     constructor() {
         this.loadRecentLogsFromDisk();
         if (this.logs.length === 0) {
-            this.addLog("INFO", "SYSTEM", "Portalarr System Logger Initialized. Capturing real-time activity stream.", undefined, true);
+            this.addLog("INFO", "SYSTEM", "DomsHomeLab System Logger Initialized. Capturing real-time activity stream.", undefined, true);
         }
     }
 
@@ -155,7 +155,7 @@ class SystemLogger {
                 this.addLog(
                     "SYSTEM",
                     "SYSTEM",
-                    `🚀 Portalarr updated to new release (${currentBuildId}). Previous container logs were cleared for the fresh deployment.`,
+                    `🚀 DomsHomeLab updated to new release (${currentBuildId}). Previous container logs were cleared for the fresh deployment.`,
                     undefined,
                     false
                 );

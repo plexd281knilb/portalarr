@@ -877,7 +877,7 @@ function JoinWizardContent() {
                                 onClick={() => router.push("/")}
                             >
                                 <Play className="h-4 w-4 fill-current" />
-                                Launch Portalarr Dashboard
+                                Launch Dashboard
                             </Button>
                         </CardFooter>
                     </Card>

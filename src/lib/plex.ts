@@ -512,7 +512,7 @@ export async function getPlexActiveSessions(adminToken: string): Promise<{ serve
 
 export async function terminatePlexServerSession(serverUrl: string, token: string, sessionKey: string, sessionId?: string, reason?: string) {
     const cleanBase = serverUrl.replace(/\/+$/, "");
-    const msg = reason || "Stream ended by user via Portalarr My Plex Hub";
+    const msg = reason || "Stream ended by user via DomsHomeLab My Plex Hub";
     let success = false;
 
     // 1. Try standard DELETE /status/sessions/{sessionKey}

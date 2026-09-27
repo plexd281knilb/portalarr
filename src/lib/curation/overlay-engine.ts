@@ -1361,7 +1361,7 @@ function generateBannerSvg(
 
 function generatePlaceholderBackdropSvg(title: string): string {
     const cleanTitle = (title || "UPCOMING RELEASE").trim().toUpperCase();
-    const subText = "PORTALARR PREVIEW";
+    const subText = "DOMSHOMELAB PREVIEW";
     const font = getOverlayFont();
 
     let textPathsSvg = "";
@@ -1391,7 +1391,7 @@ function generatePlaceholderBackdropSvg(title: string): string {
         textPathsSvg = `
             <g filter="url(#posterGlow)">
                 <text x="500" y="780" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="44px" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#f8fafc">${escaped}</text>
-                <text x="500" y="830" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="20px" font-weight="700" letter-spacing="3px" text-anchor="middle" dominant-baseline="central" fill="#94a3b8">PORTALARR PREVIEW</text>
+                <text x="500" y="830" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="20px" font-weight="700" letter-spacing="3px" text-anchor="middle" dominant-baseline="central" fill="#94a3b8">DOMSHOMELAB PREVIEW</text>
             </g>
         `;
     }

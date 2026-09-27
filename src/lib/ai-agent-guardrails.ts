@@ -362,7 +362,7 @@ export function validateUserCrossBoundaryQuery(
                     violationType: "CROSS_USER_RECONNAISSANCE",
                     targetAttempted: rawTarget || "other users",
                     reason: "Users cannot query active streams or watch activity for other users.",
-                    safeResponse: `🔒 **Privacy Boundary Enforcement:** You do not have permission to view active streams, playback sessions, or watch activity for other users. In Portalarr, users are strictly isolated to their own accounts and directly linked family profiles (such as Kids or Living Room devices).`
+                    safeResponse: `🔒 **Privacy Boundary Enforcement:** You do not have permission to view active streams, playback sessions, or watch activity for other users. On this server, users are strictly isolated to their own accounts and directly linked family profiles (such as Kids or Living Room devices).`
                 };
             }
 

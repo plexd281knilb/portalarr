@@ -5,7 +5,7 @@ import { AgregarrStudio } from "@/components/curation/agregarr-studio";
 import { Loader2 } from "lucide-react";
 
 export const metadata = {
-    title: "Agregarr Collections & Coming Soon Hub | Portalarr",
+    title: "Agregarr Collections & Coming Soon Hub | DomsHomeLab",
     description: "Automated TMDb/Trakt/MDBList collections, Plex Home screen ranking (#1-#99), seasonal schedules, upcoming releases, and coming soon banners."
 };
 

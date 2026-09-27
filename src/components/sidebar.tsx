@@ -71,12 +71,12 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
             </div>
             <div>
               <h2 className="text-base font-extrabold tracking-tight text-foreground flex items-center gap-1.5">
-                Portalarr
+                DomsHomeLab
                 <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
                   v3.0-beta
                 </span>
               </h2>
-              <p className="text-[10px] text-muted-foreground font-medium">Media Ecosystem Portal</p>
+              <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
             </div>
           </div>
 
@@ -384,12 +384,12 @@ export function MobileSidebar() {
                   </div>
                   <div>
                     <h2 className="text-base font-extrabold tracking-tight text-foreground flex items-center gap-1.5">
-                      Portalarr
+                      DomsHomeLab
                       <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
                         v3.0-beta
                       </span>
                     </h2>
-                    <p className="text-[10px] text-muted-foreground font-medium">Media Ecosystem Portal</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
                   </div>
                 </div>
 

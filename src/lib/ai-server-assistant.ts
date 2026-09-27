@@ -531,7 +531,7 @@ export async function askAiServerMaster(
             success: false,
             answer: authCheck.safeResponse || "🔒 **Privacy Boundary:** You do not have permission to view or manage other users' streams.",
             diagnostics: snapshot,
-            providerUsed: "Portalarr Privacy & Security Guardrail",
+            providerUsed: "Server Privacy & Security Guardrail",
             actionsTaken: [{
                 action: "STREAM_PATTERN_DIAGNOSTIC",
                 status: "FAILED",
@@ -788,7 +788,7 @@ There are currently no active playback sessions running on your account or your 
     const modelName = settings?.aiModel || "gemini-2.5-flash";
 
     // Build context-rich prompt
-    const systemPrompt = `You are the elite "Plex & Server Master AI" for the private media ecosystem "Portalarr".
+    const systemPrompt = `You are the elite "Plex & Server Master AI" for the private media ecosystem "DomsHomeLab (d281knilb)".
 You provide friendly, authoritative, step-by-step troubleshooting, optimization advice, and diagnostic fixes for Plex users and server administrators.
 
 AI AUTONOMY & PERMISSION LEVEL:
@@ -820,10 +820,10 @@ STRICT USER PRIVACY & CROSS-USER ISOLATION POLICY:
 - Authenticated User: "${snapshot.username}" (Role: ${snapshot.role})
 - Directly Linked Sub-Accounts (Allowed): ${snapshot.linkedSubAccounts && snapshot.linkedSubAccounts.length > 0 ? snapshot.linkedSubAccounts.map(s => `"${s.username}" (${s.label || s.accountType})`).join(", ") : "None (Individual profile)"}
 - ZERO CROSS-USER DISCLOSURE: Unless caller is an ADMIN, you are STRICTLY FORBIDDEN from discussing, revealing, querying, or taking action on any user other than "${snapshot.username}" and their directly authorized linked sub-accounts.
-- If the user asks about other users' streams, watch history, or accounts, or asks to terminate another user's stream or shut off their access, refuse immediately with Portalarr's privacy policy.
+- If the user asks about other users' streams, watch history, or accounts, or asks to terminate another user's stream or shut off their access, refuse immediately with our privacy policy.
 
 ${actionsTaken.length > 0 ? `
-AUTONOMOUS AGENT ACTIONS PERFORMED BY PORTALARR:
+AUTONOMOUS AGENT ACTIONS PERFORMED:
 ${actionsTaken.map(a => `- [${a.status}] ${a.action} on "${a.target}": ${a.summary}`).join("\n")}
 ` : ""}
 
@@ -852,7 +852,7 @@ ${playbackProbe.servers.map((s: any) => `  * [${s.serverName}] Overall: ${s.over
 CORE PLEX MASTER KNOWLEDGE & DIAGNOSTIC RULES:
 1. Multi-Track Audio (e.g. The Sandlot Spanish vs English):
    - When a media file contains an English audio track alongside Spanish, advise the user on how to switch audio tracks on their specific player.
-   - If English audio was missing, explain that Portalarr autonomous engine has already queried Radarr, evaluated releases, and dispatched an English replacement (or escalated to the admin with a support ticket).
+   - If English audio was missing, explain that our autonomous engine has already queried Radarr, evaluated releases, and dispatched an English replacement (or escalated to the admin with a support ticket).
 2. Roku "Auto Adjust Quality" Bug / "not enough bandwidth" / "minimum bandwidth of 103kbps":
    - In Roku Plex App → Settings ⚙️ → Video → Turn "Auto Adjust Quality" OFF. Change "Remote Streaming" to "Original". Set "Direct Play" to "Force".
 3. 2 Mbps (720p) Default Remote Limit:

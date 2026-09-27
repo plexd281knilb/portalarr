@@ -93,7 +93,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
     // Notifications (Discord & Email)
     const [notificationOnAvailable, setNotificationOnAvailable] = useState(true);
     const [discordWebhookUrl, setDiscordWebhookUrl] = useState<string>("");
-    const [discordBotUsername, setDiscordBotUsername] = useState<string>("Portalarr");
+    const [discordBotUsername, setDiscordBotUsername] = useState<string>("DomsHomeLab");
     const [discordBotAvatarUrl, setDiscordBotAvatarUrl] = useState<string>("");
     const [discordNotifyPending, setDiscordNotifyPending] = useState(true);
     const [discordNotifyAutoApproved, setDiscordNotifyAutoApproved] = useState(true);
@@ -190,7 +190,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
         return (
             notificationOnAvailable !== init.notificationOnAvailable ||
             discordWebhookUrl.trim() !== (init.discordWebhookUrl || "").trim() ||
-            discordBotUsername.trim() !== (init.discordBotUsername || "Portalarr").trim() ||
+            discordBotUsername.trim() !== (init.discordBotUsername || "DomsHomeLab").trim() ||
             discordBotAvatarUrl.trim() !== (init.discordBotAvatarUrl || "").trim() ||
             discordNotifyPending !== init.discordNotifyPending ||
             discordNotifyAutoApproved !== init.discordNotifyAutoApproved ||
@@ -352,7 +352,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                 // Notifications (Discord & Email)
                 setNotificationOnAvailable(d.seerrNotificationOnAvailable ?? true);
                 setDiscordWebhookUrl(d.seerrDiscordWebhookUrl || "");
-                setDiscordBotUsername(d.seerrDiscordBotUsername || "Portalarr");
+                setDiscordBotUsername(d.seerrDiscordBotUsername || "DomsHomeLab");
                 setDiscordBotAvatarUrl(d.seerrDiscordBotAvatarUrl || "");
                 setDiscordNotifyPending(d.seerrDiscordNotifyPending ?? true);
                 setDiscordNotifyAutoApproved(d.seerrDiscordNotifyAutoApproved ?? true);
@@ -422,7 +422,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                     autoDual1080pFor4k: d.seerrAutoDual1080pFor4k ?? true,
                     notificationOnAvailable: d.seerrNotificationOnAvailable ?? true,
                     discordWebhookUrl: d.seerrDiscordWebhookUrl || "",
-                    discordBotUsername: d.seerrDiscordBotUsername || "Portalarr",
+                    discordBotUsername: d.seerrDiscordBotUsername || "DomsHomeLab",
                     discordBotAvatarUrl: d.seerrDiscordBotAvatarUrl || "",
                     discordNotifyPending: d.seerrDiscordNotifyPending ?? true,
                     discordNotifyAutoApproved: d.seerrDiscordNotifyAutoApproved ?? true,
@@ -551,7 +551,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
 
                 // Discord Webhook Notification Settings
                 seerrDiscordWebhookUrl: discordWebhookUrl ? discordWebhookUrl.trim() : null,
-                seerrDiscordBotUsername: discordBotUsername ? discordBotUsername.trim() : "Portalarr",
+                seerrDiscordBotUsername: discordBotUsername ? discordBotUsername.trim() : "DomsHomeLab",
                 seerrDiscordBotAvatarUrl: discordBotAvatarUrl ? discordBotAvatarUrl.trim() : null,
                 seerrDiscordNotifyPending: discordNotifyPending,
                 seerrDiscordNotifyAutoApproved: discordNotifyAutoApproved,
@@ -1244,7 +1244,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                                 <div className="sm:col-span-4 space-y-1">
                                     <Label className="text-[11px] font-semibold text-foreground">Bot Username</Label>
                                     <Input
-                                        placeholder="Portalarr"
+                                        placeholder="DomsHomeLab"
                                         value={discordBotUsername}
                                         onChange={(e) => setDiscordBotUsername(e.target.value)}
                                         className="h-8 text-xs bg-background/60"

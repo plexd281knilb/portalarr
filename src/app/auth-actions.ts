@@ -590,7 +590,7 @@ export async function requestForgotPassword(formData: FormData) {
     return { error: "Password reset emails are currently disabled by the administrator. Please contact your admin directly for assistance." };
   }
 
-  const tempPassword = "Portalarr-" + Math.random().toString(36).slice(-6) + "!";
+  const tempPassword = "DomsHomeLab-" + Math.random().toString(36).slice(-6) + "!";
   const hashedPassword = await hash(tempPassword, 10);
 
   await prisma.user.update({

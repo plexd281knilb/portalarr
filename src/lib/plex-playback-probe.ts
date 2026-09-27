@@ -337,7 +337,7 @@ export async function runDeepPlexPlaybackHealthCheck(): Promise<PlexPlaybackDiag
             operationalServers: 0,
             allCanPlay: false,
             servers: [],
-            summary: "No Plex servers or main Plex token configured in Portalarr settings."
+            summary: "No Plex servers or main Plex token configured in DomsHomeLab settings."
         };
     }
 

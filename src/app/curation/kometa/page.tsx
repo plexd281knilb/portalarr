@@ -5,7 +5,7 @@ import { KometaStudio } from "@/components/curation/kometa-studio";
 import { Loader2 } from "lucide-react";
 
 export const metadata = {
-    title: "Kometa Overlays & Badges | Portalarr",
+    title: "Kometa Overlays & Badges | DomsHomeLab",
     description: "4K UHD, HDR, Dolby Vision dovetailing, studio audio codecs, US age ratings, network logos, and tiered gloss ribbons."
 };
 

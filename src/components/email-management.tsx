@@ -250,9 +250,9 @@ export default function EmailManagement() {
             "{kindleEmail}": sampleUser.kindleEmail || "user@kindle.com",
             "{role}": sampleUser.role,
             "{status}": sampleUser.status,
-            "{appUrl}": typeof window !== "undefined" ? window.location.origin : "https://portalarr.domain.com",
-            "{loginUrl}": typeof window !== "undefined" ? `${window.location.origin}/login` : "https://portalarr.domain.com/login",
-            "{portalName}": "Portalarr"
+            "{appUrl}": typeof window !== "undefined" ? window.location.origin : "https://home.domshomelab.com",
+            "{loginUrl}": typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login",
+            "{portalName}": "DomsHomeLab"
         };
         for (const [k, v] of Object.entries(map)) {
             text = text.replaceAll(k, v);
@@ -268,9 +268,9 @@ export default function EmailManagement() {
             "{kindleEmail}": sampleUser.kindleEmail || "user@kindle.com",
             "{role}": sampleUser.role,
             "{status}": sampleUser.status,
-            "{appUrl}": typeof window !== "undefined" ? window.location.origin : "https://portalarr.domain.com",
-            "{loginUrl}": typeof window !== "undefined" ? `${window.location.origin}/login` : "https://portalarr.domain.com/login",
-            "{portalName}": "Portalarr"
+            "{appUrl}": typeof window !== "undefined" ? window.location.origin : "https://home.domshomelab.com",
+            "{loginUrl}": typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login",
+            "{portalName}": "DomsHomeLab"
         };
         for (const [k, v] of Object.entries(map)) {
             text = text.replaceAll(k, v);
@@ -473,9 +473,9 @@ export default function EmailManagement() {
         for (const v of currentTemplate.variables) {
             text = text.replaceAll(v.key, v.sampleValue);
         }
-        text = text.replaceAll("{appUrl}", typeof window !== "undefined" ? window.location.origin : "https://portalarr.domain.com");
-        text = text.replaceAll("{loginUrl}", typeof window !== "undefined" ? `${window.location.origin}/login` : "https://portalarr.domain.com/login");
-        text = text.replaceAll("{portalName}", "Portalarr");
+        text = text.replaceAll("{appUrl}", typeof window !== "undefined" ? window.location.origin : "https://home.domshomelab.com");
+        text = text.replaceAll("{loginUrl}", typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login");
+        text = text.replaceAll("{portalName}", "DomsHomeLab");
         return text;
     }, [currentTemplate, templateSubject]);
 
@@ -485,9 +485,9 @@ export default function EmailManagement() {
         for (const v of currentTemplate.variables) {
             text = text.replaceAll(v.key, v.sampleValue);
         }
-        text = text.replaceAll("{appUrl}", typeof window !== "undefined" ? window.location.origin : "https://portalarr.domain.com");
-        text = text.replaceAll("{loginUrl}", typeof window !== "undefined" ? `${window.location.origin}/login` : "https://portalarr.domain.com/login");
-        text = text.replaceAll("{portalName}", "Portalarr");
+        text = text.replaceAll("{appUrl}", typeof window !== "undefined" ? window.location.origin : "https://home.domshomelab.com");
+        text = text.replaceAll("{loginUrl}", typeof window !== "undefined" ? `${window.location.origin}/login` : "https://home.domshomelab.com/login");
+        text = text.replaceAll("{portalName}", "DomsHomeLab");
         return text;
     }, [currentTemplate, templateBody]);
 
@@ -863,7 +863,7 @@ export default function EmailManagement() {
                                             { tag: "{role}", label: "Role (Admin/User)" },
                                             { tag: "{status}", label: "Status (Approved)" },
                                             { tag: "{kindleEmail}", label: "Kindle Email" },
-                                            { tag: "{portalName}", label: "Portalarr Name" },
+                                            { tag: "{portalName}", label: "Dashboard / Brand Name" },
                                             { tag: "{appUrl}", label: "Portal URL" },
                                             { tag: "{loginUrl}", label: "Login Link" }
                                         ].map(item => (
@@ -908,8 +908,8 @@ export default function EmailManagement() {
                                         />
                                         <p className="text-[10px] text-muted-foreground">
                                             {broadcastIsHtml 
-                                                ? "Raw HTML mode enabled: Portalarr will not wrap your message in default email branding layout." 
-                                                : "Standard mode: Your message is automatically placed inside the beautiful, dark-themed responsive Portalarr email card layout."}
+                                                ? "Raw HTML mode enabled: The server will not wrap your message in default email branding layout." 
+                                                : "Standard mode: Your message is automatically placed inside the beautiful, dark-themed responsive DomsHomeLab email card layout."}
                                         </p>
                                     </div>
                                 ) : (
@@ -927,7 +927,7 @@ export default function EmailManagement() {
                                             {/* Simulated Email Header */}
                                             <div className="bg-[#181822] p-3 border-b border-border/40 space-y-1 text-xs font-sans">
                                                 <div className="flex items-center justify-between text-muted-foreground text-[11px]">
-                                                    <span><strong>From:</strong> Portalarr &lt;notifications@yourserver.com&gt;</span>
+                                                    <span><strong>From:</strong> DomsHomeLab (d281knilb) &lt;notifications@yourserver.com&gt;</span>
                                                     <span>Today, Just now</span>
                                                 </div>
                                                 <div className="text-foreground">
@@ -943,9 +943,9 @@ export default function EmailManagement() {
                                                 <div className="max-w-[540px] mx-auto bg-[#14141d] border border-white/10 rounded-xl p-6 shadow-xl space-y-4">
                                                     <div className="flex items-center gap-2 border-b border-white/10 pb-3">
                                                         <div className="h-7 w-7 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center font-bold text-primary text-xs">
-                                                            P
+                                                            D
                                                         </div>
-                                                        <span className="font-bold text-sm tracking-wide text-foreground">PORTALARR</span>
+                                                        <span className="font-bold text-sm tracking-wide text-foreground">DOMSHOMELAB</span>
                                                     </div>
 
                                                     <h4 className="text-base font-bold text-foreground">{renderedBroadcastSubjectPreview}</h4>
@@ -961,7 +961,7 @@ export default function EmailManagement() {
                                                             onClick={(e) => e.preventDefault()}
                                                             className="inline-block bg-primary text-primary-foreground font-semibold text-xs px-4 py-2 rounded-lg shadow-md"
                                                         >
-                                                            Open Portalarr
+                                                            Open Dashboard
                                                         </a>
                                                     </div>
                                                 </div>
@@ -1158,7 +1158,7 @@ export default function EmailManagement() {
                                                     </Badge>
                                                 ) : (
                                                     <Badge variant="outline" className="text-[10px]">
-                                                        Portalarr Default
+                                                        System Default
                                                     </Badge>
                                                 )}
                                             </div>
@@ -1300,9 +1300,9 @@ export default function EmailManagement() {
                                                     <div className="max-w-[540px] mx-auto bg-[#14141d] border border-white/10 rounded-xl p-6 shadow-xl space-y-4">
                                                         <div className="flex items-center gap-2 border-b border-white/10 pb-3">
                                                             <div className="h-7 w-7 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center font-bold text-primary text-xs">
-                                                                P
+                                                                D
                                                             </div>
-                                                            <span className="font-bold text-sm tracking-wide text-foreground">PORTALARR</span>
+                                                            <span className="font-bold text-sm tracking-wide text-foreground">DOMSHOMELAB</span>
                                                         </div>
 
                                                         <h4 className="text-base font-bold text-foreground">{renderedTemplateSubjectPreview}</h4>
@@ -1318,7 +1318,7 @@ export default function EmailManagement() {
                                                                 onClick={(e) => e.preventDefault()}
                                                                 className="inline-block bg-primary text-primary-foreground font-semibold text-xs px-4 py-2 rounded-lg shadow-md"
                                                             >
-                                                                Open Portalarr
+                                                                Open Dashboard
                                                             </a>
                                                         </div>
                                                     </div>

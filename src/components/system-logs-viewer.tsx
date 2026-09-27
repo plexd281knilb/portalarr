@@ -187,7 +187,7 @@ export default function SystemLogsViewer() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `portalarr_system_logs_${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+        a.download = `domshomelab_system_logs_${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

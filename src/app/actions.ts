@@ -1680,7 +1680,7 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
 
     const appUrl = await getAppUrl();
     mockVars.appUrl = appUrl;
-    mockVars.portalName = "Portalarr";
+    mockVars.portalName = "DomsHomeLab";
 
     let subject = customSubject || defaultDef.defaultSubject;
     let body = customBody || defaultDef.defaultBody;
@@ -1708,7 +1708,8 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
     });
 
     try {
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
+        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
@@ -1823,7 +1824,7 @@ export async function sendBroadcastEmailAction(payload: {
             status: user.status || "APPROVED",
             appUrl,
             loginUrl: `${appUrl}/login`,
-            portalName: "Portalarr"
+            portalName: "DomsHomeLab"
         };
 
         let personalizedSubject = payload.subject;
@@ -1901,10 +1902,10 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
         status: adminUser?.status || "APPROVED",
         appUrl,
         loginUrl: `${appUrl}/login`,
-        portalName: "Portalarr"
+        portalName: "DomsHomeLab"
     };
 
-    let personalizedSubject = payload.subject || "Portalarr Broadcast Test";
+    let personalizedSubject = payload.subject || "DomsHomeLab Broadcast Test";
     let personalizedBody = payload.body || "<p>This is a test broadcast email message.</p>";
 
     for (const [k, v] of Object.entries(mockVars)) {
@@ -2014,16 +2015,16 @@ export async function sendTestEmailAction() {
         await transporter.sendMail({
             from: senderEmail,
             to: settings.smtpUser,
-            subject: "🧪 Portalarr SMTP Email Test",
+            subject: "🧪 DomsHomeLab (d281knilb) SMTP Email Test",
             html: `
                 <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
                     <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified</h2>
-                    <p style="font-size: 14px; color: #334155;">Your Portalarr SMTP server configuration is working properly.</p>
+                    <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (d281knilb) SMTP server configuration is working properly.</p>
                     <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
                         <strong>SMTP Host:</strong> ${settings.smtpHost}:${settings.smtpPort || 587}<br/>
                         <strong>Sender:</strong> ${senderEmail}
                     </div>
-                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from Portalarr System Settings.</p>
+                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from DomsHomeLab System Settings.</p>
                 </div>
             `
         });
@@ -2612,7 +2613,7 @@ export async function revokePlexAccessForUserInternal(
 
         const isAdmin = (user as any).role === "ADMIN";
         if (isAdmin) {
-            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is a Portalarr Administrator.`);
+            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is an Administrator.`);
             return { success: true, message: "Plex administrator access retained." };
         }
 
@@ -2895,7 +2896,7 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                     }
                 });
 
-                await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on Portalarr.");
+                await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on DomsHomeLab.");
                 logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
 
                 // Notify administrator of user expiration and access revocation
@@ -5424,7 +5425,7 @@ export async function sendManualEmail(formData: FormData) {
         } as any);
 
         await transporter.sendMail({
-            from: `"Portalarr" <${settings.smtpUser}>`,
+            from: (settings.smtpFrom?.trim()?.includes("<") ? settings.smtpFrom.trim() : `"DomsHomeLab (d281knilb)" <${settings.smtpFrom?.trim() || settings.smtpUser}>`),
             to: to,
             subject: subject,
             html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${message}</div>` 
@@ -6193,7 +6194,7 @@ export async function createOrUpdateSubAccountAction(payload: {
             // Generate unique sub-account username & internal email
             const randomSuffix = Math.random().toString(36).substring(2, 7);
             const subUsername = `${parentUser.username}_${cleanType.toLowerCase()}_${randomSuffix}`;
-            const subEmail = `${subUsername}@portalarr.subaccount.local`;
+            const subEmail = `${subUsername}@domshomelab.subaccount.local`;
             const dummyPassword = await hash(Math.random().toString(36), 10);
 
             // Inherit parent's status and expiration dates
@@ -6689,13 +6690,13 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 }) {
     try {
         let name = "Anonymous User";
-        let email = "user@portalarr.local";
+        let email = "user@domshomelab.local";
         
         try {
             const session: any = await verifyUser();
             if (session) {
-                name = (session.username as string) || "Portalarr User";
-                email = (session.email as string) || `${session.username || "user"}@portalarr.local`;
+                name = (session.username as string) || "DomsHomeLab User";
+                email = (session.email as string) || `${session.username || "user"}@domshomelab.local`;
             }
         } catch (e) {
             // Unauthenticated or guest fallback
@@ -7085,9 +7086,9 @@ export async function getRoadmapText(): Promise<string> {
     try {
         await ensureSchemaColumns();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
-        return settings?.roadmapText || "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+        return settings?.roadmapText || "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
     } catch (e) {
-        return "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+        return "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
     }
 }
 
@@ -7142,7 +7143,7 @@ export async function getFeatureSuggestions() {
                         title: "Native Subtitle Engine & Auto-Sync (Bazarr Replacement)",
                         description: "Automated missing subtitle downloader across OpenSubtitles, Subscene, and Addic7ed, with AI speech-to-text audio sync alignment and 1-click user 'Fix Subtitles' in My Plex Hub.",
                         category: "Subtitles",
-                        createdBy: "Portalarr"
+                        createdBy: "DomsHomeLab"
                     },
                     include: {
                         votes: true
@@ -7323,7 +7324,7 @@ export async function getEbooksUserGuide(): Promise<string> {
     } catch (e) {
         console.warn("Failed to read user_guide_ebooks.md from disk:", e);
     }
-    return "# 📖 Portalarr Ebooks & Audiobooks User Guide\n\nWelcome to Portalarr!";
+    return "# 📖 DomsHomeLab Ebooks & Audiobooks User Guide\n\nWelcome to DomsHomeLab!";
 }
 
 export async function saveEbooksUserGuide(content: string) {
@@ -10538,7 +10539,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             where: { type: "prowlarr" }
         });
         if (!prowlarrApp) {
-            logger.addLog("WARN", "AUTO_GRAB", "⚠️ Prowlarr indexer app is not configured under Portalarr Settings.");
+            logger.addLog("WARN", "AUTO_GRAB", "⚠️ Prowlarr indexer app is not configured under Settings.");
             await prisma.bookRequest.update({
                 where: { id: requestId },
                 data: { status: "Failed - Prowlarr is not configured under settings" }
@@ -10784,7 +10785,7 @@ export async function searchProwlarrIndexers(
     });
     
     if (!prowlarrApp) {
-        throw new Error("Prowlarr is not configured in Portalarr Settings. Please add it first under Settings.");
+        throw new Error("Prowlarr is not configured in Settings. Please add it first under Settings.");
     }
     
     const prowlarrUrl = cleanUrl(prowlarrApp.url);
@@ -10942,7 +10943,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         });
         
         if (!sabApp) {
-            throw new Error("No SABnzbd download client configured in Portalarr Settings.");
+            throw new Error("No SABnzbd download client configured in Settings.");
         }
         
         const sabUrl = cleanUrl(sabApp.url);
@@ -10967,7 +10968,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         });
         
         if (!qbitApp) {
-            throw new Error("No qBittorrent client configured in Portalarr Settings.");
+            throw new Error("No qBittorrent client configured in Settings.");
         }
         
         const qbitUrl = cleanUrl(qbitApp.url);
@@ -12411,7 +12412,7 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         const mailOptions = {
             from: senderEmail,
             to: user.email,
-            subject: `📦 Portalarr Delivery: ${book.title}`,
+            subject: `📦 DomsHomeLab Book Delivery: ${book.title}`,
             html: `
                 <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
                     <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">${itemTypeLabel} File Delivery</h2>
@@ -15567,8 +15568,8 @@ export async function runPlexDiagnosticsAction() {
         await verifyAdmin();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings?.mainPlexToken) {
-            logger.addLog("ERROR", "PLEX", "❌ Plex Diagnostics: No Admin Plex Token configured in Portalarr Settings!");
-            return { success: false, error: "No Plex Admin Token configured in Portalarr Settings." };
+            logger.addLog("ERROR", "PLEX", "❌ Plex Diagnostics: No Admin Plex Token configured in Settings!");
+            return { success: false, error: "No Plex Admin Token configured in Settings." };
         }
 
         let adminToken = "";
@@ -16646,7 +16647,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                 adminToken, 
                 String(targetSession.sessionKey || sessionKey), 
                 sessionId, 
-                "Stream ended by user via Portalarr My Plex Hub"
+                "Stream ended by user via DomsHomeLab My Plex Hub"
             );
 
             if (termResult.success) {
@@ -16706,7 +16707,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         // 2. Execute termination via Tautulli
         const sessionKeyParam = targetSession.session_key ? `&session_key=${encodeURIComponent(String(targetSession.session_key))}` : `&session_key=${encodeURIComponent(sessionKey)}`;
         const sessionIdParam = targetSession.session_id ? `&session_id=${encodeURIComponent(String(targetSession.session_id))}` : "";
-        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session${sessionKeyParam}${sessionIdParam}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
+        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session${sessionKeyParam}${sessionIdParam}&message=${encodeURIComponent("Stream ended by user via DomsHomeLab My Plex Hub")}`;
         const killResult = await fetchTautulliApiJson(killUrl);
         
         let killed = killResult.ok;
@@ -16723,7 +16724,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                             sToken,
                             String(targetSession.session_key || sessionKey),
                             targetSession.session_id ? String(targetSession.session_id) : undefined,
-                            "Stream ended by user via Portalarr My Plex Hub"
+                            "Stream ended by user via DomsHomeLab My Plex Hub"
                         );
                         if (directRes.success) {
                             killed = true;

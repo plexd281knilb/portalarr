@@ -53,7 +53,7 @@ export default function LoginPage() {
     try {
       setPlexStatus("Contacting Plex.tv for authorization PIN...");
       const pin = await getPlexPin();
-      const authUrl = `https://app.plex.tv/auth/#!?clientID=portalarr-custom-dashboard-app&code=${pin.code}&context[device][product]=Portalarr`;
+      const authUrl = `https://app.plex.tv/auth/#!?clientID=domshomelab-dashboard-app&code=${pin.code}&context[device][product]=DomsHomeLab`;
       
       // Update the popup location to the actual Plex Auth URL
       popup.location.href = authUrl;
@@ -90,7 +90,7 @@ export default function LoginPage() {
             }
 
             const plexUser = await getPlexUser(token);
-            setPlexStatus("Authenticating with Portalarr...");
+            setPlexStatus("Authenticating with DomsHomeLab...");
             const plexUsername = plexUser.username || plexUser.title || (plexUser.email ? plexUser.email.split("@")[0] : "");
             const plexEmail = plexUser.email || (plexUsername ? `${plexUsername}@plex.local` : "");
             const res = await handlePlexCallback(token, plexUsername, plexEmail, isSetupMode || false);

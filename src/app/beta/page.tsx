@@ -28,7 +28,7 @@ export default function BetaPage() {
                         Beta Testing & Services
                     </h1>
                     <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-                        Early preview programs and experimental service integrations for Portalarr members.
+                        Early preview programs and experimental service integrations for community members.
                     </p>
                 </div>
 

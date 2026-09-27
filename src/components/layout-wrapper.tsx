@@ -65,7 +65,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     if (pathname.startsWith("/settings")) return "System Settings";
     if (pathname.startsWith("/guides")) return "Setup Guides";
     if (pathname.startsWith("/beta")) return "Beta Portal";
-    return "Portalarr";
+    return "DomsHomeLab";
   };
 
   if (isPublicRoute) {
@@ -77,7 +77,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           <header className="flex items-center justify-between px-3 sm:px-6 h-14 sm:h-16 border-b bg-muted/20 shrink-0">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <Server className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
-                <span className="font-bold text-lg sm:text-xl tracking-tight">Portalarr</span>
+                <span className="font-bold text-lg sm:text-xl tracking-tight">DomsHomeLab</span>
             </Link>
             
             <div className="flex items-center gap-1.5 sm:gap-3">

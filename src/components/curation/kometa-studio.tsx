@@ -162,7 +162,7 @@ const PRESET_BADGE_PACKS: BadgePresetPack[] = [
     {
         id: "dovetail-glass",
         title: "Obsidian Dovetailed Resolution & HDR Pack",
-        author: "Portalarr Studio",
+        author: "DomsHomeLab Studio",
         description: "Modern interlocking dovetailed badge series combining 4K UHD, 1080p FHD, Dolby Vision, and HDR10+ with frosted glass reflections.",
         repoUrl: "builtin://dovetail-glass",
         badgeCountEstimate: 36,
@@ -3761,7 +3761,7 @@ export function KometaStudio() {
                                 disabled={revertingOverlays}
                                 onClick={handleRevertOverlays}
                                 className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5"
-                                title="Restore original artwork from Portalarr backup vault"
+                                title="Restore original artwork from DomsHomeLab backup vault"
                             >
                                 {revertingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                                 <span>↺ Restore Originals</span>
@@ -6159,7 +6159,7 @@ export function KometaStudio() {
                                 className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
                             >
                                 {kometaImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 fill-slate-950" />}
-                                <span>Import &amp; Apply to Portalarr</span>
+                                <span>Import &amp; Apply to DomsHomeLab</span>
                             </Button>
                         </div>
                     </DialogFooter>

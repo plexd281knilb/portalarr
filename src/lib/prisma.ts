@@ -253,7 +253,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "seerrQuotaDays" INTEGER DEFAULT 7,
                     "seerrNotificationOnAvailable" BOOLEAN NOT NULL DEFAULT 1,
                     "seerrDiscordWebhookUrl" TEXT,
-                    "seerrDiscordBotUsername" TEXT DEFAULT 'Portalarr',
+                    "seerrDiscordBotUsername" TEXT DEFAULT 'DomsHomeLab',
                     "seerrDiscordBotAvatarUrl" TEXT,
                     "seerrDiscordNotifyPending" BOOLEAN NOT NULL DEFAULT 1,
                     "seerrDiscordNotifyAutoApproved" BOOLEAN NOT NULL DEFAULT 1,
@@ -544,7 +544,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["seerrKidsTv4kRootFolder", `ALTER TABLE "Settings" ADD COLUMN "seerrKidsTv4kRootFolder" TEXT;`],
                 ["seerrAutoDual1080pFor4k", `ALTER TABLE "Settings" ADD COLUMN "seerrAutoDual1080pFor4k" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["seerrDiscordWebhookUrl", `ALTER TABLE "Settings" ADD COLUMN "seerrDiscordWebhookUrl" TEXT;`],
-                ["seerrDiscordBotUsername", `ALTER TABLE "Settings" ADD COLUMN "seerrDiscordBotUsername" TEXT DEFAULT 'Portalarr';`],
+                ["seerrDiscordBotUsername", `ALTER TABLE "Settings" ADD COLUMN "seerrDiscordBotUsername" TEXT DEFAULT 'DomsHomeLab';`],
                 ["seerrDiscordBotAvatarUrl", `ALTER TABLE "Settings" ADD COLUMN "seerrDiscordBotAvatarUrl" TEXT;`],
                 ["seerrDiscordNotifyPending", `ALTER TABLE "Settings" ADD COLUMN "seerrDiscordNotifyPending" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["seerrDiscordNotifyAutoApproved", `ALTER TABLE "Settings" ADD COLUMN "seerrDiscordNotifyAutoApproved" BOOLEAN NOT NULL DEFAULT 1;`],
@@ -1084,7 +1084,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     {
                         id: "sug_plex_user_filter",
                         title: "Personal Plex Content & NSFW Filtering",
-                        description: "Allow users to customize their Plex experience from Portalarr—toggle NSFW/mature content and hide specific tagged shows or movies.",
+                        description: "Allow users to customize their Plex experience from DomsHomeLab—toggle NSFW/mature content and hide specific tagged shows or movies.",
                         category: "Plex"
                     },
                     {

@@ -25,19 +25,19 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when an administrator approves their pending account request.",
         triggerEvent: "Triggered immediately when an administrator clicks 'Approve' on a pending account in Access Control (/settings/access) or when Plex friend auto-sync detects a newly approved friend.",
         category: "AUTH",
-        defaultSubject: "🎉 Your Portalarr Account has been Approved!",
+        defaultSubject: "🎉 Your DomsHomeLab Account has been Approved!",
         defaultBody: `<h2>Account Approved! 🎉</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Great news! Your account request for Portalarr has been approved by the administrator.</p>
+<p>Great news! Your account request for DomsHomeLab has been approved by the administrator.</p>
 <p>You can now sign in and explore media libraries, stream audiobooks, read books in your browser, and submit media requests.</p>
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Log in to Portalarr</a>
+    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Log in to DomsHomeLab</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">If you need any assistance getting started, feel free to submit a support ticket inside the dashboard.</p>`,
         variables: [
             { key: "{username}", description: "Username of the approved user", sampleValue: "alex_reader" },
             { key: "{email}", description: "Email address of the approved user", sampleValue: "alex@example.com" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
             { key: "{loginUrl}", description: "Direct login link", sampleValue: "https://portal.example.com/login" }
         ]
     },
@@ -49,7 +49,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         category: "AUTH",
         defaultSubject: "👤 New Account Request: {username}",
         defaultBody: `<h2>New Account Request</h2>
-<p>A new user has registered a temporary account and is awaiting administrator approval to access Portalarr.</p>
+<p>A new user has registered a temporary account and is awaiting administrator approval to access DomsHomeLab.</p>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -76,7 +76,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of the applicant", sampleValue: "samuel_g" },
             { key: "{email}", description: "Email address of the applicant", sampleValue: "samuel@example.com" },
             { key: "{status}", description: "Account status (e.g. PENDING APPROVAL)", sampleValue: "PENDING APPROVAL" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
             { key: "{accessUrl}", description: "URL to the Access Control management page", sampleValue: "https://portal.example.com/settings/access" }
         ]
     },
@@ -86,10 +86,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when they request a password reset or when an admin resets their password.",
         triggerEvent: "Triggered on demand when a user clicks 'Forgot password?' on /login or when an administrator clicks 'Reset Password' (🔑) in Access Control.",
         category: "AUTH",
-        defaultSubject: "🔑 Temporary Password for Portalarr",
+        defaultSubject: "🔑 Temporary Password for DomsHomeLab",
         defaultBody: `<h2>Temporary Password Request</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>We received a password reset request for your Portalarr account. Here is your temporary password:</p>
+<p>We received a password reset request for your DomsHomeLab account. Here is your temporary password:</p>
 
 <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 18px; border-radius: 8px; font-family: monospace; font-size: 22px; font-weight: bold; text-align: center; letter-spacing: 2px; color: #0f172a; margin: 24px 0;">
     {tempPassword}
@@ -102,8 +102,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         variables: [
             { key: "{username}", description: "Username of recipient", sampleValue: "jordan_k" },
             { key: "{email}", description: "Email address of recipient", sampleValue: "jordan@example.com" },
-            { key: "{tempPassword}", description: "The newly generated temporary password", sampleValue: "Portalarr-9k2x1!" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" },
+            { key: "{tempPassword}", description: "The newly generated temporary password", sampleValue: "DomsHomeLab-9k2x1!" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
             { key: "{loginUrl}", description: "Direct login link", sampleValue: "https://portal.example.com/login" }
         ]
     },
@@ -116,7 +116,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "🎉 Your {mediaLabel} is Ready: {title}",
         defaultBody: `<h2>Your {mediaLabel} is Ready! 🎉</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Great news! The {mediaLabel} you requested has been downloaded and is now ready in the Portalarr library.</p>
+<p>Great news! The {mediaLabel} you requested has been downloaded and is now ready in the DomsHomeLab library.</p>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
     <p style="margin: 0 0 6px 0; font-size: 15px;"><strong>Title:</strong> {title}</p>
@@ -138,7 +138,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{actionUrl}", description: "Direct player or reader link", sampleValue: "https://portal.example.com/library?tab=audiobooks" },
             { key: "{actionText}", description: "Call-to-action button text", sampleValue: "🎧 Listen in Player" },
             { key: "{coverUrl}", description: "Cover image URL if available", sampleValue: "https://portal.example.com/api/cover?..." },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -179,7 +179,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{mediaLabel}", description: "Format name ('Ebook' or 'Audiobook')", sampleValue: "Ebook" },
             { key: "{requestedBy}", description: "Username who made the request", sampleValue: "marcus_t" },
             { key: "{manageUrl}", description: "URL to the Requests management portal", sampleValue: "https://portal.example.com/requests" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -200,7 +200,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; white-space: pre-wrap; font-size: 14px; color: #334155;">{issue}</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">Thanks for using Portalarr Support!</p>`,
+<p style="font-size: 13px; color: #64748b;">Thanks for using DomsHomeLab Support!</p>`,
         variables: [
             { key: "{name}", description: "Name or username of user who opened the ticket", sampleValue: "David" },
             { key: "{email}", description: "Email of the ticket creator", sampleValue: "david@example.com" },
@@ -208,7 +208,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{adminComment}", description: "Admin reply comment text", sampleValue: "Your requested library has been refreshed." },
             { key: "{adminCommentBlock}", description: "Formatted admin reply block with styling", sampleValue: "<div ...>...</div>" },
             { key: "{issue}", description: "The original issue text submitted by user", sampleValue: "Cannot stream chapter 4 of Harry Potter." },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -238,7 +238,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{errorTitle}", description: "Short error title", sampleValue: "Audio Stream Range Error" },
             { key: "{errorMessage}", description: "Full technical error stack trace or description", sampleValue: "ESTREAM: audio file lock failed" },
             { key: "{ticketsUrl}", description: "Link to Admin Tickets panel", sampleValue: "https://portal.example.com/admin/tickets" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -274,10 +274,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         variables: [
             { key: "{title}", description: "Book title", sampleValue: "Mistborn: The Final Empire" },
             { key: "{kindleEmail}", description: "User's Send-to-Kindle email address", sampleValue: "alex_kindle@kindle.com" },
-            { key: "{senderEmail}", description: "Server SMTP sender email address", sampleValue: "portalarr@example.com" },
+            { key: "{senderEmail}", description: "Server SMTP sender email address", sampleValue: "domshomelab@example.com" },
             { key: "{errorMessage}", description: "SMTP error message", sampleValue: "550 5.1.1 Recipient rejected by Amazon" },
             { key: "{fileSizeMb}", description: "File size in Megabytes", sampleValue: "3.2" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -304,7 +304,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{author}", description: "Author of book", sampleValue: "Brandon Sanderson" },
             { key: "{kindleEmail}", description: "Kindle delivery email address", sampleValue: "alex@kindle.com" },
             { key: "{fileSizeMb}", description: "File size in MB", sampleValue: "2.4" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -336,7 +336,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <h3 style="color: #0f172a; margin-bottom: 8px;">How to Approve:</h3>
 <p style="line-height: 1.6;">
-    To grant access to this user, log into Portalarr and open the Book Library Manage tab. 
+    To grant access to this user, log into DomsHomeLab and open the Book Library Manage tab. 
     Edit the library you want them to access and add <strong><code>{username}</code></strong> to the Allowed Users list.
 </p>
 <div style="text-align: center; margin: 24px 0;">
@@ -347,7 +347,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "User's personal email", sampleValue: "clara@example.com" },
             { key: "{kindleEmail}", description: "User's Kindle email", sampleValue: "clara_kindle@kindle.com" },
             { key: "{accessUrl}", description: "URL to Access Control page", sampleValue: "https://portal.example.com/settings/access" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -356,10 +356,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when their free trial account is created or approved, detailing trial duration, expiration date, and library access.",
         triggerEvent: "Triggered immediately when a new user finishes the /join invitation wizard or when an administrator grants a trial period in Access Control.",
         category: "TRIALS",
-        defaultSubject: "🌟 Welcome to your {trialDays}-Day Free Trial on Portalarr!",
+        defaultSubject: "🌟 Welcome to your {trialDays}-Day Free Trial on DomsHomeLab!",
         defaultBody: `<h2>Welcome to Your Free Trial! 🌟</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for Portalarr. You now have full access to stream our movie and TV show collections on Plex!</p>
+<p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for DomsHomeLab (Plex server d281knilb). You now have full access to stream our movie and TV show collections on Plex!</p>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -387,7 +387,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{trialDays}", description: "Number of trial days granted", sampleValue: "14" },
             { key: "{expirationDate}", description: "Date when trial will expire", sampleValue: "October 15, 2026" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
             { key: "{loginUrl}", description: "Direct login link", sampleValue: "https://portal.example.com/login" }
         ]
     },
@@ -397,10 +397,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to trial users a few days before their trial expires reminding them to renew or upgrade their access.",
         triggerEvent: "Triggered automatically by the background trial monitoring cron when an active trial has 3 or fewer days remaining before expiration.",
         category: "TRIALS",
-        defaultSubject: "⏳ Your Portalarr Trial Ends Soon ({daysRemaining} days left)",
+        defaultSubject: "⏳ Your DomsHomeLab Trial Ends Soon ({daysRemaining} days left)",
         defaultBody: `<h2>Your Free Trial is Ending Soon ⏳</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>We hope you've been enjoying Portalarr! Just a quick heads up that your free trial access is scheduled to expire on <strong>{expirationDate}</strong> (in {daysRemaining} days).</p>
+<p>We hope you've been enjoying DomsHomeLab (d281knilb)! Just a quick heads up that your free trial access is scheduled to expire on <strong>{expirationDate}</strong> (in {daysRemaining} days).</p>
 
 <div style="background-color: #fefce8; border: 1px solid #fef08a; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <p style="margin: 0; font-size: 14px; color: #854d0e;">
@@ -418,7 +418,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{daysRemaining}", description: "Number of days remaining in trial", sampleValue: "3" },
             { key: "{expirationDate}", description: "Date when trial expires", sampleValue: "October 15, 2026" },
             { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/settings" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -427,23 +427,23 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when their trial period has concluded and their library access has paused.",
         triggerEvent: "Triggered automatically when a user's trial period concludes and grace period expires, pausing active Plex library shares.",
         category: "TRIALS",
-        defaultSubject: "⚠️ Your Portalarr Trial Has Ended",
+        defaultSubject: "⚠️ Your DomsHomeLab Trial Has Ended",
         defaultBody: `<h2>Your Trial Period Has Ended ⚠️</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Your free trial access for Portalarr concluded on <strong>{expirationDate}</strong>. Your media and Plex library access has been temporarily paused.</p>
+<p>Your free trial access for DomsHomeLab (d281knilb) concluded on <strong>{expirationDate}</strong>. Your media and Plex library access has been temporarily paused.</p>
 
 <p>Your account, bookmarks, and request history remain safely saved. You can reactivate your account at any time by upgrading to full access.</p>
 
 <div style="text-align: center; margin: 28px 0;">
     <a href="{renewUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Reactivate & Upgrade Account</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Thank you for trying Portalarr! If you have any feedback or questions, let us know.</p>`,
+<p style="font-size: 13px; color: #64748b;">Thank you for trying DomsHomeLab! If you have any feedback or questions, let us know.</p>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{expirationDate}", description: "Date when trial concluded", sampleValue: "October 15, 2026" },
             { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/settings" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -452,10 +452,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when their account is upgraded from trial to Full Membership or when a subscription pass is granted.",
         triggerEvent: "Triggered when a user upgrades from a trial to Full Membership (Annual, Monthly, Rest-of-Year, or Permanent Pass), or when an administrator activates their full membership in Access Control.",
         category: "TRIALS",
-        defaultSubject: "👑 Welcome to Full Membership on Portalarr!",
+        defaultSubject: "👑 Welcome to Full Membership on DomsHomeLab!",
         defaultBody: `<h2>Full Membership Activated! 👑</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Congratulations! Your account has been upgraded to <strong>{planName}</strong>. You now have full, uninterrupted access to all media libraries and all premium perks.</p>
+<p>Congratulations! Your account has been upgraded to <strong>{planName}</strong>. You now have full, uninterrupted access to all media libraries on d281knilb and all premium perks.</p>
 
 <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -487,7 +487,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{planName}", description: "Plan or membership name", sampleValue: "Annual Pass" },
             { key: "{validUntil}", description: "Expiration or renewal date", sampleValue: "December 31, 2026" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -499,7 +499,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "💳 Payment Received & Membership Confirmed ({amount})",
         defaultBody: `<h2>Payment Received! 💳</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Thank you for your payment! We have received your payment of <strong>{amount}</strong> via <strong>{provider}</strong> and your Portalarr membership has been updated.</p>
+<p>Thank you for your payment! We have received your payment of <strong>{amount}</strong> via <strong>{provider}</strong> and your DomsHomeLab membership has been updated.</p>
 
 <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -540,7 +540,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Portalarr Dashboard</a>
+    <a href="{appUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open DomsHomeLab Dashboard</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">If you have any questions regarding your membership or billing, reply to this email or submit a ticket in the dashboard.</p>`,
         variables: [
@@ -552,7 +552,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{periodGranted}", description: "Subscription period granted", sampleValue: "Rest of Year (through Dec 31, 2026)" },
             { key: "{validUntil}", description: "New membership expiration date", sampleValue: "December 31, 2026" },
             { key: "{transactionId}", description: "External transaction ID or reference", sampleValue: "VENMO-TX-984210" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
             { key: "{loginUrl}", description: "Direct login link", sampleValue: "https://portal.example.com/login" }
         ]
     },
@@ -564,7 +564,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         category: "PAYMENTS",
         defaultSubject: "💰 Payment Received: {amount} via {provider} ({matchedUser})",
         defaultBody: `<h2>Incoming Payment Received 💰</h2>
-<p>An incoming payment has been processed and logged in Portalarr:</p>
+<p>An incoming payment has been processed and logged in DomsHomeLab:</p>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -603,11 +603,11 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{provider}", description: "Payment provider name", sampleValue: "Venmo" },
             { key: "{senderName}", description: "Name of the sender", sampleValue: "Jordan Miller" },
             { key: "{senderHandle}", description: "Handle or email of sender", sampleValue: "@jordan-miller" },
-            { key: "{matchedUser}", description: "Matched username on Portalarr", sampleValue: "jordan_reader" },
+            { key: "{matchedUser}", description: "Matched username on DomsHomeLab", sampleValue: "jordan_reader" },
             { key: "{periodGranted}", description: "Subscription period granted", sampleValue: "Rest of Year (through Dec 31, 2026)" },
-            { key: "{note}", description: "Payment memo or note", sampleValue: "#PORTALARR-JORDAN" },
+            { key: "{note}", description: "Payment memo or note", sampleValue: "#DOMSHOMELAB-JORDAN" },
             { key: "{accessUrl}", description: "Link to Access Control payment tab", sampleValue: "https://portal.example.com/settings/access" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -657,7 +657,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{requestedBy}", description: "Username who submitted request", sampleValue: "alex_reader" },
             { key: "{overview}", description: "Plot summary", sampleValue: "Paul Atreides unites with Chani and the Fremen..." },
             { key: "{manageUrl}", description: "Link to Request Engine management tab", sampleValue: "https://portal.example.com/requests" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -684,7 +684,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{releaseYear}", description: "Release year", sampleValue: "2023" },
             { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "Movie" },
             { key: "{quality}", description: "Quality resolution", sampleValue: "1080p Standard" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -711,7 +711,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{releaseYear}", description: "Release year", sampleValue: "2022" },
             { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "TV Series" },
             { key: "{quality}", description: "Quality resolution", sampleValue: "4K UHD" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -737,7 +737,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{releaseYear}", description: "Release year", sampleValue: "2021" },
             { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "Movie" },
             { key: "{declineReason}", description: "Administrator's reason for declining", sampleValue: "Already available under alternate edition in library." },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -770,7 +770,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{quality}", description: "Quality resolution ('4K UHD' or '1080p Standard')", sampleValue: "4K UHD" },
             { key: "{overview}", description: "Plot overview", sampleValue: "Paul Atreides unites with Chani and the Fremen..." },
             { key: "{plexUrl}", description: "Direct link to watch on Plex", sampleValue: "https://app.plex.tv/desktop" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -796,7 +796,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{releaseYear}", description: "Release year", sampleValue: "2024" },
             { key: "{mediaLabel}", description: "Format name ('Movie' or 'TV Series')", sampleValue: "TV Series" },
             { key: "{errorMessage}", description: "Description of the download or dispatch error", sampleValue: "No indexer release matches custom quality cutoff." },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
     {
@@ -844,7 +844,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{newRole}", description: "New user role", sampleValue: "USER" },
             { key: "{reason}", description: "Reason for the role or access change", sampleValue: "Trial period elapsed beyond grace period" },
             { key: "{accessUrl}", description: "URL to the Access Control management page", sampleValue: "https://portal.example.com/settings/access" },
-            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     }
 ];
@@ -854,7 +854,7 @@ export function getDefaultEmailTemplate(id: string): EmailTemplateDefinition | u
 }
 
 /**
- * Standard Portalarr Responsive Email Container Layout
+ * Standard Responsive Email Container Layout
  */
 export function wrapInPortalarrEmailLayout(options: {
     title: string;
@@ -862,7 +862,7 @@ export function wrapInPortalarrEmailLayout(options: {
     appUrl?: string;
     actionButton?: { text: string; url: string; color?: string };
 }): string {
-    const appUrl = options.appUrl || "https://portalarr.local";
+    const appUrl = options.appUrl || "https://home.domshomelab.com";
     const currentYear = new Date().getFullYear();
 
     return `
@@ -879,11 +879,11 @@ export function wrapInPortalarrEmailLayout(options: {
         <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); border-radius: 12px 12px 0 0; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: none; text-align: center;">
             <div style="display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
                 <span style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">
-                    PORTAL<span style="color: #6366f1;">ARR</span>
+                    DOMS<span style="color: #6366f1;">HOMELAB</span>
                 </span>
             </div>
             <div style="font-size: 11px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px;">
-                Unified Media Hub & Management
+                d281knilb Media Server & Dashboard
             </div>
         </div>
 
@@ -905,8 +905,8 @@ export function wrapInPortalarrEmailLayout(options: {
 
             <!-- Footer -->
             <div style="text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                <p style="margin: 0;">Portalarr Server • <a href="${appUrl}" style="color: #6366f1; text-decoration: none; font-weight: 500;">Open Dashboard</a></p>
-                <p style="margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1;">© ${currentYear} Portalarr Ecosystem. All rights reserved.</p>
+                <p style="margin: 0;">DomsHomeLab • d281knilb Media Server • <a href="${appUrl}" style="color: #6366f1; text-decoration: none; font-weight: 500;">Open Dashboard</a></p>
+                <p style="margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1;">© ${currentYear} DomsHomeLab. All rights reserved.</p>
             </div>
         </div>
     </div>
@@ -927,8 +927,8 @@ export async function renderEmailTemplate(
     }
 ): Promise<{ subject: string; html: string }> {
     const defaultDef = getDefaultEmailTemplate(templateId);
-    let subject = defaultDef?.defaultSubject || "Portalarr Notification";
-    let body = defaultDef?.defaultBody || "<p>Notification from Portalarr</p>";
+    let subject = defaultDef?.defaultSubject || "DomsHomeLab Notification";
+    let body = defaultDef?.defaultBody || "<p>Notification from DomsHomeLab (d281knilb)</p>";
 
     try {
         const custom = await prisma.emailTemplate.findUnique({
@@ -949,7 +949,8 @@ export async function renderEmailTemplate(
     const appUrl = (variables.appUrl as string) || (await getAppUrl());
     const allVars: Record<string, string> = {
         appUrl,
-        portalName: "Portalarr",
+        portalName: "DomsHomeLab",
+        serverName: "d281knilb",
         ...Object.fromEntries(
             Object.entries(variables).map(([k, v]) => [k, v !== undefined && v !== null ? String(v) : ""])
         )

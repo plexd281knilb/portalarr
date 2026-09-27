@@ -33,7 +33,7 @@ function generateFallbackPosterSvg(title: string, year: string): string {
         <rect x="80" y="540" width="440" height="2" fill="url(#accentGrad)" opacity="0.7" />
         <text x="300" y="600" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="26" fill="#f8fafc" text-anchor="middle">${cleanTitle.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}</text>
         ${cleanYear ? `<text x="300" y="640" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="18" fill="#94a3b8" text-anchor="middle">${cleanYear}</text>` : ""}
-        <text x="300" y="810" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="12" fill="#818cf8" text-anchor="middle" letter-spacing="3">PORTALARR MEDIA</text>
+        <text x="300" y="810" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="12" fill="#818cf8" text-anchor="middle" letter-spacing="3">DOMSHOMELAB MEDIA</text>
     </svg>`;
 }
 
@@ -42,7 +42,7 @@ async function tryFetchImage(url: string, headers: Record<string, string> = {}, 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         const res = await fetch(url, {
-            headers: { "User-Agent": "Portalarr/1.0", ...headers },
+            headers: { "User-Agent": "DomsHomeLab/1.0", ...headers },
             signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -263,7 +263,7 @@ export async function GET(req: NextRequest) {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000);
                 const itunesRes = await fetch(itunesSearchUrl, { 
-                    headers: { "User-Agent": "Portalarr/1.0" },
+                    headers: { "User-Agent": "DomsHomeLab/1.0" },
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);

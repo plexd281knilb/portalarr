@@ -109,7 +109,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                                     Official Kometa overlays are <strong>pre-rendered high-definition raster PNG assets</strong> with authentic laurels (Oscars, BAFTA, Cannes), textured metallic ribbons, official Dolby/IMAX branding, and custom-styled dovetail resolution flags.
                                 </p>
                                 <p className="leading-relaxed text-slate-300">
-                                    Portalarr ships with <strong>2,350+ official stock assets</strong> pulled directly from the <code className="bg-slate-900 text-purple-300 px-1 py-0.5 rounded font-mono">Kometa-Team/Kometa</code> repository. The Sharp compositing engine automatically layers these authentic raster graphics at pixel-perfect 1000&times;1500 resolution.
+                                    DomsHomeLab ships with <strong>2,350+ official stock assets</strong> pulled directly from the <code className="bg-slate-900 text-purple-300 px-1 py-0.5 rounded font-mono">Kometa-Team/Kometa</code> repository. The Sharp compositing engine automatically layers these authentic raster graphics at pixel-perfect 1000&times;1500 resolution.
                                 </p>
                             </div>
 
@@ -164,7 +164,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                     {activeTab === "adding" && (
                         <div className="space-y-5">
                             <p className="text-slate-300 leading-relaxed">
-                                You can add custom badges to Portalarr using three different workflows: direct UI upload, 1-click GitHub repository import, or by placing image files directly onto the server disk.
+                                You can add custom badges to DomsHomeLab using three different workflows: direct UI upload, 1-click GitHub repository import, or by placing image files directly onto the server disk.
                             </p>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -184,7 +184,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                                     </div>
                                     <h4 className="font-bold text-white text-xs">GitHub Repo Import</h4>
                                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                                        Click <strong>&quot;📥 Import from GitHub Repo&quot;</strong>. Paste any public GitHub repository or directory URL (e.g., custom community badge packs). Portalarr scans and imports all discovered images automatically.
+                                        Click <strong>&quot;📥 Import from GitHub Repo&quot;</strong>. Paste any public GitHub repository or directory URL (e.g., custom community badge packs). DomsHomeLab scans and imports all discovered images automatically.
                                     </p>
                                 </div>
 
@@ -335,7 +335,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                     {activeTab === "positions" && (
                         <div className="space-y-5">
                             <p className="text-slate-300 leading-relaxed">
-                                Portalarr supports 6 badge anchors, 4 corner ribbons, and configurable layer priority order to prevent overlapping when multiple badges share the same position.
+                                DomsHomeLab supports 6 badge anchors, 4 corner ribbons, and configurable layer priority order to prevent overlapping when multiple badges share the same position.
                             </p>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -364,7 +364,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                                         🧬 Dovetailed Resolution + HDR
                                     </span>
                                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                                        When both <strong>Resolution</strong> and <strong>HDR</strong> are assigned to the same corner (e.g. Top-Right) and no single custom override badge matches, Portalarr automatically merges them into a single seamless dovetailed pill badge:
+                                        When both <strong>Resolution</strong> and <strong>HDR</strong> are assigned to the same corner (e.g. Top-Right) and no single custom override badge matches, DomsHomeLab automatically merges them into a single seamless dovetailed pill badge:
                                     </p>
                                     <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] text-center text-amber-300 font-bold">
                                         4K UHD &bull; DOLBY VISION
@@ -377,7 +377,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                                     🥞 Layer Priority Hierarchy
                                 </span>
                                 <p className="text-[11px] text-slate-400">
-                                    When multiple enabled badges share an anchor, Portalarr stacks them in the order specified in the <strong>Layer Priority Order</strong> list in the Live Simulator. The default stack order is:
+                                    When multiple enabled badges share an anchor, DomsHomeLab stacks them in the order specified in the <strong>Layer Priority Order</strong> list in the Live Simulator. The default stack order is:
                                 </p>
                                 <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
                                     {["1. Ribbon", "2. Resolution", "3. HDR", "4. Video Codec", "5. Audio Codec", "6. Channels", "7. Edition", "8. Studio", "9. Ratings"].map((st, i) => (
@@ -394,7 +394,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                     {activeTab === "yaml" && (
                         <div className="space-y-5">
                             <p className="text-slate-300 leading-relaxed">
-                                If you are migrating from or integrating with an existing <code className="font-mono text-purple-300">config.yml</code> from Kometa, Portalarr translates standard Kometa overlay declarations directly into native rules.
+                                If you are migrating from or integrating with an existing <code className="font-mono text-purple-300">config.yml</code> from Kometa, DomsHomeLab translates standard Kometa overlay declarations directly into native rules.
                             </p>
 
                             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
@@ -472,7 +472,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                 {/* Footer */}
                 <div className="p-4 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between shrink-0">
                     <span className="text-[11px] text-slate-400">
-                        Portalarr Curation Studio &bull; Step 1: Kometa &amp; Agregarr Replacement
+                        DomsHomeLab Curation Studio &bull; Step 1: Kometa &amp; Agregarr Replacement
                     </span>
                     <Button
                         type="button"

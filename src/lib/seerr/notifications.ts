@@ -161,7 +161,7 @@ export async function sendSeerrDiscordWebhook(
             color: colorInt,
             fields,
             footer: {
-                text: "Portalarr • Media Request Management"
+                text: "DomsHomeLab • d281knilb Media Server"
             },
             timestamp: new Date().toISOString()
         };
@@ -176,7 +176,7 @@ export async function sendSeerrDiscordWebhook(
             embed.thumbnail = { url: posterUrl };
         }
 
-        const botUsername = settings.seerrDiscordBotUsername || "Portalarr";
+        const botUsername = settings.seerrDiscordBotUsername || "DomsHomeLab";
         const botAvatar = settings.seerrDiscordBotAvatarUrl || undefined;
 
         const res = await fetch(webhookUrl, {
@@ -218,7 +218,7 @@ export async function sendTestSeerrDiscordWebhook(
 
         const appUrl = await getAppUrl();
         const testEmbed = {
-            title: "🎉 Portalarr Request Engine — Discord Webhook Test",
+            title: "🎉 DomsHomeLab Request Engine — Discord Webhook Test",
             description: "Discord Webhook notifications are successfully connected and ready to broadcast media request events, auto-approvals, and stream availability alerts!",
             color: 0x10B981, // Emerald green
             fields: [
@@ -227,7 +227,7 @@ export async function sendTestSeerrDiscordWebhook(
                 { name: "Integration", value: "Radarr, Sonarr & Plex", inline: true }
             ],
             footer: {
-                text: "Portalarr • Media Request Management Engine"
+                text: "DomsHomeLab • d281knilb Media Server"
             },
             timestamp: new Date().toISOString()
         };
@@ -236,7 +236,7 @@ export async function sendTestSeerrDiscordWebhook(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                username: botUsername || "Portalarr",
+                username: botUsername || "DomsHomeLab",
                 avatar_url: botAvatarUrl || undefined,
                 embeds: [testEmbed]
             })

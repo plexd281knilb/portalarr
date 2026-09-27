@@ -3871,7 +3871,7 @@ export function PruneStudio() {
                                 <span>Artwork Backup Vault Health</span>
                             </CardTitle>
                             <p className="text-xs text-slate-400">
-                                Portalarr automatically archives pristine original poster artworks before applying overlays, allowing 0-loss rollback anytime.
+                                DomsHomeLab automatically archives pristine original poster artworks before applying overlays, allowing 0-loss rollback anytime.
                             </p>
 
                             <div className="space-y-3 font-mono text-xs">

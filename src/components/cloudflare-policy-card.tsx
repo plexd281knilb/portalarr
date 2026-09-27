@@ -61,7 +61,7 @@ export default function CloudflarePolicyCard() {
                             </Badge>
                         </div>
                         <CardDescription className="text-xs">
-                            If you run Cloudflare Access, Zero Trust, Authentik, or Authelia in front of Portalarr, configure these route policies to ensure users and webhooks are not blocked.
+                            If you run Cloudflare Access, Zero Trust, Authentik, or Authelia in front of DomsHomeLab, configure these route policies to ensure users and webhooks are not blocked.
                         </CardDescription>
                     </div>
                 </div>

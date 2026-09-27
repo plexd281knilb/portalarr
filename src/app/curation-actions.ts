@@ -2071,7 +2071,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const leavingSoon = await prisma.mediaContentAdvisory.findMany({ where: { isLeavingSoon: true } });
                 const lKeys = leavingSoon.map(l => l.ratingKey);
                 matchedItems = libraryItems.filter(it => lKeys.includes(it.ratingKey));
-                executionMethod = "Portalarr Prune Engine: Flagged as 'Leaving Soon' by storage disk policy.";
+                executionMethod = "DomsHomeLab Prune Engine: Flagged as 'Leaving Soon' by storage disk policy.";
             } else if (sourceQuery.startsWith("rating>=") || sourceQuery.startsWith("rating:")) {
                 const minRating = parseFloat(sourceQuery.replace(/[^0-9.]/g, "")) || 8.0;
                 matchedItems = libraryItems.filter(it => it.rating && it.rating >= minRating);

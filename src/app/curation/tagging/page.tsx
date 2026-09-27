@@ -5,7 +5,7 @@ import { TaggingStudio } from "@/components/curation/tagging-studio";
 import { Loader2 } from "lucide-react";
 
 export const metadata = {
-    title: "Plex Media Tagging & Content Advisory Studio | Portalarr",
+    title: "Plex Media Tagging & Content Advisory Studio | DomsHomeLab",
     description: "IMDb Parental Guide advisory severity tags (Nudity, Violence, Profanity, Alcohol/Drugs, Frightening), custom Plex labels/genres, and rule-based auto-taggers."
 };
 

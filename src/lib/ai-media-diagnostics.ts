@@ -84,7 +84,7 @@ export async function inspectMediaStreams(
             hasSpanishAudio: false,
             hasEnglishSubtitles: false,
             verdict: "NOT_IN_LIBRARY",
-            diagnosisSummary: "Plex Server token is not configured in Portalarr. Cannot inspect container streams."
+            diagnosisSummary: "Plex Server token is not configured. Cannot inspect container streams."
         };
     }
 
@@ -322,22 +322,22 @@ export async function searchAndGrabRadarrReplacement(
     // 2. Fetch enabled Radarr instances
     const appsRes = await getEnabledArrInstancesInternal("radarr");
     if (!appsRes.success || !appsRes.data || appsRes.data.length === 0) {
-        logAgentEvent("ERROR", "No enabled Radarr instances found in Portalarr settings");
+        logAgentEvent("ERROR", "No enabled Radarr instances found in system settings");
         const escalation = await escalateToAdminTicket({
             user,
             title,
-            issue: `User requested replacement for "${title}" due to "${reason}", but no enabled Radarr instances were found in Portalarr.`,
+            issue: `User requested replacement for "${title}" due to "${reason}", but no enabled Radarr instances were found.`,
             stepsTaken: [
                 `1. Inspected media streams: Missing English audio confirmed.`,
                 `2. Attempted autonomous Radarr search: No enabled Radarr instances configured.`
             ],
-            recommendation: "Configure and enable a Radarr instance in Portalarr Settings -> Monitoring & Apps."
+            recommendation: "Configure and enable a Radarr instance in Settings -> Monitoring & Apps."
         });
         return {
             success: false,
             escalated: true,
             ticketId: escalation.ticketId,
-            error: "No Radarr instance is connected to Portalarr. A support ticket has been sent to the server administrator."
+            error: "No Radarr instance is connected. A support ticket has been sent to the server administrator."
         };
     }
 
@@ -532,7 +532,7 @@ export async function searchAndGrabSonarrReplacement(
             title,
             issue: `User requested TV replacement for "${title}" (S${seasonNumber || 1}E${episodeNumber || 1}), but no Sonarr instances are connected.`,
             stepsTaken: ["1. TV episode stream inspection", "2. Looked up Sonarr instances: none enabled"],
-            recommendation: "Enable Sonarr instance in Portalarr settings."
+            recommendation: "Enable Sonarr instance in system settings."
         });
         return { success: false, escalated: true, ticketId: escalation.ticketId, error: "No Sonarr instance configured." };
     }
@@ -636,7 +636,7 @@ export async function escalateToAdminTicket(params: {
     telemetry?: any;
 }): Promise<{ success: boolean; ticketId: string }> {
     const userName = params.user?.username || "Plex User";
-    const userEmail = params.user?.email || "user@portalarr.local";
+    const userEmail = params.user?.email || "user@domshomelab.local";
 
     const formattedIssue = `### 🤖 Autonomous AI Agent Escalation Report
 

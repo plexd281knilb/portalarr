@@ -719,7 +719,7 @@ export function ExcludedLabelsSelector({
 
             {/* Quick-Select Labels Pills Container */}
             <div className="max-h-52 overflow-y-auto pr-1 space-y-2.5 border border-slate-800/80 rounded-lg p-2.5 bg-slate-950/60">
-                {/* 1. Portalarr Preset Labels */}
+                {/* 1. System Preset Labels */}
                 <div className="flex flex-wrap items-center gap-1.5">
                     {filteredPresetLabels.map(item => {
                         const isSelected = isLabelExcluded(value, item);

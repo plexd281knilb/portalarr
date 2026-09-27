@@ -795,6 +795,64 @@ async function runTestSuite() {
         }
     });
 
+    // 27. Brand & White-Label Integrity (DomsHomeLab & d281knilb Isolation, Zero Portalarr in Emails/Memos)
+    await assertTest("Brand & White-Label Integrity (DomsHomeLab & d281knilb Isolation)", async () => {
+        const { DEFAULT_EMAIL_TEMPLATES, wrapInPortalarrEmailLayout, renderEmailTemplate } = await import("../src/lib/email-templates");
+        const { generatePaymentMemo } = await import("../src/lib/payment-links");
+
+        // A. Assert all 18 default email templates contain zero occurrences of "Portalarr"
+        if (DEFAULT_EMAIL_TEMPLATES.length < 18) {
+            throw new Error(`Expected at least 18 email templates, found ${DEFAULT_EMAIL_TEMPLATES.length}`);
+        }
+
+        for (const t of DEFAULT_EMAIL_TEMPLATES) {
+            if (/portalarr/i.test(t.defaultSubject)) {
+                throw new Error(`Email template "${t.id}" contains "portalarr" in subject: ${t.defaultSubject}`);
+            }
+            if (/portalarr/i.test(t.defaultBody)) {
+                throw new Error(`Email template "${t.id}" contains "portalarr" in body: ${t.defaultBody}`);
+            }
+            if (/portalarr/i.test(t.description)) {
+                throw new Error(`Email template "${t.id}" contains "portalarr" in description: ${t.description}`);
+            }
+        }
+
+        // B. Assert wrapInPortalarrEmailLayout produces DomsHomeLab & d281knilb branding and zero "Portalarr"
+        const renderedHtml = wrapInPortalarrEmailLayout({
+            body: "<p>Hello user</p>",
+            subject: "Verification Test"
+        });
+
+        if (!renderedHtml.includes("DOMS") || !renderedHtml.includes("HOMELAB")) {
+            throw new Error("Email layout header banner missing DOMSHOMELAB branding");
+        }
+        if (!renderedHtml.includes("d281knilb")) {
+            throw new Error("Email layout missing d281knilb server subtitle");
+        }
+        if (/portalarr/i.test(renderedHtml)) {
+            throw new Error("Email layout contains 'portalarr' in output HTML");
+        }
+
+        // C. Assert generatePaymentMemo outputs #DOMSHOMELAB-
+        const memo = generatePaymentMemo("testuser");
+        if (!memo.startsWith("#DOMSHOMELAB-TESTUSER-")) {
+            throw new Error(`Expected memo to start with #DOMSHOMELAB-TESTUSER-, got: ${memo}`);
+        }
+
+        // D. Assert rendered user_approval template contains DomsHomeLab
+        const renderedApproval = await renderEmailTemplate("user_approval", {
+            username: "testuser",
+            email: "testuser@example.com",
+            loginUrl: "https://home.domshomelab.com/login"
+        });
+        if (/portalarr/i.test(renderedApproval.subject) || /portalarr/i.test(renderedApproval.html)) {
+            throw new Error("Rendered user_approval template contains 'portalarr'");
+        }
+        if (!renderedApproval.html.includes("DomsHomeLab") && !renderedApproval.subject.includes("DomsHomeLab")) {
+            throw new Error("Rendered user_approval template does not contain DomsHomeLab");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

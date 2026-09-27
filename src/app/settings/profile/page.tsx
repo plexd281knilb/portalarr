@@ -2309,7 +2309,7 @@ export default function UserProfilePage() {
                         <CardTitle className="text-lg font-bold flex items-center gap-2">
                             <KeyRound className="h-5 w-5 text-primary" /> Change Password
                         </CardTitle>
-                        <CardDescription>Update your login password for Portalarr.</CardDescription>
+                        <CardDescription>Update your login password for DomsHomeLab.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleChangePassword} className="space-y-4" autoComplete="off">

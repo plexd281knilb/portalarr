@@ -106,7 +106,7 @@ function filterRoadmapByRole(markdown: string, role?: string): string {
     }
 
     const result = filtered.join("\n").trim();
-    return result || "Welcome to Portalarr! Check out the media discovery and streaming features.";
+    return result || "Welcome to DomsHomeLab! Check out the media discovery and streaming features.";
 }
 
 export default function WhatsNewModal({ 
@@ -177,10 +177,10 @@ export default function WhatsNewModal({
                                 <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-bold uppercase tracking-wider py-0.5">
                                     <Rocket className="h-3 w-3 mr-1" /> Latest Updates
                                 </Badge>
-                                <span className="text-xs text-muted-foreground">Portalarr Ecosystem</span>
+                                <span className="text-xs text-muted-foreground">DomsHomeLab (d281knilb)</span>
                             </div>
                             <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2 text-foreground">
-                                <Sparkles className="h-5 w-5 text-purple-400" /> What's New in Portalarr
+                                <Sparkles className="h-5 w-5 text-purple-400" /> What's New in DomsHomeLab
                             </DialogTitle>
                             <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
                                 Discover the latest features, system improvements, and upcoming roadmap milestones.

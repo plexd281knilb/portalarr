@@ -404,7 +404,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                         <Vote className="h-10 w-10 text-muted-foreground mx-auto mb-2 opacity-50" />
                         <h4 className="text-base font-semibold text-foreground">No feature suggestions found</h4>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-                            {searchQuery ? "Try refining your search term or category." : "Be the first to suggest a great new feature for Portalarr!"}
+                            {searchQuery ? "Try refining your search term or category." : "Be the first to suggest a great new feature for DomsHomeLab!"}
                         </p>
                     </div>
                 ) : (

@@ -293,7 +293,7 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
         }
 
         if (details.certification && isNc17OrDisallowedRating(details.certification)) {
-            return { success: false, error: "NC-17 and adult-rated titles are not permitted in Portalarr." };
+            return { success: false, error: "NC-17 and adult-rated titles are not permitted on this server." };
         }
 
         const availability = await checkMediaAvailability(
@@ -377,7 +377,7 @@ export async function requestTvEpisodesAction(payload: {
         }
 
         if (payload.contentRating && isNc17OrDisallowedRating(payload.contentRating)) {
-            throw new Error("NC-17 and adult-rated titles cannot be requested in Portalarr.");
+            throw new Error("NC-17 and adult-rated titles cannot be requested on this server.");
         }
 
         if (payload.isKids && isAdultOrMatureRating(payload.contentRating)) {
@@ -753,7 +753,7 @@ export async function submitMediaRequestAction(payload: {
 
         // Global NC-17 / Disallowed Rating Guard
         if (payload.contentRating && isNc17OrDisallowedRating(payload.contentRating)) {
-            throw new Error("NC-17 and adult-rated titles cannot be requested in Portalarr.");
+            throw new Error("NC-17 and adult-rated titles cannot be requested on this server.");
         }
 
         // Kids Section Verification & Approval Rules
@@ -1507,7 +1507,7 @@ export async function getSeerrSettingsAction() {
 
                 // Seerr Discord Webhook Notification Settings
                 seerrDiscordWebhookUrl: settings?.seerrDiscordWebhookUrl ?? null,
-                seerrDiscordBotUsername: settings?.seerrDiscordBotUsername ?? "Portalarr",
+                seerrDiscordBotUsername: settings?.seerrDiscordBotUsername ?? "DomsHomeLab",
                 seerrDiscordBotAvatarUrl: settings?.seerrDiscordBotAvatarUrl ?? null,
                 seerrDiscordNotifyPending: settings?.seerrDiscordNotifyPending ?? true,
                 seerrDiscordNotifyAutoApproved: settings?.seerrDiscordNotifyAutoApproved ?? true,
