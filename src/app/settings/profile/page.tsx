@@ -139,6 +139,8 @@ export default function UserProfilePage() {
     const [addonMsg, setAddonMsg] = useState("");
     const [addonErr, setAddonErr] = useState("");
 
+    const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.role !== "ADMIN";
+
     const initialProfileRef = useRef<{
         kindleEmail: string;
         bypassKindle: boolean;
@@ -361,7 +363,15 @@ export default function UserProfilePage() {
 
     // --- LIBRARY PREFERENCE HANDLERS ---
     const isSectionAllowed = (sec: any, server?: any) => {
-        if (user?.role === "ADMIN" || !allowedLibraries || allowedLibraries.length === 0) return true;
+        if (isTrial) {
+            const sName = (server?.serverName || "").toLowerCase();
+            const secTitle = (sec?.title || "").toLowerCase();
+            if (sName.includes("kid") || sName.includes("backup") || secTitle.includes("kid")) {
+                return false;
+            }
+        }
+        if (user?.role === "ADMIN") return true;
+        if (!allowedLibraries || allowedLibraries.length === 0) return true;
         const secId = String(sec?.id ?? "");
         const secKey = String(sec?.key ?? "");
         const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
@@ -817,7 +827,6 @@ export default function UserProfilePage() {
         );
     }
 
-    const isTrial = user?.status === "TRIAL" || user?.membershipTier === "TRIAL";
     const daysLeft = isTrial && user?.trialEndsAt ? Math.max(0, differenceInDays(new Date(user.trialEndsAt), new Date())) : null;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const inviteUrl = referralInfo?.inviteUrl || (referralInfo?.referralCode ? (paymentConfig?.appUrl ? `${paymentConfig.appUrl}/join?ref=${referralInfo.referralCode}` : `${origin}/join?ref=${referralInfo.referralCode}`) : "");
@@ -881,52 +890,86 @@ export default function UserProfilePage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Gift className="h-5 w-5 text-purple-400" /> Invite Friends & Share Media
+                                <Gift className="h-5 w-5 text-purple-400" /> Invite Friends & Community Rewards
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Give your friends a free {paymentConfig?.defaultTrialDays || 14}-day pass to try out the media server. Track their trial progress and subscription rewards below.
+                                {isTrial 
+                                    ? "Full members receive personal invite links to grant friends a free pass and earn 1 free month for every friend who joins."
+                                    : `Give your friends a free ${paymentConfig?.defaultTrialDays || 14}-day pass to try out the media server. Track their trial progress and subscription rewards below.`
+                                }
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
-                            Code: {referralInfo?.referralCode || user?.username}
-                        </Badge>
+                        {isTrial ? (
+                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-purple-300" /> Full Member Perk
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
+                                Code: {referralInfo?.referralCode || user?.username}
+                            </Badge>
+                        )}
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* INVITE URL COPY BOX */}
-                    <div className="flex flex-col sm:flex-row items-center gap-2">
-                        <div className="relative w-full">
-                            <Input 
-                                readOnly 
-                                value={inviteUrl} 
-                                className="bg-background/80 font-mono text-xs pr-10 text-foreground border-purple-500/30"
-                            />
+                    {isTrial ? (
+                        <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="space-y-1">
+                                <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                    <Sparkles className="h-4 w-4 text-purple-400" /> Earn Free Months by Inviting Friends
+                                </p>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                    Upgrade to a full annual or monthly membership to unlock your personal referral link, invite friends, and automatically earn free subscription months when they convert!
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => {
+                                    document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
+                                }}
+                                className="w-full sm:w-auto text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
+                            >
+                                <Crown className="h-3.5 w-3.5" /> View Membership Options
+                            </Button>
                         </div>
-                        <Button 
-                            type="button" 
-                            onClick={handleCopyInviteLink}
-                            className="w-full sm:w-auto font-bold shrink-0 bg-purple-600 hover:bg-purple-500 text-white gap-2 text-xs h-10 transition-all hover:ring-2 hover:ring-purple-400/40 active:scale-95"
-                        >
-                            {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
-                            {copied ? "Copied Invite Link!" : "Copy Invite Link"}
-                        </Button>
-                    </div>
+                    ) : (
+                        <>
+                            {/* INVITE URL COPY BOX */}
+                            <div className="flex flex-col sm:flex-row items-center gap-2">
+                                <div className="relative w-full">
+                                    <Input 
+                                        readOnly 
+                                        value={inviteUrl} 
+                                        className="bg-background/80 font-mono text-xs pr-10 text-foreground border-purple-500/30"
+                                    />
+                                </div>
+                                <Button 
+                                    type="button" 
+                                    onClick={handleCopyInviteLink}
+                                    className="w-full sm:w-auto font-bold shrink-0 bg-purple-600 hover:bg-purple-500 text-white gap-2 text-xs h-10 transition-all hover:ring-2 hover:ring-purple-400/40 active:scale-95"
+                                >
+                                    {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                                    {copied ? "Copied Invite Link!" : "Copy Invite Link"}
+                                </Button>
+                            </div>
 
-                    {/* REFERRAL METRICS PILLS */}
-                    <div className="grid grid-cols-3 gap-3 pt-2 border-t border-purple-500/20 text-center">
-                        <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-0.5">
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Friends Invited</p>
-                            <p className="text-xl font-black text-foreground">{referralInfo?.totalReferrals ?? 0}</p>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-0.5">
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Active Trials</p>
-                            <p className="text-xl font-black text-blue-400">{referralInfo?.activeTrials ?? 0}</p>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-0.5">
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Subscribed</p>
-                            <p className="text-xl font-black text-emerald-400">{referralInfo?.conversions ?? 0}</p>
-                        </div>
-                    </div>
+                            {/* REFERRAL METRICS PILLS */}
+                            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-purple-500/20 text-center">
+                                <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-0.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Friends Invited</p>
+                                    <p className="text-xl font-black text-foreground">{referralInfo?.totalReferrals ?? 0}</p>
+                                </div>
+                                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-0.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Active Trials</p>
+                                    <p className="text-xl font-black text-blue-400">{referralInfo?.activeTrials ?? 0}</p>
+                                </div>
+                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-0.5">
+                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Subscribed</p>
+                                    <p className="text-xl font-black text-emerald-400">{referralInfo?.conversions ?? 0}</p>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </CardContent>
             </Card>
 
@@ -1168,8 +1211,14 @@ export default function UserProfilePage() {
 
                                 <div className="space-y-3">
                                     {serverLibraries.map((server) => {
+                                        if (isTrial) {
+                                            const sName = (server.serverName || "").toLowerCase();
+                                            if (sName.includes("kid") || sName.includes("backup")) {
+                                                return null;
+                                            }
+                                        }
                                         let allowedSections = (server.sections || []).filter((sec: any) => isSectionAllowed(sec, server));
-                                        if (allowedSections.length === 0 && (user?.role === "ADMIN" || allowedLibraries.length === 0)) {
+                                        if (allowedSections.length === 0 && (user?.role === "ADMIN" || (!isTrial && allowedLibraries.length === 0))) {
                                             allowedSections = server.sections || [];
                                         }
                                         if (allowedSections.length === 0) return null;
@@ -1257,9 +1306,15 @@ export default function UserProfilePage() {
                                 Create secondary Plex profiles for your Living Room TV or Kids' tablets. Sub-accounts are nested under your membership with zero extra billing.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
-                            {subAccounts.length} / {subLimits.includedLivingRooms + subLimits.includedKids} Profiles Configured
-                        </Badge>
+                        {isTrial ? (
+                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-purple-300" /> Full Member Perk
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
+                                {subAccounts.length} / {subLimits.includedLivingRooms + subLimits.includedKids} Profiles Configured
+                            </Badge>
+                        )}
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1279,49 +1334,68 @@ export default function UserProfilePage() {
                                     Shares the same libraries as your main account, but automatically filters out content with IMDb Severe Nudity tags for family room viewing.
                                 </p>
 
-                                {/* EXISTING LIVING ROOM SUBS */}
-                                <div className="space-y-2">
-                                    {subAccounts.filter(s => s.accountType === "LIVING_ROOM").map(sub => (
-                                        <div key={sub.id} className="p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-500/30 flex items-center justify-between gap-2">
-                                            <div className="space-y-0.5 min-w-0">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Living Room TV"}</span>
-                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                {isTrial ? (
+                                    <div className="p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/15 text-center space-y-1">
+                                        <p className="text-[11px] font-medium text-foreground">Dedicated Living Room Profile</p>
+                                        <p className="text-[10px] text-muted-foreground">Keep shared family screens clean with automated severe nudity filtering.</p>
+                                    </div>
+                                ) : (
+                                    /* EXISTING LIVING ROOM SUBS */
+                                    <div className="space-y-2">
+                                        {subAccounts.filter(s => s.accountType === "LIVING_ROOM").map(sub => (
+                                            <div key={sub.id} className="p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-500/30 flex items-center justify-between gap-2">
+                                                <div className="space-y-0.5 min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Living Room TV"}</span>
+                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                                    </div>
+                                                    <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
+                                                    <span className="inline-flex items-center text-[10px] text-indigo-300/90 font-medium">
+                                                        🚫 Severe Nudity Excluded
+                                                    </span>
                                                 </div>
-                                                <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
-                                                <span className="inline-flex items-center text-[10px] text-indigo-300/90 font-medium">
-                                                    🚫 Severe Nudity Excluded
-                                                </span>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleOpenEditSubAccount(sub)}
+                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                        title="Edit Profile"
+                                                    >
+                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setDeleteSubConfirmId(sub.id)}
+                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
+                                                        title="Remove Sub-Account"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleOpenEditSubAccount(sub)}
-                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                                                    title="Edit Profile"
-                                                >
-                                                    <Edit2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setDeleteSubConfirmId(sub.id)}
-                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
-                                                    title="Remove Sub-Account"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="pt-2">
-                                {subAccounts.filter(s => s.accountType === "LIVING_ROOM").length < subLimits.includedLivingRooms ? (
+                                {isTrial ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
+                                        }}
+                                        className="w-full text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Unlocks with Full Membership
+                                    </Button>
+                                ) : subAccounts.filter(s => s.accountType === "LIVING_ROOM").length < subLimits.includedLivingRooms ? (
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -1354,49 +1428,68 @@ export default function UserProfilePage() {
                                     Automatically limited to Kids-only server libraries, enforcing a strict PG rating ceiling with adult, horror, and violent content hidden.
                                 </p>
 
-                                {/* EXISTING KIDS SUBS */}
-                                <div className="space-y-2">
-                                    {subAccounts.filter(s => s.accountType === "KID").map(sub => (
-                                        <div key={sub.id} className="p-2.5 rounded-lg bg-purple-950/20 border border-purple-500/30 flex items-center justify-between gap-2">
-                                            <div className="space-y-0.5 min-w-0">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Kids Account"}</span>
-                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                {isTrial ? (
+                                    <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/15 text-center space-y-1">
+                                        <p className="text-[11px] font-medium text-foreground">Dedicated Kids Profile</p>
+                                        <p className="text-[10px] text-muted-foreground">Curated kids-safe environment with PG rating ceiling and mature content blocked.</p>
+                                    </div>
+                                ) : (
+                                    /* EXISTING KIDS SUBS */
+                                    <div className="space-y-2">
+                                        {subAccounts.filter(s => s.accountType === "KID").map(sub => (
+                                            <div key={sub.id} className="p-2.5 rounded-lg bg-purple-950/20 border border-purple-500/30 flex items-center justify-between gap-2">
+                                                <div className="space-y-0.5 min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Kids Account"}</span>
+                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                                    </div>
+                                                    <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
+                                                    <span className="inline-flex items-center text-[10px] text-purple-300/90 font-medium">
+                                                        👶 PG Safe • Kids Only Server
+                                                    </span>
                                                 </div>
-                                                <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
-                                                <span className="inline-flex items-center text-[10px] text-purple-300/90 font-medium">
-                                                    👶 PG Safe • Kids Only Server
-                                                </span>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleOpenEditSubAccount(sub)}
+                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                        title="Edit Profile"
+                                                    >
+                                                        <Edit2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setDeleteSubConfirmId(sub.id)}
+                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
+                                                        title="Remove Sub-Account"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleOpenEditSubAccount(sub)}
-                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                                                    title="Edit Profile"
-                                                >
-                                                    <Edit2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setDeleteSubConfirmId(sub.id)}
-                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
-                                                    title="Remove Sub-Account"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="pt-2">
-                                {subAccounts.filter(s => s.accountType === "KID").length < subLimits.includedKids ? (
+                                {isTrial ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
+                                        }}
+                                        className="w-full text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        <Sparkles className="h-3.5 w-3.5 text-purple-400" /> Unlocks with Full Membership
+                                    </Button>
+                                ) : subAccounts.filter(s => s.accountType === "KID").length < subLimits.includedKids ? (
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -1430,9 +1523,15 @@ export default function UserProfilePage() {
                                 Enable optional features, live streaming channels, and extra household profile slots.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
-                            {userEnabledAddons.filter((id) => addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").some((a) => a.id === id)).length} of {addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").length} Enabled
-                        </Badge>
+                        {isTrial ? (
+                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-amber-300" /> Full Member Perk
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
+                                {userEnabledAddons.filter((id) => addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").some((a) => a.id === id)).length} of {addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").length} Enabled
+                            </Badge>
+                        )}
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1511,7 +1610,19 @@ export default function UserProfilePage() {
                                                     <span>Inactive</span>
                                                 )}
                                             </span>
-                                            {isFree ? (
+                                            {isTrial ? (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
+                                                    }}
+                                                    className="text-[11px] h-7 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 gap-1 cursor-pointer transition-all active:scale-95"
+                                                >
+                                                    <Sparkles className="h-3 w-3 text-amber-400" /> Unlocks with Full Membership
+                                                </Button>
+                                            ) : isFree ? (
                                                 <div className="flex items-center gap-2">
                                                     {isToggling && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}
                                                     <Switch

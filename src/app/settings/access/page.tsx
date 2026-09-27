@@ -763,6 +763,24 @@ export default function AccessSettingsPage() {
             } else {
                 initialKeys = currentServers.flatMap(srv => (srv.sections || []).map((sec: any) => `${srv.serverId}:${sec.id}`));
             }
+
+            if (activatingTrialType.includes("TRIAL")) {
+                initialKeys = initialKeys.filter(k => {
+                    for (const srv of currentServers) {
+                        const sName = (srv.serverName || "").toLowerCase();
+                        if (sName.includes("kid") || sName.includes("backup")) {
+                            if (k.startsWith(`${srv.serverId}:`)) return false;
+                        }
+                        for (const sec of (srv.sections || [])) {
+                            const secTitle = (sec.title || "").toLowerCase();
+                            if (secTitle.includes("kid") && (k === `${srv.serverId}:${sec.id}` || k === String(sec.id))) {
+                                return false;
+                            }
+                        }
+                    }
+                    return true;
+                });
+            }
         } else {
             // Normal "Manage Libraries" click: load what is currently in SQLite (or [] if inactive/empty)
             const isInactive = user.status === "SUSPENDED" || user.status === "EXPIRED" || user.status === "REJECTED" || user.status === "PENDING";

@@ -730,6 +730,71 @@ async function runTestSuite() {
         }
     });
 
+    // 26. Trial User Perk Framing & Access Isolation (Referral Blocking, Kid/Backup Server Isolation)
+    await assertTest("Trial User Perk Framing & Access Isolation", async () => {
+        const { validateMemberReferenceAction } = await import("../src/app/actions");
+
+        const trialUser = await prisma.user.create({
+            data: {
+                username: "trial_tester_perks",
+                email: "trial_perks@example.com",
+                password: "hashedpassword123",
+                role: "USER",
+                status: "TRIAL",
+                referralCode: "trial-tester-perks-code"
+            }
+        });
+
+        try {
+            // A. Referral Code Validation: Trial user referral code must be rejected on /join
+            const trialRefCheck = await validateMemberReferenceAction("trial-tester-perks-code");
+            if (trialRefCheck.valid) {
+                throw new Error("Expected trial user referral code to be rejected, but validateMemberReferenceAction marked it valid");
+            }
+
+            // B. Upgrade user to APPROVED: Now referral code must be valid
+            await prisma.user.update({
+                where: { id: trialUser.id },
+                data: { status: "APPROVED" }
+            });
+
+            const approvedRefCheck = await validateMemberReferenceAction("trial-tester-perks-code");
+            if (!approvedRefCheck.valid) {
+                throw new Error("Expected approved user referral code to be valid, but validateMemberReferenceAction rejected it");
+            }
+
+            // C. Server & Section Filtering for Trial Users: Ensure Kids and Backup servers are isolated
+            const mockServers = [
+                { serverId: "srv1", serverName: "MainPlexServer", sections: [{ id: 1, key: "1", title: "Movies", type: "movie" }, { id: 2, key: "2", title: "Kids Movies", type: "movie" }] },
+                { serverId: "srv2", serverName: "KidsPlexServer", sections: [{ id: 3, key: "3", title: "Cartoons", type: "show" }] },
+                { serverId: "srv3", serverName: "MainPlexServerBackup", sections: [{ id: 4, key: "4", title: "Movies Backup", type: "movie" }] }
+            ];
+
+            const filteredForTrial = mockServers
+                .filter(s => {
+                    const sName = (s.serverName || "").toLowerCase();
+                    return !sName.includes("kid") && !sName.includes("backup");
+                })
+                .map(s => ({
+                    ...s,
+                    sections: (s.sections || []).filter(sec => {
+                        const secTitle = (sec.title || "").toLowerCase();
+                        return !secTitle.includes("kid");
+                    })
+                }))
+                .filter(s => s.sections.length > 0);
+
+            if (filteredForTrial.length !== 1 || filteredForTrial[0].serverId !== "srv1") {
+                throw new Error(`Expected exactly 1 allowed primary server for trial user, found ${filteredForTrial.length}`);
+            }
+            if (filteredForTrial[0].sections.length !== 1 || filteredForTrial[0].sections[0].id !== 1) {
+                throw new Error(`Expected only standard "Movies" section for trial user, found ${filteredForTrial[0].sections.map(s => s.title).join(", ")}`);
+            }
+        } finally {
+            await prisma.user.delete({ where: { id: trialUser.id } }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

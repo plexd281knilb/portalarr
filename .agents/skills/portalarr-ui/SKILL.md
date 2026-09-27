@@ -150,6 +150,25 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 10. Trial User Perk Framing & Access Isolation (`/settings/profile`)
+- **Positive Perk Framing (Preview vs Unlocked Membership)**:
+  - Trial users (`status: "TRIAL"`, `role: "USER"`) experience a clean, curated preview of core media server features.
+  - Never use restrictive, punitive, or negative phrasing ("trial members do not receive..."). Instead, frame all advanced features as exciting **Full Member Perks** that unlock upon upgrading to full membership.
+- **Referral Rewards & Invite Links**:
+  - Trial users do NOT receive active referral codes or invite links to share. Referral rewards ("Earn 1 Free Month per converted friend") and active invite links unlock with full annual or monthly membership.
+  - When `isTrial` is true, the Referral card highlights this perk with a direct 1-click button to view membership options (`#billing`).
+- **Server & Section Isolation (Kids & Backup Servers Strictly Excluded)**:
+  - Trial users are strictly restricted to standard primary server libraries (e.g. `MainPlexServer` movies and TV shows).
+  - Kids servers (`KidsPlexServer`, sections with `Kids`) and backup servers (`MainPlexServerBackup`) are strictly filtered out on both server (`getUserAllowedPlexLibrariesAction`, `updateUserSelectedPlexLibrariesAction`, `syncUserPlexShareInternal`) and client (`isSectionAllowed`).
+- **Household Sub-Accounts & Profiles**:
+  - Secondary profiles (Living Room TV with severe nudity filtering, Kids account with PG ratings ceiling) are exclusive full member perks.
+  - Trial users see clean perk preview blocks and "Unlocks with Full Membership" actions linking to subscription options.
+- **Account Add-Ons & Features**:
+  - Optional add-ons (Books & Audiobooks, extra profile slots) display "Unlocks with Full Membership" buttons for trial users.
+  - Backend actions (`toggleFreeAddonAction`, `createOrUpdateSubAccountAction`) strictly enforce full membership status.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

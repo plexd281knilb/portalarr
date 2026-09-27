@@ -4554,8 +4554,20 @@ export async function syncUserPlexShareInternal(
         };
 
         const shareErrors: string[] = [];
+        let isTrialUser = false;
+        if (targetUser.id) {
+            const u = await prisma.user.findUnique({
+                where: { id: targetUser.id },
+                select: { status: true, role: true, membershipTier: true }
+            }).catch(() => null);
+            if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.role !== "ADMIN") {
+                isTrialUser = true;
+            }
+        }
+
         for (const srv of (servers || [])) {
             const srvId = srv.clientIdentifier;
+            const srvName = (srv.name || "").toLowerCase();
             let targetSectionIds = serverSectionsMap.get(srvId) || [];
             if (targetSectionIds.length === 0) {
                 for (const [mapKey, secList] of serverSectionsMap.entries()) {
@@ -4572,6 +4584,11 @@ export async function syncUserPlexShareInternal(
                 targetSectionIds = Array.from(serverSectionsMap.values()).flat();
             }
 
+            // TRIAL USER RESTRICTION: Never share kids servers or backup servers with trial users
+            if (isTrialUser && (srvName.includes("kid") || srvName.includes("backup"))) {
+                targetSectionIds = [];
+            }
+
             const match = (shares || []).find((s: any) => 
                 ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || (servers && servers.length === 1)) &&
                 matchesPlexUser(matchTarget, s)
@@ -4579,11 +4596,14 @@ export async function syncUserPlexShareInternal(
 
             if (targetSectionIds.length === 0) {
                 // Safety Guard: Only delete a share if the user status is explicitly SUSPENDED, EXPIRED, or REJECTED,
+                // or if the user is a trial user on an excluded server (kids/backup),
                 // or if the user/admin explicitly configured selectedPlexLibrarySectionIds and omitted this server.
                 let shouldRemove = false;
                 if (targetUser.id) {
-                    const u = await prisma.user.findUnique({ where: { id: targetUser.id }, select: { status: true, selectedPlexLibrarySectionIds: true } }).catch(() => null);
+                    const u = await prisma.user.findUnique({ where: { id: targetUser.id }, select: { status: true, role: true, membershipTier: true, selectedPlexLibrarySectionIds: true } }).catch(() => null);
                     if (u && (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED")) {
+                        shouldRemove = true;
+                    } else if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.role !== "ADMIN") {
                         shouldRemove = true;
                     } else if (u && u.selectedPlexLibrarySectionIds !== null && u.selectedPlexLibrarySectionIds !== undefined) {
                         shouldRemove = true;
@@ -4997,6 +5017,9 @@ export async function getUserReferralInfo() {
             select: {
                 id: true,
                 username: true,
+                status: true,
+                role: true,
+                membershipTier: true,
                 referralCode: true,
                 referrals: {
                     select: {
@@ -5012,8 +5035,10 @@ export async function getUserReferralInfo() {
 
         if (!dbUser) return { success: false, error: "User not found" };
 
+        const isTrial = (dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.role !== "ADMIN";
+
         let code = dbUser.referralCode;
-        if (!code) {
+        if (!code && !isTrial) {
             code = dbUser.username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
             await prisma.user.update({
                 where: { id: dbUser.id },
@@ -5026,13 +5051,14 @@ export async function getUserReferralInfo() {
         const conversions = dbUser.referrals.filter(r => r.convertedAt).length;
 
         const appUrl = await getAppUrl();
-        const inviteUrl = `${appUrl}/join?ref=${encodeURIComponent(code)}`;
+        const inviteUrl = (isTrial || !code) ? null : `${appUrl}/join?ref=${encodeURIComponent(code)}`;
 
         return {
             success: true,
-            referralCode: code,
+            referralCode: isTrial ? null : code,
             appUrl,
             inviteUrl,
+            canRefer: !isTrial,
             totalReferrals,
             activeTrials,
             conversions,
@@ -5111,9 +5137,39 @@ export async function registerTrialUserFromInvite(data: {
         }
 
         const trialLibConfig = settings?.defaultTrialPlexLibraries || settings?.defaultPlexLibraries || "";
-        const rawDefaultKeys = trialLibConfig 
+        let rawDefaultKeys = trialLibConfig 
             ? trialLibConfig.split(",").map((s: string) => s.trim()).filter(Boolean)
             : [];
+
+        // Ensure trial users never receive access to kids or backup servers
+        if (settings?.mainPlexToken) {
+            try {
+                const adminToken = decryptData(settings.mainPlexToken);
+                if (adminToken) {
+                    const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                    const validKeys = new Set<string>();
+                    for (const s of srvSections) {
+                        const sName = (s.serverName || "").toLowerCase();
+                        if (!sName.includes("kid") && !sName.includes("backup")) {
+                            for (const sec of (s.sections || [])) {
+                                const secTitle = (sec.title || "").toLowerCase();
+                                if (!secTitle.includes("kid")) {
+                                    validKeys.add(`${s.serverId}:${sec.id}`);
+                                    validKeys.add(`${s.serverId}:${sec.key}`);
+                                    validKeys.add(String(sec.id));
+                                    validKeys.add(String(sec.key));
+                                }
+                            }
+                        }
+                    }
+                    if (rawDefaultKeys.length > 0 && validKeys.size > 0) {
+                        rawDefaultKeys = rawDefaultKeys.filter(k => 
+                            validKeys.has(k) || Array.from(validKeys).some(vk => vk.endsWith(`:${k}`) || k.endsWith(`:${vk}`))
+                        );
+                    }
+                }
+            } catch (_) {}
+        }
 
         const newUser = await prisma.user.create({
             data: {
@@ -5676,6 +5732,7 @@ export async function getUserAllowedPlexLibrariesAction() {
                 username: true,
                 email: true,
                 status: true,
+                role: true,
                 plexUsername: true,
                 plexEmail: true,
                 plexLibrarySectionIds: true,
@@ -5738,10 +5795,58 @@ export async function getUserAllowedPlexLibrariesAction() {
             }));
         }
 
+        if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN") {
+            // Strictly exclude kids servers, backup servers, and kids sections from trial users
+            allServersWithSections = allServersWithSections
+                .filter(s => {
+                    const sName = (s.serverName || "").toLowerCase();
+                    return !sName.includes("kid") && !sName.includes("backup");
+                })
+                .map(s => ({
+                    ...s,
+                    sections: (s.sections || []).filter((sec: any) => {
+                        const secTitle = (sec.title || "").toLowerCase();
+                        return !secTitle.includes("kid");
+                    })
+                }))
+                .filter(s => s.sections.length > 0);
+
+            const allowedUniqueKeys = new Set<string>();
+            const allowedIds = new Set<string>();
+            for (const s of allServersWithSections) {
+                for (const sec of s.sections) {
+                    allowedUniqueKeys.add(`${s.serverId}:${sec.id}`);
+                    allowedUniqueKeys.add(`${s.serverId}:${sec.key}`);
+                    allowedIds.add(String(sec.id));
+                    allowedIds.add(String(sec.key));
+                }
+            }
+
+            if (allServersWithSections.length > 0) {
+                if (allowedRawKeys.length > 0) {
+                    allowedRawKeys = allowedRawKeys.filter(k => 
+                        allowedUniqueKeys.has(k) || allowedIds.has(k) ||
+                        Array.from(allowedUniqueKeys).some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`))
+                    );
+                }
+                if (allowedRawKeys.length === 0) {
+                    allowedRawKeys = Array.from(allowedUniqueKeys);
+                }
+            }
+        }
+
         // If no specific libraries selected, user gets all allowed
         let selectedKeys: string[] = [];
         if (dbUser.selectedPlexLibrarySectionIds) {
             selectedKeys = dbUser.selectedPlexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN" && allServersWithSections.length > 0) {
+                selectedKeys = selectedKeys.filter(k =>
+                    allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`) || ak === k)
+                );
+                if (selectedKeys.length === 0) {
+                    selectedKeys = [...allowedRawKeys];
+                }
+            }
         } else {
             selectedKeys = [...allowedRawKeys];
         }
@@ -5797,10 +5902,73 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
             }
         }
 
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        let allServersWithSections: any[] = [];
+        if (adminToken) {
+            try {
+                const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                allServersWithSections = srvSections.map(s => ({
+                    serverId: s.serverId,
+                    serverName: s.serverName,
+                    sections: (s.sections || []).map(sec => ({
+                        id: sec.id,
+                        key: sec.key || String(sec.id),
+                        title: sec.title,
+                        type: sec.type,
+                        uniqueKey: `${s.serverId}:${sec.id}`
+                    }))
+                }));
+            } catch (_) {}
+        }
+
+        if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN") {
+            const allowedUniqueKeys = new Set<string>();
+            const allowedIds = new Set<string>();
+            for (const s of allServersWithSections) {
+                const sName = (s.serverName || "").toLowerCase();
+                if (!sName.includes("kid") && !sName.includes("backup")) {
+                    for (const sec of s.sections) {
+                        const secTitle = (sec.title || "").toLowerCase();
+                        if (!secTitle.includes("kid")) {
+                            allowedUniqueKeys.add(`${s.serverId}:${sec.id}`);
+                            allowedUniqueKeys.add(`${s.serverId}:${sec.key}`);
+                            allowedIds.add(String(sec.id));
+                            allowedIds.add(String(sec.key));
+                        }
+                    }
+                }
+            }
+
+            if (allServersWithSections.length > 0) {
+                if (allowedRawKeys.length > 0) {
+                    allowedRawKeys = allowedRawKeys.filter(k => 
+                        allowedUniqueKeys.has(k) || allowedIds.has(k) ||
+                        Array.from(allowedUniqueKeys).some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`))
+                    );
+                }
+                if (allowedRawKeys.length === 0) {
+                    allowedRawKeys = Array.from(allowedUniqueKeys);
+                }
+            }
+        }
+
         // If allowedRawKeys is empty or user is admin, allow any valid key
-        const filteredSelected = (allowedRawKeys.length > 0 && dbUser.role !== "ADMIN")
+        let filteredSelected = (allowedRawKeys.length > 0 && dbUser.role !== "ADMIN")
             ? selectedKeys.filter(k => allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`) || ak === k))
             : selectedKeys;
+
+        if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN" && allServersWithSections.length > 0) {
+            filteredSelected = filteredSelected.filter(k =>
+                allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`) || ak === k)
+            );
+        }
 
         const savedStr = Array.from(new Set(filteredSelected)).join(",");
 
@@ -5909,19 +6077,20 @@ export async function getUserSubAccountsAction() {
         // Check active add-ons for extra profile allowances
         const parentUser = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { enabledAddons: true, membershipTier: true }
+            select: { enabledAddons: true, membershipTier: true, status: true, role: true }
         });
+        const isTrial = (parentUser?.status === "TRIAL" || parentUser?.membershipTier === "TRIAL") && parentUser?.role !== "ADMIN";
         const enabledAddonsList: string[] = parentUser?.enabledAddons ? JSON.parse(parentUser.enabledAddons) : [];
-        const extraKidsAllowed = enabledAddonsList.includes("extra_kid_profile") ? 3 : 1;
-        const extraLivingRoomsAllowed = enabledAddonsList.includes("extra_living_room") ? 3 : 1;
+        const extraKidsAllowed = isTrial ? 0 : (enabledAddonsList.includes("extra_kid_profile") ? 3 : 1);
+        const extraLivingRoomsAllowed = isTrial ? 0 : (enabledAddonsList.includes("extra_living_room") ? 3 : 1);
 
         return {
             success: true,
-            subAccounts,
+            subAccounts: isTrial ? [] : subAccounts,
             limits: {
                 includedLivingRooms: extraLivingRoomsAllowed,
                 includedKids: extraKidsAllowed,
-                totalActive: subAccounts.length
+                totalActive: isTrial ? 0 : subAccounts.length
             }
         };
     } catch (e: any) {
@@ -5944,6 +6113,13 @@ export async function createOrUpdateSubAccountAction(payload: {
         const user: any = await verifyUser();
         const parentUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!parentUser) return { success: false, error: "Parent user not found" };
+
+        if ((parentUser.status === "TRIAL" || parentUser.membershipTier === "TRIAL") && parentUser.role !== "ADMIN") {
+            return {
+                success: false,
+                error: "Secondary profiles and sub-accounts unlock upon upgrading to full membership."
+            };
+        }
 
         const cleanType = payload.type === "KID" ? "KID" : "LIVING_ROOM";
         const cleanLabel = payload.label?.trim() || (cleanType === "KID" ? "Kids Account" : "Living Room Account");
@@ -6278,6 +6454,13 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
 
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser) return { success: false, error: "User not found" };
+
+        if ((dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.role !== "ADMIN") {
+            return {
+                success: false,
+                error: "Optional add-ons unlock upon upgrading to full membership."
+            };
+        }
 
         let enabledList: string[] = [];
         if (dbUser.enabledAddons) {
