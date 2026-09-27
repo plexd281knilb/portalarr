@@ -12,7 +12,7 @@ Radix UI's default `DialogContent` includes `sm:max-w-lg`. If you simply add `ma
 For wide media modals (such as `MediaDetailModal`, `EpisodeGuideModal`, `CollectionBuilderModal`, `SettingsModal`):
 ```tsx
 <DialogContent
-  className="sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw] max-h-[92vh] overflow-y-auto p-0 bg-slate-950 border border-slate-800 shadow-2xl rounded-2xl focus:outline-none"
+  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground focus:outline-none"
 >
 ```
 
@@ -36,12 +36,12 @@ When users click on a poster or open media details, they expect to see key metad
    - Image layer with soft zoom/fade: `<img src={backdropUrl} className="w-full h-full object-cover object-top opacity-35" />`.
    - Bottom gradient fade: `bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent`.
 2. **Foreground Header Overlap**:
-   - Poster thumbnail on the left (`w-28 sm:w-36 md:w-44 aspect-[2/3] rounded-lg shadow-2xl border border-slate-700/60 shrink-0`).
+   - Poster thumbnail on the left (`w-28 sm:w-36 md:w-40 lg:w-44 aspect-[2/3] rounded-2xl shadow-2xl border border-white/10 shrink-0`).
    - Information stack on the right:
      - Title (`text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight`).
      - Tagline (`text-xs sm:text-sm text-slate-400 italic`).
      - Pill badges row: Release Year, Content Rating (PG-13 / R / TV-MA), Runtime / Episodes, TMDB Score (`⭐ 8.2`).
-     - Action Bar: Watch Trailer button (`▶️ Watch Trailer`), Quick Request button (`📥 Request`), or Plex In-Library indicator (`✓ In Library`).
+     - Action Bar: Primary Request button (`📥 Request Movie` / `Configure & Request`), Monitored status badge, followed by secondary actions (`▶️ Watch Trailer`). Primary action must ALWAYS be first on the left.
 
 ---
 

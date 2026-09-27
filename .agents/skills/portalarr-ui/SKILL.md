@@ -31,16 +31,20 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 
 ## 📐 Key Layout & Component Rules
 
-### 1. Modals & Dialogs (Space Optimization & Responsive Widths)
+### 1. Modals & Dialogs (Space Optimization, Bounded Widths & Horizontal Overflow Protection)
 - **Radix Tailwind Merge Gotcha**: Base `DialogContent` contains `sm:max-w-lg`. Passing an unprefixed `max-w-6xl` gets overridden!
-- **Rule**: Always pass explicit prefixed responsive classes for wide modals (Media Detail, Seerr requests, Episode Guide, Collection Builders):
+- **Rule**: Always pass explicit prefixed responsive classes for wide modals (Media Detail, Seerr requests, Episode Guide, Collection Builders), capping at `max-w-4xl lg:max-w-5xl` with `overflow-x-hidden` to prevent horizontal page spreading and off-screen button scrolling on standard desktop/laptop scaling:
   ```tsx
-  className="sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw] max-h-[92vh] overflow-y-auto p-0 bg-slate-950 border border-slate-800 shadow-2xl rounded-2xl"
+  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground"
   ```
+- **Primary Action Hierarchy**:
+  - In media request modals, always place the primary action button (`Request Movie` / `Configure & Request` / `Request 4K UHD`) FIRST on the left of the action row, followed by secondary actions like "Watch Trailer". This guarantees immediate 1-click access without requiring horizontal scrolling.
+- **Similar Titles & Recommendations (Carousel vs Grid)**:
+  - Inside tabbed detail modals, provide an inline horizontal scrolling carousel (`overflow-x-auto pb-2 scrollbar-thin scroll-smooth`) with left/right chevron buttons on the primary request tab for instant browsing without layout expansion.
+  - In dedicated grid tabs (Similar Titles, Cast & Crew), cap columns at `grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3` and add `min-w-0` to all card cells. Never use unconstrained 8-10 column grids (`xl:grid-cols-8 2xl:grid-cols-10`) which spread the modal out.
 - **Zero Wasted Header Space**:
   - Use a compact hero backdrop layout with gradient fades (`bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent`).
   - Keep titles, badges (Year, Rating, Runtime, Status), and quick-action buttons aligned without massive empty top margins.
-  - Place trailer playback triggers and primary action buttons (Request / Download) directly in the header action bar for instant 1-click access without vertical scrolling.
 
 See detailed reference: [modal-and-dialog-patterns.md](./references/modal-and-dialog-patterns.md).
 

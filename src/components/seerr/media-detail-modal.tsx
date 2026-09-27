@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +48,9 @@ import {
     Check,
     CheckCheck,
     Filter,
-    RefreshCw
+    RefreshCw,
+    ChevronLeft,
+    ChevronRight
 } from "lucide-react";
 
 interface MediaDetailModalProps {
@@ -79,6 +81,15 @@ export function MediaDetailModal({
     
     // Active navigation tab
     const [activeTab, setActiveTab] = useState<"request" | "episodes" | "cast" | "providers" | "recommendations">("request");
+
+    // Carousel ref & scroll controller for Similar Titles
+    const carouselRef = useRef<HTMLDivElement>(null);
+    const scrollCarousel = (direction: "left" | "right") => {
+        if (carouselRef.current) {
+            const offset = direction === "left" ? -320 : 320;
+            carouselRef.current.scrollBy({ left: offset, behavior: "smooth" });
+        }
+    };
 
     // Inline Trailer Player State
     const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
@@ -465,7 +476,7 @@ export function MediaDetailModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="w-[96vw] sm:w-[94vw] md:w-[92vw] lg:w-[90vw] xl:w-[86vw] 2xl:w-[82vw] sm:max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1500px] max-h-[94vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto overflow-x-hidden shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
                 {loading || !details ? (
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -474,7 +485,7 @@ export function MediaDetailModal({
                         </p>
                     </div>
                 ) : (
-                    <div className="flex flex-col min-h-0">
+                    <div className="flex flex-col min-h-0 min-w-0">
                         {/* ========================================================================= */}
                         {/* HERO SECTION (Compact 2-Column or Seamless Inline Trailer Player)         */}
                         {/* ========================================================================= */}
@@ -561,7 +572,7 @@ export function MediaDetailModal({
 
                                 <div className="relative z-10 flex flex-col sm:flex-row gap-4 sm:gap-5 md:gap-6 items-start">
                                     {/* Left Column: 2:3 Vertical Poster Card */}
-                                    <div className="w-28 sm:w-36 md:w-44 lg:w-48 xl:w-52 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0 bg-[#14141c] mx-auto sm:mx-0 relative group">
+                                    <div className="w-28 sm:w-36 md:w-40 lg:w-44 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0 bg-[#14141c] mx-auto sm:mx-0 relative group">
                                         {details.posterPath ? (
                                             <img
                                                 src={details.posterPath}
@@ -673,19 +684,8 @@ export function MediaDetailModal({
                                             </div>
                                         )}
 
-                                        {/* Row 4: Action Buttons */}
+                                        {/* Row 4: Action Buttons (Primary Request / Monitor Action First) */}
                                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                                            {trailers.length > 0 && (
-                                                <Button
-                                                    size="sm"
-                                                    className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
-                                                    onClick={() => setIsPlayingTrailer(true)}
-                                                >
-                                                    <Play className="h-3.5 w-3.5 fill-current" />
-                                                    <span>Watch Trailer</span>
-                                                </Button>
-                                            )}
-
                                             {inLibrary ? (
                                                 <div className="h-8 sm:h-9 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 text-xs font-bold">
                                                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
@@ -762,6 +762,18 @@ export function MediaDetailModal({
                                                     )}
                                                 </Button>
                                             )}
+
+                                            {trailers.length > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-8 sm:h-9 px-3.5 rounded-xl font-semibold bg-red-600/15 hover:bg-red-600/25 text-red-200 border-red-500/30 hover:border-red-500/50 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 text-xs"
+                                                    onClick={() => setIsPlayingTrailer(true)}
+                                                >
+                                                    <Play className="h-3.5 w-3.5 fill-current text-red-400" />
+                                                    <span>Watch Trailer</span>
+                                                </Button>
+                                            )}
                                         </div>
 
                                         {/* Row 5: Overview Synopsis */}
@@ -778,7 +790,7 @@ export function MediaDetailModal({
                         {/* ========================================================================= */}
                         {/* NAVIGATION TABS BAR                                                      */}
                         {/* ========================================================================= */}
-                        <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2 border-b border-border/40 overflow-x-auto bg-[#0d0d14] sticky top-0 z-20 scrollbar-none">
+                        <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2 border-b border-border/40 overflow-x-auto max-w-full bg-[#0d0d14] sticky top-0 z-20 scrollbar-none">
                             <Button
                                 size="sm"
                                 variant="ghost"
@@ -861,7 +873,7 @@ export function MediaDetailModal({
                         {/* ========================================================================= */}
                         {/* TAB BODY CONTENTS                                                         */}
                         {/* ========================================================================= */}
-                        <div className="p-4 sm:p-5 md:p-6 space-y-4 flex-1">
+                        <div className="p-4 sm:p-5 md:p-6 space-y-4 flex-1 min-w-0">
                             {/* TAB 1: REQUEST & SEASONS */}
                             {activeTab === "request" && (
                                 <div className="space-y-4">
@@ -1008,7 +1020,7 @@ export function MediaDetailModal({
                                                     </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
                                                     {details.seasons.filter(s => s.seasonNumber > 0).map(s => {
                                                         const sNum = s.seasonNumber;
                                                         const seasonMon1080 = arrDetails?.seasons1080p?.[sNum];
@@ -1022,7 +1034,7 @@ export function MediaDetailModal({
                                                             <div
                                                                 key={s.id}
                                                                 onClick={() => handleToggleSeasonSelect(sNum)}
-                                                                className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 ${
+                                                                className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-1.5 min-w-0 ${
                                                                     isSelected
                                                                         ? "bg-primary/15 border-primary/50 text-foreground shadow-sm"
                                                                         : isFullyMon
@@ -1031,14 +1043,14 @@ export function MediaDetailModal({
                                                                 }`}
                                                             >
                                                                 <div className="flex items-center justify-between">
-                                                                    <div className="flex items-center gap-2">
+                                                                    <div className="flex items-center gap-2 min-w-0">
                                                                         <Checkbox
                                                                             checked={isSelected}
                                                                             onCheckedChange={() => handleToggleSeasonSelect(sNum)}
                                                                         />
-                                                                        <span className="text-xs font-bold text-white">{s.name}</span>
+                                                                        <span className="text-xs font-bold text-white truncate">{s.name}</span>
                                                                     </div>
-                                                                    <span className="text-[10px] text-muted-foreground">{s.episodeCount} eps</span>
+                                                                    <span className="text-[10px] text-muted-foreground shrink-0">{s.episodeCount} eps</span>
                                                                 </div>
 
                                                                 {/* Status indicators */}
@@ -1159,6 +1171,84 @@ export function MediaDetailModal({
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Inline Similar Titles Carousel */}
+                                    {details.recommendations && details.recommendations.length > 0 && (
+                                        <div className="pt-2 border-t border-border/40 space-y-2.5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                                        Similar Titles You May Also Like
+                                                    </h4>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[11px] font-semibold text-muted-foreground/70 mr-1">
+                                                        {details.recommendations.length} titles
+                                                    </span>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="outline"
+                                                        className="h-6 w-6 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => scrollCarousel("left")}
+                                                        title="Scroll left"
+                                                    >
+                                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="outline"
+                                                        className="h-6 w-6 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => scrollCarousel("right")}
+                                                        title="Scroll right"
+                                                    >
+                                                        <ChevronRight className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                ref={carouselRef}
+                                                className="flex gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent scroll-smooth"
+                                            >
+                                                {details.recommendations.map(rec => (
+                                                    <div
+                                                        key={rec.id}
+                                                        onClick={() => handleSelectRecommendation(rec)}
+                                                        className="w-28 sm:w-32 shrink-0 group cursor-pointer rounded-xl bg-[#121218] border border-border/40 hover:border-primary/60 transition-all hover:scale-[1.03] shadow-md p-1.5 flex flex-col justify-between"
+                                                    >
+                                                        <div className="aspect-[2/3] w-full rounded-lg overflow-hidden bg-muted/20 relative">
+                                                            {rec.posterPath ? (
+                                                                <img
+                                                                    src={rec.posterPath}
+                                                                    alt={rec.title}
+                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                                                                    {rec.mediaType === "tv" ? <Tv className="h-6 w-6 opacity-40" /> : <Film className="h-6 w-6 opacity-40" />}
+                                                                </div>
+                                                            )}
+                                                            {rec.voteAverage > 0 && (
+                                                                <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-md text-amber-300 text-[9px] font-bold flex items-center gap-0.5 border border-white/10">
+                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-400" />
+                                                                    <span>{rec.voteAverage.toFixed(1)}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="pt-1.5 px-0.5 space-y-0.5 min-w-0">
+                                                            <div className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                                                                {rec.title}
+                                                            </div>
+                                                            <div className="text-[10px] text-muted-foreground truncate">
+                                                                {rec.releaseDate ? rec.releaseDate.split("-")[0] : ""} • {rec.mediaType === "tv" ? "TV" : "Movie"}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -1395,9 +1485,9 @@ export function MediaDetailModal({
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                         Top Cast Members
                                     </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2.5">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                         {details.cast.map(c => (
-                                            <div key={c.id} className="p-2.5 rounded-xl bg-[#121218] border border-border/40 space-y-1.5 text-center">
+                                            <div key={c.id} className="p-2.5 rounded-xl bg-[#121218] border border-border/40 space-y-1.5 text-center min-w-0">
                                                 <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full overflow-hidden border border-border/50 bg-muted/20 shadow-md">
                                                     {c.profilePath ? (
                                                         <img src={c.profilePath} alt={c.name} className="w-full h-full object-cover" />
@@ -1407,7 +1497,7 @@ export function MediaDetailModal({
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <div className="text-xs font-bold text-foreground line-clamp-1">{c.name}</div>
                                                     {c.character && (
                                                         <div className="text-[10px] text-muted-foreground line-clamp-1">{c.character}</div>
@@ -1462,12 +1552,12 @@ export function MediaDetailModal({
                                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                         Titles You May Also Like
                                     </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2.5">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                         {details.recommendations.map(rec => (
                                             <div
                                                 key={rec.id}
                                                 onClick={() => handleSelectRecommendation(rec)}
-                                                className="group cursor-pointer rounded-xl overflow-hidden bg-[#121218] border border-border/40 hover:border-primary/50 transition-all hover:scale-[1.02] shadow-lg"
+                                                className="group cursor-pointer rounded-xl overflow-hidden bg-[#121218] border border-border/40 hover:border-primary/50 transition-all hover:scale-[1.02] shadow-lg min-w-0 flex flex-col justify-between"
                                             >
                                                 <div className="aspect-[2/3] w-full bg-muted/20 overflow-hidden relative">
                                                     {rec.posterPath ? (
@@ -1484,11 +1574,11 @@ export function MediaDetailModal({
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="p-2 space-y-0.5">
+                                                <div className="p-2 space-y-0.5 min-w-0">
                                                     <div className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
                                                         {rec.title}
                                                     </div>
-                                                    <div className="text-[10px] text-muted-foreground">
+                                                    <div className="text-[10px] text-muted-foreground truncate">
                                                         {rec.releaseDate ? rec.releaseDate.split("-")[0] : ""} • {rec.mediaType === "tv" ? "TV" : "Movie"}
                                                     </div>
                                                 </div>
