@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
 import { 
     getUserReferralInfo, 
@@ -138,6 +139,88 @@ export default function UserProfilePage() {
     const [addonMsg, setAddonMsg] = useState("");
     const [addonErr, setAddonErr] = useState("");
 
+    const initialProfileRef = useRef<{
+        kindleEmail: string;
+        bypassKindle: boolean;
+        notifPrefs: typeof notifPrefs;
+        contentPrefs: typeof contentPrefs;
+        selectedLibraries: string[];
+    } | null>(null);
+
+    const isKindleDirty = useMemo(() => {
+        if (!initialProfileRef.current) return false;
+        return (
+            kindleEmail.trim() !== initialProfileRef.current.kindleEmail.trim() ||
+            bypassKindle !== initialProfileRef.current.bypassKindle
+        );
+    }, [kindleEmail, bypassKindle]);
+
+    const isNotifDirty = useMemo(() => {
+        if (!initialProfileRef.current) return false;
+        const init = initialProfileRef.current.notifPrefs;
+        return (
+            notifPrefs.emailMediaReady !== init.emailMediaReady ||
+            notifPrefs.emailNewContent !== init.emailNewContent ||
+            notifPrefs.emailAnnouncements !== init.emailAnnouncements ||
+            notifPrefs.emailSupportTickets !== init.emailSupportTickets ||
+            notifPrefs.emailSubscriptionReminders !== init.emailSubscriptionReminders ||
+            notifPrefs.emailReferralRewards !== init.emailReferralRewards ||
+            notifPrefs.discordMediaReady !== init.discordMediaReady ||
+            notifPrefs.discordAnnouncements !== init.discordAnnouncements ||
+            (notifPrefs.discordWebhookUrl || "").trim() !== (init.discordWebhookUrl || "").trim()
+        );
+    }, [notifPrefs]);
+
+    const isContentDirty = useMemo(() => {
+        if (!initialProfileRef.current) return false;
+        if (selectedSafetyUserId && user && selectedSafetyUserId !== user.id) return false;
+        const init = initialProfileRef.current.contentPrefs;
+        const areArraysEqual = (a: string[], b: string[]) => {
+            if (a.length !== b.length) return false;
+            const setA = new Set(a);
+            return b.every(x => setA.has(x));
+        };
+        return (
+            contentPrefs.maxContentRating !== init.maxContentRating ||
+            contentPrefs.hideLeavingSoon !== init.hideLeavingSoon ||
+            contentPrefs.hideHorror !== init.hideHorror ||
+            contentPrefs.hideNsfw !== init.hideNsfw ||
+            contentPrefs.hideGore !== init.hideGore ||
+            !areArraysEqual(contentPrefs.excludedGenresList, init.excludedGenresList) ||
+            !areArraysEqual(contentPrefs.excludedTagsList, init.excludedTagsList)
+        );
+    }, [contentPrefs, selectedSafetyUserId, user]);
+
+    const isLibrariesDirty = useMemo(() => {
+        if (!initialProfileRef.current) return false;
+        const init = initialProfileRef.current.selectedLibraries;
+        if (selectedLibraries.length !== init.length) return true;
+        const setInit = new Set(init);
+        return !selectedLibraries.every(x => setInit.has(x));
+    }, [selectedLibraries]);
+
+    const unsavedSections: string[] = [];
+    if (isKindleDirty) unsavedSections.push("Send-to-Kindle");
+    if (isLibrariesDirty) unsavedSections.push("Shared Plex Libraries");
+    if (isNotifDirty) unsavedSections.push("Notification Preferences");
+    if (isContentDirty) unsavedSections.push("Content Safety");
+
+    const hasUnsavedChanges = unsavedSections.length > 0;
+
+    const handleDiscardAll = () => {
+        if (!initialProfileRef.current) return;
+        const init = initialProfileRef.current;
+        setKindleEmail(init.kindleEmail);
+        setBypassKindle(init.bypassKindle);
+        setNotifPrefs({ ...init.notifPrefs });
+        setContentPrefs({
+            ...init.contentPrefs,
+            excludedGenresList: [...init.contentPrefs.excludedGenresList],
+            excludedTagsList: [...init.contentPrefs.excludedTagsList]
+        });
+        setSelectedLibraries([...init.selectedLibraries]);
+    };
+
     const handleCopy = (text: string, key: string) => {
         if (!text) return;
         navigator.clipboard.writeText(text);
@@ -241,6 +324,32 @@ export default function UserProfilePage() {
                     setAddonsCatalog(addRes.catalog || []);
                     setUserEnabledAddons(addRes.userEnabledAddons || []);
                 }
+
+                initialProfileRef.current = {
+                    kindleEmail: u?.kindleEmail === "DIRECT_DOWNLOAD" ? "" : (u?.kindleEmail || ""),
+                    bypassKindle: u?.kindleEmail === "DIRECT_DOWNLOAD",
+                    notifPrefs: {
+                        emailMediaReady: Boolean(notifRes?.preferences?.emailMediaReady),
+                        emailNewContent: Boolean(notifRes?.preferences?.emailNewContent),
+                        emailAnnouncements: Boolean(notifRes?.preferences?.emailAnnouncements),
+                        emailSupportTickets: Boolean(notifRes?.preferences?.emailSupportTickets ?? true),
+                        emailSubscriptionReminders: Boolean(notifRes?.preferences?.emailSubscriptionReminders ?? true),
+                        emailReferralRewards: Boolean(notifRes?.preferences?.emailReferralRewards ?? true),
+                        discordMediaReady: Boolean(notifRes?.preferences?.discordMediaReady),
+                        discordAnnouncements: Boolean(notifRes?.preferences?.discordAnnouncements),
+                        discordWebhookUrl: notifRes?.preferences?.discordWebhookUrl || ""
+                    },
+                    contentPrefs: {
+                        maxContentRating: contentRes?.preferences?.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(contentRes?.preferences?.hideLeavingSoon),
+                        hideHorror: Boolean(contentRes?.preferences?.hideHorror),
+                        hideNsfw: Boolean(contentRes?.preferences?.hideNsfw),
+                        hideGore: Boolean(contentRes?.preferences?.hideGore),
+                        excludedGenresList: contentRes?.preferences?.excludedGenresList || [],
+                        excludedTagsList: contentRes?.preferences?.excludedTagsList || []
+                    },
+                    selectedLibraries: libRes?.selectedKeys || []
+                };
             } catch (e) {
                 console.error("fetchProfile error:", e);
             } finally {
@@ -341,8 +450,7 @@ export default function UserProfilePage() {
         setSelectedLibraries([]);
     };
 
-    const handleSaveLibraries = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSaveLibrariesDirect = async (): Promise<boolean> => {
         setSavingLibraries(true);
         setLibMsg("");
         setLibErr("");
@@ -350,16 +458,28 @@ export default function UserProfilePage() {
             const res = await updateUserSelectedPlexLibrariesAction(selectedLibraries);
             if (res.success) {
                 setLibMsg(res.message || "Your shared Plex library preferences have been saved and synced to Plex!");
-                if (res.selectedKeys) setSelectedLibraries(res.selectedKeys);
+                const keys = res.selectedKeys || [...selectedLibraries];
+                setSelectedLibraries(keys);
+                if (initialProfileRef.current) {
+                    initialProfileRef.current.selectedLibraries = [...keys];
+                }
                 setTimeout(() => setLibMsg(""), 5000);
+                return true;
             } else {
                 setLibErr(res.error || "Failed to save library preferences.");
+                return false;
             }
         } catch (err: any) {
             setLibErr(err.message || "Error saving library preferences");
+            return false;
         } finally {
             setSavingLibraries(false);
         }
+    };
+
+    const handleSaveLibraries = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSaveLibrariesDirect();
     };
 
     // --- SUB-ACCOUNT HANDLERS ---
@@ -485,6 +605,10 @@ export default function UserProfilePage() {
             if (!bypassKindle) {
                 setKindleEmail(res.kindleEmail || "");
             }
+            if (initialProfileRef.current) {
+                initialProfileRef.current.kindleEmail = bypassKindle ? "" : (res.kindleEmail || kindleEmail);
+                initialProfileRef.current.bypassKindle = bypassKindle;
+            }
         }
     };
 
@@ -502,6 +626,10 @@ export default function UserProfilePage() {
             setKindleMsg(res.message || "Your Send-to-Kindle email address has been cleared.");
             setUser((prev: any) => ({ ...prev, kindleEmail: "" }));
             setKindleEmail("");
+            if (initialProfileRef.current) {
+                initialProfileRef.current.kindleEmail = "";
+                initialProfileRef.current.bypassKindle = false;
+            }
         }
     };
 
@@ -527,8 +655,7 @@ export default function UserProfilePage() {
         }
     };
 
-    const handleSaveNotifications = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSaveNotificationsDirect = async (): Promise<boolean> => {
         setSavingNotif(true);
         setNotifMsg("");
         setNotifErr("");
@@ -536,15 +663,26 @@ export default function UserProfilePage() {
             const res = await updateUserNotificationPreferencesAction(notifPrefs);
             if (res.success) {
                 setNotifMsg(res.message || "Notification preferences saved!");
+                if (initialProfileRef.current) {
+                    initialProfileRef.current.notifPrefs = { ...notifPrefs };
+                }
                 setTimeout(() => setNotifMsg(""), 4000);
+                return true;
             } else {
                 setNotifErr(res.error || "Failed to save preferences");
+                return false;
             }
         } catch (err: any) {
             setNotifErr(err.message || "Error saving preferences");
+            return false;
         } finally {
             setSavingNotif(false);
         }
+    };
+
+    const handleSaveNotifications = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSaveNotificationsDirect();
     };
 
     const handleSelectSafetyAccount = async (targetId: string) => {
@@ -575,8 +713,7 @@ export default function UserProfilePage() {
         }
     };
 
-    const handleSaveContentSafety = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSaveContentSafetyDirect = async (): Promise<boolean> => {
         setSavingContent(true);
         setContentMsg("");
         setContentErr("");
@@ -598,14 +735,44 @@ export default function UserProfilePage() {
                     ? `"${targetSub.subAccountLabel || (targetSub.accountType === "KID" ? "Kids Account" : "Living Room")}"`
                     : "Primary Account";
                 setContentMsg(`Content safety preferences saved for ${targetName}!`);
+                if (initialProfileRef.current && (!selectedSafetyUserId || selectedSafetyUserId === user?.id)) {
+                    initialProfileRef.current.contentPrefs = {
+                        ...contentPrefs,
+                        excludedGenresList: [...contentPrefs.excludedGenresList],
+                        excludedTagsList: [...contentPrefs.excludedTagsList]
+                    };
+                }
                 setTimeout(() => setContentMsg(""), 4000);
+                return true;
             } else {
                 setContentErr(res.error || "Failed to save preferences");
+                return false;
             }
         } catch (err: any) {
             setContentErr(err.message || "Error saving preferences");
+            return false;
         } finally {
             setSavingContent(false);
+        }
+    };
+
+    const handleSaveContentSafety = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSaveContentSafetyDirect();
+    };
+
+    const [savingAllDirty, setSavingAllDirty] = useState(false);
+    const handleSaveAllDirty = async () => {
+        setSavingAllDirty(true);
+        try {
+            const promises: Promise<any>[] = [];
+            if (isKindleDirty) promises.push(handleUpdateKindleEmail());
+            if (isLibrariesDirty) promises.push(handleSaveLibrariesDirect());
+            if (isNotifDirty) promises.push(handleSaveNotificationsDirect());
+            if (isContentDirty) promises.push(handleSaveContentSafetyDirect());
+            await Promise.all(promises);
+        } finally {
+            setSavingAllDirty(false);
         }
     };
 
@@ -926,13 +1093,18 @@ export default function UserProfilePage() {
             </Card>
 
             {/* MY SHARED PLEX LIBRARIES CARD */}
-            <Card id="libraries" className="border-cyan-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="libraries" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isLibrariesDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
                                 <FolderCheck className="h-5 w-5 text-cyan-400" /> My Shared Plex Libraries
+                                {isLibrariesDirty && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Choose which libraries from your allowed membership access appear on your Plex home screen and apps.
@@ -1372,13 +1544,18 @@ export default function UserProfilePage() {
             </Card>
 
             {/* NOTIFICATION PREFERENCES CARD */}
-            <Card id="notifications" className="border-cyan-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="notifications" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isNotifDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
                                 <Bell className="h-5 w-5 text-cyan-400" /> Notification & Email Preferences
+                                {isNotifDirty && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Choose which updates you want to receive via Email and Discord webhook alerts.
@@ -1541,13 +1718,18 @@ export default function UserProfilePage() {
             </Card>
 
             {/* CONTENT SAFETY & FAMILY PROFILE CARD */}
-            <Card id="safety" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="safety" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isContentDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-amber-500/30 shadow-sm"}`}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
                                 <Shield className="h-5 w-5 text-amber-400" /> Content Safety & Family Profile
+                                {isContentDirty && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Configure parental rating ceilings, genre exclusions, and child-safe viewing filters.
@@ -1741,13 +1923,18 @@ export default function UserProfilePage() {
             </Card>
 
             {/* SEND-TO-KINDLE DELIVERY CARD */}
-            <Card id="kindle" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+            <Card id="kindle" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isKindleDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-amber-500/30 shadow-sm"}`}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
                                 <BookOpen className="h-5 w-5 text-amber-400" /> Send-to-Kindle Delivery
+                                {isKindleDirty && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Configure your Kindle email address to receive ebooks directly on your Amazon Kindle device or app.
@@ -2278,6 +2465,15 @@ export default function UserProfilePage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* FLOATING SAVE BAR & UNSAVED CHANGES MODAL */}
+            <UnsavedChangesPrompt
+                hasUnsavedChanges={hasUnsavedChanges}
+                unsavedSections={unsavedSections}
+                onSave={handleSaveAllDirty}
+                onDiscard={handleDiscardAll}
+                isSaving={savingAllDirty || savingLibraries || savingNotif || savingContent || kindleSaving}
+            />
         </div>
     );
 }

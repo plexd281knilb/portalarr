@@ -2,6 +2,19 @@
 
 Portalarr is a centralized, self-hosted dashboard designed to manage a media server ecosystem. It serves as a unified portal that aggregates system status, active downloads, service links, and support tools for both users and administrators.
 
+## 🚨 Mandatory Task Completion & Delivery Protocol (Strict 100% Enforcement)
+
+To guarantee 100% reliability, quality control, and consistency, the following 4-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+1. **Full Integration Testing:**
+   Execute `cmd /c "npm test"` to run the Portalarr verification suite (`scripts/verify-all.ts`). All tests must pass (0 failures). Add new test cases whenever adding new actions or core calculations.
+2. **Production Build Verification:**
+   Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Skills & Documentation Sync:**
+   Review and update relevant `.agents/skills/` documents (e.g. `portalarr-ui`, `seerr-expert`, etc.) to record any new UI patterns, API contracts, formulas, or operational guidelines.
+4. **Git Version Control & Deployment Push:**
+   Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style, and run `git push origin main`.
+
 ## Project Overview
 
 - **Core Purpose:** To provide a single "mission control" interface for media server stacks (Plex, Tautulli, Glances, and "Arr" apps).

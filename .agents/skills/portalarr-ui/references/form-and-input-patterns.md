@@ -25,25 +25,42 @@ When building suggestion dropdowns (e.g. Title/Author autocomplete, Plex server 
 
 ---
 
-## 2. Dirty State Warnings & Floating Save Bars
+## 2. Dirty State Warnings & Unified `UnsavedChangesPrompt` System
 
-To prevent users from losing unpersisted settings changes when navigating across tabs or pages:
-1. **Dirty Detection**: Compare current component states against `baselineSettings`.
-2. **Visual Highlight**:
+To prevent users from losing unpersisted settings changes when navigating across tabs or pages, all settings and configuration surfaces in Portalarr adhere to a standardized unsaved changes alert system:
+
+1. **Dirty Detection**: Compare current component states against an `initialDataRef` snapshot taken on page load and updated upon successful saves.
+2. **Visual Card Highlight**:
    ```tsx
-   <Card className={`transition-all duration-300 ${isDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-slate-800'}`}>
+   <Card className={`transition-all duration-300 ${isDirty ? 'border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-border/50'}`}>
    ```
-3. **Card Header Badge & Save Trigger**:
+3. **Card Header Badge**:
    ```tsx
-   <Button
-     onClick={handleSave}
-     disabled={saving}
-     size="sm"
-     className={isDirty ? "bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold" : "bg-slate-800 text-slate-300"}
-   >
-     {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-     {savedMsg ? "Saved!" : isDirty ? "Save Changes *" : "Save Settings"}
-   </Button>
+   {isDirty && (
+       <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+           ● Unsaved Changes
+       </Badge>
+   )}
+   ```
+4. **Tab Switch & In-App Navigation Interception**:
+   - Tab triggers display a pulsing amber dot: `{isTabDirty && <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse ml-1 shrink-0" />}`.
+   - If switching tabs while dirty, intercept with confirmation before switching.
+5. **Unified `<UnsavedChangesPrompt />` Component**:
+   Located at `@/components/ui/unsaved-changes-prompt`.
+   - **Floating Docked Save Bar**: Fixed at `bottom-6 right-6 z-50` with an animated amber ping, list of modified sections, "Discard" button, and "Save All Changes" button.
+   - **Browser Navigation Guard**: Registers `beforeunload` listener while dirty to prevent accidental page refresh or tab close.
+   - **Link Click Interception**: Intercepts in-app `<a>` navigation, displaying a modal dialog with 3 options:
+     - "Stay on Page" (dismisses dialog)
+     - "Discard & Leave" (discards changes and navigates to target)
+     - "Save & Continue" (saves changes, updates snapshot, and navigates to target)
+   ```tsx
+   <UnsavedChangesPrompt
+       hasUnsavedChanges={hasUnsavedChanges}
+       unsavedSections={unsavedSections}
+       onSave={handleSaveAllDirty}
+       onDiscard={handleDiscardAll}
+       isSaving={saving}
+   />
    ```
 
 ---

@@ -73,7 +73,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       <div className="w-full min-h-[100dvh] flex flex-col bg-background">
         <ImpersonationBanner />
         {/* --- GLOBAL USER HEADER --- */}
-        {pathname !== "/login" && (
+        {pathname !== "/login" && !pathname.startsWith("/join") && (
           <header className="flex items-center justify-between px-3 sm:px-6 h-14 sm:h-16 border-b bg-muted/20 shrink-0">
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <Server className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />

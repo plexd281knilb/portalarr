@@ -123,6 +123,8 @@ function SettingsPageContent() {
     // Alert States
     const [alertBanner, setAlertBanner] = useState<{enabled: boolean, text: string}>({enabled: false, text: ""});
     const [bannerEnabled, setBannerEnabled] = useState(false);
+    const [isSeerrDirty, setIsSeerrDirty] = useState(false);
+    const [seerrDirtySections, setSeerrDirtySections] = useState<string[]>([]);
 
     // Edit Mode States
     const [editingApp, setEditingApp] = useState<any>(null);
@@ -330,6 +332,9 @@ function SettingsPageContent() {
     if (isAiDirty) unsavedSections.push("AI Metadata Agent");
     if (isRoadmapDirty) unsavedSections.push("Roadmap Text");
     if (isBetaDirty) unsavedSections.push("Beta Dashboard Intro");
+    if (isSeerrDirty) {
+        seerrDirtySections.forEach(s => unsavedSections.push(`Seerr: ${s}`));
+    }
 
     const hasUnsavedChanges = unsavedSections.length > 0;
     const isGeneralTabDirty = isAlertBannerDirty || isAppUrlDirty || isSmtpDirty || isPlexDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
@@ -1166,6 +1171,12 @@ function SettingsPageContent() {
                     <TabsTrigger value="requests" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
                         <Compass className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Media Requests</span>
+                        {isSeerrDirty && (
+                            <span className="ml-1 flex h-2 w-2 relative shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                        )}
                     </TabsTrigger>
                     <TabsTrigger value="emails" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80 min-w-0">
                         <Mail className="h-4 w-4 text-amber-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -3925,7 +3936,13 @@ function SettingsPageContent() {
                 </TabsContent>
 
                 <TabsContent value="requests">
-                    <SeerrSettingsPanel onNavigateTab={handleTabChange} />
+                    <SeerrSettingsPanel 
+                        onNavigateTab={handleTabChange} 
+                        onDirtyChange={(dirty, sections) => {
+                            setIsSeerrDirty(dirty);
+                            setSeerrDirtySections(sections);
+                        }}
+                    />
                 </TabsContent>
 
                 <TabsContent value="logs">

@@ -50,9 +50,14 @@ export function calculateProratedBilling(options: {
 }): ProratedBillingResult {
     const trialDays = options.trialDays && options.trialDays > 0 ? options.trialDays : 14;
     const yearlyRate = typeof options.yearlyPrice === "number" && options.yearlyPrice >= 0 ? options.yearlyPrice : 180;
-    const monthlyRate = typeof options.monthlyPrice === "number" && options.monthlyPrice > 0 
+    
+    // Annual proration strictly derives the monthly base from the annual price (e.g. $180 / 12 = $15/mo)
+    const annualMonthlyRate = yearlyRate > 0 ? Math.round((yearlyRate / 12) * 100) / 100 : 15;
+    
+    // Standalone monthly plan rate (defaults to annualMonthlyRate if not set)
+    const standaloneMonthlyRate = typeof options.monthlyPrice === "number" && options.monthlyPrice > 0 
         ? options.monthlyPrice 
-        : (yearlyRate > 0 ? Math.round((yearlyRate / 12) * 100) / 100 : 15);
+        : annualMonthlyRate;
 
     const start = options.startDate ? new Date(options.startDate) : new Date();
     const end = new Date(start.getTime() + trialDays * 24 * 60 * 60 * 1000);
@@ -68,8 +73,10 @@ export function calculateProratedBilling(options: {
     // Days in the trial-end month
     const daysInTrialEndMonth = new Date(endYear, endMonthIdx + 1, 0).getDate();
     const daysRemainingInMonth = Math.max(0, daysInTrialEndMonth - endDay);
-    const dailyRate = Math.round((monthlyRate / daysInTrialEndMonth) * 100) / 100;
-    const proratedMonthAmount = Math.round(((daysRemainingInMonth / daysInTrialEndMonth) * monthlyRate) * 100) / 100;
+    
+    // Annual plan calculations (strictly based on annualMonthlyRate: e.g. $15/mo)
+    const dailyRate = Math.round((annualMonthlyRate / daysInTrialEndMonth) * 100) / 100;
+    const proratedMonthAmount = Math.round(((daysRemainingInMonth / daysInTrialEndMonth) * annualMonthlyRate) * 100) / 100;
 
     // Remaining full calendar months in current year after the month trial ends
     const remainingMonthsIndices: number[] = [];
@@ -79,19 +86,21 @@ export function calculateProratedBilling(options: {
 
     const remainingMonthsCount = remainingMonthsIndices.length;
     const remainingMonthsNames = remainingMonthsIndices.map(i => MONTH_NAMES[i]);
-    const fullMonthsAmount = Math.round(remainingMonthsCount * monthlyRate * 100) / 100;
+    const fullMonthsAmount = Math.round(remainingMonthsCount * annualMonthlyRate * 100) / 100;
 
-    // Monthly plan calculation
+    // Standalone monthly plan calculation
+    const monthlyDailyRate = Math.round((standaloneMonthlyRate / daysInTrialEndMonth) * 100) / 100;
+    const standaloneProratedMonth = Math.round(((daysRemainingInMonth / daysInTrialEndMonth) * standaloneMonthlyRate) * 100) / 100;
     const nextMonthIdx = (endMonthIdx + 1) % 12;
     const nextMonthYear = endMonthIdx === 11 ? endYear + 1 : endYear;
     const nextMonthlyRenewalDate = `${MONTH_NAMES[nextMonthIdx]} 1, ${nextMonthYear}`;
-    const monthlyAmountDueNow = daysRemainingInMonth > 0 ? proratedMonthAmount : monthlyRate;
+    const monthlyAmountDueNow = daysRemainingInMonth > 0 ? standaloneProratedMonth : standaloneMonthlyRate;
     const monthlyAmountDueText = daysRemainingInMonth > 0 
-        ? `$${proratedMonthAmount.toFixed(2)} (${daysRemainingInMonth} days in ${trialEndMonthName})`
-        : `$${monthlyRate}/mo`;
+        ? `$${standaloneProratedMonth.toFixed(2)} (${daysRemainingInMonth} days in ${trialEndMonthName})`
+        : `$${standaloneMonthlyRate}/mo`;
     const monthlyBreakdownSummary = daysRemainingInMonth > 0
-        ? `$${proratedMonthAmount.toFixed(2)} for ${daysRemainingInMonth} days remaining in ${trialEndMonthName} ($${dailyRate.toFixed(2)}/day), then $${monthlyRate}/month starting ${nextMonthlyRenewalDate}.`
-        : `$${monthlyRate}/month starting ${nextMonthlyRenewalDate}.`;
+        ? `$${standaloneProratedMonth.toFixed(2)} for ${daysRemainingInMonth} days remaining in ${trialEndMonthName} ($${monthlyDailyRate.toFixed(2)}/day), then $${standaloneMonthlyRate}/month starting ${nextMonthlyRenewalDate}.`
+        : `$${standaloneMonthlyRate}/month starting ${nextMonthlyRenewalDate}.`;
 
     // Yearly plan calculation (Days remaining in current month + Remaining full months)
     let amountDueNow = 0;
@@ -113,7 +122,7 @@ export function calculateProratedBilling(options: {
                 ? `${daysRemainingInMonth} days in ${trialEndMonthName} + ${firstMonth} ${endYear} (1 mo)` 
                 : `${daysRemainingInMonth} days in ${trialEndMonthName} + ${firstMonth} – ${lastMonth} ${endYear} (${remainingMonthsCount} mos)`;
             yearlyBreakdownText = `${daysRemainingInMonth} days in ${trialEndMonthName.slice(0, 3)} ($${proratedMonthAmount.toFixed(2)}) + ${remainingMonthsCount} mos ($${fullMonthsAmount.toFixed(2)})`;
-            breakdownSummary = `$${amountDueNow.toFixed(2)} for remainder of ${endYear} (${daysRemainingInMonth} days in ${trialEndMonthName} @ $${proratedMonthAmount.toFixed(2)} + ${remainingMonthsCount} full mos @ $${monthlyRate}/mo), then $${yearlyRate}/year renewing on ${nextRenewalDate}.`;
+            breakdownSummary = `$${amountDueNow.toFixed(2)} for remainder of ${endYear} (${daysRemainingInMonth} days in ${trialEndMonthName} @ $${proratedMonthAmount.toFixed(2)} + ${remainingMonthsCount} full mos @ $${annualMonthlyRate.toFixed(2)}/mo), then $${yearlyRate}/year renewing on ${nextRenewalDate}.`;
         } else if (daysRemainingInMonth > 0) {
             remainingMonthsText = `${daysRemainingInMonth} days in ${trialEndMonthName} ${endYear}`;
             yearlyBreakdownText = `${daysRemainingInMonth} days in ${trialEndMonthName.slice(0, 3)} ($${proratedMonthAmount.toFixed(2)})`;
@@ -125,7 +134,7 @@ export function calculateProratedBilling(options: {
                 ? `${firstMonth} ${endYear} (1 month)` 
                 : `${firstMonth} – ${lastMonth} ${endYear} (${remainingMonthsCount} months)`;
             yearlyBreakdownText = `${remainingMonthsCount} mos (${firstMonth.slice(0, 3)}–${lastMonth.slice(0, 3)})`;
-            breakdownSummary = `$${amountDueNow.toFixed(2)} for ${remainingMonthsText} @ $${monthlyRate}/mo, then $${yearlyRate}/year renewing on ${nextRenewalDate}.`;
+            breakdownSummary = `$${amountDueNow.toFixed(2)} for ${remainingMonthsText} @ $${annualMonthlyRate.toFixed(2)}/mo, then $${yearlyRate}/year renewing on ${nextRenewalDate}.`;
         }
 
         amountDueText = `$${amountDueNow.toFixed(2)} for rest of ${endYear}`;
@@ -154,7 +163,7 @@ export function calculateProratedBilling(options: {
         remainingMonthsCount,
         remainingMonthsNames,
         remainingMonthsText,
-        monthlyRate,
+        monthlyRate: annualMonthlyRate,
         yearlyRate,
         amountDueNow,
         amountDueText,

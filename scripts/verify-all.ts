@@ -7,8 +7,10 @@ import {
     getBlocklistedReleases,
     getSystemLogsAction,
     getAlertBanner,
-    getRoadmapText
+    getRoadmapText,
+    validateMemberReferenceAction
 } from "../src/app/actions";
+import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
 import { logger } from "../src/lib/logger";
 
@@ -533,6 +535,74 @@ async function runTestSuite() {
             await prisma.adminApproval.delete({ where: { id: stagedRevoke.id } });
         } finally {
             await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
+        }
+    });
+
+    // 22. Prorated Subscription Billing Math ($15/mo base rate, 21 days in Oct + Nov + Dec)
+    await assertTest("Billing: Prorated Rest-of-Year Math ($15/mo base)", async () => {
+        // Start date: Sept 26, 2026 with 14-day trial -> ends Oct 10, 2026
+        // Days remaining in Oct: 31 - 10 = 21 days
+        // At $180/yr -> $15/mo base rate
+        // Oct: (21 / 31) * 15 = $10.16
+        // Nov + Dec: 2 * 15 = $30.00
+        // Total amountDueNow: $40.16 (NOT $46.85)
+        const result = calculateProratedBilling({
+            startDate: new Date("2026-09-26T12:00:00Z"),
+            trialDays: 14,
+            yearlyPrice: 180,
+            monthlyPrice: 15
+        });
+
+        if (result.amountDueNow !== 40.16) {
+            throw new Error(`Expected amountDueNow to be 40.16 but got ${result.amountDueNow}`);
+        }
+        if (result.monthlyRate !== 15) {
+            throw new Error(`Expected monthlyRate to be 15 but got ${result.monthlyRate}`);
+        }
+        if (result.remainingMonthsCount !== 2) {
+            throw new Error(`Expected 2 remaining months but got ${result.remainingMonthsCount}`);
+        }
+    });
+
+    // 23. Onboarding: Member Reference Validation (Referral code, username, and full name)
+    await assertTest("Onboarding: Member Reference & Referral Validation", async () => {
+        const testReferrer = await prisma.user.create({
+            data: {
+                username: "test_ref_member",
+                name: "Test Reference FullName",
+                email: "test_ref_member@example.com",
+                password: "hashedpassword123",
+                referralCode: "ref-code-vip-99",
+                status: "APPROVED"
+            }
+        });
+
+        try {
+            // Test 1: Match by referralCode
+            const res1 = await validateMemberReferenceAction("ref-code-vip-99");
+            if (!res1.valid || !res1.referrerName) {
+                throw new Error("Failed to validate by referralCode");
+            }
+
+            // Test 2: Match by username (case-insensitive)
+            const res2 = await validateMemberReferenceAction("TEST_REF_MEMBER");
+            if (!res2.valid || !res2.referrerName) {
+                throw new Error("Failed to validate by username (case-insensitive)");
+            }
+
+            // Test 3: Match by full name
+            const res3 = await validateMemberReferenceAction("Test Reference FullName");
+            if (!res3.valid || !res3.referrerName) {
+                throw new Error("Failed to validate by full name");
+            }
+
+            // Test 4: Reject non-existent member
+            const res4 = await validateMemberReferenceAction("non_existent_fake_user_12345");
+            if (res4.valid) {
+                throw new Error("Should have rejected non-existent user reference");
+            }
+        } finally {
+            await prisma.user.delete({ where: { id: testReferrer.id } }).catch(() => {});
         }
     });
 

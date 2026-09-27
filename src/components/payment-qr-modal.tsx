@@ -35,7 +35,7 @@ export function PaymentQrModal({
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
     const yearlyAmount = config?.yearlyPrice || 180;
-    const monthlyAmount = config?.monthlyPrice || 17.5;
+    const monthlyAmount = config?.monthlyPrice || 15;
     const selectedAmount = cadence === "yearly" ? yearlyAmount : monthlyAmount;
 
     const memoTag = useMemo(() => generatePaymentMemo(username), [username]);

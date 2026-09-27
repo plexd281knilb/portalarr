@@ -61,8 +61,9 @@ See detailed reference: [card-and-poster-patterns.md](./references/card-and-post
 ### 3. Forms, Autocomplete & Dirty State Management
 - **Autocomplete Dropdowns**: Always use `onMouseDown` on dropdown suggestion items instead of `onClick` to prevent input `onBlur` from unmounting items before the click event fires.
 - **Unsaved Settings Protection**:
-  - Highlight dirty sections with amber glowing borders.
-  - Render a fixed bottom floating save bar (`Save Settings *`) when changes are pending.
+  - Track dirty states against `initialDataRef` snapshots.
+  - Highlight dirty sections with amber glowing borders (`border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]`) and `● Unsaved Changes` badges.
+  - Render the standard `<UnsavedChangesPrompt />` component for floating docked save bars, `beforeunload` protection, and in-app navigation dialogs.
 - **Sensitive Fields**:
   - Mask tokens and passwords by default (`type={showToken ? "text" : "password"}`).
   - Provide an inline toggle button with Lucide `<Eye />` / `<EyeOff />`.
@@ -114,6 +115,21 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - **No Stretched Monoliths**: Wrap outer content in `max-w-[2560px] mx-auto w-full min-w-0` to prevent single form inputs or text lines from spanning 3800px.
   - **Scalable Grids**: Scale grids beyond `2xl` with native Tailwind v4 `3xl:` and `4xl:` breakpoints (`3xl:grid-cols-7 4xl:grid-cols-8` or `3xl:grid-cols-8 4xl:grid-cols-10` for posters; `3xl:grid-cols-3 4xl:grid-cols-4` for dashboard cards) so cards maintain optimal 2:3 proportions and avoid giant 500px wide cards.
   - Detail Modals: Expand wide modal caps to `2xl:max-w-7xl 3xl:max-w-[1800px]` on 4K so rich media detail views utilize the expansive screen real estate.
+
+---
+
+### 7. Member Onboarding & Invitation Gateway (`/join`)
+- **Private Server Invite Gate**: Direct visitors without a valid `?ref=` query parameter are gated at Step 0. They cannot access the onboarding flow until entering a valid referral code or active member reference (`name` or `username`).
+- **Layout Header Isolation**: On `/join`, all user navigation headers (Book Library, Guides, Account Settings, System Settings) are strictly hidden via `layout-wrapper.tsx` (`!pathname.startsWith("/join")`).
+- **Trial vs Full Member Delineation**:
+  - **Free Trial**: Full Movies & TV streaming on Plex, 100% Direct Play Original Studio Quality (4K HDR, Dolby Vision, Dolby Atmos), all devices (Apple TV, Roku, Fire TV, Smart TVs, Phone, Web), movie & TV requests, and no payment up front.
+  - **Full Membership**: Unlimited ongoing streaming, full Ebook & Audiobook Library with in-browser Kindle Paperwhite reader & Send-to-Kindle *(Trial members do NOT receive book access)*, dedicated Kids & Living Room sub-account profiles *(Trial members do NOT receive kids accounts)*, book requests, Discord community.
+  - **Notice Banner**: Explicitly warn users that Kids accounts and the Ebook/Audiobook library are reserved exclusively for full members.
+- **Prorated Rest-of-Year Billing Math**:
+  - Annual plans strictly derive their monthly base rate from `yearlyPrice / 12` ($180 / 12 = $15.00/mo), never an inflated standalone monthly price.
+  - Formula: `proratedMonth = (daysRemaining / totalDaysInMonth) * 15`, `fullMonths = remainingFullMonths * 15`. Total amount due now = `proratedMonth + fullMonths`.
+- **Payment Method Wording**:
+  - Strictly avoid mentioning credit cards; state "No payment up front. Stream completely free during your trial." P2P payment methods (Venmo, PayPal, CashApp, Zelle) are used for future renewals.
 
 ---
 

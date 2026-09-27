@@ -2,7 +2,13 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getPublicJoinConfig, registerTrialUserFromInvite, getPlexSetupGuides } from "@/app/actions";
+import Link from "next/link";
+import { 
+    getPublicJoinConfig, 
+    registerTrialUserFromInvite, 
+    getPlexSetupGuides,
+    validateMemberReferenceAction 
+} from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,9 +18,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
 import { 
     Sparkles, Gift, CheckCircle2, ChevronRight, ChevronLeft, Tv, Tv2, 
-    Flame, Monitor, Smartphone, Globe, Shield, User, Mail, Lock, 
-    Loader2, AlertCircle, CreditCard, DollarSign, ArrowRight, Play, ExternalLink, Check, Copy, Calendar,
-    MessageSquare
+    Flame, Monitor, Smartphone, Globe, Shield, ShieldCheck, User, Mail, Lock, 
+    Loader2, AlertCircle, DollarSign, ArrowRight, Play, ExternalLink, Check, 
+    Calendar, MessageSquare, BookOpen, Users, LockKeyhole
 } from "lucide-react";
 
 function JoinWizardContent() {
@@ -25,14 +31,12 @@ function JoinWizardContent() {
     const [step, setStep] = useState(1);
     const [loadingConfig, setLoadingConfig] = useState(true);
     const [config, setConfig] = useState<any>(null);
-    const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
 
-    const handleCopy = (text: string, key: string) => {
-        if (!text) return;
-        navigator.clipboard.writeText(text);
-        setCopiedHandle(key);
-        setTimeout(() => setCopiedHandle(null), 2000);
-    };
+    // Gating / Reference verification state
+    const [isInviteVerified, setIsInviteVerified] = useState(false);
+    const [referenceInput, setReferenceInput] = useState(refParam);
+    const [verifyingReference, setVerifyingReference] = useState(false);
+    const [gateError, setGateError] = useState("");
 
     // Form registration state
     const [username, setUsername] = useState("");
@@ -50,11 +54,18 @@ function JoinWizardContent() {
     useEffect(() => {
         if (refParam) {
             setReferralCode(refParam);
+            setReferenceInput(refParam);
         }
 
         getPublicJoinConfig(refParam).then((res) => {
             if (res.success && res.config) {
                 setConfig(res.config);
+                if (res.config.validReferral) {
+                    setIsInviteVerified(true);
+                    setStep(1);
+                } else if (refParam) {
+                    setGateError(`We couldn't find an active member matching invite "${refParam}". Please enter your referrer's name or code.`);
+                }
             }
             setLoadingConfig(false);
         }).catch(() => setLoadingConfig(false));
@@ -63,6 +74,31 @@ function JoinWizardContent() {
             if (Array.isArray(g)) setGuides(g);
         }).catch(() => {});
     }, [refParam]);
+
+    const handleVerifyReference = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const clean = referenceInput.trim();
+        if (!clean) return;
+
+        setVerifyingReference(true);
+        setGateError("");
+
+        const res = await validateMemberReferenceAction(clean);
+        setVerifyingReference(false);
+
+        if (res.success && res.valid) {
+            setIsInviteVerified(true);
+            setReferralCode(res.referralCode || clean);
+            setConfig((prev: any) => ({
+                ...(prev || {}),
+                referrerName: res.referrerName,
+                validReferral: true
+            }));
+            setStep(1);
+        } else {
+            setGateError(res.error || "No active member found matching that reference.");
+        }
+    };
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -74,7 +110,7 @@ function JoinWizardContent() {
             email,
             password,
             plexEmailOrUser: plexEmail || email,
-            referralCode: referralCode || undefined
+            referralCode: referralCode || referenceInput || undefined
         });
 
         setSubmitting(false);
@@ -116,37 +152,118 @@ function JoinWizardContent() {
         <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#12121c] to-[#0a0a0f] p-3 sm:p-6">
             <div className="w-full max-w-2xl sm:max-w-3xl space-y-6 transition-all duration-300">
                 
-                {/* STEP INDICATOR */}
-                <div className="flex items-center justify-center gap-2 sm:gap-4 text-xs font-bold text-muted-foreground">
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
-                        step === 1 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 1 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
-                    }`}>
-                        <span>1. Welcome</span>
+                {/* STEP INDICATOR - ONLY SHOWN ONCE INVITE IS VERIFIED */}
+                {isInviteVerified && (
+                    <div className="flex items-center justify-center gap-2 sm:gap-4 text-xs font-bold text-muted-foreground">
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
+                            step === 1 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 1 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
+                        }`}>
+                            <span>1. Welcome</span>
+                        </div>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
+                            step === 2 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 2 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
+                        }`}>
+                            <span>2. Account</span>
+                        </div>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
+                            step === 3 || step === 4 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 4 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
+                        }`}>
+                            <span>3. Devices</span>
+                        </div>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
+                            step === 5 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : "bg-muted/20 border-border/30"
+                        }`}>
+                            <span>4. Ready</span>
+                        </div>
                     </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
-                        step === 2 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 2 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
-                    }`}>
-                        <span>2. Account</span>
-                    </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
-                        step === 3 || step === 4 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 4 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
-                    }`}>
-                        <span>3. Devices</span>
-                    </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
-                        step === 5 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : "bg-muted/20 border-border/30"
-                    }`}>
-                        <span>4. Ready</span>
-                    </div>
-                </div>
+                )}
 
                 {/* ========================================================================= */}
-                {/* STEP 1: WELCOME & INVITATION INTRO */}
+                {/* STEP 0: INVITATION / MEMBER REFERENCE GATE */}
                 {/* ========================================================================= */}
-                {step === 1 && (
+                {!isInviteVerified && (
+                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
+                        <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+                        
+                        <CardHeader className="text-center space-y-4 pt-8 pb-4">
+                            <div className="mx-auto bg-purple-500/15 border border-purple-500/30 p-4 rounded-3xl w-fit shadow-lg text-purple-400">
+                                <LockKeyhole className="h-10 w-10" />
+                            </div>
+
+                            <Badge variant="outline" className="mx-auto bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs px-3 py-1 gap-1.5 font-bold">
+                                <Sparkles className="h-3.5 w-3.5" /> Private Media Server
+                            </Badge>
+
+                            <CardTitle className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                                Invitation Required
+                            </CardTitle>
+                            <CardDescription className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                                This media server is private and invite-only. To claim a free trial pass, you must be referred by an active server member.
+                            </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4 max-w-md mx-auto">
+                            <form onSubmit={handleVerifyReference} className="space-y-4">
+                                {gateError && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-xl flex items-center gap-2">
+                                        <AlertCircle className="h-4 w-4 shrink-0" />
+                                        <span>{gateError}</span>
+                                    </div>
+                                )}
+
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold">Referral Code or Member Name / Username</Label>
+                                    <div className="relative">
+                                        <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input 
+                                            placeholder="e.g. john_doe or referral code"
+                                            value={referenceInput}
+                                            onChange={(e) => setReferenceInput(e.target.value)}
+                                            required
+                                            className="pl-9 bg-background/60"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Enter the name, username, or referral link of the friend who invited you to the server.
+                                    </p>
+                                </div>
+
+                                <Button 
+                                    type="submit" 
+                                    disabled={verifyingReference || !referenceInput.trim()}
+                                    className="w-full h-11 font-bold bg-primary hover:bg-primary/90 text-primary-foreground transition-all hover:ring-2 hover:ring-primary/40 active:scale-98"
+                                >
+                                    {verifyingReference ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            Verifying Invitation...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                                            Verify Invitation & Continue
+                                        </>
+                                    )}
+                                </Button>
+                            </form>
+
+                            <div className="pt-2 text-center">
+                                <Link href="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors">
+                                    Already an approved member? <strong className="text-primary">Sign In</strong>
+                                </Link>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* ========================================================================= */}
+                {/* STEP 1: WELCOME & PERKS COMPARISON (TRIAL VS FULL MEMBERSHIP) */}
+                {/* ========================================================================= */}
+                {isInviteVerified && step === 1 && (
                     <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
                         <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
                         
@@ -155,13 +272,9 @@ function JoinWizardContent() {
                                 <Gift className="h-10 w-10" />
                             </div>
 
-                            {config?.referrerName ? (
+                            {config?.referrerName && (
                                 <Badge variant="outline" className="mx-auto bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs px-3 py-1 gap-1.5 font-bold">
                                     <Sparkles className="h-3.5 w-3.5" /> Invited by @{config.referrerName}
-                                </Badge>
-                            ) : (
-                                <Badge variant="outline" className="mx-auto bg-primary/20 text-primary border-primary/40 text-xs px-3 py-1 gap-1.5 font-bold">
-                                    <Sparkles className="h-3.5 w-3.5" /> VIP Media Server Invitation
                                 </Badge>
                             )}
 
@@ -169,51 +282,92 @@ function JoinWizardContent() {
                                 Welcome to the Media Server
                             </CardTitle>
                             <CardDescription className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                                You’ve received a free <strong>{trialDays}-Day All-Access Pass</strong> to stream thousands of movies, TV shows, audiobooks, and requested media.
+                                You’ve received a free <strong>{trialDays}-Day All-Access Pass</strong>. No payment up front — enjoy original studio quality streaming during your trial.
                             </CardDescription>
                         </CardHeader>
 
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-start gap-3">
-                                    <div className="p-2 bg-emerald-500/15 text-emerald-400 rounded-xl shrink-0 mt-0.5">
-                                        <Play className="h-4 w-4 fill-current" />
+                            {/* TWO COLUMN COMPARISON: TRIAL VS FULL MEMBERSHIP */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                {/* TRIAL MEMBER PERKS */}
+                                <div className="p-4 rounded-2xl bg-emerald-500/[0.04] border border-emerald-500/20 space-y-3">
+                                    <div className="flex items-center gap-2 border-b border-emerald-500/20 pb-2">
+                                        <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
+                                            <Play className="h-4 w-4 fill-current" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Free Trial ({trialDays} Days)</h4>
+                                            <p className="text-[11px] text-muted-foreground">Included with your trial pass</p>
+                                        </div>
                                     </div>
-                                    <div className="space-y-0.5">
-                                        <h4 className="text-xs font-bold text-foreground">Original Studio Quality</h4>
-                                        <p className="text-[11px] text-muted-foreground">4K HDR, Dolby Vision, and immersive Dolby Atmos audio without compression.</p>
-                                    </div>
+
+                                    <ul className="space-y-2 text-xs">
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Movies & TV Streaming:</strong> Full access to thousands of movies and TV series on Plex.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Original Studio Quality:</strong> 4K HDR, Dolby Vision, and immersive Dolby Atmos with 100% Direct Play.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">All Your Devices:</strong> Apple TV, Roku, Fire TV, Smart TVs, iPhone, Android, and Web Browser.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Movie & TV Requests:</strong> Request any movie or series with instant auto-approval.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">No Payment Up Front:</strong> Stream completely free during your trial without any commitment.</span>
+                                        </li>
+                                    </ul>
                                 </div>
 
-                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-start gap-3">
-                                    <div className="p-2 bg-blue-500/15 text-blue-400 rounded-xl shrink-0 mt-0.5">
-                                        <Tv className="h-4 w-4" />
+                                {/* FULL MEMBER PERKS */}
+                                <div className="p-4 rounded-2xl bg-purple-500/[0.04] border border-purple-500/20 space-y-3">
+                                    <div className="flex items-center gap-2 border-b border-purple-500/20 pb-2">
+                                        <div className="p-1.5 bg-purple-500/20 text-purple-400 rounded-lg">
+                                            <Sparkles className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider">Full Membership</h4>
+                                            <p className="text-[11px] text-muted-foreground">Unlocked upon subscription</p>
+                                        </div>
                                     </div>
-                                    <div className="space-y-0.5">
-                                        <h4 className="text-xs font-bold text-foreground">All Your Devices</h4>
-                                        <p className="text-[11px] text-muted-foreground">Apple TV, Roku, Fire TV, Smart TVs, iPhone, Android, and Web Browser.</p>
-                                    </div>
-                                </div>
 
-                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-start gap-3">
-                                    <div className="p-2 bg-purple-500/15 text-purple-400 rounded-xl shrink-0 mt-0.5">
-                                        <Sparkles className="h-4 w-4" />
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        <h4 className="text-xs font-bold text-foreground">Instant Media Requests</h4>
-                                        <p className="text-[11px] text-muted-foreground">Request any book, audiobook, movie, or series directly from your portal.</p>
-                                    </div>
+                                    <ul className="space-y-2 text-xs">
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Everything in Free Trial:</strong> Uninterrupted streaming with highest server bandwidth priority.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <BookOpen className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, audio player & Send-to-Kindle delivery.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <Users className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Dedicated Kids & Living Room Profiles:</strong> Managed family accounts with PIN safety & age ratings.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Book & Audiobook Requests:</strong> 1-click requests for bestsellers, new releases, and audiobooks.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2 text-muted-foreground">
+                                            <Gift className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <span><strong className="text-foreground">Discord Community & Referral Rewards:</strong> Server downtime alerts, chat, and earn 1 free month per friend referred.</span>
+                                        </li>
+                                    </ul>
                                 </div>
+                            </div>
 
-                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-start gap-3">
-                                    <div className="p-2 bg-amber-500/15 text-amber-400 rounded-xl shrink-0 mt-0.5">
-                                        <CheckCircle2 className="h-4 w-4" />
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        <h4 className="text-xs font-bold text-foreground">{trialDays}-Day Free Pass</h4>
-                                        <p className="text-[11px] text-muted-foreground">Zero credit card required upfront. Stream completely free during your trial.</p>
-                                    </div>
-                                </div>
+                            {/* TRIAL NOTICE BANNER */}
+                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5 text-xs text-amber-300">
+                                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                                <p className="text-[11px] leading-relaxed">
+                                    <strong>Important:</strong> Free trial passes include full movie and TV streaming. Dedicated Kids accounts and the Ebook & Audiobook library are reserved exclusively for full members upon subscription.
+                                </p>
                             </div>
 
                             {/* TRANSPARENT PRORATED PRICING BANNER */}
@@ -224,7 +378,7 @@ function JoinWizardContent() {
                                             <Calendar className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <p className="font-bold text-purple-200">Prorated Annual Plan</p>
+                                            <p className="font-bold text-purple-200">Prorated Annual Plan ($15/month)</p>
                                             <p className="text-[11px] text-muted-foreground">
                                                 Only pay for remaining months ({config.proratedBilling.remainingMonthsText}): <strong className="text-foreground">{config.proratedBilling.amountDueText}</strong>
                                             </p>
@@ -237,7 +391,7 @@ function JoinWizardContent() {
                             )}
                         </CardContent>
 
-                        <CardFooter className="pt-2 pb-6 flex justify-center">
+                        <CardFooter className="pt-2 pb-6 flex flex-col items-center gap-3">
                             <Button 
                                 type="button" 
                                 size="lg"
@@ -246,6 +400,9 @@ function JoinWizardContent() {
                             >
                                 Claim Your Free Pass <ArrowRight className="h-4 w-4" />
                             </Button>
+                            <Link href="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors">
+                                Already an approved member? <strong className="text-primary">Sign In</strong>
+                            </Link>
                         </CardFooter>
                     </Card>
                 )}
@@ -253,7 +410,7 @@ function JoinWizardContent() {
                 {/* ========================================================================= */}
                 {/* STEP 2: ACCOUNT CREATION */}
                 {/* ========================================================================= */}
-                {step === 2 && (
+                {isInviteVerified && step === 2 && (
                     <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="space-y-1 pb-4">
                             <div className="flex items-center gap-2">
@@ -268,7 +425,7 @@ function JoinWizardContent() {
                                 </Button>
                                 <div>
                                     <CardTitle className="text-xl font-bold text-foreground">Create Your Account</CardTitle>
-                                    <CardDescription className="text-xs">Set up your credentials to manage requests and access Plex libraries.</CardDescription>
+                                    <CardDescription className="text-xs">Set up your credentials to manage requests and access Plex libraries (No payment up front).</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -350,13 +507,17 @@ function JoinWizardContent() {
                                 </div>
 
                                 <div className="space-y-1.5 pt-2 border-t border-border/40">
-                                    <Label className="text-xs font-semibold">Invite / Referral Code</Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold">Verified Referrer</Label>
+                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] gap-1 font-semibold">
+                                            <CheckCircle2 className="h-3 w-3" /> Invitation Verified
+                                        </Badge>
+                                    </div>
                                     <Input 
-                                        placeholder="Optional referral code"
-                                        value={referralCode}
-                                        onChange={(e) => setReferralCode(e.target.value)}
-                                        className="bg-background/60 font-mono text-xs"
-                                        disabled={Boolean(refParam && config?.validReferral)}
+                                        value={config?.referrerName ? `@${config.referrerName}` : referralCode}
+                                        readOnly
+                                        disabled
+                                        className="bg-muted/40 font-mono text-xs text-muted-foreground cursor-not-allowed"
                                     />
                                 </div>
 
@@ -373,7 +534,7 @@ function JoinWizardContent() {
                                     ) : (
                                         <>
                                             <CheckCircle2 className="h-4 w-4 mr-2" />
-                                            Activate {trialDays}-Day Free Pass
+                                            Activate {trialDays}-Day Free Pass (No Payment Up Front)
                                         </>
                                     )}
                                 </Button>
@@ -385,7 +546,7 @@ function JoinWizardContent() {
                 {/* ========================================================================= */}
                 {/* STEP 3: PROVISION SUCCESS & ACCEPT PLEX INVITE */}
                 {/* ========================================================================= */}
-                {step === 3 && (
+                {isInviteVerified && step === 3 && (
                     <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-3 pt-8 pb-4">
                             <div className="mx-auto bg-emerald-500/15 border border-emerald-500/30 p-4 rounded-3xl w-fit shadow-lg text-emerald-400">
@@ -449,7 +610,7 @@ function JoinWizardContent() {
                         <CardFooter className="flex gap-3 justify-between pt-2 pb-6">
                             <Button 
                                 type="button" 
-                                variant="outline"
+                                variant="outline" 
                                 onClick={() => router.push("/")}
                                 className="font-semibold text-xs"
                             >
@@ -469,7 +630,7 @@ function JoinWizardContent() {
                 {/* ========================================================================= */}
                 {/* STEP 4: DEVICE SETUP GUIDES */}
                 {/* ========================================================================= */}
-                {step === 4 && (
+                {isInviteVerified && step === 4 && (
                     <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="space-y-1 pb-4">
                             <CardTitle className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -552,7 +713,7 @@ function JoinWizardContent() {
                 {/* ========================================================================= */}
                 {/* STEP 5: SUBSCRIPTION INFO & READY TO STREAM */}
                 {/* ========================================================================= */}
-                {step === 5 && (
+                {isInviteVerified && step === 5 && (
                     <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-3 pt-8 pb-4">
                             <div className="mx-auto bg-emerald-500/15 border border-emerald-500/30 p-4 rounded-3xl w-fit shadow-lg text-emerald-400">
@@ -562,7 +723,7 @@ function JoinWizardContent() {
                                 Enjoy Your {trialDays}-Day Free Pass!
                             </CardTitle>
                             <CardDescription className="text-xs text-muted-foreground max-w-md mx-auto">
-                                You're completely ready to explore, stream, and submit media requests.
+                                You're completely ready to explore, stream, and submit media requests. No payment is required up front.
                             </CardDescription>
                         </CardHeader>
 
@@ -571,11 +732,11 @@ function JoinWizardContent() {
                             <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3 text-xs">
                                 <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
                                     <div className="flex items-center gap-2 font-bold text-foreground">
-                                        <CreditCard className="h-4 w-4 text-emerald-400" />
+                                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
                                         <span>Annual Subscription & Prorated Billing</span>
                                     </div>
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold">
-                                        ${config?.yearlyPrice ?? 180} / year
+                                        ${config?.yearlyPrice ?? 180} / year ($15/mo)
                                     </Badge>
                                 </div>
 
@@ -621,7 +782,7 @@ function JoinWizardContent() {
                                 )}
 
                                 <p className="text-[11px] text-muted-foreground italic pt-1">
-                                    💡 When submitting payment, please include your username <strong className="text-foreground">({username || "your account name"})</strong> in the note or memo.
+                                    💡 No payment up front for your trial. When submitting future renewal payments, please include your username <strong className="text-foreground">({username || "your account name"})</strong> in the note or memo.
                                 </p>
                             </div>
                         </CardContent>

@@ -4875,23 +4875,29 @@ export async function registerTrialUserFromInvite(data: {
         }
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        if (settings?.requireReferralForSignup && !refCode) {
-            return { success: false, error: "A valid referral code from an existing member is required to join." };
+        if (!refCode) {
+            return { success: false, error: "A referral code or existing member reference (name or username) is required to join." };
         }
 
-        let referrer = null;
-        if (refCode) {
-            referrer = await prisma.user.findFirst({
-                where: {
-                    OR: [
-                        { referralCode: refCode },
-                        { username: { equals: refCode } }
-                    ]
-                }
-            });
-            if (settings?.requireReferralForSignup && !referrer) {
-                return { success: false, error: "Invalid referral code. Please check with the friend who invited you." };
-            }
+        const approvedUsers = await prisma.user.findMany({
+            where: {
+                OR: [
+                    { status: "APPROVED" },
+                    { role: "ADMIN" }
+                ]
+            },
+            select: { id: true, username: true, name: true, referralCode: true }
+        });
+
+        const lowerRef = refCode.toLowerCase();
+        const referrer = approvedUsers.find(u => 
+            (u.referralCode && u.referralCode.toLowerCase() === lowerRef) ||
+            (u.username && u.username.toLowerCase() === lowerRef) ||
+            (u.name && u.name.toLowerCase() === lowerRef)
+        );
+
+        if (!referrer) {
+            return { success: false, error: "Invalid referral code or member reference. You must be invited by an active member." };
         }
 
         // Check if username or email already taken
@@ -5013,17 +5019,25 @@ export async function getPublicJoinConfig(refCode?: string) {
 
         const cleanRef = (refCode || "").trim();
         if (cleanRef) {
-            const referrer = await prisma.user.findFirst({
+            const approvedUsers = await prisma.user.findMany({
                 where: {
                     OR: [
-                        { referralCode: cleanRef },
-                        { username: { equals: cleanRef } }
+                        { status: "APPROVED" },
+                        { role: "ADMIN" }
                     ]
                 },
-                select: { id: true, username: true }
-            });
+                select: { id: true, username: true, name: true, referralCode: true }
+            }).catch(() => []);
+
+            const lowerRef = cleanRef.toLowerCase();
+            const referrer = approvedUsers.find(u => 
+                (u.referralCode && u.referralCode.toLowerCase() === lowerRef) ||
+                (u.username && u.username.toLowerCase() === lowerRef) ||
+                (u.name && u.name.toLowerCase() === lowerRef)
+            );
+
             if (referrer) {
-                referrerName = referrer.username;
+                referrerName = referrer.name || referrer.username;
                 validReferral = true;
             }
         }
@@ -5072,6 +5086,54 @@ export async function getPublicJoinConfig(refCode?: string) {
         };
     } catch (e: any) {
         return { success: false, error: e.message };
+    }
+}
+
+export async function validateMemberReferenceAction(reference: string): Promise<{
+    success: boolean;
+    valid: boolean;
+    referrerName?: string;
+    referralCode?: string;
+    error?: string;
+}> {
+    try {
+        const clean = (reference || "").trim();
+        if (!clean) {
+            return { success: false, valid: false, error: "Please enter a referral code or existing member reference." };
+        }
+        const lower = clean.toLowerCase();
+        const approvedUsers = await prisma.user.findMany({
+            where: {
+                OR: [
+                    { status: "APPROVED" },
+                    { role: "ADMIN" }
+                ]
+            },
+            select: { id: true, username: true, name: true, referralCode: true }
+        });
+
+        const match = approvedUsers.find(u =>
+            (u.referralCode && u.referralCode.toLowerCase() === lower) ||
+            (u.username && u.username.toLowerCase() === lower) ||
+            (u.name && u.name.toLowerCase() === lower)
+        );
+
+        if (match) {
+            return {
+                success: true,
+                valid: true,
+                referrerName: match.name || match.username,
+                referralCode: match.referralCode || match.username
+            };
+        }
+
+        return {
+            success: true,
+            valid: false,
+            error: `We couldn't find an active member or invite matching "${clean}". Please check with the friend who invited you.`
+        };
+    } catch (e: any) {
+        return { success: false, valid: false, error: e.message || "Failed to validate invite reference." };
     }
 }
 

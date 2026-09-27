@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { 
     getSeerrSettingsAction, 
     updateSeerrSettingsAction, 
@@ -63,9 +64,10 @@ interface ArrAppData {
 
 interface SeerrSettingsPanelProps {
     onNavigateTab?: (tab: string) => void;
+    onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void;
 }
 
-export function SeerrSettingsPanel({ onNavigateTab }: SeerrSettingsPanelProps = {}) {
+export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettingsPanelProps = {}) {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -153,6 +155,175 @@ export function SeerrSettingsPanel({ onNavigateTab }: SeerrSettingsPanelProps = 
     const [sonarrApps, setSonarrApps] = useState<any[]>([]);
     const [appDataMap, setAppDataMap] = useState<Record<string, ArrAppData>>({});
 
+    const initialSeerrRef = useRef<any>(null);
+
+    const isFullQuotaDirty = useMemo(() => {
+        if (!initialSeerrRef.current) return false;
+        const init = initialSeerrRef.current;
+        return (
+            fullAutoApprove !== init.fullAutoApprove ||
+            fullUnlimited !== init.fullUnlimited ||
+            Number(fullQuotaMovies) !== Number(init.fullQuotaMovies) ||
+            Number(fullQuotaTv) !== Number(init.fullQuotaTv) ||
+            Number(fullQuotaDays) !== Number(init.fullQuotaDays)
+        );
+    }, [fullAutoApprove, fullUnlimited, fullQuotaMovies, fullQuotaTv, fullQuotaDays]);
+
+    const isTrialQuotaDirty = useMemo(() => {
+        if (!initialSeerrRef.current) return false;
+        const init = initialSeerrRef.current;
+        return (
+            trialAutoApprove !== init.trialAutoApprove ||
+            Number(trialQuotaMovies) !== Number(init.trialQuotaMovies) ||
+            Number(trialQuotaTv) !== Number(init.trialQuotaTv)
+        );
+    }, [trialAutoApprove, trialQuotaMovies, trialQuotaTv]);
+
+    const isDual1080pDirty = useMemo(() => {
+        if (!initialSeerrRef.current) return false;
+        return autoDual1080pFor4k !== initialSeerrRef.current.autoDual1080pFor4k;
+    }, [autoDual1080pFor4k]);
+
+    const isNotificationsDirty = useMemo(() => {
+        if (!initialSeerrRef.current) return false;
+        const init = initialSeerrRef.current;
+        return (
+            notificationOnAvailable !== init.notificationOnAvailable ||
+            discordWebhookUrl.trim() !== (init.discordWebhookUrl || "").trim() ||
+            discordBotUsername.trim() !== (init.discordBotUsername || "Portalarr").trim() ||
+            discordBotAvatarUrl.trim() !== (init.discordBotAvatarUrl || "").trim() ||
+            discordNotifyPending !== init.discordNotifyPending ||
+            discordNotifyAutoApproved !== init.discordNotifyAutoApproved ||
+            discordNotifyApproved !== init.discordNotifyApproved ||
+            discordNotifyDeclined !== init.discordNotifyDeclined ||
+            discordNotifyAvailable !== init.discordNotifyAvailable ||
+            discordNotifyFailed !== init.discordNotifyFailed ||
+            emailNotifyAdminNewRequest !== init.emailNotifyAdminNewRequest ||
+            emailNotifyUserAutoApproved !== init.emailNotifyUserAutoApproved ||
+            emailNotifyUserApproved !== init.emailNotifyUserApproved ||
+            emailNotifyUserDeclined !== init.emailNotifyUserDeclined ||
+            emailNotifyUserAvailable !== init.emailNotifyUserAvailable ||
+            emailNotifyUserFailed !== init.emailNotifyUserFailed
+        );
+    }, [
+        notificationOnAvailable, discordWebhookUrl, discordBotUsername, discordBotAvatarUrl,
+        discordNotifyPending, discordNotifyAutoApproved, discordNotifyApproved, discordNotifyDeclined,
+        discordNotifyAvailable, discordNotifyFailed, emailNotifyAdminNewRequest, emailNotifyUserAutoApproved,
+        emailNotifyUserApproved, emailNotifyUserDeclined, emailNotifyUserAvailable, emailNotifyUserFailed
+    ]);
+
+    const isArrRoutingDirty = useMemo(() => {
+        if (!initialSeerrRef.current) return false;
+        const init = initialSeerrRef.current;
+        return (
+            defaultMovieAppId !== init.defaultMovieAppId ||
+            defaultMovieProfileId !== init.defaultMovieProfileId ||
+            defaultMovieRootFolder !== init.defaultMovieRootFolder ||
+            defaultMovie4kAppId !== init.defaultMovie4kAppId ||
+            defaultMovie4kProfileId !== init.defaultMovie4kProfileId ||
+            defaultMovie4kRootFolder !== init.defaultMovie4kRootFolder ||
+            defaultTvAppId !== init.defaultTvAppId ||
+            defaultTvProfileId !== init.defaultTvProfileId ||
+            defaultTvRootFolder !== init.defaultTvRootFolder ||
+            defaultTv4kAppId !== init.defaultTv4kAppId ||
+            defaultTv4kProfileId !== init.defaultTv4kProfileId ||
+            defaultTv4kRootFolder !== init.defaultTv4kRootFolder ||
+            kidsAutoApprovePg !== init.kidsAutoApprovePg ||
+            kidsRequireApprovalPg13 !== init.kidsRequireApprovalPg13 ||
+            kidsMovieAppId !== init.kidsMovieAppId ||
+            kidsMovieProfileId !== init.kidsMovieProfileId ||
+            kidsMovieRootFolder !== init.kidsMovieRootFolder ||
+            kidsMovie4kAppId !== init.kidsMovie4kAppId ||
+            kidsMovie4kProfileId !== init.kidsMovie4kProfileId ||
+            kidsMovie4kRootFolder !== init.kidsMovie4kRootFolder ||
+            kidsTvAppId !== init.kidsTvAppId ||
+            kidsTvProfileId !== init.kidsTvProfileId ||
+            kidsTvRootFolder !== init.kidsTvRootFolder ||
+            kidsTv4kAppId !== init.kidsTv4kAppId ||
+            kidsTv4kProfileId !== init.kidsTv4kProfileId ||
+            kidsTv4kRootFolder !== init.kidsTv4kRootFolder
+        );
+    }, [
+        defaultMovieAppId, defaultMovieProfileId, defaultMovieRootFolder,
+        defaultMovie4kAppId, defaultMovie4kProfileId, defaultMovie4kRootFolder,
+        defaultTvAppId, defaultTvProfileId, defaultTvRootFolder,
+        defaultTv4kAppId, defaultTv4kProfileId, defaultTv4kRootFolder,
+        kidsAutoApprovePg, kidsRequireApprovalPg13,
+        kidsMovieAppId, kidsMovieProfileId, kidsMovieRootFolder,
+        kidsMovie4kAppId, kidsMovie4kProfileId, kidsMovie4kRootFolder,
+        kidsTvAppId, kidsTvProfileId, kidsTvRootFolder,
+        kidsTv4kAppId, kidsTv4kProfileId, kidsTv4kRootFolder
+    ]);
+
+    const unsavedSections: string[] = [];
+    if (isFullQuotaDirty) unsavedSections.push("Full Member Quotas");
+    if (isTrialQuotaDirty) unsavedSections.push("Trial Quotas");
+    if (isDual1080pDirty) unsavedSections.push("Dual 1080p Sync");
+    if (isNotificationsDirty) unsavedSections.push("Request Notifications");
+    if (isArrRoutingDirty) unsavedSections.push("Arr Routing & Root Folders");
+
+    const hasUnsavedChanges = unsavedSections.length > 0;
+
+    useEffect(() => {
+        onDirtyChange?.(hasUnsavedChanges, unsavedSections);
+    }, [hasUnsavedChanges, unsavedSections, onDirtyChange]);
+
+    const handleDiscard = () => {
+        if (!initialSeerrRef.current) return;
+        const init = initialSeerrRef.current;
+        setFullAutoApprove(init.fullAutoApprove);
+        setFullUnlimited(init.fullUnlimited);
+        setFullQuotaMovies(init.fullQuotaMovies);
+        setFullQuotaTv(init.fullQuotaTv);
+        setFullQuotaDays(init.fullQuotaDays);
+        setTrialAutoApprove(init.trialAutoApprove);
+        setTrialQuotaMovies(init.trialQuotaMovies);
+        setTrialQuotaTv(init.trialQuotaTv);
+        setAutoDual1080pFor4k(init.autoDual1080pFor4k);
+        setNotificationOnAvailable(init.notificationOnAvailable);
+        setDiscordWebhookUrl(init.discordWebhookUrl);
+        setDiscordBotUsername(init.discordBotUsername);
+        setDiscordBotAvatarUrl(init.discordBotAvatarUrl);
+        setDiscordNotifyPending(init.discordNotifyPending);
+        setDiscordNotifyAutoApproved(init.discordNotifyAutoApproved);
+        setDiscordNotifyApproved(init.discordNotifyApproved);
+        setDiscordNotifyDeclined(init.discordNotifyDeclined);
+        setDiscordNotifyAvailable(init.discordNotifyAvailable);
+        setDiscordNotifyFailed(init.discordNotifyFailed);
+        setEmailNotifyAdminNewRequest(init.emailNotifyAdminNewRequest);
+        setEmailNotifyUserAutoApproved(init.emailNotifyUserAutoApproved);
+        setEmailNotifyUserApproved(init.emailNotifyUserApproved);
+        setEmailNotifyUserDeclined(init.emailNotifyUserDeclined);
+        setEmailNotifyUserAvailable(init.emailNotifyUserAvailable);
+        setEmailNotifyUserFailed(init.emailNotifyUserFailed);
+        setDefaultMovieAppId(init.defaultMovieAppId);
+        setDefaultMovieProfileId(init.defaultMovieProfileId);
+        setDefaultMovieRootFolder(init.defaultMovieRootFolder);
+        setDefaultMovie4kAppId(init.defaultMovie4kAppId);
+        setDefaultMovie4kProfileId(init.defaultMovie4kProfileId);
+        setDefaultMovie4kRootFolder(init.defaultMovie4kRootFolder);
+        setDefaultTvAppId(init.defaultTvAppId);
+        setDefaultTvProfileId(init.defaultTvProfileId);
+        setDefaultTvRootFolder(init.defaultTvRootFolder);
+        setDefaultTv4kAppId(init.defaultTv4kAppId);
+        setDefaultTv4kProfileId(init.defaultTv4kProfileId);
+        setDefaultTv4kRootFolder(init.defaultTv4kRootFolder);
+        setKidsAutoApprovePg(init.kidsAutoApprovePg);
+        setKidsRequireApprovalPg13(init.kidsRequireApprovalPg13);
+        setKidsMovieAppId(init.kidsMovieAppId);
+        setKidsMovieProfileId(init.kidsMovieProfileId);
+        setKidsMovieRootFolder(init.kidsMovieRootFolder);
+        setKidsMovie4kAppId(init.kidsMovie4kAppId);
+        setKidsMovie4kProfileId(init.kidsMovie4kProfileId);
+        setKidsMovie4kRootFolder(init.kidsMovie4kRootFolder);
+        setKidsTvAppId(init.kidsTvAppId);
+        setKidsTvProfileId(init.kidsTvProfileId);
+        setKidsTvRootFolder(init.kidsTvRootFolder);
+        setKidsTv4kAppId(init.kidsTv4kAppId);
+        setKidsTv4kProfileId(init.kidsTv4kProfileId);
+        setKidsTv4kRootFolder(init.kidsTv4kRootFolder);
+    };
+
     useEffect(() => {
         loadSettings();
     }, []);
@@ -238,6 +409,60 @@ export function SeerrSettingsPanel({ onNavigateTab }: SeerrSettingsPanelProps = 
                 setRadarrApps(d.radarrApps || []);
                 setSonarrApps(d.sonarrApps || []);
                 setAppDataMap(d.appDataMap || {});
+
+                initialSeerrRef.current = {
+                    fullAutoApprove: d.seerrFullAutoApprove ?? true,
+                    fullUnlimited: d.seerrFullUnlimited ?? true,
+                    fullQuotaMovies: d.seerrFullQuotaMovies ?? 0,
+                    fullQuotaTv: d.seerrFullQuotaTv ?? 0,
+                    fullQuotaDays: d.seerrFullQuotaDays ?? 7,
+                    trialAutoApprove: d.seerrTrialAutoApprove ?? false,
+                    trialQuotaMovies: d.seerrTrialQuotaMovies ?? 3,
+                    trialQuotaTv: d.seerrTrialQuotaTv ?? 3,
+                    autoDual1080pFor4k: d.seerrAutoDual1080pFor4k ?? true,
+                    notificationOnAvailable: d.seerrNotificationOnAvailable ?? true,
+                    discordWebhookUrl: d.seerrDiscordWebhookUrl || "",
+                    discordBotUsername: d.seerrDiscordBotUsername || "Portalarr",
+                    discordBotAvatarUrl: d.seerrDiscordBotAvatarUrl || "",
+                    discordNotifyPending: d.seerrDiscordNotifyPending ?? true,
+                    discordNotifyAutoApproved: d.seerrDiscordNotifyAutoApproved ?? true,
+                    discordNotifyApproved: d.seerrDiscordNotifyApproved ?? true,
+                    discordNotifyDeclined: d.seerrDiscordNotifyDeclined ?? true,
+                    discordNotifyAvailable: d.seerrDiscordNotifyAvailable ?? true,
+                    discordNotifyFailed: d.seerrDiscordNotifyFailed ?? true,
+                    emailNotifyAdminNewRequest: d.seerrEmailNotifyAdminNewRequest ?? true,
+                    emailNotifyUserAutoApproved: d.seerrEmailNotifyUserAutoApproved ?? true,
+                    emailNotifyUserApproved: d.seerrEmailNotifyUserApproved ?? true,
+                    emailNotifyUserDeclined: d.seerrEmailNotifyUserDeclined ?? true,
+                    emailNotifyUserAvailable: d.seerrEmailNotifyUserAvailable ?? true,
+                    emailNotifyUserFailed: d.seerrEmailNotifyUserFailed ?? true,
+                    defaultMovieAppId: d.seerrDefaultMovieAppId || "",
+                    defaultMovieProfileId: d.seerrDefaultMovieProfileId ?? null,
+                    defaultMovieRootFolder: d.seerrDefaultMovieRootFolder || "",
+                    defaultMovie4kAppId: d.seerrDefaultMovie4kAppId || "",
+                    defaultMovie4kProfileId: d.seerrDefaultMovie4kProfileId ?? null,
+                    defaultMovie4kRootFolder: d.seerrDefaultMovie4kRootFolder || "",
+                    defaultTvAppId: d.seerrDefaultTvAppId || "",
+                    defaultTvProfileId: d.seerrDefaultTvProfileId ?? null,
+                    defaultTvRootFolder: d.seerrDefaultTvRootFolder || "",
+                    defaultTv4kAppId: d.seerrDefaultTv4kAppId || "",
+                    defaultTv4kProfileId: d.seerrDefaultTv4kProfileId ?? null,
+                    defaultTv4kRootFolder: d.seerrDefaultTv4kRootFolder || "",
+                    kidsAutoApprovePg: d.seerrKidsAutoApprovePg ?? true,
+                    kidsRequireApprovalPg13: d.seerrKidsRequireApprovalPg13 ?? true,
+                    kidsMovieAppId: d.seerrKidsMovieAppId || "",
+                    kidsMovieProfileId: d.seerrKidsMovieProfileId ?? null,
+                    kidsMovieRootFolder: d.seerrKidsMovieRootFolder || "",
+                    kidsMovie4kAppId: d.seerrKidsMovie4kAppId || "",
+                    kidsMovie4kProfileId: d.seerrKidsMovie4kProfileId ?? null,
+                    kidsMovie4kRootFolder: d.seerrKidsMovie4kRootFolder || "",
+                    kidsTvAppId: d.seerrKidsTvAppId || "",
+                    kidsTvProfileId: d.seerrKidsTvProfileId ?? null,
+                    kidsTvRootFolder: d.seerrKidsTvRootFolder || "",
+                    kidsTv4kAppId: d.seerrKidsTv4kAppId || "",
+                    kidsTv4kProfileId: d.seerrKidsTv4kProfileId ?? null,
+                    kidsTv4kRootFolder: d.seerrKidsTv4kRootFolder || ""
+                };
             }
         } catch (e) {} finally {
             setLoading(false);
@@ -361,6 +586,25 @@ export function SeerrSettingsPanel({ onNavigateTab }: SeerrSettingsPanelProps = 
 
             if (res.success) {
                 setSuccessMsg(res.message || "Request settings saved successfully!");
+                initialSeerrRef.current = {
+                    fullAutoApprove, fullUnlimited, fullQuotaMovies, fullQuotaTv, fullQuotaDays,
+                    trialAutoApprove, trialQuotaMovies, trialQuotaTv,
+                    autoDual1080pFor4k, notificationOnAvailable,
+                    discordWebhookUrl, discordBotUsername, discordBotAvatarUrl,
+                    discordNotifyPending, discordNotifyAutoApproved, discordNotifyApproved,
+                    discordNotifyDeclined, discordNotifyAvailable, discordNotifyFailed,
+                    emailNotifyAdminNewRequest, emailNotifyUserAutoApproved, emailNotifyUserApproved,
+                    emailNotifyUserDeclined, emailNotifyUserAvailable, emailNotifyUserFailed,
+                    defaultMovieAppId, defaultMovieProfileId, defaultMovieRootFolder,
+                    defaultMovie4kAppId, defaultMovie4kProfileId, defaultMovie4kRootFolder,
+                    defaultTvAppId, defaultTvProfileId, defaultTvRootFolder,
+                    defaultTv4kAppId, defaultTv4kProfileId, defaultTv4kRootFolder,
+                    kidsAutoApprovePg, kidsRequireApprovalPg13,
+                    kidsMovieAppId, kidsMovieProfileId, kidsMovieRootFolder,
+                    kidsMovie4kAppId, kidsMovie4kProfileId, kidsMovie4kRootFolder,
+                    kidsTvAppId, kidsTvProfileId, kidsTvRootFolder,
+                    kidsTv4kAppId, kidsTv4kProfileId, kidsTv4kRootFolder
+                };
             } else {
                 setErrorMsg(res.error || "Failed to save settings.");
             }
@@ -569,13 +813,18 @@ export function SeerrSettingsPanel({ onNavigateTab }: SeerrSettingsPanelProps = 
 
     return (
         <div className="space-y-6">
-            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+            <Card className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md shadow-sm ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-border/50"}`}>
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
                                 <Compass className="h-5 w-5 text-primary" />
                                 Native Media Requests & Seerr Engine
+                                {hasUnsavedChanges && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription>
                                 Configure instance routing, quality profiles, root paths, Full vs Trial accounts, and Dual 4K+1080p ingestion rules.
@@ -1311,6 +1560,16 @@ export function SeerrSettingsPanel({ onNavigateTab }: SeerrSettingsPanelProps = 
                     </div>
                 </CardContent>
             </Card>
+
+            {/* FLOATING SAVE BAR & UNSAVED CHANGES MODAL */}
+            <UnsavedChangesPrompt
+                hasUnsavedChanges={hasUnsavedChanges}
+                unsavedSections={unsavedSections}
+                onSave={handleSave}
+                onDiscard={handleDiscard}
+                isSaving={saving}
+                saveLabel="Save Request Settings"
+            />
         </div>
     );
 }

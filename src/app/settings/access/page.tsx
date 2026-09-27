@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { UnsavedChangesPrompt, CustomPendingNavigation } from "@/components/ui/unsaved-changes-prompt";
 import { 
     getAppUsers, 
     createAppUser, 
@@ -147,6 +148,78 @@ export default function AccessSettingsPage() {
     const [savingSettings, setSavingSettings] = useState(false);
     const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
     const [settingsErrMsg, setSettingsErrMsg] = useState("");
+
+    const initialPaymentSettingsRef = useRef<{
+        paymentSettings: any;
+        defaultSelectedKeys: string[];
+        defaultTrialSelectedKeys: string[];
+        defaultKidsSelectedKeys: string[];
+    } | null>(null);
+    const [customPendingNav, setCustomPendingNav] = useState<CustomPendingNavigation | null>(null);
+
+    const isPricingDirty = useMemo(() => {
+        if (!initialPaymentSettingsRef.current) return false;
+        const init = initialPaymentSettingsRef.current.paymentSettings;
+        return (
+            paymentSettings.defaultTrialDays !== init.defaultTrialDays ||
+            paymentSettings.subscriptionPrice !== init.subscriptionPrice ||
+            paymentSettings.yearlyPrice !== init.yearlyPrice ||
+            paymentSettings.monthlyPrice !== init.monthlyPrice ||
+            (paymentSettings.tier2YearlyPrice ?? 240) !== (init.tier2YearlyPrice ?? 240) ||
+            (paymentSettings.tier2MonthlyPrice ?? 25) !== (init.tier2MonthlyPrice ?? 25) ||
+            paymentSettings.renewalMonth !== init.renewalMonth ||
+            paymentSettings.renewalDay !== init.renewalDay ||
+            paymentSettings.billingType !== init.billingType ||
+            (paymentSettings.membershipTiersEnabled ?? true) !== (init.membershipTiersEnabled ?? true)
+        );
+    }, [paymentSettings]);
+
+    const isPaymentMethodsDirty = useMemo(() => {
+        if (!initialPaymentSettingsRef.current) return false;
+        const init = initialPaymentSettingsRef.current.paymentSettings;
+        return (
+            (paymentSettings.paymentPaypal || "") !== (init.paymentPaypal || "") ||
+            (paymentSettings.paymentVenmo || "") !== (init.paymentVenmo || "") ||
+            (paymentSettings.paymentCashApp || "") !== (init.paymentCashApp || "") ||
+            (paymentSettings.paymentZelle || "") !== (init.paymentZelle || "") ||
+            (paymentSettings.paymentInstructions || "") !== (init.paymentInstructions || "") ||
+            (paymentSettings.discordInviteUrl || "") !== (init.discordInviteUrl || "") ||
+            (paymentSettings.subscriptionGracePeriodDays ?? 3) !== (init.subscriptionGracePeriodDays ?? 3) ||
+            (paymentSettings.autoSuspendExpiredAccounts ?? false) !== (init.autoSuspendExpiredAccounts ?? false) ||
+            (paymentSettings.requireReferralForSignup ?? false) !== (init.requireReferralForSignup ?? false)
+        );
+    }, [paymentSettings]);
+
+    const isDefaultLibrariesDirty = useMemo(() => {
+        if (!initialPaymentSettingsRef.current) return false;
+        const init = initialPaymentSettingsRef.current;
+        const areArraysEqual = (a: string[], b: string[]) => {
+            if (a.length !== b.length) return false;
+            const setA = new Set(a);
+            return b.every(x => setA.has(x));
+        };
+        return (
+            !areArraysEqual(defaultSelectedKeys, init.defaultSelectedKeys) ||
+            !areArraysEqual(defaultTrialSelectedKeys, init.defaultTrialSelectedKeys) ||
+            !areArraysEqual(defaultKidsSelectedKeys, init.defaultKidsSelectedKeys)
+        );
+    }, [defaultSelectedKeys, defaultTrialSelectedKeys, defaultKidsSelectedKeys]);
+
+    const unsavedSections: string[] = [];
+    if (isPricingDirty) unsavedSections.push("Subscription & Trial Pricing");
+    if (isPaymentMethodsDirty) unsavedSections.push("Payment Methods & Policy");
+    if (isDefaultLibrariesDirty) unsavedSections.push("Default Plex Libraries");
+
+    const hasUnsavedChanges = unsavedSections.length > 0;
+
+    const handleDiscardAll = () => {
+        if (!initialPaymentSettingsRef.current) return;
+        const init = initialPaymentSettingsRef.current;
+        setPaymentSettings({ ...init.paymentSettings });
+        setDefaultSelectedKeys([...init.defaultSelectedKeys]);
+        setDefaultTrialSelectedKeys([...init.defaultTrialSelectedKeys]);
+        setDefaultKidsSelectedKeys([...init.defaultKidsSelectedKeys]);
+    };
 
     // Change Password state
     const [passCurrent, setPassCurrent] = useState("");
@@ -371,27 +444,36 @@ export default function AccessSettingsPage() {
             const res = await getPaymentAndTrialSettings();
             if (res && res.success && res.settings) {
                 setPaymentSettings(res.settings);
+                let loadedKeys: string[] = [];
+                let loadedTrialKeys: string[] = [];
+                let loadedKidsKeys: string[] = [];
                 if (res.settings.defaultPlexLibraries) {
-                    const keys = res.settings.defaultPlexLibraries
+                    loadedKeys = res.settings.defaultPlexLibraries
                         .split(",")
                         .map((s: string) => s.trim())
                         .filter(Boolean);
-                    setDefaultSelectedKeys(keys);
+                    setDefaultSelectedKeys(loadedKeys);
                 }
                 if (res.settings.defaultTrialPlexLibraries) {
-                    const trialKeys = res.settings.defaultTrialPlexLibraries
+                    loadedTrialKeys = res.settings.defaultTrialPlexLibraries
                         .split(",")
                         .map((s: string) => s.trim())
                         .filter(Boolean);
-                    setDefaultTrialSelectedKeys(trialKeys);
+                    setDefaultTrialSelectedKeys(loadedTrialKeys);
                 }
                 if (res.settings.defaultKidsPlexLibraries) {
-                    const kidsKeys = res.settings.defaultKidsPlexLibraries
+                    loadedKidsKeys = res.settings.defaultKidsPlexLibraries
                         .split(",")
                         .map((s: string) => s.trim())
                         .filter(Boolean);
-                    setDefaultKidsSelectedKeys(kidsKeys);
+                    setDefaultKidsSelectedKeys(loadedKidsKeys);
                 }
+                initialPaymentSettingsRef.current = {
+                    paymentSettings: { ...res.settings },
+                    defaultSelectedKeys: loadedKeys,
+                    defaultTrialSelectedKeys: loadedTrialKeys,
+                    defaultKidsSelectedKeys: loadedKidsKeys
+                };
             }
 
             const addonRes = await getAvailableAddonsAction();
@@ -1061,8 +1143,7 @@ export default function AccessSettingsPage() {
     };
 
     // Save Payment & Onboarding Defaults
-    const handleSaveOnboardingSettings = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSaveOnboardingDirect = async (): Promise<boolean> => {
         setSavingSettings(true);
         setSettingsSuccessMsg("");
         setSettingsErrMsg("");
@@ -1072,20 +1153,20 @@ export default function AccessSettingsPage() {
         formData.append("defaultPlexLibraries", defaultSelectedKeys.join(","));
         formData.append("defaultTrialPlexLibraries", defaultTrialSelectedKeys.join(","));
         formData.append("defaultKidsPlexLibraries", defaultKidsSelectedKeys.join(","));
-        formData.append("paymentPaypal", paymentSettings.paymentPaypal);
-        formData.append("paymentVenmo", paymentSettings.paymentVenmo);
-        formData.append("paymentCashApp", paymentSettings.paymentCashApp);
-        formData.append("paymentZelle", paymentSettings.paymentZelle);
-        formData.append("paymentInstructions", paymentSettings.paymentInstructions);
-        formData.append("subscriptionPrice", paymentSettings.subscriptionPrice);
+        formData.append("paymentPaypal", paymentSettings.paymentPaypal || "");
+        formData.append("paymentVenmo", paymentSettings.paymentVenmo || "");
+        formData.append("paymentCashApp", paymentSettings.paymentCashApp || "");
+        formData.append("paymentZelle", paymentSettings.paymentZelle || "");
+        formData.append("paymentInstructions", paymentSettings.paymentInstructions || "");
+        formData.append("subscriptionPrice", paymentSettings.subscriptionPrice || "");
         formData.append("yearlyPrice", String(paymentSettings.yearlyPrice));
         formData.append("monthlyPrice", String(paymentSettings.monthlyPrice));
         formData.append("tier2YearlyPrice", String(paymentSettings.tier2YearlyPrice ?? 240));
         formData.append("tier2MonthlyPrice", String(paymentSettings.tier2MonthlyPrice ?? 25));
         formData.append("renewalMonth", String(paymentSettings.renewalMonth));
         formData.append("renewalDay", String(paymentSettings.renewalDay));
-        formData.append("billingType", paymentSettings.billingType);
-        formData.append("requireReferralForSignup", String(paymentSettings.requireReferralForSignup));
+        formData.append("billingType", paymentSettings.billingType || "YEARLY_PRORATED");
+        formData.append("requireReferralForSignup", String(paymentSettings.requireReferralForSignup ?? false));
         formData.append("discordInviteUrl", paymentSettings.discordInviteUrl || "");
         formData.append("subscriptionGracePeriodDays", String(paymentSettings.subscriptionGracePeriodDays ?? 3));
         formData.append("membershipTiersEnabled", String(paymentSettings.membershipTiersEnabled ?? true));
@@ -1095,9 +1176,45 @@ export default function AccessSettingsPage() {
         setSavingSettings(false);
         if (res.success) {
             setSettingsSuccessMsg(res.message || "Payment & Trial settings saved successfully!");
+            initialPaymentSettingsRef.current = {
+                paymentSettings: { ...paymentSettings },
+                defaultSelectedKeys: [...defaultSelectedKeys],
+                defaultTrialSelectedKeys: [...defaultTrialSelectedKeys],
+                defaultKidsSelectedKeys: [...defaultKidsSelectedKeys]
+            };
+            return true;
         } else {
             setSettingsErrMsg(res.error || "Failed to save settings.");
+            return false;
         }
+    };
+
+    const handleSaveOnboardingSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSaveOnboardingDirect();
+    };
+
+    const handleTabChange = (newTab: string) => {
+        if (hasUnsavedChanges && newTab !== activeTab) {
+            setCustomPendingNav({
+                type: "tab",
+                target: newTab,
+                onDiscardAndProceed: () => {
+                    handleDiscardAll();
+                    setActiveTab(newTab);
+                    setCustomPendingNav(null);
+                },
+                onSaveAndProceed: async () => {
+                    const ok = await handleSaveOnboardingDirect();
+                    if (ok) {
+                        setActiveTab(newTab);
+                        setCustomPendingNav(null);
+                    }
+                }
+            });
+            return;
+        }
+        setActiveTab(newTab);
     };
 
     const pendingUsersCount = users.filter(u => u.status === "PENDING").length;
@@ -1163,7 +1280,7 @@ export default function AccessSettingsPage() {
             </div>
 
             {/* TOP NAVIGATION TABS */}
-            <Tabs defaultValue="users" value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+            <Tabs defaultValue="users" value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
                     <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
@@ -1171,8 +1288,11 @@ export default function AccessSettingsPage() {
                     <TabsTrigger value="referrals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Trophy className="h-4 w-4 text-amber-400 shrink-0" /> <span className="truncate">Referrals & Leaderboard</span>
                     </TabsTrigger>
-                    <TabsTrigger value="onboarding" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                    <TabsTrigger value="onboarding" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
                         <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Payment & Onboarding</span>
+                        {hasUnsavedChanges && (
+                            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse ml-1 shrink-0" />
+                        )}
                     </TabsTrigger>
                     <TabsTrigger value="scraper" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Email Scraper</span>
@@ -2337,10 +2457,15 @@ export default function AccessSettingsPage() {
                 {/* TAB 3: PAYMENT & ONBOARDING SETTINGS */}
                 {/* ========================================================================= */}
                 <TabsContent value="onboarding" className="space-y-6 animate-in fade-in-50 duration-200">
-                    <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                    <Card className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-border/50"}`}>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg font-bold">
                                 <Sparkles className="h-5 w-5 text-emerald-400" /> Wizarr-Style Onboarding, Trials & Prorated Yearly Billing
+                                {hasUnsavedChanges && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription>
                                 Configure custom trial days, yearly/monthly subscription pricing, annual January 1st proration, and payment gateways.
@@ -4457,6 +4582,17 @@ export default function AccessSettingsPage() {
                     </Card>
                 </div>
             )}
+
+            {/* UNSAVED CHANGES FLOATING BAR & MODAL */}
+            <UnsavedChangesPrompt
+                hasUnsavedChanges={hasUnsavedChanges}
+                unsavedSections={unsavedSections}
+                onSave={handleSaveOnboardingDirect}
+                onDiscard={handleDiscardAll}
+                isSaving={savingSettings}
+                customPendingNav={customPendingNav}
+                onCancelPendingNav={() => setCustomPendingNav(null)}
+            />
         </div>
     );
 }
