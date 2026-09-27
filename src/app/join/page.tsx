@@ -20,7 +20,7 @@ import {
     Sparkles, Gift, CheckCircle2, ChevronRight, ChevronLeft, Tv, Tv2, 
     Flame, Monitor, Smartphone, Globe, Shield, ShieldCheck, User, Mail, Lock, 
     Loader2, AlertCircle, DollarSign, ArrowRight, Play, ExternalLink, Check, 
-    Calendar, MessageSquare, BookOpen, Users, LockKeyhole
+    Calendar, MessageSquare, BookOpen, Users, LockKeyhole, Crown
 } from "lucide-react";
 
 function JoinWizardContent() {
@@ -325,49 +325,54 @@ function JoinWizardContent() {
                                     </ul>
                                 </div>
 
-                                {/* FULL MEMBER PERKS */}
+                                {/* FULL MEMBERSHIP UPGRADE PERKS */}
                                 <div className="p-4 rounded-2xl bg-purple-500/[0.04] border border-purple-500/20 space-y-3">
                                     <div className="flex items-center gap-2 border-b border-purple-500/20 pb-2">
-                                        <div className="p-1.5 bg-purple-500/20 text-purple-400 rounded-lg">
-                                            <Sparkles className="h-4 w-4" />
+                                        <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded-lg">
+                                            <Crown className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider">Full Membership</h4>
-                                            <p className="text-[11px] text-muted-foreground">Unlocked upon subscription</p>
+                                            <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider">Upgrade to Full Membership</h4>
+                                            <p className="text-[11px] text-muted-foreground">Unlock all extra server perks & features</p>
                                         </div>
                                     </div>
 
                                     <ul className="space-y-2 text-xs">
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Everything in Free Trial:</strong> Uninterrupted streaming with highest server bandwidth priority.</span>
+                                            <span><strong className="text-foreground">Priority Streaming:</strong> Highest server bandwidth priority & uninterrupted playback.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <BookOpen className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, audio player & Send-to-Kindle delivery.</span>
+                                            <span><strong className="text-foreground">Digital Ebook & Audiobook Library:</strong> Read in-browser with Kindle Paperwhite mode, listen in audio player, or Send-to-Kindle.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Users className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Dedicated Kids & Living Room Profiles:</strong> Managed family accounts with PIN safety & age ratings.</span>
+                                            <span><strong className="text-foreground">Dedicated Kids & Living Room Profiles:</strong> Managed sub-accounts with custom age ratings, PIN safety, and kid-safe library curation.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Book & Audiobook Requests:</strong> 1-click requests for bestsellers, new releases, and audiobooks.</span>
+                                            <span><strong className="text-foreground">Book & Audiobook Requests:</strong> 1-click requests for bestsellers, new books, and audiobooks.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Gift className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Discord Community & Referral Rewards:</strong> Server downtime alerts, chat, and earn 1 free month per friend referred.</span>
+                                            <span><strong className="text-foreground">Discord VIP & Referral Rewards:</strong> Real-time server status alerts, direct support, and earn +1 free month per friend referred.</span>
                                         </li>
                                     </ul>
                                 </div>
                             </div>
 
-                            {/* TRIAL NOTICE BANNER */}
-                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5 text-xs text-amber-300">
-                                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
-                                <p className="text-[11px] leading-relaxed">
-                                    <strong>Important:</strong> Free trial passes include full movie and TV streaming. Dedicated Kids accounts and the Ebook & Audiobook library are reserved exclusively for full members upon subscription.
-                                </p>
+                            {/* UPGRADE PERKS CALLOUT */}
+                            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-purple-500/10 border border-purple-500/25 flex items-start sm:items-center gap-3 text-xs">
+                                <div className="p-2 bg-purple-500/20 text-purple-300 rounded-xl shrink-0">
+                                    <Crown className="h-4 w-4" />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <h4 className="font-bold text-purple-200">The Trial is Just the Preview</h4>
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                        Your free trial gives you full access to test out our movies and TV shows streaming. When you upgrade to full membership, you unlock all the premium perks — including dedicated Kids profiles, our complete digital Ebook & Audiobook collection, and community rewards!
+                                    </p>
+                                </div>
                             </div>
 
                             {/* TRANSPARENT PRORATED PRICING BANNER */}

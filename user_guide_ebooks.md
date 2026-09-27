@@ -27,6 +27,8 @@ Portalarr offers dedicated library views for your reading and listening collecti
 - **⚙️ Kindle Settings Tab:** Configure Send-to-Kindle email addresses, run pre-flight diagnostics, check Amazon approved sender whitelists, and view outbound delivery transaction logs.
 - **❓ Help & Guide Tab:** This in-app guide, keeping you up-to-date with the latest features.
 
+> 💡 **Full Membership Perk:** The digital Ebook & Audiobook Library is an exclusive perk of Full Membership. While free trial passes provide full movie and TV streaming on Plex, upgrading to full membership unlocks our complete digital book library, wireless Send-to-Kindle delivery, floating audio player, and 1-click book requests!
+
 ---
 
 ## 📱 2. Ebook & Comic In-Browser Reading

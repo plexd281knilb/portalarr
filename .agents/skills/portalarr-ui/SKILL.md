@@ -121,10 +121,9 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 ### 7. Member Onboarding & Invitation Gateway (`/join`)
 - **Private Server Invite Gate**: Direct visitors without a valid `?ref=` query parameter are gated at Step 0. They cannot access the onboarding flow until entering a valid referral code or active member reference (`name` or `username`).
 - **Layout Header Isolation**: On `/join`, all user navigation headers (Book Library, Guides, Account Settings, System Settings) are strictly hidden via `layout-wrapper.tsx` (`!pathname.startsWith("/join")`).
-- **Trial vs Full Member Delineation**:
-  - **Free Trial**: Full Movies & TV streaming on Plex, 100% Direct Play Original Studio Quality (4K HDR, Dolby Vision, Dolby Atmos), all devices (Apple TV, Roku, Fire TV, Smart TVs, Phone, Web), movie & TV requests, and no payment up front.
-  - **Full Membership**: Unlimited ongoing streaming, full Ebook & Audiobook Library with in-browser Kindle Paperwhite reader & Send-to-Kindle *(Trial members do NOT receive book access)*, dedicated Kids & Living Room sub-account profiles *(Trial members do NOT receive kids accounts)*, book requests, Discord community.
-  - **Notice Banner**: Explicitly warn users that Kids accounts and the Ebook/Audiobook library are reserved exclusively for full members.
+- **Trial vs Full Membership Framing (Upgrade Perks)**:
+  - **Free Trial**: A risk-free preview giving full access to stream movies and TV shows on Plex, 100% Direct Play Original Studio Quality (4K HDR, Dolby Vision, Dolby Atmos), all devices (Apple TV, Roku, Fire TV, Smart TVs, Phone, Web), movie & TV requests, with no payment up front.
+  - **Full Membership Upgrade Perks**: Frame full membership as unlocking all the extra perks: priority bandwidth streaming, full Ebook & Audiobook Library with in-browser Kindle Paperwhite reader & Send-to-Kindle delivery, dedicated Kids & Living Room sub-account profiles with PIN safety & age ratings, 1-click book requests, and Discord community rewards. Never use negative/restrictive phrasing like "trial members do not receive". Frame the trial as the preview and upgrading as unlocking the extra perks.
 - **Prorated Rest-of-Year Billing Math**:
   - Annual plans strictly derive their monthly base rate from `yearlyPrice / 12` ($180 / 12 = $15.00/mo), never an inflated standalone monthly price.
   - Formula: `proratedMonth = (daysRemaining / totalDaysInMonth) * 15`, `fullMonths = remainingFullMonths * 15`. Total amount due now = `proratedMonth + fullMonths`.

@@ -16,7 +16,8 @@ Welcome to Portalarr! This guide will walk you through monitoring your Plex stre
 9. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#9--native-movie--tv-show-requests-seerr-engine--episode-guides)
 10. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#10--curation-studio-suite-kometa-agregarr-maintainerr-tagging)
 11. [👁️ Admin Tools: View Site As User (Impersonation)](#11-️-admin-tools-view-site-as-user-impersonation)
-12. [Need Help or Technical Support?](#12-need-help-or-technical-support)
+12. [💳 Subscriptions, Prorated Billing & Unsaved Settings Guard](#-13-subscriptions-prorated-billing--unsaved-settings-guard)
+13. [Need Help or Technical Support?](#-14-need-help-or-technical-support)
 
 ---
 
@@ -24,7 +25,14 @@ Welcome to Portalarr! This guide will walk you through monitoring your Plex stre
 
 1. Open your browser and navigate to the Portalarr server address (e.g. `https://home.yourdomain.com`).
 2. Log in using your Username/Email & Password or click **Sign in with Plex**.
-3. If you are a new user, click **Request Account Access** on the login screen. An administrator will review and approve your account.
+3. **New User Invitations (`/join`):**
+   - Portalarr is a private, invite-only community. New users can join via a direct referral link (e.g. `/join?ref=YOUR_CODE`) or by entering the referral code, username, or full name of an existing active member.
+   - **Free Trial Pass:** New members receive a free all-access pass with **zero payment required up front** to preview movies and TV shows in full 4K HDR / 1080p studio quality on Plex.
+   - **Upgrading to Full Membership:** Upgrading unlocks all the extra server perks:
+     - 🧒 **Dedicated Kids & Living Room Profiles:** Child-safe managed Plex accounts with PIN safety and age rating filters.
+     - 📚 **Full Digital Book & Audiobook Library:** In-browser Kindle Paperwhite reading mode, floating HTML5 audiobook player, and wireless Send-to-Kindle delivery.
+     - ⚡ **Priority Server Bandwidth:** Dedicated high-priority streaming and transcode allocation.
+     - 🎁 **Discord Community & Referral Rewards:** Live server downtime alerts, member chat, and earn 1 free month per friend referred.
 4. Once logged in, your session remains securely active for 30 days with sliding automatic renewal.
 
 ---
@@ -55,6 +63,10 @@ If a TV app crashed, lost Wi-Fi, or left a "ghost session" running in the backgr
 Click the **Connected Servers** badge in the hub header to view:
 - All healthy Plex Media Server instances linked to your ecosystem.
 - Server names, active versions, local/public IP addresses, and secure HTTPS connection statuses.
+
+### ⏱️ Personalized Watch Time Analytics
+- **Formatted Days & Hours:** Displays your total streaming duration formatted into clean days and hours (e.g. `33 days 4 hrs` rather than confusing raw hour counts).
+- **Milestone Counts:** Tracks your total Movies Finished and TV Episodes Watched, synchronized automatically from your Tautulli and Plex watch history.
 
 ### ⚡ In-Browser Server Speed Test
 Diagnose buffering or stuttering directly from your current viewing device:
@@ -228,7 +240,26 @@ Administrators can view the entire Portalarr portal through the eyes of any regi
 
 ---
 
-## ❓ 12. Need Help or Technical Support?
+## 💳 13. Subscriptions, Prorated Billing & Unsaved Settings Guard
+
+### 📅 Transparent Prorated Annual Billing
+When you upgrade from a free trial pass to a full annual membership:
+- **Base Rate:** The standard yearly membership is $180/year ($15/month).
+- **Mid-Year Proration:** You only pay for the remaining calendar days and full months in the year before renewing on January 1st:
+  - Prorated first month: `(remaining days / total days in month) * $15`
+  - Remaining months: `remaining full months * $15`
+  - *Example:* Upgrading on October 10th covers 21 days in October ($10.16) + November ($15) + December ($15) = **$40.16** for the remainder of the year.
+- **P2P Direct Payment Methods:** Members can renew via Venmo, Cash App, PayPal, or Zelle with zero gateway fees. Be sure to include your username in the payment note/memo!
+
+### ⚠️ Unsaved Settings Protection
+When managing your profile, Send-to-Kindle preferences, notification toggles, or server settings:
+- **Amber Border Glow:** Modified sections highlight with an amber glow and `● Unsaved Changes` badge.
+- **Floating Save Bar:** A persistent bottom bar allows you to save all pending changes or discard with 1 click.
+- **Navigation Guard:** Portalarr prevents accidental page exits or tab switching while unsaved changes are pending.
+
+---
+
+## ❓ 14. Need Help or Technical Support?
 
 If a download fails, a stream won't play, or you need server assistance:
 1. Click the **Support** (`💬`) icon in the main navigation bar.
