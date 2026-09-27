@@ -12813,7 +12813,7 @@ export async function getAdminDetailedStreamsAction() {
                             audioDecision: (s.audio_decision || "direct play").toLowerCase(),
                             videoCodec: (s.video_codec || "").toUpperCase(),
                             audioCodec: (s.audio_codec || "").toUpperCase(),
-                            streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate) / 1000) : 0,
+                            streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate)) : (s.bitrate ? Math.round(Number(s.bitrate)) : 0),
                             transcodeHwRequested: !!s.transcode_hw_requested,
                             transcodeHwDecoding: s.transcode_hw_decoding || "",
                             transcodeHwEncoding: s.transcode_hw_encoding || "",

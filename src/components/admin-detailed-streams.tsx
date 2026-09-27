@@ -72,7 +72,7 @@ export default function AdminDetailedStreams() {
 
     const transcodeCount = sessions.filter((s: any) => s.videoDecision === "transcode" || s.audioDecision === "transcode").length;
     const directPlayCount = sessions.length - transcodeCount;
-    const hwCount = sessions.filter((s: any) => s.transcodeHwRequested || s.transcodeHwEncoding || s.transcodeHwDecoding).length;
+    const hwCount = sessions.filter((s: any) => s.videoDecision === "transcode" && (s.transcodeHwRequested || s.transcodeHwEncoding || s.transcodeHwDecoding)).length;
     const totalBandwidthKbps = sessions.reduce((acc: number, s: any) => acc + (s.streamBitrate || 0), 0);
     const totalBandwidthMbps = (totalBandwidthKbps / 1000).toFixed(1);
 
@@ -173,7 +173,7 @@ export default function AdminDetailedStreams() {
                         {sessions.map((stream: any, idx: number) => {
                             const isTranscoding = stream.videoDecision === "transcode";
                             const isAudioTranscoding = stream.audioDecision === "transcode";
-                            const isHw = stream.transcodeHwRequested || stream.transcodeHwEncoding || stream.transcodeHwDecoding;
+                            const isHw = isTranscoding && (stream.transcodeHwRequested || stream.transcodeHwEncoding || stream.transcodeHwDecoding);
 
                             return (
                                 <div 
@@ -228,7 +228,7 @@ export default function AdminDetailedStreams() {
                                                     {stream.player} {stream.device ? `• ${stream.device}` : ""}
                                                 </span>
                                                 <span>•</span>
-                                                <span className="font-mono">{stream.streamBitrate ? `${stream.streamBitrate} kbps` : ""}</span>
+                                                <span className="font-mono">{stream.streamBitrate ? (stream.streamBitrate >= 1000 ? `${(stream.streamBitrate / 1000).toFixed(1)} Mbps` : `${stream.streamBitrate} kbps`) : ""}</span>
                                             </div>
 
                                             {/* Progress */}

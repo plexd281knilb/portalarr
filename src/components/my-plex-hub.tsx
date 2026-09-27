@@ -478,10 +478,12 @@ export default function MyPlexHub() {
                                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
                                     <div className="text-[10px] text-muted-foreground uppercase font-semibold">Hardware Accel</div>
                                     <div className="font-bold text-foreground">
-                                        {selectedStreamForDiagnosis.transcodeHwEncoding ? "Active (NVENC)" : "None"}
+                                        {selectedStreamForDiagnosis.videoDecision === "transcode"
+                                            ? (selectedStreamForDiagnosis.transcodeHwEncoding ? "Active (NVENC)" : "None (Software)")
+                                            : "None (Direct Play)"}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">
-                                        Speed: {selectedStreamForDiagnosis.transcodeSpeed}x
+                                        Speed: {selectedStreamForDiagnosis.videoDecision === "transcode" ? `${selectedStreamForDiagnosis.transcodeSpeed}x` : "1.0x (Raw)"}
                                     </div>
                                 </div>
                             </div>
