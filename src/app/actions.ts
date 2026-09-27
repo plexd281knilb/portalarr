@@ -2544,11 +2544,44 @@ import { sendUserApprovalEmail, createSession } from "@/app/auth-actions";
  */
 export async function revokePlexAccessForUserInternal(
     user: { id?: string; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null },
-    reason = "Account trial/access expired or revoked."
+    reason = "Account trial/access expired or revoked.",
+    options?: { bypassApproval?: boolean }
 ) {
     if (!user) return { success: false, error: "No user provided." };
     try {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const requireApproval = (settings?.requireApprovalForPlexChanges ?? true) && !options?.bypassApproval;
+        if (requireApproval && user.id) {
+            const existing = await prisma.adminApproval.findFirst({
+                where: {
+                    userId: user.id,
+                    type: "PLEX_ACCESS_REVOKE",
+                    status: "PENDING"
+                }
+            });
+            if (!existing) {
+                const approval = await prisma.adminApproval.create({
+                    data: {
+                        type: "PLEX_ACCESS_REVOKE",
+                        status: "PENDING",
+                        title: `Revoke Plex Access: ${user.username || 'User'}`,
+                        description: `Reason: ${reason}. Pending admin approval before revoking Plex library access.`,
+                        targetUser: user.username,
+                        targetEmail: user.email,
+                        userId: user.id,
+                        payload: JSON.stringify({
+                            userId: user.id,
+                            action: "EXPIRE_SUSPEND",
+                            reason
+                        })
+                    }
+                });
+                logger.addLog("INFO", "APPROVAL", `Plex access revocation for "${user.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                return { success: true, staged: true, approvalId: approval.id, message: "Plex access revocation staged for admin approval." };
+            }
+            return { success: true, staged: true, approvalId: existing.id, message: "Plex access revocation already staged for admin approval." };
+        }
+
         if (!settings?.mainPlexToken) {
             return { success: false, error: "Plex admin token not configured." };
         }
@@ -3120,7 +3153,7 @@ export async function rejectAppUser(id: string) {
         });
 
         if (user) {
-            await revokePlexAccessForUserInternal(user, "Account access rejected by administrator.");
+            await revokePlexAccessForUserInternal(user, "Account access rejected by administrator.", { bypassApproval: true });
             await notifyAdminUserRoleOrAccessChange({
                 username: user.username,
                 email: user.email,
@@ -3146,7 +3179,7 @@ export async function deleteAppUser(id: string) {
     try {
         const user = await prisma.user.findUnique({ where: { id } });
         if (user) {
-            await revokePlexAccessForUserInternal(user, "Account deleted by administrator.");
+            await revokePlexAccessForUserInternal(user, "Account deleted by administrator.", { bypassApproval: true });
             await notifyAdminUserRoleOrAccessChange({
                 username: user.username,
                 email: user.email,
@@ -3968,7 +4001,51 @@ export async function approveAdminApprovalAction(approvalId: string) {
                         where: { id: targetUser.id },
                         data: { status: "EXPIRED", plexLibrarySectionIds: "" }
                     });
-                    await revokePlexAccessForUserInternal(targetUser, payload.reason || "Subscription/trial ended.");
+                    await revokePlexAccessForUserInternal(targetUser, payload.reason || "Subscription/trial ended.", { bypassApproval: true });
+                }
+            } else if (payload.action === "INVITE_TRIAL_PLEX") {
+                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (targetUser && settings?.mainPlexToken) {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const rawKeys: string[] = payload.selectedKeys || [];
+                    const cleanPlex = payload.cleanPlex || targetUser.plexEmail || targetUser.plexUsername || targetUser.email || targetUser.username;
+                    const servers = await getPlexServers(adminToken);
+                    const serverSectionsMap = new Map<string, number[]>();
+                    for (const key of rawKeys) {
+                        if (key.includes(":")) {
+                            const [srvId, secStr] = key.split(":");
+                            const secId = parseInt(secStr, 10);
+                            if (!isNaN(secId)) {
+                                const list = serverSectionsMap.get(srvId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(srvId, list);
+                            }
+                        } else {
+                            const secId = parseInt(key, 10);
+                            if (!isNaN(secId) && servers.length > 0) {
+                                const primaryId = servers[0].clientIdentifier;
+                                const list = serverSectionsMap.get(primaryId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(primaryId, list);
+                            }
+                        }
+                    }
+                    for (const server of servers) {
+                        const srvId = server.clientIdentifier;
+                        const sections = serverSectionsMap.get(srvId) || [];
+                        if (sections.length > 0) {
+                            await invitePlexFriendAndShare(adminToken, srvId, cleanPlex, sections);
+                        }
+                    }
+                }
+            } else if (payload.action === "SYNC_SHARE") {
+                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (targetUser && settings?.mainPlexToken) {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const rawKeys: string[] = payload.selectedKeys || [];
+                    await syncUserPlexShareInternal(adminToken, targetUser, rawKeys);
                 }
             } else {
                 const updateRes = await executePlexLibraryAccessUpdateInternal(
@@ -4349,15 +4426,46 @@ export async function setUserTrialOrSubscription(
                         const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
                         rawKeys = srvSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
                     }
-                    await syncUserPlexShareInternal(adminToken, user, rawKeys, servers, shares);
 
-                    // Restore Plex shares for child sub-accounts
-                    for (const child of childSubAccounts) {
-                        const childRawKeys = child.accountType === "KID"
-                            ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
-                            : (child.selectedPlexLibrarySectionIds || child.plexLibrarySectionIds || rawKeys.join(",")).split(",").map(s => s.trim()).filter(Boolean);
-                        if (childRawKeys.length > 0) {
-                            await syncUserPlexShareInternal(adminToken, child, childRawKeys, servers, shares);
+                    const requirePlexApproval = settings?.requireApprovalForPlexChanges ?? true;
+                    if (requirePlexApproval) {
+                        const existing = await prisma.adminApproval.findFirst({
+                            where: {
+                                userId: user.id,
+                                type: "PLEX_ACCESS_GRANT",
+                                status: "PENDING"
+                            }
+                        });
+                        if (!existing) {
+                            const approval = await prisma.adminApproval.create({
+                                data: {
+                                    type: "PLEX_ACCESS_GRANT",
+                                    status: "PENDING",
+                                    title: `Plex Access: ${user.username} [${status}]`,
+                                    description: `User status set to ${status} (${type}). Pending admin approval before syncing ${rawKeys.length} Plex libraries.`,
+                                    targetUser: user.username,
+                                    targetEmail: user.email,
+                                    userId: user.id,
+                                    payload: JSON.stringify({
+                                        userId: user.id,
+                                        action: "SYNC_SHARE",
+                                        selectedKeys: rawKeys
+                                    })
+                                }
+                            });
+                            logger.addLog("INFO", "APPROVAL", `Plex access sync for "${user.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                        }
+                    } else {
+                        await syncUserPlexShareInternal(adminToken, user, rawKeys, servers, shares);
+
+                        // Restore Plex shares for child sub-accounts
+                        for (const child of childSubAccounts) {
+                            const childRawKeys = child.accountType === "KID"
+                                ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
+                                : (child.selectedPlexLibrarySectionIds || child.plexLibrarySectionIds || rawKeys.join(",")).split(",").map(s => s.trim()).filter(Boolean);
+                            if (childRawKeys.length > 0) {
+                                await syncUserPlexShareInternal(adminToken, child, childRawKeys, servers, shares);
+                            }
                         }
                     }
                 }
@@ -5026,40 +5134,62 @@ export async function registerTrialUserFromInvite(data: {
         // Automatically invite to Plex server with default libraries
         if (settings?.mainPlexToken) {
             try {
-                const adminToken = decryptData(settings.mainPlexToken);
-                const servers = await getPlexServers(adminToken);
-
-                const serverSectionsMap = new Map<string, number[]>();
-                for (const key of rawDefaultKeys) {
-                    if (key.includes(":")) {
-                        const [srvId, secStr] = key.split(":");
-                        const secId = parseInt(secStr, 10);
-                        if (!isNaN(secId)) {
-                            const list = serverSectionsMap.get(srvId) || [];
-                            list.push(secId);
-                            serverSectionsMap.set(srvId, list);
+                const requirePlexApproval = settings?.requireApprovalForPlexChanges !== false;
+                if (requirePlexApproval) {
+                    const approval = await prisma.adminApproval.create({
+                        data: {
+                            type: "PLEX_ACCESS_GRANT",
+                            status: "PENDING",
+                            title: `Plex Invite: New Trial (${newUser.username})`,
+                            description: `New member registered via invite. Pending admin approval before sending Plex invite and granting ${rawDefaultKeys.length} libraries.`,
+                            targetUser: newUser.username,
+                            targetEmail: newUser.email,
+                            userId: newUser.id,
+                            payload: JSON.stringify({
+                                userId: newUser.id,
+                                action: "INVITE_TRIAL_PLEX",
+                                selectedKeys: rawDefaultKeys,
+                                cleanPlex
+                            })
                         }
-                    } else {
-                        const secId = parseInt(key, 10);
-                        if (!isNaN(secId) && servers.length > 0) {
-                            const primaryId = servers[0].clientIdentifier;
-                            const list = serverSectionsMap.get(primaryId) || [];
-                            list.push(secId);
-                            serverSectionsMap.set(primaryId, list);
+                    });
+                    logger.addLog("INFO", "APPROVAL", `New trial registration Plex invite for "${newUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                } else {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const servers = await getPlexServers(adminToken);
+
+                    const serverSectionsMap = new Map<string, number[]>();
+                    for (const key of rawDefaultKeys) {
+                        if (key.includes(":")) {
+                            const [srvId, secStr] = key.split(":");
+                            const secId = parseInt(secStr, 10);
+                            if (!isNaN(secId)) {
+                                const list = serverSectionsMap.get(srvId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(srvId, list);
+                            }
+                        } else {
+                            const secId = parseInt(key, 10);
+                            if (!isNaN(secId) && servers.length > 0) {
+                                const primaryId = servers[0].clientIdentifier;
+                                const list = serverSectionsMap.get(primaryId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(primaryId, list);
+                            }
                         }
                     }
-                }
 
-                for (const server of servers) {
-                    const srvId = server.clientIdentifier;
-                    const sections = serverSectionsMap.get(srvId) || [];
-                    if (sections.length > 0) {
-                        await invitePlexFriendAndShare(
-                            adminToken, 
-                            srvId, 
-                            cleanPlex, 
-                            sections
-                        );
+                    for (const server of servers) {
+                        const srvId = server.clientIdentifier;
+                        const sections = serverSectionsMap.get(srvId) || [];
+                        if (sections.length > 0) {
+                            await invitePlexFriendAndShare(
+                                adminToken, 
+                                srvId, 
+                                cleanPlex, 
+                                sections
+                            );
+                        }
                     }
                 }
             } catch (plexErr: any) {
@@ -5681,15 +5811,52 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
 
         // Apply immediately to Plex if active
         if (dbUser.status === "APPROVED" || dbUser.status === "TRIAL") {
-            let adminToken = "";
-            if (settings?.mainPlexToken) {
-                adminToken = decryptData(settings.mainPlexToken);
-            }
-            if (!adminToken) {
-                adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
-            }
-            if (adminToken) {
-                await syncUserPlexShareInternal(adminToken, dbUser, filteredSelected);
+            const requireApproval = (settings?.requireApprovalForPlexChanges !== false) && dbUser.role !== "ADMIN";
+            if (requireApproval) {
+                const existing = await prisma.adminApproval.findFirst({
+                    where: {
+                        userId: user.id,
+                        type: "PLEX_ACCESS_GRANT",
+                        status: "PENDING"
+                    }
+                });
+                if (!existing) {
+                    const approval = await prisma.adminApproval.create({
+                        data: {
+                            type: "PLEX_ACCESS_GRANT",
+                            status: "PENDING",
+                            title: `Plex Preference Change: ${dbUser.username}`,
+                            description: `User selected ${filteredSelected.length} library sections. Pending admin approval before updating live Plex shares.`,
+                            targetUser: dbUser.username,
+                            targetEmail: dbUser.email,
+                            userId: dbUser.id,
+                            payload: JSON.stringify({
+                                userId: dbUser.id,
+                                action: "SYNC_SHARE",
+                                selectedKeys: filteredSelected
+                            })
+                        }
+                    });
+                    logger.addLog("INFO", "APPROVAL", `Plex library preference update for "${dbUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                }
+                revalidatePath("/settings/profile");
+                return {
+                    success: true,
+                    message: "Your library preference request has been submitted for admin approval!",
+                    staged: true,
+                    selectedKeys: filteredSelected
+                };
+            } else {
+                let adminToken = "";
+                if (settings?.mainPlexToken) {
+                    adminToken = decryptData(settings.mainPlexToken);
+                }
+                if (!adminToken) {
+                    adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+                }
+                if (adminToken) {
+                    await syncUserPlexShareInternal(adminToken, dbUser, filteredSelected);
+                }
             }
         }
 
@@ -5938,7 +6105,7 @@ export async function deleteSubAccountAction(subAccountId: string) {
         if (!subAccount) return { success: false, error: "Sub-account not found or unauthorized" };
 
         // Revoke Plex access
-        await revokePlexAccessForUserInternal(subAccount, "Sub-account deleted.");
+        await revokePlexAccessForUserInternal(subAccount, "Sub-account deleted.", { bypassApproval: true });
 
         // Delete from DB
         await prisma.user.delete({ where: { id: subAccountId } });
@@ -11981,11 +12148,13 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
                         appUrl
                     });
 
-                    await transporter.sendMail({
-                        from: senderEmail,
+                    await sendOrQueueEmail({
                         to: user.email,
                         subject,
-                        html
+                        html,
+                        templateId: "kindle_failed",
+                        targetUser: user.username,
+                        userId: user.id
                     });
                 } catch (err) {
                     console.error("Failed to send Kindle failure email to personal address:", err);
@@ -12243,11 +12412,13 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
                     appUrl
                 });
 
-                await transporter.sendMail({
-                    from: senderEmail,
+                await sendOrQueueEmail({
                     to: user.email,
                     subject,
-                    html
+                    html,
+                    templateId: "kindle_failed",
+                    targetUser: user.username,
+                    userId: user.id
                 });
             } catch (err) {
                 console.error("[AUTO-KINDLE] Failed to send troubleshooting email:", err);
@@ -14005,7 +14176,7 @@ export async function forceRevokePlexAccessAction(userId: string) {
     try {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found." };
-        const res = await revokePlexAccessForUserInternal(user, "Administrator forced immediate revocation of Plex access.");
+        const res = await revokePlexAccessForUserInternal(user, "Administrator forced immediate revocation of Plex access.", { bypassApproval: true });
         await notifyAdminUserRoleOrAccessChange({
             username: user.username,
             email: user.email,

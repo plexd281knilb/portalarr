@@ -491,26 +491,25 @@ async function runTestSuite() {
             }
         });
 
+        const { revokePlexAccessForUserInternal } = await import("../src/app/actions");
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { requireApprovalForPlexChanges: true, requireApprovalForEmails: true }
+        });
+
         try {
-            // Stage a Plex Library Access Revocation in AdminApproval
-            const stagedRevoke = await prisma.adminApproval.create({
-                data: {
-                    type: "PLEX_ACCESS_REVOKE",
-                    status: "PENDING",
-                    title: `Plex Access: Revoke libraries for ${testUser.username}`,
-                    description: "Removing libraries: 11",
-                    targetUser: testUser.username,
-                    userId: testUser.id,
-                    payload: JSON.stringify({
-                        userId: testUser.id,
-                        selectedKeys: ["10"],
-                        removedKeys: ["11"]
-                    })
-                }
+            // Test that revokePlexAccessForUserInternal stages into AdminApproval instead of calling Plex
+            const revokeResult = await revokePlexAccessForUserInternal(testUser, "Test automated trial expiry");
+            if (!revokeResult.staged || !revokeResult.approvalId) {
+                throw new Error("revokePlexAccessForUserInternal failed to stage revocation when approval gate is active");
+            }
+
+            const stagedRevoke = await prisma.adminApproval.findUnique({
+                where: { id: revokeResult.approvalId }
             });
 
-            if (!stagedRevoke.id || stagedRevoke.status !== "PENDING") {
-                throw new Error("Failed to create staged Plex access approval record");
+            if (!stagedRevoke || stagedRevoke.status !== "PENDING" || stagedRevoke.type !== "PLEX_ACCESS_REVOKE") {
+                throw new Error("Failed to create staged Plex access approval record with PENDING status");
             }
 
             // Verify status transition to APPROVED
@@ -660,6 +659,74 @@ async function runTestSuite() {
         });
         if (!subRendered.subject.includes("Full Membership")) {
             throw new Error("subscription_activated subject does not match expected default");
+        }
+    });
+
+    // 25. Admin Approval Gates: Strict Enforcement of Require Buttons (Zero User Emails or Live Plex Changes Without Approval)
+    await assertTest("Admin Approval Gates: Strict Enforcement of Require Buttons", async () => {
+        const { revokePlexAccessForUserInternal, sendOrQueueEmail } = await import("../src/app/actions");
+        
+        // 1. Ensure gates are turned ON
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                requireApprovalForPlexChanges: true,
+                requireApprovalForEmails: true,
+                emailNotificationsEnabled: true
+            }
+        });
+
+        const testUser = await prisma.user.create({
+            data: {
+                username: "gate_enforcement_tester",
+                email: "tester@example.com",
+                password: "hashedpassword123",
+                role: "USER",
+                status: "APPROVED",
+                plexLibrarySectionIds: "1,2,3"
+            }
+        });
+
+        try {
+            // A. Email gate enforcement: verify no email is sent and item is strictly queued in AdminApproval
+            const emailRes = await sendOrQueueEmail({
+                to: testUser.email,
+                subject: "Gated Test Notification",
+                html: "<p>This must not be sent without approval</p>",
+                templateId: "user_approval",
+                targetUser: testUser.username,
+                userId: testUser.id
+            });
+
+            if (!emailRes.queued || !emailRes.approvalId) {
+                throw new Error("Expected email to be queued for approval, but it was not queued");
+            }
+
+            const emailApproval = await prisma.adminApproval.findUnique({
+                where: { id: emailRes.approvalId }
+            });
+            if (!emailApproval || emailApproval.status !== "PENDING" || emailApproval.type !== "EMAIL") {
+                throw new Error("Email approval record was not properly created with PENDING status");
+            }
+
+            // B. Plex access change gate enforcement: verify no live Plex share deletion happens without approval
+            const revokeRes = await revokePlexAccessForUserInternal(testUser, "Test automated suspension");
+            if (!revokeRes.staged || !revokeRes.approvalId) {
+                throw new Error("Expected Plex revocation to be staged for approval, but it was not staged");
+            }
+
+            const plexApproval = await prisma.adminApproval.findUnique({
+                where: { id: revokeRes.approvalId }
+            });
+            if (!plexApproval || plexApproval.status !== "PENDING" || plexApproval.type !== "PLEX_ACCESS_REVOKE") {
+                throw new Error("Plex revocation approval record was not properly created with PENDING status");
+            }
+
+            // C. Clean up staged approvals
+            await prisma.adminApproval.delete({ where: { id: emailRes.approvalId } });
+            await prisma.adminApproval.delete({ where: { id: revokeRes.approvalId } });
+        } finally {
+            await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
         }
     });
 

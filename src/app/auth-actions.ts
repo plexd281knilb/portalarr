@@ -619,13 +619,16 @@ export async function requestForgotPassword(formData: FormData) {
       loginUrl: `${appUrl}/login`
     });
 
-    await transporter.sendMail({
-      from: senderEmail,
+    const { sendOrQueueEmail } = await import("./actions");
+    await sendOrQueueEmail({
       to: user.email,
       subject,
-      html
+      html,
+      templateId: "password_reset",
+      targetUser: user.username,
+      userId: user.id
     });
-    console.log(`[AUTH] Sent temporary password email to ${user.email} (${user.username})`);
+    console.log(`[AUTH] Sent or queued temporary password email to ${user.email} (${user.username})`);
   } catch (err: any) {
     console.error("[AUTH] Error sending temporary password email:", err);
     return { error: "Failed to send email. Please verify SMTP settings with your administrator." };

@@ -1002,7 +1002,8 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
                     subject,
                     html,
                     templateId: "admin_payment_received",
-                    targetUser: "admin"
+                    targetUser: "admin",
+                    bypassApproval: true
                 });
             }
         }
