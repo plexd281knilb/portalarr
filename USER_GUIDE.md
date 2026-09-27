@@ -240,16 +240,21 @@ Administrators can view the entire Portalarr portal through the eyes of any regi
 
 ---
 
-## 💳 13. Subscriptions, Prorated Billing & Unsaved Settings Guard
+## 💳 12. Subscriptions, Multi-Cadence Plans & Payment Receipts
 
-### 📅 Transparent Prorated Annual Billing
-When you upgrade from a free trial pass to a full annual membership:
-- **Base Rate:** The standard yearly membership is $180/year ($15/month).
-- **Mid-Year Proration:** You only pay for the remaining calendar days and full months in the year before renewing on January 1st:
+### 📅 Flexible Membership Plans
+When upgrading from your free trial pass to full membership, choose the cadence that fits you best:
+- **Flexible Monthly Plan ($15/month):** Pay-as-you-go month-to-month access. Cancel or resume at any time with zero long-term commitment.
+- **Rest-of-Year Annual Pass (Prorated Best Value):** Derived from the $15/month base rate ($180/year). You only pay for the remaining calendar days and full months in the current year, then renew on January 1st:
   - Prorated first month: `(remaining days / total days in month) * $15`
   - Remaining months: `remaining full months * $15`
   - *Example:* Upgrading on October 10th covers 21 days in October ($10.16) + November ($15) + December ($15) = **$40.16** for the remainder of the year.
-- **P2P Direct Payment Methods:** Members can renew via Venmo, Cash App, PayPal, or Zelle with zero gateway fees. Be sure to include your username in the payment note/memo!
+
+### 💳 Zero-Fee P2P Payments & Automated Receipts
+- **P2P Direct Methods:** Renew seamlessly via Venmo, PayPal, Cash App, or Zelle with zero gateway fees.
+- **Pre-Filled Memo Tags & QR Codes:** Use the interactive QR code modal on the dashboard or `/join` to prefill your exact payment memo (e.g. `#PORTALARR-USERNAME`).
+- **Instant Payment Receipts:** Whenever your payment is matched and processed, Portalarr automatically dispatches a branded HTML payment confirmation receipt (`payment_received`) confirming the amount received, date, new expiration date, and all active membership perks.
+- **Full Membership Activation Alerts:** Moving from trial to full membership dispatches a welcome email (`subscription_activated`) highlighting all unlocked features (4K HDR Direct Play, Kids profiles, digital book library, and priority bandwidth).
 
 ### ⚠️ Unsaved Settings Protection
 When managing your profile, Send-to-Kindle preferences, notification toggles, or server settings:

@@ -606,6 +606,63 @@ async function runTestSuite() {
         }
     });
 
+    // 24. Email Templates: Trigger Events, Payment Receipts & Subscription Activation
+    await assertTest("Email System: Templates Trigger Events & Payment Notifications", async () => {
+        const { DEFAULT_EMAIL_TEMPLATES, renderEmailTemplate } = await import("../src/lib/email-templates");
+
+        // Verify every template has non-empty triggerEvent
+        for (const tmpl of DEFAULT_EMAIL_TEMPLATES) {
+            if (!tmpl.triggerEvent || tmpl.triggerEvent.trim().length === 0) {
+                throw new Error(`Email template ${tmpl.id} is missing a triggerEvent definition`);
+            }
+        }
+
+        // Test payment_received template rendering
+        const paymentRendered = await renderEmailTemplate("payment_received", {
+            username: "sarah_connor",
+            amount: "$15.00",
+            provider: "Venmo",
+            paymentDate: "October 1, 2026",
+            periodGranted: "1 Month",
+            validUntil: "November 1, 2026",
+            transactionId: "VEN-998877",
+            appUrl: "https://portalarr.example.com",
+            loginUrl: "https://portalarr.example.com/login"
+        });
+
+        if (!paymentRendered.subject.includes("$15.00")) {
+            throw new Error("payment_received subject does not contain amount");
+        }
+        if (!paymentRendered.html.includes("sarah_connor") || !paymentRendered.html.includes("VEN-998877")) {
+            throw new Error("payment_received html does not contain user or transaction details");
+        }
+
+        // Test admin_payment_received template rendering
+        const adminRendered = await renderEmailTemplate("admin_payment_received", {
+            matchedUser: "sarah_connor",
+            username: "sarah_connor",
+            amount: "$15.00",
+            provider: "Venmo",
+            paymentDate: "October 1, 2026",
+            periodGranted: "1 Month",
+            validUntil: "November 1, 2026",
+            transactionId: "VEN-998877"
+        });
+        if (!adminRendered.subject.includes("$15.00") || !adminRendered.subject.includes("sarah_connor")) {
+            throw new Error("admin_payment_received subject does not contain amount or username");
+        }
+
+        // Test subscription_activated template rendering
+        const subRendered = await renderEmailTemplate("subscription_activated", {
+            username: "sarah_connor",
+            validUntil: "November 1, 2026",
+            loginUrl: "https://portalarr.example.com/login"
+        });
+        if (!subRendered.subject.includes("Full Membership")) {
+            throw new Error("subscription_activated subject does not match expected default");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

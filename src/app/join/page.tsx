@@ -375,25 +375,59 @@ function JoinWizardContent() {
                                 </div>
                             </div>
 
-                            {/* TRANSPARENT PRORATED PRICING BANNER */}
-                            {config?.proratedBilling && (
-                                <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-between gap-3 text-xs">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded-lg shrink-0">
-                                            <Calendar className="h-4 w-4" />
-                                        </div>
+                            {/* TRANSPARENT PRICING OPTIONS (MONTHLY & ANNUAL PRORATED) */}
+                            <div className="space-y-2.5">
+                                <div className="flex items-center justify-between px-1">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                        <DollarSign className="h-3.5 w-3.5 text-primary" /> Transparent Membership Pricing (Post-Trial)
+                                    </span>
+                                    <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10 font-bold">
+                                        Zero Upfront Cost
+                                    </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* MONTHLY OPTION */}
+                                    <div className="p-3.5 rounded-2xl bg-amber-500/[0.04] border border-amber-500/25 flex flex-col justify-between space-y-2">
                                         <div>
-                                            <p className="font-bold text-purple-200">Prorated Annual Plan ($15/month)</p>
-                                            <p className="text-[11px] text-muted-foreground">
-                                                Only pay for remaining months ({config.proratedBilling.remainingMonthsText}): <strong className="text-foreground">{config.proratedBilling.amountDueText}</strong>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                                                    <Calendar className="h-3.5 w-3.5 text-amber-400" /> Monthly Plan
+                                                </span>
+                                                <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/30 font-semibold">
+                                                    Flexible
+                                                </Badge>
+                                            </div>
+                                            <div className="text-lg font-black text-foreground pt-1">
+                                                ${config?.monthlyPrice ?? 15} <span className="text-xs font-normal text-muted-foreground">/ month</span>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
+                                                Pay-as-you-go month-to-month pass. Flexible and cancelable at any time.
                                             </p>
                                         </div>
                                     </div>
-                                    <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs shrink-0 font-bold">
-                                        ${config.proratedBilling.yearlyRate}/yr (Jan 1)
-                                    </Badge>
+
+                                    {/* PRORATED ANNUAL OPTION */}
+                                    <div className="p-3.5 rounded-2xl bg-emerald-500/[0.04] border border-emerald-500/25 flex flex-col justify-between space-y-2">
+                                        <div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-400" /> Rest of Year (Annual Pass)
+                                                </span>
+                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-semibold">
+                                                    Best Value
+                                                </Badge>
+                                            </div>
+                                            <div className="text-lg font-black text-emerald-400 pt-1">
+                                                {config?.proratedBilling?.amountDueText || `$${config?.yearlyPrice ?? 180}/yr`}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
+                                                Only pay for remaining months {config?.proratedBilling?.remainingMonthsText ? `(${config.proratedBilling.remainingMonthsText})` : "in the year"}. Renews Jan 1 at ${config?.yearlyPrice ?? 180}/yr.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
+                            </div>
                         </CardContent>
 
                         <CardFooter className="pt-2 pb-6 flex flex-col items-center gap-3">
@@ -733,20 +767,63 @@ function JoinWizardContent() {
                         </CardHeader>
 
                         <CardContent className="space-y-4">
-                            {/* PRORATED SUBSCRIPTION BREAKDOWN */}
-                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3 text-xs">
+                            {/* MEMBERSHIP PLANS & RENEWAL BREAKDOWN */}
+                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4 text-xs">
                                 <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
                                     <div className="flex items-center gap-2 font-bold text-foreground">
                                         <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                                        <span>Annual Subscription & Prorated Billing</span>
+                                        <span>Membership Plans & Renewal Options</span>
                                     </div>
-                                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold">
-                                        ${config?.yearlyPrice ?? 180} / year ($15/mo)
+                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-xs font-bold">
+                                        Zero Upfront Payment
                                     </Badge>
                                 </div>
 
+                                {/* TWO PLAN CARDS: MONTHLY VS ANNUAL */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* MONTHLY PLAN CARD */}
+                                    <div className="p-3.5 rounded-xl bg-amber-500/[0.04] border border-amber-500/25 space-y-1.5 flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                    <Calendar className="h-3.5 w-3.5 text-amber-400" /> Monthly Plan
+                                                </span>
+                                                <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/30">
+                                                    Flexible
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xl font-black text-foreground pt-1">
+                                                {config?.proratedBilling?.monthlyAmountDueText || `$${config?.monthlyPrice || 15}/mo`}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
+                                                {config?.proratedBilling?.monthlyBreakdownSummary || "Prorated for remaining days in current month, then $15/month."}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* ANNUAL REST-OF-YEAR PLAN CARD */}
+                                    <div className="p-3.5 rounded-xl bg-emerald-500/[0.04] border border-emerald-500/25 space-y-1.5 flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-400" /> Rest of Year (Annual Pass)
+                                                </span>
+                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                    Best Value
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xl font-black text-emerald-400 pt-1">
+                                                {config?.proratedBilling?.amountDueText || `$${config?.yearlyPrice ?? 180}/yr`}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
+                                                {config?.proratedBilling?.yearlyBreakdownText || "Prorated through the remainder of the calendar year."}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {config?.proratedBilling ? (
-                                    <div className="space-y-3">
+                                    <div className="space-y-3 pt-1 border-t border-border/30">
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                             <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Free Trial</span>
@@ -777,7 +854,7 @@ function JoinWizardContent() {
 
                                 {/* PAYMENT METHODS GRID */}
                                 <div className="pt-2 border-t border-border/40">
-                                    <PaymentMethodsGrid config={config} />
+                                    <PaymentMethodsGrid config={config} username={username} />
                                 </div>
 
                                 {config?.paymentInstructions && (

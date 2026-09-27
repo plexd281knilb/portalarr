@@ -29,7 +29,7 @@ import {
     Search, Users, Sparkles, RotateCcw, 
     Loader2, Shield, Key, BookOpen, LifeBuoy, UserCheck, 
     Bell, BellOff, CheckSquare, Square, 
-    Code, Eye, Check
+    Code, Eye, Check, Zap, DollarSign
 } from "lucide-react";
 
 interface BroadcastUser {
@@ -53,7 +53,8 @@ interface EmailTemplate {
     id: string;
     name: string;
     description: string;
-    category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS" | string;
+    triggerEvent?: string;
+    category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS" | "PAYMENTS" | string;
     subject: string;
     body: string;
     defaultSubject: string;
@@ -364,7 +365,8 @@ export default function EmailManagement() {
         const cat = (tplCat || "").toUpperCase();
         const filter = filterId.toUpperCase();
         if (filter === "AUTH" && (cat === "AUTH" || cat === "ACCOUNTS")) return true;
-        if (filter === "TRIALS" && (cat === "TRIALS" || cat === "TRIAL" || cat === "BILLING")) return true;
+        if (filter === "TRIALS" && (cat === "TRIALS" || cat === "TRIAL" || cat === "BILLING" || cat === "PAYMENTS" || cat === "PAYMENT" || cat === "MEMBERSHIP")) return true;
+        if (filter === "PAYMENTS" && (cat === "PAYMENTS" || cat === "PAYMENT" || cat === "BILLING")) return true;
         if (filter === "REQUESTS" && (cat === "REQUESTS" || cat === "MEDIA")) return true;
         if (filter === "KINDLE" && cat === "KINDLE") return true;
         if (filter === "SUPPORT" && (cat === "SUPPORT" || cat === "TICKETS" || cat === "ALERTS")) return true;
@@ -1068,6 +1070,7 @@ export default function EmailManagement() {
                                     { id: "all", label: "All" },
                                     { id: "auth", label: "Accounts" },
                                     { id: "trials", label: "Trials & Billing" },
+                                    { id: "payments", label: "Payments" },
                                     { id: "requests", label: "Media & Requests" },
                                     { id: "kindle", label: "Kindle Delivery" },
                                     { id: "support", label: "Support & Tickets" }
@@ -1104,7 +1107,7 @@ export default function EmailManagement() {
                                             <div
                                                 key={tpl.id}
                                                 onClick={() => handleSelectTemplate(tpl.id)}
-                                                className={`p-3 cursor-pointer transition-colors text-xs space-y-1 ${
+                                                className={`p-3 cursor-pointer transition-colors text-xs space-y-1.5 ${
                                                     isSelected ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/20"
                                                 }`}
                                             >
@@ -1113,18 +1116,24 @@ export default function EmailManagement() {
                                                         {tpl.name}
                                                     </div>
                                                     {tpl.isCustom ? (
-                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500/40 text-amber-400 bg-amber-500/10">
+                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500/40 text-amber-400 bg-amber-500/10 shrink-0">
                                                             Customized
                                                         </Badge>
                                                     ) : (
-                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 text-muted-foreground">
+                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 text-muted-foreground shrink-0">
                                                             Default
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                                <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
                                                     {tpl.description}
                                                 </p>
+                                                {tpl.triggerEvent && (
+                                                    <div className="text-[10px] text-amber-400/90 font-medium flex items-center gap-1 pt-0.5 border-t border-border/10">
+                                                        <Zap className="h-3 w-3 text-amber-400 shrink-0" />
+                                                        <span className="truncate" title={tpl.triggerEvent}>Trigger: {tpl.triggerEvent}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1167,6 +1176,23 @@ export default function EmailManagement() {
                                             </TabsList>
                                         </Tabs>
                                     </div>
+
+                                    {/* EXACT TRIGGER CONDITION CALLOUT */}
+                                    {currentTemplate.triggerEvent && (
+                                        <div className="mt-3 p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/25 flex items-start gap-2.5 text-xs animate-in fade-in">
+                                            <div className="p-1 rounded-md bg-amber-500/20 text-amber-300 shrink-0 mt-0.5">
+                                                <Zap className="h-3.5 w-3.5" />
+                                            </div>
+                                            <div className="space-y-0.5 min-w-0">
+                                                <div className="font-bold text-amber-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                                    ⚡ Exact Trigger Condition & Dispatch Event
+                                                </div>
+                                                <p className="text-foreground/90 text-xs leading-relaxed font-normal">
+                                                    {currentTemplate.triggerEvent}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardHeader>
 
                                 <CardContent className="space-y-4">
@@ -1553,14 +1579,14 @@ export default function EmailManagement() {
                                 />
                             </div>
 
-                            {/* 10. Subscription / VIP Pass Activation */}
+                            {/* 10. Payment Receipts & Full Membership Activation */}
                             <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
                                 <div className="space-y-1 pr-3">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Shield className="h-4 w-4 text-purple-400" /> Subscription / Pass Active
+                                        <DollarSign className="h-4 w-4 text-emerald-400" /> Payment Receipts & Full Membership Activations
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Send confirmation emails when a monthly or annual pass payment is verified and enabled.
+                                        Send automated confirmation receipts when an incoming payment is received (Venmo, PayPal, Cash App, Zelle) and when Full Membership is activated.
                                     </p>
                                 </div>
                                 <Switch

@@ -1580,6 +1580,7 @@ export async function getEmailTemplatesAction() {
                 id: def.id,
                 name: def.name,
                 description: def.description,
+                triggerEvent: def.triggerEvent,
                 category: def.category,
                 subject: custom?.subject || def.defaultSubject,
                 body: custom?.body || def.defaultBody,
@@ -4212,6 +4213,83 @@ export async function setUserTrialOrSubscription(
         });
 
         logger.addLog("INFO", "PLEX", `[ACTION] setUserTrialOrSubscription: Setting "${user.username}" to ${type} (New status: ${status})`);
+
+        // Dispatch Full Membership Activation Email if transitioning to APPROVED
+        if (status === "APPROVED" && (user.status === "TRIAL" || user.status === "EXPIRED" || user.status === "PENDING")) {
+            try {
+                const settingsForEmail = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (user.email && settingsForEmail?.emailNotificationsEnabled && settingsForEmail?.notifySubscriptionActive) {
+                    const validUntilFormatted = subscriptionEndsAt 
+                        ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(subscriptionEndsAt)
+                        : "Permanent VIP (Lifetime)";
+                    const planName = type === "REST_OF_YEAR" 
+                        ? "Rest-of-Year Annual Pass" 
+                        : type === "1_YEAR" 
+                        ? "Full 1-Year Pass" 
+                        : type === "30_DAYS" 
+                        ? "Monthly Pass" 
+                        : type === "PERMANENT" 
+                        ? "Permanent VIP All-Access" 
+                        : "Full Membership";
+
+                    const appUrl = await getAppUrl();
+                    const { subject, html } = await renderEmailTemplate("subscription_activated", {
+                        username: user.username,
+                        email: user.email,
+                        planName,
+                        validUntil: validUntilFormatted,
+                        appUrl
+                    });
+
+                    await sendOrQueueEmail({
+                        to: user.email,
+                        subject,
+                        html,
+                        templateId: "subscription_activated",
+                        targetUser: user.username,
+                        userId: user.id
+                    });
+                    logger.addLog("INFO", "EMAIL", `Dispatched full membership activation email to "${user.username}" (${user.email}) for ${planName}`);
+                }
+            } catch (notifErr: any) {
+                console.warn("[ACTION-SUBSCRIPTION-EMAIL-WARNING]:", notifErr.message || notifErr);
+            }
+        }
+
+        // Dispatch Trial Welcome Email if activating new trial
+        if (status === "TRIAL" && user.status !== "TRIAL") {
+            try {
+                const settingsForEmail = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (user.email && settingsForEmail?.emailNotificationsEnabled && settingsForEmail?.notifyTrialWelcome) {
+                    const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (settingsForEmail?.defaultTrialDays || 14);
+                    const expirationFormatted = trialEndsAt 
+                        ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(trialEndsAt)
+                        : "N/A";
+                    const appUrl = await getAppUrl();
+
+                    const { subject, html } = await renderEmailTemplate("trial_welcome", {
+                        username: user.username,
+                        email: user.email,
+                        trialDays,
+                        expirationDate: expirationFormatted,
+                        appUrl,
+                        loginUrl: `${appUrl}/login`
+                    });
+
+                    await sendOrQueueEmail({
+                        to: user.email,
+                        subject,
+                        html,
+                        templateId: "trial_welcome",
+                        targetUser: user.username,
+                        userId: user.id
+                    });
+                    logger.addLog("INFO", "EMAIL", `Dispatched free trial welcome email to "${user.username}" (${user.email})`);
+                }
+            } catch (trialErr: any) {
+                console.warn("[ACTION-TRIAL-EMAIL-WARNING]:", trialErr.message || trialErr);
+            }
+        }
 
         // Cascade to nested sub-accounts
         const childSubAccounts = await prisma.user.findMany({ where: { parentUserId: userId } });

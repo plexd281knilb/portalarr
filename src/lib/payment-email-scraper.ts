@@ -924,6 +924,92 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" (Current: $${payment.amount.toFixed(2)}, Cumulative: $${totalCumulativeAmount.toFixed(2)}) via ${payment.provider}`
     );
 
+    // Dispatch payment confirmation receipt email to the user
+    try {
+        if (user.email && isCurrentlyActive) {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            if (settings?.emailNotificationsEnabled && settings?.notifySubscriptionActive) {
+                const { renderEmailTemplate } = await import("@/lib/email-templates");
+                const { sendOrQueueEmail } = await import("@/app/actions");
+                const { getAppUrl } = await import("@/lib/app-url");
+                const appUrl = await getAppUrl();
+
+                const formattedDate = payment.emailDate 
+                    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(payment.emailDate))
+                    : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(now);
+
+                const validUntilFormatted = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(newExpiryDate);
+
+                const { subject, html } = await renderEmailTemplate("payment_received", {
+                    username: user.username,
+                    email: user.email,
+                    amount: payment.amount.toFixed(2),
+                    provider: payment.provider,
+                    paymentDate: formattedDate,
+                    periodGranted: periodGrantedText,
+                    validUntil: validUntilFormatted,
+                    transactionId: payment.externalTxId || payment.emailUid || "N/A",
+                    appUrl,
+                    loginUrl: `${appUrl}/login`
+                });
+
+                await sendOrQueueEmail({
+                    to: user.email,
+                    subject,
+                    html,
+                    templateId: "payment_received",
+                    targetUser: user.username,
+                    userId: user.id
+                });
+                logger.addLog("INFO", "EMAIL", `Dispatched payment confirmation receipt to "${user.username}" (${user.email}) for $${payment.amount.toFixed(2)} via ${payment.provider}`);
+            }
+        }
+    } catch (emailErr: any) {
+        logger.addLog("WARN", "EMAIL", `Failed to dispatch payment receipt email to "${user.username}": ${emailErr.message || emailErr}`);
+    }
+
+    // Dispatch admin payment notification alert if enabled
+    try {
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.emailNotificationsEnabled && settings?.notifySubscriptionActive) {
+            const admins = await prisma.user.findMany({
+                where: { role: "ADMIN" },
+                select: { email: true }
+            });
+            const adminEmails = admins.map(a => a.email).filter((e): e is string => Boolean(e));
+            const recipientEmails = adminEmails.length > 0 ? adminEmails : (settings.smtpUser ? [settings.smtpUser] : []);
+
+            if (recipientEmails.length > 0) {
+                const { renderEmailTemplate } = await import("@/lib/email-templates");
+                const { sendOrQueueEmail } = await import("@/app/actions");
+                const { getAppUrl } = await import("@/lib/app-url");
+                const appUrl = await getAppUrl();
+
+                const { subject, html } = await renderEmailTemplate("admin_payment_received", {
+                    amount: payment.amount.toFixed(2),
+                    provider: payment.provider,
+                    senderName: payment.senderName || "Unknown",
+                    senderHandle: payment.senderHandle || "",
+                    matchedUser: user.username,
+                    periodGranted: periodGrantedText,
+                    note: payment.note || "None",
+                    accessUrl: `${appUrl}/settings/access`,
+                    appUrl
+                });
+
+                await sendOrQueueEmail({
+                    to: recipientEmails,
+                    subject,
+                    html,
+                    templateId: "admin_payment_received",
+                    targetUser: "admin"
+                });
+            }
+        }
+    } catch (adminEmailErr: any) {
+        // Non-blocking
+    }
+
     return {
         newExpiryDate,
         periodGrantedText,

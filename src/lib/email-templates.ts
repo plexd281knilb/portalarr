@@ -11,7 +11,8 @@ export interface EmailTemplateDefinition {
     id: string;
     name: string;
     description: string;
-    category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS";
+    triggerEvent: string;
+    category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS" | "PAYMENTS" | string;
     defaultSubject: string;
     defaultBody: string;
     variables: TemplateVariableInfo[];
@@ -22,6 +23,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "user_approval",
         name: "User Account Approval Welcome",
         description: "Sent to users when an administrator approves their pending account request.",
+        triggerEvent: "Triggered immediately when an administrator clicks 'Approve' on a pending account in Access Control (/settings/access) or when Plex friend auto-sync detects a newly approved friend.",
         category: "AUTH",
         defaultSubject: "🎉 Your Portalarr Account has been Approved!",
         defaultBody: `<h2>Account Approved! 🎉</h2>
@@ -43,6 +45,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "admin_new_user",
         name: "New User Registration Alert (Admins)",
         description: "Sent to server administrators whenever a new user registers a pending account.",
+        triggerEvent: "Triggered immediately when a visitor submits a new account registration on /login or /join, alerting all server administrators that approval is pending.",
         category: "AUTH",
         defaultSubject: "👤 New Account Request: {username}",
         defaultBody: `<h2>New Account Request</h2>
@@ -81,6 +84,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "password_reset",
         name: "Password Reset & Temp Password",
         description: "Sent to users when they request a password reset or when an admin resets their password.",
+        triggerEvent: "Triggered on demand when a user clicks 'Forgot password?' on /login or when an administrator clicks 'Reset Password' (🔑) in Access Control.",
         category: "AUTH",
         defaultSubject: "🔑 Temporary Password for Portalarr",
         defaultBody: `<h2>Temporary Password Request</h2>
@@ -107,6 +111,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "media_ready",
         name: "Media Request Ready & Complete",
         description: "Sent to users when their requested book or audiobook is successfully downloaded and added to the library.",
+        triggerEvent: "Triggered automatically when a requested ebook or audiobook finishes downloading, passes scanner import checks, and is committed to the SQLite library database.",
         category: "REQUESTS",
         defaultSubject: "🎉 Your {mediaLabel} is Ready: {title}",
         defaultBody: `<h2>Your {mediaLabel} is Ready! 🎉</h2>
@@ -140,6 +145,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "media_request_admin",
         name: "New Media Request Alert (Admins)",
         description: "Sent to administrators whenever a user submits a new book or audiobook request.",
+        triggerEvent: "Triggered immediately when a user submits a book or audiobook request on /library or /discover, notifying administrators for download tracking.",
         category: "REQUESTS",
         defaultSubject: "{mediaLabel} Request: {title}",
         defaultBody: `<h2>New {mediaLabel} Request 📚</h2>
@@ -180,6 +186,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "ticket_update",
         name: "Support Ticket Update & Admin Reply",
         description: "Sent to the user when an admin updates their support ticket status or leaves a response.",
+        triggerEvent: "Triggered whenever an administrator submits a reply note or changes the ticket status at /admin/tickets, delivering the update directly to the ticket author.",
         category: "SUPPORT",
         defaultSubject: "Support Ticket Update: {status}",
         defaultBody: `<h2>Support Ticket Update</h2>
@@ -208,6 +215,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "ticket_error_alert",
         name: "System Error & Ticket Alert (Admins)",
         description: "Sent to administrators when a user submits a ticket or an automated system error report is logged.",
+        triggerEvent: "Triggered automatically when an unhandled server error occurs or when a user clicks 'Report Error' / creates a ticket, providing full stack traces to admins.",
         category: "SUPPORT",
         defaultSubject: "🚨 [{errorTitle}] Reported by {name}",
         defaultBody: `<h2 style="color: #dc2626; margin-top: 0;">🚨 Automated Error Report Ticket</h2>
@@ -237,6 +245,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "kindle_failed",
         name: "Send-to-Kindle Delivery Failure Guide",
         description: "Sent to the user's personal email when delivery of an ebook to their Kindle email fails.",
+        triggerEvent: "Triggered whenever an outbound SMTP Send-to-Kindle delivery is rejected by Amazon (e.g. sender email not in Amazon's Approved Personal Document list or file exceeds 50MB).",
         category: "KINDLE",
         defaultSubject: "❌ Failed to Deliver Ebook to Kindle: {title}",
         defaultBody: `<h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
@@ -272,9 +281,37 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "kindle_success",
+        name: "Send-to-Kindle Delivery Confirmation",
+        description: "Sent to user's personal email when an ebook is successfully dispatched to their Kindle device.",
+        triggerEvent: "Triggered whenever an ebook file is successfully accepted and dispatched by the SMTP server to the user's @kindle.com email address.",
+        category: "KINDLE",
+        defaultSubject: "📚 Ebook Delivered to Kindle: {title}",
+        defaultBody: `<h2>Ebook Sent to Kindle! 📚</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your requested ebook <strong>{title}</strong> by <em>{author}</em> has been successfully sent to your Kindle address (<code>{kindleEmail}</code>).</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Title:</strong> {title}</p>
+    <p style="margin: 0 0 6px 0; font-size: 14px; color: #475569;"><strong>Author:</strong> {author}</p>
+    <p style="margin: 0; font-size: 14px; color: #475569;"><strong>File Size:</strong> {fileSizeMb} MB</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b;">It usually takes 1-5 minutes for Amazon Whispernet to sync the ebook to your Kindle device or Kindle app.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of recipient", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of book sent", sampleValue: "The Way of Kings" },
+            { key: "{author}", description: "Author of book", sampleValue: "Brandon Sanderson" },
+            { key: "{kindleEmail}", description: "Kindle delivery email address", sampleValue: "alex@kindle.com" },
+            { key: "{fileSizeMb}", description: "File size in MB", sampleValue: "2.4" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
         id: "library_access_request",
         name: "Library Access Request (Admins)",
         description: "Sent to administrators when a user requests access to a book or audiobook library.",
+        triggerEvent: "Triggered when a user clicks 'Request Access' on a private or restricted library card from the /library page, alerting admins to update allowed users.",
         category: "REQUESTS",
         defaultSubject: "🚨 Library Access Request from {username}",
         defaultBody: `<h2>Library Access Request</h2>
@@ -317,11 +354,12 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "trial_welcome",
         name: "Free Trial Welcome & Activation",
         description: "Sent to users when their free trial account is created or approved, detailing trial duration, expiration date, and library access.",
+        triggerEvent: "Triggered immediately when a new user finishes the /join invitation wizard or when an administrator grants a trial period in Access Control.",
         category: "TRIALS",
         defaultSubject: "🌟 Welcome to your {trialDays}-Day Free Trial on Portalarr!",
         defaultBody: `<h2>Welcome to Your Free Trial! 🌟</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for Portalarr. You now have full access to our media collections, audiobooks, ebooks, and request features!</p>
+<p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for Portalarr. You now have full access to stream our movie and TV show collections on Plex!</p>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -341,7 +379,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Start Exploring Portalarr</a>
+    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Start Streaming Now</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Need help or have questions during your trial? Submit a support ticket or request media directly from your dashboard.</p>`,
         variables: [
@@ -357,6 +395,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "trial_expiring_soon",
         name: "Trial Expiring Soon Reminder",
         description: "Sent to trial users a few days before their trial expires reminding them to renew or upgrade their access.",
+        triggerEvent: "Triggered automatically by the background trial monitoring cron when an active trial has 3 or fewer days remaining before expiration.",
         category: "TRIALS",
         defaultSubject: "⏳ Your Portalarr Trial Ends Soon ({daysRemaining} days left)",
         defaultBody: `<h2>Your Free Trial is Ending Soon ⏳</h2>
@@ -365,12 +404,12 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <div style="background-color: #fefce8; border: 1px solid #fef08a; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <p style="margin: 0; font-size: 14px; color: #854d0e;">
-        To maintain uninterrupted access to your Plex media libraries, book collections, and request queue, please renew or upgrade your account.
+        To maintain uninterrupted access to your Plex media libraries and unlock full membership perks (dedicated Kids profiles, full digital Ebook & Audiobook library, and Send-to-Kindle), upgrade your account today!
     </p>
 </div>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{renewUrl}" style="background-color: #d97706; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Renew or Upgrade Access</a>
+    <a href="{renewUrl}" style="background-color: #d97706; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Upgrade to Full Membership</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">If you have any questions or need an extension, feel free to reach out to the server admin.</p>`,
         variables: [
@@ -386,16 +425,17 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "trial_expired",
         name: "Trial Period Expired Notice",
         description: "Sent to users when their trial period has concluded and their library access has paused.",
+        triggerEvent: "Triggered automatically when a user's trial period concludes and grace period expires, pausing active Plex library shares.",
         category: "TRIALS",
         defaultSubject: "⚠️ Your Portalarr Trial Has Ended",
         defaultBody: `<h2>Your Trial Period Has Ended ⚠️</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your free trial access for Portalarr concluded on <strong>{expirationDate}</strong>. Your media and Plex library access has been temporarily paused.</p>
 
-<p>Your account, bookmarks, and request history remain saved. You can reactivate your account at any time by upgrading to full access.</p>
+<p>Your account, bookmarks, and request history remain safely saved. You can reactivate your account at any time by upgrading to full access.</p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{renewUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Reactivate Account</a>
+    <a href="{renewUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Reactivate & Upgrade Account</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Thank you for trying Portalarr! If you have any feedback or questions, let us know.</p>`,
         variables: [
@@ -408,13 +448,14 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     },
     {
         id: "subscription_activated",
-        name: "Subscription / VIP Pass Activated",
-        description: "Sent to users when their ongoing subscription, yearly pass, or VIP status is enabled.",
+        name: "Full Membership / VIP Pass Activated",
+        description: "Sent to users when their account is upgraded from trial to Full Membership or when a subscription pass is granted.",
+        triggerEvent: "Triggered when a user upgrades from a trial to Full Membership (Annual, Monthly, Rest-of-Year, or Permanent Pass), or when an administrator activates their full membership in Access Control.",
         category: "TRIALS",
-        defaultSubject: "✨ Your Portalarr Full Access is Active!",
-        defaultBody: `<h2>Full Access Activated! ✨</h2>
+        defaultSubject: "👑 Welcome to Full Membership on Portalarr!",
+        defaultBody: `<h2>Full Membership Activated! 👑</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Great news! Your account has been upgraded to <strong>{planName}</strong>. You now have uninterrupted access to all libraries, players, and download services.</p>
+<p>Congratulations! Your account has been upgraded to <strong>{planName}</strong>. You now have full, uninterrupted access to all media libraries and all premium perks.</p>
 
 <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -429,6 +470,15 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     </table>
 </div>
 
+<h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Unlocked Membership Perks:</h3>
+<ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
+    <li>🎬 <strong>Unlimited Streaming:</strong> 100% Direct Play Original Studio Quality (4K HDR, Dolby Atmos).</li>
+    <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection and age rating filters.</li>
+    <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, floating audio player, & Send-to-Kindle delivery.</li>
+    <li>⚡ <strong>Priority Bandwidth:</strong> Dedicated high-priority streaming & transcoding allocation.</li>
+    <li>🎁 <strong>Discord VIP & Referral Rewards:</strong> Real-time server status alerts, direct support, and earn +1 free month per friend referred.</li>
+</ul>
+
 <div style="text-align: center; margin: 28px 0;">
     <a href="{appUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Media Hub</a>
 </div>`,
@@ -441,28 +491,122 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
-        id: "kindle_success",
-        name: "Send-to-Kindle Delivery Confirmation",
-        description: "Sent to user's personal email when an ebook is successfully dispatched to their Kindle device.",
-        category: "KINDLE",
-        defaultSubject: "📚 Ebook Delivered to Kindle: {title}",
-        defaultBody: `<h2>Ebook Sent to Kindle! 📚</h2>
+        id: "payment_received",
+        name: "Payment Receipt & Membership Confirmation",
+        description: "Sent to the user anytime a payment is received and processed (via Venmo, PayPal, Cash App, Zelle, or manual attribution), confirming the amount paid, new expiration date, and active membership perks.",
+        triggerEvent: "Triggered automatically whenever an incoming payment (Venmo, PayPal, Cash App, Zelle) is matched and fulfilled by the automated IMAP email scraper or manually attributed by an administrator.",
+        category: "PAYMENTS",
+        defaultSubject: "💳 Payment Received & Membership Confirmed ({amount})",
+        defaultBody: `<h2>Payment Received! 💳</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Your requested ebook <strong>{title}</strong> by <em>{author}</em> has been successfully sent to your Kindle address (<code>{kindleEmail}</code>).</p>
+<p>Thank you for your payment! We have received your payment of <strong>{amount}</strong> via <strong>{provider}</strong> and your Portalarr membership has been updated.</p>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
-    <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Title:</strong> {title}</p>
-    <p style="margin: 0 0 6px 0; font-size: 14px; color: #475569;"><strong>Author:</strong> {author}</p>
-    <p style="margin: 0; font-size: 14px; color: #475569;"><strong>File Size:</strong> {fileSizeMb} MB</p>
+<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 150px; color: #166534;">Amount Received:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 700; font-size: 16px;">{amount}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #166534;">Payment Method:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{provider}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #166534;">Date Received:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{paymentDate}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #166534;">Period Granted:</td>
+            <td style="padding: 6px 0; color: #4f46e5; font-weight: 600;">{periodGranted}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #166534;">Active Until:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{validUntil}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #166534;">Transaction Ref:</td>
+            <td style="padding: 6px 0; color: #64748b; font-family: monospace; font-size: 12px;">{transactionId}</td>
+        </tr>
+    </table>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">It usually takes 1-5 minutes for Amazon Whispernet to sync the ebook to your Kindle device or Kindle app.</p>`,
+<h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Full Membership Perks:</h3>
+<ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
+    <li>🎬 <strong>Unlimited Streaming:</strong> 100% Direct Play Original Studio Quality (4K HDR, Dolby Atmos).</li>
+    <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection.</li>
+    <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite mode, audio player, & Send-to-Kindle.</li>
+    <li>⚡ <strong>Priority Bandwidth:</strong> Dedicated high-priority streaming & transcoding allocation.</li>
+    <li>🎁 <strong>Referral Rewards:</strong> Earn +1 free month for every friend you refer to the server!</li>
+</ul>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{appUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Portalarr Dashboard</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">If you have any questions regarding your membership or billing, reply to this email or submit a ticket in the dashboard.</p>`,
         variables: [
-            { key: "{username}", description: "Username of recipient", sampleValue: "alex_reader" },
-            { key: "{title}", description: "Title of book sent", sampleValue: "The Way of Kings" },
-            { key: "{author}", description: "Author of book", sampleValue: "Brandon Sanderson" },
-            { key: "{kindleEmail}", description: "Kindle delivery email address", sampleValue: "alex@kindle.com" },
-            { key: "{fileSizeMb}", description: "File size in MB", sampleValue: "2.4" },
+            { key: "{username}", description: "Username of the payer", sampleValue: "jordan_reader" },
+            { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
+            { key: "{amount}", description: "Payment amount received (e.g. 15.00 or 40.16)", sampleValue: "40.16" },
+            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Cash App, Zelle)", sampleValue: "Venmo" },
+            { key: "{paymentDate}", description: "Date payment was received", sampleValue: "October 10, 2026" },
+            { key: "{periodGranted}", description: "Subscription period granted", sampleValue: "Rest of Year (through Dec 31, 2026)" },
+            { key: "{validUntil}", description: "New membership expiration date", sampleValue: "December 31, 2026" },
+            { key: "{transactionId}", description: "External transaction ID or reference", sampleValue: "VENMO-TX-984210" },
+            { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" },
+            { key: "{loginUrl}", description: "Direct login link", sampleValue: "https://portal.example.com/login" }
+        ]
+    },
+    {
+        id: "admin_payment_received",
+        name: "New Payment Alert (Admins)",
+        description: "Sent to administrators whenever an incoming payment is detected and recorded from Venmo, PayPal, Cash App, or Zelle.",
+        triggerEvent: "Triggered whenever an incoming payment is detected and recorded from Venmo, PayPal, Cash App, or Zelle, alerting administrators of received funds and whether it was auto-matched or requires manual review.",
+        category: "PAYMENTS",
+        defaultSubject: "💰 Payment Received: {amount} via {provider} ({matchedUser})",
+        defaultBody: `<h2>Incoming Payment Received 💰</h2>
+<p>An incoming payment has been processed and logged in Portalarr:</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 140px; color: #64748b;">Amount:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 700; font-size: 16px;">{amount}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Provider:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{provider}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Payer:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{senderName} ({senderHandle})</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Matched User:</td>
+            <td style="padding: 6px 0; color: #2563eb; font-weight: 600;">{matchedUser}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Period Granted:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{periodGranted}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Memo / Note:</td>
+            <td style="padding: 6px 0; color: #64748b; font-family: monospace;">{note}</td>
+        </tr>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 24px 0;">
+    <a href="{accessUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">View Payment Transactions</a>
+</div>`,
+        variables: [
+            { key: "{amount}", description: "Payment amount received", sampleValue: "40.16" },
+            { key: "{provider}", description: "Payment provider name", sampleValue: "Venmo" },
+            { key: "{senderName}", description: "Name of the sender", sampleValue: "Jordan Miller" },
+            { key: "{senderHandle}", description: "Handle or email of sender", sampleValue: "@jordan-miller" },
+            { key: "{matchedUser}", description: "Matched username on Portalarr", sampleValue: "jordan_reader" },
+            { key: "{periodGranted}", description: "Subscription period granted", sampleValue: "Rest of Year (through Dec 31, 2026)" },
+            { key: "{note}", description: "Payment memo or note", sampleValue: "#PORTALARR-JORDAN" },
+            { key: "{accessUrl}", description: "Link to Access Control payment tab", sampleValue: "https://portal.example.com/settings/access" },
             { key: "{appUrl}", description: "Base URL of Portalarr", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -470,6 +614,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "seerr_request_new_admin",
         name: "New Movie/TV Request Alert (Admins)",
         description: "Sent to administrators when a user submits a Movie or TV Show request that requires review.",
+        triggerEvent: "Triggered when a user submits a Movie or TV Show request via Discover/Seerr that requires manual administrator approval.",
         category: "REQUESTS",
         defaultSubject: "🎬 New {mediaLabel} Request: {title} ({releaseYear})",
         defaultBody: `<h2>New Media Request 🎬</h2>
@@ -519,6 +664,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "seerr_request_auto_approved",
         name: "Media Request Auto-Approved Confirmation",
         description: "Sent to the requesting user when their Movie or TV Show request is automatically approved and queued for download.",
+        triggerEvent: "Triggered immediately when a user's Movie or TV Show request satisfies auto-approval rules and is automatically dispatched to Radarr / Sonarr.",
         category: "REQUESTS",
         defaultSubject: "🚀 Your Request is Auto-Approved: {title}",
         defaultBody: `<h2>Request Auto-Approved! 🚀</h2>
@@ -545,6 +691,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "seerr_request_approved",
         name: "Media Request Approved (Admin Review)",
         description: "Sent to the requesting user when an administrator reviews and approves their pending Movie or TV Show request.",
+        triggerEvent: "Triggered when an administrator manually approves a pending Movie or TV Show request in the Request Engine (/requests).",
         category: "REQUESTS",
         defaultSubject: "✅ Media Request Approved: {title}",
         defaultBody: `<h2>Request Approved! ✅</h2>
@@ -571,6 +718,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "seerr_request_declined",
         name: "Media Request Declined Notice",
         description: "Sent to the requesting user when an administrator declines their Movie or TV Show request, including the reason.",
+        triggerEvent: "Triggered when an administrator rejects or declines a Movie or TV Show request in the Request Engine, transmitting the decline explanation.",
         category: "REQUESTS",
         defaultSubject: "❌ Media Request Declined: {title}",
         defaultBody: `<h2>Media Request Update</h2>
@@ -596,6 +744,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "seerr_request_available",
         name: "Media Available to Stream (Plex)",
         description: "Sent to the requesting user when their requested Movie or TV Show is downloaded and ready to stream on Plex.",
+        triggerEvent: "Triggered when Radarr or Sonarr finishes downloading a requested movie or episode and Plex library scanning detects the new file.",
         category: "REQUESTS",
         defaultSubject: "🎉 Ready to Watch: {title} is Now on Plex!",
         defaultBody: `<h2>Ready to Stream! 🎉</h2>
@@ -628,6 +777,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "seerr_request_failed",
         name: "Media Request Download Issue Alert",
         description: "Sent when a Movie or TV Show request encounters a download or dispatch error.",
+        triggerEvent: "Triggered when a Movie or TV Show download fails, encounters indexer errors, or exceeds retry limits in Radarr / Sonarr.",
         category: "REQUESTS",
         defaultSubject: "⚠️ Media Request Issue: {title}",
         defaultBody: `<h2>Media Request Notice ⚠️</h2>
@@ -653,6 +803,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         id: "admin_user_access_revoked",
         name: "User Role / Access Change Alert (Admins)",
         description: "Sent to server administrators whenever a user's role is demoted or their access is expired, suspended, or revoked.",
+        triggerEvent: "Triggered whenever an administrator changes a user's role or status, or when the trial monitor expires or suspends an account.",
         category: "AUTH",
         defaultSubject: "⚠️ User Access / Role Update: {username} ({statusChange})",
         defaultBody: `<h2>User Access / Role Update ⚠️</h2>
