@@ -91,7 +91,7 @@ export default function MyPlexHub() {
         servers: [],
         activeStreams: [],
         watchHistory: [],
-        watchStats: { totalWatchTimeHours: 0, moviesWatched: 0, episodesWatched: 0, musicTracksPlayed: 0 },
+        watchStats: { totalWatchTimeHours: 0, totalWatchTimeDays: 0, remainingWatchTimeHours: 0, moviesWatched: 0, episodesWatched: 0, musicTracksPlayed: 0 },
         readingStats: { totalBooksAvailable: 0, totalRequests: 0, completedRequests: 0, kindleDeliveries: 0 }
     };
 
@@ -311,10 +311,40 @@ export default function MyPlexHub() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3.5 rounded-xl bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                        <Clock className="h-3.5 w-3.5 text-primary" /> Hours Streamed
+                        <Clock className="h-3.5 w-3.5 text-primary" /> Time Streamed
                     </div>
-                    <div className="text-xl font-bold tracking-tight text-foreground">
-                        {stats.totalWatchTimeHours || 0} <span className="text-xs font-normal text-muted-foreground">hrs</span>
+                    <div className="text-xl font-bold tracking-tight text-foreground flex items-baseline gap-1 flex-wrap">
+                        {(() => {
+                            const totalHours = Number(stats.totalWatchTimeHours || 0);
+                            const days = stats.totalWatchTimeDays !== undefined 
+                                ? Number(stats.totalWatchTimeDays) 
+                                : Math.floor(totalHours / 24);
+                            const remHours = stats.remainingWatchTimeHours !== undefined 
+                                ? Number(stats.remainingWatchTimeHours) 
+                                : (totalHours % 24);
+
+                            if (days > 0) {
+                                return (
+                                    <>
+                                        <span>{days}</span>
+                                        <span className="text-xs font-normal text-muted-foreground mr-1">{days === 1 ? "day" : "days"}</span>
+                                        {remHours > 0 && (
+                                            <>
+                                                <span>{remHours}</span>
+                                                <span className="text-xs font-normal text-muted-foreground">{remHours === 1 ? "hr" : "hrs"}</span>
+                                            </>
+                                        )}
+                                    </>
+                                );
+                            }
+
+                            return (
+                                <>
+                                    <span>{totalHours}</span>
+                                    <span className="text-xs font-normal text-muted-foreground">{totalHours === 1 ? "hr" : "hrs"}</span>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
 

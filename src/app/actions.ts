@@ -15484,6 +15484,8 @@ export async function getUserPlexHubData() {
     let watchHistory: any[] = [];
     let watchStats = {
         totalWatchTimeHours: 0,
+        totalWatchTimeDays: 0,
+        remainingWatchTimeHours: 0,
         moviesWatched: 0,
         episodesWatched: 0,
         musicTracksPlayed: 0
@@ -15818,29 +15820,63 @@ export async function getUserPlexHubData() {
                 }
             } catch (e) {}
 
-            // 3. User Watch Time Stats from this Tautulli instance
+            // 3. User Watch Time Stats & Media Breakdown from this Tautulli instance
             try {
                 const statsUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliMatchedUser.username)}`;
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const timeoutId = setTimeout(() => controller.abort(), 4500);
+
                 const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&${statsUserParam}`;
-                const statsResult = await fetchTautulliApiJson(statsUrl, controller.signal, { revalidate: 60 });
+                const movieHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${statsUserParam}&media_type=movie&length=1`;
+                const epHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${statsUserParam}&media_type=episode&length=1`;
+
+                const [statsSettled, movieSettled, epSettled] = await Promise.allSettled([
+                    fetchTautulliApiJson(statsUrl, controller.signal, { revalidate: 60 }),
+                    fetchTautulliApiJson(movieHistUrl, controller.signal, { revalidate: 60 }),
+                    fetchTautulliApiJson(epHistUrl, controller.signal, { revalidate: 60 })
+                ]);
                 clearTimeout(timeoutId);
 
-                if (statsResult.ok && statsResult.data) {
-                    const data = Array.isArray(statsResult.data) ? statsResult.data : (statsResult.data.data || []);
+                if (statsSettled.status === "fulfilled" && statsSettled.value.ok && statsSettled.value.data) {
+                    const rawStats = statsSettled.value.data;
+                    const data = Array.isArray(rawStats) ? rawStats : (rawStats.data || []);
                     const allTime = data.find((d: any) => d.query_days === 0) || data[data.length - 1];
                     if (allTime) {
                         const totalSec = Number(allTime.total_time || 0);
                         watchStats.totalWatchTimeHours += Math.round(totalSec / 3600);
-                        watchStats.moviesWatched += Number(allTime.total_movies || 0);
-                        watchStats.episodesWatched += Number(allTime.total_episodes || 0);
-                        watchStats.musicTracksPlayed += Number(allTime.total_music || 0);
+                        if (allTime.total_movies) watchStats.moviesWatched += Number(allTime.total_movies);
+                        if (allTime.total_episodes) watchStats.episodesWatched += Number(allTime.total_episodes);
+                        if (allTime.total_music) watchStats.musicTracksPlayed += Number(allTime.total_music);
+                    }
+                }
+
+                if (movieSettled.status === "fulfilled" && movieSettled.value.ok && movieSettled.value.data) {
+                    const mData = movieSettled.value.data;
+                    const count = Number(mData.recordsFiltered ?? mData.recordsTotal ?? (Array.isArray(mData.data) ? mData.data.length : 0));
+                    if (count > 0) {
+                        watchStats.moviesWatched += count;
+                    }
+                }
+
+                if (epSettled.status === "fulfilled" && epSettled.value.ok && epSettled.value.data) {
+                    const eData = epSettled.value.data;
+                    const count = Number(eData.recordsFiltered ?? eData.recordsTotal ?? (Array.isArray(eData.data) ? eData.data.length : 0));
+                    if (count > 0) {
+                        watchStats.episodesWatched += count;
                     }
                 }
             } catch (e) {}
         }
     }));
+
+    // Fallback: If Tautulli total counts were 0 or missing, estimate from fetched history rows
+    if (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0 && rawWatchHistory.length > 0) {
+        for (const item of rawWatchHistory) {
+            if (item.mediaType === "movie") watchStats.moviesWatched++;
+            else if (item.mediaType === "episode") watchStats.episodesWatched++;
+            else if (item.mediaType === "track") watchStats.musicTracksPlayed++;
+        }
+    }
 
     // --- 3. DIRECT PLEX MEDIA SERVERS HISTORY SCAN (Query ALL discovered PMS instances) ---
     if (adminToken) {
@@ -15913,11 +15949,15 @@ export async function getUserPlexHubData() {
                                     });
 
                                     // If watch stats on this server were not provided by Tautulli, sum duration
-                                    if (tautulli.length === 0) {
-                                        if (durMs > 0) watchStats.totalWatchTimeHours += Math.round(durMs / 3600000);
-                                        if (r.type === "movie") watchStats.moviesWatched++;
-                                        else if (r.type === "episode") watchStats.episodesWatched++;
-                                        else if (r.type === "track") watchStats.musicTracksPlayed++;
+                                    if (tautulli.length === 0 || (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0)) {
+                                        if (tautulli.length === 0 && durMs > 0) {
+                                            watchStats.totalWatchTimeHours += Math.round(durMs / 3600000);
+                                        }
+                                        if (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0) {
+                                            if (r.type === "movie") watchStats.moviesWatched++;
+                                            else if (r.type === "episode") watchStats.episodesWatched++;
+                                            else if (r.type === "track") watchStats.musicTracksPlayed++;
+                                        }
                                     }
                                 }
                             }
@@ -15930,6 +15970,10 @@ export async function getUserPlexHubData() {
             console.warn("[PLEX-HUB] Plex stats calculation error:", e);
         }
     }
+
+    // Compute decomposed days and remaining hours
+    watchStats.totalWatchTimeDays = Math.floor(watchStats.totalWatchTimeHours / 24);
+    watchStats.remainingWatchTimeHours = watchStats.totalWatchTimeHours % 24;
 
     // --- 4. DEDUPLICATE AND GLOBALLY SORT RECENT WATCH HISTORY ACROSS ALL SERVERS ---
     const seenPlays = new Set<string>();

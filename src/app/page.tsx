@@ -92,8 +92,11 @@ export default async function UserLandingPage() {
         app.type === "Requests" || 
         ["overseerr", "ombi", "jellyseerr"].includes(app.type?.toLowerCase())
     );
-    const ombiApp = requestApps.find(a => a.name.toLowerCase().includes("ombi") || a.type.toLowerCase().includes("ombi"));
-    const otherRequestApps = requestApps.filter(a => a.id !== ombiApp?.id);
+    const isOmbiApp = (a: any) => 
+        (a.name || "").toLowerCase().includes("ombi") || 
+        (a.type || "").toLowerCase().includes("ombi");
+    const ombiApps = requestApps.filter(isOmbiApp);
+    const otherRequestApps = requestApps.filter(a => !isOmbiApp(a));
 
     return (
         <div className="min-h-screen bg-background flex flex-col">
@@ -240,24 +243,28 @@ export default async function UserLandingPage() {
                                 )}
 
                                 {/* OMBI AT BOTTOM WITH NOTE THAT SUPPORT IS ENDING SOON */}
-                                {ombiApp && (
-                                    <div className="p-2.5 rounded-xl bg-white/[0.02] border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
-                                        <div className="space-y-0.5 min-w-0">
-                                            <div className="font-semibold text-foreground flex items-center gap-1.5">
-                                                <span>{ombiApp.name || "Ombi Requests"}</span>
-                                                <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                    Support Ending Soon
-                                                </Badge>
+                                {ombiApps.length > 0 && (
+                                    <div className="space-y-2 pt-1">
+                                        {ombiApps.map((ombiApp) => (
+                                            <div key={ombiApp.id} className="p-2.5 rounded-xl bg-white/[0.02] border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
+                                                <div className="space-y-0.5 min-w-0">
+                                                    <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
+                                                        <span>{ombiApp.name || "Ombi Requests"}</span>
+                                                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                             Support Ending Soon
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        Legacy request engine. Please use the built-in request tool above for immediate auto-approval.
+                                                    </p>
+                                                </div>
+                                                <Button asChild size="sm" variant="ghost" className="h-8 text-xs shrink-0 text-muted-foreground hover:text-foreground">
+                                                    <a href={makeAbsoluteUrl(ombiApp.externalUrl)} target="_blank" rel="noopener noreferrer">
+                                                        Open <ExternalLink className="ml-1 h-3 w-3" />
+                                                    </a>
+                                                </Button>
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">
-                                                Legacy request engine. Please use the built-in request tool above for immediate auto-approval.
-                                            </p>
-                                        </div>
-                                        <Button asChild size="sm" variant="ghost" className="h-8 text-xs shrink-0 text-muted-foreground hover:text-foreground">
-                                            <a href={makeAbsoluteUrl(ombiApp.externalUrl)} target="_blank" rel="noopener noreferrer">
-                                                Open <ExternalLink className="ml-1 h-3 w-3" />
-                                            </a>
-                                        </Button>
+                                        ))}
                                     </div>
                                 )}
                             </CardContent>
