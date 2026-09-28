@@ -78,6 +78,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
 import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
+import { CurationLibraryGuardModal } from "./curation-library-guard-modal";
 import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import {
     getPlexServersAndSectionsAction,
@@ -436,6 +437,66 @@ export function AgregarrStudio() {
         return handleToggleAllSectionsForSpecificServer(selectedServerId, enableAll);
     };
 
+    // Protective Guard Modal State (for un-enabled libraries)
+    const [guardModalOpen, setGuardModalOpen] = useState(false);
+    const [guardContext, setGuardContext] = useState<{
+        serverId: string;
+        sectionKey: string;
+        serverName: string;
+        libraryName: string;
+        actionName: string;
+        execute: () => Promise<void> | void;
+    } | null>(null);
+
+    const executeWithLibraryGuard = (
+        srvId: string,
+        secKey: string,
+        actionName: string,
+        fn: () => Promise<void> | void
+    ) => {
+        if (!srvId || !secKey) {
+            fn();
+            return;
+        }
+        const isEnabled = isSectionEnabled(srvId, secKey);
+        if (isEnabled) {
+            fn();
+            return;
+        }
+        const srv = servers.find(s => s.serverId === srvId);
+        const sec = srv?.sections?.find(s => String(s.key) === String(secKey));
+        setGuardContext({
+            serverId: srvId,
+            sectionKey: secKey,
+            serverName: srv?.serverName || srvId,
+            libraryName: sec?.title || `Library #${secKey}`,
+            actionName,
+            execute: fn
+        });
+        setGuardModalOpen(true);
+    };
+
+    const handleGuardEnableAndRun = async () => {
+        if (!guardContext) return;
+        const { serverId, sectionKey, execute } = guardContext;
+        const currentSections = servers.find(s => s.serverId === serverId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleCurationLibrarySectionAction("agregarr", serverId, sectionKey, true, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForCollections(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed enabling section collection state:", e);
+        }
+        await execute();
+    };
+
+    const handleGuardForceRun = async () => {
+        if (!guardContext) return;
+        await guardContext.execute();
+    };
+
     // Save schedule settings
     const handleSaveSchedule = async () => {
         setSavingSchedule(true);
@@ -502,6 +563,14 @@ export function AgregarrStudio() {
 
     // Run collection sync job now
     const handleRunCollectionSync = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Collection Sync", () => executeRunCollectionSync());
+            return;
+        }
+        await executeRunCollectionSync();
+    };
+
+    const executeRunCollectionSync = async () => {
         setRunningCollectionSync(true);
         setCollectionSyncResult(null);
         try {
@@ -998,6 +1067,17 @@ export function AgregarrStudio() {
 
     // Sync Single Collection to Plex
     const handleSyncCollection = async (collId: string) => {
+        const coll = collections.find(c => c.id === collId);
+        const targetSrv = coll?.serverId || selectedServerId;
+        const targetSec = coll?.sectionKey || selectedSectionKey;
+        if (targetSrv && targetSec && !isSectionEnabled(targetSrv, targetSec)) {
+            executeWithLibraryGuard(targetSrv, targetSec, "Sync Collection", () => executeSyncCollection(collId));
+            return;
+        }
+        await executeSyncCollection(collId);
+    };
+
+    const executeSyncCollection = async (collId: string) => {
         setSyncingCollId(collId);
         setSyncMessage(null);
         try {
@@ -1037,6 +1117,14 @@ export function AgregarrStudio() {
 
     // Sync Seasonal Schedules
     const handleSyncSeasonal = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Sync Seasonal Hubs", () => executeSyncSeasonal());
+            return;
+        }
+        await executeSyncSeasonal();
+    };
+
+    const executeSyncSeasonal = async () => {
         setSyncingSeasonal(true);
         setSeasonalSyncMsg(null);
         try {
@@ -1717,6 +1805,14 @@ export function AgregarrStudio() {
     // Deploy Filtered Recently Added Hub (Smart Collection excluding placeholders)
     const handleDeployFilteredRecentlyAddedHub = async () => {
         if (!selectedServerId || !selectedSectionKey) return;
+        if (!isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Deploy Filtered Recently Added Hub", () => executeDeployFilteredRecentlyAddedHub());
+            return;
+        }
+        await executeDeployFilteredRecentlyAddedHub();
+    };
+
+    const executeDeployFilteredRecentlyAddedHub = async () => {
         setDeployingRecentlyAdded(true);
         setRecentlyAddedDeployMsg(null);
         try {
@@ -1747,6 +1843,14 @@ export function AgregarrStudio() {
     // Deploy specific Filtered Smart Hub variant
     const handleDeployFilteredSmartHub = async (subtype: "recently_added" | "recently_released" | "recently_released_episodes" | "top_unwatched") => {
         if (!selectedServerId || !selectedSectionKey) return;
+        if (!isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Deploy Smart Hub", () => executeDeployFilteredSmartHub(subtype));
+            return;
+        }
+        await executeDeployFilteredSmartHub(subtype);
+    };
+
+    const executeDeployFilteredSmartHub = async (subtype: "recently_added" | "recently_released" | "recently_released_episodes" | "top_unwatched") => {
         setDeployingSmartHub(subtype);
         setRecentlyAddedDeployMsg(null);
         try {
@@ -1778,6 +1882,14 @@ export function AgregarrStudio() {
     // Deploy ALL Filtered Smart Hubs in 1-Click
     const handleDeployAllFilteredSmartHubs = async () => {
         if (!selectedServerId || !selectedSectionKey) return;
+        if (!isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Deploy All Smart Hubs", () => executeDeployAllFilteredSmartHubs());
+            return;
+        }
+        await executeDeployAllFilteredSmartHubs();
+    };
+
+    const executeDeployAllFilteredSmartHubs = async () => {
         setDeployingSmartHub("all");
         setRecentlyAddedDeployMsg(null);
         try {
@@ -5922,6 +6034,20 @@ export function AgregarrStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Protective Curation Library Automation Guard Modal */}
+            <CurationLibraryGuardModal
+                open={guardModalOpen}
+                onOpenChange={setGuardModalOpen}
+                featureName="Collections & Playlists"
+                serverName={guardContext?.serverName || selectedServerId}
+                libraryName={guardContext?.libraryName || `Library #${selectedSectionKey}`}
+                sectionKey={guardContext?.sectionKey || selectedSectionKey}
+                actionName={guardContext?.actionName || "Sync Collection"}
+                onEnableAndRun={handleGuardEnableAndRun}
+                onForceRun={handleGuardForceRun}
+                onCancel={() => setGuardModalOpen(false)}
+            />
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>

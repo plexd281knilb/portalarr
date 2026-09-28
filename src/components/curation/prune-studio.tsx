@@ -51,6 +51,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
 import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
+import { CurationLibraryGuardModal } from "./curation-library-guard-modal";
 import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import {
     getPlexServersAndSectionsAction,
@@ -374,6 +375,66 @@ export function PruneStudio() {
         return handleToggleAllSectionsForSpecificServer(selectedServerId, enableAll);
     };
 
+    // Protective Guard Modal State (for un-enabled libraries)
+    const [guardModalOpen, setGuardModalOpen] = useState(false);
+    const [guardContext, setGuardContext] = useState<{
+        serverId: string;
+        sectionKey: string;
+        serverName: string;
+        libraryName: string;
+        actionName: string;
+        execute: () => Promise<void> | void;
+    } | null>(null);
+
+    const executeWithLibraryGuard = (
+        srvId: string,
+        secKey: string,
+        actionName: string,
+        fn: () => Promise<void> | void
+    ) => {
+        if (!srvId || !secKey) {
+            fn();
+            return;
+        }
+        const isEnabled = isSectionEnabled(srvId, secKey);
+        if (isEnabled) {
+            fn();
+            return;
+        }
+        const srv = servers.find(s => s.serverId === srvId);
+        const sec = srv?.sections?.find(s => String(s.key) === String(secKey));
+        setGuardContext({
+            serverId: srvId,
+            sectionKey: secKey,
+            serverName: srv?.serverName || srvId,
+            libraryName: sec?.title || `Library #${secKey}`,
+            actionName,
+            execute: fn
+        });
+        setGuardModalOpen(true);
+    };
+
+    const handleGuardEnableAndRun = async () => {
+        if (!guardContext) return;
+        const { serverId, sectionKey, execute } = guardContext;
+        const currentSections = servers.find(s => s.serverId === serverId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleCurationLibrarySectionAction("prune", serverId, sectionKey, true, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForPruning(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed enabling section prune state:", e);
+        }
+        await execute();
+    };
+
+    const handleGuardForceRun = async () => {
+        if (!guardContext) return;
+        await guardContext.execute();
+    };
+
     // Save schedule settings
     const handleSaveSchedule = async () => {
         setSavingSchedule(true);
@@ -517,6 +578,14 @@ export function PruneStudio() {
 
     // Run prune evaluation job now
     const handleRunPruneSync = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Prune Sync", () => executeRunPruneSync());
+            return;
+        }
+        await executeRunPruneSync();
+    };
+
+    const executeRunPruneSync = async () => {
         setRunningPruneSync(true);
         setPruneSyncResult(null);
         try {
@@ -1473,6 +1542,14 @@ export function PruneStudio() {
 
     // Sync Leaving Soon Collection Hub
     const handleSyncLeavingSoonHub = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Sync Leaving Soon Hub", () => executeSyncLeavingSoonHub());
+            return;
+        }
+        await executeSyncLeavingSoonHub();
+    };
+
+    const executeSyncLeavingSoonHub = async () => {
         setSyncingLeavingSoonHub(true);
         setLeavingSoonHubMsg(null);
         try {
@@ -1550,6 +1627,14 @@ export function PruneStudio() {
 
     // Execute Safe Prune / Stage Action
     const handleExecutePrune = async (forceLiveDelete = false) => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, forceLiveDelete ? "Permanent Prune" : "Stage Leaving Soon", () => executeExecutePrune(forceLiveDelete));
+            return;
+        }
+        await executeExecutePrune(forceLiveDelete);
+    };
+
+    const executeExecutePrune = async (forceLiveDelete = false) => {
         if (!pruneSimResults || selectedCandidateKeys.length === 0) return;
 
         const targetItems = pruneSimResults.candidates
@@ -4071,6 +4156,20 @@ export function PruneStudio() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Protective Curation Library Automation Guard Modal */}
+            <CurationLibraryGuardModal
+                open={guardModalOpen}
+                onOpenChange={setGuardModalOpen}
+                featureName="Prune Engine"
+                serverName={guardContext?.serverName || selectedServerId}
+                libraryName={guardContext?.libraryName || `Library #${selectedSectionKey}`}
+                sectionKey={guardContext?.sectionKey || selectedSectionKey}
+                actionName={guardContext?.actionName || "Prune Action"}
+                onEnableAndRun={handleGuardEnableAndRun}
+                onForceRun={handleGuardForceRun}
+                onCancel={() => setGuardModalOpen(false)}
+            />
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>

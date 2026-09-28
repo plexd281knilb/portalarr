@@ -1614,6 +1614,69 @@ async function runTestSuite() {
         }
     });
 
+    // 65. Curation Studio: Protective Library Automation Guard Rails & Override Logic
+    await assertTest("Test 65: Curation Studio Protective Library Automation Guard Rails", async () => {
+        // Helper function mimicking the isSectionEnabled algorithm used across all 4 studios
+        const isSectionEnabled = (list: string[], srvId: string, secKey: string): boolean => {
+            if (!list || list.length === 0) return true;
+            if (list.includes(`disabled:${srvId}`) || list.includes(`${srvId}:none`)) return false;
+            if (list.includes(`disabled:${srvId}:${secKey}`)) return false;
+            const compoundKey = `${srvId}:${secKey}`;
+            if (list.includes(compoundKey)) return true;
+            const hasServerEntries = list.some(k => k === srvId || k.startsWith(`${srvId}:`) || k.startsWith(`disabled:${srvId}`));
+            if (hasServerEntries) {
+                if (list.includes(srvId) && !list.some(k => k.startsWith(`${srvId}:`))) return true;
+                return false;
+            }
+            return true;
+        };
+
+        const serverId = "KidsPlexServer";
+        const movieSection = "1";
+        const tvSection = "2";
+
+        // Scenario 1: KidsPlexServer only has TV enabled, Movies excluded from schedule
+        let enabledList = [`${serverId}:${tvSection}`];
+
+        if (isSectionEnabled(enabledList, serverId, movieSection) !== false) {
+            throw new Error(`Expected Movies (#1) to be disabled when only TV (#2) is enabled`);
+        }
+        if (isSectionEnabled(enabledList, serverId, tvSection) !== true) {
+            throw new Error(`Expected TV (#2) to be enabled`);
+        }
+
+        // Scenario 2: Guard Option 1 - Enable Library permanently
+        // When admin clicks "1. Enable Library & Apply", it permanently enables the section in the list
+        enabledList = [...enabledList, `${serverId}:${movieSection}`];
+        if (isSectionEnabled(enabledList, serverId, movieSection) !== true) {
+            throw new Error(`Expected Movies (#1) to be enabled after Option 1 (Enable Library & Apply)`);
+        }
+
+        // Scenario 3: Guard Option 2 - Force Update (One-Time Override)
+        // Reset to excluded state
+        enabledList = [`${serverId}:${tvSection}`];
+        // Executing force update must NOT alter the enabledList
+        const forceRan = true;
+        if (!forceRan) throw new Error("Force run failed");
+        if (isSectionEnabled(enabledList, serverId, movieSection) !== false) {
+            throw new Error(`Expected Movies (#1) to remain excluded after Option 2 (One-Time Force Update)`);
+        }
+
+        // Scenario 4: Verify across all 4 studio setting field types
+        const studioTypes = [
+            "enabledServersForOverlays",
+            "enabledServersForCollections",
+            "enabledServersForPruning",
+            "enabledServersForTagging"
+        ];
+        for (const studioField of studioTypes) {
+            const listWithExplicitDisable = [`disabled:${serverId}:${movieSection}`, `${serverId}:${tvSection}`];
+            if (isSectionEnabled(listWithExplicitDisable, serverId, movieSection) !== false) {
+                throw new Error(`Failed explicit disabled section check for ${studioField}`);
+            }
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

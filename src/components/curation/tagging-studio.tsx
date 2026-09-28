@@ -46,6 +46,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurationNavHeader } from "./curation-nav-header";
 import { ServerGuardRailsModal } from "./server-guard-rails-modal";
+import { CurationLibraryGuardModal } from "./curation-library-guard-modal";
 import {
     getPlexServersAndSectionsAction,
     getPlexServerSectionsAction,
@@ -248,6 +249,66 @@ export function TaggingStudio() {
         return handleToggleAllSectionsForSpecificServer(selectedServerId, enableAll);
     };
 
+    // Protective Guard Modal State (for un-enabled libraries)
+    const [guardModalOpen, setGuardModalOpen] = useState(false);
+    const [guardContext, setGuardContext] = useState<{
+        serverId: string;
+        sectionKey: string;
+        serverName: string;
+        libraryName: string;
+        actionName: string;
+        execute: () => Promise<void> | void;
+    } | null>(null);
+
+    const executeWithLibraryGuard = (
+        srvId: string,
+        secKey: string,
+        actionName: string,
+        fn: () => Promise<void> | void
+    ) => {
+        if (!srvId || !secKey) {
+            fn();
+            return;
+        }
+        const isEnabled = isSectionEnabled(srvId, secKey);
+        if (isEnabled) {
+            fn();
+            return;
+        }
+        const srv = servers.find(s => s.serverId === srvId);
+        const sec = srv?.sections?.find(s => String(s.key) === String(secKey));
+        setGuardContext({
+            serverId: srvId,
+            sectionKey: secKey,
+            serverName: srv?.serverName || srvId,
+            libraryName: sec?.title || `Library #${secKey}`,
+            actionName,
+            execute: fn
+        });
+        setGuardModalOpen(true);
+    };
+
+    const handleGuardEnableAndRun = async () => {
+        if (!guardContext) return;
+        const { serverId, sectionKey, execute } = guardContext;
+        const currentSections = servers.find(s => s.serverId === serverId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleCurationLibrarySectionAction("tagging", serverId, sectionKey, true, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForTagging(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed enabling section tagging state:", e);
+        }
+        await execute();
+    };
+
+    const handleGuardForceRun = async () => {
+        if (!guardContext) return;
+        await guardContext.execute();
+    };
+
     // Save schedule settings
     const handleSaveSchedule = async () => {
         setSavingSchedule(true);
@@ -317,6 +378,16 @@ export function TaggingStudio() {
 
     // Run Tagging Sync Now
     const handleRunTaggingSync = async (srvId?: string, secKey?: string) => {
+        const targetSrv = srvId || selectedServerId;
+        const targetSec = secKey || selectedSectionKey;
+        if (targetSrv && targetSec && !isSectionEnabled(targetSrv, targetSec)) {
+            executeWithLibraryGuard(targetSrv, targetSec, "Tagging Sync", () => executeRunTaggingSync(targetSrv, targetSec));
+            return;
+        }
+        await executeRunTaggingSync(targetSrv, targetSec);
+    };
+
+    const executeRunTaggingSync = async (srvId?: string, secKey?: string) => {
         setRunningTaggingSync(true);
         setTaggingSyncResult(null);
         try {
@@ -478,6 +549,15 @@ export function TaggingStudio() {
     // Parental Tag Execution
     async function handleApplyParentalTags() {
         if (!selectedServerId || !selectedSectionKey) return;
+        if (!isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Apply Parental Tags", () => executeApplyParentalTags());
+            return;
+        }
+        await executeApplyParentalTags();
+    }
+
+    async function executeApplyParentalTags() {
+        if (!selectedServerId || !selectedSectionKey) return;
         setParentalActionLoading(true);
         setParentalResult(null);
         try {
@@ -511,6 +591,15 @@ export function TaggingStudio() {
 
     async function handleClearParentalTags() {
         if (!selectedServerId || !selectedSectionKey) return;
+        if (!isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Clear Parental Tags", () => executeClearParentalTags());
+            return;
+        }
+        await executeClearParentalTags();
+    }
+
+    async function executeClearParentalTags() {
+        if (!selectedServerId || !selectedSectionKey) return;
         setParentalActionLoading(true);
         setParentalResult(null);
         try {
@@ -541,6 +630,15 @@ export function TaggingStudio() {
 
     // Custom Tag Execution
     async function handleApplyCustomRule() {
+        if (!selectedServerId || !selectedSectionKey || !customRule.tagName.trim()) return;
+        if (!isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, `Apply Custom Rule (${customRule.tagName})`, () => executeApplyCustomRule());
+            return;
+        }
+        await executeApplyCustomRule();
+    }
+
+    async function executeApplyCustomRule() {
         if (!selectedServerId || !selectedSectionKey || !customRule.tagName.trim()) return;
         setCustomActionLoading(true);
         setCustomResult(null);
@@ -1799,6 +1897,20 @@ export function TaggingStudio() {
                     </Card>
                 </div>
             )}
+
+            {/* Protective Curation Library Automation Guard Modal */}
+            <CurationLibraryGuardModal
+                open={guardModalOpen}
+                onOpenChange={setGuardModalOpen}
+                featureName="Media Tagging"
+                serverName={guardContext?.serverName || selectedServerId}
+                libraryName={guardContext?.libraryName || `Library #${selectedSectionKey}`}
+                sectionKey={guardContext?.sectionKey || selectedSectionKey}
+                actionName={guardContext?.actionName || "Apply Tagging"}
+                onEnableAndRun={handleGuardEnableAndRun}
+                onForceRun={handleGuardForceRun}
+                onCancel={() => setGuardModalOpen(false)}
+            />
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>

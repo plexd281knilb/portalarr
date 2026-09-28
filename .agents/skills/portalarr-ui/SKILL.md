@@ -320,6 +320,25 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 19. Protective Curation Library Automation Guard Rails (`CurationLibraryGuardModal`)
+- **Purpose & Scope**:
+  - Guards against accidental manual executions, poster overwrites, collection pushes, pruning operations, or tag modifications on Plex libraries that are currently excluded/disabled from the automated curation schedule (e.g. `KidsPlexServer -> Movies` when only TV is monitored).
+  - Deployed consistently across all 4 Curation Studios:
+    - **Kometa Poster Overlays**: `kometa-studio.tsx` (Batch Apply Overlays, Overlay Sync, Single-Item Poster Apply)
+    - **Agregarr Collections & Playlists**: `agregarr-studio.tsx` (Collection Sync, Sync Collection to Plex, Seasonal Sync, Smart Hub Deployments)
+    - **Maintainerr Prune Engine**: `prune-studio.tsx` (Prune Sync, Execute Prune / Stage Leaving Soon, Sync Leaving Soon Hub)
+    - **Media Tagging & Parental Guides**: `tagging-studio.tsx` (Tagging Sync, Apply Parental Tags, Clear Parental Tags, Apply Custom Tag Rules)
+- **Modal Design & 3-Choice Decision Protocol**:
+  - Whenever an action is triggered on an un-enabled library (`isSectionEnabled(serverId, sectionKey) === false`), execution halts and `CurationLibraryGuardModal` is displayed:
+    - **Header & Scope Box**: Amber warning theme (`AlertTriangle`), server name (`HardDrive`), library name (`Folder`), section key, and prominent `⚪ Excluded from Schedule` badge.
+    - **Alert Heading**: *"Hey, you don't have this library turned on or enabled!"*
+    - **Option 1: Enable Library & Apply (Recommended)**: Permanently turns the library section ON in SQLite settings (`toggleCurationLibrarySectionAction`), updates the local enabled list, and immediately executes the requested action.
+    - **Option 2: Force Update (One-Time Override)**: Executes the update once right now without altering the schedule settings, keeping the library safely excluded for future automated background jobs.
+    - **Option 3: Cancel**: Aborts the operation immediately with zero changes made to Plex media.
+- **Component**: `src/components/curation/curation-library-guard-modal.tsx`
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

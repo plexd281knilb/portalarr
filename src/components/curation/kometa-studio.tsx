@@ -60,6 +60,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CurationNavHeader } from "./curation-nav-header";
 import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
 import { KometaOverlaysGuideModal } from "./kometa-overlays-guide-modal";
+import { CurationLibraryGuardModal } from "./curation-library-guard-modal";
 import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { IMDB_TOP_250_MOVIES, IMDB_TOP_250_TV } from "@/lib/curation/imdb-top250-data";
 import {
@@ -556,6 +557,66 @@ export function KometaStudio() {
         return handleToggleAllSectionsForSpecificServer(selectedServerId, enableAll);
     };
 
+    // Protective Guard Modal State (for un-enabled libraries)
+    const [guardModalOpen, setGuardModalOpen] = useState(false);
+    const [guardContext, setGuardContext] = useState<{
+        serverId: string;
+        sectionKey: string;
+        serverName: string;
+        libraryName: string;
+        actionName: string;
+        execute: () => Promise<void> | void;
+    } | null>(null);
+
+    const executeWithLibraryGuard = (
+        srvId: string,
+        secKey: string,
+        actionName: string,
+        fn: () => Promise<void> | void
+    ) => {
+        if (!srvId || !secKey) {
+            fn();
+            return;
+        }
+        const isEnabled = isSectionEnabled(srvId, secKey);
+        if (isEnabled) {
+            fn();
+            return;
+        }
+        const srv = servers.find(s => s.serverId === srvId);
+        const sec = srv?.sections?.find(s => String(s.key) === String(secKey));
+        setGuardContext({
+            serverId: srvId,
+            sectionKey: secKey,
+            serverName: srv?.serverName || srvId,
+            libraryName: sec?.title || `Library #${secKey}`,
+            actionName,
+            execute: fn
+        });
+        setGuardModalOpen(true);
+    };
+
+    const handleGuardEnableAndRun = async () => {
+        if (!guardContext) return;
+        const { serverId, sectionKey, execute } = guardContext;
+        const currentSections = servers.find(s => s.serverId === serverId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleCurationLibrarySectionAction("kometa", serverId, sectionKey, true, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForOverlays(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed enabling section overlay state:", e);
+        }
+        await execute();
+    };
+
+    const handleGuardForceRun = async () => {
+        if (!guardContext) return;
+        await guardContext.execute();
+    };
+
     // Save dual automation schedule settings
     const handleSaveSchedule = async () => {
         setSavingSchedule(true);
@@ -696,6 +757,14 @@ export function KometaStudio() {
 
     // Run overlay sync job now (strictly scoped to selected server or section)
     const handleRunOverlaySync = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Overlay Sync", () => executeRunOverlaySync());
+            return;
+        }
+        await executeRunOverlaySync();
+    };
+
+    const executeRunOverlaySync = async () => {
         setRunningOverlaySync(true);
         setOverlaySyncResult(null);
         try {
@@ -2484,6 +2553,14 @@ export function KometaStudio() {
 
     // Apply Overlays to Entire Library
     const handleApplyOverlays = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Apply Overlays", () => executeApplyOverlays());
+            return;
+        }
+        await executeApplyOverlays();
+    };
+
+    const executeApplyOverlays = async () => {
         setApplyingOverlays(true);
         setOverlayMessage(null);
         try {
@@ -3036,6 +3113,14 @@ export function KometaStudio() {
     };
 
     const handleApplySingleItemOverlay = async (ratingKey: string) => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Apply Single Poster", () => executeApplySingleItemOverlay(ratingKey));
+            return;
+        }
+        await executeApplySingleItemOverlay(ratingKey);
+    };
+
+    const executeApplySingleItemOverlay = async (ratingKey: string) => {
         setApplyingSingleOverlay(true);
         setSingleItemMsg(null);
         try {
@@ -6292,6 +6377,20 @@ export function KometaStudio() {
             <KometaOverlaysGuideModal
                 open={guideModalOpen}
                 onOpenChange={setGuideModalOpen}
+            />
+
+            {/* Protective Curation Library Automation Guard Modal */}
+            <CurationLibraryGuardModal
+                open={guardModalOpen}
+                onOpenChange={setGuardModalOpen}
+                featureName="Poster Overlays"
+                serverName={guardContext?.serverName || selectedServerId}
+                libraryName={guardContext?.libraryName || `Library #${selectedSectionKey}`}
+                sectionKey={guardContext?.sectionKey || selectedSectionKey}
+                actionName={guardContext?.actionName || "Apply Overlays"}
+                onEnableAndRun={handleGuardEnableAndRun}
+                onForceRun={handleGuardForceRun}
+                onCancel={() => setGuardModalOpen(false)}
             />
 
             {/* Manage Target Library Sections Modal */}
