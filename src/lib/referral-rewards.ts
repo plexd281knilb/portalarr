@@ -22,6 +22,7 @@ export interface UserRenewalReferralSummary {
     convertedReferralsCount: number;
     convertedFriends: ConvertedFriendInfo[];
     baseYearlyPrice: number;
+    annualMonthlyRate: number;
     monthlyRate: number;
     rewardDiscountAmount: number;
     discountedYearlyPrice: number;
@@ -62,9 +63,14 @@ export function calculateUserRenewalSummary(options: {
     const baseYearlyPrice = typeof options.yearlyPrice === "number" && options.yearlyPrice >= 0 
         ? options.yearlyPrice 
         : 180;
+    // The annual plan's per-month rate (e.g. $180 / 12 = $15.00/mo)
+    const annualMonthlyRate = baseYearlyPrice > 0 
+        ? Math.round((baseYearlyPrice / 12) * 100) / 100 
+        : 15;
+    // The standalone monthly alternative rate (e.g. $17.50/mo)
     const monthlyRate = typeof options.monthlyPrice === "number" && options.monthlyPrice > 0 
         ? options.monthlyPrice 
-        : (baseYearlyPrice > 0 ? Math.round((baseYearlyPrice / 12) * 100) / 100 : 15);
+        : annualMonthlyRate;
 
     const rawExpDate = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
     const hasActiveSubscription = user.status === "APPROVED" && rawExpDate !== null;
@@ -96,9 +102,9 @@ export function calculateUserRenewalSummary(options: {
     const bonusMonths = typeof user.referralBonusMonths === "number" ? Math.max(0, user.referralBonusMonths) : 0;
     const convertedReferralsCount = convertedFriends.length + bonusMonths;
 
-    // Each converted referral awards 1 free month ($15 value)
-    const rewardDiscountAmount = Math.min(convertedReferralsCount * monthlyRate, baseYearlyPrice);
-    const discountedYearlyPrice = Math.max(0, baseYearlyPrice - (convertedReferralsCount * monthlyRate));
+    // Each converted referral awards 1 free month off the annual renewal (annualMonthlyRate, e.g. $15.00 for $180/yr)
+    const rewardDiscountAmount = Math.min(convertedReferralsCount * annualMonthlyRate, baseYearlyPrice);
+    const discountedYearlyPrice = Math.max(0, baseYearlyPrice - rewardDiscountAmount);
     const isFullYearFree = discountedYearlyPrice === 0 && convertedReferralsCount > 0;
 
     // Calculate delayed monthly renewal date
@@ -134,14 +140,14 @@ export function calculateUserRenewalSummary(options: {
             ? `for referring ${friendNamesStr}` 
             : `for ${convertedReferralsCount} converted referral(s)`;
 
-        summaryText = `Referral Reward Applied: ${convertedReferralsCount} free month(s) earned ($${(convertedReferralsCount * monthlyRate).toFixed(2)} total discount ${friendCreditNote}). Next annual renewal is $${discountedYearlyPrice.toFixed(2)}${delayedMonthlyStartDate ? `, or monthly billing delayed until ${delayedMonthlyStartDate}` : ""}.`;
+        summaryText = `Referral Reward Applied: ${convertedReferralsCount} free month(s) earned ($${rewardDiscountAmount.toFixed(2)} total discount ${friendCreditNote}). Next annual renewal is $${discountedYearlyPrice.toFixed(2)}${delayedMonthlyStartDate ? `, or monthly billing delayed until ${delayedMonthlyStartDate}` : ""}.`;
 
         reminderNoticeText = isFullYearFree
             ? `🎁 Referral Rewards Applied: You referred ${convertedReferralsCount} friends (${friendNamesStr}) who became full members! Your upcoming year is 100% FREE ($0.00 due).`
-            : `🎁 Referral Rewards Applied: You referred ${convertedReferralsCount} friend(s) (${friendNamesStr}) who joined as full members! You get ${monthWord} off ($${rewardDiscountAmount.toFixed(2)} discount). Your annual renewal is discounted to $${discountedYearlyPrice.toFixed(2)} (was $${baseYearlyPrice.toFixed(2)})${delayedMonthlyStartDate ? `, or if you prefer monthly ($${monthlyRate}/mo), your payments are delayed until ${delayedMonthlyStartDate}` : ""}.`;
+            : `🎁 Referral Rewards Applied: You referred ${convertedReferralsCount} friend(s) (${friendNamesStr}) who joined as full members! You get ${monthWord} off ($${rewardDiscountAmount.toFixed(2)} discount). Your annual renewal is discounted to $${discountedYearlyPrice.toFixed(2)} (was $${baseYearlyPrice.toFixed(2)})${delayedMonthlyStartDate ? `, or if you prefer monthly ($${monthlyRate.toFixed(2)}/mo), your payments are delayed until ${delayedMonthlyStartDate}` : ""}.`;
     } else {
         summaryText = `Standard subscription: $${baseYearlyPrice.toFixed(2)}/year renewal${expirationDateFormatted ? ` on ${expirationDateFormatted}` : ""}.`;
-        reminderNoticeText = `Your DomsHomeLab membership is scheduled for renewal on ${expirationDateFormatted || 'upcoming renewal'}. Renewal rate: $${baseYearlyPrice.toFixed(2)}/year (or $${monthlyRate}/month).`;
+        reminderNoticeText = `Your DomsHomeLab membership is scheduled for renewal on ${expirationDateFormatted || 'upcoming renewal'}. Renewal rate: $${baseYearlyPrice.toFixed(2)}/year (or $${monthlyRate.toFixed(2)}/month).`;
     }
 
     return {
@@ -151,6 +157,7 @@ export function calculateUserRenewalSummary(options: {
         convertedReferralsCount,
         convertedFriends,
         baseYearlyPrice,
+        annualMonthlyRate,
         monthlyRate,
         rewardDiscountAmount,
         discountedYearlyPrice,

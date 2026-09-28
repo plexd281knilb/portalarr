@@ -5042,7 +5042,7 @@ export async function creditUserReferralAction(params: {
                     username: referrer.username,
                     friendUsername: referredUser.username,
                     totalReferralsCount: rewardSummary.convertedReferralsCount,
-                    renewalImpactText: `1 Month Off Next Statement ($${monthlyPrice.toFixed(2)} discount)`,
+                    renewalImpactText: `1 Month Off Next Statement ($${rewardSummary.rewardDiscountAmount.toFixed(2)} discount)`,
                     annualDiscountText: `$${rewardSummary.discountedYearlyPrice.toFixed(2)} instead of $${yearlyPrice.toFixed(2)}`,
                     delayedMonthDate: rewardSummary.delayedMonthlyStartDate || "Next Month",
                     appUrl
@@ -5068,7 +5068,7 @@ export async function creditUserReferralAction(params: {
 
         return {
             success: true,
-            message: `Successfully credited @${referrer.username} for referring @${referredUser.username}! 1 free month credit applied ($${monthlyPrice.toFixed(2)} value).${extendedExpiryDateFormatted ? ` Expiry extended to ${extendedExpiryDateFormatted}.` : ""}`,
+            message: `Successfully credited @${referrer.username} for referring @${referredUser.username}! 1 free month credit applied ($${rewardSummary.rewardDiscountAmount.toFixed(2)} value).${extendedExpiryDateFormatted ? ` Expiry extended to ${extendedExpiryDateFormatted}.` : ""}`,
             rewardSummary
         };
     } catch (e: any) {

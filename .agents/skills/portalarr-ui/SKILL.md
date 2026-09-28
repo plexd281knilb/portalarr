@@ -239,6 +239,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - In `/settings/access`, administrators can manually link and credit an existing member for a friend's join using the `Credit Referral` button on the user row or `+ Credit Member Referral` on the Referrals Leaderboard.
   - The modal provides select dropdowns for both the referring member and the friend who joined, with an option to immediately extend the subscription expiration date by +1 month (`extendSubscriptionExpiry: true`) or keep the date unchanged and apply the reward on the upcoming statement.
   - The modal features a live reactive statement preview card driven by `calculateUserRenewalSummary` displaying the exact annual renewal discount ($180 - $15 = $165) and the delayed monthly payment start date (e.g. pushed from Jan 1 to Feb 1).
+  - **Annual vs Monthly Rate Isolation**: Free months earned off an annual plan strictly discount at the annual plan's monthly rate (`annualMonthlyRate = baseYearlyPrice / 12`, e.g. $15.00/mo for $180/yr), even when a higher flexible standalone monthly plan is configured (e.g. $17.50/mo). Standalone `monthlyRate` is preserved exclusively for the monthly alternative schedule.
 - **Renewal Statement Notices**:
   - Admins can dispatch an instant `Renewal Notice` email from the user row with pre-calculated referral discounts and delayed monthly dates.
 - **User Profile Subscription Card Transparency**:

@@ -1130,7 +1130,7 @@ export default function UserProfilePage() {
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                                         You earned <strong>{referralInfo.renewalSummary.convertedReferralsCount} free month(s)</strong> (${referralInfo.renewalSummary.rewardDiscountAmount.toFixed(2)} credit) for inviting friends who joined!
                                         {referralInfo.renewalSummary.delayedMonthlyStartDate && (
-                                            <> If switching to monthly billing ($15/mo), your payments are delayed until <strong>{referralInfo.renewalSummary.delayedMonthlyStartDate}</strong>.</>
+                                            <> If switching to monthly billing (${referralInfo.renewalSummary.monthlyRate.toFixed(2)}/mo), your payments are delayed until <strong>{referralInfo.renewalSummary.delayedMonthlyStartDate}</strong>.</>
                                         )}
                                     </p>
                                 </div>

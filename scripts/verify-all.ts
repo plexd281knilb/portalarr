@@ -1028,6 +1028,40 @@ async function runTestSuite() {
             throw new Error(`Reminder text missing discount or delayed date: ${summary1.reminderNoticeText}`);
         }
 
+        // Scenario 1b: Standalone flexible monthly price higher than annual ($17.50/mo vs $180/yr)
+        // Annual renewal should strictly receive 1 month off at the annual rate ($15.00 off -> $165.00, NOT $17.50 off -> $162.50)
+        const summary1b = calculateUserRenewalSummary({
+            user: {
+                username: "annual_member_flex_system",
+                status: "APPROVED",
+                subscriptionEndsAt: new Date(2027, 0, 1),
+                referrals: [
+                    { id: "friend1", username: "blackjord", status: "APPROVED", convertedAt: new Date() }
+                ]
+            },
+            yearlyPrice: 180,
+            monthlyPrice: 17.50
+        });
+
+        if (summary1b.rewardDiscountAmount !== 15) {
+            throw new Error(`Expected annual reward discount to be $15.00, got: $${summary1b.rewardDiscountAmount}`);
+        }
+        if (summary1b.discountedYearlyPrice !== 165) {
+            throw new Error(`Expected annual renewal discounted price to be $165.00, got: $${summary1b.discountedYearlyPrice}`);
+        }
+        if (summary1b.annualMonthlyRate !== 15) {
+            throw new Error(`Expected annualMonthlyRate to be 15, got: ${summary1b.annualMonthlyRate}`);
+        }
+        if (summary1b.monthlyRate !== 17.50) {
+            throw new Error(`Expected monthlyRate to be 17.50, got: ${summary1b.monthlyRate}`);
+        }
+        if (!summary1b.reminderNoticeText.includes("$15.00 discount") || !summary1b.reminderNoticeText.includes("$165.00")) {
+            throw new Error(`Expected reminder notice to show $15.00 discount and $165.00 annual renewal: ${summary1b.reminderNoticeText}`);
+        }
+        if (!summary1b.reminderNoticeText.includes("$17.50/mo")) {
+            throw new Error(`Expected reminder notice to display $17.50/mo for monthly alternative: ${summary1b.reminderNoticeText}`);
+        }
+
         // Scenario 2: Multiple referrals (e.g. 2 converted referrals)
         const summary2 = calculateUserRenewalSummary({
             user: {
