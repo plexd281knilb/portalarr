@@ -1,26 +1,27 @@
-# 📖 Portalarr Ebooks & Audiobooks User Guide
+# 📖 DomsHomeLab (d281knilb) Ebooks & Audiobooks User Guide
 
-Welcome to the comprehensive user guide for **Portalarr's Ebooks and Audiobooks** ecosystem! This document explains all features available in the library, in-browser readers, Send-to-Kindle delivery, audio chapter management, media requests, series tracking, and indexer integration.
+Welcome to the comprehensive user guide for **DomsHomeLab's (d281knilb) Ebooks and Audiobooks** ecosystem! This document explains all features available in the library, in-browser readers, Send-to-Kindle delivery, audio chapter management, media requests, series tracking, and indexer integration.
 
 ---
 
-## 📑 Table of Contents
+### 📑 Table of Contents
 1. [Getting Started & Navigation](#1-getting-started--navigation)
 2. [Ebook & Comic In-Browser Reading](#2-ebook--comic-in-browser-reading)
 3. [Send-to-Kindle Wireless Delivery & Failure Diagnostics](#3-send-to-kindle-wireless-delivery--failure-diagnostics)
 4. [Audiobooks & Floating Audio Player](#4-audiobooks--floating-audio-player)
-5. [Chapter Management & Track Reordering](#5-chapter-management--track-reordering)
+5. [Chapter Management & Track Reordering on Disk](#5-chapter-management--track-reordering-on-disk)
 6. [Requesting Media (Title & Author Discovery)](#6-requesting-media-title--author-discovery)
-7. [Series Tracking & Auto-Monitoring](#7-series-tracking--auto-monitoring)
-8. [Release Selection, Blocklisting & Download Ingestion](#8-release-selection-blocklisting--download-ingestion)
-9. [AI Metadata Agent & Cover Artwork Engine](#9-ai-metadata-agent--cover-artwork-engine)
-10. [Frequently Asked Questions (FAQ)](#10-frequently-asked-questions-faq)
+7. [Series Tracking, Missing Books & 1-Click Auto-Grab](#7-series-tracking-missing-books--1-click-auto-grab)
+8. [Interactive Ingest & Unlinked Series Matcher](#8-interactive-ingest--unlinked-series-matcher)
+9. [Release Selection, Blocklisting & 1-Click Import](#9-release-selection-blocklisting--1-click-import)
+10. [AI Metadata Agent & Cover Artwork Engine](#10-ai-metadata-agent--cover-artwork-engine)
+11. [Frequently Asked Questions (FAQ)](#11-frequently-asked-questions-faq)
 
 ---
 
 ## 🚀 1. Getting Started & Navigation
 
-Portalarr offers dedicated library views for your reading and listening collection:
+DomsHomeLab offers dedicated library views for your reading and listening collection:
 - **📖 Ebooks Tab:** Browse EPUB, PDF, MOBI, and comic files across public and user-restricted library shelves.
 - **🎧 Audiobooks Tab:** Browse single-file and multi-track audiobooks with duration stats, cover art, and track listings.
 - **📨 Requests Tab:** Monitor active book grabs with real-time download progress, pipeline health pulse, search indexers, retry failed requests, or import downloads.
@@ -33,7 +34,7 @@ Portalarr offers dedicated library views for your reading and listening collecti
 
 ## 📱 2. Ebook & Comic In-Browser Reading
 
-Portalarr includes high-performance in-browser readers for all major book and comic formats—no third-party apps required.
+DomsHomeLab includes high-performance in-browser readers for all major book and comic formats—no third-party apps required.
 
 ### 📖 Kindle-Style EPUB Reader
 Click **`Read`** or **`Resume (X%)`** on any EPUB book card to launch the reader:
@@ -72,17 +73,17 @@ Send books wirelessly to your Kindle e-reader in seconds with end-to-end deliver
 - On Amazon, go to *Account & Lists* > *Content & Devices* > *Preferences* > *Personal Document Settings*.
 - Copy your Kindle email address (ends in `@kindle.com`).
 
-### Step 2: Authorize Portalarr's Sender Email
+### Step 2: Authorize DomsHomeLab's Sender Email
 - Under *Approved Personal Document E-mail List*, click *Add a new approved e-mail address*.
-- Add your server's SMTP sender address (displayed in the Portalarr Kindle Setup tab).
+- Add your server's SMTP sender address (displayed in the Kindle Setup tab).
 
 ### Step 3: 1-Click Dispatch
 - Click the **`📧 Send to Kindle`** icon on any book card.
-- Portalarr automatically verifies the file integrity (<50MB, valid EPUB ZIP magic bytes, sanitized ASCII filename) and delivers it directly to your Amazon account.
+- DomsHomeLab automatically verifies the file integrity (<50MB, valid EPUB ZIP magic bytes, sanitized ASCII filename) and delivers it directly to your Amazon account.
 
 ### 🩺 Kindle Pre-Flight Diagnostics Check
 - Navigate to the **Kindle Settings** tab and click **`Run Pre-Flight Delivery Check`**.
-- Portalarr runs live checks across your SMTP configuration, sender address authorization, Kindle email syntax, and ebook storage limits.
+- The system runs live checks across your SMTP configuration, sender address authorization, Kindle email syntax, and ebook storage limits.
 
 ### 📋 Outbound Delivery History & Error Tracker
 - All outbound deliveries are logged in the **Kindle Delivery History** panel with timestamps, recipient emails, file formats, and file sizes.
@@ -95,7 +96,7 @@ Send books wirelessly to your Kindle e-reader in seconds with end-to-end deliver
 
 ## 🎧 4. Audiobooks & Floating Audio Player
 
-Portalarr delivers an Audible-quality audiobook experience right in your web browser:
+DomsHomeLab delivers an Audible-quality audiobook experience right in your web browser:
 
 - **Floating Web Player:** Pinned audio controls at the bottom of your screen let you listen uninterrupted while browsing other libraries and tabs.
 - **Continuous Autoplay:** Seamlessly transitions to the next chapter track when the current chapter finishes.
@@ -105,14 +106,14 @@ Portalarr delivers an Audible-quality audiobook experience right in your web bro
 
 ---
 
-## 🎼 5. Chapter Management & Track Reordering
+## 🎼 5. Chapter Management & Track Reordering on Disk
 
 Need to correct chapter numbers or track ordering?
 
 1. Click **`Listen & Chapters`** on any audiobook card to open the Chapter Selector Modal.
 2. Click **`✏️ Reorder & Edit Chapters`**.
 3. Use the **`⬆️ Up`** / **`⬇️ Down`** buttons or type custom chapter numbers to rearrange tracks.
-4. Click **`Save Order`**. Portalarr physically renames and synchronizes track files on disk so the new order is permanent for all users across the server.
+4. Click **`Save Order`**. DomsHomeLab physically renames and synchronizes track files on disk (`reorderAudiobookChapters`) so the new order is permanent for all users across the server!
 
 ---
 
@@ -125,7 +126,7 @@ Can't find a book in your library? Request and auto-grab it in seconds:
 
 ### Combined Title & Author Search (Narrow Down Results)
 - You can enter both the **Book Title and Author Name** in the title input (e.g. `Project Hail Mary Andy Weir` or `The Way of Kings Brandon Sanderson`).
-- Portalarr queries Audible keywords, iTunes, Open Library, and Google Books with smart token relevance scoring, immediately ranking the exact book by that author at the top of the suggestions list.
+- DomsHomeLab queries Audible keywords, iTunes, Open Library, and Google Books with smart token relevance scoring, immediately ranking the exact book by that author at the top of the suggestions list.
 - Clicking the result automatically populates and separates the Title and Author fields cleanly and verifies the selection.
 
 ### Requesting by Title Only
@@ -137,41 +138,41 @@ Can't find a book in your library? Request and auto-grab it in seconds:
 
 ### Requesting by Author
 1. Type the author's name into the **Author** field (e.g. *Brandon Sanderson*, *Andy Weir*, *J.K. Rowling*).
-2. Portalarr searches connected book registries for all top titles and audiobooks by that author.
+2. DomsHomeLab searches connected book registries for all top titles and audiobooks by that author.
 3. Browse the list of available releases with cover art, release year, and format badges.
 4. Click any book from the list to populate and verify the form, and then click **`Submit Request`**!
-
-### 🔒 Verified Registry Selection (Required for Single Requests)
-To guarantee accurate book metadata, official HD cover artwork, and correct indexer searching, single book/audiobook requests require selecting a verified result from the auto-populated suggestions dropdown.
 
 ### 📥 Direct File Upload & Drag-and-Drop Fulfill
 - Have a local copy of the book or a custom `.torrent` / `.nzb`?
 - Click the **`Upload` (`FileUp`)** button on any request card to upload `.epub`, `.pdf`, `.m4b`, `.mp3`, `.torrent`, or `.nzb`.
 - Book files are immediately ingested into the library, and torrents/NZBs are sent directly to your download client!
 
-### 🔔 Request Completion Email Notifications
-- Once an item finishes downloading and is imported to your library, Portalarr automatically sends a rich HTML email notification with deep links:
-  - 📖 **Read in Browser** (for Ebooks)
-  - 🎧 **Listen in Player** (for Audiobooks)
-  - 🚀 **Send to Kindle** (for Ebooks)
-
 ---
 
-## 📚 7. Series Tracking & Auto-Monitoring
+## 📚 7. Series Tracking, Missing Books & 1-Click Auto-Grab
 
-Portalarr tracks book series and helps you complete your collections:
+DomsHomeLab tracks book series and helps you complete your collections:
 
 - **Group by Series:** Check the *Group by Series* toggle on any library shelf to organize books sequentially by series name and volume number.
-- **📡 Auto-Monitor Series:** Click the **`Monitor Series` (`Zap`)** button on any series request card. Portalarr's background scheduler will automatically check book registries for new installments and queue downloads as soon as they become available.
+- **📡 Auto-Monitor Series:** Click the **`Monitor Series` (`Zap`)** button on any series request card. Background schedulers automatically check book registries for new installments and queue downloads as soon as they become available.
 - **🔍 Show Missing Books:** Click *Show Missing Books* on any series card to automatically scan iTunes, OpenLibrary, and Google Books for unacquired installments. Results are sorted strictly by volume (`Vol 1`, `Vol 2`, `Vol 3`...) with knockoff study guides, summary publishers, and foreign translations filtered out.
 - **⚡ 1-Click Auto-Grab:** Click **`Auto-Grab`** on individual missing installments (or **`Grab All Missing`**) to automatically search indexers and download them. Discovered missing books also appear in the *Seerr discovery ("Missing from Your Series") carousel.
 - **Missing Book Stubs:** Missing books appear on your shelf as grayscale cards with a `MISSING` badge and `.portalarr-missing` immunity markers. When the real file is downloaded, the stub is automatically replaced.
 
 ---
 
-## ⚙️ 8. Release Selection, Blocklisting & Download Ingestion
+## 🧩 8. Interactive Ingest & Unlinked Series Matcher
 
-Portalarr connects directly to Prowlarr, Torznab indexers, SABnzbd, NZBGet, and qBittorrent:
+Have unlinked files or manually uploaded books?
+- **Interactive Matcher (`BookMatchModal`):** Radarr/Sonarr-style interactive matcher that non-destructively inspects file metadata and presents candidate suggestions with confidence scoring.
+- **Multi-Source Registries:** Pulls suggestions from the local database relations (`Author`/`BookSeries`), OpenLibrary, Audible, Google Books, and AI agent fallback.
+- **Customization:** Allows manual field overrides, volume linking, high-definition cover selection, optional disk restructuring (`renameBookFileOnDisk`), and automatic request state reconciliation (`Downloaded` / `AVAILABLE`).
+
+---
+
+## ⚙️ 9. Release Selection, Blocklisting & 1-Click Import
+
+DomsHomeLab connects directly to Prowlarr, Torznab indexers, SABnzbd, NZBGet, and qBittorrent:
 
 ### Interactive Release Chooser
 - If an automatic grab picks the wrong release or you want to pick a specific group, click **`🔍 Search Release`** on any request card.
@@ -184,21 +185,21 @@ Portalarr connects directly to Prowlarr, Torznab indexers, SABnzbd, NZBGet, and 
 
 ### 📥 1-Click Download Import (`Import Download`)
 - If a download completes in SABnzbd/qBittorrent but wasn't automatically organized, click **`📥 Import Download`**.
-- Portalarr scans completed download folders, matches the media, moves it into your library, and updates the database record to `Downloaded`.
+- DomsHomeLab scans completed download folders, matches the media, moves it into your library, and updates the database record to `Downloaded`.
 
 ---
 
-## 🤖 9. AI Metadata Agent & Cover Artwork Engine
+## 🤖 10. AI Metadata Agent & Cover Artwork Engine
 
-- **3-Tier Cover Artwork Engine:** Automatically queries iTunes HD (600x600/600x900), OpenLibrary, and Google Books. Click the **`🖼️ Fetch Cover`** button on any card to refresh missing or low-res covers.
+- **3-Tier Cover Artwork Engine:** Automatically queries iTunes HD (600x900), OpenLibrary, and Google Books. Click the **`🖼️ Fetch Cover`** button on any card to refresh missing or low-res covers.
 - **AI Metadata Agent:** Powered by Gemini, Claude, OpenAI, Ollama, Groq, or DeepSeek. Click **`🤖 Run AI Metadata Agent`** on any card to extract official title, author, series name, volume numbers, and high-resolution artwork from noisy file names.
 
 ---
 
-## ❓ 10. Frequently Asked Questions (FAQ)
+## ❓ 11. Frequently Asked Questions (FAQ)
 
 **Q: Can I read EPUB files offline?**  
-A: Yes. Once an EPUB is opened in Portalarr's reader, it is stored in your browser's persistent cache. You can resume reading even if you temporarily lose server connection.
+A: Yes. Once an EPUB is opened in DomsHomeLab's reader, it is stored in your browser's persistent cache. You can resume reading even if you temporarily lose server connection.
 
 **Q: Why did my Kindle email delivery fail?**  
 A: Go to the **Kindle Settings** tab and inspect the **Kindle Delivery History** log. Common reasons:

@@ -7703,6 +7703,31 @@ export async function saveEbooksUserGuide(content: string) {
     }
 }
 
+export async function getFullUserGuideAction(): Promise<string> {
+    try {
+        const rootGuidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        if (fs.existsSync(rootGuidePath)) {
+            return fs.readFileSync(rootGuidePath, "utf-8");
+        }
+    } catch (e) {
+        console.warn("Failed to read USER_GUIDE.md from disk:", e);
+    }
+    return "# 📚 DomsHomeLab (d281knilb) — Full Platform User Guide\n\nWelcome to DomsHomeLab!";
+}
+
+export async function saveFullUserGuideAction(content: string) {
+    await verifyAdmin();
+    try {
+        const guidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        fs.writeFileSync(guidePath, content, "utf-8");
+        revalidatePath("/guides");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to write USER_GUIDE.md:", e);
+        return { success: false, error: e.message || "Failed to save user guide." };
+    }
+}
+
 // ============================================================================
 // --- ALERT BANNER ACTIONS ---
 // ============================================================================

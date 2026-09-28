@@ -38,6 +38,7 @@ import {
     CheckSquare, Square, Plus, Edit2, AlertTriangle, Music
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
+import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
@@ -1067,9 +1068,12 @@ export default function UserProfilePage() {
                                 Transparent annual billing renewing on January 1st with prorated first-year rates.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
-                            ${effectiveYearlyPrice} / year
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            <FeatureGuideModal guideId="referral-rewards" triggerText="Referral & Billing Guide" />
+                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-bold w-fit">
+                                ${effectiveYearlyPrice} / year
+                            </Badge>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

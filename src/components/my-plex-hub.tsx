@@ -14,6 +14,7 @@ import {
 import { getUserPlexHubData, killUserStream, StreamDiagnosis } from "@/app/actions";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
+import FeatureGuideModal from "@/components/feature-guide-modal";
 
 export default function MyPlexHub() {
     const [data, setData] = useState<any>(null);
@@ -133,6 +134,7 @@ export default function MyPlexHub() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                    <FeatureGuideModal guideId="stream-diagnostics" triggerText="Diagnostics Guide" />
                     <ServerSpeedTest />
                     <PlexSetupGuides />
                     <Button 

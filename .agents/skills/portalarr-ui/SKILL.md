@@ -262,6 +262,32 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 16. Feature Guide Modals & Centralized Knowledge Base (`FeatureGuideModal` & `/guides`)
+- **Interactive Contextual Guide Buttons (`FeatureGuideModal`)**:
+  - Reusable modal dialog (`src/components/feature-guide-modal.tsx`) mounted via compact trigger buttons (`<FeatureGuideModal guideId="..." label="..." />`) across key feature headers:
+    - AI Assistant header: `guideId="ai-assistant"`
+    - Discover / Media Requests header: `guideId="movies-tv"`
+    - Media Requests status view: `guideId="movies-tv"`
+    - Library Books / Audiobooks / Kindle header: dynamic `guideId` switching between `ebooks`, `audiobooks`, `requests-pipeline`, and `kindle-setup`
+    - My Plex Hub stream diagnostics: `guideId="stream-diagnostics"`
+    - Settings Profile & Referrals card: `guideId="referral-rewards"`
+    - Curation Studio shared nav bar (`CurationNavHeader`): `guideId="curation-studio"`
+  - **Category Switching Inside Modal**: Users can switch between any of the 10 topics (`ai-assistant`, `movies-tv`, `ebooks`, `audiobooks`, `requests-pipeline`, `kindle-setup`, `stream-diagnostics`, `referral-rewards`, `curation-studio`, `general`) without leaving the dialog.
+  - **Visual Elements**: Highlight pill tags with icons (`CheckCircle2`), numbered step cards, pro-tip callouts (`Sparkles`), important warnings (`AlertCircle`), and deep links to `/guides`.
+- **Knowledge Base & Platform Guides Hub (`/guides`)**:
+  - Centralized knowledge base supporting 8 master categories:
+    - 📱 Streaming Devices (Plex direct play guides with left/right tab scrolling and pro-tips)
+    - 🤖 AI Support & Storage Probes (active byte-range `Range: bytes=0-65535` media testing, stream diagnostics)
+    - 🎬 Movies & TV Requests (Seerr requests, multi-tier fallback Prowlarr queries)
+    - 📚 Ebooks & Kindle Reader (Kindle Paperwhite reader, Send-to-Kindle pre-flight checks, comics)
+    - 🎧 Audiobooks & Chapters (multi-track consolidation, chapter selector, track reordering on disk)
+    - 🎁 Memberships & Referrals ($15/mo referral discount calculations, payment QR, profile management)
+    - 🎨 Server Curation Suite (Kometa ribbons, Agregarr hubs, Maintainerr prune rules, Tagging)
+    - 📖 Full Platform Manual (`USER_GUIDE.md` Markdown viewer with instant search and inline Admin editor)
+  - URL query parameter sync (`/guides?topic=ai-assistant` or `/guides?tab=devices`) with `<Suspense>` wrapper for Next.js App Router compliance.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

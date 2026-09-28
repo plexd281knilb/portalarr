@@ -56,6 +56,7 @@ import rehypeRaw from "rehype-raw";
 import { askAiServerMasterAction, getUserAiDiagnosticSnapshotAction } from "@/app/actions";
 import { UserDiagnosticSnapshot, AiChatMessage } from "@/lib/ai-server-assistant-types";
 import PlexSetupGuides from "@/components/plex-setup-guides";
+import FeatureGuideModal from "@/components/feature-guide-modal";
 
 export function AiServerAssistant() {
     const [isOpen, setIsOpen] = useState(false);
@@ -327,6 +328,7 @@ export function AiServerAssistant() {
                             </div>
 
                             <div className="flex items-center gap-2">
+                                <FeatureGuideModal guideId="ai-assistant" triggerText="Help Guide" />
                                 <PlexSetupGuides />
                                 <Button
                                     variant="ghost"

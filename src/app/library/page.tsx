@@ -42,6 +42,7 @@ import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
 import { BookMatchModal } from "@/components/book-match-modal";
 import ErrorTicketModal from "@/components/error-ticket-modal";
+import FeatureGuideModal from "@/components/feature-guide-modal";
 import {
   Card,
   CardHeader,
@@ -2556,6 +2557,20 @@ function BookLibraryPageContent() {
             <Mail className="h-3.5 w-3.5 text-primary" />
             <span>Kindle: {userKindleEmail || "Not Configured"}</span>
           </Button>
+          <FeatureGuideModal 
+            guideId={
+              activeTab === "audiobooks" ? "audiobooks" :
+              activeTab === "kindle" ? "kindle-setup" :
+              activeTab === "manage" ? "requests-pipeline" :
+              "ebooks"
+            } 
+            triggerText={
+              activeTab === "audiobooks" ? "Audiobooks Guide" :
+              activeTab === "kindle" ? "Kindle Guide" :
+              activeTab === "manage" ? "Pipeline Guide" :
+              "Ebooks Guide"
+            } 
+          />
           {isAdmin && (
             <Badge
               variant="outline"

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sparkles, Film, Trash2, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import FeatureGuideModal from "@/components/feature-guide-modal";
 
 interface CurationNavHeaderProps {
     serversCount?: number;
@@ -84,10 +85,13 @@ export function CurationNavHeader({
                     </p>
                 </div>
 
-                <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-2 text-xs font-semibold flex items-center gap-2 shrink-0">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>{serversCount} Connected {serversCount === 1 ? 'Server' : 'Servers'}</span>
-                </Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                    <FeatureGuideModal guideId="curation-studio" triggerText="Curation Guide" />
+                    <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-2 text-xs font-semibold flex items-center gap-2 shrink-0">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>{serversCount} Connected {serversCount === 1 ? 'Server' : 'Servers'}</span>
+                    </Badge>
+                </div>
             </div>
 
             {/* 4-Way Mode Switcher Navigation Tabs */}
