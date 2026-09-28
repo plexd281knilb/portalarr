@@ -339,6 +339,27 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 20. Plex & Server Master AI Mission Control Modal (`AiServerAssistant`)
+- **Viewport-Bounded Modal Layout (`h-[86vh] max-h-[92vh]`)**:
+  - Modal container uses responsive sizing:
+    ```tsx
+    className="w-[98vw] sm:max-w-4xl max-h-[92vh] h-[86vh] p-0 bg-neutral-950/98 border border-neutral-800/90 shadow-2xl rounded-2xl flex flex-col overflow-hidden text-neutral-100"
+    ```
+  - Replaces rigid hardcoded pixel heights (`h-[780px]`) that overflowed laptop screens and caused double nested scrollbars.
+  - Header, tab bar, and prompt input are fixed anchors, with the central content area constrained to `min-h-0 flex-1 overflow-y-auto scrollbar-thin` for fluid scrolling.
+- **4-Tab Mission Control Navigation**:
+  - `activeTab` switches seamlessly between:
+    1. **`💬 Diagnostic Chat`**: Interactive conversation with the autonomous AI agent. Features collapsible live telemetry ribbon with 1-click `"Diagnose Stream"` trigger, audio track inspector cards with replacement actions, real-time media probe results, autonomous action report cards (`RADARR_SEARCH_GRAB`, `ESCALATE_ADMIN_TICKET`), multi-step animated thinking states, and categorized prompt suggestions.
+    2. **`📡 Live Telemetry`**: Deep stream telemetry inspector showing real-time video/audio transcode decisions, hardware acceleration indicators (`NVENC / QSV` vs `CPU Software`), bitrate & resolution telemetry, transcode speed multipliers, transcode reason tags, detected playback issues with recommended client fixes, and chronic pattern insights.
+    3. **`🩺 Server Disk & Probes`**: Server nodes matrix displaying physical storage read speeds (`182 MB/s`), NVMe fast tier status, database query latency (`0.4ms`), hardware transcoder status, and 1-click test probe actions.
+    4. **`⚡ Quick Fixes`**: Actionable 1-click client playback resolutions (Roku "Playback Error" fix, 100% Direct Play mode, quiet center-channel audio boost, language track replacement, subtitle burn-in fix) with direct links to `PlexSetupGuides` and `FeatureGuideModal`.
+- **Integrated High-Tech Header & Identity**:
+  - Features an animated glowing Bot avatar with status pulse and `Autonomous v3.1` live indicator badge.
+  - Quick action buttons in the header provide instant access to setup guides (`PlexSetupGuides`), feature tours (`FeatureGuideModal`), and clearing session history.
+- **Component**: `src/components/ai-server-assistant.tsx`
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:
