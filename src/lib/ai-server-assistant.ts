@@ -1108,9 +1108,12 @@ INSTRUCTIONS:
         const dynamicModels = await getAvailableGeminiModels(geminiKey).catch(() => []);
         const candidateModels = getGeminiCandidateModels(modelName, dynamicModels);
 
+        logAgentEvent("INFO", `Querying Google Gemini (${candidateModels[0]}) for user "${snapshot.username}"`);
+
         for (const activeModel of candidateModels) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 35000);
+            const startTime = Date.now();
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
 
@@ -1164,6 +1167,8 @@ INSTRUCTIONS:
                     const data = await res.json();
                     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (text && text.trim().length > 10) {
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                        logAgentEvent("INFO", `✨ Gemini (${activeModel}) generated response in ${elapsed}s for user "${snapshot.username}"`);
                         return {
                             success: true,
                             answer: text.trim(),
@@ -1176,9 +1181,11 @@ INSTRUCTIONS:
                     }
                 } else {
                     const errText = await res.text().catch(() => "");
+                    logAgentEvent("WARN", `Gemini model ${activeModel} HTTP ${res.status}: ${errText.substring(0, 150)}`);
                     console.warn(`[AI-SERVER-ASSISTANT] Gemini model ${activeModel} HTTP ${res.status}: ${errText}`);
                 }
             } catch (e: any) {
+                logAgentEvent("WARN", `Gemini model ${activeModel} error: ${e.message}`);
                 console.warn(`[AI-SERVER-ASSISTANT] Gemini model ${activeModel} exception: ${e.message}`);
             } finally {
                 clearTimeout(timeoutId);
@@ -1188,6 +1195,7 @@ INSTRUCTIONS:
 
     // 2. OpenAI Provider
     if (provider === "openai" && rawKey) {
+        logAgentEvent("INFO", `Querying OpenAI (${modelName || 'gpt-4o-mini'}) for user "${snapshot.username}"`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 35000);
         try {
@@ -1220,6 +1228,7 @@ INSTRUCTIONS:
                 const data = await res.json();
                 const text = data.choices?.[0]?.message?.content;
                 if (text && text.trim().length > 10) {
+                    logAgentEvent("INFO", `✨ OpenAI (${activeModel}) generated response for user "${snapshot.username}"`);
                     return {
                         success: true,
                         answer: text.trim(),
@@ -1232,9 +1241,11 @@ INSTRUCTIONS:
                 }
             } else {
                 const errText = await res.text().catch(() => "");
+                logAgentEvent("WARN", `OpenAI HTTP ${res.status}: ${errText.substring(0, 150)}`);
                 console.warn(`[AI-SERVER-ASSISTANT] OpenAI HTTP ${res.status}: ${errText}`);
             }
         } catch (e: any) {
+            logAgentEvent("WARN", `OpenAI error: ${e.message}`);
             console.warn(`[AI-SERVER-ASSISTANT] OpenAI exception: ${e.message}`);
         } finally {
             clearTimeout(timeoutId);
@@ -1242,6 +1253,7 @@ INSTRUCTIONS:
     }
 
     // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Guaranteed Instant Response)
+    logAgentEvent("INFO", `Serving diagnostic response via Built-in Plex Master Autonomous Engine for user "${snapshot.username}"`);
     const heuristicAnswer = resolvePlexMasterHeuristic(question, snapshot, actionsTaken, mediaInspection, playbackProbe);
     return {
         success: true,
