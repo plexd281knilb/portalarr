@@ -1104,7 +1104,7 @@ INSTRUCTIONS:
 
         for (const activeModel of candidateModels) {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 35000);
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
 
@@ -1126,25 +1126,32 @@ INSTRUCTIONS:
                     body: JSON.stringify({
                         system_instruction: { parts: [{ text: systemPrompt }] },
                         contents: contents,
-                        generationConfig: { temperature: 0.2, maxOutputTokens: 1400 }
+                        generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
                     }),
                     signal: controller.signal
                 });
 
                 // If 503 (model overloaded), retry once with exponential backoff and jitter
                 if (res.status === 503) {
-                    const jitter = Math.floor(Math.random() * 500) + 1200;
-                    await new Promise(r => setTimeout(r, jitter));
-                    res = await fetch(url, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            system_instruction: { parts: [{ text: systemPrompt }] },
-                            contents: contents,
-                            generationConfig: { temperature: 0.2, maxOutputTokens: 1400 }
-                        }),
-                        signal: controller.signal
-                    });
+                    clearTimeout(timeoutId);
+                    const retryController = new AbortController();
+                    const retryTimeoutId = setTimeout(() => retryController.abort(), 35000);
+                    try {
+                        const jitter = Math.floor(Math.random() * 500) + 1200;
+                        await new Promise(r => setTimeout(r, jitter));
+                        res = await fetch(url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                system_instruction: { parts: [{ text: systemPrompt }] },
+                                contents: contents,
+                                generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+                            }),
+                            signal: retryController.signal
+                        });
+                    } finally {
+                        clearTimeout(retryTimeoutId);
+                    }
                 }
 
                 if (res.ok) {
@@ -1175,10 +1182,10 @@ INSTRUCTIONS:
 
     // 2. OpenAI Provider
     if (provider === "openai" && rawKey) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
         try {
             const activeModel = modelName || "gpt-4o-mini";
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
 
             const messages: any[] = [
                 { role: "system", content: systemPrompt }
@@ -1198,11 +1205,10 @@ INSTRUCTIONS:
                     model: activeModel,
                     messages: messages,
                     temperature: 0.2,
-                    max_tokens: 1400
+                    max_tokens: 1200
                 }),
                 signal: controller.signal
             });
-            clearTimeout(timeoutId);
 
             if (res.ok) {
                 const data = await res.json();
@@ -1218,8 +1224,15 @@ INSTRUCTIONS:
                         playbackProbe
                     };
                 }
+            } else {
+                const errText = await res.text().catch(() => "");
+                console.warn(`[AI-SERVER-ASSISTANT] OpenAI HTTP ${res.status}: ${errText}`);
             }
-        } catch (e: any) {}
+        } catch (e: any) {
+            console.warn(`[AI-SERVER-ASSISTANT] OpenAI exception: ${e.message}`);
+        } finally {
+            clearTimeout(timeoutId);
+        }
     }
 
     // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Guaranteed Instant Response)

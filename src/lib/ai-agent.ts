@@ -122,6 +122,8 @@ Example output:
     const prompt = JSON.stringify(bookTitles);
 
     for (const m of candidateModels) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
             const response = await fetch(url, {
@@ -131,7 +133,8 @@ Example output:
                     system_instruction: { parts: [{ text: systemPrompt }] },
                     contents: [{ parts: [{ text: prompt }] }],
                     generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                })
+                }),
+                signal: controller.signal
             });
 
             if (!response.ok) {
@@ -147,6 +150,8 @@ Example output:
             }
         } catch (e) {
             continue;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
     return {};
@@ -245,6 +250,8 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
     let lastError = "";
 
     for (const ver of versions) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
         try {
             const endpoint = `https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
             let res = await fetch(endpoint, {
@@ -255,23 +262,32 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
                         parts: [{ text: systemPrompt }]
                     }],
                     generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                })
+                }),
+                signal: controller.signal
             });
 
             // If 503 (model overloaded), retry once after a 1.2s - 1.7s backoff with jitter
             if (res.status === 503) {
-                const jitter = Math.floor(Math.random() * 500) + 1200;
-                await new Promise(r => setTimeout(r, jitter));
-                res = await fetch(endpoint, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: systemPrompt }]
-                        }],
-                        generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                    })
-                });
+                clearTimeout(timeoutId);
+                const retryController = new AbortController();
+                const retryTimeoutId = setTimeout(() => retryController.abort(), 35000);
+                try {
+                    const jitter = Math.floor(Math.random() * 500) + 1200;
+                    await new Promise(r => setTimeout(r, jitter));
+                    res = await fetch(endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{ text: systemPrompt }]
+                            }],
+                            generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                        }),
+                        signal: retryController.signal
+                    });
+                } finally {
+                    clearTimeout(retryTimeoutId);
+                }
             }
 
             if (res.ok) {
@@ -285,6 +301,9 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
             }
         } catch (e: any) {
             lastError = e.message;
+            console.warn(`[AI-AGENT] WARN Gemini model ${modelName} exception: ${e.message}`);
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
