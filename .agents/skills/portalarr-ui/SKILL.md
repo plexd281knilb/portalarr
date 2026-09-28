@@ -288,6 +288,19 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 17. Real-Time Session Expiration & Dual Cadence Reactivation (`/pending`)
+- **Edge Session Expiration & Stale Cookie Trapping**:
+  - `createSession` embeds ISO strings for `trialEndsAt` and `subscriptionEndsAt` directly into the signed JWT token payload.
+  - `src/proxy.ts` validates `trialEndsAt` and `subscriptionEndsAt` against `Date.now()` on every incoming request. If a trial or subscription has elapsed in real time, `proxy.ts` dynamically treats `userStatus` as `"EXPIRED"` and immediately halts access, redirecting to `/pending` (or returning 403 on API calls).
+  - Server components (`src/app/page.tsx`, `src/app/discover/page.tsx`, `src/app/requests/page.tsx`) and `LayoutWrapper` explicitly verify `user.status` from SQLite via `getCurrentUser()` and redirect any `EXPIRED`, `PENDING`, `REJECTED`, or `SUSPENDED` users immediately to `/pending`, completely preventing unauthorized viewing of the dashboard or requests when cookies are mid-renewal.
+- **Dual Cadence Reactivation Selector (`/pending`)**:
+  - When an expired or suspended user reaches `/pending`, they are presented with an interactive dual-plan selector:
+    - **Annual Renewal**: Prorated rest-of-year amount due (e.g. `$39.19 for rest of 2026` @ $15/mo base), detailing exact months covered and future January 1 renewal.
+    - **Flexible Monthly**: Month-to-month reactivation rate (e.g. `$15.00/mo` or prorated current month) with first-of-month renewal cadence.
+  - Selecting either card immediately updates the Reactivation Amount Due, renewal breakdown text, P2P deep link pre-filled amounts (Venmo, PayPal, Cash App, Zelle), and pure-TS SVG QR code generator in `PaymentQrModal`.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

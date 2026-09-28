@@ -34,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { 
     ExternalLink, AlertTriangle, BookOpen, Sparkles, Compass, 
     Tv, Film, Zap, ArrowRight, Shield, Download, LifeBuoy, Settings, Wrench
@@ -49,6 +50,9 @@ function makeAbsoluteUrl(url: string | null | undefined) {
 
 export default async function UserLandingPage() {
     const user = await getCurrentUser().catch(() => null);
+    if (user && (user.status === "EXPIRED" || user.status === "PENDING" || user.status === "REJECTED" || user.status === "SUSPENDED")) {
+        redirect("/pending");
+    }
     const isLoggedIn = !!user;
 
     const isAdmin = user?.role === "ADMIN";

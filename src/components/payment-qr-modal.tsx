@@ -22,6 +22,8 @@ interface PaymentQrModalProps {
     } | null;
     username?: string;
     initialProvider?: "paypal" | "venmo" | "cashapp" | "zelle";
+    initialCadence?: "yearly" | "monthly";
+    customAmount?: number;
 }
 
 export function PaymentQrModal({
@@ -30,12 +32,22 @@ export function PaymentQrModal({
     config,
     username = "USER",
     initialProvider = "venmo",
+    initialCadence = "yearly",
+    customAmount,
 }: PaymentQrModalProps) {
-    const [cadence, setCadence] = useState<"yearly" | "monthly">("yearly");
+    const [cadence, setCadence] = useState<"yearly" | "monthly">(initialCadence);
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-    const yearlyAmount = config?.yearlyPrice || 180;
-    const monthlyAmount = config?.monthlyPrice || 15;
+    React.useEffect(() => {
+        if (initialCadence) {
+            setCadence(initialCadence);
+        }
+    }, [initialCadence, isOpen]);
+
+    const baseYearlyAmount = config?.yearlyPrice || 180;
+    const baseMonthlyAmount = config?.monthlyPrice || 15;
+    const yearlyAmount = (cadence === "yearly" && initialCadence === "yearly" && customAmount) ? customAmount : baseYearlyAmount;
+    const monthlyAmount = (cadence === "monthly" && initialCadence === "monthly" && customAmount) ? customAmount : baseMonthlyAmount;
     const selectedAmount = cadence === "yearly" ? yearlyAmount : monthlyAmount;
 
     const memoTag = useMemo(() => generatePaymentMemo(username), [username]);

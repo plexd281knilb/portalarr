@@ -1,4 +1,5 @@
-import { getSession } from "@/app/auth-actions";
+import { getCurrentUser, getSession } from "@/app/auth-actions";
+import { redirect } from "next/navigation";
 import { DiscoverHub } from "@/components/seerr/discover-hub";
 import { Compass } from "lucide-react";
 import { Suspense } from "react";
@@ -9,7 +10,14 @@ export const dynamic = "force-dynamic";
 export default async function DiscoverPage(props: {
     searchParams?: Promise<{ tab?: string; section?: string }>;
 }) {
+    const user = await getCurrentUser().catch(() => null);
+    if (user && (user.status === "EXPIRED" || user.status === "PENDING" || user.status === "REJECTED" || user.status === "SUSPENDED")) {
+        redirect("/pending");
+    }
     const session = await getSession();
+    if (session && (session.status === "EXPIRED" || session.status === "PENDING" || session.status === "REJECTED" || session.status === "SUSPENDED")) {
+        redirect("/pending");
+    }
     const isAdmin = session?.role === "ADMIN" || session?.role === "SUPER_USER";
     const searchParams = props.searchParams ? await props.searchParams : {};
     const tabParam = (searchParams.tab || "").toLowerCase();

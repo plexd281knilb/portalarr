@@ -5619,7 +5619,7 @@ export async function registerTrialUserFromInvite(data: {
 
         // Automatically create session cookie so user is logged in
         try {
-            await createSession(newUser.id, newUser.username, newUser.role, newUser.status);
+            await createSession(newUser.id, newUser.username, newUser.role, newUser.status, newUser.trialEndsAt, newUser.subscriptionEndsAt);
         } catch (sessErr) {
             console.warn("[AUTO-SESSION-CREATE-WARNING]:", sessErr);
         }
@@ -13619,7 +13619,7 @@ export async function toggleSelfSuperUserAction() {
         });
 
         const { createSession } = await import("./auth-actions");
-        await createSession(user.id, user.username, newRole, user.status);
+        await createSession(user.id, user.username, newRole, user.status, user.trialEndsAt, user.subscriptionEndsAt);
 
         revalidatePath("/");
         revalidatePath("/settings/profile");

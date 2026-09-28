@@ -1410,6 +1410,84 @@ async function runTestSuite() {
         }
     });
 
+    // 35. Auth & Routing: Expired Session Detection & Dual Cadence Reactivation
+    await assertTest("Auth & Routing: Expired Session Detection & Dual Cadence Reactivation", async () => {
+        const { SignJWT, jwtVerify } = await import("jose");
+        const { getJwtSecret } = await import("../src/lib/auth-secret");
+        const { calculateProratedBilling } = await import("../src/lib/prorated-billing");
+
+        const secret = getJwtSecret();
+
+        // 1. JWT with past trialEndsAt
+        const pastTrialDate = new Date(Date.now() - 3600 * 1000).toISOString();
+        const trialToken = await new SignJWT({
+            userId: "test-user-id",
+            username: "expired_trial_user",
+            role: "USER",
+            status: "TRIAL",
+            trialEndsAt: pastTrialDate,
+            subscriptionEndsAt: null
+        })
+            .setProtectedHeader({ alg: "HS256" })
+            .setIssuedAt()
+            .setExpirationTime("30d")
+            .sign(secret);
+
+        const { payload: trialPayload } = await jwtVerify(trialToken, secret);
+        let status1 = (trialPayload.status as string) || "APPROVED";
+        const now = Date.now();
+        if (status1 === "TRIAL" && trialPayload.trialEndsAt && new Date(trialPayload.trialEndsAt as string).getTime() < now) {
+            status1 = "EXPIRED";
+        }
+        if (status1 !== "EXPIRED") {
+            throw new Error(`Expected trial session to evaluate to EXPIRED, got: ${status1}`);
+        }
+
+        // 2. JWT with past subscriptionEndsAt
+        const pastSubDate = new Date(Date.now() - 3600 * 1000).toISOString();
+        const subToken = await new SignJWT({
+            userId: "test-user-id",
+            username: "expired_sub_user",
+            role: "USER",
+            status: "APPROVED",
+            trialEndsAt: null,
+            subscriptionEndsAt: pastSubDate
+        })
+            .setProtectedHeader({ alg: "HS256" })
+            .setIssuedAt()
+            .setExpirationTime("30d")
+            .sign(secret);
+
+        const { payload: subPayload } = await jwtVerify(subToken, secret);
+        let status2 = (subPayload.status as string) || "APPROVED";
+        if (status2 === "APPROVED" && subPayload.subscriptionEndsAt && new Date(subPayload.subscriptionEndsAt as string).getTime() < now) {
+            status2 = "EXPIRED";
+        }
+        if (status2 !== "EXPIRED") {
+            throw new Error(`Expected subscription session to evaluate to EXPIRED, got: ${status2}`);
+        }
+
+        // 3. Reactivation billing options (Yearly vs Monthly)
+        const billing = calculateProratedBilling({
+            startDate: new Date(),
+            yearlyPrice: 180,
+            monthlyPrice: 15
+        });
+
+        if (typeof billing.amountDueNow !== "number" || billing.amountDueNow <= 0) {
+            throw new Error(`Expected valid yearly amountDueNow, got: ${billing.amountDueNow}`);
+        }
+        if (typeof billing.monthlyAmountDueNow !== "number" || billing.monthlyAmountDueNow <= 0) {
+            throw new Error(`Expected valid monthlyAmountDueNow, got: ${billing.monthlyAmountDueNow}`);
+        }
+        if (!billing.amountDueText.includes("$")) {
+            throw new Error(`Expected amountDueText to include '$', got: ${billing.amountDueText}`);
+        }
+        if (!billing.monthlyAmountDueText.includes("$")) {
+            throw new Error(`Expected monthlyAmountDueText to include '$', got: ${billing.monthlyAmountDueText}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

@@ -13,6 +13,7 @@ import { Clock, MailCheck, LogOut, RefreshCw, ShieldAlert, AlertTriangle, Credit
 export default function PendingPage() {
   const [user, setUser] = useState<{ username: string; email: string; status?: string; subscriptionEndsAt?: Date | null; trialEndsAt?: Date | null } | null>(null);
   const [paymentConfig, setPaymentConfig] = useState<any>(null);
+  const [selectedCadence, setSelectedCadence] = useState<"yearly" | "monthly">("yearly");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
   const [checkMsg, setCheckMsg] = useState<string | null>(null);
@@ -82,6 +83,13 @@ export default function PendingPage() {
   const isSuspended = user?.status === "SUSPENDED";
   const isRejected = user?.status === "REJECTED";
 
+  const yearlyPrice = paymentConfig?.yearlyPrice ?? 180;
+  const monthlyPrice = paymentConfig?.monthlyPrice ?? paymentConfig?.proratedBilling?.monthlyRate ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+  const prorated = paymentConfig?.proratedBilling;
+  const yearlyAmountDue = prorated?.amountDueNow ?? yearlyPrice;
+  const monthlyAmountDue = prorated?.monthlyAmountDueNow ?? monthlyPrice;
+  const effectiveAmount = selectedCadence === "yearly" ? yearlyAmountDue : monthlyAmountDue;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-3 sm:px-4 py-6 sm:py-12">
       <Card className="w-full max-w-lg sm:max-w-xl border-border/50 shadow-2xl bg-[#121218]/90 backdrop-blur-md">
@@ -123,34 +131,113 @@ export default function PendingPage() {
 
         <CardContent className="space-y-6">
           {isExpired || isSuspended ? (
-            <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-2xl space-y-3.5">
+            <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-orange-500/20 pb-2.5">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-orange-400">
                   <CreditCard className="h-4 w-4" />
-                  <span>Subscription & Renewal</span>
+                  <span>Choose Your Reactivation Plan</span>
                 </div>
                 <Badge variant="outline" className="bg-orange-500/20 text-orange-300 border-orange-500/40 text-xs font-bold">
-                  ${paymentConfig?.yearlyPrice ?? 180} / yr (Jan 1)
+                  {selectedCadence === "yearly" ? `$${yearlyPrice} / yr` : `$${monthlyPrice} / mo`}
                 </Badge>
               </div>
 
-              {paymentConfig?.proratedBilling ? (
-                <div className="space-y-2">
-                  <div className="p-3 rounded-xl bg-background/60 border border-border/40 space-y-1">
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Reactivation Amount Due</span>
-                    <p className="text-base font-black text-foreground">{paymentConfig.proratedBilling.amountDueText}</p>
-                    <p className="text-[11px] text-muted-foreground">Covers {paymentConfig.proratedBilling.remainingMonthsText} @ ${paymentConfig.proratedBilling.monthlyRate}/mo</p>
+              {/* DUAL CADENCE SELECTOR TILES */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCadence("yearly")}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                    selectedCadence === "yearly"
+                      ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(52,211,153,0.15)] ring-1 ring-primary/40"
+                      : "bg-background/40 border-border/40 hover:bg-background/80 hover:border-border/60"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Annual Renewal</span>
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold">
+                      Best Value
+                    </Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Following your initial prorated term, the annual subscription renews at <strong>${paymentConfig.proratedBilling.yearlyRate}/year</strong> on <strong>{paymentConfig.proratedBilling.nextRenewalDate}</strong>.
-                  </p>
-                </div>
-              ) : (
-                paymentConfig?.subscriptionPrice && (
-                  <div className="text-sm font-bold text-foreground">
-                    Rate: {paymentConfig.subscriptionPrice}
+                  <div className="text-base font-extrabold text-foreground">
+                    ${yearlyPrice} <span className="text-xs font-normal text-muted-foreground">/ yr</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-400 font-medium mt-0.5">
+                    {prorated?.amountDueText || `$${yearlyPrice} due now`}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedCadence("monthly")}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                    selectedCadence === "monthly"
+                      ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(52,211,153,0.15)] ring-1 ring-primary/40"
+                      : "bg-background/40 border-border/40 hover:bg-background/80 hover:border-border/60"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monthly Plan</span>
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-sky-500/10 text-sky-400 border-sky-500/30 font-bold">
+                      Flexible
+                    </Badge>
+                  </div>
+                  <div className="text-base font-extrabold text-foreground">
+                    ${monthlyPrice} <span className="text-xs font-normal text-muted-foreground">/ mo</span>
+                  </div>
+                  <div className="text-[11px] text-sky-400 font-medium mt-0.5">
+                    {prorated?.monthlyAmountDueText || `$${monthlyPrice}/mo due now`}
+                  </div>
+                </button>
+              </div>
+
+              {/* REACTIVATION AMOUNT DETAILS */}
+              {selectedCadence === "yearly" ? (
+                prorated ? (
+                  <div className="space-y-2">
+                    <div className="p-3.5 rounded-xl bg-background/60 border border-border/40 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
+                          Reactivation Amount Due (Rest of Year)
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-400">Prorated Rest-of-Year</span>
+                      </div>
+                      <p className="text-base font-black text-foreground">{prorated.amountDueText}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Covers {prorated.remainingMonthsText} @ ${prorated.monthlyRate}/mo
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Following your initial prorated term, the annual subscription renews at <strong>${prorated.yearlyRate}/year</strong> on <strong>{prorated.nextRenewalDate}</strong>.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-background/60 border border-border/40 space-y-1">
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Subscription</span>
+                    <p className="text-base font-black text-foreground">${yearlyPrice} / year</p>
+                    <p className="text-[11px] text-muted-foreground">Full annual access with zero interruption.</p>
                   </div>
                 )
+              ) : (
+                <div className="space-y-2">
+                  <div className="p-3.5 rounded-xl bg-background/60 border border-border/40 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
+                        Reactivation Amount Due (First Month)
+                      </span>
+                      <span className="text-[10px] font-bold text-sky-400">Flexible Month-to-Month</span>
+                    </div>
+                    <p className="text-base font-black text-foreground">
+                      {prorated?.monthlyAmountDueText || `$${monthlyPrice}.00 / month`}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Flexible month-to-month access, cancel anytime.
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {prorated?.monthlyBreakdownSummary || `Following your initial payment, the subscription renews monthly at $${monthlyPrice}/month on the 1st of each month.`}
+                  </p>
+                </div>
               )}
 
               {paymentConfig?.paymentInstructions && (
@@ -161,7 +248,12 @@ export default function PendingPage() {
 
               {/* PAYMENT HANDLES */}
               <div className="pt-1 border-t border-orange-500/20">
-                <PaymentMethodsGrid config={paymentConfig} />
+                <PaymentMethodsGrid 
+                  config={paymentConfig} 
+                  username={user?.username} 
+                  amount={effectiveAmount} 
+                  cadence={selectedCadence} 
+                />
               </div>
 
               <p className="text-[11px] text-muted-foreground italic pt-1">

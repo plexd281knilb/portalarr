@@ -1310,6 +1310,10 @@ function BookLibraryPageContent() {
         setUser(session);
 
         const profile = await getCurrentUser();
+        if (profile && (profile.status === "EXPIRED" || profile.status === "PENDING" || profile.status === "REJECTED" || profile.status === "SUSPENDED")) {
+          window.location.href = "/pending";
+          return;
+        }
         setFullUser(profile);
         if (profile) {
           setUserEmail(profile.email || "");

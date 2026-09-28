@@ -1,4 +1,5 @@
-import { getSession } from "@/app/auth-actions";
+import { getCurrentUser, getSession } from "@/app/auth-actions";
+import { redirect } from "next/navigation";
 import { DiscoverHub } from "@/components/seerr/discover-hub";
 import { Inbox } from "lucide-react";
 import FeatureGuideModal from "@/components/feature-guide-modal";
@@ -6,7 +7,14 @@ import FeatureGuideModal from "@/components/feature-guide-modal";
 export const dynamic = "force-dynamic";
 
 export default async function RequestsPage() {
+    const user = await getCurrentUser().catch(() => null);
+    if (user && (user.status === "EXPIRED" || user.status === "PENDING" || user.status === "REJECTED" || user.status === "SUSPENDED")) {
+        redirect("/pending");
+    }
     const session = await getSession();
+    if (session && (session.status === "EXPIRED" || session.status === "PENDING" || session.status === "REJECTED" || session.status === "SUSPENDED")) {
+        redirect("/pending");
+    }
     const isAdmin = session?.role === "ADMIN" || session?.role === "SUPER_USER";
 
     return (

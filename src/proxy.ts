@@ -26,7 +26,14 @@ export async function proxy(req: NextRequest) {
     if (session) {
       try {
         const { payload } = await jwtVerify(session, getJwtSecret());
-        const status = (payload.status as string) || "APPROVED";
+        let status = (payload.status as string) || "APPROVED";
+        const now = Date.now();
+        if (status === "TRIAL" && payload.trialEndsAt && new Date(payload.trialEndsAt as string).getTime() < now) {
+          status = "EXPIRED";
+        }
+        if (status === "APPROVED" && payload.subscriptionEndsAt && new Date(payload.subscriptionEndsAt as string).getTime() < now) {
+          status = "EXPIRED";
+        }
         if (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED") {
           return NextResponse.redirect(new URL("/pending", req.url));
         }
@@ -48,7 +55,16 @@ export async function proxy(req: NextRequest) {
 
   try {
     const { payload } = await jwtVerify(session, getJwtSecret());
-    const userStatus = (payload.status as string) || "APPROVED";
+    let userStatus = (payload.status as string) || "APPROVED";
+
+    // Auto-detect expired trials or subscriptions directly in proxy from JWT timestamps
+    const now = Date.now();
+    if (userStatus === "TRIAL" && payload.trialEndsAt && new Date(payload.trialEndsAt as string).getTime() < now) {
+      userStatus = "EXPIRED";
+    }
+    if (userStatus === "APPROVED" && payload.subscriptionEndsAt && new Date(payload.subscriptionEndsAt as string).getTime() < now) {
+      userStatus = "EXPIRED";
+    }
 
     // 4. Pending, Rejected, Suspended, or Expired user protection
     if (userStatus === "PENDING" || userStatus === "REJECTED" || userStatus === "SUSPENDED" || userStatus === "EXPIRED") {

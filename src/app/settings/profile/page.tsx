@@ -258,6 +258,10 @@ export default function UserProfilePage() {
             setLoading(true);
             try {
                 const u = await getCurrentUser();
+                if (u && (u.status === "EXPIRED" || u.status === "PENDING" || u.status === "REJECTED" || u.status === "SUSPENDED")) {
+                    window.location.href = "/pending";
+                    return;
+                }
                 setUser(u);
                 if (u?.kindleEmail) {
                     if (u.kindleEmail === "DIRECT_DOWNLOAD") {

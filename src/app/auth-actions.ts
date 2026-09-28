@@ -80,7 +80,18 @@ export async function login(formData: FormData) {
     return { error: "Invalid credentials" };
   }
 
-  await createSession(user.id, user.username, user.role, user.status);
+  // Check if trial or subscription elapsed before creating session
+  const now = new Date();
+  let currentStatus = user.status;
+  if (currentStatus === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
+    currentStatus = "EXPIRED";
+    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
+  } else if (currentStatus === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
+    currentStatus = "EXPIRED";
+    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
+  }
+
+  await createSession(user.id, user.username, user.role, currentStatus, user.trialEndsAt, user.subscriptionEndsAt);
   return { success: true };
 }
 
@@ -132,7 +143,14 @@ export async function logout() {
 }
 
 // --- HELPER: CREATE SESSION ---
-export async function createSession(userId: string, username: string, role: string, status: string = "APPROVED") {
+export async function createSession(
+  userId: string, 
+  username: string, 
+  role: string, 
+  status: string = "APPROVED",
+  trialEndsAt?: Date | string | null,
+  subscriptionEndsAt?: Date | string | null
+) {
   const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30; // 30 Days persistent login
   const expiresAt = new Date(Date.now() + THIRTY_DAYS_SEC * 1000);
 
@@ -145,20 +163,31 @@ export async function createSession(userId: string, username: string, role: stri
     console.error("[AUTH] Failed to update lastLogin for user:", e);
   }
 
-  const token = await new SignJWT({ userId, username, role, status })
+  const token = await new SignJWT({ 
+    userId, 
+    username, 
+    role, 
+    status,
+    trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
+    subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt).toISOString() : null
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
     .sign(getJwtSecret());
 
-  (await cookies()).set("session", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    maxAge: THIRTY_DAYS_SEC, 
-    path: "/",
-    sameSite: "lax",
-    expires: expiresAt
-  });
+  try {
+    (await cookies()).set("session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: THIRTY_DAYS_SEC, 
+      path: "/",
+      sameSite: "lax",
+      expires: expiresAt
+    });
+  } catch (cookieErr) {
+    // In Server Components render context, Next.js does not allow setting cookies on the response.
+  }
 }
 
 // --- HELPER: GET SESSION ---
@@ -318,7 +347,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
       });
     }
 
-    await createSession(user.id, user.username, user.role, user.status);
+    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt);
     return { success: true };
   }
 
@@ -373,7 +402,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     });
   }
 
-  await createSession(user.id, user.username, user.role, user.status);
+  await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt);
   return { success: true };
 }
 
@@ -553,7 +582,7 @@ export async function getCurrentUser() {
   // Prevent login loops: If user status or role in DB changed, re-issue updated session cookie immediately
   if (user.status !== payload.status || user.role !== payload.role) {
     console.log(`[AUTH] User status/role updated for ${user.username} (Status: ${payload.status} -> ${user.status}). Updating session cookie.`);
-    await createSession(user.id, user.username, user.role, user.status);
+    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt);
   }
 
   return user;
@@ -713,7 +742,7 @@ export async function impersonateUserAction(targetUserId: string) {
   // 2. Fetch target user
   const targetUser = await prisma.user.findUnique({
     where: { id: targetUserId },
-    select: { id: true, username: true, role: true, status: true }
+    select: { id: true, username: true, role: true, status: true, trialEndsAt: true, subscriptionEndsAt: true }
   });
 
   if (!targetUser) {
@@ -732,7 +761,7 @@ export async function impersonateUserAction(targetUserId: string) {
   }
 
   // 4. Create fresh session cookie for the target user
-  await createSession(targetUser.id, targetUser.username, targetUser.role, targetUser.status);
+  await createSession(targetUser.id, targetUser.username, targetUser.role, targetUser.status, targetUser.trialEndsAt, targetUser.subscriptionEndsAt);
 
   return {
     success: true,
@@ -758,7 +787,7 @@ export async function stopImpersonationAction() {
 
     const adminUser = await prisma.user.findUnique({
       where: { id: payload.userId as string },
-      select: { id: true, username: true, role: true, status: true }
+      select: { id: true, username: true, role: true, status: true, trialEndsAt: true, subscriptionEndsAt: true }
     });
 
     if (!adminUser || adminUser.role !== "ADMIN") {
@@ -767,7 +796,7 @@ export async function stopImpersonationAction() {
     }
 
     // Restore original Admin session
-    await createSession(adminUser.id, adminUser.username, adminUser.role, adminUser.status);
+    await createSession(adminUser.id, adminUser.username, adminUser.role, adminUser.status, adminUser.trialEndsAt, adminUser.subscriptionEndsAt);
     cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
 
     return { success: true, adminUsername: adminUser.username };

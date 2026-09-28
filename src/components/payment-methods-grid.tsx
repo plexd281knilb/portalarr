@@ -20,14 +20,18 @@ interface PaymentMethodsGridProps {
     username?: string;
     className?: string;
     onCopy?: (text: string, provider: string) => void;
+    amount?: number;
+    cadence?: "yearly" | "monthly";
 }
 
-export function PaymentMethodsGrid({ config, username = "USER", className = "", onCopy }: PaymentMethodsGridProps) {
+export function PaymentMethodsGrid({ config, username = "USER", className = "", onCopy, amount, cadence }: PaymentMethodsGridProps) {
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [qrModalOpen, setQrModalOpen] = useState(false);
     const [selectedProvider, setSelectedProvider] = useState<"paypal" | "venmo" | "cashapp" | "zelle">("venmo");
 
     if (!config) return null;
+
+    const effectiveAmount = amount ?? (cadence === "monthly" ? (config?.monthlyPrice || 15) : (config?.yearlyPrice || 180));
 
     const providers: Array<{ key: "paypal" | "venmo" | "cashapp" | "zelle"; value?: string | null }> = [
         { key: "paypal", value: config.paymentPaypal },
@@ -41,7 +45,8 @@ export function PaymentMethodsGrid({ config, username = "USER", className = "", 
         if (value && value.trim()) {
             const linkInfo = getPaymentLink(key, value, {
                 username,
-                amount: config.yearlyPrice || 180,
+                amount: effectiveAmount,
+                cadence
             });
             if (linkInfo) {
                 activeItems.push({ link: linkInfo, rawValue: value.trim(), key });
@@ -159,6 +164,8 @@ export function PaymentMethodsGrid({ config, username = "USER", className = "", 
                 config={config}
                 username={username}
                 initialProvider={selectedProvider}
+                initialCadence={cadence || "yearly"}
+                customAmount={amount}
             />
         </div>
     );

@@ -113,6 +113,10 @@ function GuidesContent() {
                     setActiveDeviceTab(g[0].id);
                 }
             }
+            if (user && (user.status === "EXPIRED" || user.status === "PENDING" || user.status === "REJECTED" || user.status === "SUSPENDED")) {
+                window.location.href = "/pending";
+                return;
+            }
             if (user?.role === "ADMIN") {
                 setIsAdmin(true);
             }

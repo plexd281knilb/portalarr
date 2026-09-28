@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Sidebar, MobileSidebar } from "@/components/sidebar";
 import { LogOut, LogIn, Settings, LayoutDashboard, Server, BookOpen, User, HelpCircle } from "lucide-react";
-import { logout, getSession } from "@/app/auth-actions";
+import { logout, getSession, getCurrentUser } from "@/app/auth-actions";
 import { checkUserLibraryAccess } from "@/app/actions";
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
@@ -20,6 +20,14 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   useEffect(() => {
     async function checkAccess() {
       try {
+        const user = await getCurrentUser().catch(() => null);
+        if (user && (user.status === "EXPIRED" || user.status === "PENDING" || user.status === "REJECTED" || user.status === "SUSPENDED")) {
+          if (!pathname.startsWith("/pending") && pathname !== "/login" && !pathname.startsWith("/join")) {
+            window.location.href = "/pending";
+            return;
+          }
+        }
+
         const session = await getSession();
         if (session) {
           setIsLoggedIn(true);
