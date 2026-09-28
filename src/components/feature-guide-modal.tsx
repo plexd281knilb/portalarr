@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
     Dialog, 
     DialogContent, 
@@ -9,6 +9,7 @@ import {
     DialogDescription,
     DialogTrigger 
 } from "@/components/ui/dialog";
+import { getUserGuideAccessAction, UserGuideAccess } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -487,6 +488,7 @@ interface FeatureGuideModalProps {
     customTrigger?: React.ReactNode;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    allowedTopicIds?: FeatureGuideId[];
 }
 
 export default function FeatureGuideModal({
@@ -498,10 +500,39 @@ export default function FeatureGuideModal({
     showIcon = true,
     customTrigger,
     open: controlledOpen,
-    onOpenChange: setControlledOpen
+    onOpenChange: setControlledOpen,
+    allowedTopicIds
 }: FeatureGuideModalProps) {
     const [internalOpen, setInternalOpen] = useState(false);
     const [activeGuideId, setActiveGuideId] = useState<FeatureGuideId>(guideId);
+    const [userAccess, setUserAccess] = useState<UserGuideAccess | null>(null);
+
+    // Fetch user access for topic gating
+    useEffect(() => {
+        getUserGuideAccessAction().then(res => {
+            if (res) setUserAccess(res);
+        }).catch(() => {});
+    }, []);
+
+    // Filter available topics by user permissions
+    const availableTopicIds = useMemo(() => {
+        const allKeys = Object.keys(GUIDE_TOPICS) as FeatureGuideId[];
+        if (allowedTopicIds && allowedTopicIds.length > 0) {
+            return allKeys.filter(id => allowedTopicIds.includes(id));
+        }
+        if (userAccess?.allowedGuideTopicIds) {
+            return allKeys.filter(id => userAccess.allowedGuideTopicIds.includes(id));
+        }
+        // Default safe fallback before user access loads: exclude curation-studio unless known admin
+        return allKeys.filter(id => id !== "curation-studio");
+    }, [allowedTopicIds, userAccess]);
+
+    // Ensure activeGuideId is an allowed topic
+    useEffect(() => {
+        if (availableTopicIds.length > 0 && !availableTopicIds.includes(activeGuideId)) {
+            setActiveGuideId(availableTopicIds[0]);
+        }
+    }, [availableTopicIds, activeGuideId]);
 
     const isControlled = typeof controlledOpen === "boolean";
     const isOpen = isControlled ? controlledOpen : internalOpen;
@@ -527,7 +558,11 @@ export default function FeatureGuideModal({
         <Dialog open={isOpen} onOpenChange={(val) => {
             setIsOpen(val);
             if (val && guideId) {
-                setActiveGuideId(guideId);
+                if (availableTopicIds.includes(guideId)) {
+                    setActiveGuideId(guideId);
+                } else if (availableTopicIds.length > 0) {
+                    setActiveGuideId(availableTopicIds[0]);
+                }
             }
         }}>
             {customTrigger ? (
@@ -577,7 +612,7 @@ export default function FeatureGuideModal({
 
                         {/* QUICK TOPIC SWITCHER BAR */}
                         <div className="flex items-center gap-1.5 overflow-x-auto pt-3 pb-1 scrollbar-thin w-full">
-                            {(Object.keys(GUIDE_TOPICS) as FeatureGuideId[]).map((tId) => {
+                            {availableTopicIds.map((tId) => {
                                 const t = GUIDE_TOPICS[tId];
                                 const isSelected = tId === activeGuideId;
                                 return (

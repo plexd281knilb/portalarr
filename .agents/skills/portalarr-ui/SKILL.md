@@ -364,6 +364,23 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 21. Guides & Platform Knowledge Base User Access Gating (`/guides` & `FeatureGuideModal`)
+- **Granular Server-Side Permissions Engine (`getUserGuideAccessAction` & `calculateUserGuideAccess`)**:
+  - Automatically computes exact accessible categories (`allowedCategories`) and feature topic IDs (`allowedGuideTopicIds`) based on user session role, membership tier, trial status, account type, and relational library access.
+- **Strict Persona Access Rules**:
+  - **Admin (`role: "ADMIN"`)**: 100% access to all 8 categories: Streaming Devices, AI Support & Probes, Movies & TV Requests, Ebooks & Kindle, Audiobooks & Chapters, Memberships & Referrals, Server Curation Suite (`curation-studio`), and Full System Manual (`manual`) with live markdown editing.
+  - **Trial Members (`status: "TRIAL"` / `membershipTier: "TRIAL"`)**: Strictly barred from Ebooks, Audiobooks, Curation Studio, and Full System Manual. Header subtitle dynamically suppresses references to audiobooks and Send-to-Kindle.
+  - **Regular Approved Members**: Curation Studio and Full System Manual are completely hidden. Ebooks & Kindle and Audiobooks & Chapters are evaluated dynamically against `checkLibraryAccess` across the SQLite `Library` table (checking `allowedUsers` and `restrictedUsers`).
+  - **Managed Household Sub-Accounts (`accountType: "KID"` or `"LIVING_ROOM"`)**: Barred from Memberships & Referrals (`referral-rewards`), Curation Studio, and System Manual.
+  - **Direct Query Parameter & Navigation Guards**: Accessing `/guides?tab=curation-studio` or `/guides?tab=manual` as a non-admin automatically sanitizes the route and falls back to `"devices"`, with defensive rendering cards blocking unauthorized content.
+- **Dynamic Header Subtitle Adaptation**:
+  - Automatically tailors the page description to reflect only enabled user features (e.g. omitting audiobooks and Send-to-Kindle for trial or video-only users).
+- **Interactive Feature Guide Modals (`FeatureGuideModal`)**:
+  - Quick Topic Switcher Bar dynamically filters its topic buttons according to `allowedGuideTopicIds`, preventing non-admin or unauthorized users from discovering or switching into administrative suite guides.
+- **Components & Actions**: `src/app/guides/page.tsx`, `src/components/feature-guide-modal.tsx`, `src/app/actions.ts` (`getUserGuideAccessAction`, `calculateUserGuideAccess`).
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

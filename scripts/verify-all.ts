@@ -8,7 +8,8 @@ import {
     getSystemLogsAction,
     getAlertBanner,
     getRoadmapText,
-    validateMemberReferenceAction
+    validateMemberReferenceAction,
+    calculateUserGuideAccess
 } from "../src/app/actions";
 import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
@@ -1719,6 +1720,106 @@ async function runTestSuite() {
             if (isSectionEnabled(listWithExplicitDisable, serverId, movieSection) !== false) {
                 throw new Error(`Failed explicit disabled section check for ${studioField}`);
             }
+        }
+    });
+
+    // 38. Guides & Knowledge Base: Granular User Access Gating
+    await assertTest("Guides: Granular User Access Gating & Permissions Engine", async () => {
+        const dummyLibraries = [
+            { name: "General Ebooks", mediaType: "ebook", allowedUsers: "*", restrictedUsers: "" },
+            { name: "General Audiobooks", mediaType: "audiobook", allowedUsers: "*", restrictedUsers: "" },
+            { name: "Restricted Library", mediaType: "ebook", allowedUsers: "vip_only", restrictedUsers: "banned_user" }
+        ];
+
+        // 1. Admin persona: Has 100% access to all 8 categories and all topics
+        const adminAccess = await calculateUserGuideAccess(
+            { username: "admin", role: "ADMIN", status: "APPROVED" },
+            dummyLibraries
+        );
+        if (!adminAccess.isAdmin) throw new Error("Admin persona failed isAdmin");
+        if (!adminAccess.hasEbooksAccess || !adminAccess.hasAudiobooksAccess) throw new Error("Admin must have ebooks and audiobooks access");
+        const requiredAdminCategories = ["devices", "ai-assistant", "movies-tv", "ebooks", "audiobooks", "referral-rewards", "curation-studio", "manual"];
+        for (const cat of requiredAdminCategories) {
+            if (!adminAccess.allowedCategories.includes(cat)) {
+                throw new Error(`Admin missing category: ${cat}`);
+            }
+        }
+        if (!adminAccess.allowedGuideTopicIds.includes("curation-studio")) throw new Error("Admin missing curation-studio topic");
+
+        // 2. Trial persona: Strictly barred from ebooks, audiobooks, curation, and manual
+        const trialAccess = await calculateUserGuideAccess(
+            { username: "trial_member", role: "USER", status: "TRIAL", membershipTier: "TRIAL" },
+            dummyLibraries
+        );
+        if (!trialAccess.isTrial) throw new Error("Trial persona failed isTrial");
+        if (trialAccess.hasEbooksAccess !== false) throw new Error("Trial user must NOT have ebooks access");
+        if (trialAccess.hasAudiobooksAccess !== false) throw new Error("Trial user must NOT have audiobooks access");
+        if (trialAccess.allowedCategories.includes("ebooks")) throw new Error("Trial user must not see ebooks tab");
+        if (trialAccess.allowedCategories.includes("audiobooks")) throw new Error("Trial user must not see audiobooks tab");
+        if (trialAccess.allowedCategories.includes("curation-studio")) throw new Error("Trial user must not see curation-studio");
+        if (trialAccess.allowedCategories.includes("manual")) throw new Error("Trial user must not see manual tab");
+        if (trialAccess.headerSubtitle.includes("audiobooks") || trialAccess.headerSubtitle.includes("Send-to-Kindle")) {
+            throw new Error(`Trial headerSubtitle should not advertise audiobooks or Kindle: ${trialAccess.headerSubtitle}`);
+        }
+
+        // 3. Regular member with Ebooks only (audiobooks library restricted or empty)
+        const ebooksOnlyLibraries = [
+            { name: "My Books", mediaType: "ebook", allowedUsers: "bookworm", restrictedUsers: "" }
+        ];
+        const ebookUserAccess = await calculateUserGuideAccess(
+            { username: "bookworm", role: "USER", status: "APPROVED" },
+            ebooksOnlyLibraries
+        );
+        if (ebookUserAccess.hasEbooksAccess !== true) throw new Error("User with ebooks should have hasEbooksAccess true");
+        if (ebookUserAccess.hasAudiobooksAccess !== false) throw new Error("User without audiobooks should have hasAudiobooksAccess false");
+        if (!ebookUserAccess.allowedCategories.includes("ebooks")) throw new Error("User should see ebooks tab");
+        if (ebookUserAccess.allowedCategories.includes("audiobooks")) throw new Error("User should NOT see audiobooks tab");
+        if (ebookUserAccess.allowedCategories.includes("curation-studio")) throw new Error("Non-admin should not see curation");
+        if (!ebookUserAccess.headerSubtitle.includes("navigate ebooks & Send-to-Kindle")) {
+            throw new Error(`Expected ebooks & Send-to-Kindle in headerSubtitle: ${ebookUserAccess.headerSubtitle}`);
+        }
+
+        // 4. Regular member with Audiobooks only (ebooks library restricted or empty)
+        const audioOnlyLibraries = [
+            { name: "My Audio", mediaType: "audiobook", allowedUsers: "*", restrictedUsers: "" }
+        ];
+        const audioUserAccess = await calculateUserGuideAccess(
+            { username: "listener", role: "USER", status: "APPROVED" },
+            audioOnlyLibraries
+        );
+        if (audioUserAccess.hasAudiobooksAccess !== true) throw new Error("User with audiobooks should have hasAudiobooksAccess true");
+        if (audioUserAccess.hasEbooksAccess !== false) throw new Error("User without ebooks should have hasEbooksAccess false");
+        if (!audioUserAccess.allowedCategories.includes("audiobooks")) throw new Error("User should see audiobooks tab");
+        if (audioUserAccess.allowedCategories.includes("ebooks")) throw new Error("User should NOT see ebooks tab");
+        if (!audioUserAccess.headerSubtitle.includes("navigate audiobooks & chapter streaming")) {
+            throw new Error(`Expected audiobooks & chapter streaming in headerSubtitle: ${audioUserAccess.headerSubtitle}`);
+        }
+
+        // 5. Explicitly restricted user in library restrictedUsers
+        const restrictedLibraries = [
+            { name: "Restricted Library", mediaType: "ebook", allowedUsers: "*", restrictedUsers: "banned_user" }
+        ];
+        const restrictedUserAccess = await calculateUserGuideAccess(
+            { username: "banned_user", role: "USER", status: "APPROVED" },
+            restrictedLibraries
+        );
+        if (restrictedUserAccess.hasEbooksAccess) throw new Error("Restricted user should not have ebooks access");
+
+        // 6. Kid sub-account: Barred from billing/referrals, curation, and manual
+        const kidAccess = await calculateUserGuideAccess(
+            { username: "timmy", role: "USER", status: "APPROVED", accountType: "KID", canRequest: false },
+            []
+        );
+        if (kidAccess.hasReferralAccess !== false) throw new Error("Kid account must have hasReferralAccess false");
+        if (kidAccess.allowedCategories.includes("referral-rewards")) throw new Error("Kid account must not see referral-rewards");
+        if (kidAccess.allowedCategories.includes("movies-tv")) throw new Error("Kid account without canRequest must not see movies-tv");
+        if (kidAccess.allowedCategories.includes("curation-studio")) throw new Error("Kid account must not see curation-studio");
+        if (kidAccess.allowedCategories.includes("manual")) throw new Error("Kid account must not see manual");
+
+        // 7. Null/unauthenticated session: Safe fallback
+        const unauthAccess = await calculateUserGuideAccess(null, []);
+        if (unauthAccess.allowedCategories.length !== 1 || unauthAccess.allowedCategories[0] !== "devices") {
+            throw new Error("Unauthenticated user must only receive devices fallback");
         }
     });
 

@@ -43,7 +43,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getPlexSetupGuides, getFullUserGuideAction, saveFullUserGuideAction } from "@/app/actions";
+import { getPlexSetupGuides, getFullUserGuideAction, saveFullUserGuideAction, getUserGuideAccessAction, UserGuideAccess } from "@/app/actions";
 import { getCurrentUser } from "@/app/auth-actions";
 import ServerSpeedTest from "@/components/server-speed-test";
 import { GUIDE_TOPICS, FeatureGuideId, GuideTopic } from "@/components/feature-guide-modal";
@@ -80,6 +80,7 @@ function GuidesContent() {
     const [guides, setGuides] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeDeviceTab, setActiveDeviceTab] = useState<string>("appletv");
+    const [userAccess, setUserAccess] = useState<UserGuideAccess | null>(null);
 
     // Full manual state
     const [fullManualMarkdown, setFullManualMarkdown] = useState<string>("");
@@ -101,12 +102,13 @@ function GuidesContent() {
         }
     };
 
-    // Load initial Plex device guides & user role
+    // Load initial Plex device guides, user role & granular access permissions
     useEffect(() => {
         Promise.all([
             getPlexSetupGuides().catch(() => []),
-            getCurrentUser().catch(() => null)
-        ]).then(([g, user]) => {
+            getCurrentUser().catch(() => null),
+            getUserGuideAccessAction().catch(() => null)
+        ]).then(([g, user, access]) => {
             if (g && Array.isArray(g)) {
                 setGuides(g);
                 if (g.length > 0 && !activeDeviceTab) {
@@ -117,7 +119,12 @@ function GuidesContent() {
                 window.location.href = "/pending";
                 return;
             }
-            if (user?.role === "ADMIN") {
+            if (access) {
+                setUserAccess(access);
+                if (access.isAdmin) {
+                    setIsAdmin(true);
+                }
+            } else if (user?.role === "ADMIN") {
                 setIsAdmin(true);
             }
         }).catch((err) => {
@@ -127,26 +134,49 @@ function GuidesContent() {
         });
     }, []);
 
-    // Sync query params on mount
+    // Filter categories strictly according to what the active user has permissions/access to
+    const visibleNavItems = useMemo(() => {
+        if (!userAccess) {
+            return NAV_ITEMS.filter(item => item.id === "devices" || item.id === "ai-assistant");
+        }
+        return NAV_ITEMS.filter(item => userAccess.allowedCategories.includes(item.id));
+    }, [userAccess]);
+
+    // Sync query params and enforce access gates
     useEffect(() => {
+        if (!userAccess) return;
+
+        let targetCategory: MainNavCategory = "devices";
+
         if (queryTopic) {
-            if (queryTopic === "ai-assistant") setMainCategory("ai-assistant");
-            else if (queryTopic === "movies-tv" || queryTopic === "requests-pipeline") setMainCategory("movies-tv");
-            else if (queryTopic === "ebooks" || queryTopic === "kindle-setup") setMainCategory("ebooks");
-            else if (queryTopic === "audiobooks") setMainCategory("audiobooks");
-            else if (queryTopic === "referral-rewards") setMainCategory("referral-rewards");
-            else if (queryTopic === "curation-studio") setMainCategory("curation-studio");
-            else if (queryTopic === "stream-diagnostics") setMainCategory("devices");
+            if (queryTopic === "ai-assistant") targetCategory = "ai-assistant";
+            else if (queryTopic === "movies-tv") targetCategory = "movies-tv";
+            else if (queryTopic === "ebooks" || queryTopic === "kindle-setup") targetCategory = "ebooks";
+            else if (queryTopic === "audiobooks") targetCategory = "audiobooks";
+            else if (queryTopic === "requests-pipeline") {
+                targetCategory = userAccess.hasEbooksAccess ? "ebooks" : (userAccess.hasAudiobooksAccess ? "audiobooks" : "movies-tv");
+            }
+            else if (queryTopic === "referral-rewards") targetCategory = "referral-rewards";
+            else if (queryTopic === "curation-studio") targetCategory = "curation-studio";
+            else if (queryTopic === "stream-diagnostics") targetCategory = "devices";
         } else if (queryTab) {
             if (["devices", "ai-assistant", "movies-tv", "ebooks", "audiobooks", "referral-rewards", "curation-studio", "manual"].includes(queryTab)) {
-                setMainCategory(queryTab);
+                targetCategory = queryTab;
             }
         }
-    }, [queryTab, queryTopic]);
 
-    // Load full manual when manual tab selected
+        // Enforce user gate: only set category if user has access to it
+        if (userAccess.allowedCategories.includes(targetCategory)) {
+            setMainCategory(targetCategory);
+        } else {
+            const fallback = (userAccess.allowedCategories[0] as MainNavCategory) || "devices";
+            setMainCategory(fallback);
+        }
+    }, [queryTab, queryTopic, userAccess]);
+
+    // Load full manual when manual tab selected and user is confirmed admin
     useEffect(() => {
-        if (mainCategory === "manual" && !fullManualMarkdown) {
+        if (mainCategory === "manual" && !fullManualMarkdown && userAccess?.isAdmin) {
             setManualLoading(true);
             getFullUserGuideAction().then(content => {
                 setFullManualMarkdown(content);
@@ -158,7 +188,7 @@ function GuidesContent() {
                 setManualLoading(false);
             });
         }
-    }, [mainCategory, fullManualMarkdown]);
+    }, [mainCategory, fullManualMarkdown, userAccess?.isAdmin]);
 
     const handleSaveManual = async () => {
         setSavingManual(true);
@@ -261,7 +291,7 @@ function GuidesContent() {
                         Guides & Platform Knowledge Base
                     </h1>
                     <p className="text-muted-foreground text-sm sm:text-base max-w-3xl leading-relaxed">
-                        Configure streaming devices for 100% Direct Play, troubleshoot buffering with our AI bot, navigate audiobooks & Send-to-Kindle, and master platform features.
+                        {userAccess?.headerSubtitle || "Configure streaming devices for 100% Direct Play, troubleshoot buffering with our AI bot, navigate audiobooks & Send-to-Kindle, and master platform features."}
                     </p>
                 </div>
 
@@ -271,7 +301,7 @@ function GuidesContent() {
                     className="overflow-x-auto pb-1 pt-0.5 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent scroll-smooth"
                 >
                     <div className="flex items-center gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-2xl min-w-full w-max">
-                        {NAV_ITEMS.map((item) => {
+                        {visibleNavItems.map((item) => {
                             const Icon = item.icon;
                             const isActive = mainCategory === item.id;
                             return (
@@ -462,23 +492,62 @@ function GuidesContent() {
 
                 {/* FEATURE GUIDES RENDERER (AI Assistant, Movies/TV, Ebooks, Audiobooks, Referrals, Curation) */}
                 {mainCategory !== "devices" && mainCategory !== "manual" && (
-                    <FeatureTopicRenderer topicId={mainCategory as FeatureGuideId} />
+                    userAccess && !userAccess.allowedCategories.includes(mainCategory) ? (
+                        <Card className="rounded-2xl border-amber-500/30 bg-amber-950/10 p-8 text-center space-y-4">
+                            <AlertCircle className="h-10 w-10 text-amber-400 mx-auto" />
+                            <div className="space-y-1">
+                                <h3 className="text-lg font-bold text-foreground">Access Restricted</h3>
+                                <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
+                                    You do not have active library access or permissions for this section of the platform.
+                                </p>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setMainCategory("devices")}
+                                className="text-xs font-semibold"
+                            >
+                                Return to Allowed Guides
+                            </Button>
+                        </Card>
+                    ) : (
+                        <FeatureTopicRenderer topicId={mainCategory as FeatureGuideId} />
+                    )
                 )}
 
                 {/* TAB: FULL PLATFORM MANUAL */}
                 {mainCategory === "manual" && (
-                    <div className="space-y-6 animate-in fade-in-50 duration-200">
-                        {/* MANUAL CONTROLS & HEADER */}
-                        <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-card border border-border/50">
+                    !userAccess?.isAdmin ? (
+                        <Card className="rounded-2xl border-amber-500/30 bg-amber-950/10 p-8 text-center space-y-4">
+                            <AlertCircle className="h-10 w-10 text-amber-400 mx-auto" />
                             <div className="space-y-1">
-                                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                    <FileText className="h-5 w-5 text-primary" />
-                                    <span>Complete System Documentation (`USER_GUIDE.md`)</span>
-                                </h3>
-                                <p className="text-xs text-muted-foreground">
-                                    Authoritative documentation covering architecture, storage probing, Transcode Doctor, Kindle delivery, and billing logic.
+                                <h3 className="text-lg font-bold text-foreground">Admin Manual Restricted</h3>
+                                <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
+                                    The full system documentation is reserved for platform administrators.
                                 </p>
                             </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setMainCategory("devices")}
+                                className="text-xs font-semibold"
+                            >
+                                Return to Allowed Guides
+                            </Button>
+                        </Card>
+                    ) : (
+                        <div className="space-y-6 animate-in fade-in-50 duration-200">
+                            {/* MANUAL CONTROLS & HEADER */}
+                            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-card border border-border/50">
+                                <div className="space-y-1">
+                                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                        <FileText className="h-5 w-5 text-primary" />
+                                        <span>Complete System Documentation (`USER_GUIDE.md`)</span>
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        Authoritative documentation covering architecture, storage probing, Transcode Doctor, Kindle delivery, and billing logic.
+                                    </p>
+                                </div>
 
                             <div className="flex items-center gap-2 flex-wrap">
                                 {isAdmin && !isEditingManual && (
@@ -621,7 +690,7 @@ function GuidesContent() {
                             </Card>
                         )}
                     </div>
-                )}
+                ))}
 
                 {/* TROUBLESHOOTING & ASSISTANCE FOOTER */}
                 <Card className="rounded-2xl border-border/40 bg-gradient-to-r from-muted/20 via-background to-muted/20 p-6">

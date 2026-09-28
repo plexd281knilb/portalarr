@@ -7744,6 +7744,7 @@ export async function saveEbooksUserGuide(content: string) {
 }
 
 export async function getFullUserGuideAction(): Promise<string> {
+    await verifyAdmin();
     try {
         const rootGuidePath = path.join(process.cwd(), "USER_GUIDE.md");
         if (fs.existsSync(rootGuidePath)) {
@@ -7765,6 +7766,199 @@ export async function saveFullUserGuideAction(content: string) {
     } catch (e: any) {
         console.error("Failed to write USER_GUIDE.md:", e);
         return { success: false, error: e.message || "Failed to save user guide." };
+    }
+}
+
+export interface UserGuideAccess {
+    isAdmin: boolean;
+    isSuperUser: boolean;
+    isTrial: boolean;
+    accountType: string;
+    canRequest: boolean;
+    hasEbooksAccess: boolean;
+    hasAudiobooksAccess: boolean;
+    hasReferralAccess: boolean;
+    allowedCategories: string[];
+    allowedGuideTopicIds: string[];
+    headerSubtitle: string;
+}
+
+export async function calculateUserGuideAccess(
+    user: {
+        username?: string | null;
+        email?: string | null;
+        role?: string | null;
+        status?: string | null;
+        membershipTier?: string | null;
+        accountType?: string | null;
+        canRequest?: boolean | null;
+    } | null,
+    libraries: Array<{
+        name?: string | null;
+        allowedUsers?: string | null;
+        restrictedUsers?: string | null;
+        mediaType?: string | null;
+    }> = []
+): Promise<UserGuideAccess> {
+    if (!user) {
+        return {
+            isAdmin: false,
+            isSuperUser: false,
+            isTrial: false,
+            accountType: "STANDARD",
+            canRequest: false,
+            hasEbooksAccess: false,
+            hasAudiobooksAccess: false,
+            hasReferralAccess: false,
+            allowedCategories: ["devices"],
+            allowedGuideTopicIds: ["general"],
+            headerSubtitle: "Configure streaming devices for 100% Direct Play."
+        };
+    }
+
+    const role = (user.role || "USER").toUpperCase();
+    const isAdmin = role === "ADMIN";
+    const isSuperUser = role === "SUPER_USER";
+    const isTrial = (user.status === "TRIAL" || user.membershipTier === "TRIAL") && user.status !== "APPROVED" && !isAdmin;
+    const accountType = (user.accountType || "STANDARD").toUpperCase();
+    const isKidOrLivingRoom = accountType === "KID" || accountType === "LIVING_ROOM";
+
+    const canRequest = isAdmin || user.canRequest !== false;
+
+    let hasEbooksAccess = false;
+    let hasAudiobooksAccess = false;
+
+    if (isAdmin) {
+        hasEbooksAccess = true;
+        hasAudiobooksAccess = true;
+    } else if (!isTrial) {
+        const safeUsername = (user.username || "").toLowerCase();
+        const safeEmail = (user.email || "").toLowerCase();
+
+        for (const lib of libraries) {
+            const isAudioByName = (lib.name || "").toLowerCase().includes("audio");
+            const effectiveMediaType = lib.mediaType || (isAudioByName ? "audiobook" : "ebook");
+
+            // Evaluate library access
+            let hasAccess = false;
+            const restrictedStr = lib.restrictedUsers || "";
+            let isRestricted = false;
+            if (restrictedStr.trim() !== "") {
+                const restricted = restrictedStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+                if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
+                    isRestricted = true;
+                }
+            }
+
+            if (!isRestricted) {
+                const allowedStr = lib.allowedUsers || "";
+                if (!allowedStr || allowedStr.trim() === "" || allowedStr.trim() === "*") {
+                    hasAccess = true;
+                } else {
+                    const allowed = allowedStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+                    if (allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail))) {
+                        hasAccess = true;
+                    }
+                }
+            }
+
+            if (hasAccess) {
+                if (effectiveMediaType === "audiobook") {
+                    hasAudiobooksAccess = true;
+                } else {
+                    hasEbooksAccess = true;
+                }
+            }
+        }
+    }
+
+    const hasReferralAccess = !isKidOrLivingRoom;
+
+    // Build allowedCategories for /guides
+    const allowedCategories: string[] = ["devices", "ai-assistant"];
+    if (canRequest) allowedCategories.push("movies-tv");
+    if (hasEbooksAccess) allowedCategories.push("ebooks");
+    if (hasAudiobooksAccess) allowedCategories.push("audiobooks");
+    if (hasReferralAccess) allowedCategories.push("referral-rewards");
+    if (isAdmin) {
+        allowedCategories.push("curation-studio");
+        allowedCategories.push("manual");
+    }
+
+    // Build allowedGuideTopicIds for feature modals
+    const allowedGuideTopicIds: string[] = ["general", "ai-assistant", "stream-diagnostics"];
+    if (canRequest) allowedGuideTopicIds.push("movies-tv");
+    if (hasEbooksAccess || hasAudiobooksAccess) allowedGuideTopicIds.push("requests-pipeline");
+    if (hasEbooksAccess) {
+        allowedGuideTopicIds.push("ebooks");
+        allowedGuideTopicIds.push("kindle-setup");
+    }
+    if (hasAudiobooksAccess) allowedGuideTopicIds.push("audiobooks");
+    if (hasReferralAccess) allowedGuideTopicIds.push("referral-rewards");
+    if (isAdmin) allowedGuideTopicIds.push("curation-studio");
+
+    // Dynamic header subtitle matching user's exact feature set
+    let headerSubtitle = "Configure streaming devices for 100% Direct Play, troubleshoot buffering with our AI bot, ";
+    if (hasEbooksAccess && hasAudiobooksAccess) {
+        headerSubtitle += "navigate audiobooks & Send-to-Kindle, and master platform features.";
+    } else if (hasEbooksAccess) {
+        headerSubtitle += "navigate ebooks & Send-to-Kindle, and master platform features.";
+    } else if (hasAudiobooksAccess) {
+        headerSubtitle += "navigate audiobooks & chapter streaming, and master platform features.";
+    } else if (canRequest) {
+        headerSubtitle += "browse movie & TV requests, and master platform playback features.";
+    } else {
+        headerSubtitle += "and master platform playback features.";
+    }
+
+    return {
+        isAdmin,
+        isSuperUser,
+        isTrial,
+        accountType,
+        canRequest,
+        hasEbooksAccess,
+        hasAudiobooksAccess,
+        hasReferralAccess,
+        allowedCategories,
+        allowedGuideTopicIds,
+        headerSubtitle
+    };
+}
+
+export async function getUserGuideAccessAction(): Promise<UserGuideAccess> {
+    try {
+        const sessionUser: any = await verifyUser().catch(() => null);
+        if (!sessionUser || !sessionUser.id) {
+            return await calculateUserGuideAccess(null);
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: sessionUser.id },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                role: true,
+                status: true,
+                membershipTier: true,
+                accountType: true,
+                canRequest: true
+            }
+        });
+
+        if (!user) {
+            return await calculateUserGuideAccess(null);
+        }
+
+        const libraries = await prisma.library.findMany({
+            select: { id: true, name: true, allowedUsers: true, restrictedUsers: true, mediaType: true }
+        }).catch(() => []);
+
+        return await calculateUserGuideAccess(user, libraries);
+    } catch (e: any) {
+        console.error("getUserGuideAccessAction failed:", e);
+        return await calculateUserGuideAccess(null);
     }
 }
 
