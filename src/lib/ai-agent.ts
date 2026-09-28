@@ -12,6 +12,15 @@ export interface AIResolvedMetadata {
     providerUsed: string;
 }
 
+export function normalizeGeminiModel(model?: string | null): string {
+    if (!model) return "gemini-3.5-flash";
+    const m = model.trim().toLowerCase();
+    if (m === "gemini-2.5-pro" || m === "gemini-1.5-pro") return "gemini-3.1-pro-preview";
+    if (m === "gemini-1.5-flash" || m === "gemini-1.5-flash-8b") return "gemini-3.5-flash";
+    if (m === "default") return "gemini-3.5-flash";
+    return model.trim();
+}
+
 export async function assignVolumeNumbersWithAI(
     seriesName: string,
     author: string,
@@ -21,7 +30,7 @@ export async function assignVolumeNumbersWithAI(
     
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-1.5-flash";
+    const modelName = normalizeGeminiModel(settings?.aiModel);
 
     if ((provider === "gemini" || provider === "google") && rawKey) {
         await new Promise(r => setTimeout(r, 4000));
@@ -37,11 +46,16 @@ async function callGeminiAIBulkVolumes(
     apiKey: string,
     model: string
 ): Promise<Record<string, string | null>> {
+    const normalized = normalizeGeminiModel(model);
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
-        ...(model ? [model] : []),
-        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash"])
-    ])).slice(0, 3);
+        normalized,
+        ...(dynamicModels.length > 0 ? dynamicModels : []),
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash"
+    ])).slice(0, 4);
 
     const systemPrompt = `You are an expert media server librarian AI agent.
 I have a list of book titles from the series "${seriesName}" by "${author}". Some of these titles do not contain volume numbers.
@@ -103,7 +117,7 @@ export async function resolveMetadataWithAI(
     
     const provider = overrideProvider || settings?.aiProvider || "default";
     const rawKey = overrideKey !== undefined ? overrideKey : (settings?.aiApiKey ? decryptData(settings.aiApiKey) : "");
-    const modelName = overrideModel || settings?.aiModel || "gemini-1.5-flash";
+    const modelName = normalizeGeminiModel(overrideModel || settings?.aiModel);
 
     console.log(`[AI-AGENT] 🤖 Querying AI Metadata Engine for "${rawFilename}" (Type: ${mediaType}, Engine: ${provider})...`);
 
@@ -162,7 +176,14 @@ export async function getAvailableGeminiModels(apiKey: string): Promise<string[]
                     const valid = data.models
                         .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
                         .map((m: any) => String(m.name || "").replace(/^models\//, ""))
-                        .filter(Boolean);
+                        .filter((name: string) => {
+                            if (!name) return false;
+                            const lower = name.toLowerCase();
+                            if (lower.includes("gemini-2.5-pro")) return false;
+                            if (lower.includes("gemini-1.5-pro")) return false;
+                            if (lower.includes("gemini-1.5-flash-8b")) return false;
+                            return true;
+                        });
                     if (valid.length > 0) return valid;
                 }
             }
@@ -217,11 +238,16 @@ async function callGeminiAI(
     apiKey: string,
     model: string
 ): Promise<AIResolvedMetadata | null> {
+    const normalized = normalizeGeminiModel(model);
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
-        ...(model ? [model] : []),
-        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash", "gemini-1.5-pro"])
-    ])).slice(0, 3);
+        normalized,
+        ...(dynamicModels.length > 0 ? dynamicModels : []),
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash"
+    ])).slice(0, 4);
 
     const systemPrompt = `You are an expert media server librarian AI agent specializing in book, audiobook, and series metadata normalization.
 Analyze this raw release filename, directory path, or request search query: "${rawFilename}" (${mediaType}).
@@ -331,7 +357,7 @@ export async function analyzeAudiobookChaptersWithAI(
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-1.5-flash";
+    const modelName = normalizeGeminiModel(settings?.aiModel);
 
     if ((provider === "gemini" || provider === "google") && rawKey) {
         try {
@@ -362,11 +388,16 @@ async function callGeminiAIForChapters(
     apiKey: string,
     model: string
 ): Promise<AIChapterResult[] | null> {
+    const normalized = normalizeGeminiModel(model);
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
     const candidateModels = Array.from(new Set([
-        ...(model ? [model] : []),
-        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash", "gemini-1.5-pro"])
-    ])).slice(0, 3);
+        normalized,
+        ...(dynamicModels.length > 0 ? dynamicModels : []),
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash"
+    ])).slice(0, 4);
 
     const systemPrompt = `You are an expert audiobook librarian AI agent specializing in audiobook track and chapter resolution.
 Book Title: "${bookTitle}"

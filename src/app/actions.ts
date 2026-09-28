@@ -12542,10 +12542,13 @@ export async function updateCurrentUserKindleEmail(kindleEmail: string) {
 export async function getAiAgentSettings() {
     await verifyAdmin();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    const { normalizeGeminiModel } = await import("@/lib/ai-agent");
+    const rawModel = settings?.aiModel || "gemini-3.5-flash";
+    const provider = settings?.aiProvider || "default";
     return {
-        aiProvider: settings?.aiProvider || "default",
+        aiProvider: provider,
         aiApiKey: settings?.aiApiKey ? decryptData(settings.aiApiKey) : "",
-        aiModel: settings?.aiModel || "gemini-2.5-flash",
+        aiModel: (provider === "gemini" || provider === "google" || provider === "default") ? normalizeGeminiModel(rawModel) : rawModel,
         aiAutoResolve: settings?.aiAutoResolve ?? true,
         aiAutonomyLevel: settings?.aiAutonomyLevel || "autonomous",
         aiMaxDailyGrabs: settings?.aiMaxDailyGrabs ?? 3
@@ -12555,9 +12558,11 @@ export async function getAiAgentSettings() {
 export async function saveAiAgentSettings(formData: FormData) {
     try {
         await verifyAdmin();
+        const { normalizeGeminiModel } = await import("@/lib/ai-agent");
         const aiProvider = (formData.get("aiProvider") as string) || "default";
         const aiApiKeyRaw = (formData.get("aiApiKey") as string) || "";
-        const aiModel = (formData.get("aiModel") as string) || "gemini-2.5-flash";
+        const rawModel = (formData.get("aiModel") as string) || "gemini-3.5-flash";
+        const aiModel = (aiProvider === "gemini" || aiProvider === "google" || aiProvider === "default") ? normalizeGeminiModel(rawModel) : rawModel;
         const aiAutoResolve = formData.get("aiAutoResolve") === "true";
         const aiAutonomyLevel = (formData.get("aiAutonomyLevel") as string) || "autonomous";
         const aiMaxDailyGrabs = parseInt(formData.get("aiMaxDailyGrabs") as string, 10) || 3;
@@ -12597,10 +12602,11 @@ export async function saveAiAgentSettings(formData: FormData) {
 export async function testAiAgentConnection(sampleText?: string, tempProvider?: string, tempKey?: string, tempModel?: string) {
     try {
         await verifyAdmin();
-        const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
+        const { resolveMetadataWithAI, normalizeGeminiModel } = await import("@/lib/ai-agent");
         const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
         console.log(`[AI-AGENT-TEST] 🤖 Testing AI Metadata Agent with query: "${targetSample}"...`);
-        const result = await resolveMetadataWithAI(targetSample, "audiobook", true, tempProvider, tempKey, tempModel);
+        const modelToUse = (tempProvider === "gemini" || tempProvider === "google" || !tempProvider) ? normalizeGeminiModel(tempModel) : tempModel;
+        const result = await resolveMetadataWithAI(targetSample, "audiobook", true, tempProvider, tempKey, modelToUse);
         console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"} #${result.volumeNumber || "N/A"}] via ${result.providerUsed}`);
         return { success: true, result };
     } catch (e: any) {

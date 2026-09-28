@@ -152,25 +152,32 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
     // Clean remaining punctuation and whitespace
     clean = clean.replace(/[?.,!":;]/g, " ").replace(/\s+/g, " ").trim();
 
-    // 5. Detect and resolve pronouns (e.g. "it", "that", "this", "the movie")
+    // 5. Detect and resolve pronouns and action verbs (e.g. "it", "that", "this", "test", "test it")
     const PRONOUN_TERMS = new Set([
         "it", "that", "this", "them",
         "the movie", "the film", "the show", "the tv show", "the series",
         "the media", "the file", "the video", "the stream", "the track"
     ]);
 
-    const isPronoun = PRONOUN_TERMS.has(clean.toLowerCase().trim()) ||
-                      /^test\s+(it|this|that)$/i.test(clean.trim()) ||
-                      /^check\s+(it|this|that)$/i.test(clean.trim());
+    const INVALID_TITLES = new Set([
+        "test it", "check it", "verify it", "probe it", "play it", "stream it", "run it",
+        "it", "that", "this", "them",
+        "test", "check", "verify", "diagnose", "inspect", "probe", "try", "run", "play"
+    ]);
 
-    if (isPronoun) {
+    const isPronounOrVerb = 
+        PRONOUN_TERMS.has(clean.toLowerCase().trim()) ||
+        INVALID_TITLES.has(clean.toLowerCase().trim()) ||
+        /^(test|check|verify|inspect|diagnose|probe|play|stream)\s*(it|this|that)?$/i.test(clean.trim());
+
+    if (isPronounOrVerb) {
         isPlaybackTest = true;
         clean = "";
     }
 
     // 6. Context Resolution: inherit from previous conversational turns
     if (context) {
-        if ((!clean || isPronoun) && context.lastTitle) {
+        if ((!clean || isPronounOrVerb) && context.lastTitle) {
             clean = context.lastTitle;
             if (!extractedYear && context.lastYear) {
                 extractedYear = context.lastYear;
@@ -179,19 +186,13 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
         }
 
         // If targetServer was not specified in the current query, inherit from previous context if this is a follow-up/correction
-        if (!targetServer && context.lastServer && (hasCorrectionPrefix || isPronoun || context.lastWasPlaybackTest)) {
+        if (!targetServer && context.lastServer && (hasCorrectionPrefix || isPronounOrVerb || context.lastWasPlaybackTest)) {
             targetServer = context.lastServer;
         }
 
         if (context.lastWasPlaybackTest) {
             isPlaybackTest = true;
         }
-    }
-
-    // Guard against treating residual verbs/pronouns as movie titles
-    const INVALID_TITLES = new Set(["test it", "check it", "it", "that", "this", "test", "check", "verify"]);
-    if (INVALID_TITLES.has(clean.toLowerCase().trim())) {
-        clean = "";
     }
 
     // Capitalize properly if lowercased
@@ -213,7 +214,7 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
         targetServer,
         rawCleaned: clean,
         isPlaybackTest,
-        isPronoun
+        isPronoun: isPronounOrVerb
     };
 }
 
@@ -378,11 +379,12 @@ export async function inspectMediaStreams(
             const exactOrClose = results.find(r => {
                 const rLower = (r.title || "").toLowerCase().trim();
                 const rClean = rLower.replace(/^the\s+/i, "").trim();
-                return rLower === sLower || 
-                       rClean === sClean || 
-                       rLower.startsWith(sClean) || 
-                       sClean.startsWith(rClean) ||
-                       (sClean.length >= 4 && rClean.includes(sClean));
+                if (!rClean || !sClean) return false;
+                if (rLower === sLower || rClean === sClean) return true;
+                if (sClean.length >= 3 && rClean.startsWith(sClean)) return true;
+                if (rClean.length >= 4 && sClean.startsWith(rClean)) return true;
+                if (sClean.length >= 4 && rClean.includes(sClean)) return true;
+                return false;
             });
 
             if (exactOrClose) {

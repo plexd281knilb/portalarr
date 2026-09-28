@@ -3,6 +3,7 @@ import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { getPlexLibraryMediaItems, getPlexLibraryLabels, getPlexLibraryCollections, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { normalizeGeminiModel } from "@/lib/ai-agent";
 
 export * from "./parental-guide-types";
 import {
@@ -398,7 +399,7 @@ export async function resolveParentalAdvisoryBatchAI(
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-2.5-flash";
+    const modelName = normalizeGeminiModel(settings?.aiModel);
 
     // If no AI key configured, use heuristic fallbacks
     if (!rawKey && (provider === "gemini" || provider === "google" || provider === "openai" || provider === "anthropic")) {
@@ -452,19 +453,31 @@ Example output:
         if (provider === "gemini" || provider === "google" || (!provider || provider === "default")) {
             const keyToUse = rawKey || process.env.GEMINI_API_KEY || "";
             if (keyToUse) {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName || "gemini-2.5-flash"}:generateContent?key=${encodeURIComponent(keyToUse)}`;
-                const res = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        system_instruction: { parts: [{ text: systemPrompt }] },
-                        contents: [{ parts: [{ text: JSON.stringify(payload) }] }],
-                        generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                    })
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                const candidateModels = Array.from(new Set([
+                    modelName,
+                    "gemini-3.5-flash",
+                    "gemini-3.1-pro-preview",
+                    "gemini-2.5-flash",
+                    "gemini-2.0-flash"
+                ]));
+                for (const activeModel of candidateModels) {
+                    try {
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(keyToUse)}`;
+                        const res = await fetch(url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                system_instruction: { parts: [{ text: systemPrompt }] },
+                                contents: [{ parts: [{ text: JSON.stringify(payload) }] }],
+                                generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                            })
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                            if (rawText) break;
+                        }
+                    } catch (e) {}
                 }
             }
         } else if (provider === "openai" && rawKey) {

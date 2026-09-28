@@ -1823,6 +1823,52 @@ async function runTestSuite() {
         }
     });
 
+    // 39. AI Engine: Gemini Model Normalization & Multi-Model Cascade Fallback
+    await assertTest("AI Engine: Gemini Model Normalization & Multi-Model Cascade Fallback", async () => {
+        const { normalizeGeminiModel } = await import("../src/lib/ai-agent");
+
+        // 1. Deprecated Gemini Pro models auto-alias to gemini-3.1-pro-preview
+        if (normalizeGeminiModel("gemini-2.5-pro") !== "gemini-3.1-pro-preview") {
+            throw new Error(`Expected gemini-2.5-pro to normalize to gemini-3.1-pro-preview, got ${normalizeGeminiModel("gemini-2.5-pro")}`);
+        }
+        if (normalizeGeminiModel("gemini-1.5-pro") !== "gemini-3.1-pro-preview") {
+            throw new Error(`Expected gemini-1.5-pro to normalize to gemini-3.1-pro-preview, got ${normalizeGeminiModel("gemini-1.5-pro")}`);
+        }
+
+        // 2. Deprecated Flash models auto-alias to modern gemini-3.5-flash
+        if (normalizeGeminiModel("gemini-1.5-flash") !== "gemini-3.5-flash") {
+            throw new Error(`Expected gemini-1.5-flash to normalize to gemini-3.5-flash, got ${normalizeGeminiModel("gemini-1.5-flash")}`);
+        }
+        if (normalizeGeminiModel("gemini-1.5-flash-8b") !== "gemini-3.5-flash") {
+            throw new Error(`Expected gemini-1.5-flash-8b to normalize to gemini-3.5-flash, got ${normalizeGeminiModel("gemini-1.5-flash-8b")}`);
+        }
+
+        // 3. Modern active models preserved
+        if (normalizeGeminiModel("gemini-3.5-flash") !== "gemini-3.5-flash") {
+            throw new Error(`Expected gemini-3.5-flash preserved, got ${normalizeGeminiModel("gemini-3.5-flash")}`);
+        }
+        if (normalizeGeminiModel("gemini-3.1-pro-preview") !== "gemini-3.1-pro-preview") {
+            throw new Error(`Expected gemini-3.1-pro-preview preserved, got ${normalizeGeminiModel("gemini-3.1-pro-preview")}`);
+        }
+        if (normalizeGeminiModel("gemini-2.5-flash") !== "gemini-2.5-flash") {
+            throw new Error(`Expected gemini-2.5-flash preserved, got ${normalizeGeminiModel("gemini-2.5-flash")}`);
+        }
+        if (normalizeGeminiModel("gemini-2.0-flash") !== "gemini-2.0-flash") {
+            throw new Error(`Expected gemini-2.0-flash preserved, got ${normalizeGeminiModel("gemini-2.0-flash")}`);
+        }
+
+        // 4. Default / empty fallback to gemini-3.5-flash
+        if (normalizeGeminiModel("default") !== "gemini-3.5-flash") {
+            throw new Error(`Expected default to normalize to gemini-3.5-flash, got ${normalizeGeminiModel("default")}`);
+        }
+        if (normalizeGeminiModel("") !== "gemini-3.5-flash") {
+            throw new Error(`Expected empty string to normalize to gemini-3.5-flash, got ${normalizeGeminiModel("")}`);
+        }
+        if (normalizeGeminiModel(undefined) !== "gemini-3.5-flash") {
+            throw new Error(`Expected undefined to normalize to gemini-3.5-flash, got ${normalizeGeminiModel(undefined)}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

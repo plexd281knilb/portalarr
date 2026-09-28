@@ -29,7 +29,7 @@ model Settings {
   downloadsPath      String?   @default("/downloads")
   aiProvider         String?   @default("default")
   aiApiKey           String?
-  aiModel            String?   @default("gemini-2.5-flash")
+  aiModel            String?   @default("gemini-3.5-flash")
   aiAutoResolve      Boolean   @default(true)
   aiAutonomyLevel    String?   @default("autonomous")
   aiMaxDailyGrabs    Int?      @default(3)

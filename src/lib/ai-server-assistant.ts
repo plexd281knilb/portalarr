@@ -21,6 +21,7 @@ import {
 } from "@/lib/ai-media-diagnostics";
 import { logAgentEvent, validateUserCrossBoundaryQuery } from "@/lib/ai-agent-guardrails";
 import { runDeepPlexPlaybackHealthCheck, PlexPlaybackDiagnosticReport } from "@/lib/plex-playback-probe";
+import { normalizeGeminiModel } from "@/lib/ai-agent";
 
 function cleanUrl(url: string): string {
     if (!url) return "";
@@ -114,6 +115,20 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
         try {
             adminToken = decryptData(settings.mainPlexToken);
         } catch (e) {}
+    }
+    if (!adminToken) {
+        const plexServersWithToken = await prisma.plexServer.findMany({ where: { token: { not: null } } }).catch(() => []);
+        for (const ps of plexServersWithToken) {
+            if (ps.token) {
+                try {
+                    const dec = decryptData(ps.token);
+                    if (dec) {
+                        adminToken = dec;
+                        break;
+                    }
+                } catch (e) {}
+            }
+        }
     }
 
     // Expand user aliases
@@ -270,9 +285,40 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
     }));
 
     // 2. Scan Direct Plex Media Servers if active
+    let plexServers: any[] = [];
     if (adminToken) {
         try {
-            const plexServers = await getPlexServers(adminToken);
+            plexServers = await getPlexServers(adminToken);
+        } catch (e) {}
+    }
+
+    try {
+        const dbPlexServers = await prisma.plexServer.findMany();
+        for (const dbs of dbPlexServers) {
+            const cleanDbUrl = dbs.url.trim().replace(/\/+$/, "");
+            const sToken = dbs.token ? (decryptData(dbs.token) || adminToken) : adminToken;
+            const matchIndex = plexServers.findIndex(s =>
+                (s.clientIdentifier && dbs.clientIdentifier && s.clientIdentifier.toLowerCase() === dbs.clientIdentifier.toLowerCase()) ||
+                s.name.toLowerCase() === dbs.name.toLowerCase() ||
+                s.connections?.some((c: any) => c.uri?.replace(/\/+$/, "") === cleanDbUrl)
+            );
+            if (matchIndex >= 0) {
+                if (sToken && !plexServers[matchIndex].accessToken) {
+                    plexServers[matchIndex].accessToken = sToken;
+                }
+            } else {
+                plexServers.push({
+                    name: dbs.name || "Plex Server",
+                    clientIdentifier: dbs.clientIdentifier || dbs.id,
+                    accessToken: sToken,
+                    connections: [{ uri: cleanDbUrl, local: true, relay: false }]
+                });
+            }
+        }
+    } catch (e) {}
+
+    if (plexServers.length > 0) {
+        try {
             await Promise.allSettled(plexServers.map(async (srv: any) => {
                 const token = srv.accessToken || adminToken;
                 const connections = srv.connections || [];
@@ -502,7 +548,8 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
 
     const onlinePlex = serverNodes.filter(s => s.type === "plex" && s.status === "ONLINE").length;
     const totalPlex = serverNodes.filter(s => s.type === "plex").length;
-    const finalServersCount = onlinePlex > 0 ? onlinePlex : (totalPlex > 0 ? totalPlex : Math.max(serversOnlineCount, tautullis.length, 1));
+    const onlineTautulli = serverNodes.filter(s => s.type === "tautulli" && s.status === "ONLINE").length;
+    const finalServersCount = Math.max(onlinePlex, totalPlex, onlineTautulli, tautullis.length, 1);
 
     return {
         username: safeUsername,
@@ -961,7 +1008,7 @@ ${serverListMarkdown}
 
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-2.5-flash";
+    const modelName = normalizeGeminiModel(settings?.aiModel);
 
     // Build context-rich prompt
     const systemPrompt = `You are the elite "Plex & Server Master AI" for the private media ecosystem "DomsHomeLab (d281knilb)".
@@ -1052,17 +1099,19 @@ INSTRUCTIONS:
     // 1. Google Gemini Provider
     const geminiKey = rawKey || process.env.GEMINI_API_KEY || "";
     if ((provider === "gemini" || provider === "google" || (!provider || provider === "default")) && geminiKey) {
+        const normalized = normalizeGeminiModel(modelName);
         const candidateModels = Array.from(new Set([
-            ...(modelName && modelName !== "gemini-2.5-flash" && modelName !== "default" ? [modelName] : []),
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro"
+            normalized,
+            "gemini-3.5-flash",
+            "gemini-3.1-pro-preview",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash"
         ]));
 
         for (const activeModel of candidateModels) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 7000);
+                const timeoutId = setTimeout(() => controller.abort(), 12000);
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
 
                 const contents: any[] = [];
@@ -1103,8 +1152,13 @@ INSTRUCTIONS:
                             playbackProbe
                         };
                     }
+                } else {
+                    const errText = await res.text().catch(() => "");
+                    console.warn(`[AI-SERVER-ASSISTANT] Gemini model ${activeModel} HTTP ${res.status}: ${errText}`);
                 }
-            } catch (e: any) {}
+            } catch (e: any) {
+                console.warn(`[AI-SERVER-ASSISTANT] Gemini model ${activeModel} exception: ${e.message}`);
+            }
         }
     }
 
