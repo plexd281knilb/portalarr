@@ -302,21 +302,7 @@ export async function manuallyAttributePaymentTransaction(transactionId: string,
         const targetUser = await prisma.user.findUnique({ where: { id: userId } });
         if (!targetUser) return { success: false, error: "User not found." };
 
-        const scrapedPayment = {
-            provider: tx.provider as any,
-            externalTxId: tx.externalTxId || undefined,
-            senderName: tx.senderName || undefined,
-            senderEmail: tx.senderEmail || undefined,
-            senderHandle: tx.senderHandle || undefined,
-            amount: tx.amount,
-            currency: tx.currency,
-            note: tx.note || undefined,
-            emailSubject: tx.emailSubject || "",
-            emailDate: tx.emailDate,
-            emailUid: tx.emailUid || ""
-        };
-
-        const { periodGrantedText } = await applySubscriptionForPayment(targetUser, scrapedPayment);
+        const previousUserId = tx.matchedUserId;
 
         // If target user doesn't have a real name set yet, auto-populate from sender name
         if (!targetUser.name && tx.senderName && tx.senderName.trim()) {
@@ -326,24 +312,37 @@ export async function manuallyAttributePaymentTransaction(transactionId: string,
             }).catch(() => {});
         }
 
+        // 1. Link transaction to target user
         await prisma.paymentTransaction.update({
             where: { id: transactionId },
             data: {
                 matchedUserId: targetUser.id,
                 status: "MANUAL",
                 appliedSubscription: true,
-                subscriptionPeriodGranted: periodGrantedText,
                 adminNotes: `Manually attributed by Admin to user "${targetUser.username}".`
             }
         });
+
+        // 2. Recalculate target user's subscription from their actual matched transactions
+        await recalculateUserSubscriptionFromPayments(targetUser.id);
+
+        // 3. If previously matched to a different user, recalculate that user too so no secret credit remains!
+        if (previousUserId && previousUserId !== targetUser.id) {
+            await recalculateUserSubscriptionFromPayments(previousUserId);
+        }
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
 
+        const updatedTarget = await prisma.user.findUnique({ where: { id: targetUser.id } });
+        const expiryFormatted = updatedTarget?.subscriptionEndsAt 
+            ? new Date(updatedTarget.subscriptionEndsAt).toLocaleDateString() 
+            : "Active";
+
         return {
             success: true,
-            message: `Successfully attributed $${tx.amount.toFixed(2)} payment to "${targetUser.username}". Granted: ${periodGrantedText}`
+            message: `Successfully attributed $${tx.amount.toFixed(2)} payment to "${targetUser.username}". Subscription valid until: ${expiryFormatted}`
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to attribute transaction." };
@@ -360,6 +359,7 @@ export async function reprocessPaymentTransactionsAction() {
             orderBy: { emailDate: "asc" }
         });
 
+        const affectedUserIds = new Set<string>();
         let matchedCount = 0;
         let reevaluatedCount = 0;
 
@@ -386,7 +386,21 @@ export async function reprocessPaymentTransactionsAction() {
             }
 
             if (targetUser) {
-                const { periodGrantedText } = await applySubscriptionForPayment(targetUser, scrapedPayment);
+                affectedUserIds.add(targetUser.id);
+
+                if (!tx.matchedUserId) {
+                    await prisma.paymentTransaction.update({
+                        where: { id: tx.id },
+                        data: {
+                            matchedUserId: targetUser.id,
+                            status: "PROCESSED",
+                            appliedSubscription: true
+                        }
+                    });
+                    matchedCount++;
+                } else {
+                    reevaluatedCount++;
+                }
 
                 // Auto-fill real name if missing
                 if (!targetUser.name && tx.senderName && tx.senderName.trim()) {
@@ -395,23 +409,12 @@ export async function reprocessPaymentTransactionsAction() {
                         data: { name: tx.senderName.trim() }
                     }).catch(() => {});
                 }
-
-                await prisma.paymentTransaction.update({
-                    where: { id: tx.id },
-                    data: {
-                        matchedUserId: targetUser.id,
-                        status: tx.status === "MANUAL" ? "MANUAL" : "PROCESSED",
-                        appliedSubscription: true,
-                        subscriptionPeriodGranted: periodGrantedText
-                    }
-                });
-
-                if (!tx.matchedUserId) {
-                    matchedCount++;
-                } else {
-                    reevaluatedCount++;
-                }
             }
+        }
+
+        // Recalculate each affected user's subscription deterministically from scratch
+        for (const uId of affectedUserIds) {
+            await recalculateUserSubscriptionFromPayments(uId);
         }
 
         revalidatePath("/settings");
@@ -553,9 +556,18 @@ export async function deletePaymentTransactionAction(transactionId: string) {
         await verifyAdmin();
         if (!transactionId) return { success: false, error: "Transaction ID is required." };
 
+        const tx = await prisma.paymentTransaction.findUnique({ where: { id: transactionId } });
+        if (!tx) return { success: false, error: "Payment transaction not found." };
+
+        const previousUserId = tx.matchedUserId;
+
         await prisma.paymentTransaction.delete({
             where: { id: transactionId }
         });
+
+        if (previousUserId) {
+            await recalculateUserSubscriptionFromPayments(previousUserId);
+        }
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
@@ -817,8 +829,6 @@ export async function groupAndAttributePaymentsAction(transactionIds: string[], 
             emailUid: primaryTx.emailUid || ""
         };
 
-        const { periodGrantedText } = await applySubscriptionForPayment(targetUser, scrapedCombined);
-
         // If target user doesn't have a real name set, try to use sender name
         if (!targetUser.name && primaryTx.senderName && primaryTx.senderName.trim()) {
             await prisma.user.update({
@@ -835,12 +845,15 @@ export async function groupAndAttributePaymentsAction(transactionIds: string[], 
                     matchedUserId: targetUser.id,
                     status: "MANUAL",
                     appliedSubscription: true,
-                    subscriptionPeriodGranted: `Grouped (${transactions.length} payments, total $${totalAmount.toFixed(2)}): ${periodGrantedText}`,
                     adminNotes: customNote ? `Grouped payment: ${customNote}` : `Grouped with ${transactions.length} payments for user "${targetUser.username}".`
                 }
             });
         }
 
+        // Recalculate target user
+        await recalculateUserSubscriptionFromPayments(targetUser.id);
+
+        // Recalculate previous users so no secret credit remains
         for (const prevId of previousUserIds) {
             await recalculateUserSubscriptionFromPayments(prevId);
         }
@@ -849,9 +862,14 @@ export async function groupAndAttributePaymentsAction(transactionIds: string[], 
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
 
+        const updatedUser = await prisma.user.findUnique({ where: { id: targetUser.id } });
+        const expiryFormatted = updatedUser?.subscriptionEndsAt 
+            ? new Date(updatedUser.subscriptionEndsAt).toLocaleDateString() 
+            : "Active";
+
         return {
             success: true,
-            message: `Successfully grouped ${transactions.length} payments ($${totalAmount.toFixed(2)}) for "${targetUser.username}". Granted: ${periodGrantedText}`
+            message: `Successfully grouped ${transactions.length} payments ($${totalAmount.toFixed(2)}) for "${targetUser.username}". Subscription valid until: ${expiryFormatted}`
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to group payments." };
@@ -893,27 +911,11 @@ export async function splitPaymentTransactionAction(
         const split1 = splits[0];
         const split1Amount = Number(split1.amount);
         let split1User = null;
-        let split1PeriodText: string | null = null;
 
         if (split1.userId) {
             split1User = await prisma.user.findUnique({ where: { id: split1.userId } });
             if (split1User) {
                 affectedUserIds.add(split1User.id);
-                const scraped1 = {
-                    provider: originalTx.provider as any,
-                    externalTxId: originalTx.externalTxId || undefined,
-                    senderName: originalTx.senderName || undefined,
-                    senderEmail: originalTx.senderEmail || undefined,
-                    senderHandle: originalTx.senderHandle || undefined,
-                    amount: split1Amount,
-                    currency: originalTx.currency,
-                    note: split1.note || originalTx.note || undefined,
-                    emailSubject: originalTx.emailSubject || "",
-                    emailDate: originalTx.emailDate,
-                    emailUid: originalTx.emailUid || ""
-                };
-                const res = await applySubscriptionForPayment(split1User, scraped1);
-                split1PeriodText = res.periodGrantedText;
             }
         }
 
@@ -925,7 +927,6 @@ export async function splitPaymentTransactionAction(
                 matchedUserId: split1User ? split1User.id : null,
                 status: split1User ? "MANUAL" : "UNMATCHED",
                 appliedSubscription: Boolean(split1User),
-                subscriptionPeriodGranted: split1PeriodText,
                 adminNotes: `Split 1 of ${splits.length} (from original $${originalTx.amount.toFixed(2)})`
             }
         });
@@ -935,7 +936,6 @@ export async function splitPaymentTransactionAction(
             const splitItem = splits[i];
             const splitAmount = Number(splitItem.amount);
             let splitUser = null;
-            let splitPeriodText: string | null = null;
 
             if (splitItem.userId) {
                 splitUser = await prisma.user.findUnique({ where: { id: splitItem.userId } });
@@ -944,7 +944,7 @@ export async function splitPaymentTransactionAction(
                 }
             }
 
-            const newTx = await prisma.paymentTransaction.create({
+            await prisma.paymentTransaction.create({
                 data: {
                     sourceId: originalTx.sourceId,
                     provider: originalTx.provider,
@@ -960,36 +960,10 @@ export async function splitPaymentTransactionAction(
                     emailUid: originalTx.emailUid,
                     matchedUserId: splitUser ? splitUser.id : null,
                     status: splitUser ? "MANUAL" : "UNMATCHED",
-                    appliedSubscription: false,
+                    appliedSubscription: Boolean(splitUser),
                     adminNotes: `Split ${i + 1} of ${splits.length} (from original $${originalTx.amount.toFixed(2)})`
                 }
             });
-
-            if (splitUser) {
-                const scrapedSplit = {
-                    provider: originalTx.provider as any,
-                    externalTxId: newTx.externalTxId || undefined,
-                    senderName: originalTx.senderName || undefined,
-                    senderEmail: originalTx.senderEmail || undefined,
-                    senderHandle: originalTx.senderHandle || undefined,
-                    amount: splitAmount,
-                    currency: originalTx.currency,
-                    note: splitItem.note || originalTx.note || undefined,
-                    emailSubject: originalTx.emailSubject || "",
-                    emailDate: originalTx.emailDate,
-                    emailUid: originalTx.emailUid || ""
-                };
-                const res = await applySubscriptionForPayment(splitUser, scrapedSplit);
-                splitPeriodText = res.periodGrantedText;
-
-                await prisma.paymentTransaction.update({
-                    where: { id: newTx.id },
-                    data: {
-                        appliedSubscription: true,
-                        subscriptionPeriodGranted: splitPeriodText
-                    }
-                });
-            }
         }
 
         // 3. Recalculate any affected users
@@ -1050,5 +1024,63 @@ export async function bulkDeletePaymentTransactionsAction(transactionIds: string
         return { success: false, error: e.message || "Failed to delete payment transactions." };
     }
 }
+
+/**
+ * Manually record a payment for a member (e.g. offline cash, Venmo/Zelle without email)
+ */
+export async function recordManualPaymentAction(data: {
+    userId: string;
+    amount: number;
+    paymentDate?: string | Date;
+    provider?: string;
+    note?: string;
+}) {
+    try {
+        await verifyAdmin();
+        const { userId, amount, paymentDate, provider, note } = data;
+        if (!userId) return { success: false, error: "Member is required." };
+        const numAmount = Number(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            return { success: false, error: "Please enter a valid payment amount." };
+        }
+
+        const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (!targetUser) return { success: false, error: "Member not found." };
+
+        const pDate = paymentDate ? new Date(paymentDate) : new Date();
+        const prov = (provider || "MANUAL").toUpperCase();
+
+        const tx = await prisma.paymentTransaction.create({
+            data: {
+                provider: prov,
+                amount: numAmount,
+                currency: "USD",
+                note: note || `Manual ${prov} payment recorded by Admin`,
+                emailSubject: `Manual Payment: $${numAmount.toFixed(2)} (${prov})`,
+                emailDate: pDate,
+                matchedUserId: targetUser.id,
+                status: "MANUAL",
+                appliedSubscription: true,
+                adminNotes: `Recorded by Admin on ${new Date().toLocaleDateString()}`
+            }
+        });
+
+        // Recalculate user subscription from their matched payments
+        await recalculateUserSubscriptionFromPayments(targetUser.id);
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        return {
+            success: true,
+            transactionId: tx.id,
+            message: `Successfully recorded $${numAmount.toFixed(2)} payment for "${targetUser.username}".`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to record manual payment." };
+    }
+}
+
 
 

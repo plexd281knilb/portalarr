@@ -614,24 +614,38 @@ export function calculateAlignedExpiryDate(params: {
         isYearly = true;
         const yearsCount = Math.max(1, Math.round(totalAmount / yearlyPrice));
         
-        // Base target expiration year for this payment:
-        // - If paying in Q4 (Oct, Nov, Dec), it covers remainder of year + next full year (e.g. Dec 2025 + 1 yr = Jan 1, 2027)
-        // - If paying in Jan - Sep, it covers through Jan 1 of next year (e.g. Jan 2026 + 1 yr = Jan 1, 2027)
-        const baseTargetYear = (payMonth >= 9 ? payYear + 1 + (yearsCount - 1) + 1 : payYear + (yearsCount - 1) + 1);
+        // Cycle year that this payment belongs to:
+        // - Payments made in Q4 (Oct, Nov, Dec; payMonth >= 9) target the upcoming calendar year (payYear + 1)
+        // - Payments made in Q1-Q3 (Jan - Sep; payMonth < 9) target the current calendar year (payYear)
+        const paymentCycleYear = payMonth >= 9 ? payYear + 1 : payYear;
+        const baseTargetYear = paymentCycleYear + yearsCount;
         
+        let targetYear: number;
         if (existingExpiry && existingExpiry.getTime() > paymentDate.getTime()) {
             const currentExpYear = existingExpiry.getFullYear();
-            const targetYear = Math.max(baseTargetYear, currentExpYear + (currentExpYear >= baseTargetYear ? yearsCount : 0));
-            newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
+            if (paymentCycleYear >= currentExpYear) {
+                // Payment is for a future renewal cycle at or beyond the current expiration
+                targetYear = currentExpYear + yearsCount;
+            } else {
+                // Payment is for the current/past cycle already covered up to currentExpYear.
+                // Do NOT add an extra year unless the amount paid exceeds the coverage!
+                targetYear = Math.max(baseTargetYear, currentExpYear);
+            }
         } else {
-            newExpiryDate = new Date(baseTargetYear, 0, 1, 23, 59, 59, 999);
+            targetYear = baseTargetYear;
         }
+
+        newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
         periodGrantedText = `${yearsCount > 1 ? `${yearsCount} Years` : "1 Year"} (Active until Jan 1, ${newExpiryDate.getFullYear()})`;
     } else if (isProratedRestOfYear) {
         // Mid-Year Prorated: Credits through Jan 1st of upcoming year
         const targetYear = payYear + 1;
-        newExpiryDate = new Date(targetYear, 0, 1, 23, 59, 59, 999);
-        periodGrantedText = `Remainder of ${payYear} (Active until Jan 1, ${targetYear})`;
+        let finalYear = targetYear;
+        if (existingExpiry && existingExpiry.getTime() > paymentDate.getTime()) {
+            finalYear = Math.max(targetYear, existingExpiry.getFullYear());
+        }
+        newExpiryDate = new Date(finalYear, 0, 1, 23, 59, 59, 999);
+        periodGrantedText = `Remainder of ${payYear} (Active until Jan 1, ${finalYear})`;
     } else {
         // Multi-Month / Monthly calculation with tolerance (e.g. $14+ counts for 1 month @ $15)
         monthsGranted = Math.max(1, Math.round(totalAmount / monthlyPrice));
@@ -648,11 +662,12 @@ export function calculateAlignedExpiryDate(params: {
             // If paying in Q4 (e.g. Dec), 6 months ($90) grants through July 1st of next year!
             if (payMonth >= 9) {
                 newExpiryDate = new Date(payYear + 1, 0, 1, 23, 59, 59, 999);
-                newExpiryDate.setMonth(newExpiryDate.getMonth() + (monthsGranted));
+                newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
                 newExpiryDate.setDate(1);
+                newExpiryDate.setHours(23, 59, 59, 999);
             } else {
                 newExpiryDate = new Date(paymentDate);
-                newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted + 1);
+                newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
                 newExpiryDate.setDate(1);
                 newExpiryDate.setHours(23, 59, 59, 999);
             }
@@ -836,36 +851,11 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
 
     const paymentDate = payment.emailDate ? new Date(payment.emailDate) : new Date();
 
-    // Fetch prior payments for this user or sender within the same installment window / cycle
-    // (e.g. +/- 90 days of paymentDate)
-    const windowStart = new Date(paymentDate.getTime() - 90 * 24 * 60 * 60 * 1000);
-    const windowEnd = new Date(paymentDate.getTime() + 90 * 24 * 60 * 60 * 1000);
-
-    const recentPayments = await prisma.paymentTransaction.findMany({
-        where: {
-            OR: [
-                { matchedUserId: user.id },
-                ...(payment.senderName ? [{ senderName: { equals: payment.senderName } }] : []),
-                ...(payment.senderEmail ? [{ senderEmail: { equals: payment.senderEmail } }] : [])
-            ],
-            emailDate: {
-                gte: windowStart,
-                lte: windowEnd
-            }
-        }
-    }).catch(() => [] as any[]);
-
-    // Sum past payments in this cycle excluding the current transaction ID
-    const pastInstallments = recentPayments.filter(p => p.externalTxId !== payment.externalTxId);
-    const pastInstallmentsSum = pastInstallments.reduce((sum, p) => sum + (p.amount || 0), 0);
-
-    const totalCumulativeAmount = pastInstallmentsSum + payment.amount;
-
     const existingExpiry = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
 
     const { newExpiryDate, periodGrantedText } = calculateAlignedExpiryDate({
         paymentDate,
-        totalAmount: totalCumulativeAmount,
+        totalAmount: payment.amount,
         yearlyPrice,
         monthlyPrice,
         existingExpiry
@@ -886,23 +876,6 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         }
     });
 
-    // Retroactively update earlier installment transactions in this cycle so they link to this user and note the merged fulfillment
-    if (recentPayments.length > 0) {
-        for (const p of recentPayments) {
-            if (p.externalTxId !== payment.externalTxId) {
-                await prisma.paymentTransaction.update({
-                    where: { id: p.id },
-                    data: {
-                        matchedUserId: user.id,
-                        status: p.status === "MANUAL" ? "MANUAL" : "PROCESSED",
-                        appliedSubscription: true,
-                        subscriptionPeriodGranted: `Merged with cumulative installment (${periodGrantedText})`
-                    }
-                }).catch(() => {});
-            }
-        }
-    }
-
     // Ensure Plex Sharing access is granted if active
     if (isCurrentlyActive) {
         try {
@@ -921,7 +894,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
     logger.addLog(
         "INFO", 
         "SYSTEM", 
-        `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" (Current: $${payment.amount.toFixed(2)}, Cumulative: $${totalCumulativeAmount.toFixed(2)}) via ${payment.provider}`
+        `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" (Amount: $${payment.amount.toFixed(2)}) via ${payment.provider}`
     );
 
     // Dispatch payment confirmation receipt email to the user
@@ -1014,7 +987,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
     return {
         newExpiryDate,
         periodGrantedText,
-        totalCumulativeAmount
+        totalCumulativeAmount: payment.amount
     };
 }
 

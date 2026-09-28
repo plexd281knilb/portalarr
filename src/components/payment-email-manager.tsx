@@ -17,7 +17,8 @@ import {
     savePaymentEmailScraperConfig,
     deletePaymentTransactionAction,
     purgeUnmatchedPaymentTransactionsAction,
-    reprocessPaymentTransactionsAction
+    reprocessPaymentTransactionsAction,
+    recordManualPaymentAction
 } from "@/app/payment-actions";
 import { getAppUsers } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -101,6 +102,18 @@ export default function PaymentEmailManager() {
     const [splitting, setSplitting] = useState(false);
     const [splitMsg, setSplitMsg] = useState("");
     const [splitErr, setSplitErr] = useState("");
+
+    // Record Manual Payment Modal State
+    const [recordModalOpen, setRecordModalOpen] = useState(false);
+    const [recordUserId, setRecordUserId] = useState("");
+    const [recordUserSearch, setRecordUserSearch] = useState("");
+    const [recordAmount, setRecordAmount] = useState("180.00");
+    const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split("T")[0]);
+    const [recordProvider, setRecordProvider] = useState("VENMO");
+    const [recordNote, setRecordNote] = useState("");
+    const [recording, setRecording] = useState(false);
+    const [recordMsg, setRecordMsg] = useState("");
+    const [recordErr, setRecordErr] = useState("");
 
     // Transactions Filter
     const [txFilter, setTxFilter] = useState("ALL");
@@ -551,9 +564,64 @@ export default function PaymentEmailManager() {
         }
     };
 
+    const handleOpenRecordModal = () => {
+        setRecordUserId("");
+        setRecordUserSearch("");
+        setRecordAmount("180.00");
+        setRecordDate(new Date().toISOString().split("T")[0]);
+        setRecordProvider("VENMO");
+        setRecordNote("");
+        setRecordMsg("");
+        setRecordErr("");
+        setRecordModalOpen(true);
+    };
+
+    const handleSaveManualPayment = async () => {
+        if (!recordUserId) {
+            setRecordErr("Please select a member.");
+            return;
+        }
+        const parsedAmount = parseFloat(recordAmount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            setRecordErr("Please enter a valid payment amount.");
+            return;
+        }
+
+        setRecording(true);
+        setRecordMsg("");
+        setRecordErr("");
+
+        const res = await recordManualPaymentAction({
+            userId: recordUserId,
+            amount: parsedAmount,
+            paymentDate: recordDate,
+            provider: recordProvider,
+            note: recordNote.trim() || undefined
+        });
+
+        setRecording(false);
+        if (res.success) {
+            setRecordMsg(res.message || "Payment recorded successfully!");
+            loadData();
+            setTimeout(() => {
+                setRecordModalOpen(false);
+            }, 1200);
+        } else {
+            setRecordErr(res.error || "Failed to record manual payment.");
+        }
+    };
+
     const filteredUsers = allUsers.filter(u => {
         if (!assignSearch) return true;
         const s = assignSearch.toLowerCase();
+        return u.username.toLowerCase().includes(s) || 
+               u.email.toLowerCase().includes(s) || 
+               (u.plexUsername && u.plexUsername.toLowerCase().includes(s));
+    });
+
+    const recordFilteredUsers = allUsers.filter(u => {
+        if (!recordUserSearch) return true;
+        const s = recordUserSearch.toLowerCase();
         return u.username.toLowerCase().includes(s) || 
                u.email.toLowerCase().includes(s) || 
                (u.plexUsername && u.plexUsername.toLowerCase().includes(s));
@@ -894,6 +962,14 @@ export default function PaymentEmailManager() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                            <Button 
+                                size="sm" 
+                                onClick={handleOpenRecordModal}
+                                className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 font-semibold flex-1 sm:flex-initial shadow-sm"
+                                title="Manually record a payment for a member"
+                            >
+                                <Plus className="h-3.5 w-3.5" /> <span>Record Payment</span>
+                            </Button>
                             <Button 
                                 size="sm" 
                                 variant="outline" 
@@ -1749,6 +1825,174 @@ export default function PaymentEmailManager() {
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-1.5"
                             >
                                 {splitting ? "Splitting & Updating..." : `Execute Split (${splitParts.length} Parts)`}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
+
+            {/* RECORD MANUAL PAYMENT MODAL */}
+            {recordModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+                    <Card className="w-full max-w-lg bg-[#121218] border-border/60 shadow-2xl flex flex-col max-h-[90vh]">
+                        <CardHeader className="pb-3 border-b border-border/40 shrink-0">
+                            <CardTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                                <DollarSign className="h-5 w-5 text-emerald-400" /> Record Manual Member Payment
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Manually log an offline payment (Cash, Venmo, PayPal, Zelle) and credit their annual or monthly subscription cleanly.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4 py-4 overflow-y-auto">
+                            {recordMsg && (
+                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                    <span>{recordMsg}</span>
+                                </div>
+                            )}
+                            {recordErr && (
+                                <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                                    <span>{recordErr}</span>
+                                </div>
+                            )}
+
+                            {/* Select Member */}
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-foreground">Select Member *</Label>
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search by username, email, or Plex handle..."
+                                        value={recordUserSearch}
+                                        onChange={(e) => setRecordUserSearch(e.target.value)}
+                                        className="pl-8 text-xs bg-background h-8"
+                                    />
+                                </div>
+                                <div className="max-h-36 overflow-y-auto border border-border/50 rounded-lg divide-y divide-border/30 bg-background/50">
+                                    {recordFilteredUsers.length === 0 ? (
+                                        <div className="p-3 text-center text-xs text-muted-foreground">No matching members found</div>
+                                    ) : (
+                                        recordFilteredUsers.map((u) => (
+                                            <button
+                                                key={u.id}
+                                                type="button"
+                                                onClick={() => setRecordUserId(u.id)}
+                                                className={`w-full text-left p-2.5 text-xs transition-colors flex items-center justify-between ${
+                                                    recordUserId === u.id ? "bg-primary/20 text-primary font-bold" : "hover:bg-muted/40 text-foreground"
+                                                }`}
+                                            >
+                                                <div>
+                                                    <span className="font-semibold">{u.username}</span>
+                                                    {u.name && <span className="text-muted-foreground ml-1.5 text-[11px]">({u.name})</span>}
+                                                    <span className="text-muted-foreground ml-2 text-[11px] block sm:inline">{u.email}</span>
+                                                </div>
+                                                {recordUserId === u.id && <Check className="h-4 w-4 text-primary shrink-0" />}
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Amount & Date */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-foreground">Payment Amount ($ USD) *</Label>
+                                    <div className="relative">
+                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="1"
+                                            value={recordAmount}
+                                            onChange={(e) => setRecordAmount(e.target.value)}
+                                            className="pl-6 text-xs bg-background h-8 font-mono font-bold"
+                                        />
+                                    </div>
+                                    <div className="flex gap-1.5 pt-1">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setRecordAmount("180.00")}
+                                            className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                        >
+                                            $180 (1 Year)
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setRecordAmount("15.00")}
+                                            className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                        >
+                                            $15 (1 Month)
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-foreground">Payment Date *</Label>
+                                    <Input
+                                        type="date"
+                                        value={recordDate}
+                                        onChange={(e) => setRecordDate(e.target.value)}
+                                        className="text-xs bg-background h-8"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Year-end payments (Dec 31) & late payments (Jan 1/2) align to cover the upcoming full calendar year.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Provider & Note */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-foreground">Payment Method</Label>
+                                    <select
+                                        value={recordProvider}
+                                        onChange={(e) => setRecordProvider(e.target.value)}
+                                        className="h-8 text-xs bg-background border border-border/60 rounded-md px-2 text-foreground font-medium w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                                    >
+                                        <option value="VENMO">Venmo</option>
+                                        <option value="PAYPAL">PayPal</option>
+                                        <option value="ZELLE">Zelle</option>
+                                        <option value="CASHAPP">Cash App</option>
+                                        <option value="CASH">Cash / In Person</option>
+                                        <option value="OTHER">Other / Check</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-foreground">Note / Memo (Optional)</Label>
+                                    <Input
+                                        value={recordNote}
+                                        onChange={(e) => setRecordNote(e.target.value)}
+                                        placeholder="e.g. Annual renewal paid via Venmo"
+                                        className="text-xs bg-background h-8"
+                                    />
+                                </div>
+                            </div>
+                        </CardContent>
+                        <CardFooter className="pt-2 pb-4 border-t border-border/40 flex items-center justify-end gap-2 shrink-0">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setRecordModalOpen(false)}
+                                disabled={recording}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveManualPayment}
+                                disabled={recording || !recordUserId}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-1.5 shadow-sm"
+                            >
+                                {recording ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                <span>{recording ? "Recording..." : "Record & Credit Payment"}</span>
                             </Button>
                         </CardFooter>
                     </Card>

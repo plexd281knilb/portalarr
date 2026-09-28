@@ -1114,6 +1114,135 @@ async function runTestSuite() {
         }).catch(() => {});
     });
 
+    // 31. Payment Subscriptions: Calendar Alignment, Late Payments, and Multi-Year Integrity
+    await assertTest("Payment Subscriptions: Calendar Alignment & Multi-Year Integrity", async () => {
+        const { calculateAlignedExpiryDate } = await import("../src/lib/payment-email-scraper");
+        const { recalculateUserSubscriptionFromPayments, deletePaymentTransactionAction } = await import("../src/app/payment-actions");
+
+        const yearlyPrice = 180;
+        const monthlyPrice = 15;
+
+        // A. Payment made on 12/31/2025 for $180 -> Credits 2026, due 1/1/2027
+        const resDec31 = calculateAlignedExpiryDate({
+            paymentDate: new Date("2025-12-31T15:30:00Z"),
+            totalAmount: 180,
+            yearlyPrice,
+            monthlyPrice,
+            existingExpiry: null
+        });
+
+        if (resDec31.newExpiryDate.getFullYear() !== 2027 || resDec31.newExpiryDate.getMonth() !== 0 || resDec31.newExpiryDate.getDate() !== 1) {
+            throw new Error(`Expected Dec 31, 2025 payment to expire on Jan 1, 2027, got: ${resDec31.newExpiryDate.toISOString()}`);
+        }
+
+        // B. Late payment made on 1/2/2026 for $180 -> Credits 2026, due 1/1/2027 (NOT 2028!)
+        const resJan2 = calculateAlignedExpiryDate({
+            paymentDate: new Date("2026-01-02T10:00:00Z"),
+            totalAmount: 180,
+            yearlyPrice,
+            monthlyPrice,
+            existingExpiry: null
+        });
+
+        if (resJan2.newExpiryDate.getFullYear() !== 2027 || resJan2.newExpiryDate.getMonth() !== 0 || resJan2.newExpiryDate.getDate() !== 1) {
+            throw new Error(`Expected Jan 2, 2026 payment to expire on Jan 1, 2027, got: ${resJan2.newExpiryDate.toISOString()}`);
+        }
+
+        // C. User already marked paid through Jan 1, 2027: attributing Jan 2, 2026 payment must NOT bump to 2028
+        const existingExp2027 = new Date(2027, 0, 1, 23, 59, 59, 999);
+        const resAlreadyCovered = calculateAlignedExpiryDate({
+            paymentDate: new Date("2026-01-02T10:00:00Z"),
+            totalAmount: 180,
+            yearlyPrice,
+            monthlyPrice,
+            existingExpiry: existingExp2027
+        });
+
+        if (resAlreadyCovered.newExpiryDate.getFullYear() !== 2027) {
+            throw new Error(`Expected already-covered user to stay at Jan 1, 2027, got: ${resAlreadyCovered.newExpiryDate.toISOString()}`);
+        }
+
+        // D. Extra paid: $360 on Jan 2, 2026 -> 2 Years, expires Jan 1, 2028
+        const resExtraPaid = calculateAlignedExpiryDate({
+            paymentDate: new Date("2026-01-02T10:00:00Z"),
+            totalAmount: 360,
+            yearlyPrice,
+            monthlyPrice,
+            existingExpiry: null
+        });
+
+        if (resExtraPaid.newExpiryDate.getFullYear() !== 2028) {
+            throw new Error(`Expected $360 payment to expire on Jan 1, 2028, got: ${resExtraPaid.newExpiryDate.toISOString()}`);
+        }
+
+        // E. Renewal payment: $180 paid on 12/31/2026 when active through Jan 1, 2027 -> extends to Jan 1, 2028
+        const resRenewal = calculateAlignedExpiryDate({
+            paymentDate: new Date("2026-12-31T12:00:00Z"),
+            totalAmount: 180,
+            yearlyPrice,
+            monthlyPrice,
+            existingExpiry: existingExp2027
+        });
+
+        if (resRenewal.newExpiryDate.getFullYear() !== 2028) {
+            throw new Error(`Expected renewal payment on Dec 31, 2026 to expire on Jan 1, 2028, got: ${resRenewal.newExpiryDate.toISOString()}`);
+        }
+
+        // F. Integration test in SQLite: Verify recalculateUserSubscriptionFromPayments and cleanup on delete
+        const testPaymentUser = await prisma.user.create({
+            data: {
+                username: "test_payment_member",
+                email: "payment_test@example.com",
+                password: "hashed_dummy_password",
+                role: "USER",
+                status: "APPROVED"
+            }
+        });
+
+        // Create 1 payment of $180 on Jan 2, 2026
+        const testTx = await prisma.paymentTransaction.create({
+            data: {
+                provider: "VENMO",
+                amount: 180,
+                currency: "USD",
+                emailDate: new Date("2026-01-02T10:00:00Z"),
+                matchedUserId: testPaymentUser.id,
+                status: "MANUAL",
+                appliedSubscription: true
+            }
+        });
+
+        // Recalculate
+        await recalculateUserSubscriptionFromPayments(testPaymentUser.id);
+        const userAfterPayment = await prisma.user.findUnique({ where: { id: testPaymentUser.id } });
+
+        if (!userAfterPayment?.subscriptionEndsAt || new Date(userAfterPayment.subscriptionEndsAt).getFullYear() !== 2027) {
+            throw new Error(`Expected user subscription to be Jan 1, 2027 after recalculate, got: ${userAfterPayment?.subscriptionEndsAt}`);
+        }
+
+        // Recalculating again must not change the year
+        await recalculateUserSubscriptionFromPayments(testPaymentUser.id);
+        const userAfterSecondRecalc = await prisma.user.findUnique({ where: { id: testPaymentUser.id } });
+        if (new Date(userAfterSecondRecalc!.subscriptionEndsAt!).getFullYear() !== 2027) {
+            throw new Error(`Subscription changed on second recalculate: ${userAfterSecondRecalc?.subscriptionEndsAt}`);
+        }
+
+        // Now delete the transaction & recalculate -> User must be reset (no secret retention)
+        await prisma.paymentTransaction.delete({ where: { id: testTx.id } });
+        await recalculateUserSubscriptionFromPayments(testPaymentUser.id);
+        const userAfterDelete = await prisma.user.findUnique({ where: { id: testPaymentUser.id } });
+
+        if (userAfterDelete?.subscriptionEndsAt !== null) {
+            throw new Error(`User still kept secret subscription date after transaction delete: ${userAfterDelete?.subscriptionEndsAt}`);
+        }
+        if (userAfterDelete?.status !== "EXPIRED") {
+            throw new Error(`User status expected EXPIRED after unmatched/deleted payment, got: ${userAfterDelete?.status}`);
+        }
+
+        // Clean up test user
+        await prisma.user.delete({ where: { id: testPaymentUser.id } }).catch(() => {});
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

@@ -246,6 +246,21 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 15. Manual Payment Recording & Calendar Alignment Patterns (`/settings?tab=payments`)
+- **Manual Payment Recording Modal**:
+  - In the Payments tab (`PaymentEmailManager`), administrators can manually log offline or direct payments via the `+ Record Payment` action button.
+  - Features real-time member live search filtering by `name`, `username`, or `email`, currency amount input, payment date picker (defaults to today), method selection (`Venmo`, `PayPal`, `Zelle`, `Cash App`, `Cash`, `Other`), and internal notes.
+  - Automatically recalculates and synchronizes the member's subscription expiration date, subscription status (`ACTIVE`), and membership tier (`STANDARD`).
+- **Calendar Alignment Formula (`paymentCycleYear` & `baseTargetYear`)**:
+  - When crediting annual payments ($180), late payments made on Jan 1 or Jan 2 of the new year credit that current calendar year (`baseTargetYear = payYear + 1`), aligning expiration to `Jan 1, <payYear + 1> 23:59:59.999` (e.g. paying on 1/2/2026 sets expiration to `1/1/2027`, NOT `1/1/2028`).
+  - Pre-payments made on or after October 1 credit the following calendar year (e.g. paying on 12/31/2025 sets expiration to `1/1/2027`).
+  - If a user is already paid through the current cycle (`existingExpiry` in 2027), re-attributing a 2026 payment does not compound or add extra years; it stays `1/1/2027`. Multi-year extensions require explicit surplus amounts (e.g. $360 for 2 years).
+- **Zero Secret Backend Retention**:
+  - Deleting, unmatching, or re-attributing a payment transaction to another member immediately triggers a clean sequential recalculation (`recalculateUserSubscriptionFromPayments`) for the previous user.
+  - If no payments remain, the previous user's subscription cleanly expires (`status: "EXPIRED"`, `subscriptionEndsAt: null`), ensuring no ghost expiration dates or hidden credits persist.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:
