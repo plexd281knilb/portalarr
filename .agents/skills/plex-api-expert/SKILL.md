@@ -76,4 +76,6 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
    - Large library endpoints (`/library/sections/{id}/all?includeGuids=1`) frequently exceed Next.js 2MB data cache limit (`WARN: items over 2MB can not be cached`). Direct server calls must bypass Next.js automatic fetch caching by supplying `{ cache: 'no-store' }`.
 9. **Identifying Trailer Placeholders vs Real Media**:
    - Agregarr trailer placeholders share identical `Guid` (TMDb / IMDb) values with real movies. Distinguish them by checking `editionTitle === "Trailer"` or searching `metadata.Label` for `trailer-placeholder`. Availability indexes must exclude placeholders so upcoming movies are not falsely marked as "In Library".
+10. **Strict Friend & Share Matching Integrity**:
+    - When mapping local users to Plex friends/shares via `/api/users` or `https://plex.tv/api/v2/friends`, NEVER use partial substring containment (e.g. `ta.includes(sa)` or `sa.startsWith(ta)`). Partial substring matching causes disastrous cross-user share collisions (e.g. `dominicjuliano` falsely matching `juliano` or `mjuliano7`). Strictly compare exact numeric Plex user IDs, exact emails, exact usernames, normalized alphanumeric characters (`username.replace(/[^a-z0-9]/gi, '')`), or exact email prefix identifiers (`email.split('@')[0]`).
 

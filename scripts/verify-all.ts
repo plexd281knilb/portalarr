@@ -13,6 +13,9 @@ import {
 import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
 import { logger } from "../src/lib/logger";
+import { matchesPlexUser } from "../src/lib/plex";
+import { scanPaymentEmailsInternal } from "../src/lib/payment-email-scraper";
+
 
 async function runTestSuite() {
     console.log("==========================================================");
@@ -1243,9 +1246,96 @@ async function runTestSuite() {
         await prisma.user.delete({ where: { id: testPaymentUser.id } }).catch(() => {});
     });
 
+    // 41. Plex User Matching & Identity Anti-Collision Engine
+    await assertTest("Plex: User Matching & Substring Collision Guards", async () => {
+        // Exact email & username match
+        if (!matchesPlexUser(
+            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
+            { user: { email: "plexd281knilb@gmail.com", username: "dominicjuliano" } }
+        )) throw new Error("Exact email & username failed to match");
+
+        // Email prefix matches Plex username
+        if (!matchesPlexUser(
+            { email: "trevsky313@gmail.com", username: "trevscar1121" },
+            { user: { email: "different@email.com", username: "trevsky313" } }
+        )) throw new Error("Email prefix failed to match Plex username");
+
+        // Guard against substring collisions (dominicjuliano must NOT match mjuliano7 or mjuli86)
+        if (matchesPlexUser(
+            { email: "plexd281knilb@gmail.com", username: "dominicjuliano", name: "David Garza" },
+            { user: { email: "mjuliano7@yahoo.com", username: "mjuli86" } }
+        )) throw new Error("CRITICAL: Substring collision allowed! dominicjuliano matched mjuli86");
+
+        // Guard against substring collisions (dominicjuliano must NOT match juliano)
+        if (matchesPlexUser(
+            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
+            { user: { email: "juliano@gmail.com", username: "juliano" } }
+        )) throw new Error("CRITICAL: Substring collision allowed! dominicjuliano matched juliano");
+
+        // Guard against matching unrelated friend with same display title
+        if (matchesPlexUser(
+            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
+            { user: { email: "davidgarza@gmail.com", username: "dgarza", title: "David Garza" } }
+        )) throw new Error("CRITICAL: Matched unrelated user based on display title");
+
+        // Normalized alphanumeric match
+        if (!matchesPlexUser(
+            { email: "test@test.com", username: "trev_sky313" },
+            { user: { email: "other@other.com", username: "trevsky313" } }
+        )) throw new Error("Normalized alphanumeric matching failed");
+
+        // Plex numeric ID match
+        if (!matchesPlexUser(
+            { id: "12345678", email: "changed@email.com", username: "changed" },
+            { user: { id: 12345678, email: "old@email.com", username: "old" } }
+        )) throw new Error("Plex numeric ID matching failed");
+    });
+
+    // 42. Payment Scraper: Lookback Window Persistence & Date Math
+    await assertTest("Payments: Lookback Window Persistence & Date Math", async () => {
+        // Set lookback to 14 days in Settings
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { paymentEmailLookbackDays: 14 },
+            create: { id: "global", paymentEmailLookbackDays: 14 }
+        });
+
+        let settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.paymentEmailLookbackDays !== 14) {
+            throw new Error(`Expected paymentEmailLookbackDays to be 14, got ${settings?.paymentEmailLookbackDays}`);
+        }
+
+        // Background runner scanPaymentEmailsInternal() without arguments must preserve 14 days
+        await scanPaymentEmailsInternal();
+        settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.paymentEmailLookbackDays !== 14) {
+            throw new Error(`Background scan mutated lookback window, got ${settings?.paymentEmailLookbackDays}`);
+        }
+
+        // Parsing logic tests
+        const parseLookback = (val: string | null | undefined) => {
+            if (!val) return undefined;
+            const parsed = parseInt(val, 10);
+            return !isNaN(parsed) ? parsed : undefined;
+        };
+        if (parseLookback("14") !== 14 || parseLookback("30") !== 30 || parseLookback("0") !== 0 || parseLookback("") !== undefined) {
+            throw new Error("Lookback string parsing failed");
+        }
+
+        // Lookback date math check
+        const now = new Date();
+        const lookback14 = new Date();
+        lookback14.setDate(now.getDate() - 14);
+        const diff = Math.round((now.getTime() - lookback14.getTime()) / (1000 * 60 * 60 * 24));
+        if (diff !== 14) {
+            throw new Error(`Lookback math mismatch: expected 14 days difference, got ${diff}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
+
 
     if (failedTests > 0) {
         process.exit(1);
