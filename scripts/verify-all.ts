@@ -892,6 +892,105 @@ async function runTestSuite() {
         }
     });
 
+    // 29. TMDb & Media Search: US-First Domestic Priority & Typo-Tolerant Re-ranking
+    await assertTest("TMDb & Media Search: US-First Domestic Priority & Typo-Tolerant Re-ranking", async () => {
+        const { 
+            levenshteinDistance, 
+            stringSimilarityRatio, 
+            rankMediaByDownloadLikelihood 
+        } = await import("../src/lib/curation/tmdb");
+
+        // 1. Verify similarity and distance functions
+        const distGladiater = levenshteinDistance("gladiater", "gladiator");
+        if (distGladiater !== 1) {
+            throw new Error(`Expected distance 1 for gladiater -> gladiator, got ${distGladiater}`);
+        }
+        const simGladiater = stringSimilarityRatio("gladiater", "gladiator");
+        if (simGladiater < 0.85) {
+            throw new Error(`Expected similarity >= 0.85, got ${simGladiater}`);
+        }
+
+        // 2. Test US domestic prioritization: "The Office" US vs UK vs Polish
+        const testOfficeItems: any[] = [
+            {
+                id: 101,
+                title: "The Office",
+                originalTitle: "The Office",
+                mediaType: "tv",
+                releaseDate: "2001-07-09",
+                originalLanguage: "en",
+                originCountry: ["GB"],
+                voteCount: 1005,
+                popularity: 18,
+                posterPath: "/poster_gb.jpg"
+            },
+            {
+                id: 102,
+                title: "The Office",
+                originalTitle: "The Office",
+                mediaType: "tv",
+                releaseDate: "2005-03-24",
+                originalLanguage: "en",
+                originCountry: ["US"],
+                voteCount: 5500,
+                popularity: 350,
+                posterPath: "/poster_us.jpg",
+                certification: "TV-14"
+            },
+            {
+                id: 103,
+                title: "The Office PL",
+                originalTitle: "The Office PL",
+                mediaType: "tv",
+                releaseDate: "2021-10-22",
+                originalLanguage: "pl",
+                originCountry: ["PL"],
+                voteCount: 11,
+                popularity: 8,
+                posterPath: "/poster_pl.jpg"
+            }
+        ];
+
+        const rankedOffice = rankMediaByDownloadLikelihood(testOfficeItems, "the office");
+        if (rankedOffice[0].id !== 102 || !rankedOffice[0].originCountry?.includes("US")) {
+            throw new Error(`Expected US version of The Office to rank #1, got: ${rankedOffice[0].title} (${rankedOffice[0].id})`);
+        }
+
+        // 3. Test Typo tolerance: "gladiater" query should rank "Gladiator" (2000, US/EN, 21k votes) #1
+        const testGladiatorItems: any[] = [
+            {
+                id: 201,
+                title: "Gladiater Obscure",
+                originalTitle: "Gladiater Obscure",
+                mediaType: "movie",
+                releaseDate: "2019-01-01",
+                originalLanguage: "es",
+                originCountry: ["ES"],
+                voteCount: 3,
+                popularity: 1.2,
+                posterPath: "/poster_obs.jpg"
+            },
+            {
+                id: 202,
+                title: "Gladiator",
+                originalTitle: "Gladiator",
+                mediaType: "movie",
+                releaseDate: "2000-05-01",
+                originalLanguage: "en",
+                originCountry: ["US"],
+                voteCount: 21500,
+                popularity: 150,
+                posterPath: "/poster_gladiator.jpg",
+                certification: "R"
+            }
+        ];
+
+        const rankedGladiator = rankMediaByDownloadLikelihood(testGladiatorItems, "gladiater", "gladiator");
+        if (rankedGladiator[0].id !== 202) {
+            throw new Error(`Expected iconic Gladiator (2000) to rank #1 for typo query 'gladiater', got id ${rankedGladiator[0].id}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

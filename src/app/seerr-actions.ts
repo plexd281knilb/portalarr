@@ -258,11 +258,9 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
         }
 
         let items = await searchTmdbMulti(cleanQuery, page);
-        items = filterAllowedMedia(items);
         if (isKids) {
             items = filterKidsSafeMedia(items);
         }
-        items = rankMediaByDownloadLikelihood(items, cleanQuery);
         const availabilityMap = await batchCheckMediaAvailability(items, Boolean(isKids));
 
         return {

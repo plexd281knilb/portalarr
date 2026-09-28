@@ -33,6 +33,7 @@ async function tmdbFetch(endpoint: string, params: Record<string, string | numbe
     const query = new URLSearchParams({
         api_key: apiKey.trim(),
         language: "en-US",
+        region: "US",
         include_adult: "false",
         ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
     });
@@ -129,6 +130,8 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
         genres: m.genres?.map((g: any) => g.name),
         certification,
         adult: Boolean(m.adult),
+        originalLanguage: m.original_language,
+        originCountry: m.origin_country || (m.production_countries?.map((c: any) => c.iso_3166_1) || []),
         imdbId: m.imdb_id || m.external_ids?.imdb_id
     };
 }
@@ -171,6 +174,8 @@ function mapTmdbTv(t: any): TmdbMediaItem {
         genres: t.genres?.map((g: any) => g.name),
         certification,
         adult: Boolean(t.adult),
+        originalLanguage: t.original_language,
+        originCountry: t.origin_country || [],
         imdbId: t.external_ids?.imdb_id
     };
 }
@@ -623,18 +628,83 @@ export async function getTmdbVideos(tmdbId: number, mediaType: "movie" | "tv" = 
     }
 }
 
+function cleanSuggestion(s: string): string {
+    return s.replace(/\s+(cast|streaming|movie|film|trailer|episodes|season\s*\d+|book|quotes|ending|release date|full movie|soundtrack|where to watch|imdb|review|ratings?)\b.*$/i, '').trim();
+}
+
+export function levenshteinDistance(a: string, b: string): number {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            const cost = a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1;
+            dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+        }
+    }
+    return dp[m][n];
+}
+
+export function stringSimilarityRatio(s1: string, s2: string): number {
+    const longer = s1.length < s2.length ? s2 : s1;
+    const shorter = s1.length < s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - levenshteinDistance(s1, s2)) / longer.length;
+}
+
+export async function getSpellingSuggestion(query: string): Promise<string | null> {
+    if (!query || query.trim().length < 3) return null;
+    try {
+        const cleanQ = query.trim();
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1800);
+        const url = `https://suggestqueries.google.com/complete/search?client=chrome&hl=en&gl=us&q=${encodeURIComponent(cleanQ)}`;
+        const res = await fetch(url, {
+            signal: controller.signal,
+            headers: { "Accept": "application/json" }
+        });
+        clearTimeout(timeout);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const rawSuggestions: string[] = (data[1] || []).map(cleanSuggestion).filter(Boolean);
+        const unique = [...new Set(rawSuggestions)];
+        if (unique.length === 0) return null;
+
+        // Sort by edit distance to query
+        unique.sort((a, b) => levenshteinDistance(cleanQ.toLowerCase(), a.toLowerCase()) - levenshteinDistance(cleanQ.toLowerCase(), b.toLowerCase()));
+        const best = unique[0];
+        if (best && best.toLowerCase() !== cleanQ.toLowerCase()) {
+            const isAutocomplete = best.toLowerCase().startsWith(cleanQ.toLowerCase()) && best.length > cleanQ.length;
+            const dist = levenshteinDistance(cleanQ.toLowerCase(), best.toLowerCase());
+            // Valid typo fix: not just auto-appending to a valid root word, within reasonable typo edit distance
+            if (!isAutocomplete && dist <= Math.max(3, Math.floor(cleanQ.length * 0.4))) {
+                return best;
+            }
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Ranks search results by likelihood of being wanted/downloaded:
- * Combines exact query relevance, release year matching, vote count weight,
- * and TMDb popularity score. Highly popular blockbusters (e.g. 2007 "P.S. I Love You"
- * with thousands of votes) strongly rank above obscure 1-2 vote releases (e.g. 1981).
+ * Combines US domestic priority, English language preference, typo/fuzzy similarity matching,
+ * exact query relevance, release year matching, vote count weight, and TMDb popularity score.
  */
-export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: string): TmdbMediaItem[] {
+export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: string, spellingSuggestion?: string | null): TmdbMediaItem[] {
     if (!items || items.length <= 1) return items;
 
     const rawQuery = (query || "").trim().toLowerCase();
     const cleanQuery = rawQuery.replace(/[^a-z0-9]/g, "");
+    const queryWithoutArticles = rawQuery.replace(/^(the|a|an)\s+/, "").replace(/[^a-z0-9]/g, "");
     const queryWords = rawQuery.split(/[\s\-_.:,]+/).filter(w => w.length > 0);
+
+    const rawSuggestion = (spellingSuggestion || "").trim().toLowerCase();
+    const cleanSuggestion = rawSuggestion.replace(/[^a-z0-9]/g, "");
+    const suggestionWithoutArticles = rawSuggestion.replace(/^(the|a|an)\s+/, "").replace(/[^a-z0-9]/g, "");
+    const suggestionWords = rawSuggestion.split(/[\s\-_.:,]+/).filter(w => w.length > 0);
     
     // Check if query explicitly contains a 4-digit release year (e.g. "ps i love you 1981")
     const yearMatch = rawQuery.match(/\b(19\d\d|20\d\d)\b/);
@@ -647,6 +717,8 @@ export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: str
         const origTitle = (item.originalTitle || "").trim().toLowerCase();
         const cleanTitle = title.replace(/[^a-z0-9]/g, "");
         const cleanOrig = origTitle.replace(/[^a-z0-9]/g, "");
+        const titleWithoutArticles = title.replace(/^(the|a|an)\s+/, "").replace(/[^a-z0-9]/g, "");
+        const origWithoutArticles = origTitle.replace(/^(the|a|an)\s+/, "").replace(/[^a-z0-9]/g, "");
         const itemYear = item.releaseDate ? item.releaseDate.split("-")[0] : "";
 
         // 1. Explicit Year Matching (if user explicitly included a year in search query)
@@ -654,32 +726,95 @@ export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: str
             score += 1500;
         }
 
-        // 2. Exact Title Match
-        if (cleanTitle === cleanQuery || cleanOrig === cleanQuery) {
-            score += 1000;
-        } else if (cleanTitle.startsWith(cleanQuery) || cleanOrig.startsWith(cleanQuery)) {
-            score += 400;
-        } else if (cleanTitle.includes(cleanQuery) || cleanOrig.includes(cleanQuery)) {
-            score += 200;
+        // 2. Title Matching (Exact, Prefix, Substring, Fuzzy & Spell-Correction)
+        const isExactMatch = cleanTitle === cleanQuery || cleanOrig === cleanQuery ||
+                             (titleWithoutArticles && queryWithoutArticles && titleWithoutArticles === queryWithoutArticles) ||
+                             (origWithoutArticles && queryWithoutArticles && origWithoutArticles === queryWithoutArticles);
+        const isSuggestionExact = Boolean(cleanSuggestion && (
+            cleanTitle === cleanSuggestion || cleanOrig === cleanSuggestion ||
+            (titleWithoutArticles && suggestionWithoutArticles && titleWithoutArticles === suggestionWithoutArticles) ||
+            (origWithoutArticles && suggestionWithoutArticles && origWithoutArticles === suggestionWithoutArticles)
+        ));
+
+        // Fuzzy similarities
+        const simDirect = Math.max(
+            stringSimilarityRatio(cleanQuery, cleanTitle),
+            stringSimilarityRatio(cleanQuery, cleanOrig),
+            queryWithoutArticles && titleWithoutArticles ? stringSimilarityRatio(queryWithoutArticles, titleWithoutArticles) : 0,
+            queryWithoutArticles && origWithoutArticles ? stringSimilarityRatio(queryWithoutArticles, origWithoutArticles) : 0
+        );
+        const simSuggestion = cleanSuggestion ? Math.max(
+            stringSimilarityRatio(cleanSuggestion, cleanTitle),
+            stringSimilarityRatio(cleanSuggestion, cleanOrig),
+            suggestionWithoutArticles && titleWithoutArticles ? stringSimilarityRatio(suggestionWithoutArticles, titleWithoutArticles) : 0,
+            suggestionWithoutArticles && origWithoutArticles ? stringSimilarityRatio(suggestionWithoutArticles, origWithoutArticles) : 0
+        ) : 0;
+        const bestSimilarity = Math.max(simDirect, simSuggestion);
+
+        if (isExactMatch) {
+            score += 1200;
+        } else if (isSuggestionExact) {
+            score += 1100;
+        } else if (cleanTitle.startsWith(cleanQuery) || cleanOrig.startsWith(cleanQuery) ||
+                   (cleanSuggestion && (cleanTitle.startsWith(cleanSuggestion) || cleanOrig.startsWith(cleanSuggestion)))) {
+            score += 500;
+        } else if (bestSimilarity >= 0.90) {
+            score += 850; // Near-perfect typo match (e.g. 1 transposed char or missing letter)
+        } else if (bestSimilarity >= 0.80) {
+            score += 600; // Close typo match (e.g. gladiater -> gladiator, interstelar -> interstellar)
+        } else if (bestSimilarity >= 0.70) {
+            score += 350; // Moderate typo match
+        } else if (cleanTitle.includes(cleanQuery) || cleanOrig.includes(cleanQuery) ||
+                   (cleanSuggestion && (cleanTitle.includes(cleanSuggestion) || cleanOrig.includes(cleanSuggestion)))) {
+            score += 250;
         }
 
-        // 3. Query word coverage in title
-        if (queryWords.length > 0) {
-            const matchedWords = queryWords.filter(w => title.includes(w) || origTitle.includes(w));
-            score += (matchedWords.length / queryWords.length) * 150;
+        // 3. Query word coverage in title (with fuzzy word matching)
+        const activeWords = suggestionWords.length > 0 ? suggestionWords : queryWords;
+        if (activeWords.length > 0) {
+            const titleWords = title.split(/[\s\-_.:,]+/).filter(w => w.length > 0);
+            const matchedCount = activeWords.filter(qw => 
+                titleWords.some(tw => tw === qw || stringSimilarityRatio(qw, tw) >= 0.75)
+            ).length;
+            const coverage = matchedCount / activeWords.length;
+            if (coverage === 1.0) {
+                score += 400;
+            } else if (coverage >= 0.5) {
+                score += coverage * 250;
+            }
         }
 
-        // 4. Popularity & Vote Count Weight (Crucial for ranking blockbusters above obscure releases)
-        // Logarithmic vote count provides exponential separation:
-        // 0 votes -> 0
-        // 2 votes -> ~9 pts
-        // 10 votes -> ~30 pts
-        // 100 votes -> ~60 pts
-        // 1,000 votes -> ~90 pts
-        // 3,500 votes (e.g. 2007 P.S. I Love You) -> ~106 pts
-        // 10,000+ votes -> ~120+ pts
+        // 4. US Domestic Origin & English Language Priority
+        // Prioritize US domestic content and English language releases for US audiences
+        const isEnglish = item.originalLanguage === "en";
+        const isUSCountry = Boolean(item.originCountry && item.originCountry.includes("US"));
+        const isUSDomestic = isUSCountry || (isEnglish && (!item.originCountry || item.originCountry.length === 0));
+
+        if (isUSDomestic) {
+            score += 300; // Strong US domestic priority
+        }
+        if (isEnglish) {
+            score += 200; // English language priority
+        }
+
+        // US Content Certification rating bonus
+        if (item.certification && /^(G|PG|PG-13|R|NC-17|TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA)$/i.test(item.certification)) {
+            score += 50;
+        }
+
+        // Foreign language deprioritization (unless high global acclaim)
+        if (!isEnglish && !isUSCountry) {
+            const votes = Math.max(0, Number(item.voteCount) || 0);
+            if (votes < 1000) {
+                score -= 300; // Obscure foreign releases heavily deprioritized
+            } else if (votes < 5000) {
+                score -= 150;
+            }
+        }
+
+        // 5. Popularity & Vote Count Weight (Exponential separation for iconic blockbusters)
         const voteCount = Math.max(0, Number(item.voteCount) || 0);
-        const voteScore = Math.log10(voteCount + 1) * 30;
+        const voteScore = Math.log10(voteCount + 1) * 35;
 
         // TMDb popularity scaled (0 to ~200)
         const pop = Math.max(0, Number(item.popularity) || 0);
@@ -687,18 +822,18 @@ export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: str
 
         score += voteScore + popScore;
 
-        // 5. Quality & Completeness Adjustments
+        // 6. Quality & Completeness Adjustments
         // Missing poster penalty (obscure/unreleased database entries)
         if (!item.posterPath) {
-            score -= 200;
+            score -= 250;
         }
         // Zero votes penalty
         if (voteCount === 0) {
-            score -= 50;
+            score -= 100;
         }
         // Missing release date penalty
         if (!item.releaseDate) {
-            score -= 30;
+            score -= 50;
         }
 
         return { item, score };
@@ -709,13 +844,18 @@ export function rankMediaByDownloadLikelihood(items: TmdbMediaItem[], query: str
 }
 
 /**
- * Multi-Search across Movies, TV Shows, and People
+ * Multi-Search across Movies, TV Shows, and People with US Priority & Spell-Correction
  */
 export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMediaItem[]> {
     if (!query || !query.trim()) return [];
     try {
         const cleanQuery = query.trim();
-        const [multiData, movieData] = await Promise.all([
+
+        // 1. Fetch spelling correction in parallel (fast US-biased spellcheck)
+        const spellPromise = page === 1 ? getSpellingSuggestion(cleanQuery) : Promise.resolve(null);
+
+        // 2. Fetch primary search on TMDb (multi + movie + tv)
+        const [multiData, movieData, tvData, spellingSuggestion] = await Promise.all([
             tmdbFetch("/search/multi", {
                 query: cleanQuery,
                 page,
@@ -725,7 +865,13 @@ export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMedi
                 query: cleanQuery,
                 page: 1,
                 include_adult: "false"
-            }) : Promise.resolve(null)
+            }) : Promise.resolve(null),
+            page === 1 ? tmdbFetch("/search/tv", {
+                query: cleanQuery,
+                page: 1,
+                include_adult: "false"
+            }) : Promise.resolve(null),
+            spellPromise
         ]);
 
         const items: TmdbMediaItem[] = [];
@@ -746,6 +892,13 @@ export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMedi
             }
         }
 
+        // Add tv-specific direct search results
+        if (tvData?.results && Array.isArray(tvData.results)) {
+            for (const t of tvData.results) {
+                addItem(mapTmdbTv(t));
+            }
+        }
+
         // Add multi-search results (movies, tv, and notable works)
         if (multiData?.results && Array.isArray(multiData.results)) {
             for (const item of multiData.results) {
@@ -763,10 +916,46 @@ export async function searchTmdbMulti(query: string, page = 1): Promise<TmdbMedi
             }
         }
 
+        // 3. If spelling suggestion exists and differs from query, search suggested term to catch misspelled titles
+        if (spellingSuggestion && spellingSuggestion.toLowerCase() !== cleanQuery.toLowerCase()) {
+            try {
+                const [sMulti, sMovie, sTv] = await Promise.all([
+                    tmdbFetch("/search/multi", {
+                        query: spellingSuggestion,
+                        page: 1,
+                        include_adult: "false"
+                    }),
+                    tmdbFetch("/search/movie", {
+                        query: spellingSuggestion,
+                        page: 1,
+                        include_adult: "false"
+                    }),
+                    tmdbFetch("/search/tv", {
+                        query: spellingSuggestion,
+                        page: 1,
+                        include_adult: "false"
+                    })
+                ]);
+
+                if (sMovie?.results && Array.isArray(sMovie.results)) {
+                    for (const m of sMovie.results) addItem(mapTmdbMovie(m));
+                }
+                if (sTv?.results && Array.isArray(sTv.results)) {
+                    for (const t of sTv.results) addItem(mapTmdbTv(t));
+                }
+                if (sMulti?.results && Array.isArray(sMulti.results)) {
+                    for (const item of sMulti.results) {
+                        if (item.media_type === "movie") addItem(mapTmdbMovie(item));
+                        else if (item.media_type === "tv") addItem(mapTmdbTv(item));
+                    }
+                }
+            } catch {}
+        }
+
         // Enrich search items with certification ratings in parallel
         const enriched = await enrichItemsWithCertifications(items);
         const allowed = filterAllowedMedia(enriched);
-        return rankMediaByDownloadLikelihood(allowed, query);
+        return rankMediaByDownloadLikelihood(allowed, query, spellingSuggestion);
     } catch {
         return [];
     }

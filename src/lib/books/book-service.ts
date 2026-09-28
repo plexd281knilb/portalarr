@@ -512,6 +512,17 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
 
     await Promise.all(fetchTasks);
 
+    // If zero results were found, check for a spelling correction and retry
+    if (results.length === 0) {
+        try {
+            const { getSpellingSuggestion } = await import("@/lib/curation/tmdb");
+            const suggestion = await getSpellingSuggestion(cleanQuery);
+            if (suggestion && suggestion.toLowerCase() !== cleanQuery.toLowerCase()) {
+                return await searchBooksUnified(suggestion, mediaType);
+            }
+        } catch {}
+    }
+
     // Relevance & popularity scoring
     const queryTokens = cleanQuery.toLowerCase().split(/\s+/).filter(t => t.length > 1);
     const cleanQ = cleanQuery.toLowerCase().replace(/[^a-z0-9]/g, "");

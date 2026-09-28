@@ -82,15 +82,18 @@ Portalarr's native Seerr engine unifies all media types into a single mission co
 - **Missing from Your Series Discovery**: Discovered unacquired installments from the user's book and audiobook series automatically surface in the *Seerr discovery feed as high-priority suggestions.
 - **Bi-Directional Request Mirroring**: `syncMediaRequestsQueueAndAvailabilityInternal` periodically reconciles legacy `BookRequest` records into `MediaRequest`, synchronizing download progress and availability states.
 
-### 8. Likelihood-to-Download Popularity Re-ranking in TMDb Search
-- **Search Relevance Problem**: TMDb's default keyword searches return results primarily by raw token match, frequently ranking obscure, low-vote releases (e.g. 1981 release with 2 votes) ahead of iconic blockbusters (e.g. 2007 blockbuster *P.S. I Love You* with 3,500+ votes).
-- **Popularity & Likelihood Algorithm** (`src/lib/curation/tmdb.ts`):
-  Each search candidate is evaluated and sorted by a weighted likelihood-to-download score:
-  $$\text{score} = \text{voteBonus} + (\text{voteAverage} \times 10) + \text{recencyBonus} + \text{exactTitleBonus}$$
-  where:
-  - $\text{voteBonus} = \min(\log_{10}(\text{voteCount} + 1) \times 35, 150)$ (logarithmic scale rewards popular blockbusters without allowing runaway million-vote titles to permanently bury niche requests).
-  - $\text{exactTitleBonus} = 40$ when normalized candidate title exactly equals the user's search query.
-  - $\text{recencyBonus}$: Up to $+15$ for recent films released in the modern streaming era.
+### 8. US-First Domestic Priority & Typo-Tolerant Search Engine
+- **Search Relevance & Typo Problem**: TMDb's default keyword searches return results primarily by raw token match and fail completely on misspellings (e.g. `oppenhiemer`, `gladiater`, `stranger thngs`, `breaking bag`, `interstelar` return 0 results). Obscure, low-vote international releases also frequently displace iconic US blockbusters.
+- **US Domestic & English Priority Algorithm** (`src/lib/curation/tmdb.ts`):
+  Each search candidate is evaluated and sorted by a weighted score prioritizing US domestic releases:
+  - **US Domestic Boost (+300 pts)**: Awarded when `originCountry.includes("US")` or when `originalLanguage === "en"` with no foreign origin country.
+  - **English Language Boost (+200 pts)**: Awarded when `originalLanguage === "en"`.
+  - **US Certification Boost (+50 pts)**: Awarded for standard US MPAA/TV ratings (`G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-14`, `TV-MA`).
+  - **Foreign Obscurity Penalty (-300 pts)**: Heavily suppresses non-English, non-US releases with low vote counts (<1,000 votes) to prevent obscure foreign titles from polluting US user searches.
+- **Typo Tolerance & Spell-Correction Engine**:
+  - **Dual-Query Search**: In parallel with the raw query, `getSpellingSuggestion` executes a fast US-biased spellcheck. If a typo is detected (e.g. `oppenhiemer` -> `oppenheimer`, `gladiater` -> `gladiator`), TMDb queries both queries in parallel across `/search/multi`, `/search/movie`, and `/search/tv`.
+  - **Levenshtein Fuzzy Matching**: Calculates string similarity ratios (`stringSimilarityRatio`). Typo matches (similarity $\ge 0.80$–$0.90$) receive $+600$ to $+850$ match points, ensuring the intended blockbuster surfaces at #1 even if misspelled.
+  - **Unified Books Fallback**: `searchBooksUnified` automatically falls back to `getSpellingSuggestion` when raw book/author searches yield 0 results.
 
 ### 9. Unified Branding & Mobile Search Input Responsiveness
 - **Standardized Naming**: All navigation bars, breadcrumbs, page titles, and sidebars standardize on **"Media Requests"** (retiring fragmented labels like "Discovery & Requests").

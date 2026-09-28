@@ -19,6 +19,8 @@ export interface TmdbMediaItem {
     imdbId?: string;
     tvdbId?: number;
     adult?: boolean;
+    originalLanguage?: string;
+    originCountry?: string[];
     nudityLevel?: string;
     violenceLevel?: string;
     profanityLevel?: string;
