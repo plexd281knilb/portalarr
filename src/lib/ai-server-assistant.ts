@@ -21,7 +21,7 @@ import {
 } from "@/lib/ai-media-diagnostics";
 import { logAgentEvent, validateUserCrossBoundaryQuery } from "@/lib/ai-agent-guardrails";
 import { runDeepPlexPlaybackHealthCheck, PlexPlaybackDiagnosticReport } from "@/lib/plex-playback-probe";
-import { normalizeGeminiModel } from "@/lib/ai-agent";
+import { normalizeGeminiModel, getGeminiCandidateModels, getAvailableGeminiModels } from "@/lib/ai-agent";
 
 function cleanUrl(url: string): string {
     if (!url) return "";
@@ -1099,14 +1099,8 @@ INSTRUCTIONS:
     // 1. Google Gemini Provider
     const geminiKey = rawKey || process.env.GEMINI_API_KEY || "";
     if ((provider === "gemini" || provider === "google" || (!provider || provider === "default")) && geminiKey) {
-        const normalized = normalizeGeminiModel(modelName);
-        const candidateModels = Array.from(new Set([
-            normalized,
-            "gemini-3.5-flash",
-            "gemini-3.1-pro-preview",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash"
-        ]));
+        const dynamicModels = await getAvailableGeminiModels(geminiKey).catch(() => []);
+        const candidateModels = getGeminiCandidateModels(modelName, dynamicModels);
 
         for (const activeModel of candidateModels) {
             try {
@@ -1126,7 +1120,7 @@ INSTRUCTIONS:
                     parts: [{ text: question }]
                 });
 
-                const res = await fetch(url, {
+                let res = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -1136,6 +1130,22 @@ INSTRUCTIONS:
                     }),
                     signal: controller.signal
                 });
+
+                // If 503 (model overloaded), retry once after a short 800ms backoff
+                if (res.status === 503) {
+                    await new Promise(r => setTimeout(r, 800));
+                    res = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            system_instruction: { parts: [{ text: systemPrompt }] },
+                            contents: contents,
+                            generationConfig: { temperature: 0.2, maxOutputTokens: 1400 }
+                        }),
+                        signal: controller.signal
+                    });
+                }
+
                 clearTimeout(timeoutId);
 
                 if (res.ok) {

@@ -12543,7 +12543,7 @@ export async function getAiAgentSettings() {
     await verifyAdmin();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
     const { normalizeGeminiModel } = await import("@/lib/ai-agent");
-    const rawModel = settings?.aiModel || "gemini-3.5-flash";
+    const rawModel = settings?.aiModel || "gemini-3.5-flash-lite";
     const provider = settings?.aiProvider || "default";
     return {
         aiProvider: provider,
@@ -12561,7 +12561,7 @@ export async function saveAiAgentSettings(formData: FormData) {
         const { normalizeGeminiModel } = await import("@/lib/ai-agent");
         const aiProvider = (formData.get("aiProvider") as string) || "default";
         const aiApiKeyRaw = (formData.get("aiApiKey") as string) || "";
-        const rawModel = (formData.get("aiModel") as string) || "gemini-3.5-flash";
+        const rawModel = (formData.get("aiModel") as string) || "gemini-3.5-flash-lite";
         const aiModel = (aiProvider === "gemini" || aiProvider === "google" || aiProvider === "default") ? normalizeGeminiModel(rawModel) : rawModel;
         const aiAutoResolve = formData.get("aiAutoResolve") === "true";
         const aiAutonomyLevel = (formData.get("aiAutonomyLevel") as string) || "autonomous";

@@ -3,7 +3,7 @@ import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { getPlexLibraryMediaItems, getPlexLibraryLabels, getPlexLibraryCollections, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
-import { normalizeGeminiModel } from "@/lib/ai-agent";
+import { normalizeGeminiModel, getGeminiCandidateModels } from "@/lib/ai-agent";
 
 export * from "./parental-guide-types";
 import {
@@ -453,17 +453,11 @@ Example output:
         if (provider === "gemini" || provider === "google" || (!provider || provider === "default")) {
             const keyToUse = rawKey || process.env.GEMINI_API_KEY || "";
             if (keyToUse) {
-                const candidateModels = Array.from(new Set([
-                    modelName,
-                    "gemini-3.5-flash",
-                    "gemini-3.1-pro-preview",
-                    "gemini-2.5-flash",
-                    "gemini-2.0-flash"
-                ]));
+                const candidateModels = getGeminiCandidateModels(modelName);
                 for (const activeModel of candidateModels) {
                     try {
                         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(keyToUse)}`;
-                        const res = await fetch(url, {
+                        let res = await fetch(url, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
@@ -472,6 +466,19 @@ Example output:
                                 generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
                             })
                         });
+                        // If 503 (model overloaded), retry once after a short 800ms backoff
+                        if (res.status === 503) {
+                            await new Promise(r => setTimeout(r, 800));
+                            res = await fetch(url, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    system_instruction: { parts: [{ text: systemPrompt }] },
+                                    contents: [{ parts: [{ text: JSON.stringify(payload) }] }],
+                                    generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                                })
+                            });
+                        }
                         if (res.ok) {
                             const data = await res.json();
                             rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";

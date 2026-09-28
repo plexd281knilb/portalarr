@@ -205,13 +205,13 @@ function SettingsPageContent() {
     const [aiSettings, setAiSettings] = useState<any>({
         aiProvider: "default",
         aiApiKey: "",
-        aiModel: "gemini-3.5-flash",
+        aiModel: "gemini-3.5-flash-lite",
         aiAutoResolve: true,
         aiAutonomyLevel: "autonomous",
         aiMaxDailyGrabs: 3
     });
     const [aiProviderSelect, setAiProviderSelect] = useState("default");
-    const [aiModelInput, setAiModelInput] = useState("gemini-3.5-flash");
+    const [aiModelInput, setAiModelInput] = useState("gemini-3.5-flash-lite");
     const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
     const [aiAutonomyLevel, setAiAutonomyLevel] = useState<"advisory" | "assisted" | "autonomous">("autonomous");
     const [aiMaxDailyGrabs, setAiMaxDailyGrabs] = useState<number>(3);
@@ -814,7 +814,7 @@ function SettingsPageContent() {
             setRoadmapText(roadmapTextVal);
 
             const aiProviderVal = ai?.aiProvider || "default";
-            const aiModelVal = ai?.aiModel || "gemini-3.5-flash";
+            const aiModelVal = ai?.aiModel || "gemini-3.5-flash-lite";
             const aiAutoResolveVal = ai?.aiAutoResolve ?? true;
             const aiAutonomyVal = (ai?.aiAutonomyLevel as "advisory" | "assisted" | "autonomous") || "autonomous";
             const aiMaxGrabsVal = ai?.aiMaxDailyGrabs ?? 3;
@@ -830,7 +830,7 @@ function SettingsPageContent() {
                 setAiApiKeyInput(aiApiKeyVal);
             } else {
                 setAiProviderSelect("default");
-                setAiModelInput("gemini-3.5-flash");
+                setAiModelInput("gemini-3.5-flash-lite");
                 setAiAutoResolveSwitch(true);
                 setAiAutonomyLevel("autonomous");
                 setAiMaxDailyGrabs(3);
@@ -2612,7 +2612,7 @@ function SettingsPageContent() {
                                                 onValueChange={(val) => {
                                                     setAiProviderSelect(val);
                                                     if (val === "gemini" && (!aiModelInput || aiModelInput.startsWith("gpt"))) {
-                                                        setAiModelInput("gemini-3.5-flash");
+                                                        setAiModelInput("gemini-3.5-flash-lite");
                                                     } else if (val === "openai" && (!aiModelInput || aiModelInput.startsWith("gemini"))) {
                                                         setAiModelInput("gpt-4o-mini");
                                                     }
@@ -2623,7 +2623,7 @@ function SettingsPageContent() {
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="default">Default Built-In (Free Heuristic & Search)</SelectItem>
-                                                    <SelectItem value="gemini">Google Gemini (Gemini 3.5 Flash / 3.1 Pro)</SelectItem>
+                                                    <SelectItem value="gemini">Google Gemini (Gemini 3.5 Flash Lite / 3.8 Flash)</SelectItem>
                                                     <SelectItem value="openai">OpenAI (GPT-4o / GPT-4o-mini)</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -2687,7 +2687,7 @@ function SettingsPageContent() {
                                                     <Select 
                                                         value={
                                                             dynamicModels.includes(aiModelInput) ||
-                                                            (aiProviderSelect === "gemini" && ["gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
+                                                            (aiProviderSelect === "gemini" && ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
                                                             (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput))
                                                                 ? aiModelInput
                                                                 : "custom"
@@ -2713,10 +2713,12 @@ function SettingsPageContent() {
                                                                 </>
                                                             ) : aiProviderSelect === "gemini" ? (
                                                                 <>
-                                                                    <SelectItem value="gemini-3.5-flash">gemini-3.5-flash (Recommended Default)</SelectItem>
-                                                                    <SelectItem value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (High Performance Pro)</SelectItem>
-                                                                    <SelectItem value="gemini-2.5-flash">gemini-2.5-flash (Stable Flash)</SelectItem>
-                                                                    <SelectItem value="gemini-2.0-flash">gemini-2.0-flash (Fast)</SelectItem>
+                                                                    <SelectItem value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (High Quota 500 RPD - Recommended)</SelectItem>
+                                                                    <SelectItem value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (High Quota 500 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.8-flash">gemini-3.8-flash (Flagship Flash - 20 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.7-flash">gemini-3.7-flash (Flash 3.7 - 20 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.5-flash">gemini-3.5-flash (Standard Flash - 20 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Deep Reasoning Pro - Paid Tier Only)</SelectItem>
                                                                     <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
                                                                 </>
                                                             ) : (
