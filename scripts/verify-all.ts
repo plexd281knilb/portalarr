@@ -1332,6 +1332,50 @@ async function runTestSuite() {
         }
     });
 
+    // 34. AI Agent: Natural Language Playback Probe & Title Extraction Engine
+    await assertTest("AI Agent: Natural Language Playback Probe & Title Extraction", async () => {
+        const { cleanMediaSearchQuery } = await import("../src/lib/ai-media-diagnostics");
+
+        // A. Natural language query with leading filler, trailing verb, and target server
+        const q1 = cleanMediaSearchQuery("test to make sure the sandlot runs on the main Plex server");
+        if (q1.title !== "The Sandlot") {
+            throw new Error(`Expected title 'The Sandlot', got: '${q1.title}'`);
+        }
+        if (q1.targetServer !== "main") {
+            throw new Error(`Expected targetServer 'main', got: '${q1.targetServer}'`);
+        }
+        if (!q1.isPlaybackTest) {
+            throw new Error(`Expected isPlaybackTest to be true, got: ${q1.isPlaybackTest}`);
+        }
+
+        // B. Year in parentheses with polite question and trailing platform
+        const q2 = cleanMediaSearchQuery("can you check if gladiator (2000) plays on plex?");
+        if (q2.title !== "Gladiator") {
+            throw new Error(`Expected title 'Gladiator', got: '${q2.title}'`);
+        }
+        if (q2.year !== 2000) {
+            throw new Error(`Expected year 2000, got: ${q2.year}`);
+        }
+        if (!q2.isPlaybackTest) {
+            throw new Error(`Expected isPlaybackTest to be true, got: ${q2.isPlaybackTest}`);
+        }
+
+        // C. Kids server target
+        const q3 = cleanMediaSearchQuery("make sure frozen runs on kids plex server");
+        if (q3.title !== "Frozen") {
+            throw new Error(`Expected title 'Frozen', got: '${q3.title}'`);
+        }
+        if (q3.targetServer !== "kids") {
+            throw new Error(`Expected targetServer 'kids', got: '${q3.targetServer}'`);
+        }
+
+        // D. Language problem query
+        const q4 = cleanMediaSearchQuery("why is the sandlot in spanish only");
+        if (q4.title !== "The Sandlot") {
+            throw new Error(`Expected title 'The Sandlot', got: '${q4.title}'`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

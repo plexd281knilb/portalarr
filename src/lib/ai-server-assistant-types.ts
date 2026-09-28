@@ -69,6 +69,7 @@ export interface SubtitleTrackInfo {
     language: string;
     languageCode?: string;
     title?: string;
+    displayTitle?: string;
     forced: boolean;
     selected: boolean;
     default: boolean;
@@ -76,6 +77,7 @@ export interface SubtitleTrackInfo {
 
 export interface MediaFilePart {
     id: number;
+    key?: string;
     file: string;
     sizeGb: number;
     container: string;
@@ -97,6 +99,14 @@ export interface MediaStreamInspection {
     verdict: "AUDIO_EXISTS_CLIENT_FIX" | "MISSING_LANGUAGE_TRACK" | "FILE_CORRUPT" | "NOT_IN_LIBRARY" | "OK";
     diagnosisSummary: string;
     recommendedClientSteps?: string[];
+    playbackTest?: {
+        canPlay: boolean;
+        httpStatus: number;
+        bytesRead: number;
+        latencyMs: number;
+        testedPartFile?: string;
+        error?: string;
+    };
 }
 
 export interface AgentActionReport {

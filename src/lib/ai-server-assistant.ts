@@ -664,8 +664,12 @@ There are currently no active playback sessions running on your account or your 
         } catch (e: any) {}
     }
 
-    // --- STEP 1: AUTONOMOUS MEDIA FILE & LANGUAGE INSPECTION ---
+    // --- STEP 1: AUTONOMOUS MEDIA FILE & PLAYBACK INSPECTION ---
+    const cleanedMedia = cleanMediaSearchQuery(question);
+    const isSpecificMediaPlaybackTest = Boolean(cleanedMedia.isPlaybackTest && cleanedMedia.title && cleanedMedia.title.length > 1);
+
     const isLanguageOrMediaIssue = 
+        isSpecificMediaPlaybackTest ||
         lowerQ.includes("spanish") ||
         lowerQ.includes("language") ||
         lowerQ.includes("audio") ||
@@ -676,24 +680,30 @@ There are currently no active playback sessions running on your account or your 
         lowerQ.includes("re-download") ||
         lowerQ.includes("replace") ||
         lowerQ.includes("broken") ||
-        lowerQ.includes("sandlot") ||
         lowerQ.includes("corrupt") ||
         lowerQ.includes("wrong audio") ||
         lowerQ.includes("foreign");
 
     if (isLanguageOrMediaIssue) {
-        const { title: candidateTitle, year: candidateYear } = cleanMediaSearchQuery(question);
+        const candidateTitle = cleanedMedia.title;
+        const candidateYear = cleanedMedia.year;
         const resolvedTitle = candidateTitle || snapshot.primaryActiveStream?.title;
 
         if (resolvedTitle && resolvedTitle.length > 1) {
             try {
-                mediaInspection = await inspectMediaStreams(resolvedTitle, user);
+                mediaInspection = await inspectMediaStreams(resolvedTitle, user, cleanedMedia.targetServer, candidateYear);
+
+                const playbackSummary = mediaInspection.playbackTest
+                    ? mediaInspection.playbackTest.canPlay
+                        ? ` Playback Probe: PASS (${(mediaInspection.playbackTest.bytesRead / 1024).toFixed(0)} KB in ${mediaInspection.playbackTest.latencyMs}ms from disk).`
+                        : ` Playback Probe: FAIL (${mediaInspection.playbackTest.error || "Cannot stream file from disk"}).`
+                    : "";
 
                 actionsTaken.push({
                     action: "INSPECT_MEDIA",
-                    status: "SUCCESS",
+                    status: mediaInspection.verdict === "FILE_CORRUPT" ? "FAILED" : "SUCCESS",
                     target: mediaInspection.title,
-                    summary: `Inspected Plex container: Found ${mediaInspection.audioTracks.length} audio tracks (${mediaInspection.audioTracks.map(t => t.displayTitle).join(", ")}). Verdict: ${mediaInspection.verdict}.`,
+                    summary: `Inspected Plex container for "${mediaInspection.title}" on ${mediaInspection.serverName || "Plex Server"}: Found ${mediaInspection.audioTracks.length} audio tracks (${mediaInspection.audioTracks.map(t => t.displayTitle).join(", ")}).${playbackSummary} Verdict: ${mediaInspection.verdict}.`,
                     details: mediaInspection,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });
@@ -828,8 +838,10 @@ ${actionsTaken.map(a => `- [${a.status}] ${a.action} on "${a.target}": ${a.summa
 ` : ""}
 
 ${mediaInspection ? `
-MEDIA CONTAINER INSPECTION REPORT:
-- Title: "${mediaInspection.title}" (${mediaInspection.mediaType})
+MEDIA CONTAINER INSPECTION & PLAYBACK REPORT:
+- Title: "${mediaInspection.title}" (${mediaInspection.mediaType}${mediaInspection.year ? `, ${mediaInspection.year}` : ""})
+- Server Node: "${mediaInspection.serverName || "Main Plex Server"}"
+- Playback Test Result: ${mediaInspection.playbackTest ? (mediaInspection.playbackTest.canPlay ? `PASS (Successfully streamed ${(mediaInspection.playbackTest.bytesRead / 1024).toFixed(0)} KB from disk in ${mediaInspection.playbackTest.latencyMs}ms. Storage is healthy and online.)` : `FAILED (${mediaInspection.playbackTest.error || "Plex cannot read file from disk"})`) : "Verified in library"}
 - Verdict: ${mediaInspection.verdict}
 - Summary: ${mediaInspection.diagnosisSummary}
 - Audio Tracks Found: ${mediaInspection.audioTracks.map(t => `${t.displayTitle} (${t.language}) [Selected: ${t.selected}]`).join(", ")}
@@ -1121,6 +1133,49 @@ I inspected the media file on disk and verified that it **only contains Spanish 
 
 The administrator has been alerted and will manually source a verified English release of *${mediaInspection.title}* for you!`;
         }
+    }
+
+    // --- CASE 2.5: MEDIA INSPECTION VERDICT: PLAYBACK VERIFIED / MEDIA HEALTHY (OK) ---
+    if (mediaInspection && (mediaInspection.verdict === "OK" || mediaInspection.verdict === "FILE_CORRUPT" || mediaInspection.playbackTest)) {
+        const pt = mediaInspection.playbackTest;
+        const mainAudio = mediaInspection.activeAudioTrack || mediaInspection.audioTracks[0];
+        const audioDesc = mainAudio ? `${mainAudio.displayTitle || mainAudio.language}` : "English";
+        const primaryFile = mediaInspection.files[0];
+
+        return `### 🎬 Playback Diagnostic: *${mediaInspection.title}*${mediaInspection.year ? ` (${mediaInspection.year})` : ""}
+
+I tested media playback for **${mediaInspection.title}** on **${mediaInspection.serverName || "Main Plex Server"}**:
+
+---
+
+#### 🔍 File & Playback Test Results:
+* **Server Node:** ${mediaInspection.serverName || "Main Plex Server"}
+* **Physical Disk Read Test:** ${pt ? (pt.canPlay ? `✅ **PASS** (Streamed ${(pt.bytesRead / 1024).toFixed(0)} KB from storage in ${pt.latencyMs}ms)` : `❌ **FAIL** (${pt.error || "Cannot read file from disk"})`) : "✅ Verified in Library"}
+* **Container Format:** ${primaryFile ? `${primaryFile.container.toUpperCase()} (${primaryFile.sizeGb} GB)` : "Media File"}
+* **Audio Track:** 🔊 **${audioDesc}** (English is present and ready)
+* **All Detected Audio Streams:** ${mediaInspection.audioTracks.map(t => t.displayTitle).join(", ") || "English"}
+* **Subtitles:** ${mediaInspection.subtitleTracks.length > 0 ? mediaInspection.subtitleTracks.map(s => s.displayTitle || s.language).join(", ") : "None detected"}
+
+---
+
+#### 💡 Playback Verdict:
+${pt?.canPlay !== false 
+    ? `**Ready for Direct Play!** The file is physically accessible on storage, the stream header is valid, and the server can stream it directly to your devices with zero errors.`
+    : `⚠️ **Storage Issue Detected:** The media item is in the Plex database, but the physical file could not be read from disk. This may indicate an unmounted drive, disconnected share, or permissions issue.`
+}`;
+    }
+
+    // --- CASE 2.6: MEDIA INSPECTION VERDICT: NOT IN LIBRARY ---
+    if (mediaInspection && mediaInspection.verdict === "NOT_IN_LIBRARY") {
+        return `### 🔍 Media Search: *${mediaInspection.title}*
+
+I searched your connected Plex media servers (${mediaInspection.serverName || "Main Plex Server"}), but **"${mediaInspection.title}" was not found in your library**.
+
+---
+
+#### 💡 How to Get It:
+* You can request this title directly on **[Media Requests](/discover)** with 1-click automatic downloading.
+* If you recently downloaded or copied this file to your server, trigger a library scan from **Settings** or your Plex library menu to index the file.`;
     }
 
     // --- CASE 3: ROKU QUALITY / AUTO ADJUST / 103kbps ERROR ---

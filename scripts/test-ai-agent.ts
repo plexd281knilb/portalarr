@@ -33,6 +33,15 @@ async function runTests() {
     const q2 = cleanMediaSearchQuery("Why is The Sandlot (1993) has no english audio?");
     assert("cleanMediaSearchQuery extracts title & year", q2.title === "The Sandlot" && q2.year === 1993);
 
+    const q3 = cleanMediaSearchQuery("test to make sure the sandlot runs on the main Plex server");
+    assert("cleanMediaSearchQuery extracts 'The Sandlot' from 'test to make sure the sandlot runs on the main Plex server'", q3.title === "The Sandlot" && q3.targetServer === "main" && q3.isPlaybackTest === true);
+
+    const q4 = cleanMediaSearchQuery("can you check if gladiator (2000) plays on plex?");
+    assert("cleanMediaSearchQuery extracts title & year from playback query", q4.title === "Gladiator" && q4.year === 2000 && q4.isPlaybackTest === true);
+
+    const q5 = cleanMediaSearchQuery("make sure frozen runs on kids plex server");
+    assert("cleanMediaSearchQuery extracts title & targetServer from 'make sure frozen runs on kids plex server'", q5.title === "Frozen" && q5.targetServer === "kids");
+
     // TEST 2: validateMediaReleaseCandidate - Foreign & Quality Rejections
     const camRelease = {
         title: "The.Sandlot.1993.HDCAM.x264",

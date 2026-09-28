@@ -580,6 +580,32 @@ export function AiServerAssistant() {
                                                         })}
                                                     </div>
                                                 </div>
+
+                                                {/* Disk Playback Verification Row (if tested) */}
+                                                {msg.mediaInspection.playbackTest && (
+                                                    <div className={`px-2 py-1.5 rounded-lg flex items-center justify-between text-[10px] border ${
+                                                        msg.mediaInspection.playbackTest.canPlay 
+                                                            ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-200" 
+                                                            : "bg-rose-950/40 border-rose-500/30 text-rose-200"
+                                                    }`}>
+                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                            <PlayCircle className={`h-3.5 w-3.5 shrink-0 ${msg.mediaInspection.playbackTest.canPlay ? "text-emerald-400" : "text-rose-400"}`} />
+                                                            <span className="font-semibold">{msg.mediaInspection.playbackTest.canPlay ? "Disk Playback Verified" : "Playback Failed"}</span>
+                                                            <span className="text-muted-foreground truncate">({msg.mediaInspection.serverName || "Server"})</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {msg.mediaInspection.playbackTest.canPlay ? (
+                                                                <span className="font-mono text-[9px] text-emerald-300">
+                                                                    {(msg.mediaInspection.playbackTest.bytesRead / 1024).toFixed(0)} KB in {msg.mediaInspection.playbackTest.latencyMs}ms
+                                                                </span>
+                                                            ) : (
+                                                                <span className="font-mono text-[9px] text-rose-300">
+                                                                    {msg.mediaInspection.playbackTest.error || `HTTP ${msg.mediaInspection.playbackTest.httpStatus}`}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 

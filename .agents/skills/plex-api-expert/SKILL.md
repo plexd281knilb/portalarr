@@ -78,4 +78,8 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
    - Agregarr trailer placeholders share identical `Guid` (TMDb / IMDb) values with real movies. Distinguish them by checking `editionTitle === "Trailer"` or searching `metadata.Label` for `trailer-placeholder`. Availability indexes must exclude placeholders so upcoming movies are not falsely marked as "In Library".
 10. **Strict Friend & Share Matching Integrity**:
     - When mapping local users to Plex friends/shares via `/api/users` or `https://plex.tv/api/v2/friends`, NEVER use partial substring containment (e.g. `ta.includes(sa)` or `sa.startsWith(ta)`). Partial substring matching causes disastrous cross-user share collisions (e.g. `dominicjuliano` falsely matching `juliano` or `mjuliano7`). Strictly compare exact numeric Plex user IDs, exact emails, exact usernames, normalized alphanumeric characters (`username.replace(/[^a-z0-9]/gi, '')`), or exact email prefix identifiers (`email.split('@')[0]`).
+11. **Connection Reachability & Byte-Range Playback Probing**:
+    - When searching items or probing media across multiple PMS servers/candidate URLs, avoid sequential hanging on unresponsive URLs. Probe connection responsiveness with a fast 1,500ms `/identity` check first.
+    - To verify disk read health without downloading complete multi-gigabyte media parts, execute an active HTTP Range probe (`Range: bytes=0-65535`) against the part URL (`part.key`). A 206 Partial Content or 200 OK confirms physical storage availability and responsive disk I/O.
+
 

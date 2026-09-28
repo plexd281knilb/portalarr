@@ -3488,7 +3488,7 @@ export async function searchPlexLibraryItems(
         if (results.length >= maxLimit) break;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 3500);
             const res = await fetch(endpoint, {
                 headers: {
                     Accept: "application/json",
@@ -3542,6 +3542,7 @@ export async function searchPlexLibraryItems(
                 seenKeys.add(rKey);
                 results.push(analyzeMediaStreamInfo(item));
             }
+            if (results.length > 0) break;
         } catch (e: any) {
             // Try next search endpoint
         }
@@ -3583,7 +3584,7 @@ export async function inspectPlexMediaItemFull(
         audio: any[];
         subtitles: any[];
     };
-    parts: Array<{ id: number; file: string; sizeGb: number; container: string }>;
+    parts: Array<{ id: number; key?: string; file: string; sizeGb: number; container: string }>;
     hasBackup: boolean;
     isLeavingSoon: boolean;
     leavingSoonDate?: Date | null;
@@ -3617,7 +3618,7 @@ export async function inspectPlexMediaItemFull(
         const videoStreams: any[] = [];
         const audioStreams: any[] = [];
         const subtitleStreams: any[] = [];
-        const parts: Array<{ id: number; file: string; sizeGb: number; container: string }> = [];
+        const parts: Array<{ id: number; key?: string; file: string; sizeGb: number; container: string }> = [];
 
         const mediaList = Array.isArray(rawItem.Media) ? rawItem.Media : rawItem.Media ? [rawItem.Media] : [];
         for (const m of mediaList) {
@@ -3626,6 +3627,7 @@ export async function inspectPlexMediaItemFull(
                 const sizeBytes = p.size || 0;
                 parts.push({
                     id: p.id,
+                    key: p.key,
                     file: p.file || "",
                     sizeGb: parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(2)),
                     container: p.container || m.container || "mkv"

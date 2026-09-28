@@ -16,7 +16,7 @@ import {
     logAgentEvent 
 } from "@/lib/ai-agent-guardrails";
 import { getPlexServers } from "@/lib/plex";
-import { searchPlexLibraryItems, inspectPlexMediaItemFull } from "@/lib/curation/plex-analyzer";
+import { searchPlexLibraryItems, inspectPlexMediaItemFull, type PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost } from "@/app/arr-actions";
 import nodemailer from "nodemailer";
 
@@ -25,44 +25,158 @@ import nodemailer from "nodemailer";
  * e.g. "The Sandlot is in Spanish only" -> "The Sandlot"
  * e.g. "Why is Gladiator (2000) buffering" -> "Gladiator" (year: 2000)
  */
-export function cleanMediaSearchQuery(rawQuery: string): { title: string; year?: number; rawCleaned: string } {
+export interface CleanedMediaQuery {
+    title: string;
+    year?: number;
+    targetServer?: string;
+    rawCleaned: string;
+    isPlaybackTest?: boolean;
+}
+
+/**
+ * Strips conversational filler, test intent verbs, server names, and noise to extract canonical title and year.
+ * e.g. "test to make sure the sandlot runs on the main Plex server" -> "The Sandlot", targetServer: "main"
+ * e.g. "Why is Gladiator (2000) buffering" -> "Gladiator" (year: 2000)
+ */
+export function cleanMediaSearchQuery(rawQuery: string): CleanedMediaQuery {
     let clean = (rawQuery || "").trim();
 
-    // Extract year if present in parentheses e.g. (1993) or (2020)
+    // Detect if this is a playback test / verification query
+    const isPlaybackTest = /\b(test|verify|check|make sure|see if|can play|does play|will play|playable|runs?|plays?|working)\b/i.test(rawQuery);
+
+    // 1. Extract year if present in parentheses e.g. (1993) or (2020)
     let extractedYear: number | undefined;
-    const yearMatch = clean.match(/\b(19\d\d|20\d\d)\b/);
-    if (yearMatch) {
-        extractedYear = parseInt(yearMatch[1], 10);
+    const yearParenMatch = clean.match(/\s*\(\s*(19\d\d|20\d\d)\s*\)\s*/);
+    if (yearParenMatch) {
+        extractedYear = parseInt(yearParenMatch[1], 10);
+        clean = clean.replace(yearParenMatch[0], " ");
+    } else {
+        const yearStandaloneMatch = clean.match(/\b(19\d\d|20\d\d)\b/);
+        if (yearStandaloneMatch) {
+            extractedYear = parseInt(yearStandaloneMatch[1], 10);
+            clean = clean.replace(yearStandaloneMatch[0], " ");
+        }
     }
 
-    // Strip common prompt/query prefixes and suffixes
-    clean = clean.replace(/^(can you|please|could you|why is|why does|how do i|fix|check|diagnose|inspect|redownload|re-download|download|grab|search for|replace)\s+/i, "");
-    clean = clean.replace(/^(the movie|the film|the show|the tv show|the episode|the series|the book)\s+/i, "");
-    clean = clean.replace(/\b(is in spanish only|in spanish only|only in spanish|spanish only|in spanish|only spanish)\b/i, "");
-    clean = clean.replace(/\b(has no english audio|no english audio|missing english audio|missing english|no english|english audio missing)\b/i, "");
-    clean = clean.replace(/\b(is not playing|wont play|won't play|not working|is broken|corrupted|buffering|stuttering)\b/i, "");
-    clean = clean.replace(/\s*\(\d{4}\)\s*/g, " "); // Strip (1993)
-    clean = clean.replace(/[?.,!]/g, " ").trim();
+    // 2. Detect target server if user specified one (e.g. "on the main Plex server", "on kids server", "on backup")
+    let targetServer: string | undefined;
+    const serverMatch = clean.match(/\bon\s+(the\s+)?(main|primary|backup|kids?|living\s*room)\s*(plex)?\s*(server)?\b/i);
+    if (serverMatch) {
+        targetServer = serverMatch[2].toLowerCase().trim();
+        clean = clean.replace(serverMatch[0], " ");
+    }
+
+    // Strip surrounding punctuation (e.g. trailing question mark)
+    clean = clean.replace(/[?.,!":;]+$/g, "").trim();
+
+    // 3. Strip leading polite phrases, question words, and intent phrases
+    const leadingPatterns = [
+        /^(can you|could you|would you|will you)(\s+please)?\s+/i,
+        /^(please\s+)?(run|execute|perform)\s+(a\s+)?(quick\s+)?(playback|stream|server|file)?\s*test\s+(on|for|of)?\s+/i,
+        /^(please\s+)?(test|check|verify|see|diagnose|inspect|probe)\s+(playback\s+(of|for)|streaming\s+(of|for)|stream\s+(of|for)|to\s+make\s+sure(\s+that)?|if|whether|that)?\s+/i,
+        /^(please\s+)?(test|check|verify|inspect|run)\s+(playback|stream)?\s*(of|for|on)?\s+/i,
+        /^(make\s+sure(\s+that)?)\s+/i,
+        /^(please\s+)?(redownload|re-download|download|grab|search for|replace|fix)\s+/i,
+        /^(why is|why does|how do i|how come|is|does|can)\s+/i,
+        /^(the movie|the film|the show|the tv show|the episode|the series|the book)\s+/i,
+        /^(movie|film|show|series)\s+/i
+    ];
+
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const pattern of leadingPatterns) {
+            const next = clean.replace(pattern, "").trim();
+            if (next !== clean) {
+                clean = next;
+                changed = true;
+            }
+        }
+    }
+
+    // 4. Strip trailing intent phrases, condition phrases, server phrases
+    const trailingPatterns = [
+        /\s+on\s+(the\s+)?(main|primary|backup|kids?|living\s*room)?\s*(plex)?\s*(server)?$/i,
+        /\s+on\s+plex$/i,
+        /\s+on\s+server$/i,
+        /\s+in\s+plex$/i,
+        /\s+runs?\s+fine$/i,
+        /\s+runs?$/i,
+        /\s+plays?\s+fine$/i,
+        /\s+plays?$/i,
+        /\s+works?\s+fine$/i,
+        /\s+works?$/i,
+        /\s+is\s+(playing|running|working)(\s+fine)?$/i,
+        /\s+can\s+(play|stream|run)$/i,
+        /\s+is\s+playable$/i,
+        /\s+for\s+playback\s+issues$/i,
+        /\s+for\s+playback$/i,
+        /\s+for\s+issues$/i,
+        /\s+for\s+streaming$/i,
+        /\s+playback\s+test$/i,
+        /\s+playback$/i,
+        /\s+(is in spanish only|in spanish only|only in spanish|spanish only|in spanish|only spanish)$/i,
+        /\s+(has no english audio|no english audio|missing english audio|missing english|no english|english audio missing)$/i,
+        /\s+(is not playing|wont play|won't play|not working|is broken|corrupted|buffering|stuttering)$/i
+    ];
+
+    changed = true;
+    while (changed) {
+        changed = false;
+        for (const pattern of trailingPatterns) {
+            const next = clean.replace(pattern, "").trim();
+            if (next !== clean) {
+                clean = next;
+                changed = true;
+            }
+        }
+    }
+
+    // Clean remaining punctuation and whitespace
+    clean = clean.replace(/[?.,!":;]/g, " ").replace(/\s+/g, " ").trim();
+
+    // Capitalize properly if lowercased
+    let finalTitle = clean;
+    if (finalTitle.length > 0) {
+        finalTitle = finalTitle.split(" ").map(w => {
+            const lower = w.toLowerCase();
+            if (["a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for", "with"].includes(lower)) {
+                return lower;
+            }
+            return lower.charAt(0).toUpperCase() + lower.slice(1);
+        }).join(" ");
+        finalTitle = finalTitle.charAt(0).toUpperCase() + finalTitle.slice(1);
+    }
 
     return {
-        title: clean.trim(),
+        title: finalTitle,
         year: extractedYear,
-        rawCleaned: clean.trim()
+        targetServer,
+        rawCleaned: clean,
+        isPlaybackTest
     };
 }
 
 /**
- * Inspects a media file's audio, video, and subtitle streams via Direct Plex API.
- * Detects whether English audio exists in the container or is truly missing.
+ * Inspects a media file's audio, video, and subtitle streams via Direct Plex API,
+ * and performs an active byte-range playback probe on the physical disk file.
  */
 export async function inspectMediaStreams(
     rawQuery: string,
-    user?: any
+    user?: any,
+    targetServerName?: string,
+    targetYear?: number
 ): Promise<MediaStreamInspection> {
-    const { title, year } = cleanMediaSearchQuery(rawQuery);
-    const searchTitle = title || rawQuery;
+    const cleaned = cleanMediaSearchQuery(rawQuery);
+    const searchTitle = cleaned.title || rawQuery;
+    const year = targetYear || cleaned.year;
+    const serverPref = targetServerName || cleaned.targetServer;
 
-    logAgentEvent("INFO", `Inspecting media streams for title "${searchTitle}"`, { user: user?.username, year });
+    logAgentEvent("INFO", `Inspecting media streams for title "${searchTitle}"`, { 
+        user: user?.username, 
+        year,
+        targetServer: serverPref 
+    });
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
     let token = "";
@@ -70,6 +184,18 @@ export async function inspectMediaStreams(
         try {
             token = decryptData(settings.mainPlexToken);
         } catch (e) {}
+    }
+    if (!token) {
+        // Fallback: check any PlexServer configured with an encrypted token
+        const plexServersWithToken = await prisma.plexServer.findMany({ where: { token: { not: null } } }).catch(() => []);
+        for (const ps of plexServersWithToken) {
+            if (ps.token) {
+                try {
+                    token = decryptData(ps.token);
+                    if (token) break;
+                } catch (e) {}
+            }
+        }
     }
 
     if (!token) {
@@ -94,36 +220,118 @@ export async function inspectMediaStreams(
         servers = await getPlexServers(token);
     } catch (e) {}
 
+    // Add mainPlexUrl if configured and not present in servers
+    if (settings?.mainPlexUrl) {
+        const cleanMain = settings.mainPlexUrl.replace(/\/+$/, "");
+        const alreadyHas = servers.some(s => s.connections?.some((c: any) => c.uri.startsWith(cleanMain)));
+        if (!alreadyHas) {
+            servers.unshift({
+                name: "Main Plex Server",
+                accessToken: token,
+                connections: [{ uri: cleanMain, local: true, relay: false }]
+            });
+        }
+    }
+
+    // Sort servers if user requested a specific server (e.g. "main", "kids", "backup")
+    if (serverPref) {
+        const lowerPref = serverPref.toLowerCase();
+        servers.sort((a, b) => {
+            const aMatch = (a.name || "").toLowerCase().includes(lowerPref);
+            const bMatch = (b.name || "").toLowerCase().includes(lowerPref);
+            if (aMatch && !bMatch) return -1;
+            if (!aMatch && bMatch) return 1;
+            return 0;
+        });
+    }
+
     let matchedItem: any = null;
     let matchedServerUrl = "";
     let matchedToken = token;
     let matchedServerName = "Main Plex Server";
 
-    // Search across candidate servers
+    // Search across candidate servers using fast non-blocking connection probes
     for (const srv of servers) {
         const srvToken = srv.accessToken || token;
-        for (const conn of srv.connections) {
-            try {
-                const results = await searchPlexLibraryItems(conn.uri, srvToken, searchTitle, undefined, 10);
-                if (results && results.length > 0) {
-                    // Find closest match by title
-                    const exactOrClose = results.find(r => 
-                        r.title.toLowerCase() === searchTitle.toLowerCase() ||
-                        r.title.toLowerCase().includes(searchTitle.toLowerCase()) ||
-                        searchTitle.toLowerCase().includes(r.title.toLowerCase())
-                    ) || results[0];
+        const connections = srv.connections || [];
 
-                    if (exactOrClose) {
-                        matchedItem = exactOrClose;
-                        matchedServerUrl = conn.uri;
-                        matchedToken = srvToken;
-                        matchedServerName = srv.name || "Plex Server";
-                        break;
-                    }
+        // Prioritize local connections first, direct remote second, relay last
+        const sortedConns = [...connections].sort((a, b) => {
+            if (a.local && !b.local) return -1;
+            if (!a.local && b.local) return 1;
+            if (!a.relay && b.relay) return -1;
+            if (a.relay && !b.relay) return 1;
+            return 0;
+        });
+
+        // 1. Probe for the first responsive connection on this server with a fast 1500ms ping
+        let activeUri = "";
+        for (const conn of sortedConns) {
+            const cleanUri = conn.uri.replace(/\/+$/, "");
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const pingRes = await fetch(`${cleanUri}/identity`, {
+                    headers: {
+                        Accept: "application/json",
+                        "X-Plex-Token": srvToken,
+                        "X-Plex-Client-Identifier": "portalarr-ai-diagnostics"
+                    },
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(timeoutId);
+                if (pingRes.ok) {
+                    activeUri = cleanUri;
+                    break;
                 }
             } catch (e) {}
         }
-        if (matchedItem) break;
+
+        if (!activeUri) {
+            // Server has no responsive connections, skip without blocking
+            continue;
+        }
+
+        // 2. Query Plex on the verified active connection
+        // Try exact searchTitle, and if not found try variants (without 'The ' or with 'The ')
+        const titlesToTry: string[] = [searchTitle];
+        if (/^The\s+/i.test(searchTitle)) {
+            titlesToTry.push(searchTitle.replace(/^The\s+/i, ""));
+        } else {
+            titlesToTry.push("The " + searchTitle);
+        }
+
+        let results: PlexMediaStreamInfo[] = [];
+        for (const qTitle of titlesToTry) {
+            try {
+                results = await searchPlexLibraryItems(activeUri, srvToken, qTitle, undefined, 10);
+                if (results && results.length > 0) break;
+            } catch (e) {}
+        }
+
+        if (results && results.length > 0) {
+            // Find closest match by title
+            const sLower = searchTitle.toLowerCase().trim();
+            const sClean = sLower.replace(/^the\s+/i, "").trim();
+
+            const exactOrClose = results.find(r => {
+                const rLower = (r.title || "").toLowerCase().trim();
+                const rClean = rLower.replace(/^the\s+/i, "").trim();
+                return rLower === sLower || 
+                       rClean === sClean || 
+                       rLower.includes(sClean) || 
+                       sClean.includes(rClean);
+            }) || results[0];
+
+            if (exactOrClose) {
+                matchedItem = exactOrClose;
+                matchedServerUrl = activeUri;
+                matchedToken = srvToken;
+                matchedServerName = srv.name || "Plex Server";
+                break;
+            }
+        }
     }
 
     if (!matchedItem || !matchedItem.ratingKey) {
@@ -139,7 +347,7 @@ export async function inspectMediaStreams(
             hasSpanishAudio: false,
             hasEnglishSubtitles: false,
             verdict: "NOT_IN_LIBRARY",
-            diagnosisSummary: `Media item "${searchTitle}" could not be located in your Plex media library.`
+            diagnosisSummary: `Media item "${searchTitle}" could not be located in your Plex media library on ${matchedServerName}.`
         };
     }
 
@@ -186,6 +394,7 @@ export async function inspectMediaStreams(
         language: s.language || "Unknown",
         languageCode: s.languageCode?.toLowerCase() || "",
         title: s.title || `${s.language || "Unknown"} [${s.codec?.toUpperCase()}]`,
+        displayTitle: s.title || `${s.language || "Unknown"} [${s.codec?.toUpperCase()}]`,
         forced: Boolean(s.forced),
         selected: Boolean(s.selected),
         default: Boolean(s.default)
@@ -221,12 +430,74 @@ export async function inspectMediaStreams(
 
     const activeAudioTrack = audioTracks.find(a => a.selected) || audioTracks.find(a => a.default) || audioTracks[0];
 
+    // Active Playback Verification: Test physical disk streaming on candidate part file
+    let playbackTestResult: {
+        canPlay: boolean;
+        httpStatus: number;
+        bytesRead: number;
+        latencyMs: number;
+        testedPartFile?: string;
+        error?: string;
+    } | undefined;
+
+    if (details.parts && details.parts.length > 0) {
+        const primaryPart = details.parts[0];
+        const partKey = (primaryPart as any).key || (primaryPart.id ? `/library/parts/${primaryPart.id}` : null);
+        if (partKey) {
+            const testUrl = `${matchedServerUrl.replace(/\/+$/, "")}${partKey.startsWith("/") ? partKey : "/" + partKey}`;
+            const pStart = Date.now();
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const rangeRes = await fetch(testUrl, {
+                    headers: {
+                        "X-Plex-Token": matchedToken,
+                        "X-Plex-Client-Identifier": "portalarr-ai-playback-probe",
+                        Range: "bytes=0-65535" // Request first 64KB
+                    },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                const latencyMs = Date.now() - pStart;
+                const canPlay = rangeRes.status === 200 || rangeRes.status === 206;
+                let bytesRead = 0;
+                if (canPlay) {
+                    const buf = await rangeRes.arrayBuffer().catch(() => new ArrayBuffer(0));
+                    bytesRead = buf.byteLength || 65536;
+                }
+
+                playbackTestResult = {
+                    canPlay,
+                    httpStatus: rangeRes.status,
+                    bytesRead,
+                    latencyMs,
+                    testedPartFile: primaryPart.file ? primaryPart.file.split(/[/\\]/).pop() : primaryPart.container,
+                    error: canPlay ? undefined : `Plex streaming endpoint returned HTTP ${rangeRes.status}`
+                };
+            } catch (pErr: any) {
+                playbackTestResult = {
+                    canPlay: false,
+                    httpStatus: 0,
+                    bytesRead: 0,
+                    latencyMs: Date.now() - pStart,
+                    testedPartFile: primaryPart.file ? primaryPart.file.split(/[/\\]/).pop() : primaryPart.container,
+                    error: pErr.name === "AbortError" ? "Storage read timed out (exceeded 3.5s)" : pErr.message || "Failed to stream media part from storage"
+                };
+            }
+        }
+    }
+
     // Determine verdict
     let verdict: MediaStreamInspection["verdict"] = "OK";
     let diagnosisSummary = "";
     let recommendedClientSteps: string[] | undefined;
 
-    if (hasSpanishAudio && hasEnglishAudio) {
+    if (playbackTestResult && !playbackTestResult.canPlay) {
+        // Storage failure or missing disk file!
+        verdict = "FILE_CORRUPT";
+        diagnosisSummary = `Storage playback check failed for "${matchedItem.title}": The underlying media file could not be read from disk on ${matchedServerName} (${playbackTestResult.error}). The hard drive, network share, or file path may be disconnected.`;
+    } else if (hasSpanishAudio && hasEnglishAudio) {
         // CASE A: User reports Spanish, but English track DOES exist in the file!
         verdict = "AUDIO_EXISTS_CLIENT_FIX";
         const engTrack = audioTracks.find(a => 
@@ -255,13 +526,14 @@ export async function inspectMediaStreams(
         diagnosisSummary = `The media file on disk does not have an English audio track. Available audio tracks: ${audioTracks.map(t => t.displayTitle).join(", ")}.`;
     } else {
         verdict = "OK";
-        diagnosisSummary = `Media container is healthy. English audio (${audioTracks.map(t => t.displayTitle).join(", ")}) is present and selected.`;
+        diagnosisSummary = `Playback verified: "${matchedItem.title}" (${matchedItem.year || "N/A"}) is physically readable from disk on ${matchedServerName} (${playbackTestResult ? `${(playbackTestResult.bytesRead / 1024).toFixed(0)} KB in ${playbackTestResult.latencyMs}ms` : "OK"}). English audio is present and ready for Direct Play.`;
     }
 
     logAgentEvent("INFO", `Media stream inspection completed for "${matchedItem.title}": Verdict=${verdict}`, {
         hasEnglishAudio,
         hasSpanishAudio,
-        audioTracksCount: audioTracks.length
+        audioTracksCount: audioTracks.length,
+        canPlay: playbackTestResult?.canPlay
     });
 
     return {
@@ -279,7 +551,8 @@ export async function inspectMediaStreams(
         hasEnglishSubtitles,
         verdict,
         diagnosisSummary,
-        recommendedClientSteps
+        recommendedClientSteps,
+        playbackTest: playbackTestResult
     };
 }
 
