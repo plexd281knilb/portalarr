@@ -3561,29 +3561,35 @@ export async function executePlexLibraryAccessUpdateInternal(
             let trialEndsAt: Date | null = user.trialEndsAt;
             let subscriptionEndsAt: Date | null = user.subscriptionEndsAt;
             let convertedAt = user.convertedAt;
+            let membershipTier = user.membershipTier;
 
             if (activationType === "APPROVED" || activationType === "PERMANENT") {
                 newStatus = "APPROVED";
                 trialEndsAt = null;
                 subscriptionEndsAt = null;
                 if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
             } else if (activationType === "TRIAL") {
                 newStatus = "TRIAL";
+                membershipTier = "TRIAL";
                 const settings = await prisma.settings.findUnique({ where: { id: "global" } });
                 const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (settings?.defaultTrialDays || 14);
                 trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
                 subscriptionEndsAt = null;
             } else if (activationType === "CUSTOM_TRIAL") {
                 newStatus = "TRIAL";
+                membershipTier = "TRIAL";
                 const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (parseInt(String(customDateOrDays), 10) || 7);
                 trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
                 subscriptionEndsAt = null;
             } else if (activationType === "7_DAYS_TRIAL") {
                 newStatus = "TRIAL";
+                membershipTier = "TRIAL";
                 trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
                 subscriptionEndsAt = null;
             } else if (activationType === "14_DAYS_TRIAL") {
                 newStatus = "TRIAL";
+                membershipTier = "TRIAL";
                 trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
                 subscriptionEndsAt = null;
             } else if (activationType === "30_DAYS") {
@@ -3591,17 +3597,20 @@ export async function executePlexLibraryAccessUpdateInternal(
                 subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
                 trialEndsAt = null;
                 if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
             } else if (activationType === "REST_OF_YEAR") {
                 newStatus = "APPROVED";
                 const currentYear = now.getFullYear();
-                subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59);
+                subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59, 999);
                 trialEndsAt = null;
                 if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
             } else if (activationType === "1_YEAR") {
                 newStatus = "APPROVED";
                 subscriptionEndsAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
                 trialEndsAt = null;
                 if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
             } else if (activationType === "CUSTOM" && customDateOrDays) {
                 newStatus = "APPROVED";
                 subscriptionEndsAt = typeof customDateOrDays === "number"
@@ -3609,17 +3618,25 @@ export async function executePlexLibraryAccessUpdateInternal(
                     : new Date(customDateOrDays);
                 trialEndsAt = null;
                 if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
             }
 
             await prisma.user.update({
                 where: { id: userId },
                 data: {
                     status: newStatus,
+                    membershipTier,
                     trialEndsAt,
                     subscriptionEndsAt,
                     convertedAt
                 }
             });
+
+            user.status = newStatus;
+            user.membershipTier = membershipTier;
+            user.trialEndsAt = trialEndsAt;
+            user.subscriptionEndsAt = subscriptionEndsAt;
+            user.convertedAt = convertedAt;
         }
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
@@ -4247,6 +4264,7 @@ export async function setUserTrialOrSubscription(
         let trialEndsAt: Date | null = user.trialEndsAt;
         let subscriptionEndsAt: Date | null = user.subscriptionEndsAt;
         let convertedAt = user.convertedAt;
+        let membershipTier = user.membershipTier;
 
         const now = new Date();
 
@@ -4254,42 +4272,50 @@ export async function setUserTrialOrSubscription(
             const settings = await prisma.settings.findUnique({ where: { id: "global" } });
             const days = typeof customDateOrDays === "number" ? customDateOrDays : (settings?.defaultTrialDays || 14);
             status = "TRIAL";
+            membershipTier = "TRIAL";
             trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
             subscriptionEndsAt = null;
         } else if (type === "CUSTOM_TRIAL") {
             const days = typeof customDateOrDays === "number" ? customDateOrDays : (parseInt(String(customDateOrDays), 10) || 7);
             status = "TRIAL";
+            membershipTier = "TRIAL";
             trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
             subscriptionEndsAt = null;
         } else if (type === "7_DAYS_TRIAL") {
             status = "TRIAL";
+            membershipTier = "TRIAL";
             trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
             subscriptionEndsAt = null;
         } else if (type === "14_DAYS_TRIAL") {
             status = "TRIAL";
+            membershipTier = "TRIAL";
             trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
             subscriptionEndsAt = null;
         } else if (type === "REST_OF_YEAR") {
             status = "APPROVED";
             const currentYear = now.getFullYear();
-            subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59);
+            subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59, 999);
             trialEndsAt = null;
             if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
         } else if (type === "30_DAYS") {
             status = "APPROVED";
             subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
             trialEndsAt = null;
             if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
         } else if (type === "1_YEAR") {
             status = "APPROVED";
             subscriptionEndsAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
             trialEndsAt = null;
             if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
         } else if (type === "PERMANENT") {
             status = "APPROVED";
             subscriptionEndsAt = null;
             trialEndsAt = null;
             if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
         } else if (type === "SUSPENDED") {
             status = "SUSPENDED";
         } else if (type === "EXPIRED") {
@@ -4301,12 +4327,14 @@ export async function setUserTrialOrSubscription(
                 : new Date(customDateOrDays);
             trialEndsAt = null;
             if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
         }
 
         await prisma.user.update({
             where: { id: userId },
             data: {
                 status,
+                membershipTier,
                 trialEndsAt,
                 subscriptionEndsAt,
                 convertedAt
@@ -4584,7 +4612,7 @@ export async function syncUserPlexShareInternal(
                 where: { id: targetUser.id },
                 select: { status: true, role: true, membershipTier: true }
             }).catch(() => null);
-            if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.role !== "ADMIN") {
+            if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.status !== "APPROVED" && u.role !== "ADMIN") {
                 isTrialUser = true;
             }
         }
@@ -4627,7 +4655,7 @@ export async function syncUserPlexShareInternal(
                     const u = await prisma.user.findUnique({ where: { id: targetUser.id }, select: { status: true, role: true, membershipTier: true, selectedPlexLibrarySectionIds: true } }).catch(() => null);
                     if (u && (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED")) {
                         shouldRemove = true;
-                    } else if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.role !== "ADMIN") {
+                    } else if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.status !== "APPROVED" && u.role !== "ADMIN") {
                         shouldRemove = true;
                     } else if (u && u.selectedPlexLibrarySectionIds !== null && u.selectedPlexLibrarySectionIds !== undefined) {
                         shouldRemove = true;
@@ -4825,10 +4853,13 @@ export async function restoreAllUsersPlexAccessAction() {
 export async function markUserConverted(userId: string) {
     try {
         await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { membershipTier: true } });
         await prisma.user.update({
             where: { id: userId },
             data: {
                 status: "APPROVED",
+                membershipTier: (user?.membershipTier === "TRIAL" || !user?.membershipTier) ? "STANDARD" : user.membershipTier,
+                trialEndsAt: null,
                 convertedAt: new Date()
             }
         });
@@ -5388,7 +5419,7 @@ export async function getUserReferralInfo() {
 
         if (!dbUser) return { success: false, error: "User not found" };
 
-        const isTrial = (dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.role !== "ADMIN";
+        const isTrial = (dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.status !== "APPROVED" && dbUser.role !== "ADMIN";
 
         let code = dbUser.referralCode;
         if (!code && !isTrial) {
@@ -6066,6 +6097,15 @@ export async function updateUserMembershipTierAction(userId: string, membershipT
         const cleanTier = validTiers.includes(membershipTier) ? membershipTier : "STANDARD";
 
         const updatePayload: any = { membershipTier: cleanTier };
+        if (cleanTier === "TRIAL") {
+            updatePayload.status = "TRIAL";
+        } else {
+            const target = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+            if (target?.status === "TRIAL") {
+                updatePayload.status = "APPROVED";
+                updatePayload.trialEndsAt = null;
+            }
+        }
 
         const updated = await prisma.user.update({
             where: { id: userId },
@@ -6443,7 +6483,7 @@ export async function getUserSubAccountsAction() {
             where: { id: user.id },
             select: { enabledAddons: true, membershipTier: true, status: true, role: true }
         });
-        const isTrial = (parentUser?.status === "TRIAL" || parentUser?.membershipTier === "TRIAL") && parentUser?.role !== "ADMIN";
+        const isTrial = (parentUser?.status === "TRIAL" || parentUser?.membershipTier === "TRIAL") && parentUser?.status !== "APPROVED" && parentUser?.role !== "ADMIN";
         const enabledAddonsList: string[] = parentUser?.enabledAddons ? JSON.parse(parentUser.enabledAddons) : [];
         const extraKidsAllowed = isTrial ? 0 : (enabledAddonsList.includes("extra_kid_profile") ? 3 : 1);
         const extraLivingRoomsAllowed = isTrial ? 0 : (enabledAddonsList.includes("extra_living_room") ? 3 : 1);
@@ -6478,7 +6518,7 @@ export async function createOrUpdateSubAccountAction(payload: {
         const parentUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!parentUser) return { success: false, error: "Parent user not found" };
 
-        if ((parentUser.status === "TRIAL" || parentUser.membershipTier === "TRIAL") && parentUser.role !== "ADMIN") {
+        if ((parentUser.status === "TRIAL" || parentUser.membershipTier === "TRIAL") && parentUser.status !== "APPROVED" && parentUser.role !== "ADMIN") {
             return {
                 success: false,
                 error: "Secondary profiles and sub-accounts unlock upon upgrading to full membership."
@@ -6819,7 +6859,7 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser) return { success: false, error: "User not found" };
 
-        if ((dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.role !== "ADMIN") {
+        if ((dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.status !== "APPROVED" && dbUser.role !== "ADMIN") {
             return {
                 success: false,
                 error: "Optional add-ons unlock upon upgrading to full membership."
@@ -13495,7 +13535,7 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
         if (session.role === "ADMIN") return true;
 
         // Trial accounts never have access to the Book Library
-        if (session.status === "TRIAL" || (session as any).isTrial === true) {
+        if ((session.status === "TRIAL" || (session as any).isTrial === true) && session.status !== "APPROVED") {
             return false;
         }
 

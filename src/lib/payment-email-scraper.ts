@@ -867,10 +867,15 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
     const convertedAtDate = user.convertedAt || payment.emailDate || now;
 
     // Update User in database
+    const newTier = (user.membershipTier === "TRIAL" || !user.membershipTier) && targetStatus === "APPROVED" 
+        ? "STANDARD" 
+        : user.membershipTier;
     await prisma.user.update({
         where: { id: user.id },
         data: {
             status: targetStatus,
+            membershipTier: newTier,
+            trialEndsAt: targetStatus === "APPROVED" ? null : user.trialEndsAt,
             subscriptionEndsAt: newExpiryDate,
             convertedAt: convertedAtDate
         }

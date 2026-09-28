@@ -301,6 +301,25 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 18. Trial-to-Full Account Upgrade & Activation Transition Engine (`isTrial` & `membershipTier` Lifecycle)
+- **Automatic Membership Tier Upgrades on Activation**:
+  - Whenever an administrator grants access or activates an account (via `executePlexLibraryAccessUpdateInternal`, `setUserTrialOrSubscription`, `recalculateUserSubscriptionFromPayments`, or `markUserConverted`) using `REST_OF_YEAR`, `30_DAYS`, `1_YEAR`, `PERMANENT`, or `CUSTOM`:
+    - `user.status` transitions to `"APPROVED"`.
+    - `user.trialEndsAt` is cleared to `null`.
+    - `user.subscriptionEndsAt` is set to the designated expiration timestamp.
+    - `user.membershipTier` automatically upgrades from `"TRIAL"` (or null) to `"STANDARD"` (or preserves elevated tiers like `"TIER_2_VIP"` / `"PREMIUM_4K"`).
+- **Strict `isTrial` Evaluation Pattern Across Codebase**:
+  - Always enforce status check exclusion so an approved member is NEVER flagged as a trial user:
+    ```tsx
+    const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && user?.role !== "ADMIN";
+    const isFullUser = isLoggedIn && !isAdmin && !isSuperUser && !isTrial;
+    ```
+  - Prevents approved accounts with active subscriptions from rendering `TrialDashboardView`, displaying 14-day trial countdowns, getting barred from secondary server libraries (kids/backup shares), or having profile features (referral links, add-ons, sub-accounts) locked behind trial gates.
+- **Self-Healing in `getCurrentUser()`**:
+  - If a user has `status: "APPROVED"` (or `role: "ADMIN"`) but their `membershipTier` in SQLite was still marked as `"TRIAL"`, `getCurrentUser()` automatically heals the database record to `membershipTier: "STANDARD"`, clears `trialEndsAt: null`, re-issues an updated persistent session cookie, and returns the healed user immediately.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

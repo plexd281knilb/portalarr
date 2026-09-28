@@ -609,7 +609,7 @@ export async function getUserRequestQuotaAction() {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
 
         const isAdmin = user.role === "ADMIN" || user.role === "SUPER_USER";
-        const isTrial = user.status === "TRIAL" || (user as any).isTrial === true;
+        const isTrial = (user.status === "TRIAL" || (user as any).isTrial === true) && user.status !== "APPROVED" && !isAdmin;
         const accountTier: "ADMIN" | "FULL" | "TRIAL" = isAdmin ? "ADMIN" : isTrial ? "TRIAL" : "FULL";
 
         const canRequest = user.canRequest ?? true;
@@ -746,7 +746,7 @@ export async function submitMediaRequestAction(payload: {
             throw new Error("You do not have permission to request 4K UHD media.");
         }
 
-        const isTrial = user.status === "TRIAL" || (user as any).isTrial === true;
+        const isTrial = (user.status === "TRIAL" || (user as any).isTrial === true) && user.status !== "APPROVED" && !isAdmin;
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
 
         // Global NC-17 / Disallowed Rating Guard

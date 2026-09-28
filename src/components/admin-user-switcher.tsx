@@ -93,7 +93,7 @@ export default function AdminUserSwitcher() {
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
                         {users.map((u) => {
-                            const isTrial = u.status === "TRIAL" || u.membershipTier === "TRIAL";
+                            const isTrial = (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.status !== "APPROVED" && u.role !== "ADMIN";
                             const isSuper = u.role === "SUPER_USER";
                             const isAdmin = u.role === "ADMIN";
 

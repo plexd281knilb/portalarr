@@ -140,7 +140,7 @@ export default function UserProfilePage() {
     const [addonMsg, setAddonMsg] = useState("");
     const [addonErr, setAddonErr] = useState("");
 
-    const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.role !== "ADMIN";
+    const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && user?.role !== "ADMIN";
 
     const initialProfileRef = useRef<{
         kindleEmail: string;

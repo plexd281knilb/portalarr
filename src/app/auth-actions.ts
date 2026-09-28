@@ -41,7 +41,7 @@ export async function setupFirstAdmin(formData: FormData) {
       data: { username, email, password: hashedPassword, role: "ADMIN", status: "APPROVED" }
     });
 
-    await createSession(user.id, user.username, user.role, user.status);
+    await createSession(user.id, user.username, user.role, user.status, null, null, "STANDARD");
     return { success: true };
   } catch (e: any) {
     console.error("Setup Error:", e);
@@ -91,7 +91,14 @@ export async function login(formData: FormData) {
     await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
   }
 
-  await createSession(user.id, user.username, user.role, currentStatus, user.trialEndsAt, user.subscriptionEndsAt);
+  // Auto-heal membership tier for approved members or admins whose tier is still marked as TRIAL
+  let currentTier = user.membershipTier;
+  if ((currentStatus === "APPROVED" || user.role === "ADMIN") && currentTier === "TRIAL") {
+    currentTier = "STANDARD";
+    await prisma.user.update({ where: { id: user.id }, data: { membershipTier: "STANDARD", trialEndsAt: null } }).catch(() => {});
+  }
+
+  await createSession(user.id, user.username, user.role, currentStatus, user.trialEndsAt, user.subscriptionEndsAt, currentTier);
   return { success: true };
 }
 
@@ -130,7 +137,7 @@ export async function requestAccount(formData: FormData) {
   await sendAdminNewAccountRequestEmail({ id: user.id, username: user.username, email: user.email });
 
   // Log user into pending session state
-  await createSession(user.id, user.username, user.role, user.status);
+  await createSession(user.id, user.username, user.role, user.status, null, null, user.membershipTier);
   return { success: true };
 }
 
@@ -149,7 +156,8 @@ export async function createSession(
   role: string, 
   status: string = "APPROVED",
   trialEndsAt?: Date | string | null,
-  subscriptionEndsAt?: Date | string | null
+  subscriptionEndsAt?: Date | string | null,
+  membershipTier?: string | null
 ) {
   const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30; // 30 Days persistent login
   const expiresAt = new Date(Date.now() + THIRTY_DAYS_SEC * 1000);
@@ -168,6 +176,7 @@ export async function createSession(
     username, 
     role, 
     status,
+    membershipTier: membershipTier || (status === "TRIAL" ? "TRIAL" : "STANDARD"),
     trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
     subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt).toISOString() : null
   })
@@ -347,7 +356,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
       });
     }
 
-    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt);
+    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
     return { success: true };
   }
 
@@ -402,7 +411,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     });
   }
 
-  await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt);
+  await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
   return { success: true };
 }
 
@@ -579,10 +588,33 @@ export async function getCurrentUser() {
     }
   }
   
-  // Prevent login loops: If user status or role in DB changed, re-issue updated session cookie immediately
-  if (user.status !== payload.status || user.role !== payload.role) {
-    console.log(`[AUTH] User status/role updated for ${user.username} (Status: ${payload.status} -> ${user.status}). Updating session cookie.`);
-    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt);
+  // Auto-heal membership tier for approved members or admins whose tier is still marked as TRIAL
+  if ((user.status === "APPROVED" || user.role === "ADMIN") && user.membershipTier === "TRIAL") {
+    console.log(`[AUTH] Healing membership tier for approved user ${user.username} (TRIAL -> STANDARD)`);
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { membershipTier: "STANDARD", trialEndsAt: null },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        kindleEmail: true,
+        role: true,
+        status: true,
+        membershipTier: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+        referralCode: true,
+        plexEmail: true,
+        plexUsername: true
+      }
+    });
+  }
+  
+  // Prevent login loops: If user status, role, or tier in DB changed, re-issue updated session cookie immediately
+  if (user.status !== payload.status || user.role !== payload.role || (payload as any).membershipTier !== user.membershipTier) {
+    console.log(`[AUTH] User status/role/tier updated for ${user.username} (Status: ${payload.status} -> ${user.status}, Tier: ${(payload as any).membershipTier} -> ${user.membershipTier}). Updating session cookie.`);
+    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
   }
 
   return user;
@@ -742,7 +774,7 @@ export async function impersonateUserAction(targetUserId: string) {
   // 2. Fetch target user
   const targetUser = await prisma.user.findUnique({
     where: { id: targetUserId },
-    select: { id: true, username: true, role: true, status: true, trialEndsAt: true, subscriptionEndsAt: true }
+    select: { id: true, username: true, role: true, status: true, membershipTier: true, trialEndsAt: true, subscriptionEndsAt: true }
   });
 
   if (!targetUser) {
@@ -761,7 +793,7 @@ export async function impersonateUserAction(targetUserId: string) {
   }
 
   // 4. Create fresh session cookie for the target user
-  await createSession(targetUser.id, targetUser.username, targetUser.role, targetUser.status, targetUser.trialEndsAt, targetUser.subscriptionEndsAt);
+  await createSession(targetUser.id, targetUser.username, targetUser.role, targetUser.status, targetUser.trialEndsAt, targetUser.subscriptionEndsAt, targetUser.membershipTier);
 
   return {
     success: true,
@@ -787,7 +819,7 @@ export async function stopImpersonationAction() {
 
     const adminUser = await prisma.user.findUnique({
       where: { id: payload.userId as string },
-      select: { id: true, username: true, role: true, status: true, trialEndsAt: true, subscriptionEndsAt: true }
+      select: { id: true, username: true, role: true, status: true, membershipTier: true, trialEndsAt: true, subscriptionEndsAt: true }
     });
 
     if (!adminUser || adminUser.role !== "ADMIN") {
@@ -796,7 +828,7 @@ export async function stopImpersonationAction() {
     }
 
     // Restore original Admin session
-    await createSession(adminUser.id, adminUser.username, adminUser.role, adminUser.status, adminUser.trialEndsAt, adminUser.subscriptionEndsAt);
+    await createSession(adminUser.id, adminUser.username, adminUser.role, adminUser.status, adminUser.trialEndsAt, adminUser.subscriptionEndsAt, adminUser.membershipTier);
     cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
 
     return { success: true, adminUsername: adminUser.username };

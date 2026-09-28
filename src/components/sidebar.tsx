@@ -42,7 +42,7 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
       if (session) {
         const userRole = (session.role as string) || "";
         const userStatus = (session.status as string) || "";
-        const trial = userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true;
+        const trial = (userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true) && userStatus !== "APPROVED" && userRole !== "ADMIN";
         setRole(userRole);
         setIsAdmin(userRole === "ADMIN");
         setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
@@ -341,7 +341,7 @@ export function MobileSidebar() {
       if (session) {
         const userRole = (session.role as string) || "";
         const userStatus = (session.status as string) || "";
-        const trial = userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true;
+        const trial = (userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true) && userStatus !== "APPROVED" && userRole !== "ADMIN";
         setRole(userRole);
         setIsAdmin(userRole === "ADMIN");
         setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");

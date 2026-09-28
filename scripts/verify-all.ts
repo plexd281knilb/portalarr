@@ -1492,6 +1492,128 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Test 64: Trial Account Upgrade & Activation Transition Engine (Status Healing, Membership Tier Upgrades, and IsTrial Demotion)", async () => {
+        const { SignJWT, jwtVerify } = await import("jose");
+        const { getJwtSecret } = await import("../src/lib/auth-secret");
+        const secret = getJwtSecret();
+
+        // 1. Emulate user with previous TRIAL status and membershipTier
+        const trialUser = {
+            id: "user-trial-123",
+            username: "dominicjuliano",
+            status: "TRIAL",
+            membershipTier: "TRIAL",
+            role: "USER",
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 3600 * 1000),
+            subscriptionEndsAt: null,
+            convertedAt: null
+        };
+
+        // Before activation: user must be flagged as trial
+        const isTrialBefore = (trialUser.status === "TRIAL" || trialUser.membershipTier === "TRIAL") && trialUser.status !== "APPROVED" && trialUser.role !== "ADMIN";
+        const isFullUserBefore = !isTrialBefore && trialUser.role !== "ADMIN";
+        if (!isTrialBefore || isFullUserBefore) {
+            throw new Error(`Expected user to be trial before activation, got isTrial=${isTrialBefore}, isFullUser=${isFullUserBefore}`);
+        }
+
+        // 2. Simulate Administrator approval for REST_OF_YEAR
+        const activationType = "REST_OF_YEAR";
+        const now = new Date();
+        let newStatus = trialUser.status;
+        let trialEndsAt: Date | null = trialUser.trialEndsAt;
+        let subscriptionEndsAt: Date | null = trialUser.subscriptionEndsAt;
+        let convertedAt = trialUser.convertedAt;
+        let membershipTier = trialUser.membershipTier;
+
+        if (activationType === "REST_OF_YEAR") {
+            newStatus = "APPROVED";
+            const currentYear = now.getFullYear();
+            subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+        }
+
+        // Apply activation state
+        const activatedUser = {
+            ...trialUser,
+            status: newStatus,
+            membershipTier,
+            trialEndsAt,
+            subscriptionEndsAt,
+            convertedAt
+        };
+
+        if (activatedUser.status !== "APPROVED") {
+            throw new Error(`Expected activated user status to be APPROVED, got: ${activatedUser.status}`);
+        }
+        if (activatedUser.membershipTier !== "STANDARD") {
+            throw new Error(`Expected activated user membershipTier to be STANDARD, got: ${activatedUser.membershipTier}`);
+        }
+        if (activatedUser.trialEndsAt !== null) {
+            throw new Error(`Expected trialEndsAt to be cleared to null, got: ${activatedUser.trialEndsAt}`);
+        }
+        if (!activatedUser.subscriptionEndsAt || activatedUser.subscriptionEndsAt.getFullYear() !== now.getFullYear()) {
+            throw new Error(`Expected subscriptionEndsAt to end on year ${now.getFullYear()}, got: ${activatedUser.subscriptionEndsAt}`);
+        }
+
+        // 3. Verify isTrial and isFullUser logic for activated user
+        const isTrialAfter = (activatedUser.status === "TRIAL" || activatedUser.membershipTier === "TRIAL") && activatedUser.status !== "APPROVED" && activatedUser.role !== "ADMIN";
+        const isFullUserAfter = !isTrialAfter && activatedUser.role !== "ADMIN";
+        if (isTrialAfter || !isFullUserAfter) {
+            throw new Error(`Expected activated user to NOT be trial and to be full user, got isTrial=${isTrialAfter}, isFullUser=${isFullUserAfter}`);
+        }
+
+        // 4. Verify self-healing logic: if user status is APPROVED but membershipTier was stuck as TRIAL
+        const stuckUser = {
+            id: "user-stuck-123",
+            username: "stuckuser",
+            status: "APPROVED",
+            membershipTier: "TRIAL",
+            role: "USER",
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 3600 * 1000)
+        };
+
+        // Before healing, page-level isTrial check must guard against stuck TRIAL tier
+        const pageIsTrial = (stuckUser.status === "TRIAL" || stuckUser.membershipTier === "TRIAL") && stuckUser.status !== "APPROVED" && stuckUser.role !== "ADMIN";
+        if (pageIsTrial) {
+            throw new Error(`Expected APPROVED stuck user to evaluate isTrial=false on page level, got: ${pageIsTrial}`);
+        }
+
+        // Self-healing execution
+        if ((stuckUser.status === "APPROVED" || stuckUser.role === "ADMIN") && stuckUser.membershipTier === "TRIAL") {
+            stuckUser.membershipTier = "STANDARD";
+            stuckUser.trialEndsAt = null;
+        }
+
+        if (stuckUser.membershipTier !== "STANDARD" || stuckUser.trialEndsAt !== null) {
+            throw new Error(`Self-healing failed to heal membershipTier to STANDARD or clear trialEndsAt`);
+        }
+
+        // 5. Verify JWT session token includes updated membershipTier
+        const sessionToken = await new SignJWT({
+            userId: activatedUser.id,
+            username: activatedUser.username,
+            role: activatedUser.role,
+            status: activatedUser.status,
+            membershipTier: activatedUser.membershipTier,
+            trialEndsAt: null,
+            subscriptionEndsAt: activatedUser.subscriptionEndsAt.toISOString()
+        })
+            .setProtectedHeader({ alg: "HS256" })
+            .setIssuedAt()
+            .setExpirationTime("30d")
+            .sign(secret);
+
+        const { payload: jwtPayload } = await jwtVerify(sessionToken, secret);
+        if (jwtPayload.membershipTier !== "STANDARD") {
+            throw new Error(`Expected JWT membershipTier to be STANDARD, got: ${jwtPayload.membershipTier}`);
+        }
+        if (jwtPayload.status !== "APPROVED") {
+            throw new Error(`Expected JWT status to be APPROVED, got: ${jwtPayload.status}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

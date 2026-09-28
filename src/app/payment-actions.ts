@@ -672,10 +672,15 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
     const isCurrentlyActive = currentExpiry ? currentExpiry > now : false;
     const newStatus = isCurrentlyActive ? "APPROVED" : "EXPIRED";
 
+    const newTier = (user.membershipTier === "TRIAL" || !user.membershipTier) && newStatus === "APPROVED" 
+        ? "STANDARD" 
+        : user.membershipTier;
     await prisma.user.update({
         where: { id: userId },
         data: {
             status: newStatus,
+            membershipTier: newTier,
+            trialEndsAt: newStatus === "APPROVED" ? null : user.trialEndsAt,
             subscriptionEndsAt: currentExpiry
         }
     });

@@ -57,7 +57,7 @@ export default async function UserLandingPage() {
 
     const isAdmin = user?.role === "ADMIN";
     const isSuperUser = user?.role === "SUPER_USER";
-    const isTrial = user?.status === "TRIAL" || user?.membershipTier === "TRIAL";
+    const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && user?.role !== "ADMIN";
     const isFullUser = isLoggedIn && !isAdmin && !isSuperUser && !isTrial;
 
     // Fetch dynamic content safely
