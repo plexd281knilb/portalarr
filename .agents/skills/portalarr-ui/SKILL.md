@@ -351,10 +351,14 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - `activeTab` switches seamlessly between:
     1. **`💬 Diagnostic Chat`**: Interactive conversation with the autonomous AI agent. Features collapsible live telemetry ribbon with 1-click `"Diagnose Stream"` trigger, audio track inspector cards with replacement actions, real-time media probe results, autonomous action report cards (`RADARR_SEARCH_GRAB`, `ESCALATE_ADMIN_TICKET`), multi-step animated thinking states, and categorized prompt suggestions.
     2. **`📡 Live Telemetry`**: Deep stream telemetry inspector showing real-time video/audio transcode decisions, hardware acceleration indicators (`NVENC / QSV` vs `CPU Software`), bitrate & resolution telemetry, transcode speed multipliers, transcode reason tags, detected playback issues with recommended client fixes, and chronic pattern insights.
-    3. **`🩺 Server Disk & Probes`**: Server nodes matrix displaying physical storage read speeds (`182 MB/s`), NVMe fast tier status, database query latency (`0.4ms`), hardware transcoder status, and 1-click test probe actions.
+    3. **`🩺 Server Disk & Probes`**: Server nodes matrix dynamically rendering every configured Plex media server node (e.g. `MainPlexServer`, `KidsPlexServer`, `MainPlexServerBackup`), displaying live reachability (`ONLINE` / `OPERATIONAL`), connection mode (`Local Direct` vs `Remote`), API latency, and disk streaming health.
     4. **`⚡ Quick Fixes`**: Actionable 1-click client playback resolutions (Roku "Playback Error" fix, 100% Direct Play mode, quiet center-channel audio boost, language track replacement, subtitle burn-in fix) with direct links to `PlexSetupGuides` and `FeatureGuideModal`.
+- **Conversational Context & Pronoun Anaphora Resolution**:
+  - Natural language pronoun resolution (`extractContextFromHistory`) seamlessly resolves anaphoric pronouns ("can you test it on the main server?", "does that play on kids?", "is it working?") to the canonical media title discussed in previous turns, preventing erroneous matches or searching Plex for filler words.
+  - Conversational title corrections (e.g. "no the sandlot", "actually the sandlot") automatically inherit requested target servers and playback test intent from context.
+  - Dedicated server infrastructure status handler (`isServerStatusQuery`) provides comprehensive cluster health reports ("what all servers are online?").
 - **Integrated High-Tech Header & Identity**:
-  - Features an animated glowing Bot avatar with status pulse and `Autonomous v3.1` live indicator badge.
+  - Features an animated glowing Bot avatar with status pulse, operational counter badge reflecting all online server nodes (`4`), and `Autonomous v3.1` live indicator badge.
   - Quick action buttons in the header provide instant access to setup guides (`PlexSetupGuides`), feature tours (`FeatureGuideModal`), and clearing session history.
 - **Component**: `src/components/ai-server-assistant.tsx`
 

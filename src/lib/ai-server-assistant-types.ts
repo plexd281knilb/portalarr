@@ -119,6 +119,18 @@ export interface AgentActionReport {
     timestamp: string;
 }
 
+export interface ServerNodeSnapshot {
+    name: string;
+    type: "plex" | "tautulli";
+    status: "ONLINE" | "DEGRADED" | "OFFLINE";
+    isLocal?: boolean;
+    isRelay?: boolean;
+    connectionUri?: string;
+    version?: string;
+    pingMs?: number;
+    activeSessions?: number;
+}
+
 export interface UserDiagnosticSnapshot {
     username: string;
     email?: string;
@@ -136,6 +148,7 @@ export interface UserDiagnosticSnapshot {
         mediaType: string;
     }>;
     serversOnlineCount: number;
+    serverNodes?: ServerNodeSnapshot[];
     detectedIssues: DetectedIssue[];
     patternInsights?: StreamPatternInsight[];
     linkedSubAccounts?: Array<{

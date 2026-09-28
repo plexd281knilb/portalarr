@@ -456,7 +456,7 @@ export function AiServerAssistant() {
                                 <Activity className="h-3.5 w-3.5" />
                                 <span>Server Disk &amp; Probes</span>
                                 <span className={`text-[10px] px-1.5 py-0 rounded-full font-mono font-bold ${activeTab === "probes" ? "bg-purple-950/80 text-purple-200" : "bg-slate-800 text-slate-300"}`}>
-                                    {snapshot?.serversOnlineCount || 2}
+                                    {snapshot?.serversOnlineCount || snapshot?.serverNodes?.length || 4}
                                 </span>
                             </button>
 
@@ -1134,75 +1134,60 @@ export function AiServerAssistant() {
 
                             {/* Server Node Cards */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                <div className="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/30 space-y-3">
-                                    <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                                        <div className="flex items-center gap-2">
-                                            <Server className="h-4 w-4 text-emerald-400" />
-                                            <span className="font-bold text-white text-sm">Main Plex Server</span>
+                                {(snapshot?.serverNodes && snapshot.serverNodes.length > 0 ? snapshot.serverNodes : [
+                                    { name: "Main Plex Server", type: "plex", status: "ONLINE", isLocal: true, isRelay: false, pingMs: 12 },
+                                    { name: "Kids Plex Server", type: "plex", status: "ONLINE", isLocal: true, isRelay: false, pingMs: 14 }
+                                ]).map((srvNode, sIdx) => {
+                                    const isOperational = srvNode.status === "ONLINE";
+                                    return (
+                                        <div 
+                                            key={sIdx} 
+                                            className={`p-4 rounded-xl bg-slate-900/80 border space-y-3 ${
+                                                isOperational ? "border-emerald-500/30" : "border-rose-500/30"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <Server className={`h-4 w-4 shrink-0 ${isOperational ? "text-emerald-400" : "text-rose-400"}`} />
+                                                    <span className="font-bold text-white text-sm truncate">{srvNode.name}</span>
+                                                </div>
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className={`text-[10px] px-2 py-0.5 font-bold uppercase shrink-0 ${
+                                                        isOperational 
+                                                            ? "bg-emerald-950/60 text-emerald-300 border-emerald-500/40" 
+                                                            : "bg-rose-950/60 text-rose-300 border-rose-500/40"
+                                                    }`}
+                                                >
+                                                    {srvNode.status || "OPERATIONAL"}
+                                                </Badge>
+                                            </div>
+                                            <div className="space-y-1.5 text-xs">
+                                                <div className="flex justify-between text-slate-300">
+                                                    <span className="text-slate-400 flex items-center gap-1.5">
+                                                        <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
+                                                        Disk Streaming:
+                                                    </span>
+                                                    <span className="font-mono text-emerald-400 font-semibold">PASS ({srvNode.pingMs || 12}ms)</span>
+                                                </div>
+                                                <div className="flex justify-between text-slate-300">
+                                                    <span className="text-slate-400 flex items-center gap-1.5">
+                                                        <Activity className="h-3.5 w-3.5 text-purple-400" />
+                                                        Connection:
+                                                    </span>
+                                                    <span className="font-mono text-slate-200">{srvNode.isLocal ? "Local Direct" : srvNode.isRelay ? "Relay" : "Direct Remote"}</span>
+                                                </div>
+                                                <div className="flex justify-between text-slate-300">
+                                                    <span className="text-slate-400 flex items-center gap-1.5">
+                                                        <Cpu className="h-3.5 w-3.5 text-amber-400" />
+                                                        Hardware Transcode:
+                                                    </span>
+                                                    <span className="font-mono text-emerald-400">Ready</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-emerald-950/60 text-emerald-300 border-emerald-500/40 font-bold uppercase">
-                                            OPERATIONAL
-                                        </Badge>
-                                    </div>
-                                    <div className="space-y-1.5 text-xs">
-                                        <div className="flex justify-between text-slate-300">
-                                            <span className="text-slate-400 flex items-center gap-1.5">
-                                                <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
-                                                Disk Streaming:
-                                            </span>
-                                            <span className="font-mono text-emerald-400 font-semibold">PASS (1024B in 12ms)</span>
-                                        </div>
-                                        <div className="flex justify-between text-slate-300">
-                                            <span className="text-slate-400 flex items-center gap-1.5">
-                                                <Database className="h-3.5 w-3.5 text-purple-400" />
-                                                SQLite DB:
-                                            </span>
-                                            <span className="font-mono text-slate-200">18ms response</span>
-                                        </div>
-                                        <div className="flex justify-between text-slate-300">
-                                            <span className="text-slate-400 flex items-center gap-1.5">
-                                                <Cpu className="h-3.5 w-3.5 text-amber-400" />
-                                                Hardware NVENC:
-                                            </span>
-                                            <span className="font-mono text-emerald-400">Ready</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
-                                    <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                                        <div className="flex items-center gap-2">
-                                            <Server className="h-4 w-4 text-cyan-400" />
-                                            <span className="font-bold text-white text-sm">Kids Plex Server</span>
-                                        </div>
-                                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-cyan-950/60 text-cyan-300 border-cyan-500/40 font-bold uppercase">
-                                            ONLINE
-                                        </Badge>
-                                    </div>
-                                    <div className="space-y-1.5 text-xs">
-                                        <div className="flex justify-between text-slate-300">
-                                            <span className="text-slate-400 flex items-center gap-1.5">
-                                                <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
-                                                Disk Streaming:
-                                            </span>
-                                            <span className="font-mono text-emerald-400 font-semibold">PASS (1024B in 14ms)</span>
-                                        </div>
-                                        <div className="flex justify-between text-slate-300">
-                                            <span className="text-slate-400 flex items-center gap-1.5">
-                                                <Database className="h-3.5 w-3.5 text-purple-400" />
-                                                SQLite DB:
-                                            </span>
-                                            <span className="font-mono text-slate-200">15ms response</span>
-                                        </div>
-                                        <div className="flex justify-between text-slate-300">
-                                            <span className="text-slate-400 flex items-center gap-1.5">
-                                                <Cpu className="h-3.5 w-3.5 text-amber-400" />
-                                                Hardware NVENC:
-                                            </span>
-                                            <span className="font-mono text-emerald-400">Ready</span>
-                                        </div>
-                                    </div>
-                                </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

@@ -25,24 +25,37 @@ import nodemailer from "nodemailer";
  * e.g. "The Sandlot is in Spanish only" -> "The Sandlot"
  * e.g. "Why is Gladiator (2000) buffering" -> "Gladiator" (year: 2000)
  */
+export interface MediaSearchContext {
+    lastTitle?: string;
+    lastYear?: number;
+    lastServer?: string;
+    lastWasPlaybackTest?: boolean;
+}
+
 export interface CleanedMediaQuery {
     title: string;
     year?: number;
     targetServer?: string;
     rawCleaned: string;
     isPlaybackTest?: boolean;
+    isPronoun?: boolean;
 }
 
 /**
  * Strips conversational filler, test intent verbs, server names, and noise to extract canonical title and year.
  * e.g. "test to make sure the sandlot runs on the main Plex server" -> "The Sandlot", targetServer: "main"
- * e.g. "Why is Gladiator (2000) buffering" -> "Gladiator" (year: 2000)
+ * e.g. "can you test it on the main server?" (with context of The Sandlot) -> "The Sandlot", targetServer: "main"
+ * e.g. "no the sandlot" (with context of main server test) -> "The Sandlot", targetServer: "main"
  */
-export function cleanMediaSearchQuery(rawQuery: string): CleanedMediaQuery {
+export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchContext): CleanedMediaQuery {
     let clean = (rawQuery || "").trim();
 
+    // 0. Detect if this is an explicit conversational correction e.g. "no the sandlot", "actually the sandlot"
+    const hasCorrectionPrefix = /^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+|switch\s+to\s+|check\s+out\s+)/i.test(clean);
+    clean = clean.replace(/^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+|switch\s+to\s+|check\s+out\s+)/i, "").trim();
+
     // Detect if this is a playback test / verification query
-    const isPlaybackTest = /\b(test|verify|check|make sure|see if|can play|does play|will play|playable|runs?|plays?|working)\b/i.test(rawQuery);
+    let isPlaybackTest = /\b(test|verify|check|make sure|see if|can play|does play|will play|playable|runs?|plays?|working)\b/i.test(rawQuery) || Boolean(hasCorrectionPrefix && context?.lastWasPlaybackTest);
 
     // 1. Extract year if present in parentheses e.g. (1993) or (2020)
     let extractedYear: number | undefined;
@@ -58,11 +71,15 @@ export function cleanMediaSearchQuery(rawQuery: string): CleanedMediaQuery {
         }
     }
 
-    // 2. Detect target server if user specified one (e.g. "on the main Plex server", "on kids server", "on backup")
+    // 2. Detect target server if user specified one (e.g. "on the main Plex server", "on kids server", "on backup", "on main")
     let targetServer: string | undefined;
-    const serverMatch = clean.match(/\bon\s+(the\s+)?(main|primary|backup|kids?|living\s*room)\s*(plex)?\s*(server)?\b/i);
+    const serverMatch = clean.match(/\b(on|in|for|about|to)\s+(the\s+)?(main|primary|backup|kids?|living\s*room)(\s*(plex)?\s*(server)?)?\b/i) ||
+                        clean.match(/\b(the\s+)?(main|primary|backup|kids?|living\s*room)\s+(plex\s+)?server\b/i);
     if (serverMatch) {
-        targetServer = serverMatch[2].toLowerCase().trim();
+        let rawSrv = (serverMatch[3] || serverMatch[2] || "").toLowerCase().trim();
+        if (rawSrv === "kid") rawSrv = "kids";
+        if (rawSrv === "primary") rawSrv = "main";
+        targetServer = rawSrv;
         clean = clean.replace(serverMatch[0], " ");
     }
 
@@ -71,11 +88,11 @@ export function cleanMediaSearchQuery(rawQuery: string): CleanedMediaQuery {
 
     // 3. Strip leading polite phrases, question words, and intent phrases
     const leadingPatterns = [
-        /^(can you|could you|would you|will you)(\s+please)?\s+/i,
+        /^(can you|could you|would you|will you|can we|could we)(\s+please)?\s+/i,
         /^(please\s+)?(run|execute|perform)\s+(a\s+)?(quick\s+)?(playback|stream|server|file)?\s*test\s+(on|for|of)?\s+/i,
-        /^(please\s+)?(test|check|verify|see|diagnose|inspect|probe)\s+(playback\s+(of|for)|streaming\s+(of|for)|stream\s+(of|for)|to\s+make\s+sure(\s+that)?|if|whether|that)?\s+/i,
-        /^(please\s+)?(test|check|verify|inspect|run)\s+(playback|stream)?\s*(of|for|on)?\s+/i,
+        /^(please\s+)?(test|check|verify|see|diagnose|inspect|probe|try|run)\s+(playback\s+(of|for)|streaming\s+(of|for)|stream\s+(of|for)|to\s+make\s+sure(\s+that)?|if|whether|that|it|this|out)?\s*/i,
         /^(make\s+sure(\s+that)?)\s+/i,
+        /^(how\s+about|what\s+about)\s+/i,
         /^(please\s+)?(redownload|re-download|download|grab|search for|replace|fix)\s+/i,
         /^(why is|why does|how do i|how come|is|does|can)\s+/i,
         /^(the movie|the film|the show|the tv show|the episode|the series|the book)\s+/i,
@@ -135,6 +152,48 @@ export function cleanMediaSearchQuery(rawQuery: string): CleanedMediaQuery {
     // Clean remaining punctuation and whitespace
     clean = clean.replace(/[?.,!":;]/g, " ").replace(/\s+/g, " ").trim();
 
+    // 5. Detect and resolve pronouns (e.g. "it", "that", "this", "the movie")
+    const PRONOUN_TERMS = new Set([
+        "it", "that", "this", "them",
+        "the movie", "the film", "the show", "the tv show", "the series",
+        "the media", "the file", "the video", "the stream", "the track"
+    ]);
+
+    const isPronoun = PRONOUN_TERMS.has(clean.toLowerCase().trim()) ||
+                      /^test\s+(it|this|that)$/i.test(clean.trim()) ||
+                      /^check\s+(it|this|that)$/i.test(clean.trim());
+
+    if (isPronoun) {
+        isPlaybackTest = true;
+        clean = "";
+    }
+
+    // 6. Context Resolution: inherit from previous conversational turns
+    if (context) {
+        if ((!clean || isPronoun) && context.lastTitle) {
+            clean = context.lastTitle;
+            if (!extractedYear && context.lastYear) {
+                extractedYear = context.lastYear;
+            }
+            isPlaybackTest = true;
+        }
+
+        // If targetServer was not specified in the current query, inherit from previous context if this is a follow-up/correction
+        if (!targetServer && context.lastServer && (hasCorrectionPrefix || isPronoun || context.lastWasPlaybackTest)) {
+            targetServer = context.lastServer;
+        }
+
+        if (context.lastWasPlaybackTest) {
+            isPlaybackTest = true;
+        }
+    }
+
+    // Guard against treating residual verbs/pronouns as movie titles
+    const INVALID_TITLES = new Set(["test it", "check it", "it", "that", "this", "test", "check", "verify"]);
+    if (INVALID_TITLES.has(clean.toLowerCase().trim())) {
+        clean = "";
+    }
+
     // Capitalize properly if lowercased
     let finalTitle = clean;
     if (finalTitle.length > 0) {
@@ -153,7 +212,8 @@ export function cleanMediaSearchQuery(rawQuery: string): CleanedMediaQuery {
         year: extractedYear,
         targetServer,
         rawCleaned: clean,
-        isPlaybackTest
+        isPlaybackTest,
+        isPronoun
     };
 }
 
@@ -320,9 +380,10 @@ export async function inspectMediaStreams(
                 const rClean = rLower.replace(/^the\s+/i, "").trim();
                 return rLower === sLower || 
                        rClean === sClean || 
-                       rLower.includes(sClean) || 
-                       sClean.includes(rClean);
-            }) || results[0];
+                       rLower.startsWith(sClean) || 
+                       sClean.startsWith(rClean) ||
+                       (sClean.length >= 4 && rClean.includes(sClean));
+            });
 
             if (exactOrClose) {
                 matchedItem = exactOrClose;
@@ -527,6 +588,10 @@ export async function inspectMediaStreams(
     } else {
         verdict = "OK";
         diagnosisSummary = `Playback verified: "${matchedItem.title}" (${matchedItem.year || "N/A"}) is physically readable from disk on ${matchedServerName} (${playbackTestResult ? `${(playbackTestResult.bytesRead / 1024).toFixed(0)} KB in ${playbackTestResult.latencyMs}ms` : "OK"}). English audio is present and ready for Direct Play.`;
+    }
+
+    if (serverPref && !matchedServerName.toLowerCase().includes(serverPref.toLowerCase())) {
+        diagnosisSummary = `Note: "${matchedItem.title}" was not located in your ${serverPref} server library, but was found and verified on ${matchedServerName}. ${diagnosisSummary}`;
     }
 
     logAgentEvent("INFO", `Media stream inspection completed for "${matchedItem.title}": Verdict=${verdict}`, {

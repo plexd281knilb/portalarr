@@ -1412,6 +1412,51 @@ async function runTestSuite() {
         if (q4.title !== "The Sandlot") {
             throw new Error(`Expected title 'The Sandlot', got: '${q4.title}'`);
         }
+
+        // E. Pronoun resolution across turns: "can you test it on the main server?"
+        const q5 = cleanMediaSearchQuery("can you test it on the main server?", {
+            lastTitle: "The Sandlot",
+            lastYear: 1993,
+            lastWasPlaybackTest: true
+        });
+        if (q5.title !== "The Sandlot") {
+            throw new Error(`Expected resolved title 'The Sandlot', got: '${q5.title}'`);
+        }
+        if (q5.targetServer !== "main") {
+            throw new Error(`Expected targetServer 'main', got: '${q5.targetServer}'`);
+        }
+        if (!q5.isPlaybackTest) {
+            throw new Error(`Expected isPlaybackTest to be true for pronoun query, got: ${q5.isPlaybackTest}`);
+        }
+
+        // F. Conversational title correction: "no the sandlot"
+        const q6 = cleanMediaSearchQuery("no the sandlot", {
+            lastTitle: "The Sandlot",
+            lastServer: "main",
+            lastWasPlaybackTest: true
+        });
+        if (q6.title !== "The Sandlot") {
+            throw new Error(`Expected corrected title 'The Sandlot', got: '${q6.title}'`);
+        }
+        if (q6.targetServer !== "main") {
+            throw new Error(`Expected targetServer 'main' inherited from context, got: '${q6.targetServer}'`);
+        }
+        if (!q6.isPlaybackTest) {
+            throw new Error(`Expected isPlaybackTest to be true for title correction, got: ${q6.isPlaybackTest}`);
+        }
+
+        // G. Server Cluster Status query: "what all servers are online?"
+        const { askAiServerMaster } = await import("../src/lib/ai-server-assistant");
+        const serverStatusRes = await askAiServerMaster("what all servers are online?", [], { username: "tester", role: "ADMIN" });
+        if (!serverStatusRes.success) {
+            throw new Error(`Expected server status query to succeed, got error: ${serverStatusRes.error}`);
+        }
+        if (!serverStatusRes.answer?.includes("Media Server Infrastructure Status")) {
+            throw new Error(`Expected server status answer to include Media Server Infrastructure Status, got: ${serverStatusRes.answer}`);
+        }
+        if (serverStatusRes.providerUsed !== "Built-in Infrastructure Health Monitor") {
+            throw new Error(`Expected provider Built-in Infrastructure Health Monitor, got: ${serverStatusRes.providerUsed}`);
+        }
     });
 
     // 35. Auth & Routing: Expired Session Detection & Dual Cadence Reactivation
