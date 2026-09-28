@@ -466,9 +466,10 @@ Example output:
                                 generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
                             })
                         });
-                        // If 503 (model overloaded), retry once after a short 800ms backoff
+                        // If 503 (model overloaded), retry once with exponential backoff and jitter
                         if (res.status === 503) {
-                            await new Promise(r => setTimeout(r, 800));
+                            const jitter = Math.floor(Math.random() * 500) + 1200;
+                            await new Promise(r => setTimeout(r, jitter));
                             res = await fetch(url, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },

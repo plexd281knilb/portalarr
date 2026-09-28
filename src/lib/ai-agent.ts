@@ -23,6 +23,20 @@ export function isLegacyGeminiModel(name?: string | null): boolean {
     );
 }
 
+export function isTextGenerationModel(name?: string | null): boolean {
+    if (!name) return false;
+    const lower = name.toLowerCase().trim();
+    if (lower.includes("tts")) return false;
+    if (lower.includes("transcribe")) return false;
+    if (lower.includes("lyria")) return false;
+    if (lower.includes("veo")) return false;
+    if (lower.includes("imagen") || lower.includes("image") || lower.includes("banana")) return false;
+    if (lower.includes("embedding")) return false;
+    if (lower.includes("robotics")) return false;
+    if (lower.includes("dialog") || lower.includes("live")) return false;
+    return true;
+}
+
 export function normalizeGeminiModel(model?: string | null): string {
     if (!model) return "gemini-3.5-flash-lite";
     const m = model.trim().toLowerCase();
@@ -33,7 +47,7 @@ export function normalizeGeminiModel(model?: string | null): string {
     if (m === "gemini-2.5-flash" || m === "gemini-2.0-flash" || m === "gemini-1.5-flash" || m === "gemini-1.5-flash-8b") {
         return "gemini-3.5-flash-lite";
     }
-    if (isLegacyGeminiModel(m)) {
+    if (isLegacyGeminiModel(m) || !isTextGenerationModel(m)) {
         return "gemini-3.5-flash-lite";
     }
     return model.trim();
@@ -42,24 +56,24 @@ export function normalizeGeminiModel(model?: string | null): string {
 export function getGeminiCandidateModels(primaryModel?: string | null, dynamicModels: string[] = []): string[] {
     const normalized = normalizeGeminiModel(primaryModel);
     
-    // Core modern models in prioritized quota order:
+    // Core high-quota text chat models:
     // 1. High Quota Lite (500 RPD, 15 RPM): gemini-3.5-flash-lite
     // 2. High Quota Sibling (500 RPD, 15 RPM): gemini-3.1-flash-lite
     // 3. Flagship Flash (20 RPD, 5 RPM): gemini-3.8-flash
-    // 4. Standard Flash (20 RPD, 5 RPM): gemini-3.7-flash, gemini-3.6-flash, gemini-3.5-flash
+    const cleanDynamic = dynamicModels
+        .filter(m => Boolean(m) && isTextGenerationModel(m) && !isLegacyGeminiModel(m));
+
     const baseList = [
         normalized,
         "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
         "gemini-3.8-flash",
-        "gemini-3.7-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        ...(dynamicModels.length > 0 ? dynamicModels : [])
+        ...cleanDynamic
     ];
 
     return Array.from(new Set(baseList))
-        .filter(m => Boolean(m) && !isLegacyGeminiModel(m));
+        .filter(m => Boolean(m) && isTextGenerationModel(m) && !isLegacyGeminiModel(m))
+        .slice(0, 3); // Strictly limit to top 3 text models to prevent thundering herd cascade
 }
 
 export async function assignVolumeNumbersWithAI(
@@ -209,12 +223,12 @@ export async function getAvailableGeminiModels(apiKey: string): Promise<string[]
                     const valid = data.models
                         .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
                         .map((m: any) => String(m.name || "").replace(/^models\//, ""))
-                        .filter((name: string) => !isLegacyGeminiModel(name));
+                        .filter((name: string) => isTextGenerationModel(name) && !isLegacyGeminiModel(name));
                     
                     // Sort so flash models come first, then pro
                     valid.sort((a: string, b: string) => {
-                        const aFlash = a.includes("3.8") ? 0 : a.includes("3.5") ? 1 : a.includes("flash") ? 2 : 3;
-                        const bFlash = b.includes("3.8") ? 0 : b.includes("3.5") ? 1 : b.includes("flash") ? 2 : 3;
+                        const aFlash = a.includes("3.5-flash-lite") ? 0 : a.includes("3.1-flash-lite") ? 1 : a.includes("3.8") ? 2 : a.includes("flash") ? 3 : 4;
+                        const bFlash = b.includes("3.5-flash-lite") ? 0 : b.includes("3.1-flash-lite") ? 1 : b.includes("3.8") ? 2 : b.includes("flash") ? 3 : 4;
                         return aFlash - bFlash;
                     });
 
@@ -244,9 +258,10 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
                 })
             });
 
-            // If 503 (model overloaded), retry once after a short 800ms backoff
+            // If 503 (model overloaded), retry once after a 1.2s - 1.7s backoff with jitter
             if (res.status === 503) {
-                await new Promise(r => setTimeout(r, 800));
+                const jitter = Math.floor(Math.random() * 500) + 1200;
+                await new Promise(r => setTimeout(r, jitter));
                 res = await fetch(endpoint, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

@@ -1885,13 +1885,31 @@ async function runTestSuite() {
             throw new Error("Active 3.x models must not be marked as legacy");
         }
 
-        // 6. Verify getGeminiCandidateModels produces safe modern cascade
-        const candidates = getGeminiCandidateModels("gemini-2.5-flash", ["gemini-2.0-flash", "gemini-3.8-flash"]);
+        // 6. Verify isTextGenerationModel filters out TTS, Transcribe, and Audio models
+        const { isTextGenerationModel } = await import("../src/lib/ai-agent");
+        if (isTextGenerationModel("gemini-3.8-flash-tts") || isTextGenerationModel("gemini-3.5-transcribe") || isTextGenerationModel("lyria-3.5")) {
+            throw new Error("Expected non-text models to be filtered out");
+        }
+        if (!isTextGenerationModel("gemini-3.5-flash-lite") || !isTextGenerationModel("gemini-3.8-flash")) {
+            throw new Error("Expected valid text models to pass isTextGenerationModel");
+        }
+
+        // 7. Verify getGeminiCandidateModels strictly caps at 3 text-only models
+        const candidates = getGeminiCandidateModels("gemini-2.5-flash", [
+            "gemini-2.0-flash", 
+            "gemini-3.8-flash", 
+            "gemini-3.8-flash-tts", 
+            "lyria-3.5",
+            "gemini-3.7-flash"
+        ]);
         if (candidates.includes("gemini-2.5-flash") || candidates.includes("gemini-2.0-flash")) {
             throw new Error(`Legacy 404 models leaked into candidates list: ${JSON.stringify(candidates)}`);
         }
-        if (!candidates.includes("gemini-3.8-flash") || !candidates.includes("gemini-3.5-flash-lite")) {
-            throw new Error(`Modern Flash models missing from candidates: ${JSON.stringify(candidates)}`);
+        if (candidates.includes("gemini-3.8-flash-tts") || candidates.includes("lyria-3.5")) {
+            throw new Error(`Non-text models leaked into candidates list: ${JSON.stringify(candidates)}`);
+        }
+        if (candidates.length > 3) {
+            throw new Error(`Expected at most 3 candidate models to prevent thundering herd cascade, got ${candidates.length}: ${JSON.stringify(candidates)}`);
         }
     });
 

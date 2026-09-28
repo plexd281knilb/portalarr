@@ -1103,9 +1103,9 @@ INSTRUCTIONS:
         const candidateModels = getGeminiCandidateModels(modelName, dynamicModels);
 
         for (const activeModel of candidateModels) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 12000);
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
 
                 const contents: any[] = [];
@@ -1131,9 +1131,10 @@ INSTRUCTIONS:
                     signal: controller.signal
                 });
 
-                // If 503 (model overloaded), retry once after a short 800ms backoff
+                // If 503 (model overloaded), retry once with exponential backoff and jitter
                 if (res.status === 503) {
-                    await new Promise(r => setTimeout(r, 800));
+                    const jitter = Math.floor(Math.random() * 500) + 1200;
+                    await new Promise(r => setTimeout(r, jitter));
                     res = await fetch(url, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -1145,8 +1146,6 @@ INSTRUCTIONS:
                         signal: controller.signal
                     });
                 }
-
-                clearTimeout(timeoutId);
 
                 if (res.ok) {
                     const data = await res.json();
@@ -1168,6 +1167,8 @@ INSTRUCTIONS:
                 }
             } catch (e: any) {
                 console.warn(`[AI-SERVER-ASSISTANT] Gemini model ${activeModel} exception: ${e.message}`);
+            } finally {
+                clearTimeout(timeoutId);
             }
         }
     }
