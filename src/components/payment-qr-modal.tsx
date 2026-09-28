@@ -195,7 +195,7 @@ export function PaymentQrModal({
                                         <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs">
                                             <div className="space-y-0.5 truncate pr-2">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
-                                                    Required Memo Tag
+                                                    Payment Note / Memo
                                                 </span>
                                                 <span className="font-mono font-bold text-purple-300 truncate block">
                                                     {memoTag}

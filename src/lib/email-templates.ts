@@ -605,7 +605,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{senderHandle}", description: "Handle or email of sender", sampleValue: "@jordan-miller" },
             { key: "{matchedUser}", description: "Matched username on DomsHomeLab", sampleValue: "jordan_reader" },
             { key: "{periodGranted}", description: "Subscription period granted", sampleValue: "Rest of Year (through Dec 31, 2026)" },
-            { key: "{note}", description: "Payment memo or note", sampleValue: "#DOMSHOMELAB-JORDAN" },
+            { key: "{note}", description: "Payment memo or note", sampleValue: "jordan_reader" },
             { key: "{accessUrl}", description: "Link to Access Control payment tab", sampleValue: "https://portal.example.com/settings/access" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]

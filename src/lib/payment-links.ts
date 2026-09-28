@@ -25,13 +25,12 @@ export interface PaymentLinkInfo {
 }
 
 /**
- * Generates standard reconciliation memo tag e.g. "#DOMSHOMELAB-ALICE-OCT2026"
+ * Generates standard reconciliation payment memo (clean username)
+ * e.g. "dominicjuliano"
  */
-export function generatePaymentMemo(username?: string, date: Date = new Date()): string {
-    const cleanUser = (username || "USER").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-    const month = date.toLocaleString("en-US", { month: "short" }).toUpperCase();
-    const year = date.getFullYear();
-    return `#DOMSHOMELAB-${cleanUser}-${month}${year}`;
+export function generatePaymentMemo(username?: string, _date: Date = new Date()): string {
+    const cleanUser = (username || "USER").trim().replace(/^@+/, "");
+    return cleanUser || "USER";
 }
 
 export function getPaymentLink(
@@ -172,7 +171,7 @@ export function getPaymentLink(
         case "zelle": {
             const isEmail = value.includes("@") && value.includes(".");
             const subject = `DomsHomeLab Subscription: ${memoTag}`;
-            const body = `Hi,\n\nI am submitting my DomsHomeLab (d281knilb) subscription payment.\n\nUsername: ${options?.username || "N/A"}\nMemo Tag: ${memoTag}\nAmount: $${amount || "180.00"}\n\nThank you!`;
+            const body = `Hi,\n\nI am submitting my DomsHomeLab (d281knilb) subscription payment.\n\nUsername: ${options?.username || memoTag || "N/A"}\nPayment Note: ${memoTag}\nAmount: $${amount ? amount.toFixed(2) : "180.00"}\n\nThank you!`;
             const url = isEmail
                 ? `mailto:${encodeURIComponent(value)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
                 : "https://www.zellepay.com/get-started";

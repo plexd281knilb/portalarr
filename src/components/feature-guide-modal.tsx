@@ -389,8 +389,8 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
                 ]
             },
             {
-                title: "3. P2P Payments & Pre-Filled Memo Tags",
-                desc: "Renew seamlessly via Venmo, PayPal, Cash App, or Zelle with zero processing fees. Include your pre-filled memo tag (#DOMSHOMELAB-USERNAME-MONTHYEAR) for instant automatic matching."
+                title: "3. Direct P2P Payments & Automatic Matching",
+                desc: "Renew seamlessly via Venmo, PayPal, Cash App, or Zelle with zero processing fees. Include your username in the payment note/memo for instant automatic matching."
             },
             {
                 title: "4. Managed Living Room & Kids Profiles",

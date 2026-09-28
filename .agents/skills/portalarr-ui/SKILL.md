@@ -183,9 +183,9 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Never allow internal/generic software names (e.g. "Portalarr") to appear in outgoing email subjects, email body text, email header banners, or user-facing UI views. Users must instantly recognize the communications as coming directly from their trusted server host to prevent confusion or spam reports.
   - Email header banner: `DOMS<span style="color: #6366f1;">HOMELAB</span>` with subtitle `d281knilb Media Server & Dashboard`.
   - Email footer: `DomsHomeLab • d281knilb Media Server • Open Dashboard` and `© {year} DomsHomeLab. All rights reserved.`.
-- **Payment Reconciliation Memo Tags**:
-  - Generated memo tags strictly format as `#DOMSHOMELAB-USERNAME-MONTHYEAR` (e.g. `#DOMSHOMELAB-ALEX-OCT2026`).
-  - Payment scrapers retain backwards-compatible substring matching for `#DOMSHOMELAB-`, `#D281KNILB-`, and legacy `#PORTALARR-`.
+- **Payment Reconciliation Memo Notes**:
+  - Payment memo notes are cleanly formatted as the member's username (e.g. `dominicjuliano`), making it simple and frictionless for members to include in transaction notes.
+  - Payment scrapers retain backwards-compatible substring matching for plain usernames as well as legacy `#DOMSHOMELAB-`, `#D281KNILB-`, and `#PORTALARR-` tags.
 - **Client & Device Dialogs**:
   - In Plex stream termination messages, prompt kill alerts as: `"Stream ended by user via DomsHomeLab My Plex Hub"`.
   - In Plex OAuth flow, register client application name as `DomsHomeLab`.

@@ -836,10 +836,14 @@ async function runTestSuite() {
             throw new Error("Email layout contains 'portalarr' in output HTML");
         }
 
-        // C. Assert generatePaymentMemo outputs #DOMSHOMELAB-
+        // C. Assert generatePaymentMemo outputs clean username
         const memo = generatePaymentMemo("testuser");
-        if (!memo.startsWith("#DOMSHOMELAB-TESTUSER-")) {
-            throw new Error(`Expected memo to start with #DOMSHOMELAB-TESTUSER-, got: ${memo}`);
+        if (memo !== "testuser") {
+            throw new Error(`Expected memo to be 'testuser', got: ${memo}`);
+        }
+        const memoWithAt = generatePaymentMemo("@testuser");
+        if (memoWithAt !== "testuser") {
+            throw new Error(`Expected memoWithAt to be 'testuser', got: ${memoWithAt}`);
         }
 
         // D. Assert rendered user_approval template contains DomsHomeLab
