@@ -10,10 +10,10 @@ Welcome to the comprehensive user guide for **DomsHomeLab's (d281knilb) Ebooks a
 3. [Send-to-Kindle Wireless Delivery & Failure Diagnostics](#3-send-to-kindle-wireless-delivery--failure-diagnostics)
 4. [Audiobooks & Floating Audio Player](#4-audiobooks--floating-audio-player)
 5. [Chapter Management & Track Reordering on Disk](#5-chapter-management--track-reordering-on-disk)
-6. [Requesting Media (Title & Author Discovery)](#6-requesting-media-title--author-discovery)
+6. [Discovering & Requesting Books (The Unified Hub)](#6-discovering--requesting-books-the-unified-hub)
 7. [Series Tracking, Missing Books & 1-Click Auto-Grab](#7-series-tracking-missing-books--1-click-auto-grab)
 8. [Interactive Ingest & Unlinked Series Matcher](#8-interactive-ingest--unlinked-series-matcher)
-9. [Release Selection, Blocklisting & 1-Click Import](#9-release-selection-blocklisting--1-click-import)
+9. [Request Tracking, Release Selection & 1-Click Import](#9-request-tracking-release-selection--1-click-import)
 10. [AI Metadata Agent & Cover Artwork Engine](#10-ai-metadata-agent--cover-artwork-engine)
 11. [Frequently Asked Questions (FAQ)](#11-frequently-asked-questions-faq)
 
@@ -21,12 +21,14 @@ Welcome to the comprehensive user guide for **DomsHomeLab's (d281knilb) Ebooks a
 
 ## 🚀 1. Getting Started & Navigation
 
-DomsHomeLab offers dedicated library views for your reading and listening collection:
-- **📖 Ebooks Tab:** Browse EPUB, PDF, MOBI, and comic files across public and user-restricted library shelves.
-- **🎧 Audiobooks Tab:** Browse single-file and multi-track audiobooks with duration stats, cover art, and track listings.
-- **📨 Requests Tab:** Monitor active book grabs with real-time download progress, pipeline health pulse, search indexers, retry failed requests, or import downloads.
-- **⚙️ Kindle Settings Tab:** Configure Send-to-Kindle email addresses, run pre-flight diagnostics, check Amazon approved sender whitelists, and view outbound delivery transaction logs.
-- **❓ Help & Guide Tab:** This in-app guide, keeping you up-to-date with the latest features.
+DomsHomeLab offers dedicated views for your digital reading and listening collection:
+- **📖 Ebooks Shelf (`/library`):** Browse clean, standardized EPUB, PDF, and comic files across public and user-restricted shelves with series grouping and quick filters.
+- **🎧 Audiobooks Shelf (`/library`):** Browse single-file and multi-track audiobooks with duration stats, cover art, chapter track listings, and floating player playback.
+- **🔍 Media Discovery Hub (`/discover`):** Unified discovery center for trending books, popular audiobooks, author bibliographies, and missing series installments with 1-click request buttons.
+- **📨 Request Manager (`/requests`):** Track all active book and audiobook grabs with real-time download progress, release selection, retry tools, and completed download imports alongside movies and TV shows.
+- **⚙️ Kindle Settings Tab (`/library`):** Configure your Send-to-Kindle email, enable automatic delivery on download completion, run pre-flight diagnostics, and view outbound delivery transaction logs.
+- **📚 Manage Shelves Tab (`/library` - Admins):** Create and manage custom public or user-restricted library shelves with granular user access rules.
+- **❓ Help & Guide Tab (`/library`):** This in-app guide, keeping you up-to-date with all the latest features.
 
 > 💡 **Full Membership Perk:** The digital Ebook & Audiobook Library is an exclusive perk of Full Membership. While free trial passes provide full movie and TV streaming on Plex, upgrading to full membership unlocks our complete digital book library, wireless Send-to-Kindle delivery, floating audio player, and 1-click book requests!
 
@@ -67,7 +69,15 @@ Click **`Read`** or **`Resume (X%)`** on any EPUB book card to launch the reader
 
 ## 📧 3. Send-to-Kindle Wireless Delivery & Failure Diagnostics
 
-Send books wirelessly to your Kindle e-reader in seconds with end-to-end delivery tracking and automated diagnostics:
+Send books wirelessly to your Kindle e-reader in seconds with end-to-end delivery tracking, automated diagnostics, and automatic request dispatch:
+
+### ⚡ Automatic Delivery upon Request Completion
+- When you request an ebook in **`/discover`** or **`/requests`**, DomsHomeLab automatically checks if you have configured a Kindle email address.
+- As soon as the download finishes and is organized into your library, **the book is automatically emailed directly to your Kindle**! No manual clicking required.
+
+### 📱 EPUB-Only Amazon Delivery Standard
+- Amazon officially discontinued `.mobi` and `.azw` file delivery for Send-to-Kindle.
+- DomsHomeLab automatically verifies and standardizes all ebook files to clean **EPUB format** (<50MB, valid EPUB ZIP magic bytes, sanitized ASCII filename) so files deliver flawlessly every time.
 
 ### Step 1: Find your Kindle Email
 - On Amazon, go to *Account & Lists* > *Content & Devices* > *Preferences* > *Personal Document Settings*.
@@ -77,12 +87,11 @@ Send books wirelessly to your Kindle e-reader in seconds with end-to-end deliver
 - Under *Approved Personal Document E-mail List*, click *Add a new approved e-mail address*.
 - Add your server's SMTP sender address (displayed in the Kindle Setup tab).
 
-### Step 3: 1-Click Dispatch
-- Click the **`📧 Send to Kindle`** icon on any book card.
-- DomsHomeLab automatically verifies the file integrity (<50MB, valid EPUB ZIP magic bytes, sanitized ASCII filename) and delivers it directly to your Amazon account.
+### Step 3: 1-Click Manual Dispatch
+- Click the **`📧 Send to Kindle`** icon on any book card in `/library` to dispatch the book immediately.
 
 ### 🩺 Kindle Pre-Flight Diagnostics Check
-- Navigate to the **Kindle Settings** tab and click **`Run Pre-Flight Delivery Check`**.
+- Navigate to the **Kindle Settings** tab in `/library` and click **`Run Pre-Flight Delivery Check`**.
 - The system runs live checks across your SMTP configuration, sender address authorization, Kindle email syntax, and ebook storage limits.
 
 ### 📋 Outbound Delivery History & Error Tracker
@@ -117,35 +126,34 @@ Need to correct chapter numbers or track ordering?
 
 ---
 
-## 🔍 6. Requesting Media (Title & Author Discovery)
+## 🔍 6. Discovering & Requesting Books (The Unified Hub)
 
-Can't find a book in your library? Request and auto-grab it in seconds:
+Requesting books and audiobooks is fully integrated into the unified **Discover (`/discover`)** and **Requests (`/requests`)** experience:
 
-### Pipeline Health Pulse & Status Bar
-- The **Requests** tab features a real-time **Pipeline Pulse** bar showing the connection status of **Prowlarr**, **Usenet (SABnzbd)**, and **Torrent (qBittorrent)**.
+### 🌟 Discover Hub (`/discover`)
+- **Popular & Trending Carousels:** Browse trending books and audiobooks alongside movies and TV shows, with high-definition artwork, author credits, and genre tags.
+- **"Missing from Your Series" Carousel:** Automatically scans your existing book library and highlights the next unacquired installments in series you already follow!
+- **Global Search with Autocomplete:** Type any book title, author, or series name into the search bar. Real-time autocomplete queries Audible, iTunes, OpenLibrary, and Google Books simultaneously with format badges (**`📖 Ebook`** vs **`🎧 Audiobook`**).
 
-### Combined Title & Author Search (Narrow Down Results)
-- You can enter both the **Book Title and Author Name** in the title input (e.g. `Project Hail Mary Andy Weir` or `The Way of Kings Brandon Sanderson`).
-- DomsHomeLab queries Audible keywords, iTunes, Open Library, and Google Books with smart token relevance scoring, immediately ranking the exact book by that author at the top of the suggestions list.
-- Clicking the result automatically populates and separates the Title and Author fields cleanly and verifies the selection.
+### 📖 Interactive Book Detail Modal
+Click any book in Discover or search results to open the comprehensive detail view:
+- **Synopsis & Metadata:** Read the full publisher synopsis, view publication year, page count, and series volume numbers.
+- **Author & Series Links:** Click the author's name to view their complete bibliography, or click the series title to view all installments in chronological reading order.
+- **Similar Books Carousel:** Browse algorithmically recommended similar books directly inside the modal with 1-click exploration.
+- **1-Click Request Buttons:** Prominent **`📖 Request Ebook`** and **`🎧 Request Audiobook`** buttons dispatch the request instantly.
+- **Auto-Approval:** All book requests are automatically approved and dispatched to background download indexers immediately.
 
-### Requesting by Title Only
-1. Go to the **Requests** tab (or click *Request* in the header).
-2. Select your desired format: **`📖 Ebook`** or **`🎧 Audiobook`**.
-3. Type the book title into the title field.
-4. An autocomplete dropdown will query Audible, iTunes, OpenLibrary, and Google Books.
-5. Click any matching result to auto-fill title, author, year, and cover art, and then click **`Submit Request`**!
+### 👤 Author & Series Catalogs
+- **Author Detail Modal (`AuthorDetailModal`):** Browse the author's complete catalog of published books, audiobooks, and series.
+- **Series Detail Modal (`SeriesDetailModal`):** See every volume in the series numbered sequentially (`Vol 1`, `Vol 2`, `Vol 3`...) with instant 1-click grab buttons for missing installments.
 
-### Requesting by Author
-1. Type the author's name into the **Author** field (e.g. *Brandon Sanderson*, *Andy Weir*, *J.K. Rowling*).
-2. DomsHomeLab searches connected book registries for all top titles and audiobooks by that author.
-3. Browse the list of available releases with cover art, release year, and format badges.
-4. Click any book from the list to populate and verify the form, and then click **`Submit Request`**!
+### 🏷️ Tier 1 Request-First Metadata Binding
+- When you submit a request, its canonical metadata (`title`, `author`, `series`, `volumeNumber`, `coverUrl`) is locked in the SQLite database relations (`Author` and `BookSeries`).
+- When the file downloads, DomsHomeLab binds the downloaded media directly to these relations, ensuring clean on-disk organization (`Author / Series / Title`) without messy guessing or folder misidentification.
 
-### 📥 Direct File Upload & Drag-and-Drop Fulfill
-- Have a local copy of the book or a custom `.torrent` / `.nzb`?
-- Click the **`Upload` (`FileUp`)** button on any request card to upload `.epub`, `.pdf`, `.m4b`, `.mp3`, `.torrent`, or `.nzb`.
-- Book files are immediately ingested into the library, and torrents/NZBs are sent directly to your download client!
+### 🔄 Non-EPUB to EPUB Standardized Conversion
+- When downloads complete, non-EPUB files (MOBI, AZW3, PDF) are automatically converted into standardized, clean EPUB format via background conversion engines (`ebook-convert`).
+- Redundant legacy files (`.mobi`, `.azw3`) are safely cleaned up from disk once the EPUB version is verified, keeping your storage optimized and 100% Kindle-compatible.
 
 ---
 
@@ -153,10 +161,10 @@ Can't find a book in your library? Request and auto-grab it in seconds:
 
 DomsHomeLab tracks book series and helps you complete your collections:
 
-- **Group by Series:** Check the *Group by Series* toggle on any library shelf to organize books sequentially by series name and volume number.
-- **📡 Auto-Monitor Series:** Click the **`Monitor Series` (`Zap`)** button on any series request card. Background schedulers automatically check book registries for new installments and queue downloads as soon as they become available.
+- **Group by Series:** Check the *Group by Series* toggle on any library shelf in `/library` to organize books sequentially by series name and volume number.
+- **📡 Auto-Monitor Series:** Click the **`Monitor Series` (`Zap`)** button on any series card. Background schedulers automatically check book registries for new installments and queue downloads as soon as they become available.
 - **🔍 Show Missing Books:** Click *Show Missing Books* on any series card to automatically scan iTunes, OpenLibrary, and Google Books for unacquired installments. Results are sorted strictly by volume (`Vol 1`, `Vol 2`, `Vol 3`...) with knockoff study guides, summary publishers, and foreign translations filtered out.
-- **⚡ 1-Click Auto-Grab:** Click **`Auto-Grab`** on individual missing installments (or **`Grab All Missing`**) to automatically search indexers and download them. Discovered missing books also appear in the *Seerr discovery ("Missing from Your Series") carousel.
+- **⚡ 1-Click Auto-Grab:** Click **`Auto-Grab`** on individual missing installments (or **`Grab All Missing`**) to automatically search indexers and download them. Discovered missing books also appear in the Discover hub's *"Missing from Your Series"* carousel.
 - **Missing Book Stubs:** Missing books appear on your shelf as grayscale cards with a `MISSING` badge and `.portalarr-missing` immunity markers. When the real file is downloaded, the stub is automatically replaced.
 
 ---
@@ -170,21 +178,28 @@ Have unlinked files or manually uploaded books?
 
 ---
 
-## ⚙️ 9. Release Selection, Blocklisting & 1-Click Import
+## ⚙️ 9. Request Tracking, Release Selection & 1-Click Import
 
-DomsHomeLab connects directly to Prowlarr, Torznab indexers, SABnzbd, NZBGet, and qBittorrent:
+All active and historical media requests (Ebooks, Audiobooks, Movies, TV) are tracked in the unified **Requests Manager (`/requests`)**:
+
+### Pipeline Status Lifecycle
+- ⏳ **Approved:** Request is auto-approved and queued for background processing.
+- 🔍 **Searching:** Multi-tier search engine is querying connected Prowlarr indexers for the best quality release.
+- 📥 **Downloading:** Download active in SABnzbd or qBittorrent with real-time download progress and ETA.
+- ✅ **Downloaded / Available:** Download complete! The book is organized into your library shelf and automatically delivered to your Kindle (if configured).
+- ❌ **Failed:** If a grab fails, actionable retry and release search buttons are displayed.
 
 ### Interactive Release Chooser
-- If an automatic grab picks the wrong release or you want to pick a specific group, click **`🔍 Search Release`** on any request card.
+- If an automatic grab picks the wrong release or you want to choose a specific release group, click **`🔍 Search Release`** on any request card in `/requests`.
 - Filter and review all available indexer releases with file size, protocol (Torrent vs Usenet), seeders, age, and format tags.
 - Click **`Grab` (`📥`)** to dispatch that exact release to your download client.
 
 ### 🚫 Permanent Release Blocklisting
 - Corrupted, password-protected, foreign-language, or mismatched releases are automatically recorded to the blocklist database (`FailedRelease`).
-- Subsequent auto-searches will skip these releases automatically, and they will be marked with a **`🚫 Blocklisted Release`** badge in the Interactive Release Chooser.
+- Subsequent auto-searches skip these releases automatically, and they are marked with a **`🚫 Blocklisted Release`** badge in the Interactive Release Chooser.
 
 ### 📥 1-Click Download Import (`Import Download`)
-- If a download completes in SABnzbd/qBittorrent but wasn't automatically organized, click **`📥 Import Download`**.
+- If a download completes in SABnzbd/qBittorrent but wasn't automatically organized, click **`📥 Import Download`** in `/requests`.
 - DomsHomeLab scans completed download folders, matches the media, moves it into your library, and updates the database record to `Downloaded`.
 
 ---
@@ -198,21 +213,24 @@ DomsHomeLab connects directly to Prowlarr, Torznab indexers, SABnzbd, NZBGet, an
 
 ## ❓ 11. Frequently Asked Questions (FAQ)
 
+**Q: Where do I go to request new books or audiobooks?**  
+A: Head to the **Discover** tab (`/discover`). You can browse popular books and audiobooks or search by title, author, or series name. Click on any title to open the detail view and click **`Request Ebook`** or **`Request Audiobook`**. All requests are auto-approved instantly!
+
+**Q: Will requested ebooks automatically send to my Kindle?**  
+A: Yes! Once you have saved your Kindle email address in the **Kindle Settings** tab in `/library`, any ebook you request will be automatically dispatched to your Kindle as soon as the download finishes.
+
+**Q: Why does Send-to-Kindle only support EPUB files?**  
+A: Amazon officially deprecated MOBI and AZW file delivery via Send-to-Kindle. DomsHomeLab automatically standardizes non-EPUB files (MOBI, AZW3, PDF) into clean, valid EPUBs so they deliver wirelessly and display properly on your Kindle e-reader.
+
 **Q: Can I read EPUB files offline?**  
-A: Yes. Once an EPUB is opened in DomsHomeLab's reader, it is stored in your browser's persistent cache. You can resume reading even if you temporarily lose server connection.
+A: Yes. Once an EPUB is opened in DomsHomeLab's reader, it is cached in your browser's persistent CacheStorage (`portalarr-books-v1`). You can resume reading even if you temporarily lose your internet or server connection.
 
 **Q: Why did my Kindle email delivery fail?**  
-A: Go to the **Kindle Settings** tab and inspect the **Kindle Delivery History** log. Common reasons:
+A: Go to the **Kindle Settings** tab in `/library` and inspect the **Kindle Delivery History** log. Common reasons:
 1. Your server's sending email is not on your Amazon Approved Personal Document E-mail List.
 2. The file size exceeds Amazon's 50MB limit.
 3. The recipient email was not an `@kindle.com` address.
 After correcting the issue, click **`Retry Delivery`** to resend immediately.
 
-**Q: Can I upload a file directly to fulfill a request?**  
-A: Yes. Click **`Upload`** on the request card and choose any `.epub`, `.pdf`, `.m4b`, `.mp3`, `.torrent`, or `.nzb` file.
-
-**Q: How do I fix an incorrect book title or author on disk?**  
-A: Admins can click the **`✏️ Edit`** button on any book card. Updating the Title or Author physically reorganizes the disk folder structure (`Library / Author / Title`) safely without leaving orphaned folders behind.
-
 **Q: How do I scan for newly added files in my shared folders?**  
-A: Click **`Scan Share Folder`** (for Ebooks) or **`Scan Audio Folder`** (for Audiobooks) at the top of any library shelf to trigger an instant background scan.
+A: Click **`Scan Share Folder`** (for Ebooks) or **`Scan Audio Folder`** (for Audiobooks) at the top of any library shelf in `/library` to trigger an instant background scan.

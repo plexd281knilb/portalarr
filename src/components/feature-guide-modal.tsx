@@ -157,6 +157,10 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
             {
                 title: "4. Automated Download Pipeline & Notifications",
                 desc: "All requests are automatically processed by Radarr/Sonarr and sent to download clients. You receive real-time notifications via Discord embed cards and styled HTML emails."
+            },
+            {
+                title: "5. Ebooks & Audiobooks Discovery",
+                desc: "Discover is your all-in-one hub for books and audiobooks too! Browse Popular Books, Trending Audiobooks, and 'Missing from Your Series' carousels. Click any book to view chapter/volume details, author catalogs, or request with 1-click auto-approval and automatic Send-to-Kindle delivery."
             }
         ]
     },
@@ -170,7 +174,8 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
         highlights: [
             "In-browser Kindle Paperwhite reader with Bookerly font",
             "0ms CacheStorage reopening for offline reading",
-            "Comic reader (.cbr, .cbz) with WebAssembly unrar",
+            "Unified Discover Hub (/discover) with 1-click requests",
+            "Auto Send-to-Kindle upon download completion",
             "Series tracking, 'Show Missing Books' & 1-click Auto-Grab"
         ],
         sections: [
@@ -185,7 +190,17 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
                 ]
             },
             {
-                title: "2. Comic & Graphic Novel Streaming",
+                title: "2. Discovering & Requesting Books (/discover)",
+                desc: "Requesting books and audiobooks is fully integrated into the Discover and Requests hub:",
+                bullets: [
+                    "Unified Discover Hub: Browse Popular Books, Trending Audiobooks, or search by title, author, or series across Audible, iTunes, OpenLibrary, and Google Books.",
+                    "1-Click Requests: Click 'Request Ebook' or 'Request Audiobook' on any title. All requests are auto-approved instantly!",
+                    "Auto Send-to-Kindle: When an ebook finishes downloading, DomsHomeLab automatically emails it directly to your Kindle if your Kindle email is configured.",
+                    "Format Standardization: Non-EPUB files (MOBI, AZW3, PDF) are auto-converted to clean EPUBs, and redundant legacy formats are pruned."
+                ]
+            },
+            {
+                title: "3. Comic & Graphic Novel Streaming",
                 desc: "Read .cbr, .cbz, and image archive comics directly in your browser with zero conversion lag:",
                 bullets: [
                     "WebAssembly unrar & JSZip: Decompresses archive pages on-the-fly.",
@@ -194,7 +209,7 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
                 ]
             },
             {
-                title: "3. Series Tracking & Missing Books Auto-Grab",
+                title: "4. Series Tracking & Missing Books Auto-Grab",
                 desc: "Group shelves by series to organize installments sequentially:",
                 bullets: [
                     "Click 'Show Missing Books' on any series to discover unacquired volumes (Vol 1, Vol 2, Vol 3...).",
@@ -203,8 +218,8 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
                 ]
             },
             {
-                title: "4. Wireless Send-to-Kindle Delivery",
-                desc: "Click the Kindle icon on any book card to wirelessly dispatch EPUB files directly to your Amazon account."
+                title: "5. Wireless Send-to-Kindle Delivery",
+                desc: "Click the Kindle icon on any book card to wirelessly dispatch standardized EPUB files directly to your Amazon account, or let new requests auto-deliver upon completion."
             }
         ]
     },

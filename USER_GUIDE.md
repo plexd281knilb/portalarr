@@ -13,8 +13,8 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
 6. [Browsing & Accessing Media (Ebooks & Audiobooks)](#6-browsing--accessing-media-ebooks--audiobooks)
 7. [In-Browser Kindle Paperwhite & Comic Readers](#7-in-browser-kindle-paperwhite--comic-readers)
 8. [Audiobooks, Floating Web Player & Chapter Track Studio](#8-audiobooks-floating-web-player--chapter-track-studio)
-9. [Requesting New Books & Audiobooks](#9-requesting-new-books--audiobooks)
-10. [Troubleshooting, Release Selection & 1-Click Import](#10-troubleshooting-release-selection--1-click-import)
+9. [Requesting New Books & Audiobooks (Unified Discover Hub)](#9-requesting-new-books--audiobooks-unified-discover-hub)
+10. [Troubleshooting, Request Tracking & 1-Click Import](#10-troubleshooting-request-tracking--1-click-import)
 11. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#11--native-movie--tv-show-requests-seerr-engine--episode-guides)
 12. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#12--curation-studio-suite-kometa-agregarr-maintainerr-tagging)
 13. [💳 Subscriptions, Referral Rewards & Family Profiles](#13--subscriptions-referral-rewards--family-profiles)
@@ -136,6 +136,7 @@ Amazon requires all senders to be approved before emails can reach your Kindle:
 ### Step 3: Save & Test
 - Enter your Kindle email and click **Save Email & Unlock Automatic Delivery**.
 - Click **Run Pre-Flight Delivery Check** to test your configuration before sending your first book!
+- **⚡ Automatic Delivery on Request:** Whenever you request an ebook in Discover, DomsHomeLab automatically emails the EPUB directly to your Kindle as soon as the download finishes!
 - *Don't have a Kindle or want to download files manually?* Click **Skip for Now & Browse Library**. You can update this anytime by clicking the **Kindle Settings** button in the header.
 
 ---
@@ -150,7 +151,8 @@ DomsHomeLab organizes your reading and listening collection into dedicated tabs:
 - **🔍 Show Missing Books:** Click **Show Missing Books** on any series group to discover unacquired books in that series, sorted chronologically and sequentially by volume number (`Vol 1`, `Vol 2`, `Vol 3`...) with knockoff study guides and summary publishers automatically filtered out.
 - **⚡ 1-Click Auto-Grab:** In the Missing Books view, click **Auto-Grab** on any missing installment (or grab the entire series) to immediately auto-request and download it.
 - **🌫️ Missing Book Cards:** Missing books display on your shelf with a grayscale poster, "MISSING" badge, and 0 MB indicator. You can click **Re-Grab Release** directly from the book card modal to search indexers anytime.
-- **1-Click Kindle Send (`📧`):** Click the Kindle button on any book card to wirelessly dispatch the EPUB/MOBI file directly to your e-reader.
+- **1-Click Kindle Send (`📧`):** Click the Kindle button on any book card to wirelessly dispatch the standardized EPUB file directly to your e-reader.
+- **Format Standardization:** Non-EPUB files (MOBI, AZW3, PDF) are automatically converted to clean EPUBs, and redundant legacy formats are pruned to save disk space.
 - **Direct Download (`⬇️`):** Click the Download button to download EPUB or PDF files directly to your phone, tablet, or computer.
 
 ---
@@ -199,47 +201,53 @@ DomsHomeLab delivers an Audible-quality audiobook experience right in your web b
 
 ---
 
-## 🔍 9. Requesting New Books & Audiobooks
+## 🔍 9. Requesting New Books & Audiobooks (Unified Discover Hub)
 
-Can't find a title in the library? Request to download it in seconds!
+Requesting books and audiobooks is fully integrated into the unified **Discover (`/discover`)** and **Requests (`/requests`)** hub:
 
-### Step 1: Open the Request Modal
-Click the `+ Request Ebook / Audiobook` button on the Library page.
+### Step 1: Open Discover (`/discover`)
+- Navigate to the **Discover** page from the sidebar or header.
+- Browse the dedicated **Popular Books**, **Trending Books**, **Trending Audiobooks**, and **"Missing from Your Series"** carousels.
 
 ### Step 2: Search & Auto-Complete
-1. Start typing the **Title** or **Author**. Instant autocomplete suggestions from Audible, iTunes, OpenLibrary, and Google Books will appear.
-2. Select the matching book to auto-fill title, author, publish year, and official high-definition cover artwork.
+- Type any **Title**, **Author**, or **Series** in the global search bar.
+- Real-time suggestions appear with cover art, release year, author name, and format badges (**`📖 Ebook`** vs **`🎧 Audiobook`**).
 
-### Step 3: Choose Format
-- Format: Select **📖 Ebook** or **🎧 Audiobook**.
+### Step 3: Interactive Detail View & 1-Click Request
+1. Click on any book to open the comprehensive **Book Detail Modal**.
+2. View synopsis, publisher, publication date, series reading order, and similar book recommendations.
+3. Click **`📖 Request Ebook`** or **`🎧 Request Audiobook`**.
+4. **Instant Auto-Approval:** All book requests are automatically approved and dispatched to indexers immediately.
 
-### Step 4: Submit & Track Progress
-Click **Submit Request**. You can track live progress under the **Requests** tab:
-- ⏳ **Pending / Approved:** Request is auto-approved and queued for background processing.
-- 🔍 **Searching:** Multi-tier search engine is querying connected indexers for the best quality release.
-- 📥 **Downloading:** Download active in SABnzbd or qBittorrent.
-- ✅ **Downloaded:** Download complete! The book is automatically organized onto your library shelf and ready for reading/listening.
-- ❌ **Failed / Failed (Missing):** If a grab fails or the file is removed, the request displays in red with actionable retry buttons.
+### Step 4: Author & Series Bibliographies
+- Click on any author's name to open the **Author Detail Modal** showing their full published bibliography.
+- Click on any series title to open the **Series Detail Modal** displaying all installments in chronological reading order with 1-click grab buttons for missing volumes.
+
+### Step 5: Automatic Send-to-Kindle Delivery
+- When an ebook request finishes downloading, DomsHomeLab automatically sends the clean EPUB directly to your Kindle if you have configured your Kindle email address!
 
 ---
 
-## 🛠️ 10. Troubleshooting, Release Selection & 1-Click Import
+## 🛠️ 10. Troubleshooting, Request Tracking & 1-Click Import
 
-- 🔄 **User Scan Folder:** All approved users can click **Scan Share Folder** or **Scan Audio Folder** directly on library shelves to instantly scan folders for new files without needing admin intervention.
+- 🔄 **User Scan Folder:** All approved users can click **Scan Share Folder** or **Scan Audio Folder** directly on library shelves in `/library` to instantly scan folders for new files without needing admin intervention.
 - 🖼️ **Fetch Cover (`🖼️`):** Click the Fetch Cover button on any library card to query iTunes HD (600x900), OpenLibrary, and Google Books to refresh low-resolution or missing covers.
 
-### 🔍 Manual Release Search (`Search Release` / `Re-Search`)
-1. Go to the **Requests** tab.
-2. On your request card, click **`🔍 Search Release`** (or `Re-Search`).
-3. DomsHomeLab will query connected torrent and Usenet/NZB indexers and open an **Interactive Release Chooser Modal**.
-4. Browse available releases showing title, size, format, protocol (Torrent vs Usenet), seeders, and age.
-5. Click **Push Release** (`📥`) on your preferred release to send that exact file to the download client.
+### 📨 Tracking Requests in `/requests`
+- Visit the **Requests** page (`/requests`) to monitor active book, audiobook, movie, and TV downloads with real-time download speed, progress bars, and ETA.
+- **Statuses:** Approved → Searching → Downloading → Available / Downloaded.
+
+### 🔍 Manual Release Search (`Search Release`)
+1. On any request card in `/requests`, click **`🔍 Search Release`**.
+2. DomsHomeLab queries connected torrent and Usenet/NZB indexers and opens an **Interactive Release Chooser Modal**.
+3. Browse available releases showing title, size, format, protocol (Torrent vs Usenet), seeders, and age.
+4. Click **Push Release** (`📥`) to dispatch that exact release to your download client.
 
 ### 📥 1-Click Download Import (`Import Download`)
-- If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared on your shelf yet, click **`📥 Import Download`** on your request card. The system will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as `Downloaded`.
+- If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared on your shelf yet, click **`📥 Import Download`** in `/requests`. The system will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as `Downloaded`.
 
 ### 🔄 Retrying Failed Downloads (`Auto-Retry`)
-- If a request shows `Failed` or `Failed (Missing)`, click **Auto-Retry** to trigger an immediate automated background search using all fallback queries.
+- If a request shows `Failed` or `Failed (Missing)`, click **Auto-Retry** in `/requests` to trigger an immediate automated background search using multi-tier fallback queries.
 
 ---
 
