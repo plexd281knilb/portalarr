@@ -2942,6 +2942,9 @@ export function PruneStudio() {
                                         <SelectItem value="least_plays">📉 Least Plays / Unwatched</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                                    💡 <em>Plex "Date Added" often reflects original release file timestamps. Use <strong>"Oldest Modified on Disk"</strong> to sort by the date files were touched on this server.</em>
+                                </p>
                             </div>
 
                             {/* Show Oldest Limit */}
@@ -3205,6 +3208,8 @@ export function PruneStudio() {
                                                 };
                                                 const addedMs = toSafeMs(c.addedAt);
                                                 const addedDateStr = addedMs ? new Date(addedMs).toLocaleDateString() : "Unknown";
+                                                const updatedMs = toSafeMs(c.updatedAt);
+                                                const updatedDateStr = updatedMs ? new Date(updatedMs).toLocaleDateString() : null;
                                                 const lastWatchedMs = toSafeMs(c.lastViewedAt);
                                                 const lastWatchedDateStr = lastWatchedMs ? new Date(lastWatchedMs).toLocaleDateString() : null;
                                                 const daysSinceViewed = lastWatchedMs ? Math.max(0, Math.floor((Date.now() - lastWatchedMs) / (1000 * 60 * 60 * 24))) : null;
@@ -3301,7 +3306,14 @@ export function PruneStudio() {
                                                             {/* Added to Library */}
                                                             <div className="flex items-center gap-1.5 text-slate-300">
                                                                 <Calendar className="h-3 w-3 text-sky-400 shrink-0" />
-                                                                <span>Added: <strong className="text-white">{addedDateStr}</strong> ({c.daysOld ?? c.ageDays}d ago)</span>
+                                                                <span>
+                                                                    Added: <strong className="text-white">{addedDateStr}</strong> ({c.daysOld ?? c.ageDays}d ago)
+                                                                    {updatedDateStr && updatedDateStr !== addedDateStr && (
+                                                                        <span className="text-[10px] text-slate-400 ml-1 font-normal" title="Date item or file was last touched/refreshed on this server">
+                                                                            • Mod: {updatedDateStr}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
                                                             </div>
 
                                                             {/* Last Watched Date */}

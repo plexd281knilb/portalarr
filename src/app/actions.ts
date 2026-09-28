@@ -29,6 +29,7 @@ import { getJwtSecret } from "@/lib/auth-secret";
 import { getAppUrl } from "@/lib/app-url";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
+import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
 import { logger, maskToken } from "@/lib/logger";
 import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout } from "@/lib/email-templates";
 import fs from "fs";
@@ -3022,6 +3023,17 @@ export async function getAppUsers() {
                         plexLibrarySectionIds: true
                     }
                 },
+                referralBonusMonths: true,
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true,
+                        createdAt: true
+                    }
+                },
                 _count: {
                     select: {
                         referrals: true,
@@ -3059,6 +3071,17 @@ export async function getAppUsers() {
                     referralCode: true,
                     referredByUserId: true,
                     convertedAt: true,
+                    referralBonusMonths: true,
+                    referrals: {
+                        select: {
+                            id: true,
+                            username: true,
+                            name: true,
+                            status: true,
+                            convertedAt: true,
+                            createdAt: true
+                        }
+                    },
                     paymentTransactions: {
                         select: {
                             id: true,
@@ -4879,6 +4902,333 @@ export async function getReferralStats() {
     }
 }
 
+/**
+ * Credit an existing member for a referral (manual link / credit).
+ * Links the newly joined user to the referrer, marks as converted, and applies referral reward credits.
+ * Optionally extends the referrer's active subscription expiry date by 1 month.
+ */
+export async function creditUserReferralAction(params: {
+    referrerUserId: string;
+    referredUserId: string;
+    extendSubscriptionExpiry?: boolean;
+    bonusMonths?: number;
+    adminNotes?: string;
+}) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const { referrerUserId, referredUserId, extendSubscriptionExpiry, bonusMonths, adminNotes } = params;
+
+        if (!referrerUserId || !referredUserId) {
+            return { success: false, error: "Both the referring member and the referred user must be selected." };
+        }
+
+        if (referrerUserId === referredUserId) {
+            return { success: false, error: "A user cannot refer themselves." };
+        }
+
+        const referrer = await prisma.user.findUnique({
+            where: { id: referrerUserId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!referrer) {
+            return { success: false, error: "Referring member not found in database." };
+        }
+
+        const referredUser = await prisma.user.findUnique({
+            where: { id: referredUserId }
+        });
+
+        if (!referredUser) {
+            return { success: false, error: "Referred user not found in database." };
+        }
+
+        const now = new Date();
+        const convertedAtDate = referredUser.convertedAt || now;
+
+        // 1. Link referred user to referrer and mark as converted
+        await prisma.user.update({
+            where: { id: referredUserId },
+            data: {
+                referredByUserId: referrerUserId,
+                convertedAt: convertedAtDate,
+                status: referredUser.status === "PENDING" ? "APPROVED" : referredUser.status
+            }
+        });
+
+        // 2. If bonus months requested, add them to referrer
+        if (bonusMonths && bonusMonths > 0) {
+            await prisma.user.update({
+                where: { id: referrerUserId },
+                data: {
+                    referralBonusMonths: {
+                        increment: bonusMonths
+                    }
+                }
+            });
+        }
+
+        // 3. If extendSubscriptionExpiry requested, extend the referrer's subscription by 1 month (or bonusMonths)
+        let extendedExpiryDateFormatted: string | null = null;
+        if (extendSubscriptionExpiry && referrer.subscriptionEndsAt) {
+            const monthsToAdd = (bonusMonths && bonusMonths > 0) ? bonusMonths : 1;
+            const currentExp = new Date(referrer.subscriptionEndsAt);
+            const newExp = new Date(currentExp);
+            newExp.setMonth(newExp.getMonth() + monthsToAdd);
+
+            await prisma.user.update({
+                where: { id: referrerUserId },
+                data: {
+                    subscriptionEndsAt: newExp
+                }
+            });
+
+            extendedExpiryDateFormatted = new Intl.DateTimeFormat("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric"
+            }).format(newExp);
+        }
+
+        // Fetch fresh referrer with updated referrals to compute rewards
+        const freshReferrer = await prisma.user.findUnique({
+            where: { id: referrerUserId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const rewardSummary = calculateUserRenewalSummary({
+            user: freshReferrer || referrer,
+            yearlyPrice,
+            monthlyPrice
+        });
+
+        logger.addLog(
+            "INFO",
+            "AUTH",
+            `[REFERRAL-CREDIT] Admin manually credited referral: user "${referredUser.username}" linked to referrer "${referrer.username}". Total converted referrals: ${rewardSummary.convertedReferralsCount}. Next renewal discounted to $${rewardSummary.discountedYearlyPrice.toFixed(2)}${extendedExpiryDateFormatted ? ` (Expiry extended to ${extendedExpiryDateFormatted})` : ""}.${adminNotes ? ` Note: ${adminNotes}` : ""}`
+        );
+
+        // 4. Optionally dispatch Referral Reward email to referrer
+        try {
+            if (referrer.email && settings?.emailNotificationsEnabled && settings?.notifyReferralReward) {
+                const appUrl = await getAppUrl();
+                const { subject, html } = await renderEmailTemplate("referral_reward_credited", {
+                    username: referrer.username,
+                    friendUsername: referredUser.username,
+                    totalReferralsCount: rewardSummary.convertedReferralsCount,
+                    renewalImpactText: `1 Month Off Next Statement ($${monthlyPrice.toFixed(2)} discount)`,
+                    annualDiscountText: `$${rewardSummary.discountedYearlyPrice.toFixed(2)} instead of $${yearlyPrice.toFixed(2)}`,
+                    delayedMonthDate: rewardSummary.delayedMonthlyStartDate || "Next Month",
+                    appUrl
+                });
+
+                await sendOrQueueEmail({
+                    to: referrer.email,
+                    subject,
+                    html,
+                    templateId: "referral_reward_credited",
+                    targetUser: referrer.username,
+                    userId: referrer.id
+                });
+                logger.addLog("INFO", "EMAIL", `Dispatched referral reward notification to "${referrer.username}" (${referrer.email}) for referring "${referredUser.username}"`);
+            }
+        } catch (emailErr: any) {
+            console.warn("[REFERRAL-CREDIT-EMAIL-WARNING]:", emailErr.message || emailErr);
+        }
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings");
+
+        return {
+            success: true,
+            message: `Successfully credited @${referrer.username} for referring @${referredUser.username}! 1 free month credit applied ($${monthlyPrice.toFixed(2)} value).${extendedExpiryDateFormatted ? ` Expiry extended to ${extendedExpiryDateFormatted}.` : ""}`,
+            rewardSummary
+        };
+    } catch (e: any) {
+        console.error("[CREDIT-USER-REFERRAL-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to credit referral." };
+    }
+}
+
+/**
+ * Unlink a user from their referring member.
+ */
+export async function unlinkUserReferralAction(referredUserId: string) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const user = await prisma.user.findUnique({
+            where: { id: referredUserId },
+            include: { referredBy: { select: { username: true } } }
+        });
+
+        if (!user) return { success: false, error: "User not found." };
+
+        const prevReferrer = user.referredBy?.username;
+
+        await prisma.user.update({
+            where: { id: referredUserId },
+            data: { referredByUserId: null }
+        });
+
+        logger.addLog("INFO", "AUTH", `[REFERRAL-UNLINK] Admin unlinked referral for "${user.username}" (previously referred by "${prevReferrer || 'N/A'}").`);
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings");
+
+        return { success: true, message: `Successfully unlinked referral for @${user.username}.` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to unlink referral." };
+    }
+}
+
+/**
+ * Get the renewal and referral summary for a specific user.
+ */
+export async function getUserRenewalSummaryAction(userId: string) {
+    try {
+        await ensureSchemaColumns();
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!user) return { success: false, error: "User not found." };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const summary = calculateUserRenewalSummary({
+            user,
+            yearlyPrice,
+            monthlyPrice
+        });
+
+        return { success: true, summary };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to get renewal summary." };
+    }
+}
+
+/**
+ * Send an advance subscription renewal & payment reminder notice to a user.
+ */
+export async function sendSubscriptionRenewalReminderAction(userId: string) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!user) return { success: false, error: "User not found." };
+        if (!user.email) return { success: false, error: `User @${user.username} has no email address configured.` };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const summary = calculateUserRenewalSummary({
+            user,
+            yearlyPrice,
+            monthlyPrice
+        });
+
+        const appUrl = await getAppUrl();
+        const renewalDateStr = summary.expirationDateFormatted || "Upcoming Renewal";
+        const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
+
+        const referralDiscountText = summary.convertedReferralsCount > 0
+            ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+            : "No active referral credits";
+
+        const monthlyAlternativeText = summary.delayedMonthlyStartDate
+            ? `$${monthlyPrice}/month starting ${summary.delayedMonthlyStartDate}`
+            : `$${monthlyPrice}/month starting ${renewalDateStr}`;
+
+        const { subject, html } = await renderEmailTemplate("subscription_renewal_reminder", {
+            username: user.username,
+            renewalDate: renewalDateStr,
+            basePrice: `$${yearlyPrice.toFixed(2)} / year`,
+            referralDiscountText,
+            amountDue: `$${summary.discountedYearlyPrice.toFixed(2)}`,
+            monthlyAlternativeText,
+            referralNoticeDetails: summary.reminderNoticeText,
+            appUrl
+        });
+
+        await sendOrQueueEmail({
+            to: user.email,
+            subject,
+            html,
+            templateId: "subscription_renewal_reminder",
+            targetUser: user.username,
+            userId: user.id
+        });
+
+        logger.addLog("INFO", "EMAIL", `Dispatched subscription renewal reminder to "${user.username}" (${user.email}). Amount due: $${summary.discountedYearlyPrice.toFixed(2)}`);
+
+        return {
+            success: true,
+            message: `Successfully dispatched renewal reminder notice to @${user.username} (${user.email})! Amount due: $${summary.discountedYearlyPrice.toFixed(2)}${summary.convertedReferralsCount > 0 ? ` ($${summary.rewardDiscountAmount.toFixed(2)} referral discount applied).` : "."}`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to send renewal reminder." };
+    }
+}
+
 export async function savePaymentAndTrialSettings(formData: FormData) {
     try {
         await verifyAdmin();
@@ -5022,6 +5372,8 @@ export async function getUserReferralInfo() {
                 role: true,
                 membershipTier: true,
                 referralCode: true,
+                subscriptionEndsAt: true,
+                referralBonusMonths: true,
                 referrals: {
                     select: {
                         id: true,
@@ -5049,7 +5401,17 @@ export async function getUserReferralInfo() {
 
         const totalReferrals = dbUser.referrals.length;
         const activeTrials = dbUser.referrals.filter(r => r.status === "TRIAL").length;
-        const conversions = dbUser.referrals.filter(r => r.convertedAt).length;
+        const conversions = dbUser.referrals.filter(r => r.convertedAt || r.status === "APPROVED").length;
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const renewalSummary = calculateUserRenewalSummary({
+            user: dbUser,
+            yearlyPrice,
+            monthlyPrice
+        });
 
         const appUrl = await getAppUrl();
         const inviteUrl = (isTrial || !code) ? null : `${appUrl}/join?ref=${encodeURIComponent(code)}`;
@@ -5063,7 +5425,8 @@ export async function getUserReferralInfo() {
             totalReferrals,
             activeTrials,
             conversions,
-            referrals: dbUser.referrals
+            referrals: dbUser.referrals,
+            renewalSummary
         };
     } catch (e: any) {
         return { success: false, error: e.message };

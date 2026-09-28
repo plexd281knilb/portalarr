@@ -330,6 +330,7 @@ model User {
   referredByUserId       String?
   referredBy             User?     @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
   referrals              User[]    @relation("UserReferrals")
+  referralBonusMonths    Int?      @default(0)
   parentUserId           String?
   parentUser             User?     @relation("UserSubAccounts", fields: [parentUserId], references: [id], onDelete: Cascade)
   subAccounts            User[]    @relation("UserSubAccounts")

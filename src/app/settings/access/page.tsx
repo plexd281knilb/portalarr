@@ -35,10 +35,15 @@ import {
     bulkRejectAdminApprovalsAction,
     getApprovalSettingsAction,
     saveApprovalSettingsAction,
-    bulkSetUsersTrialOrSubscriptionAction
+    bulkSetUsersTrialOrSubscriptionAction,
+    creditUserReferralAction,
+    unlinkUserReferralAction,
+    sendSubscriptionRenewalReminderAction,
+    getUserRenewalSummaryAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
+import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +54,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
-    Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
+    UserCheck, Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
@@ -113,6 +118,20 @@ export default function AccessSettingsPage() {
     // Referral Stats & Leaderboard state
     const [referralStats, setReferralStats] = useState<any>(null);
     const [loadingReferrals, setLoadingReferrals] = useState(false);
+
+    // Referral Credit Modal state
+    const [showCreditReferralModal, setShowCreditReferralModal] = useState(false);
+    const [creditReferrerId, setCreditReferrerId] = useState("");
+    const [creditReferredId, setCreditReferredId] = useState("");
+    const [creditExtendExpiry, setCreditExtendExpiry] = useState(false);
+    const [creditBonusMonths, setCreditBonusMonths] = useState<number>(0);
+    const [creditAdminNotes, setCreditAdminNotes] = useState("");
+    const [submittingCredit, setSubmittingCredit] = useState(false);
+    const [creditSuccessMsg, setCreditSuccessMsg] = useState("");
+    const [creditErrMsg, setCreditErrMsg] = useState("");
+    const [sendingReminderUserId, setSendingReminderUserId] = useState<string | null>(null);
+    const [reminderSuccessMsg, setReminderSuccessMsg] = useState("");
+    const [reminderErrMsg, setReminderErrMsg] = useState("");
 
     // Payment & Onboarding Defaults state
     const [paymentSettings, setPaymentSettings] = useState({
@@ -436,6 +455,102 @@ export default function AccessSettingsPage() {
             console.error("loadReferrals error:", e);
         } finally {
             setLoadingReferrals(false);
+        }
+    };
+
+    const handleOpenCreditReferralModal = (targetUser?: any, asReferred = false) => {
+        setCreditSuccessMsg("");
+        setCreditErrMsg("");
+        setCreditExtendExpiry(false);
+        setCreditBonusMonths(0);
+        setCreditAdminNotes("");
+
+        if (targetUser && asReferred) {
+            setCreditReferredId(targetUser.id);
+            setCreditReferrerId(targetUser.referredByUserId || "");
+        } else if (targetUser) {
+            setCreditReferrerId(targetUser.id);
+            setCreditReferredId("");
+        } else {
+            setCreditReferrerId("");
+            setCreditReferredId("");
+        }
+        setShowCreditReferralModal(true);
+    };
+
+    const handleSubmitCreditReferral = async () => {
+        if (!creditReferrerId || !creditReferredId) {
+            setCreditErrMsg("Please select both the referring member and the friend who joined.");
+            return;
+        }
+        if (creditReferrerId === creditReferredId) {
+            setCreditErrMsg("A user cannot be credited for referring themselves.");
+            return;
+        }
+
+        setSubmittingCredit(true);
+        setCreditErrMsg("");
+        setCreditSuccessMsg("");
+
+        try {
+            const res = await creditUserReferralAction({
+                referrerUserId: creditReferrerId,
+                referredUserId: creditReferredId,
+                extendSubscriptionExpiry: creditExtendExpiry,
+                bonusMonths: creditBonusMonths,
+                adminNotes: creditAdminNotes
+            });
+
+            if (res.success) {
+                setCreditSuccessMsg(res.message || "Referral credit successfully applied!");
+                await loadUsers();
+                await loadReferrals();
+                setTimeout(() => {
+                    setShowCreditReferralModal(false);
+                }, 1800);
+            } else {
+                setCreditErrMsg(res.error || "Failed to credit referral.");
+            }
+        } catch (e: any) {
+            setCreditErrMsg(e.message || "Error processing referral credit.");
+        } finally {
+            setSubmittingCredit(false);
+        }
+    };
+
+    const handleUnlinkReferral = async (referredUserId: string) => {
+        if (!confirm("Are you sure you want to unlink this referral attribution?")) return;
+        try {
+            const res = await unlinkUserReferralAction(referredUserId);
+            if (res.success) {
+                await loadUsers();
+                await loadReferrals();
+            } else {
+                alert(res.error || "Failed to unlink referral.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to unlink referral.");
+        }
+    };
+
+    const handleSendRenewalReminder = async (userId: string) => {
+        setSendingReminderUserId(userId);
+        setReminderSuccessMsg("");
+        setReminderErrMsg("");
+        try {
+            const res = await sendSubscriptionRenewalReminderAction(userId);
+            if (res.success) {
+                setReminderSuccessMsg(res.message || "Renewal reminder dispatched!");
+                setTimeout(() => setReminderSuccessMsg(""), 5000);
+            } else {
+                setReminderErrMsg(res.error || "Failed to send reminder.");
+                setTimeout(() => setReminderErrMsg(""), 5000);
+            }
+        } catch (e: any) {
+            setReminderErrMsg(e.message || "Failed to send reminder.");
+            setTimeout(() => setReminderErrMsg(""), 5000);
+        } finally {
+            setSendingReminderUserId(null);
         }
     };
 
@@ -1572,6 +1687,30 @@ export default function AccessSettingsPage() {
                                 </div>
                             )}
 
+                            {reminderSuccessMsg && (
+                                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground animate-in fade-in">
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <span>{reminderSuccessMsg}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setReminderSuccessMsg("")}>
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
+
+                            {reminderErrMsg && (
+                                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground animate-in fade-in">
+                                    <div className="flex items-center gap-2">
+                                        <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                        <span>{reminderErrMsg}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setReminderErrMsg("")}>
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
+
                             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-2 min-w-0">
                                 {/* SEARCH INPUT */}
                                 <div className="relative flex-1 min-w-0 sm:min-w-[220px]">
@@ -2100,8 +2239,30 @@ export default function AccessSettingsPage() {
                                                             </Badge>
                                                         )}
                                                         {user.referredBy?.username && (
-                                                            <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs gap-1 font-medium">
+                                                            <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs gap-1 font-medium" title={`Invited by @${user.referredBy.username}`}>
                                                                 <Gift className="h-3 w-3" /> @{user.referredBy.username}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleUnlinkReferral(user.id);
+                                                                    }}
+                                                                    className="ml-1 text-muted-foreground hover:text-red-400 text-[10px] cursor-pointer"
+                                                                    title="Unlink referral"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </Badge>
+                                                        )}
+                                                        {user.referrals && user.referrals.length > 0 && (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs gap-1 font-semibold cursor-pointer hover:bg-purple-500/30 transition-colors"
+                                                                onClick={() => handleOpenCreditReferralModal(user)}
+                                                                title={`Friends Referred:\n${user.referrals.map((r: any) => `• @${r.username} (${r.status === 'APPROVED' || r.convertedAt ? 'Converted 🎁 1 Mo Free' : r.status})`).join('\n')}`}
+                                                            >
+                                                                <Trophy className="h-3 w-3 text-amber-400" />
+                                                                {user.referrals.length} Ref{user.referrals.length > 1 ? "s" : ""} ({user.referrals.filter((r: any) => r.status === "APPROVED" || r.convertedAt).length} Converted 🎁)
                                                             </Badge>
                                                         )}
                                                     </div>
@@ -2264,6 +2425,37 @@ export default function AccessSettingsPage() {
                                                             )}
                                                             View As
                                                         </Button>
+
+                                                        {/* CREDIT REFERRAL BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-purple-500/40 text-purple-300 hover:bg-purple-500/15 hover:border-purple-500 transition-all active:scale-95"
+                                                            onClick={() => handleOpenCreditReferralModal(user)}
+                                                            title="Credit this member for a referral or assign who invited them"
+                                                        >
+                                                            <Gift className="h-3.5 w-3.5 text-purple-400" />
+                                                            Credit Referral
+                                                        </Button>
+
+                                                        {/* SEND RENEWAL REMINDER BUTTON */}
+                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                className="h-8 px-2 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-500 transition-all active:scale-95"
+                                                                onClick={() => handleSendRenewalReminder(user.id)}
+                                                                title="Send annual renewal & payment reminder email with referral discounts"
+                                                                disabled={sendingReminderUserId === user.id}
+                                                            >
+                                                                {sendingReminderUserId === user.id ? (
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                                                                ) : (
+                                                                    <Send className="h-3 w-3 text-emerald-400" />
+                                                                )}
+                                                                Renewal Notice
+                                                            </Button>
+                                                        )}
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-2">
@@ -2409,11 +2601,20 @@ export default function AccessSettingsPage() {
 
                     {/* TOP REFERRERS LEADERBOARD */}
                     <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                                <Trophy className="h-5 w-5 text-amber-400" /> Member Referral Leaderboard
-                            </CardTitle>
-                            <CardDescription>Track which members bring the most friends and successful conversions to your server.</CardDescription>
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                    <Trophy className="h-5 w-5 text-amber-400" /> Member Referral Leaderboard
+                                </CardTitle>
+                                <CardDescription>Track which members bring the most friends and successful conversions to your server.</CardDescription>
+                            </div>
+                            <Button 
+                                size="sm" 
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold gap-1.5 text-xs shadow-sm shrink-0 active:scale-95"
+                                onClick={() => handleOpenCreditReferralModal()}
+                            >
+                                <Gift className="h-4 w-4" /> Credit Member Referral
+                            </Button>
                         </CardHeader>
                         <CardContent>
                             {loadingReferrals ? (
@@ -4600,6 +4801,258 @@ export default function AccessSettingsPage() {
                     </Card>
                 </div>
             )}
+
+            {/* ========================================================================= */}
+            {/* CREDIT MEMBER REFERRAL MODAL */}
+            {/* ========================================================================= */}
+            {showCreditReferralModal && (() => {
+                const selectedReferrer = users.find((u: any) => u.id === creditReferrerId);
+                const selectedReferred = users.find((u: any) => u.id === creditReferredId);
+
+                // Compute preview summary if referrer is selected
+                let liveSummary = null;
+                if (selectedReferrer) {
+                    const existingRefs = (selectedReferrer.referrals || []).map((r: any) => ({ ...r }));
+                    if (selectedReferred && !existingRefs.some((r: any) => r.id === selectedReferred.id)) {
+                        existingRefs.push({
+                            id: selectedReferred.id,
+                            username: selectedReferred.username,
+                            name: selectedReferred.name,
+                            status: "APPROVED",
+                            convertedAt: new Date()
+                        });
+                    }
+                    liveSummary = calculateUserRenewalSummary({
+                        user: {
+                            ...selectedReferrer,
+                            referrals: existingRefs,
+                            referralBonusMonths: (selectedReferrer.referralBonusMonths || 0) + (creditBonusMonths || 0)
+                        },
+                        yearlyPrice: paymentSettings?.yearlyPrice ?? 180,
+                        monthlyPrice: paymentSettings?.monthlyPrice ?? 15
+                    });
+                }
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <Card className="w-full max-w-lg border-purple-500/40 bg-[#0f0f15] text-foreground shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500" />
+                            <CardHeader className="pb-3 pt-5">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300">
+                                            <Gift className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-base font-bold flex items-center gap-1.5">
+                                                Credit Member Referral
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                                                Assign referral credit (+1 free month / $15 value) to an existing member.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                                        onClick={() => setShowCreditReferralModal(false)}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </CardHeader>
+
+                            <CardContent className="space-y-4 overflow-y-auto flex-1 pr-2">
+                                {creditSuccessMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        <span>{creditSuccessMsg}</span>
+                                    </div>
+                                )}
+                                {creditErrMsg && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <XCircle className="h-4 w-4 shrink-0" />
+                                        <span>{creditErrMsg}</span>
+                                    </div>
+                                )}
+
+                                {/* Referrer dropdown */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                        <Trophy className="h-3.5 w-3.5 text-amber-400" />
+                                        Referring Member (Earns Reward)
+                                    </Label>
+                                    <select
+                                        value={creditReferrerId}
+                                        onChange={(e) => setCreditReferrerId(e.target.value)}
+                                        className="w-full h-10 px-3 rounded-md bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium cursor-pointer"
+                                    >
+                                        <option value="">-- Select Member to Reward --</option>
+                                        {users.map((u: any) => {
+                                            const exp = u.subscriptionEndsAt ? ` (Exp: ${format(new Date(u.subscriptionEndsAt), "MMM d, yyyy")})` : "";
+                                            const count = (u.referrals || []).filter((r: any) => r.status === "APPROVED" || r.convertedAt).length;
+                                            const countLabel = count > 0 ? ` [${count} converted]` : "";
+                                            return (
+                                                <option key={u.id} value={u.id}>
+                                                    @{u.username} {u.name ? `(${u.name})` : ""} - {u.status} {exp}{countLabel}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        The existing member who invited a friend.
+                                    </p>
+                                </div>
+
+                                {/* Referred friend dropdown */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                        <UserCheck className="h-3.5 w-3.5 text-emerald-400" />
+                                        Referred Friend (Joined Member)
+                                    </Label>
+                                    <select
+                                        value={creditReferredId}
+                                        onChange={(e) => setCreditReferredId(e.target.value)}
+                                        className="w-full h-10 px-3 rounded-md bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium cursor-pointer"
+                                    >
+                                        <option value="">-- Select Invited Friend --</option>
+                                        {users.filter((u: any) => u.id !== creditReferrerId).map((u: any) => {
+                                            const isReferredAlready = u.referredBy ? ` (currently invited by @${u.referredBy.username})` : "";
+                                            return (
+                                                <option key={u.id} value={u.id}>
+                                                    @{u.username} {u.name ? `(${u.name})` : ""} - {u.status}{isReferredAlready}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        The newly joined user who was invited.
+                                    </p>
+                                </div>
+
+                                {/* Option: Immediately extend subscription date by +1 month */}
+                                <div className="p-3 rounded-lg border border-purple-500/20 bg-purple-500/5 space-y-2">
+                                    <label className="flex items-start gap-2.5 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={creditExtendExpiry}
+                                            onChange={(e) => setCreditExtendExpiry(e.target.checked)}
+                                            className="mt-0.5 rounded border-border bg-black text-purple-500 focus:ring-purple-400 cursor-pointer"
+                                        />
+                                        <div className="space-y-0.5">
+                                            <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                <Calendar className="h-3.5 w-3.5 text-purple-400" />
+                                                Immediately extend referrer's subscription expiry date by +1 month
+                                            </span>
+                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                If checked, adds 30 days to their current expiration date right now. If unchecked, their expiration date remains as-is, and the referral reward will be automatically applied as a discount on their upcoming payment statement ($15 off annual or delayed monthly billing).
+                                            </p>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {/* Optional Bonus Months */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-muted-foreground">
+                                        Additional Bonus Months (Optional)
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={12}
+                                        value={creditBonusMonths}
+                                        onChange={(e) => setCreditBonusMonths(parseInt(e.target.value) || 0)}
+                                        className="bg-black/40 border-border/60 text-sm h-9"
+                                        placeholder="0"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Extra bonus reward months to award (beyond the 1 month for this friend).
+                                    </p>
+                                </div>
+
+                                {/* Admin notes */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-muted-foreground">
+                                        Admin Notes (Optional)
+                                    </Label>
+                                    <Input
+                                        type="text"
+                                        value={creditAdminNotes}
+                                        onChange={(e) => setCreditAdminNotes(e.target.value)}
+                                        className="bg-black/40 border-border/60 text-sm h-9"
+                                        placeholder="e.g. Manually verified friend invited in Discord"
+                                    />
+                                </div>
+
+                                {/* LIVE REWARD & RENEWAL PREVIEW */}
+                                {liveSummary && (
+                                    <div className="p-3.5 rounded-xl border border-border/60 bg-black/40 space-y-2.5">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-semibold text-purple-300 flex items-center gap-1.5">
+                                                <Sparkles className="h-3.5 w-3.5 text-purple-400" /> Live Statement Preview
+                                            </span>
+                                            <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/30 text-[10px]">
+                                                {liveSummary.convertedReferralsCount} Converted ({liveSummary.convertedReferralsCount} Free Mo)
+                                            </Badge>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="p-2.5 rounded-lg bg-white/5 border border-border/30">
+                                                <div className="text-[10px] uppercase font-semibold text-muted-foreground">Annual Renewal</div>
+                                                <div className="font-bold text-emerald-400 text-sm mt-0.5">
+                                                    ${liveSummary.discountedYearlyPrice.toFixed(2)}
+                                                    <span className="text-xs text-muted-foreground line-through ml-1.5 font-normal">
+                                                        ${liveSummary.baseYearlyPrice.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[10px] text-purple-300 mt-0.5">
+                                                    -${liveSummary.rewardDiscountAmount.toFixed(2)} referral discount
+                                                </div>
+                                            </div>
+
+                                            <div className="p-2.5 rounded-lg bg-white/5 border border-border/30">
+                                                <div className="text-[10px] uppercase font-semibold text-muted-foreground">Monthly Alternative</div>
+                                                <div className="font-bold text-amber-300 text-sm mt-0.5">
+                                                    {liveSummary.delayedMonthlyStartDate || "Delayed +1 mo"}
+                                                </div>
+                                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                                    Starts after free month
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-[11px] text-muted-foreground italic border-t border-border/30 pt-2">
+                                            "{liveSummary.reminderNoticeText}"
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+
+                            <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-black/30 shrink-0">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowCreditReferralModal(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={submittingCredit || !creditReferrerId || !creditReferredId}
+                                    onClick={handleSubmitCreditReferral}
+                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold shadow-md shadow-purple-600/25 gap-1.5 cursor-pointer active:scale-95"
+                                >
+                                    {submittingCredit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gift className="h-3.5 w-3.5" />}
+                                    Grant Referral Credit
+                                </Button>
+                            </CardFooter>
+                        </Card>
+                    </div>
+                );
+            })()}
 
             {/* UNSAVED CHANGES FLOATING BAR & MODAL */}
             <UnsavedChangesPrompt

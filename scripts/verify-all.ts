@@ -991,6 +991,129 @@ async function runTestSuite() {
         }
     });
 
+    // 30. Referral Rewards & Credit Calculations
+    await assertTest("Subscriptions: Referral Rewards & Renewal Engine", async () => {
+        const { calculateUserRenewalSummary } = await import("../src/lib/referral-rewards");
+
+        // Scenario 1: User pays yearly ($180/yr, $15/mo), expiration is Jan 1, 2027, 1 friend converted
+        const summary1 = calculateUserRenewalSummary({
+            user: {
+                username: "annual_member",
+                status: "APPROVED",
+                subscriptionEndsAt: new Date(2027, 0, 1),
+                referrals: [
+                    { id: "friend1", username: "new_friend", status: "APPROVED", convertedAt: new Date() }
+                ]
+            },
+            yearlyPrice: 180,
+            monthlyPrice: 15
+        });
+
+        if (summary1.convertedReferralsCount !== 1) {
+            throw new Error(`Expected 1 converted referral, got: ${summary1.convertedReferralsCount}`);
+        }
+        if (summary1.discountedYearlyPrice !== 165) {
+            throw new Error(`Expected discounted annual price to be $165, got: ${summary1.discountedYearlyPrice}`);
+        }
+        if (summary1.rewardDiscountAmount !== 15) {
+            throw new Error(`Expected reward discount amount to be $15, got: ${summary1.rewardDiscountAmount}`);
+        }
+        if (!summary1.delayedMonthlyStartDate?.includes("February 1, 2027")) {
+            throw new Error(`Expected delayed monthly start date to be February 1, 2027, got: ${summary1.delayedMonthlyStartDate}`);
+        }
+        if (!summary1.reminderNoticeText.includes("$165.00") || !summary1.reminderNoticeText.includes("February 1, 2027")) {
+            throw new Error(`Reminder text missing discount or delayed date: ${summary1.reminderNoticeText}`);
+        }
+
+        // Scenario 2: Multiple referrals (e.g. 2 converted referrals)
+        const summary2 = calculateUserRenewalSummary({
+            user: {
+                username: "vip_member",
+                status: "APPROVED",
+                subscriptionEndsAt: new Date(2027, 0, 1),
+                referrals: [
+                    { id: "f1", username: "friend_one", status: "APPROVED", convertedAt: new Date() },
+                    { id: "f2", username: "friend_two", status: "APPROVED", convertedAt: new Date() }
+                ]
+            },
+            yearlyPrice: 180,
+            monthlyPrice: 15
+        });
+
+        if (summary2.convertedReferralsCount !== 2) {
+            throw new Error(`Expected 2 converted referrals, got: ${summary2.convertedReferralsCount}`);
+        }
+        if (summary2.discountedYearlyPrice !== 150) {
+            throw new Error(`Expected $150 discounted yearly price for 2 referrals, got: ${summary2.discountedYearlyPrice}`);
+        }
+        if (!summary2.delayedMonthlyStartDate?.includes("March 1, 2027")) {
+            throw new Error(`Expected delayed monthly start date to be March 1, 2027, got: ${summary2.delayedMonthlyStartDate}`);
+        }
+
+        // Scenario 3: Database User Referral Linking
+        const referrerUser = await prisma.user.upsert({
+            where: { username: "test_referrer_user" },
+            create: {
+                username: "test_referrer_user",
+                email: "referrer@example.com",
+                password: "hash123",
+                status: "APPROVED",
+                subscriptionEndsAt: new Date(2027, 0, 1)
+            },
+            update: {
+                status: "APPROVED",
+                subscriptionEndsAt: new Date(2027, 0, 1)
+            }
+        });
+
+        const friendUser = await prisma.user.upsert({
+            where: { username: "test_referred_friend" },
+            create: {
+                username: "test_referred_friend",
+                email: "friend@example.com",
+                password: "hash456",
+                status: "APPROVED"
+            },
+            update: {
+                status: "APPROVED"
+            }
+        });
+
+        // Link friend to referrer in database
+        await prisma.user.update({
+            where: { id: friendUser.id },
+            data: {
+                referredByUserId: referrerUser.id,
+                convertedAt: new Date()
+            }
+        });
+
+        // Fetch referrer with referrals included
+        const updatedReferrer = await prisma.user.findUnique({
+            where: { id: referrerUser.id },
+            include: { referrals: true }
+        });
+
+        if (!updatedReferrer || updatedReferrer.referrals.length === 0) {
+            throw new Error("Failed to link referral in database");
+        }
+
+        const dbSummary = calculateUserRenewalSummary({
+            user: updatedReferrer,
+            yearlyPrice: 180,
+            monthlyPrice: 15
+        });
+
+        if (dbSummary.discountedYearlyPrice !== 165) {
+            throw new Error(`Expected $165 renewal from DB user, got: ${dbSummary.discountedYearlyPrice}`);
+        }
+
+        // Clean up test users
+        await prisma.user.deleteMany({
+            where: { username: { in: ["test_referrer_user", "test_referred_friend"] } }
+        }).catch(() => {});
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

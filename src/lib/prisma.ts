@@ -629,6 +629,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["plexLibrarySectionIds", `ALTER TABLE "User" ADD COLUMN "plexLibrarySectionIds" TEXT;`],
                 ["referralCode", `ALTER TABLE "User" ADD COLUMN "referralCode" TEXT;`],
                 ["referredByUserId", `ALTER TABLE "User" ADD COLUMN "referredByUserId" TEXT;`],
+                ["referralBonusMonths", `ALTER TABLE "User" ADD COLUMN "referralBonusMonths" INTEGER DEFAULT 0;`],
                 ["parentUserId", `ALTER TABLE "User" ADD COLUMN "parentUserId" TEXT;`],
                 ["subAccountLabel", `ALTER TABLE "User" ADD COLUMN "subAccountLabel" TEXT;`],
                 ["selectedPlexLibrarySectionIds", `ALTER TABLE "User" ADD COLUMN "selectedPlexLibrarySectionIds" TEXT;`],

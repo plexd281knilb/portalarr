@@ -1097,14 +1097,48 @@ export default function UserProfilePage() {
                             </p>
                         </div>
                     ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
-                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1 text-xs">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Active Annual Subscription</span>
+                        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2.5 text-xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
+                                    Active Annual Subscription
+                                </span>
+                                {referralInfo?.renewalSummary?.convertedReferralsCount > 0 && (
+                                    <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-[10px] gap-1 font-semibold">
+                                        <Gift className="h-3 w-3 text-purple-400" />
+                                        {referralInfo.renewalSummary.convertedReferralsCount} Free Mo Earned
+                                    </Badge>
+                                )}
+                            </div>
                             <p className="font-bold text-emerald-400 text-sm">
                                 Valid until {format(new Date(user.subscriptionEndsAt), "MMMM d, yyyy")}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">
-                                Renews at ${effectiveYearlyPrice}/year for the following calendar year.
-                            </p>
+
+                            {referralInfo?.renewalSummary?.convertedReferralsCount > 0 ? (
+                                <div className="p-2.5 rounded-lg bg-black/30 border border-purple-500/25 space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="font-semibold text-purple-300 flex items-center gap-1">
+                                            <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                            Referral Reward Applied
+                                        </span>
+                                        <span className="font-bold text-emerald-400">
+                                            ${referralInfo.renewalSummary.discountedYearlyPrice.toFixed(2)}/yr
+                                            <span className="line-through text-muted-foreground ml-1.5 font-normal text-[11px]">
+                                                ${referralInfo.renewalSummary.baseYearlyPrice.toFixed(2)}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                        You earned <strong>{referralInfo.renewalSummary.convertedReferralsCount} free month(s)</strong> (${referralInfo.renewalSummary.rewardDiscountAmount.toFixed(2)} credit) for inviting friends who joined!
+                                        {referralInfo.renewalSummary.delayedMonthlyStartDate && (
+                                            <> If switching to monthly billing ($15/mo), your payments are delayed until <strong>{referralInfo.renewalSummary.delayedMonthlyStartDate}</strong>.</>
+                                        )}
+                                    </p>
+                                </div>
+                            ) : (
+                                <p className="text-[11px] text-muted-foreground">
+                                    Renews at ${effectiveYearlyPrice}/year for the following calendar year.
+                                </p>
+                            )}
                         </div>
                     ) : (
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-xs space-y-1">

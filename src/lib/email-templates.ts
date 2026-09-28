@@ -844,6 +844,108 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{newRole}", description: "New user role", sampleValue: "USER" },
             { key: "{reason}", description: "Reason for the role or access change", sampleValue: "Trial period elapsed beyond grace period" },
             { key: "{accessUrl}", description: "URL to the Access Control management page", sampleValue: "https://portal.example.com/settings/access" },
+        ]
+    },
+    {
+        id: "referral_reward_credited",
+        name: "Referral Reward Credited (+1 Free Month)",
+        description: "Sent to a member when an invited friend joins or is credited by an admin, confirming their +1 free month credit towards membership renewal.",
+        triggerEvent: "Triggered automatically when an invited friend joins and becomes an active member, or when an administrator credits a referral to the member's account.",
+        category: "TRIALS",
+        defaultSubject: "🎁 You've Earned 1 Free Month! (@{friendUsername} Joined DomsHomeLab)",
+        defaultBody: `<h2>You've Earned 1 Free Month! 🎁</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Awesome news! Your friend <strong>@{friendUsername}</strong> has joined DomsHomeLab (d281knilb) as a member.</p>
+
+<div style="background-color: #f5f3ff; border: 1px solid #ddd6fe; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 150px; color: #5b21b6;">Reward Earned:</td>
+            <td style="padding: 6px 0; color: #7c3aed; font-weight: 700; font-size: 15px;">+1 Free Month Credit ($15.00 Value)</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #5b21b6;">Referred Friend:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">@{friendUsername}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #5b21b6;">Total Rewards:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{totalReferralsCount} Friends Referred</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #5b21b6;">Renewal Impact:</td>
+            <td style="padding: 6px 0; color: #166534; font-weight: 600;">{renewalImpactText}</td>
+        </tr>
+    </table>
+</div>
+
+<h3 style="color: #0f172a; margin: 20px 0 8px 0;">How Your Reward Applies:</h3>
+<ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
+    <li>⭐ <strong>Annual Pass:</strong> Your next annual renewal will be discounted by $15.00 ({annualDiscountText}).</li>
+    <li>🗓️ <strong>Monthly Pass:</strong> Or if you prefer monthly billing, your payments won't start until <strong>{delayedMonthDate}</strong>!</li>
+</ul>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{appUrl}/settings/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">Keep sharing your personal invite link! You can earn an unlimited number of free months for each friend you invite.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of the referring member", sampleValue: "jordan_reader" },
+            { key: "{friendUsername}", description: "Username of the friend who joined", sampleValue: "alex_cinephile" },
+            { key: "{totalReferralsCount}", description: "Total converted referrals count", sampleValue: "1" },
+            { key: "{renewalImpactText}", description: "Summary of renewal discount", sampleValue: "1 Month Off Next Statement ($15.00 discount)" },
+            { key: "{annualDiscountText}", description: "Annual discount calculation", sampleValue: "$165.00 instead of $180.00" },
+            { key: "{delayedMonthDate}", description: "Delayed monthly payment date", sampleValue: "February 1, 2027" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "subscription_renewal_reminder",
+        name: "Subscription Renewal & Payment Reminder",
+        description: "Sent to members before their annual or monthly subscription renews, including any referral reward credits and discounted totals.",
+        triggerEvent: "Triggered prior to annual or monthly subscription renewal, detailing renewal amounts, applied referral credits, and payment methods.",
+        category: "PAYMENTS",
+        defaultSubject: "🔔 Your DomsHomeLab Membership Renewal Notice ({renewalDate})",
+        defaultBody: `<h2>Membership Renewal Notice 🔔</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your DomsHomeLab (d281knilb) membership is scheduled for renewal on <strong>{renewalDate}</strong>.</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 170px; color: #64748b;">Standard Annual Rate:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{basePrice}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Referral Rewards:</td>
+            <td style="padding: 6px 0; color: #16a34a; font-weight: 700;">{referralDiscountText}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Annual Amount Due:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 800; font-size: 16px;">{amountDue}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Monthly Alternative:</td>
+            <td style="padding: 6px 0; color: #4f46e5; font-weight: 600;">{monthlyAlternativeText}</td>
+        </tr>
+    </table>
+</div>
+
+<p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    {referralNoticeDetails}
+</p>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{appUrl}/settings/profile#billing" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
+        variables: [
+            { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
+            { key: "{renewalDate}", description: "Expiration or renewal date", sampleValue: "January 1, 2027" },
+            { key: "{basePrice}", description: "Standard base annual price", sampleValue: "$180.00 / year" },
+            { key: "{referralDiscountText}", description: "Referral discount summary", sampleValue: "-$15.00 (1 friend referred)" },
+            { key: "{amountDue}", description: "Net amount due after referral credits", sampleValue: "$165.00" },
+            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
+            { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total) or your monthly billing is delayed until February 1, 2027." },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     }
