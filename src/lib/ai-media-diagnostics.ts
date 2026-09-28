@@ -152,6 +152,30 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
     // Clean remaining punctuation and whitespace
     clean = clean.replace(/[?.,!":;]/g, " ").replace(/\s+/g, " ").trim();
 
+    // 4.5 Detect system-wide infrastructure queries, playback probes, and general troubleshooting questions that do not name a movie
+    const lowerClean = clean.toLowerCase();
+    const isSystemOrProbePhrase = 
+        /\b(is\s+)?plex\s+working\b/i.test(lowerClean) ||
+        /\b(is\s+)?(the\s+)?server\s+(working|online|up|down)\b/i.test(lowerClean) ||
+        /\b(disk\s+access|synthetic\s+playback|playback\s+probe)\b/i.test(lowerClean) ||
+        /\b(all\s+servers|each\s+server|media\s+servers|across\s+all)\b/i.test(lowerClean) ||
+        /\b(servers?\s*(online|status|health))\b/i.test(lowerClean) ||
+        /\b(what|which)\s+servers\b/i.test(lowerClean) ||
+        /\b(direct\s+play\s+vs\s+transcoding|100%?\s+direct\s+play)\b/i.test(lowerClean) ||
+        /\b(stream\s+buffering|why\s+is\s+my\s+stream\s+buffering)\b/i.test(lowerClean) ||
+        /\b(roku\s+giving\s+an\s+error|quality\s+is\s+too\s+low)\b/i.test(lowerClean);
+
+    if (isSystemOrProbePhrase) {
+        return {
+            title: "",
+            year: undefined,
+            targetServer,
+            rawCleaned: "",
+            isPlaybackTest: false,
+            isPronoun: false
+        };
+    }
+
     // 5. Detect and resolve pronouns and action verbs (e.g. "it", "that", "this", "test", "test it")
     const PRONOUN_TERMS = new Set([
         "it", "that", "this", "them",

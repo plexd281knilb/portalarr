@@ -853,6 +853,9 @@ ${serverListMarkdown}
         lowerQ.includes("can plex play") ||
         lowerQ.includes("ping plex") ||
         lowerQ.includes("test playback") ||
+        lowerQ.includes("synthetic playback") ||
+        lowerQ.includes("disk access") ||
+        lowerQ.includes("playback probe") ||
         lowerQ.includes("test plex");
 
     if (isPlaybackProbeQuery) {
@@ -870,37 +873,39 @@ ${serverListMarkdown}
     }
 
     // --- STEP 1: AUTONOMOUS MEDIA FILE & PLAYBACK INSPECTION ---
-    const historyContext = extractContextFromHistory(history);
-    const cleanedMedia = cleanMediaSearchQuery(question, historyContext);
-    const isSpecificMediaPlaybackTest = Boolean(cleanedMedia.isPlaybackTest && cleanedMedia.title && cleanedMedia.title.length > 1);
+    // Only inspect specific media files if the user is NOT asking for server inventory or an infrastructure playback probe
+    if (!isPlaybackProbeQuery && !isServerStatusQuery) {
+        const historyContext = extractContextFromHistory(history);
+        const cleanedMedia = cleanMediaSearchQuery(question, historyContext);
+        const isSpecificMediaPlaybackTest = Boolean(cleanedMedia.isPlaybackTest && cleanedMedia.title && cleanedMedia.title.length > 1);
 
-    const isTitleCorrection = Boolean(cleanedMedia.title && cleanedMedia.title.length > 1 && (
-        /^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+)/i.test(question) ||
-        historyContext.lastWasPlaybackTest
-    ));
+        const isTitleCorrection = Boolean(cleanedMedia.title && cleanedMedia.title.length > 1 && (
+            /^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+)/i.test(question) ||
+            historyContext.lastWasPlaybackTest
+        ));
 
-    const isLanguageOrMediaIssue = 
-        isSpecificMediaPlaybackTest ||
-        isTitleCorrection ||
-        lowerQ.includes("spanish") ||
-        lowerQ.includes("language") ||
-        lowerQ.includes("audio") ||
-        lowerQ.includes("soundtrack") ||
-        lowerQ.includes("dub") ||
-        lowerQ.includes("track") ||
-        lowerQ.includes("redownload") ||
-        lowerQ.includes("re-download") ||
-        lowerQ.includes("replace") ||
-        lowerQ.includes("broken") ||
-        lowerQ.includes("corrupt") ||
-        lowerQ.includes("wrong audio") ||
-        lowerQ.includes("foreign");
+        const isLanguageOrMediaIssue = 
+            isSpecificMediaPlaybackTest ||
+            isTitleCorrection ||
+            lowerQ.includes("spanish") ||
+            lowerQ.includes("language") ||
+            lowerQ.includes("audio") ||
+            lowerQ.includes("soundtrack") ||
+            lowerQ.includes("dub") ||
+            lowerQ.includes("track") ||
+            lowerQ.includes("redownload") ||
+            lowerQ.includes("re-download") ||
+            lowerQ.includes("replace") ||
+            lowerQ.includes("broken") ||
+            lowerQ.includes("corrupt") ||
+            lowerQ.includes("wrong audio") ||
+            lowerQ.includes("foreign");
 
-    if (isLanguageOrMediaIssue) {
-        const candidateTitle = cleanedMedia.title;
-        const candidateYear = cleanedMedia.year || historyContext.lastYear;
-        const resolvedTitle = candidateTitle || snapshot.primaryActiveStream?.title || historyContext.lastTitle;
-        const resolvedServer = cleanedMedia.targetServer || (isTitleCorrection ? historyContext.lastServer : undefined);
+        if (isLanguageOrMediaIssue) {
+            const candidateTitle = cleanedMedia.title;
+            const candidateYear = cleanedMedia.year || historyContext.lastYear;
+            const resolvedTitle = candidateTitle || (isSpecificMediaPlaybackTest || isTitleCorrection ? undefined : snapshot.primaryActiveStream?.title) || (isTitleCorrection ? historyContext.lastTitle : undefined);
+            const resolvedServer = cleanedMedia.targetServer || (isTitleCorrection ? historyContext.lastServer : undefined);
 
         if (resolvedTitle && resolvedTitle.length > 1) {
             try {
@@ -975,6 +980,7 @@ ${serverListMarkdown}
                 logAgentEvent("WARN", `Autonomous inspection error: ${inspectErr.message}`);
             }
         }
+    }
     }
 
     // Check for book redownload inquiry

@@ -1458,6 +1458,20 @@ async function runTestSuite() {
         if (serverStatusRes.providerUsed !== "Built-in Infrastructure Health Monitor") {
             throw new Error(`Expected provider Built-in Infrastructure Health Monitor, got: ${serverStatusRes.providerUsed}`);
         }
+
+        // H. System-Wide Playback Probe query: must NOT extract movie title or run single-item media inspection
+        const q7 = cleanMediaSearchQuery("Is Plex working right now? Test actual file playback and disk access for each server.");
+        if (q7.title !== "") {
+            throw new Error(`Expected empty title for system playback probe query, got: '${q7.title}'`);
+        }
+
+        const probeRes = await askAiServerMaster("Is Plex working right now? Test actual file playback and disk access for each server.", [], { username: "tester", role: "ADMIN" });
+        if (!probeRes.success) {
+            throw new Error(`Expected playback probe query to succeed, got error: ${probeRes.error}`);
+        }
+        if (probeRes.mediaInspection) {
+            throw new Error(`Expected mediaInspection to be undefined for system probe query, got inspection for: ${probeRes.mediaInspection.title}`);
+        }
     });
 
     // 35. Auth & Routing: Expired Session Detection & Dual Cadence Reactivation
