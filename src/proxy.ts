@@ -94,8 +94,8 @@ export async function proxy(req: NextRequest) {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      // Direct non-admin users to their Account Settings / Password Change screen
-      return NextResponse.redirect(new URL("/settings/profile", req.url));
+      // Direct non-admin users to their Account Settings / Password Change screen (/profile)
+      return NextResponse.redirect(new URL("/profile", req.url));
     }
 
     // 6. Role-based protection for Radarr/Sonarr routes
@@ -107,7 +107,7 @@ export async function proxy(req: NextRequest) {
     }
 
     // 7. Strict route protection for TRIAL accounts
-    // Trial accounts have access to: /, /discover, /requests, /guides, /settings/profile (password/my plex hub).
+    // Trial accounts have access to: /, /discover, /requests, /guides, /profile, /settings/profile (password/my plex hub).
     // They are strictly forbidden from /library (Book Library), /radarr, /sonarr, /beta, /curation, /admin.
     const isTrialUser = (userStatus === "TRIAL" || payload.role === "TRIAL" || (payload as any).isTrial === true) && userStatus !== "APPROVED" && payload.role !== "ADMIN";
     if (isTrialUser) {

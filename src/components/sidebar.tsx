@@ -160,12 +160,12 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Link>
             )}
 
-            <Link href="/settings/profile">
+            <Link href="/profile">
               <Button
-                variant={pathname === "/settings/profile" ? "secondary" : "ghost"}
+                variant={pathname === "/profile" || pathname === "/settings/profile" ? "secondary" : "ghost"}
                 className={cn(
                   "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname === "/settings/profile"
+                  pathname === "/profile" || pathname === "/settings/profile"
                     ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-blue-500/40 font-bold"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-blue-500/40"
                 )}
@@ -468,12 +468,12 @@ export function MobileSidebar() {
                     </Link>
                   )}
 
-                  <Link href="/settings/profile" onClick={() => setIsOpen(false)}>
+                  <Link href="/profile" onClick={() => setIsOpen(false)}>
                     <Button
-                      variant={pathname === "/settings/profile" ? "secondary" : "ghost"}
+                      variant={pathname === "/profile" || pathname === "/settings/profile" ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname === "/settings/profile"
+                        pathname === "/profile" || pathname === "/settings/profile"
                           ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-blue-500/40 font-bold"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-blue-500/40"
                       )}

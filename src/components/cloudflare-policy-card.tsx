@@ -17,6 +17,7 @@ export default function CloudflarePolicyCard() {
         "/pending",
         "/discover*",
         "/library*",
+        "/profile*",
         "/settings/profile",
         "/api/auth/*",
         "/api/plex/*",

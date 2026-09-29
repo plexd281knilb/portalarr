@@ -68,7 +68,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     if (pathname.startsWith("/curation/tagging")) return "Tagging Studio";
     if (pathname.startsWith("/curation")) return "Curation Studio";
     if (pathname.startsWith("/admin/tickets")) return "Support Tickets";
-    if (pathname.startsWith("/settings/profile")) return "Account Settings";
+    if (pathname.startsWith("/profile") || pathname.startsWith("/settings/profile")) return "Account Settings";
     if (pathname.startsWith("/settings/access")) return "Access Control";
     if (pathname.startsWith("/settings")) return "System Settings";
     if (pathname.startsWith("/guides")) return "Setup Guides";
@@ -108,8 +108,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                     </Button>
 
                     {/* Account Settings Button */}
-                    <Button asChild variant="ghost" size="sm" className="flex gap-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
-                        <Link href="/settings/profile" title="Account & Password Settings">
+                    <Button asChild variant="ghost" size="sm" className={`flex gap-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-400/40 active:scale-95 transition-all text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 ${pathname.startsWith("/profile") || pathname.startsWith("/settings/profile") ? "bg-blue-500/15 ring-1 ring-blue-500/40 font-bold" : ""}`}>
+                        <Link href="/profile" title="Account & Password Settings">
                             <User className="h-4 w-4 shrink-0" /> 
                             <span className="hidden sm:inline font-semibold">Account</span>
                         </Link>

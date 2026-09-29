@@ -85,7 +85,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                             </div>
                             <div className="pt-2">
                                 <Button asChild size="sm" variant="outline" className="w-full text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-300">
-                                    <Link href="/settings/profile#payment">
+                                    <Link href="/profile#payment">
                                         View Payment Instructions
                                     </Link>
                                 </Button>
@@ -112,7 +112,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                             </div>
                             <div className="pt-2">
                                 <Button asChild size="sm" className="w-full text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-black">
-                                    <Link href="/settings/profile#payment">
+                                    <Link href="/profile#payment">
                                         Activate Full Year
                                     </Link>
                                 </Button>
@@ -125,7 +125,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                             <KeyRound className="h-3.5 w-3.5 text-primary" />
                             Need to update your password?
                         </span>
-                        <Link href="/settings/profile#password" className="text-primary hover:underline font-semibold flex items-center gap-1">
+                        <Link href="/profile#password" className="text-primary hover:underline font-semibold flex items-center gap-1">
                             Account Settings <ArrowRight className="h-3 w-3" />
                         </Link>
                     </div>

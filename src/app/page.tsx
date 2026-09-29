@@ -319,8 +319,8 @@ export default async function UserLandingPage() {
                                 )}
                                 <div className="text-[11px] text-muted-foreground pt-1 border-t border-border/30 flex items-center justify-between">
                                     <span>Supports Send-to-Kindle delivery or direct browser downloads/reading.</span>
-                                    <Link href="/settings/profile#kindle" className="text-emerald-400 hover:underline">
-                                        Configure in Settings &gt;
+                                    <Link href="/profile#kindle" className="text-emerald-400 hover:underline">
+                                        Configure in Account &gt;
                                     </Link>
                                 </div>
                             </CardContent>

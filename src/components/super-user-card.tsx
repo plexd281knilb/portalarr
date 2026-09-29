@@ -107,7 +107,7 @@ export default function SuperUserCard({ initialRole = "USER" }: SuperUserCardPro
                     </div>
                 )}
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/30">
-                    <span>You can toggle this option anytime here or on your <Link href="/settings/profile" className="text-cyan-400 hover:underline">Settings &gt; Profile</Link> page.</span>
+                    <span>You can toggle this option anytime here or on your <Link href="/profile" className="text-cyan-400 hover:underline">Account Profile</Link> page.</span>
                     {isSuper && (
                         <div className="flex items-center gap-2">
                             <Link href="/radarr" className="text-cyan-400 hover:underline flex items-center gap-0.5">

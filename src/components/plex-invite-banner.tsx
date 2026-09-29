@@ -199,7 +199,7 @@ export default function PlexInviteBanner({
                                 <Sparkles className="h-3.5 w-3.5 text-purple-400" /> How Inviting Friends Works
                             </span>
                             <Link 
-                                href="/settings/profile#referral" 
+                                href="/profile#referral" 
                                 className="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1 hover:underline"
                             >
                                 Referral Stats <ArrowRight className="h-3 w-3" />

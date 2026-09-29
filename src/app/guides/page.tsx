@@ -740,7 +740,7 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
             case "audiobooks":
                 return { href: "/library", label: "Open Audiobooks" };
             case "referral-rewards":
-                return { href: "/settings/profile", label: "View Profile & Referrals" };
+                return { href: "/profile", label: "View Profile & Referrals" };
             case "curation-studio":
                 return { href: "/curation/kometa", label: "Open Curation Studio" };
             default:

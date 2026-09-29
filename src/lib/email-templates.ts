@@ -885,7 +885,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/settings/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
+    <a href="{appUrl}/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Keep sharing your personal invite link! You can earn an unlimited number of free months for each friend you invite.</p>`,
         variables: [
@@ -935,7 +935,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/settings/profile#billing" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
+    <a href="{appUrl}/profile#billing" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
         variables: [
