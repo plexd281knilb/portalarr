@@ -123,6 +123,7 @@ Need to correct chapter numbers or track ordering?
 2. Click **`✏️ Reorder & Edit Chapters`**.
 3. Use the **`⬆️ Up`** / **`⬇️ Down`** buttons or type custom chapter numbers to rearrange tracks.
 4. Click **`Save Order`**. DomsHomeLab physically renames and synchronizes track files on disk (`reorderAudiobookChapters`) so the new order is permanent for all users across the server!
+5. **✨ AI Chapter Track Analysis:** Click **`Analyze with AI`** to have the AI agent automatically inspect raw track names, infer official chapter splits, and populate canonical chapter titles.
 
 ---
 

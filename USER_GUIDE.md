@@ -7,7 +7,7 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
 ### 📑 Table of Contents
 1. [Getting Started, Invitations & Free Trial Passes](#1-getting-started-invitations--free-trial-passes)
 2. [My Plex Hub, Stream Diagnostics & Speed Tests](#2-my-plex-hub-stream-diagnostics--speed-tests)
-3. [🤖 Plex & Server Master AI Support Assistant](#3--plex--server-master-ai-support-assistant)
+3. [🤖 Plex & Server Master AI Support Assistant](#3-plex--server-master-ai-support-assistant)
 4. [Plex Device Setup & Quality Optimization Guides](#4-plex-device-setup--quality-optimization-guides)
 5. [Wireless Send-to-Kindle Setup (For E-Readers)](#5-wireless-send-to-kindle-setup-for-e-readers)
 6. [Browsing & Accessing Media (Ebooks & Audiobooks)](#6-browsing--accessing-media-ebooks--audiobooks)
@@ -15,10 +15,10 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
 8. [Audiobooks, Floating Web Player & Chapter Track Studio](#8-audiobooks-floating-web-player--chapter-track-studio)
 9. [Requesting New Books & Audiobooks (Unified Discover Hub)](#9-requesting-new-books--audiobooks-unified-discover-hub)
 10. [Troubleshooting, Request Tracking & 1-Click Import](#10-troubleshooting-request-tracking--1-click-import)
-11. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#11--native-movie--tv-show-requests-seerr-engine--episode-guides)
-12. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#12--curation-studio-suite-kometa-agregarr-maintainerr-tagging)
-13. [💳 Subscriptions, Referral Rewards & Family Profiles](#13--subscriptions-referral-rewards--family-profiles)
-14. [👁️ Admin Tools: View Site As User (Impersonation)](#14-️-admin-tools-view-site-as-user-impersonation)
+11. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#11-native-movie--tv-show-requests-seerr-engine--episode-guides)
+12. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#12-curation-studio-suite-kometa-agregarr-maintainerr-tagging)
+13. [💳 Subscriptions, Referral Rewards & Family Profiles](#13-subscriptions-referral-rewards--family-profiles)
+14. [👁️ Admin Tools: Impersonation & Approval Governance](#14-admin-tools-impersonation--approval-governance)
 15. [Need Help or Technical Support?](#15-need-help-or-technical-support)
 
 ---
@@ -79,7 +79,7 @@ Diagnose buffering or stuttering directly from your current viewing device:
 
 ---
 
-## 🤖 3. 🤖 Plex & Server Master AI Support Assistant
+## 🤖 3. Plex & Server Master AI Support Assistant
 
 Need instant help troubleshooting a playback error on your TV or streaming device? Use the built-in **Plex & Server Master AI Assistant**!
 
@@ -114,6 +114,7 @@ To eliminate buffering and enjoy maximum 4K HDR and 1080p video quality, configu
    - 🤖 **Android TV / Google TV / Nvidia Shield:** Enable Refresh Rate Switching, set Remote Quality to *Original*, and enable Audio Passthrough (HDMI).
    - 📱 **Smart TVs (LG webOS / Samsung Tizen):** Disable *Auto Quality Adjust*, set Local and Remote Quality to *Original*, and avoid PGS subtitles if unsupported.
    - 💻 **Web Browsers & Mobile (iOS / Android):** Use the official Plex Desktop app or native mobile apps for direct codec support.
+3. **Interactive In-App Feature Guide Modal:** Click the **`📖 Feature Guide`** button available across app pages to open full interactive walk-throughs for all features without leaving your current view.
 
 ---
 
@@ -136,8 +137,9 @@ Amazon requires all senders to be approved before emails can reach your Kindle:
 ### Step 3: Save & Test
 - Enter your Kindle email and click **Save Email & Unlock Automatic Delivery**.
 - Click **Run Pre-Flight Delivery Check** to test your configuration before sending your first book!
-- **⚡ Automatic Delivery on Request:** Whenever you request an ebook in Discover, DomsHomeLab automatically emails the EPUB directly to your Kindle as soon as the download finishes!
-- *Don't have a Kindle or want to download files manually?* Click **Skip for Now & Browse Library**. You can update this anytime by clicking the **Kindle Settings** button in the header.
+- **⚡ Automatic Delivery on Request:** Whenever you request an ebook in Discover, DomsHomeLab automatically emails the clean EPUB directly to your Kindle as soon as the download finishes!
+- **📋 Outbound Delivery Logs & Retries:** Inspect previous Kindle email dispatches in the Kindle Delivery History panel, and retry any failed dispatches with 1 click.
+- *Don't have a Kindle or want to download files manually?* Click **Skip for Now & Browse Library**. You can update this anytime by clicking the **Kindle** tab in `/library`.
 
 ---
 
@@ -152,8 +154,9 @@ DomsHomeLab organizes your reading and listening collection into dedicated tabs:
 - **⚡ 1-Click Auto-Grab:** In the Missing Books view, click **Auto-Grab** on any missing installment (or grab the entire series) to immediately auto-request and download it.
 - **🌫️ Missing Book Cards:** Missing books display on your shelf with a grayscale poster, "MISSING" badge, and 0 MB indicator. You can click **Re-Grab Release** directly from the book card modal to search indexers anytime.
 - **1-Click Kindle Send (`📧`):** Click the Kindle button on any book card to wirelessly dispatch the standardized EPUB file directly to your e-reader.
-- **Format Standardization:** Non-EPUB files (MOBI, AZW3, PDF) are automatically converted to clean EPUBs, and redundant legacy formats are pruned to save disk space.
+- **Format Standardization:** Non-EPUB files (MOBI, AZW3, PDF) are automatically converted to clean EPUBs via background conversion (`ebook-convert`), and redundant legacy formats are pruned to save disk space.
 - **Direct Download (`⬇️`):** Click the Download button to download EPUB or PDF files directly to your phone, tablet, or computer.
+- **Interactive Metadata Matcher (`BookMatchModal`):** For unlinked or manually uploaded books, click the Match button to run the interactive matcher. It scores suggestions against local database relations, Audible, iTunes, and Google Books with AI fallback, allowing 1-click field updates, volume linking, cover fetching, and disk reorganization.
 
 ---
 
@@ -185,6 +188,9 @@ Click **`Read`** or **`Resume (X%)`** on any EPUB book card to launch the reader
 - **Navigation:** Use keyboard arrow keys, spacebar, on-screen arrows, or the bottom thumbnail scrubber to quickly jump between pages.
 - **Page Position Memory:** Automatically resumes at the exact page you last viewed.
 
+### 📄 PDF Document Viewer
+- Embedded inline PDF rendering with zoom controls, page jumping, and direct download capabilities.
+
 ---
 
 ## 🎧 8. Audiobooks, Floating Web Player & Chapter Track Studio
@@ -198,6 +204,7 @@ DomsHomeLab delivers an Audible-quality audiobook experience right in your web b
 - **Multi-Disc & Multi-Track Auto-Consolidation:** Folder structures with chapter tracks (`01 Intro.mp3`, `02 Chapter 1.mp3`) or multi-disc subdirectories (`Disc 01/`, `Disc 02/`) are automatically merged into a single audiobook card displaying total duration and consolidated size.
 - **Interactive Chapter Selector:** Click **Listen & Chapters** on any audiobook card to open the Chapter Selector Modal, jump to any specific chapter, or view file details.
 - **Reorder & Edit Chapters:** Click **✏️ Reorder & Edit Chapters** in the Chapter Selector Modal to change chapter numbers or click ⬆️ / ⬇️ buttons. Click **Save** to rename track files on disk so your custom order is permanent for all users!
+- **✨ AI Chapter Track Analysis:** Click **Analyze with AI** to automatically inspect raw audio tracks, infer official chapter boundaries and titles, and auto-populate metadata.
 
 ---
 
@@ -243,6 +250,10 @@ Requesting books and audiobooks is fully integrated into the unified **Discover 
 3. Browse available releases showing title, size, format, protocol (Torrent vs Usenet), seeders, and age.
 4. Click **Push Release** (`📥`) to dispatch that exact release to your download client.
 
+### 🚫 Permanent Release Blocklisting
+- Corrupted, password-protected, foreign-language, or mismatched releases are automatically recorded to the blocklist database (`FailedRelease`).
+- Subsequent auto-searches skip these releases automatically, and they are marked with a **`🚫 Blocklisted Release`** badge in the Interactive Release Chooser.
+
 ### 📥 1-Click Download Import (`Import Download`)
 - If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared on your shelf yet, click **`📥 Import Download`** in `/requests`. The system will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as `Downloaded`.
 
@@ -251,7 +262,7 @@ Requesting books and audiobooks is fully integrated into the unified **Discover 
 
 ---
 
-## 🎬 11. 🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)
+## 🎬 11. Native Movie & TV Show Requests (Seerr Engine & Episode Guides)
 
 DomsHomeLab includes a built-in media discovery and request engine directly connected with TMDb, Plex, Radarr, and Sonarr!
 
@@ -275,18 +286,18 @@ DomsHomeLab includes a built-in media discovery and request engine directly conn
 
 ---
 
-## 🎨 12. 🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)
+## 🎨 12. Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)
 
-Administrators can curate Plex libraries natively without external scripts or extra docker containers:
+Administrators can curate Plex libraries natively without external scripts or extra docker containers via the **Curation Studio (`/curation`)**:
 
 - **✨ Kometa Overlays Studio:** Apply high-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, audio codecs, and custom user overlays to movie and TV posters with live canvas previews.
 - **🎬 Agregarr Hubs:** Generate dynamic trending hubs, smart collections, and discovery rows linked directly with Trakt, TMDb, and IMDb charts.
-- **🧹 Maintainerr Prune:** Set disk quota rules, identify unwatched media, and safely prune media to recover storage automatically.
-- **🏷️ Tagging Studio:** Tag movies, shows, and parental guide labels across Plex libraries to prepare for user-level customizable shelf toggles.
+- **🧹 Maintainerr Prune:** Set disk quota rules, identify unwatched media, and safely prune media to recover storage automatically with Leaving Soon staging collections and poster countdown badges.
+- **🏷️ Parental Guide & Tagging Studio:** Tag movies, shows, and parental guide labels across Plex libraries with IMDb / Common Sense Media content advisory severity ratings (violence, sex, substance, gore) to prepare for user-level customizable shelf toggles.
 
 ---
 
-## 💳 13. 💳 Subscriptions, Referral Rewards & Family Profiles
+## 💳 13. Subscriptions, Referral Rewards & Family Profiles
 
 ### 📅 Flexible Membership Plans
 When upgrading from your free trial pass to full membership, choose the cadence that fits you best:
@@ -304,7 +315,7 @@ When upgrading from your free trial pass to full membership, choose the cadence 
 
 ### 💳 Zero-Fee P2P Payments & Automated Receipts
 - **P2P Direct Methods:** Renew seamlessly via Venmo, PayPal, Cash App, or Zelle with zero gateway fees.
-- **Pre-Filled Memo Tags & QR Codes:** Use the interactive QR code modal on the dashboard or `/join` to prefill your exact payment memo tag: `#DOMSHOMELAB-USERNAME-MONTHYEAR`.
+- **Pre-Filled Memo Notes & QR Codes:** Use the interactive QR code modal on the dashboard, `/settings/profile`, or `/join` to prefill your exact payment memo (your clean username, e.g. `dominicjuliano`) for automated IMAP reconciliation.
 - **Instant Payment Receipts:** Whenever your payment is processed, DomsHomeLab automatically dispatches a branded HTML payment confirmation receipt (`payment_received`) confirming the amount received, date, new expiration date, and active perks.
 - **Full Membership Activation Alerts:** Upgrading from trial to full membership dispatches a welcome email (`subscription_activated`) highlighting all unlocked features.
 
@@ -315,22 +326,29 @@ When upgrading from your free trial pass to full membership, choose the cadence 
 
 ---
 
-## 👁️ 14. 👁️ Admin Tools: View Site As User (Impersonation)
+## 👁️ 14. Admin Tools: Impersonation & Approval Governance
 
-Administrators can view the entire DomsHomeLab portal through the eyes of any registered user:
+Administrators have powerful management and safety tools:
+
+### 👁️ View Site As User (Impersonation)
 1. Navigate to **System Settings** → **Access Control** (`/settings/access`).
 2. On any user's card in the User Directory, click **`👁️ View As`**.
 3. Confirm the prompt to switch your active session to that user.
 4. While impersonating, a prominent sticky warning banner appears across all pages: `Viewing site as [Username] ([ROLE])`.
 5. To exit and return to your Admin account, click **`Return to Admin`** on the top banner anytime.
 
+### 🛡️ Action Approval Gates & Governance
+When `requireApprovalForPlexChanges` or `requireApprovalForEmails` switches are active in System Settings:
+1. Critical actions (such as user account permission adjustments, library sharing edits, or bulk notification emails) are staged in the **Admin Approval Queue (`/admin/approvals`)**.
+2. Administrators can review, batch-approve, or reject staged modifications with full audit history before they are executed live on Plex or dispatched via SMTP.
+
 ---
 
 ## ❓ 15. Need Help or Technical Support?
 
 If a stream won't play, a book download fails, or you need server assistance:
-1. Click the **Support** (`💬`) icon in the navigation bar.
-2. Submit a ticket detailing the issue.
+1. **Try the AI Support Bot:** Ask questions in the floating AI Assistant on My Plex Hub for instant storage diagnostics and stream fixes.
+2. **Submit a Ticket:** Click the **Support** (`💬`) icon in the navigation bar to submit a ticket detailing the issue.
 3. You will receive email updates as the administrator investigates and resolves your request.
 
 *Happy Streaming, Reading & Listening!* 🎬📖🎧
