@@ -51,7 +51,7 @@ export default function SuperUserCard({ initialRole = "USER" }: SuperUserCardPro
                         <div className="flex items-center gap-2">
                             <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground">
                                 <Zap className="h-5 w-5 text-cyan-400" />
-                                {isSuper ? "Super User Mode Active" : "Want to Help Out? Become a Super User"}
+                                {isSuper ? "Super User Mode Active" : "Don't Want to Wait for the Admin? Become a Super User"}
                             </CardTitle>
                             <Badge 
                                 variant="outline" 
@@ -65,7 +65,9 @@ export default function SuperUserCard({ initialRole = "USER" }: SuperUserCardPro
                             </Badge>
                         </div>
                         <CardDescription className="text-xs">
-                            Super users get direct access to Radarr and Sonarr to fix missing episodes, adjust search indexers, and help manage downloads.
+                            {isSuper
+                                ? "You have direct self-service access to Radarr and Sonarr to resolve missing episodes, trigger searches, and manage downloads instantly."
+                                : "Don't want to wait for the server admin to fix your issue? Super users get direct access to Radarr and Sonarr to fix missing episodes, adjust search indexers, and help manage downloads directly."}
                         </CardDescription>
                     </div>
 
