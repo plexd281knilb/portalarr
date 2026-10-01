@@ -2111,6 +2111,125 @@ async function runTestSuite() {
         }
     });
 
+    // 44. Tagging Studio: Parental Advisory Tag Formatting, Severity Matching, Server Guard Rails, and Custom Tag Rule Logic
+    await assertTest("Tagging Studio: Parental Tagging Formats, Server Guard Rails & Content Advisory Engine", async () => {
+        const {
+            formatParentalTag,
+            isParentalTag,
+            meetsSeverityThreshold,
+            normalizeContentRating,
+            getContentRatingRank,
+            isRatingAllowedByGuardRail,
+            isMediaAllowedByServerGuardRail,
+            KID_SAFE_GUARD_RAIL_PRESET,
+            FAMILY_GUARD_RAIL_PRESET,
+            UNRESTRICTED_GUARD_RAIL_PRESET
+        } = await import("../src/lib/curation/parental-guide-types");
+
+        // 1. Tag Formatting Verification across all syntax templates
+        const f1 = formatParentalTag("nudity", "Severe", "prefix_category_severity", "IMDb");
+        if (f1 !== "IMDb: Nudity [Severe]") throw new Error(`Expected "IMDb: Nudity [Severe]", got "${f1}"`);
+
+        const f2 = formatParentalTag("violence", "Moderate", "prefix_severity", "IMDb");
+        if (f2 !== "IMDb: Moderate") throw new Error(`Expected "IMDb: Moderate", got "${f2}"`);
+
+        const f3 = formatParentalTag("nudity", "Severe", "category_severity");
+        if (f3 !== "Nudity [Severe]") throw new Error(`Expected "Nudity [Severe]", got "${f3}"`);
+
+        const f4 = formatParentalTag("profanity", "Mild", "category_severity_paren");
+        if (f4 !== "Profanity (Mild)") throw new Error(`Expected "Profanity (Mild)", got "${f4}"`);
+
+        const f5 = formatParentalTag("alcohol", "Severe", "severity_category");
+        if (f5 !== "Severe Alcohol") throw new Error(`Expected "Severe Alcohol", got "${f5}"`);
+
+        const f6 = formatParentalTag("frightening", "Severe", "custom", "Advisory");
+        if (f6 !== "Advisory: Frightening - Severe") throw new Error(`Expected "Advisory: Frightening - Severe", got "${f6}"`);
+
+        // 2. Tag Detection & Prefix Parsing
+        if (!isParentalTag("IMDb: Nudity [Severe]", "IMDb")) throw new Error("Expected isParentalTag true for IMDb: Nudity [Severe]");
+        if (!isParentalTag("IMDb: Moderate", "IMDb")) throw new Error("Expected isParentalTag true for IMDb: Moderate");
+        if (!isParentalTag("Nudity [Severe]")) throw new Error("Expected isParentalTag true for Nudity [Severe]");
+        if (!isParentalTag("Nudity (Severe)")) throw new Error("Expected isParentalTag true for Nudity (Severe)");
+        if (!isParentalTag("Severe Nudity")) throw new Error("Expected isParentalTag true for Severe Nudity");
+        if (!isParentalTag("IMDb-Nudity: Severe", "IMDb")) throw new Error("Expected isParentalTag true for IMDb-Nudity: Severe");
+        if (isParentalTag("Action Movies")) throw new Error("Expected isParentalTag false for regular genre");
+        if (isParentalTag("4K UHD HDR")) throw new Error("Expected isParentalTag false for technical label");
+
+        // 3. Severity Thresholds
+        if (!meetsSeverityThreshold("Severe", "Mild")) throw new Error("Severe should meet Mild threshold");
+        if (!meetsSeverityThreshold("Moderate", "Moderate")) throw new Error("Moderate should meet Moderate threshold");
+        if (meetsSeverityThreshold("Mild", "Moderate")) throw new Error("Mild should not meet Moderate threshold");
+        if (meetsSeverityThreshold("None", "Mild")) throw new Error("None should not meet Mild threshold");
+
+        // 4. Content Rating Normalization (Handling country prefixes with colons and slashes)
+        if (normalizeContentRating("us/PG-13") !== "PG-13") throw new Error("us/PG-13 failed normalization");
+        if (normalizeContentRating("US:R") !== "R") throw new Error("US:R failed normalization");
+        if (normalizeContentRating("gb/15") !== "15") throw new Error("gb/15 failed normalization");
+        if (normalizeContentRating("PG-13") !== "PG-13") throw new Error("PG-13 failed normalization");
+
+        // 5. Content Rating Ranks
+        if (getContentRatingRank("G") !== 1) throw new Error("G rank should be 1");
+        if (getContentRatingRank("PG") !== 2) throw new Error("PG rank should be 2");
+        if (getContentRatingRank("PG-13") !== 3) throw new Error("PG-13 rank should be 3");
+        if (getContentRatingRank("R") !== 4) throw new Error("R rank should be 4");
+        if (getContentRatingRank("NC-17") !== 5) throw new Error("NC-17 rank should be 5");
+
+        // 6. Server Guard Rails: Rating Policy
+        const kidSafeCheckAllowed = isRatingAllowedByGuardRail("G", "G", ["PG", "PG-13", "R"], true);
+        if (!kidSafeCheckAllowed.allowed) throw new Error("G rating should be allowed on Kid-Safe");
+
+        const kidSafeCheckBlocked = isRatingAllowedByGuardRail("PG-13", "G", ["PG", "PG-13", "R"], true);
+        if (kidSafeCheckBlocked.allowed) throw new Error("PG-13 rating should be blocked on Kid-Safe");
+
+        const unratedCheck = isRatingAllowedByGuardRail("NR", "PG", [], true);
+        if (unratedCheck.allowed) throw new Error("Unrated should be blocked when blockUnrated is true");
+
+        // 7. Full Media Item Evaluation against Kid-Safe Server Guard Rail
+        const kidSafeConfig = {
+            ...KID_SAFE_GUARD_RAIL_PRESET,
+            serverId: "kids-server"
+        };
+
+        // Permitted Kid Media
+        const allowedMedia = isMediaAllowedByServerGuardRail({
+            title: "Finding Nemo",
+            contentRating: "G",
+            genres: ["Animation", "Family"]
+        }, kidSafeConfig);
+        if (!allowedMedia.allowed) throw new Error(`Finding Nemo should be permitted: ${allowedMedia.reason}`);
+
+        // Blocked by Rating (R)
+        const blockedByRating = isMediaAllowedByServerGuardRail({
+            title: "Deadpool",
+            contentRating: "R",
+            genres: ["Action", "Comedy"]
+        }, kidSafeConfig);
+        if (blockedByRating.allowed) throw new Error("Deadpool should be blocked by R rating");
+
+        // Blocked by Genre (Horror)
+        const blockedByGenre = isMediaAllowedByServerGuardRail({
+            title: "Scary Cartoon",
+            contentRating: "G",
+            genres: ["Animation", "Horror"]
+        }, kidSafeConfig);
+        if (blockedByGenre.allowed) throw new Error("Horror genre should be blocked on Kid-Safe");
+
+        // Blocked by Parental Severity (Severe Nudity)
+        const blockedBySeverity = isMediaAllowedByServerGuardRail({
+            title: "Unrated Art Film",
+            contentRating: "G",
+            advisory: {
+                nudity: "Severe",
+                violence: "None",
+                profanity: "None",
+                alcohol: "None",
+                frightening: "None",
+                source: "imdb_direct"
+            }
+        }, kidSafeConfig);
+        if (blockedBySeverity.allowed) throw new Error("Severe nudity should be blocked by Kid-Safe limits");
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

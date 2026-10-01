@@ -1346,6 +1346,8 @@ export function TaggingStudio() {
                                             <SelectItem value="prefix_category_severity" className="text-xs">IMDb: Nudity [Severe]</SelectItem>
                                             <SelectItem value="prefix_severity" className="text-xs">IMDb: Severe</SelectItem>
                                             <SelectItem value="category_severity" className="text-xs">Nudity [Severe]</SelectItem>
+                                            <SelectItem value="category_severity_paren" className="text-xs">Nudity (Severe)</SelectItem>
+                                            <SelectItem value="severity_category" className="text-xs">Severe Nudity</SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <p className="text-[11px] text-slate-500">The string syntax applied to Plex metadata.</p>

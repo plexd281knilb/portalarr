@@ -7091,7 +7091,7 @@ export async function applyParentalTagsToLibraryAction(
     serverId: string,
     sectionKey: string | number,
     options?: {
-        format?: "prefix_category_severity" | "severity_category" | "category_severity_paren" | "custom";
+        format?: "prefix_category_severity" | "prefix_severity" | "category_severity" | "category_severity_paren" | "severity_category" | "custom";
         prefix?: string;
         target?: "labels" | "genres" | "both";
         minSeverity?: "Severe" | "Moderate" | "Mild" | "None";

@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
-import { getPlexLibraryMediaItems, getPlexLibraryLabels, getPlexLibraryCollections, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { getPlexLibraryMediaItems, getPlexLibraryLabels, getPlexLibraryCollections, deletePlexCollection, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { normalizeGeminiModel, getGeminiCandidateModels } from "@/lib/ai-agent";
 
 export * from "./parental-guide-types";
@@ -291,9 +291,13 @@ export function resolveParentalAdvisoryFallback(metadata: {
  * Resolves IMDb ID from title and release year using IMDb's suggestion search service.
  */
 export async function searchImdbIdByTitle(title: string, year?: number): Promise<string | null> {
+    if (!title || typeof title !== "string") return null;
     try {
-        const clean = encodeURIComponent(title.replace(/[^\w\s]/gi, " ").trim());
-        const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/x/${clean}.json`, {
+        const rawClean = title.replace(/[^\w\s]/gi, " ").trim();
+        if (!rawClean) return null;
+        const clean = encodeURIComponent(rawClean);
+        const firstChar = rawClean[0]?.toLowerCase() || "x";
+        const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/${firstChar}/${clean}.json`, {
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
         });
         if (!res.ok) return null;
@@ -800,9 +804,22 @@ export async function clearParentalTagsFromPlexItem(
     item: {
         ratingKey: string;
         type?: string;
+        labels?: string[];
+        genres?: string[];
+        genre?: string[];
     },
     prefix = "IMDb"
 ): Promise<{ success: boolean; clearedCount?: number; error?: string }> {
+    // Fast pre-filter: If both labels and genres are known and neither has any parental tags, skip HTTP fetch
+    const knownLabels = item.labels;
+    const knownGenres = item.genres || item.genre;
+    if (Array.isArray(knownLabels) && Array.isArray(knownGenres)) {
+        const hasParental = knownLabels.some(l => isParentalTag(l, prefix)) || knownGenres.some(g => isParentalTag(g, prefix));
+        if (!hasParental) {
+            return { success: true, clearedCount: 0 };
+        }
+    }
+
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const mediaType = item.type === "show" ? "show" : "movie";
     const typeId = mediaType === "show" ? 2 : 1;
@@ -1026,10 +1043,11 @@ export async function clearParentalTagsFromLibrary(
 
     // Also purge stored cached advisories for this section so the studio UI resets completely clean
     try {
+        const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
         await prisma.mediaContentAdvisory.deleteMany({
             where: {
                 ratingKey: { in: ratingKeys },
-                serverId: resolved.serverId
+                serverId: { in: serverIdCandidates }
             }
         });
     } catch (e) {}
@@ -1140,39 +1158,95 @@ export async function applyCustomTagRuleToLibrary(
             case "all":
                 matches = true;
                 break;
-            case "resolution":
-                matches = Boolean(itemRes && itemRes.includes((rule.filterValue || "").toLowerCase()));
+            case "resolution": {
+                const targetRes = (rule.filterValue || "").toLowerCase().trim();
+                const is4k = targetRes === "4k" || targetRes === "2160" || targetRes === "uhd";
+                const is1080 = targetRes === "1080" || targetRes === "1080p" || targetRes === "fhd";
+                const is720 = targetRes === "720" || targetRes === "720p" || targetRes === "hd";
+
+                if (is4k) {
+                    matches = Boolean(itemRes && (itemRes.includes("4k") || itemRes.includes("2160") || itemRes.includes("uhd")));
+                } else if (is1080) {
+                    matches = Boolean(itemRes && (itemRes.includes("1080") || itemRes.includes("fhd")));
+                } else if (is720) {
+                    matches = Boolean(itemRes && (itemRes.includes("720") || itemRes.includes("hd")));
+                } else {
+                    matches = Boolean(itemRes && itemRes.includes(targetRes));
+                }
                 break;
-            case "hdr":
-                matches = Boolean(itemHdr && itemHdr.includes((rule.filterValue || "").toLowerCase()));
+            }
+            case "hdr": {
+                const targetHdr = (rule.filterValue || "").toLowerCase().trim();
+                if (targetHdr.includes("dv") || targetHdr.includes("dolby") || targetHdr.includes("vision")) {
+                    matches = Boolean(itemHdr && (itemHdr.includes("dv") || itemHdr.includes("dolby") || itemHdr.includes("vision") || itemHdr.includes("dovi")));
+                } else if (targetHdr.includes("hdr10+") || targetHdr.includes("hdr10plus")) {
+                    matches = Boolean(itemHdr && (itemHdr.includes("hdr10+") || itemHdr.includes("hdr10plus")));
+                } else if (targetHdr.includes("hdr")) {
+                    matches = Boolean(itemHdr && (itemHdr.includes("hdr") || itemHdr.includes("dv")));
+                } else {
+                    matches = Boolean(itemHdr && itemHdr.includes(targetHdr));
+                }
                 break;
+            }
             case "audio":
-                matches = Boolean(itemAudio && itemAudio.includes((rule.filterValue || "").toLowerCase()));
+                matches = Boolean(itemAudio && itemAudio.includes((rule.filterValue || "").toLowerCase().trim()));
                 break;
             case "studio":
-                matches = Boolean(item.studio && item.studio.toLowerCase().includes((rule.filterValue || "").toLowerCase()));
+                matches = Boolean(item.studio && item.studio.toLowerCase().includes((rule.filterValue || "").toLowerCase().trim()));
                 break;
-            case "decade":
-                if (item.year && rule.filterValue) {
-                    const startYear = parseInt(rule.filterValue, 10);
+            case "decade": {
+                const digits = (rule.filterValue || "").replace(/\D/g, "");
+                if (item.year && digits) {
+                    let startYear = parseInt(digits, 10);
+                    if (startYear < 100) {
+                        startYear = startYear >= 20 ? 1900 + startYear : 2000 + startYear;
+                    }
                     matches = item.year >= startYear && item.year < startYear + 10;
                 }
                 break;
-            case "contentRating":
-                matches = Boolean(item.contentRating && item.contentRating.toLowerCase() === (rule.filterValue || "").toLowerCase());
+            }
+            case "contentRating": {
+                const normItemRating = normalizeContentRating(item.contentRating || (item.detectedBadges as any)?.contentRating);
+                const normTargetRating = normalizeContentRating(rule.filterValue);
+                matches = Boolean(normItemRating && normTargetRating && normItemRating === normTargetRating);
                 break;
-            case "rating_above":
-                matches = Boolean(item.rating && item.rating >= parseFloat(rule.filterValue || "7.0"));
+            }
+            case "rating_above": {
+                let effRating = item.rating ?? item.audienceRating;
+                if (effRating !== undefined && effRating !== null) {
+                    let targetVal = parseFloat(rule.filterValue || "7.0");
+                    if (effRating > 10 && targetVal <= 10) effRating = effRating / 10;
+                    matches = effRating >= targetVal;
+                }
                 break;
-            case "rating_below":
-                matches = Boolean(item.rating && item.rating < parseFloat(rule.filterValue || "5.0"));
+            }
+            case "rating_below": {
+                let effRating = item.rating ?? item.audienceRating;
+                if (effRating !== undefined && effRating !== null) {
+                    let targetVal = parseFloat(rule.filterValue || "5.0");
+                    if (effRating > 10 && targetVal <= 10) effRating = effRating / 10;
+                    matches = effRating < targetVal;
+                }
                 break;
+            }
             default:
                 matches = true;
         }
 
         if (!matches) {
             skippedCount++;
+            continue;
+        }
+
+        // Fast pre-check: If item already has tag in known fields, count and skip network PUT
+        if (rule.field === "label" && item.labels && item.labels.includes(rule.tagName)) {
+            taggedCount++;
+            continue;
+        } else if (rule.field === "genre" && (item.genres || item.genre) && (item.genres || item.genre || []).includes(rule.tagName)) {
+            taggedCount++;
+            continue;
+        } else if (rule.field === "collection" && item.collections && item.collections.includes(rule.tagName)) {
+            taggedCount++;
             continue;
         }
 
@@ -1191,11 +1265,11 @@ export async function applyCustomTagRuleToLibrary(
                     const metaData = await metaRes.json();
                     const meta = metaData.MediaContainer?.Metadata?.[0];
                     if (rule.field === "label" && meta?.Label) {
-                        existingTags = meta.Label.map((l: any) => l.tag);
+                        existingTags = meta.Label.map((l: any) => typeof l === "string" ? l : l?.tag).filter(Boolean);
                     } else if (rule.field === "genre" && meta?.Genre) {
-                        existingTags = meta.Genre.map((g: any) => g.tag);
+                        existingTags = meta.Genre.map((g: any) => typeof g === "string" ? g : g?.tag).filter(Boolean);
                     } else if (rule.field === "collection" && meta?.Collection) {
-                        existingTags = meta.Collection.map((c: any) => c.tag);
+                        existingTags = meta.Collection.map((c: any) => typeof c === "string" ? c : c?.tag).filter(Boolean);
                     }
                 }
 
@@ -1215,8 +1289,16 @@ export async function applyCustomTagRuleToLibrary(
                 });
                 params.set(`${rule.field}.locked`, "1");
 
-                const url = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
-                const putRes = await fetch(url, {
+                // 1. Send PUT to metadata endpoint
+                const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
+                await fetch(metaUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                // 2. Send PUT to sections endpoint
+                const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
+                const putRes = await fetch(secUrl, {
                     method: "PUT",
                     headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
                 });
@@ -1264,6 +1346,18 @@ export async function clearCustomTagFromLibrary(
     let clearedCount = 0;
 
     for (const item of items) {
+        // Fast pre-filter: Skip items that definitely do not possess this tag to prevent redundant network calls
+        if (field === "genre") {
+            const genres = item.genres || item.genre || [];
+            if (genres.length > 0 && !genres.includes(tagName)) continue;
+        } else if (field === "collection") {
+            const collections = item.collections || [];
+            if (collections.length > 0 && !collections.includes(tagName)) continue;
+        } else if (field === "label") {
+            const labels = item.labels || [];
+            if (labels.length > 0 && !labels.includes(tagName)) continue;
+        }
+
         const mediaType = item.type === "show" ? "show" : "movie";
         const typeId = mediaType === "show" ? 2 : 1;
 
@@ -1322,6 +1416,13 @@ export async function clearCustomTagFromLibrary(
         }
     }
 
+    // If clearing a collection tag, also delete the collection container from PMS
+    if (field === "collection") {
+        try {
+            await deletePlexCollection(urlsToTry, serverToken, tagName, sectionKey);
+        } catch (e) {}
+    }
+
     logger.addLog("SUCCESS", "CURATION", `Removed custom tag "${tagName}" from ${clearedCount} items on Plex server "${serverName}".`);
 
     return { success: true, clearedCount };
@@ -1351,31 +1452,37 @@ export async function getPlexLibraryTagsAudit(
         const collectionCounts: Record<string, number> = {};
 
         // 1. Fetch native Plex sharing/content labels directly from PMS
+        let hasNativeLabels = false;
         try {
             const nativeLabels = await getPlexLibraryLabels(urlsToTry, resolved.token, sectionKey);
             for (const nl of nativeLabels) {
                 if (nl.tag) {
                     labelCounts[nl.tag] = nl.count;
+                    hasNativeLabels = true;
                 }
             }
         } catch (e) {}
 
         // 2. Fetch native Plex collections directly from PMS
+        let hasNativeCollections = false;
         try {
             const nativeCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
             for (const nc of nativeCollections) {
                 if (nc.title) {
                     collectionCounts[nc.title] = nc.childCount || 1;
+                    hasNativeCollections = true;
                 }
             }
         } catch (e) {}
 
-        // 3. Scan media items for genres, collections, and any embedded labels
+        // 3. Scan media items for genres, and fallback labels/collections not in native lists
         for (const item of items) {
             const itemLabels = item.labels || [];
             for (const l of itemLabels) {
                 if (l && typeof l === "string") {
-                    labelCounts[l] = (labelCounts[l] || 0) + 1;
+                    if (!hasNativeLabels || labelCounts[l] === undefined) {
+                        labelCounts[l] = (labelCounts[l] || 0) + 1;
+                    }
                 }
             }
             const itemGenres = item.genres || item.genre || [];
@@ -1387,32 +1494,12 @@ export async function getPlexLibraryTagsAudit(
             const itemCollections = item.collections || (item as any).collection || [];
             for (const c of itemCollections) {
                 if (c && typeof c === "string") {
-                    collectionCounts[c] = (collectionCounts[c] || 0) + 1;
-                }
-            }
-        }
-
-        // 4. Also check SQLite mediaContentAdvisory for any parental tags applied to items in this library
-        try {
-            const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
-            const advisories = await prisma.mediaContentAdvisory.findMany({
-                where: {
-                    ratingKey: { in: items.map(it => it.ratingKey) },
-                    serverId: { in: serverIdCandidates }
-                }
-            });
-            for (const adv of advisories) {
-                for (const cat of ["nudity", "violence", "profanity", "alcohol", "frightening"] as const) {
-                    const sev = (adv as any)[`${cat}Level`];
-                    if (sev && typeof sev === "string" && sev !== "None") {
-                        const tag = `IMDb: ${cat.charAt(0).toUpperCase() + cat.slice(1)} (${sev})`;
-                        if (!labelCounts[tag]) {
-                            labelCounts[tag] = (labelCounts[tag] || 0) + 1;
-                        }
+                    if (!hasNativeCollections || collectionCounts[c] === undefined) {
+                        collectionCounts[c] = (collectionCounts[c] || 0) + 1;
                     }
                 }
             }
-        } catch (e) {}
+        }
 
         const labels = Object.entries(labelCounts).map(([tag, count]) => ({
             tag,

@@ -81,5 +81,10 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
 11. **Connection Reachability & Byte-Range Playback Probing**:
     - When searching items or probing media across multiple PMS servers/candidate URLs, avoid sequential hanging on unresponsive URLs. Probe connection responsiveness with a fast 1,500ms `/identity` check first.
     - To verify disk read health without downloading complete multi-gigabyte media parts, execute an active HTTP Range probe (`Range: bytes=0-65535`) against the part URL (`part.key`). A 206 Partial Content or 200 OK confirms physical storage availability and responsive disk I/O.
+12. **Tagging Studio & Content Advisory Labels**:
+    - **Label Destination vs Genre Destination**: Plex labels applied via `PUT /library/metadata/{ratingKey}?label[0].tag.tag=...&label.locked=1` integrate directly into Plex Home user sharing restrictions, allowing administrators to restrict Kids and Teen profiles from sensitive content (e.g. `IMDb: Nudity [Severe]`).
+    - **Dual Endpoint Updating**: Always dispatch tag updates to both `PUT /library/metadata/{ratingKey}` and `PUT /library/sections/{sectionKey}/all?type={typeId}&id={ratingKey}` to maintain 100% compatibility across legacy and modern PMS versions.
+    - **Pre-Filtering to Avoid Excessive HTTP Calls**: When clearing tags or applying custom rules across thousands of media items, inspect known stream/section tags (`item.labels`, `item.genres`, `item.collections`) before initiating individual `GET /library/metadata/{ratingKey}` requests. Items that already lack the tag should be skipped immediately to maintain sub-second execution speeds.
+    - **Collection Untagging and Container Deletion**: When clearing custom collection tags from a library, untagging the items should be accompanied by `deletePlexCollection` to cleanly remove the collection container entity from PMS.
 
 

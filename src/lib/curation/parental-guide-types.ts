@@ -14,7 +14,7 @@ export interface ImdbParentalAdvisory {
 
 export interface ParentalTaggingOptions {
     enabled?: boolean;
-    format?: "prefix_category_severity" | "severity_category" | "category_severity_paren" | "custom";
+    format?: "prefix_category_severity" | "prefix_severity" | "category_severity" | "category_severity_paren" | "severity_category" | "custom";
     prefix?: string; // e.g. "IMDb"
     target?: "labels" | "genres" | "both"; // Plex Labels (for sharing restrictions), Plex Genres, or both
     minSeverity?: ParentalSeverity; // "Severe", "Moderate", "Mild", "None"
@@ -66,6 +66,10 @@ export function formatParentalTag(
     const cleanPrefix = (prefix || "IMDb").trim();
 
     switch (format) {
+        case "prefix_severity":
+            return `${cleanPrefix}: ${severity}`;
+        case "category_severity":
+            return `${shortName} [${severity}]`;
         case "severity_category":
             return `${severity} ${shortName}`;
         case "category_severity_paren":
@@ -74,7 +78,7 @@ export function formatParentalTag(
             return `${cleanPrefix}: ${shortName} - ${severity}`;
         case "prefix_category_severity":
         default:
-            return `${cleanPrefix}-${shortName}: ${severity}`;
+            return `${cleanPrefix}: ${shortName} [${severity}]`;
     }
 }
 
@@ -256,7 +260,7 @@ export const UNRESTRICTED_GUARD_RAIL_PRESET: Omit<ServerGuardRailConfig, "server
 export function normalizeContentRating(raw?: string): string {
     if (!raw) return "";
     let clean = String(raw).trim();
-    clean = clean.replace(/^[A-Z]{2,3}:/i, "").trim().toUpperCase();
+    clean = clean.replace(/^[A-Z]{2,3}[:\/]/i, "").trim().toUpperCase();
     return clean;
 }
 
