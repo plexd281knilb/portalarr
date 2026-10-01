@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
     getAllMediaRequestsAction, 
     getUserMediaRequestsAction, 
@@ -44,9 +44,12 @@ interface RequestManagerProps {
     onSelectMedia?: (tmdbId: number, mediaType: "movie" | "tv") => void;
 }
 
+let cachedRequests: any[] | null = null;
+let lastRequestsFetchTime = 0;
+
 export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) {
-    const [requests, setRequests] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [requests, setRequests] = useState<any[]>(cachedRequests || []);
+    const [loading, setLoading] = useState(cachedRequests ? false : true);
     const [syncing, setSyncing] = useState(false);
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [mediaTypeFilter, setMediaTypeFilter] = useState("ALL");
@@ -58,17 +61,27 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
     const [selectedSeries, setSelectedSeries] = useState<{ title: string; author?: string } | null>(null);
 
-    const loadRequests = async () => {
-        setLoading(true);
+    const loadRequests = async (silent = false) => {
+        if (!silent && !cachedRequests) {
+            setLoading(true);
+        }
         try {
             if (isAdmin) {
                 const res = await getAllMediaRequestsAction({
                     limit: 500
                 });
-                if (res.success && res.data) setRequests(res.data);
+                if (res.success && res.data) {
+                    setRequests(res.data);
+                    cachedRequests = res.data;
+                    lastRequestsFetchTime = Date.now();
+                }
             } else {
                 const res = await getUserMediaRequestsAction();
-                if (res.success && res.data) setRequests(res.data);
+                if (res.success && res.data) {
+                    setRequests(res.data);
+                    cachedRequests = res.data;
+                    lastRequestsFetchTime = Date.now();
+                }
             }
         } catch (e) {} finally {
             setLoading(false);
@@ -76,7 +89,8 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     };
 
     useEffect(() => {
-        loadRequests();
+        const isFresh = cachedRequests && (Date.now() - lastRequestsFetchTime < 15_000);
+        loadRequests(Boolean(isFresh));
     }, [isAdmin]);
 
     const handleSync = async () => {
@@ -130,38 +144,40 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
         }
     };
 
-    const filteredRequests = requests.filter(req => {
-        if (searchTerm.trim()) {
-            const term = searchTerm.toLowerCase();
-            const matchTitle = req.title?.toLowerCase().includes(term);
-            const matchAuthor = req.bookAuthor?.toLowerCase().includes(term);
-            const matchUser = req.requestedByUsername?.toLowerCase().includes(term);
-            if (!matchTitle && !matchAuthor && !matchUser) return false;
-        }
-        if (mediaTypeFilter !== "ALL") {
-            if (mediaTypeFilter === "movie" && req.mediaType !== "movie") return false;
-            if (mediaTypeFilter === "tv" && req.mediaType !== "tv") return false;
-            if (mediaTypeFilter === "book" && req.mediaType !== "book" && req.mediaType !== "ebook") return false;
-            if (mediaTypeFilter === "audiobook" && req.mediaType !== "audiobook") return false;
-        }
-        if (statusFilter !== "ALL") {
-            const s = (req.status || "").toUpperCase();
-            if (statusFilter === "PROCESSING") {
-                if (s !== "PROCESSING" && s !== "APPROVED" && s !== "SEARCHING" && s !== "DOWNLOADING") return false;
-            } else if (statusFilter === "AVAILABLE") {
-                if (s !== "AVAILABLE" && s !== "PARTIALLY_AVAILABLE" && s !== "DOWNLOADED") return false;
-            } else if (statusFilter === "FAILED") {
-                if (s !== "FAILED" && s !== "DECLINED" && s !== "REJECTED") return false;
-            } else if (statusFilter === "PENDING") {
-                if (s !== "PENDING") return false;
-            } else if (s !== statusFilter.toUpperCase()) {
-                return false;
+    const filteredRequests = useMemo(() => {
+        return requests.filter(req => {
+            if (searchTerm.trim()) {
+                const term = searchTerm.toLowerCase();
+                const matchTitle = req.title?.toLowerCase().includes(term);
+                const matchAuthor = req.bookAuthor?.toLowerCase().includes(term);
+                const matchUser = req.requestedByUsername?.toLowerCase().includes(term);
+                if (!matchTitle && !matchAuthor && !matchUser) return false;
             }
-        }
-        return true;
-    });
+            if (mediaTypeFilter !== "ALL") {
+                if (mediaTypeFilter === "movie" && req.mediaType !== "movie") return false;
+                if (mediaTypeFilter === "tv" && req.mediaType !== "tv") return false;
+                if (mediaTypeFilter === "book" && req.mediaType !== "book" && req.mediaType !== "ebook") return false;
+                if (mediaTypeFilter === "audiobook" && req.mediaType !== "audiobook") return false;
+            }
+            if (statusFilter !== "ALL") {
+                const s = (req.status || "").toUpperCase();
+                if (statusFilter === "PROCESSING") {
+                    if (s !== "PROCESSING" && s !== "APPROVED" && s !== "SEARCHING" && s !== "DOWNLOADING") return false;
+                } else if (statusFilter === "AVAILABLE") {
+                    if (s !== "AVAILABLE" && s !== "PARTIALLY_AVAILABLE" && s !== "DOWNLOADED") return false;
+                } else if (statusFilter === "FAILED") {
+                    if (s !== "FAILED" && s !== "DECLINED" && s !== "REJECTED") return false;
+                } else if (statusFilter === "PENDING") {
+                    if (s !== "PENDING") return false;
+                } else if (s !== statusFilter.toUpperCase()) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }, [requests, searchTerm, mediaTypeFilter, statusFilter]);
 
-    const counts = {
+    const counts = useMemo(() => ({
         all: requests.length,
         pending: requests.filter(r => (r.status || "").toUpperCase() === "PENDING").length,
         processing: requests.filter(r => {
@@ -176,7 +192,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
             const s = (r.status || "").toUpperCase();
             return s === "FAILED" || s === "DECLINED" || s === "REJECTED";
         }).length
-    };
+    }), [requests]);
 
     return (
         <div className="space-y-4">

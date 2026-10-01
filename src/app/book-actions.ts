@@ -48,6 +48,13 @@ async function verifyAuth(): Promise<AuthSession> {
     };
 }
 
+interface CacheEntry<T> {
+    data: T;
+    timestamp: number;
+}
+const missingSeriesSuggestionsCache = new Map<string, CacheEntry<BookDiscoveryItem[]>>();
+const MISSING_SERIES_SUGGESTIONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 /**
  * Discovers missing series books for series present in the user's accessible libraries
  */
@@ -57,6 +64,12 @@ export async function fetchMissingSeriesSuggestions(
     mediaType: "all" | MediaType = "all",
     isKids: boolean = false
 ): Promise<BookDiscoveryItem[]> {
+    const cacheKey = `${username || "all"}:::${email || ""}:::${mediaType}:::${Boolean(isKids)}`;
+    const cached = missingSeriesSuggestionsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < MISSING_SERIES_SUGGESTIONS_CACHE_TTL) {
+        return cached.data;
+    }
+
     const suggestions: BookDiscoveryItem[] = [];
     const seen = new Set<string>();
 
@@ -139,6 +152,9 @@ export async function fetchMissingSeriesSuggestions(
         console.warn("[SEERR-MISSING-SUGGESTIONS] Notice:", e?.message || e);
     }
 
+    if (suggestions.length > 0) {
+        missingSeriesSuggestionsCache.set(cacheKey, { data: suggestions, timestamp: Date.now() });
+    }
     return suggestions;
 }
 

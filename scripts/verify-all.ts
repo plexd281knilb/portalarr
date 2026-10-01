@@ -2458,6 +2458,50 @@ async function runTestSuite() {
         }
     });
 
+    // 49. Seerr Engine: Discovery Caching, Reconcile Throttling & Fast Loading
+    await assertTest("Seerr Engine: Discovery Caching, Reconcile Throttling & Fast Loading", async () => {
+        const { getDiscoverHomeAction, reconcileBookRequestsWithMediaRequests } = await import("../src/app/seerr-actions");
+        const { fetchTrendingEbooks, fetchTrendingAudiobooks } = await import("../src/lib/books/book-service");
+
+        // 1. Discovery Home Caching Test
+        const startFirst = Date.now();
+        const homeRes1 = await getDiscoverHomeAction("main");
+        const durationFirst = Date.now() - startFirst;
+
+        if (!homeRes1.success || !Array.isArray(homeRes1.sections)) {
+            throw new Error(`getDiscoverHomeAction failed: ${homeRes1.error || "No sections"}`);
+        }
+
+        const startSecond = Date.now();
+        const homeRes2 = await getDiscoverHomeAction("main");
+        const durationSecond = Date.now() - startSecond;
+
+        if (!homeRes2.success || homeRes2.sections.length !== homeRes1.sections.length) {
+            throw new Error("Cached getDiscoverHomeAction did not return identical sections");
+        }
+
+        // 2. Reconcile Book Requests Throttling Test
+        await reconcileBookRequestsWithMediaRequests();
+
+        const startThrottled = Date.now();
+        await reconcileBookRequestsWithMediaRequests(); // should be throttled (returns immediately in < 20ms)
+        const throttledDuration = Date.now() - startThrottled;
+
+        if (throttledDuration > 50) {
+            throw new Error(`Throttled reconcile took ${throttledDuration}ms (expected < 50ms)`);
+        }
+
+        // 3. Trending Books In-Memory Caching Test
+        const ebooks1 = await fetchTrendingEbooks(false);
+        const startEbooksCached = Date.now();
+        const ebooks2 = await fetchTrendingEbooks(false);
+        const cachedEbooksDuration = Date.now() - startEbooksCached;
+
+        if (cachedEbooksDuration > 50) {
+            throw new Error(`Cached fetchTrendingEbooks took ${cachedEbooksDuration}ms (expected < 50ms)`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

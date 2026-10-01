@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
     getDiscoverHomeAction, 
@@ -91,6 +91,13 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     const [gridPage, setGridPage] = useState(1);
     const [loadingGrid, setLoadingGrid] = useState(false);
 
+    // In-memory Client Cache for instantaneous (0ms) tab switching & silent background revalidation
+    const tabCacheRef = useRef<{
+        home?: { [sec: string]: { heroItem: any; sections: any[]; availabilityMap: any; timestamp: number } };
+        grid?: { [key: string]: { items: any[]; availabilityMap: any; page: number; timestamp: number } };
+        booksTab?: { [key: string]: { bookHeroItem: any; bookSections: any[]; bookAvailabilityMap: any; timestamp: number } };
+    }>({});
+
     // Search state
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -100,7 +107,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     const [bookSearchResults, setBookSearchResults] = useState<BookDiscoveryItem[]>([]);
     const [bookSearchAvailabilityMap, setBookSearchAvailabilityMap] = useState<Record<string, any>>({});
 
-    // Debounce search by 1000ms (waits until user has stopped typing for a full second)
+    // Debounce search by 350ms for snappy, fluid autocomplete
     useEffect(() => {
         const trimmed = searchQuery.trim();
         if (!trimmed) {
@@ -114,12 +121,12 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
         setIsSearching(true);
         const timer = setTimeout(() => {
             setDebouncedQuery(trimmed);
-        }, 1000);
+        }, 350);
 
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // Execute search action once debouncedQuery is established
+    // Execute search action once debouncedQuery is established (scoped to active category for speed)
     useEffect(() => {
         if (!debouncedQuery) {
             setIsSearching(false);
@@ -135,6 +142,13 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     if (!isCancelled && bookRes.success && bookRes.items) {
                         setBookSearchResults(bookRes.items);
                         setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
+                    }
+                } else if (activeTab === "movies" || activeTab === "tv") {
+                    const mediaRes = await searchMediaAction(debouncedQuery, 1, section === "kids");
+                    if (!isCancelled && mediaRes.success && mediaRes.items) {
+                        const filtered = mediaRes.items.filter(item => activeTab === "movies" ? item.mediaType === "movie" : item.mediaType === "tv");
+                        setSearchResults(filtered);
+                        setSearchAvailabilityMap(mediaRes.availabilityMap || {});
                     }
                 } else {
                     const [mediaRes, bookRes] = await Promise.all([
@@ -252,13 +266,31 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     }, [activeTab, section]);
 
     const loadHomeData = async (targetSection: "main" | "kids") => {
-        setLoading(true);
+        const cached = tabCacheRef.current.home?.[targetSection];
+        if (cached) {
+            setHeroItem(cached.heroItem);
+            setSections(cached.sections);
+            setAvailabilityMap(cached.availabilityMap);
+            setLoading(false);
+            if (Date.now() - cached.timestamp < 120_000) {
+                return;
+            }
+        } else {
+            setLoading(true);
+        }
         try {
             const res = await getDiscoverHomeAction(targetSection);
             if (res.success) {
                 setHeroItem(res.heroItem || null);
                 setSections(res.sections || []);
                 setAvailabilityMap(res.availabilityMap || {});
+                if (!tabCacheRef.current.home) tabCacheRef.current.home = {};
+                tabCacheRef.current.home[targetSection] = {
+                    heroItem: res.heroItem || null,
+                    sections: res.sections || [],
+                    availabilityMap: res.availabilityMap || {},
+                    timestamp: Date.now()
+                };
             }
         } catch (e) {} finally {
             setLoading(false);
@@ -266,13 +298,32 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     };
 
     const loadBooksData = async (mediaType: "all" | "ebook" | "audiobook", isKidsMode: boolean = false) => {
-        setLoadingBooks(true);
+        const cacheKey = `${mediaType}:${isKidsMode}`;
+        const cached = tabCacheRef.current.booksTab?.[cacheKey];
+        if (cached) {
+            setBookHeroItem(cached.bookHeroItem);
+            setBookSections(cached.bookSections);
+            setBookAvailabilityMap(cached.bookAvailabilityMap);
+            setLoadingBooks(false);
+            if (Date.now() - cached.timestamp < 120_000) {
+                return;
+            }
+        } else {
+            setLoadingBooks(true);
+        }
         try {
             const res = await getDiscoverBooksHomeAction(mediaType, isKidsMode);
             if (res.success) {
                 setBookHeroItem(res.heroItem || null);
                 setBookSections(res.sections || []);
                 setBookAvailabilityMap(res.availabilityMap || {});
+                if (!tabCacheRef.current.booksTab) tabCacheRef.current.booksTab = {};
+                tabCacheRef.current.booksTab[cacheKey] = {
+                    bookHeroItem: res.heroItem || null,
+                    bookSections: res.sections || [],
+                    bookAvailabilityMap: res.availabilityMap || {},
+                    timestamp: Date.now()
+                };
             }
         } catch (e) {} finally {
             setLoadingBooks(false);
@@ -280,13 +331,32 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     };
 
     const loadGridData = async (type: "movie" | "tv", category: "trending" | "popular" | "upcoming" | "top_rated", page: number, isKidsMode: boolean) => {
-        setLoadingGrid(true);
+        const cacheKey = `${type}:${category}:${page}:${isKidsMode}`;
+        const cached = tabCacheRef.current.grid?.[cacheKey];
+        if (cached) {
+            setGridItems(cached.items);
+            setGridPage(cached.page);
+            setAvailabilityMap(prev => ({ ...prev, ...(cached.availabilityMap || {}) }));
+            setLoadingGrid(false);
+            if (Date.now() - cached.timestamp < 120_000) {
+                return;
+            }
+        } else {
+            setLoadingGrid(true);
+        }
         try {
             const res = await getDiscoverMediaAction(category, type, page, isKidsMode);
             if (res.success && res.items) {
                 setGridItems(res.items);
                 setGridPage(page);
                 setAvailabilityMap(prev => ({ ...prev, ...(res.availabilityMap || {}) }));
+                if (!tabCacheRef.current.grid) tabCacheRef.current.grid = {};
+                tabCacheRef.current.grid[cacheKey] = {
+                    items: res.items,
+                    availabilityMap: res.availabilityMap || {},
+                    page,
+                    timestamp: Date.now()
+                };
             }
         } catch (e) {} finally {
             setLoadingGrid(false);
@@ -309,14 +379,20 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 seasons: item.mediaType === "tv" ? "all" : undefined
             });
             if (res.success) {
-                setAvailabilityMap(prev => ({
-                    ...prev,
-                    [item.id]: {
-                        inLibrary: false,
-                        isRequested: true,
-                        requestStatus: res.request?.status || "APPROVED"
+                setAvailabilityMap(prev => {
+                    const next = {
+                        ...prev,
+                        [item.id]: {
+                            inLibrary: false,
+                            isRequested: true,
+                            requestStatus: res.request?.status || "APPROVED"
+                        }
+                    };
+                    if (tabCacheRef.current.home?.[section]) {
+                        tabCacheRef.current.home[section].availabilityMap = next;
                     }
-                }));
+                    return next;
+                });
             }
         } catch (e) {}
     };

@@ -538,16 +538,30 @@ const CANONICAL_SERIES: Record<string, Array<{ volumeNumber: string; title: stri
     ]
 };
 
+interface MissingSeriesCacheEntry {
+    data: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[];
+    timestamp: number;
+}
+const missingSeriesCandidatesCache = new Map<string, MissingSeriesCacheEntry>();
+const MISSING_SERIES_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
 export async function findMissingBooksInSeries(seriesName: string, author: string, libraryId?: string) {
     try {
-        const q = `${seriesName} ${author}`.trim();
-        const normSeries = seriesName.toLowerCase().trim();
-        let rawCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+        const seriesCacheKey = `${seriesName.toLowerCase().trim()}:::${(author || "").toLowerCase().trim()}`;
+        const cachedSeries = missingSeriesCandidatesCache.get(seriesCacheKey);
+        let validCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
 
-        // Check if series matches a known canonical series
-        const canonicalMatchKey = Object.keys(CANONICAL_SERIES).find(k => normSeries.includes(k) || k.includes(normSeries));
-        if (canonicalMatchKey && CANONICAL_SERIES[canonicalMatchKey]) {
-            for (const cBook of CANONICAL_SERIES[canonicalMatchKey]) {
+        if (cachedSeries && Date.now() - cachedSeries.timestamp < MISSING_SERIES_CACHE_TTL) {
+            validCandidates = cachedSeries.data;
+        } else {
+            const q = `${seriesName} ${author}`.trim();
+            const normSeries = seriesName.toLowerCase().trim();
+            let rawCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+
+            // Check if series matches a known canonical series
+            const canonicalMatchKey = Object.keys(CANONICAL_SERIES).find(k => normSeries.includes(k) || k.includes(normSeries));
+            if (canonicalMatchKey && CANONICAL_SERIES[canonicalMatchKey]) {
+                for (const cBook of CANONICAL_SERIES[canonicalMatchKey]) {
                 rawCandidates.push({
                     title: cBook.title,
                     author: cBook.author,
@@ -749,6 +763,11 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                 }
             }
         }
+
+        if (validCandidates.length > 0) {
+            missingSeriesCandidatesCache.set(seriesCacheKey, { data: validCandidates, timestamp: Date.now() });
+        }
+    }
 
         // 6. Cross-check against existing books in SQLite (Filter out already-owned volumes and titles in this library)
         const dbSeriesBooks = await prisma.book.findMany({

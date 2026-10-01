@@ -105,6 +105,24 @@ Portalarr's native Seerr engine unifies all media types into a single mission co
 - **Standardized Naming**: All navigation bars, breadcrumbs, page titles, and sidebars standardize on **"Media Requests"** (retiring fragmented labels like "Discovery & Requests").
 - **Responsive Search Input Sizing**: On mobile screens, search inputs without flex width wrappers collapse to illegibly small widths. Always style request search inputs with `w-full max-w-full sm:w-[320px] md:w-[420px]` within `flex-wrap gap-2` toolbars.
 
+### 10. High-Performance Multi-Tier Caching & Instant Tab Switching Engine
+To achieve sub-second page loads and eliminate blank-screen flashing on tab changes:
+- **Server-Side In-Memory Discovery Caches**:
+  - `discoverHomeCache`: Stores curated hero spotlights and category sections per section mode (`main` vs `kids`) with a 5-minute TTL. Availability checks run dynamically against SQLite/Arr in ~5ms.
+  - `discoverMediaCache`: Caches paginated category grids (`trending`, `popular`, `upcoming`, `top_rated`) keyed by `${category}:${mediaType}:${page}:${isKids}` with a 5-minute TTL.
+  - `mediaSearchCache` & `booksSearchCache`: Caches full-text search results for 5 minutes, preventing redundant upstream API calls when users re-search or navigate back.
+  - `mediaDetailsCache`: Caches TMDb full movie/TV metadata for 10 minutes. Deep Arr and recommendations availability run concurrently via `Promise.all([checkMediaAvailability, batchCheckMediaAvailability])`.
+  - `trendingEbooksCache` & `trendingAudiobooksCache`: Caches OpenLibrary, Google Books, and Audible trending works with a 15-minute TTL in `src/lib/books/book-service.ts`.
+  - `missingSeriesCandidatesCache`: Caches discovered series volumes with a 30-minute TTL in `findMissingBooksInSeries`, eliminating up to 15 sequential external API calls during library scans and home loads.
+  - `reconcileBookRequestsWithMediaRequests`: Throttled to a 30-second interval (`Date.now() - lastReconcileTime < 30_000`) so repeated request listing queries execute immediately without running SQLite PRAGMA table audits or 300-row updates, with a `force = true` bypass for manual syncs and new request submissions.
+- **Client-Side Stale-While-Revalidate Tab Caching (`tabCacheRef`)**:
+  - `DiscoverHub` maintains an in-memory ref caching previously visited tabs (`discover`, `movies`, `tv`, `ebooks`, `audiobooks`).
+  - Switching between tabs instantly displays cached data with `0ms` latency (zero loading spinner, zero screen flicker), then revalidates in the background if older than 2 minutes.
+  - Search debounce is optimized to `350ms` for fluid responsiveness. Searches on `movies` and `tv` tabs strictly query TMDb media without firing redundant book APIs, while `ebooks` and `audiobooks` tabs strictly query book registries.
+- **Request Manager Module-Level Cache**:
+  - `RequestManager` initializes from `cachedRequests` to render previous request listings instantly when switching between Discover and Requests tabs.
+  - `filteredRequests` and status `counts` are memoized via `useMemo` for lag-free typing in large request catalogs.
+
 ---
 
 ## Common Gotchas & Troubleshooting
@@ -133,3 +151,5 @@ Portalarr's native Seerr engine unifies all media types into a single mission co
 9. **Online Book Registry (OpenLibrary, Audible, Google Books) Resilience**:
    - OpenLibrary searches MUST pass lightweight field projections (`&fields=key,title,author_name,cover_i,first_publish_year`) and a valid application `User-Agent` (`Portalarr/3.0 ...`) to avoid Cloudflare/undici connection drops and rate limits.
    - Batch lookups (such as series discovery) must run concurrently via `Promise.allSettled` and use bounded `AbortController` timeouts to guarantee sub-second page responses.
+10. **Redundant Schema Columns Audits on Fast Polling**:
+   - Calling `ensureSchemaColumns()` on high-frequency routes (like requests or availability sync) triggers expensive SQLite metadata queries. Throttle background reconciliation passes (`reconcileBookRequestsWithMediaRequests`) to $\ge 30$ seconds to keep request browsing sub-second.

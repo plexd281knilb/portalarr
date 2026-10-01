@@ -197,10 +197,27 @@ export async function batchCheckBookAvailability(
     return resultMap;
 }
 
+interface CacheEntry<T> {
+    data: T;
+    timestamp: number;
+}
+const trendingEbooksCache = new Map<string, CacheEntry<BookDiscoveryItem[]>>();
+const trendingAudiobooksCache = new Map<string, CacheEntry<BookDiscoveryItem[]>>();
+const TRENDING_BOOKS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+const booksSearchCache = new Map<string, CacheEntry<BookDiscoveryItem[]>>();
+const BOOKS_SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Fetches Trending / Bestselling Ebooks from OpenLibrary & Google Books
  */
 export async function fetchTrendingEbooks(isKids: boolean = false): Promise<BookDiscoveryItem[]> {
+    const cacheKey = String(Boolean(isKids));
+    const cached = trendingEbooksCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < TRENDING_BOOKS_CACHE_TTL) {
+        return cached.data;
+    }
+
     const results: BookDiscoveryItem[] = [];
     const seen = new Set<string>();
 
@@ -294,6 +311,9 @@ export async function fetchTrendingEbooks(isKids: boolean = false): Promise<Book
         } catch (e) {}
     }
 
+    if (results.length > 0) {
+        trendingEbooksCache.set(cacheKey, { data: results, timestamp: Date.now() });
+    }
     return results;
 }
 
@@ -301,6 +321,12 @@ export async function fetchTrendingEbooks(isKids: boolean = false): Promise<Book
  * Fetches Popular / Trending Audiobooks from Audible & iTunes
  */
 export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<BookDiscoveryItem[]> {
+    const cacheKey = String(Boolean(isKids));
+    const cached = trendingAudiobooksCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < TRENDING_BOOKS_CACHE_TTL) {
+        return cached.data;
+    }
+
     const results: BookDiscoveryItem[] = [];
     const seen = new Set<string>();
 
@@ -408,6 +434,9 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
         } catch (e) {}
     }
 
+    if (results.length > 0) {
+        trendingAudiobooksCache.set(cacheKey, { data: results, timestamp: Date.now() });
+    }
     return results;
 }
 
@@ -417,6 +446,13 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
 export async function searchBooksUnified(query: string, mediaType: "all" | MediaType = "all", isKids: boolean = false): Promise<BookDiscoveryItem[]> {
     if (!query || query.trim().length < 2) return [];
     const cleanQuery = query.trim();
+
+    const cacheKey = `${cleanQuery.toLowerCase()}:${mediaType}:${Boolean(isKids)}`;
+    const cached = booksSearchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < BOOKS_SEARCH_CACHE_TTL) {
+        return cached.data;
+    }
+
     const results: BookDiscoveryItem[] = [];
     const seen = new Set<string>();
 
@@ -660,7 +696,9 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
         return bScore - aScore;
     });
 
-    return results.slice(0, 40);
+    const finalResults = results.slice(0, 40);
+    booksSearchCache.set(cacheKey, { data: finalResults, timestamp: Date.now() });
+    return finalResults;
 }
 
 /**
