@@ -2323,7 +2323,7 @@ async function resolveServerNameHelper(serverId?: string, fallbackName?: string)
  * and upgraded items (e.g. 480p -> 1080p) are re-rendered from the pristine backup.
  */
 export async function backupAndApplyOverlay(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     serverId: string,
     item: PlexMediaStreamInfo,
@@ -2335,6 +2335,15 @@ export async function backupAndApplyOverlay(
 
     if (!item.thumb) {
         return { success: false, message: "Item has no thumbnail to overlay." };
+    }
+
+    // Guard: TV episodes are 16:9 thumbnails, not 2:3 vertical posters
+    if (item.type === "episode") {
+        return {
+            success: false,
+            skipped: true,
+            message: `"${item.title}" is a TV episode; poster overlays currently support 2:3 vertical posters, not 16:9 episode thumbnails.`
+        };
     }
 
     const targetServerName = await resolveServerNameHelper(serverId, serverName);
@@ -2406,7 +2415,7 @@ export async function backupAndApplyOverlay(
     if (existingBackup && fs.existsSync(existingBackup.backupFilePath)) {
         originalBuffer = fs.readFileSync(existingBackup.backupFilePath);
     } else {
-        originalBuffer = await fetchPlexPosterBuffer(serverUrl, token, item.thumb);
+        originalBuffer = await fetchPlexPosterBuffer(serverUrlOrCandidates, token, item.thumb);
         if (!originalBuffer) {
             return { success: false, message: "Failed to download poster buffer from Plex." };
         }
@@ -2434,7 +2443,7 @@ export async function backupAndApplyOverlay(
         options
     );
 
-    const uploaded = await uploadPlexItemPoster(serverUrl, token, item.ratingKey, overlayBuffer);
+    const uploaded = await uploadPlexItemPoster(serverUrlOrCandidates, token, item.ratingKey, overlayBuffer);
 
     if (uploaded) {
         if (existingBackup) {
@@ -2465,7 +2474,7 @@ export async function backupAndApplyOverlay(
  * Restores the pristine original poster from the backup vault.
  */
 export async function restoreItemOriginalArtwork(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     serverId: string,
     ratingKey: string,
@@ -2488,7 +2497,7 @@ export async function restoreItemOriginalArtwork(
 
     if (fs.existsSync(backup.backupFilePath)) {
         const originalBuf = fs.readFileSync(backup.backupFilePath);
-        const restored = await uploadPlexItemPoster(serverUrl, token, ratingKey, originalBuf);
+        const restored = await uploadPlexItemPoster(serverUrlOrCandidates, token, ratingKey, originalBuf);
 
         if (restored) {
             try { fs.unlinkSync(backup.backupFilePath); } catch (e) {}
@@ -2506,7 +2515,7 @@ export async function restoreItemOriginalArtwork(
  * Restores ALL backed-up posters in a library or server in 1 click.
  */
 export async function restoreAllOriginalArtworks(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     serverId: string,
     serverName?: string
@@ -2519,7 +2528,7 @@ export async function restoreAllOriginalArtworks(
 
     let restoredCount = 0;
     for (const b of backups) {
-        const res = await restoreItemOriginalArtwork(serverUrl, token, serverId, b.ratingKey, targetServerName);
+        const res = await restoreItemOriginalArtwork(serverUrlOrCandidates, token, serverId, b.ratingKey, targetServerName);
         if (res.success) restoredCount++;
     }
 

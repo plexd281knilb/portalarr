@@ -2622,7 +2622,8 @@ export async function uploadPlexItemPoster(
                     "X-Plex-Token": token,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
-                body: new Uint8Array(imageBuffer)
+                body: new Uint8Array(imageBuffer),
+                signal: AbortSignal.timeout(20000)
             });
 
             if (res.ok) {
@@ -2772,31 +2773,38 @@ export async function deletePlexCollection(
  * Fetches the active raw image buffer of an item's poster from Plex.
  */
 export async function fetchPlexPosterBuffer(
-    serverUrl: string,
+    serverUrlOrCandidates: string | string[],
     token: string,
     thumbPath: string
 ): Promise<Buffer | null> {
     if (!thumbPath) return null;
-    const cleanBase = serverUrl.replace(/\/+$/, "");
-    const fullUrl = thumbPath.startsWith("http")
-        ? thumbPath
-        : `${cleanBase}${thumbPath.startsWith("/") ? "" : "/"}${thumbPath}?X-Plex-Token=${encodeURIComponent(token)}`;
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
 
-    try {
-        const res = await fetch(fullUrl, {
-            headers: {
-                "X-Plex-Token": token,
-                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-            },
-            cache: "no-store"
-        });
+    for (const cleanBase of urlsToTry) {
+        const fullUrl = thumbPath.startsWith("http")
+            ? thumbPath
+            : `${cleanBase}${thumbPath.startsWith("/") ? "" : "/"}${thumbPath}?X-Plex-Token=${encodeURIComponent(token)}`;
 
-        if (!res.ok) return null;
-        const arrayBuf = await res.arrayBuffer();
-        return Buffer.from(arrayBuf);
-    } catch (e) {
-        return null;
+        try {
+            const res = await fetch(fullUrl, {
+                headers: {
+                    "X-Plex-Token": token,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                signal: AbortSignal.timeout(15000),
+                cache: "no-store"
+            });
+
+            if (res.ok) {
+                const arrayBuf = await res.arrayBuffer();
+                return Buffer.from(arrayBuf);
+            }
+        } catch (e) {
+            // Try next candidate
+        }
+        if (thumbPath.startsWith("http")) break;
     }
+    return null;
 }
 
 /**

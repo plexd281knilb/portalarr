@@ -97,7 +97,8 @@ import {
     runFullCurationSyncAction,
     runServerCurationSyncAction,
     runOverlayIncrementalSyncAction,
-    runOverlayRecheckSyncAction
+    runOverlayRecheckSyncAction,
+    pruneOrphanArtworkBackupsAction
 } from "@/app/curation-actions";
 import {
     SCHEDULE_OPTIONS,
@@ -206,6 +207,11 @@ export function KometaStudio() {
     const [savingOverlaySettings, setSavingOverlaySettings] = useState(false);
     const [applyingOverlays, setApplyingOverlays] = useState(false);
     const [revertingOverlays, setRevertingOverlays] = useState(false);
+    const [revertConfirmModalOpen, setRevertConfirmModalOpen] = useState(false);
+    const [revertScope, setRevertScope] = useState<"section" | "server">("section");
+    const [backupsCount, setBackupsCount] = useState<number>(0);
+    const [pruningOrphans, setPruningOrphans] = useState(false);
+    const [orphanPruneMsg, setOrphanPruneMsg] = useState<{ success: boolean; text: string } | null>(null);
     const [overlayMessage, setOverlayMessage] = useState<{ success: boolean; text: string } | null>(null);
 
     // Live Overlay Simulator States
@@ -857,6 +863,9 @@ export function KometaStudio() {
                         applyRuleToSimulator(rulesRes.rules[0]);
                     }
                 }
+                if (rulesRes?.backupsCount !== undefined) {
+                    setBackupsCount(rulesRes.backupsCount);
+                }
 
                 const settingsRes = await getCurationSettingsAction();
                 if (settingsRes.success) {
@@ -1009,6 +1018,41 @@ export function KometaStudio() {
         }
     };
 
+    const resetSimulatorToDefaults = () => {
+        setSimShowResolution(true);
+        setSimShowHdr(true);
+        setSimShowAudio(true);
+        setSimShowChannels(false);
+        setSimShowCodec(false);
+        setSimShowEdition(false);
+        setSimShowStudio(false);
+        setSimShowRating(false);
+        setSimRatings(false);
+        setSimBadgeScale(1.0);
+        setSimCategoryScales(DEFAULT_CATEGORY_SCALES);
+        setSimBadgeBackdrops(DEFAULT_BADGE_BACKDROPS);
+        setSimResolutionPosition("top-right");
+        setSimHdrPosition("top-right");
+        setSimCodecPosition("top-right");
+        setSimAudioPosition("top-left");
+        setSimChannelsPosition("top-left");
+        setSimEditionPosition("top-left");
+        setSimStudioPosition("bottom-left");
+        setSimRatingPosition("bottom-left");
+        setSimRatingsPosition("bottom-right");
+        setSimShowRibbon(false);
+        setSimRibbonPosition("bottom-right");
+        setSimRibbonTheme("gold");
+        setSimRibbonType("imdb_top_250");
+        setSimRibbonText("");
+        setSimRibbonMode("waterfall");
+        setSimMaxRibbonTiers(1);
+        setSimTieredRibbons(DEFAULT_KOMETA_WATERFALL_RIBBONS);
+        setLayerPriorityOrder(DEFAULT_LAYER_PRIORITY_ORDER);
+        setSimDovetailResolutionHdr(true);
+        setSimTheme("glass");
+    };
+
     const loadRulesForSection = async (srvId?: string, secKey?: string) => {
         setServerSectionsLoading(true);
         try {
@@ -1017,7 +1061,12 @@ export function KometaStudio() {
                 setOverlayRules(res.rules);
                 if (res.rules.length > 0) {
                     applyRuleToSimulator(res.rules[0]);
+                } else {
+                    resetSimulatorToDefaults();
                 }
+            }
+            if (res?.backupsCount !== undefined) {
+                setBackupsCount(res.backupsCount);
             }
         } catch (e) {
             console.error("Failed loading rules:", e);
@@ -2493,10 +2542,13 @@ export function KometaStudio() {
         setSavingOverlaySettings(true);
         setOverlayMessage(null);
         try {
-            const existingId = overlayRules?.[0]?.id;
+            const matchedRule = overlayRules?.find(r => r.serverId === selectedServerId && String(r.sectionKey) === String(selectedSectionKey));
+            const existingId = matchedRule?.id;
+            const currentSection = servers.find(s => s.serverId === selectedServerId)?.sections?.find(sec => String(sec.key) === String(selectedSectionKey));
+            const ruleName = currentSection ? `${currentSection.title} Overlay Rule` : `Section #${selectedSectionKey} Overlay Rule`;
             const payload = {
                 id: existingId,
-                name: "Kometa Library Overlay",
+                name: ruleName,
                 serverId: selectedServerId || "main",
                 sectionKey: selectedSectionKey || "1",
                 overlayType: "quality_badges",
@@ -2564,11 +2616,14 @@ export function KometaStudio() {
         setApplyingOverlays(true);
         setOverlayMessage(null);
         try {
-            const existingId = overlayRules?.[0]?.id;
+            const matchedRule = overlayRules?.find(r => r.serverId === selectedServerId && String(r.sectionKey) === String(selectedSectionKey));
+            const existingId = matchedRule?.id;
+            const currentSection = servers.find(s => s.serverId === selectedServerId)?.sections?.find(sec => String(sec.key) === String(selectedSectionKey));
+            const ruleName = currentSection ? `${currentSection.title} Overlay Rule` : `Section #${selectedSectionKey} Overlay Rule`;
             // Auto-save active studio options to rule first
             const payload: any = {
                 id: existingId,
-                name: "Kometa Library Overlay",
+                name: ruleName,
                 serverId: selectedServerId,
                 sectionKey: selectedSectionKey,
                 overlayType: "combined",
@@ -2631,14 +2686,23 @@ export function KometaStudio() {
         }
     };
 
-    // Restore Original Posters
-    const handleRevertOverlays = async () => {
+    // Restore Original Posters (Trigger confirmation dialog)
+    const handleRevertOverlays = () => {
+        setRevertConfirmModalOpen(true);
+    };
+
+    const executeRevertOverlays = async (scope: "section" | "server") => {
         setRevertingOverlays(true);
         setOverlayMessage(null);
+        setRevertConfirmModalOpen(false);
         try {
-            const res: any = await revertLibraryOverlaysAction(selectedServerId);
+            const res: any = await revertLibraryOverlaysAction(
+                selectedServerId,
+                scope === "section" ? selectedSectionKey : undefined
+            );
             if (res.success) {
                 setOverlayMessage({ success: true, text: res.message || "Original artwork restored from backup vault!" });
+                loadRulesForSection(selectedServerId, selectedSectionKey);
             } else {
                 setOverlayMessage({ success: false, text: res.error || "Failed restoring original artwork." });
             }
@@ -2646,6 +2710,24 @@ export function KometaStudio() {
             setOverlayMessage({ success: false, text: e.message || "Failed restoring original artwork." });
         } finally {
             setRevertingOverlays(false);
+        }
+    };
+
+    const handlePruneOrphans = async () => {
+        setPruningOrphans(true);
+        setOrphanPruneMsg(null);
+        try {
+            const res = await pruneOrphanArtworkBackupsAction(selectedServerId);
+            if (res.success) {
+                setOrphanPruneMsg({ success: true, text: res.message || "Orphan artwork backups pruned successfully." });
+                loadRulesForSection(selectedServerId, selectedSectionKey);
+            } else {
+                setOrphanPruneMsg({ success: false, text: res.error || "Failed to prune orphan backups." });
+            }
+        } catch (e: any) {
+            setOrphanPruneMsg({ success: false, text: e.message || "Failed to prune orphan backups." });
+        } finally {
+            setPruningOrphans(false);
         }
     };
 
@@ -3850,6 +3932,11 @@ export function KometaStudio() {
                             >
                                 {revertingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                                 <span>↺ Restore Originals</span>
+                                {backupsCount > 0 && (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-600 text-slate-300 ml-0.5">
+                                        {backupsCount}
+                                    </Badge>
+                                )}
                             </Button>
                         </div>
                     </div>
@@ -6392,6 +6479,131 @@ export function KometaStudio() {
                 onForceRun={handleGuardForceRun}
                 onCancel={() => setGuardModalOpen(false)}
             />
+
+            {/* Restore Originals Safe Confirmation Modal */}
+            <Dialog open={revertConfirmModalOpen} onOpenChange={setRevertConfirmModalOpen}>
+                <DialogContent className="w-[96vw] sm:max-w-md p-5 sm:p-6 bg-slate-900 border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
+                    <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <RotateCcw className="h-5 w-5 text-amber-400" />
+                            <span>Restore Pristine Original Posters</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Revert applied badges and restore the untouched original artwork from the DomsHomeLab backup vault.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-3 space-y-3">
+                        <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <div className="text-xs font-semibold text-slate-300">Choose Restoration Scope:</div>
+                            <div className="grid grid-cols-1 gap-2">
+                                <label 
+                                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                                        revertScope === "section" 
+                                            ? "bg-purple-950/40 border-purple-500/60 text-white" 
+                                            : "bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700"
+                                    }`}
+                                    onClick={() => setRevertScope("section")}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="revertScope" 
+                                        checked={revertScope === "section"} 
+                                        onChange={() => setRevertScope("section")}
+                                        className="mt-0.5 text-purple-600 focus:ring-purple-500" 
+                                    />
+                                    <div className="space-y-0.5">
+                                        <div className="text-xs font-bold flex items-center gap-1.5">
+                                            <span>Current Library Only</span>
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1 border-purple-500/50 text-purple-300">Recommended</Badge>
+                                        </div>
+                                        <div className="text-[11px] text-slate-400">
+                                            Restores posters exclusively for items in <span className="font-semibold text-slate-200">{servers.find(s => s.serverId === selectedServerId)?.sections?.find(sec => String(sec.key) === String(selectedSectionKey))?.title || `Section #${selectedSectionKey}`}</span>.
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label 
+                                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                                        revertScope === "server" 
+                                            ? "bg-rose-950/40 border-rose-500/60 text-white" 
+                                            : "bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700"
+                                    }`}
+                                    onClick={() => setRevertScope("server")}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="revertScope" 
+                                        checked={revertScope === "server"} 
+                                        onChange={() => setRevertScope("server")}
+                                        className="mt-0.5 text-rose-600 focus:ring-rose-500" 
+                                    />
+                                    <div className="space-y-0.5">
+                                        <div className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                                            <span>Entire Server (All Libraries)</span>
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1 border-rose-500/50 text-rose-300">Caution</Badge>
+                                        </div>
+                                        <div className="text-[11px] text-slate-400">
+                                            Restores all backed-up artwork across every library on <span className="font-semibold text-slate-200">{servers.find(s => s.serverId === selectedServerId)?.serverName || selectedServerId}</span>.
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Orphan Vault Cleaner Quick Action */}
+                        <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800/80 flex items-center justify-between gap-3">
+                            <div className="space-y-0.5">
+                                <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                                    <Trash2 className="h-3.5 w-3.5 text-slate-400" />
+                                    <span>Prune Orphan Artwork Backups</span>
+                                </div>
+                                <div className="text-[11px] text-slate-400">
+                                    Frees disk space by removing backups for items no longer on Plex.
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={pruningOrphans}
+                                onClick={handlePruneOrphans}
+                                className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-7.5 px-2.5 shrink-0"
+                            >
+                                {pruningOrphans ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Trash2 className="h-3 w-3 mr-1" />}
+                                <span>Prune</span>
+                            </Button>
+                        </div>
+                        {orphanPruneMsg && (
+                            <div className={`text-xs p-2 rounded-lg border ${orphanPruneMsg.success ? "bg-emerald-950/60 border-emerald-800 text-emerald-300" : "bg-rose-950/60 border-rose-800 text-rose-300"}`}>
+                                {orphanPruneMsg.text}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRevertConfirmModalOpen(false)}
+                            className="text-xs text-slate-400 hover:text-white"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={revertingOverlays}
+                            onClick={() => executeRevertOverlays(revertScope)}
+                            className={revertScope === "server" ? "bg-rose-600 hover:bg-rose-500 text-white text-xs h-8 px-3" : "bg-amber-600 hover:bg-amber-500 text-white text-xs h-8 px-3"}
+                        >
+                            {revertingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
+                            <span>Restore {revertScope === "section" ? "Section" : "All Libraries"}</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>

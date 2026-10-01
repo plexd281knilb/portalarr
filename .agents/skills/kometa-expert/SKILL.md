@@ -82,3 +82,18 @@ Portalarr separates overlay generation into two distinct, decoupled automated sc
 7. **Badge Toggles & Slider Layout**:
    - Cause: Nesting `sm:grid-cols-2` inside multi-column simulator cards squeezes columns to ~120px, causing the Position Select dropdown to overlap the Size slider and forcing the slider out of the card bounds.
    - Rule: Always stack Placement dropdowns (`h-7.5 w-32 shrink-0`) and Scale Size sliders vertically with `w-full min-w-0` on range inputs within a bounded `max-w-[150px]` container.
+8. **Cross-Library & Cross-Server Rule Hijacking**:
+   - Cause: Falling back to `findFirst({ orderBy: { updatedAt: "desc" } })` when looking up overlay rules causes an unconfigured library to hijack the ID and configuration of whatever library was most recently edited. Saving then inadvertently overwrites the previous library's rule.
+   - Rule: Overlay rules must strictly resolve to `(serverId, sectionKey)` or `(serverId, sectionKey: null)` server-default. If saving a rule with a mismatched server or section, always create a new rule rather than updating the mismatched existing rule ID.
+9. **Revert Button Granularity (Section vs Server)**:
+   - Cause: A single global "Revert All" button wipes out original artwork across all libraries on the Plex server, even when an admin only wanted to revert a test in a single section.
+   - Rule: Always provide section-scoped reverts (`revertLibraryOverlaysAction(serverId, sectionKey)`) querying the specific section's rating keys, while offering a clear confirmation dialog for server-wide reverts.
+10. **Custom Badge ID Scoping**:
+    - Cause: Unrestricted custom badge retrieval overlays all active badges globally onto every library regardless of the library's rule configuration.
+    - Rule: Check and filter against `rule.customBadgeIds` in `applyOverlaysToLibraryInternal` so only badges explicitly enabled for that rule are processed.
+11. **TV Episode 16:9 Thumbnail Distortion**:
+    - Cause: Applying 2:3 portrait overlays (1000x1500) to Plex TV episode items (`type === "episode"`) forces center-cropping into vertical portraits, ruining 16:9 episode screenshots.
+    - Rule: Guard against `item.type === "episode"` in `backupAndApplyOverlay` and single-item overlay actions.
+12. **Orphan Artwork Backup Reclamation**:
+    - Cause: Media items removed or upgraded in Plex leave orphaned `.jpg` backups and SQLite rows in `mediaArtBackup` in `data/art_backups`.
+    - Rule: Provide `pruneOrphanArtworkBackupsAction` to reconcile active PMS rating keys against backup records, unlinking orphaned physical `.jpg` files and reclaiming disk storage.

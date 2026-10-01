@@ -4016,14 +4016,19 @@ export async function getOverlayRulesAction(serverId?: string, sectionKey?: stri
                 where: { serverId, sectionKey: String(sectionKey) },
                 orderBy: { updatedAt: "desc" }
             });
-        }
-        if (rules.length === 0 && serverId) {
+            // If no rule exists for this specific section, optionally check for server-level default rule (where sectionKey is null)
+            if (rules.length === 0) {
+                rules = await prisma.mediaOverlayRule.findMany({
+                    where: { serverId, sectionKey: null },
+                    orderBy: { updatedAt: "desc" }
+                });
+            }
+        } else if (serverId) {
             rules = await prisma.mediaOverlayRule.findMany({
                 where: { serverId },
                 orderBy: { updatedAt: "desc" }
             });
-        }
-        if (rules.length === 0) {
+        } else {
             rules = await prisma.mediaOverlayRule.findMany({
                 orderBy: { updatedAt: "desc" }
             });
@@ -4174,10 +4179,21 @@ export async function saveOverlayRuleAction(data: {
 
         let rule;
         if (data.id) {
-            rule = await prisma.mediaOverlayRule.update({
-                where: { id: data.id },
-                data: ruleData
-            });
+            const targetRule = await prisma.mediaOverlayRule.findUnique({ where: { id: data.id } });
+            if (targetRule) {
+                const serverMismatch = data.serverId && targetRule.serverId && targetRule.serverId !== data.serverId;
+                const sectionMismatch = data.sectionKey && targetRule.sectionKey && String(targetRule.sectionKey) !== String(data.sectionKey);
+                if (serverMismatch || sectionMismatch) {
+                    rule = await prisma.mediaOverlayRule.create({ data: ruleData });
+                } else {
+                    rule = await prisma.mediaOverlayRule.update({
+                        where: { id: data.id },
+                        data: ruleData
+                    });
+                }
+            } else {
+                rule = await prisma.mediaOverlayRule.create({ data: ruleData });
+            }
         } else {
             let existingRule = null;
             if (data.serverId && data.sectionKey) {
@@ -4187,17 +4203,12 @@ export async function saveOverlayRuleAction(data: {
                         sectionKey: String(data.sectionKey)
                     }
                 });
-            }
-            if (!existingRule && data.serverId) {
+            } else if (data.serverId) {
                 existingRule = await prisma.mediaOverlayRule.findFirst({
                     where: {
-                        serverId: data.serverId
+                        serverId: data.serverId,
+                        sectionKey: null
                     }
-                });
-            }
-            if (!existingRule) {
-                existingRule = await prisma.mediaOverlayRule.findFirst({
-                    orderBy: { updatedAt: "desc" }
                 });
             }
 
@@ -4354,7 +4365,7 @@ export async function applyOverlaysToLibraryInternal(
         const token = resolved.token;
 
         // Fetch active custom badges
-        const activeCustomBadges = await prisma.customBadge.findMany({
+        const allActiveCustomBadges = await prisma.customBadge.findMany({
             where: { enabled: true }
         });
 
@@ -4367,11 +4378,21 @@ export async function applyOverlaysToLibraryInternal(
                 }
             }) || await prisma.mediaOverlayRule.findFirst({
                 where: {
-                    serverId
+                    serverId,
+                    sectionKey: null
                 }
-            }) || await prisma.mediaOverlayRule.findFirst({
-                orderBy: { updatedAt: "desc" }
             });
+
+        // Filter custom badges if the rule specifies allowed badge IDs
+        let activeCustomBadges = allActiveCustomBadges;
+        if (rule?.customBadgeIds) {
+            try {
+                const allowedBadgeIds = typeof rule.customBadgeIds === "string" ? JSON.parse(rule.customBadgeIds) : rule.customBadgeIds;
+                if (Array.isArray(allowedBadgeIds) && allowedBadgeIds.length > 0) {
+                    activeCustomBadges = allActiveCustomBadges.filter(cb => allowedBadgeIds.includes(cb.id));
+                }
+            } catch (e) {}
+        }
 
         // Fetch rule options
         let overlayOpts: OverlayOptions;
@@ -4705,7 +4726,7 @@ export async function applyOverlaysToLibraryInternal(
 
         for (const candidate of batchToProcess) {
             const it = candidate.item;
-            const res = await backupAndApplyOverlay(serverUrl, token, serverId, it, candidate.options, true, resolved.serverName);
+            const res = await backupAndApplyOverlay(urlsToTry, token, serverId, it, candidate.options, true, resolved.serverName);
             if (res.success) {
                 successCount++;
                 if (res.upgraded || candidate.isUpgrade) {
@@ -4775,15 +4796,108 @@ export async function applyOverlaysToLibraryAction(
     }
 }
 
-export async function revertLibraryOverlaysAction(serverId: string) {
+export async function revertLibraryOverlaysAction(serverId: string, sectionKey?: string) {
     try {
 
         await verifyAdmin();
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
-        const result = await restoreAllOriginalArtworks(resolved.serverUrl, resolved.token, resolved.serverId, resolved.serverName);
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+
+        if (sectionKey) {
+            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 10000, undefined, false, false);
+            const sectionRatingKeys = new Set(items.map(it => String(it.ratingKey)));
+
+            const backups = await prisma.mediaArtBackup.findMany({
+                where: {
+                    serverId: resolved.serverId,
+                    ratingKey: { in: Array.from(sectionRatingKeys) }
+                }
+            });
+
+            let restoredCount = 0;
+            for (const b of backups) {
+                const res = await restoreItemOriginalArtwork(urlsToTry, resolved.token, resolved.serverId, b.ratingKey, resolved.serverName);
+                if (res.success) restoredCount++;
+            }
+
+            const msg = `Restored ${restoredCount} original poster(s) in Section #${sectionKey} on Plex server "${resolved.serverName}".`;
+            logger.addLog("SUCCESS", "CURATION", msg);
+            return { success: true, restoredCount, message: msg };
+        }
+
+        const result = await restoreAllOriginalArtworks(urlsToTry, resolved.token, resolved.serverId, resolved.serverName);
         return result;
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function pruneOrphanArtworkBackupsAction(serverId: string) {
+    try {
+        await verifyAdmin();
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable." };
+
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const sections = await getPlexServerSections(resolved.token, resolved.serverId);
+
+        const activeRatingKeys = new Set<string>();
+        for (const sec of sections) {
+            try {
+                const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sec.key, 10000, undefined, false, false);
+                for (const it of items) {
+                    if (it.ratingKey) activeRatingKeys.add(String(it.ratingKey));
+                }
+            } catch (e) {}
+        }
+
+        const backups = await prisma.mediaArtBackup.findMany({
+            where: { serverId: resolved.serverId }
+        });
+
+        let prunedCount = 0;
+        let reclaimedBytes = 0;
+
+        for (const b of backups) {
+            if (!activeRatingKeys.has(String(b.ratingKey))) {
+                if (fs.existsSync(b.backupFilePath)) {
+                    try {
+                        const stat = fs.statSync(b.backupFilePath);
+                        reclaimedBytes += stat.size;
+                        fs.unlinkSync(b.backupFilePath);
+                    } catch (e) {}
+                }
+                await prisma.mediaArtBackup.delete({ where: { id: b.id } }).catch(() => {});
+                prunedCount++;
+            }
+        }
+
+        const BACKUP_DIR = path.join(process.cwd(), "data", "art_backups");
+        if (fs.existsSync(BACKUP_DIR)) {
+            const diskFiles = fs.readdirSync(BACKUP_DIR);
+            const prefix = `${resolved.serverId}_`;
+            for (const file of diskFiles) {
+                if (file.startsWith(prefix) && file.endsWith(".jpg")) {
+                    const rKey = file.slice(prefix.length, -4);
+                    if (!activeRatingKeys.has(rKey)) {
+                        const filePath = path.join(BACKUP_DIR, file);
+                        try {
+                            const stat = fs.statSync(filePath);
+                            reclaimedBytes += stat.size;
+                            fs.unlinkSync(filePath);
+                            prunedCount++;
+                        } catch (e) {}
+                    }
+                }
+            }
+        }
+
+        const mbReclaimed = (reclaimedBytes / (1024 * 1024)).toFixed(2);
+        const msg = `Pruned ${prunedCount} orphaned artwork backup(s) (${mbReclaimed} MB reclaimed) on Plex server "${resolved.serverName}".`;
+        logger.addLog("INFO", "CURATION", msg);
+        return { success: true, prunedCount, reclaimedBytes, message: msg };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -6281,6 +6395,13 @@ export async function applyOverlayToSingleItemAction(
 
         if (!inspection) return { success: false, error: "Media item not found on Plex." };
 
+        if (inspection.item.type === "episode") {
+            return {
+                success: false,
+                error: `"${inspection.item.title}" is a TV episode (16:9 thumbnail). Poster overlays currently only support standard 2:3 vertical posters (Movies, Shows, Seasons).`
+            };
+        }
+
         const allCustomBadges = await prisma.customBadge.findMany({ where: { enabled: true } });
         const activeBadges = (options?.customBadgeIds && options.customBadgeIds.length > 0)
             ? allCustomBadges.filter(cb => options.customBadgeIds!.includes(cb.id))
@@ -6291,7 +6412,7 @@ export async function applyOverlayToSingleItemAction(
             : options?.categoryScales;
 
         const res = await backupAndApplyOverlay(
-            serverUrl,
+            urlsToTry,
             token,
             serverId,
             inspection.item,

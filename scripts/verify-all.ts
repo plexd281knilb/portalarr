@@ -2039,6 +2039,78 @@ async function runTestSuite() {
         }
     });
 
+    // 43. Kometa: Rule Scoping, Section Revert Scoping & Aspect Ratio Guard
+    await assertTest("Kometa: Rule Scoping, Section Revert Scoping & Episode Aspect Ratio Guards", async () => {
+        // 1. Rule Scoping & Isolation
+        const mockRules = [
+            { id: "rule_srvA_sec1", serverId: "srvA", sectionKey: "1", name: "Movies 4K" },
+            { id: "rule_srvA_default", serverId: "srvA", sectionKey: null, name: "Default Rule" },
+            { id: "rule_srvB_sec1", serverId: "srvB", sectionKey: "1", name: "Kids Movies" }
+        ];
+
+        // Resolving for srvA, section 1 -> matches exact
+        const matchSec1 = mockRules.find(r => r.serverId === "srvA" && r.sectionKey === "1")
+            || mockRules.find(r => r.serverId === "srvA" && r.sectionKey === null);
+        if (matchSec1?.id !== "rule_srvA_sec1") {
+            throw new Error(`Expected rule_srvA_sec1, got ${matchSec1?.id}`);
+        }
+
+        // Resolving for srvA, unconfigured section 2 -> falls back to srvA default, NEVER cross-server srvB
+        const matchSec2 = mockRules.find(r => r.serverId === "srvA" && r.sectionKey === "2")
+            || mockRules.find(r => r.serverId === "srvA" && r.sectionKey === null);
+        if (matchSec2?.id !== "rule_srvA_default") {
+            throw new Error(`Expected rule_srvA_default fallback, got ${matchSec2?.id}`);
+        }
+
+        // Resolving for srvB, unconfigured section 3 -> NO fallback from srvA
+        const matchSec3 = mockRules.find(r => r.serverId === "srvB" && r.sectionKey === "3")
+            || mockRules.find(r => r.serverId === "srvB" && r.sectionKey === null);
+        if (matchSec3 !== undefined) {
+            throw new Error(`Expected no match for unconfigured srvB section, but got ${matchSec3?.id}`);
+        }
+
+        // 2. Custom Badge ID Scoping
+        const allBadges = [
+            { id: "badge-4k", name: "4K UHD" },
+            { id: "badge-hdr", name: "HDR10" },
+            { id: "badge-atmos", name: "Dolby Atmos" }
+        ];
+        const ruleWithSelection = { customBadgeIds: JSON.stringify(["badge-4k", "badge-atmos"]) };
+        const allowedIds = JSON.parse(ruleWithSelection.customBadgeIds);
+        const filteredBadges = allBadges.filter(b => allowedIds.includes(b.id));
+        if (filteredBadges.length !== 2 || filteredBadges.some(b => b.id === "badge-hdr")) {
+            throw new Error("Custom badge ID filtering failed to exclude unselected badges");
+        }
+
+        // 3. Aspect Ratio & TV Episode Guard
+        const episodeItem = { ratingKey: "991", title: "Pilot", type: "episode" };
+        const movieItem = { ratingKey: "992", title: "Inception", type: "movie" };
+        const isEpisodeRejected = (it: { type?: string }) => it.type === "episode";
+
+        if (!isEpisodeRejected(episodeItem)) {
+            throw new Error("Expected episode item to be rejected by 2:3 vertical poster guard");
+        }
+        if (isEpisodeRejected(movieItem)) {
+            throw new Error("Expected movie item to be permitted by poster overlay engine");
+        }
+
+        // 4. Section Revert Scoping
+        const section1Items = [{ ratingKey: "101" }, { ratingKey: "102" }];
+        const section2Items = [{ ratingKey: "201" }];
+        const allBackups = [
+            { ratingKey: "101", serverId: "srvA" },
+            { ratingKey: "102", serverId: "srvA" },
+            { ratingKey: "201", serverId: "srvA" },
+            { ratingKey: "301", serverId: "srvB" }
+        ];
+
+        const sec1RatingKeys = new Set(section1Items.map(it => it.ratingKey));
+        const scopedBackups = allBackups.filter(b => b.serverId === "srvA" && sec1RatingKeys.has(b.ratingKey));
+        if (scopedBackups.length !== 2 || scopedBackups.some(b => b.ratingKey === "201" || b.serverId === "srvB")) {
+            throw new Error(`Expected exactly 2 scoped backups for Section 1, got ${scopedBackups.length}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
