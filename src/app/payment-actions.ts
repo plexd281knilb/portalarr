@@ -647,10 +647,11 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
     const monthlyPrice = settings?.monthlyPrice || 15;
 
     let currentExpiry: Date | null = null;
+    let finalCadence: "YEARLY" | "MONTHLY" = "YEARLY";
 
     for (const tx of matchedPayments) {
         const paymentDate = new Date(tx.emailDate);
-        const { newExpiryDate, periodGrantedText } = calculateAlignedExpiryDate({
+        const { newExpiryDate, periodGrantedText, cadence } = calculateAlignedExpiryDate({
             paymentDate,
             totalAmount: tx.amount,
             yearlyPrice,
@@ -658,6 +659,7 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
             existingExpiry: currentExpiry
         });
         currentExpiry = newExpiryDate;
+        finalCadence = cadence;
 
         await prisma.paymentTransaction.update({
             where: { id: tx.id },
@@ -680,6 +682,7 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
         data: {
             status: newStatus,
             membershipTier: newTier,
+            subscriptionCadence: finalCadence,
             trialEndsAt: newStatus === "APPROVED" ? null : user.trialEndsAt,
             subscriptionEndsAt: currentExpiry
         }
@@ -1086,6 +1089,341 @@ export async function recordManualPaymentAction(data: {
         return { success: false, error: e.message || "Failed to record manual payment." };
     }
 }
+
+/**
+ * Update a user's subscription billing cadence (Annual vs Monthly)
+ */
+export async function updateUserSubscriptionCadenceAction(userId: string, cadence: "YEARLY" | "MONTHLY") {
+    try {
+        await verifyAdmin();
+        if (!userId) return { success: false, error: "User ID is required." };
+        if (cadence !== "YEARLY" && cadence !== "MONTHLY") {
+            return { success: false, error: "Invalid cadence. Must be YEARLY or MONTHLY." };
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found." };
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { subscriptionCadence: cadence }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        logger.addLog("INFO", "DATABASE", `Admin updated subscription cadence for "${user.username}" to ${cadence}`);
+        return {
+            success: true,
+            message: `Updated @${user.username}'s plan cadence to ${cadence === "YEARLY" ? "Annual ($180/yr)" : "Monthly ($15/mo)"}.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update subscription cadence." };
+    }
+}
+
+/**
+ * Automated sweep to check active subscriptions and trials,
+ * dispatching advance expiration and renewal warnings:
+ * - Yearly plan: multi-stage warnings at 30, 14, 7, 3, and 1 days before expiration
+ * - Monthly plan: warnings at 3 and 1 days before expiration
+ * - Trial: warning at 3 days before trial ends
+ *
+ * Uses cycle-based milestone deduplication to guarantee 100% idempotency (zero duplicate emails).
+ */
+export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
+    success: boolean;
+    scannedUsers: number;
+    remindersSent: number;
+    details: Array<{ username: string; plan: string; milestone: string; daysRemaining: number }>;
+}> {
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    if (!settings || !settings.emailNotificationsEnabled || settings.notifySubscriptionRenewal === false) {
+        return { success: true, scannedUsers: 0, remindersSent: 0, details: [] };
+    }
+
+    const now = new Date();
+    const yearlyPrice = settings.yearlyPrice || 180;
+    const monthlyPrice = settings.monthlyPrice || 15;
+    const { getAppUrl } = await import("@/lib/app-url");
+    const appUrl = await getAppUrl();
+    const { renderEmailTemplate } = await import("@/lib/email-templates");
+    const { sendOrQueueEmail } = await import("@/app/actions");
+    const { calculateUserRenewalSummary } = await import("@/lib/referral-rewards");
+
+    const remindersSent: Array<{ username: string; plan: string; milestone: string; daysRemaining: number }> = [];
+
+    // 1. Process Active Subscribed Members
+    const activeMembers = await prisma.user.findMany({
+        where: {
+            status: "APPROVED",
+            role: { not: "ADMIN" },
+            subscriptionEndsAt: { not: null }
+        },
+        include: {
+            notificationPreference: true,
+            referrals: {
+                select: {
+                    id: true,
+                    username: true,
+                    name: true,
+                    status: true,
+                    convertedAt: true
+                }
+            }
+        }
+    });
+
+    for (const member of activeMembers) {
+        if (!member.email || !member.subscriptionEndsAt) continue;
+        // Respect user notification preferences
+        if (member.notificationPreference && member.notificationPreference.emailSubscriptionReminders === false) {
+            continue;
+        }
+
+        const expiryDate = new Date(member.subscriptionEndsAt);
+        const msRemaining = expiryDate.getTime() - now.getTime();
+        const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
+
+        // Only evaluate if within 31 days and not already expired
+        if (daysRemaining <= 0 || daysRemaining > 31) continue;
+
+        // Determine plan cadence
+        const cadence = (member.subscriptionCadence || (
+            expiryDate.getMonth() === 0 && expiryDate.getDate() === 1 ? "YEARLY" : "MONTHLY"
+        )).toUpperCase();
+
+        const isYearly = cadence === "YEARLY";
+
+        // Cycle target key for idempotency: e.g. "2027-01-01"
+        const cycleTarget = expiryDate.toISOString().slice(0, 10);
+        let reminderState: { cycleTarget: string; milestones: string[] } = {
+            cycleTarget,
+            milestones: []
+        };
+
+        if (member.renewalRemindersSent) {
+            try {
+                const parsed = JSON.parse(member.renewalRemindersSent);
+                if (parsed && parsed.cycleTarget === cycleTarget && Array.isArray(parsed.milestones)) {
+                    reminderState = parsed;
+                }
+            } catch (_) {}
+        }
+
+        let dueMilestone: string | null = null;
+        let milestoneLabel = "";
+
+        if (isYearly) {
+            // Yearly Plan: 30d, 14d, 7d, 3d, 1d milestones
+            if (daysRemaining <= 30 && daysRemaining > 14 && !reminderState.milestones.includes("30d")) {
+                dueMilestone = "30d";
+                milestoneLabel = "30 Days";
+            } else if (daysRemaining <= 14 && daysRemaining > 7 && !reminderState.milestones.includes("14d")) {
+                dueMilestone = "14d";
+                milestoneLabel = "14 Days";
+            } else if (daysRemaining <= 7 && daysRemaining > 3 && !reminderState.milestones.includes("7d")) {
+                dueMilestone = "7d";
+                milestoneLabel = "7 Days";
+            } else if (daysRemaining <= 3 && daysRemaining > 1 && !reminderState.milestones.includes("3d")) {
+                dueMilestone = "3d";
+                milestoneLabel = "3 Days";
+            } else if (daysRemaining <= 1 && daysRemaining > 0 && !reminderState.milestones.includes("1d")) {
+                dueMilestone = "1d";
+                milestoneLabel = "1 Day";
+            }
+        } else {
+            // Monthly Plan: 3d and 1d milestones
+            if (daysRemaining <= 3 && daysRemaining > 1 && !reminderState.milestones.includes("3d")) {
+                dueMilestone = "3d";
+                milestoneLabel = "3 Days";
+            } else if (daysRemaining <= 1 && daysRemaining > 0 && !reminderState.milestones.includes("1d")) {
+                dueMilestone = "1d";
+                milestoneLabel = "1 Day";
+            }
+        }
+
+        if (dueMilestone) {
+            try {
+                const summary = calculateUserRenewalSummary({
+                    user: member,
+                    yearlyPrice,
+                    monthlyPrice
+                });
+
+                const renewalDateStr = summary.expirationDateFormatted || new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(expiryDate);
+                const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
+                const referralDiscountText = summary.convertedReferralsCount > 0
+                    ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+                    : "No active referral credits";
+                const monthlyAlternativeText = summary.delayedMonthlyStartDate
+                    ? `$${monthlyPrice}/month starting ${summary.delayedMonthlyStartDate}`
+                    : `$${monthlyPrice}/month starting ${renewalDateStr}`;
+
+                const templateId = isYearly ? "subscription_renewal_reminder_yearly" : "subscription_renewal_reminder_monthly";
+                const netAmountDue = isYearly 
+                    ? `$${summary.discountedYearlyPrice.toFixed(2)}` 
+                    : `$${monthlyPrice.toFixed(2)}`;
+
+                const { subject, html } = await renderEmailTemplate(templateId, {
+                    username: member.username,
+                    daysRemaining: String(daysRemaining),
+                    renewalDate: renewalDateStr,
+                    basePrice: isYearly ? `$${yearlyPrice.toFixed(2)} / year` : `$${monthlyPrice.toFixed(2)} / month`,
+                    referralDiscountText,
+                    amountDue: netAmountDue,
+                    monthlyAlternativeText,
+                    referralNoticeDetails: summary.reminderNoticeText,
+                    paymentMemo: member.username,
+                    billingUrl: `${appUrl}/settings/profile#billing`,
+                    appUrl
+                });
+
+                await sendOrQueueEmail({
+                    to: member.email,
+                    subject,
+                    html,
+                    templateId,
+                    targetUser: member.username,
+                    userId: member.id
+                });
+
+                // Update user milestone tracking
+                reminderState.milestones.push(dueMilestone);
+                await prisma.user.update({
+                    where: { id: member.id },
+                    data: {
+                        lastRenewalReminderSentAt: now,
+                        renewalRemindersSent: JSON.stringify(reminderState)
+                    }
+                });
+
+                remindersSent.push({
+                    username: member.username,
+                    plan: isYearly ? "Yearly" : "Monthly",
+                    milestone: dueMilestone,
+                    daysRemaining
+                });
+
+                logger.addLog("INFO", "EMAIL", `[RENEWAL-REMINDER] Dispatched ${isYearly ? 'Annual' : 'Monthly'} (${milestoneLabel}) reminder to "${member.username}" (${member.email}). Amount due: ${netAmountDue}`);
+            } catch (remErr: any) {
+                logger.addLog("WARN", "EMAIL", `[RENEWAL-REMINDER] Failed to dispatch reminder to "${member.username}": ${remErr.message}`);
+            }
+        }
+    }
+
+    // 2. Also process Trials Expiring Soon (if notifyTrialExpiring is enabled)
+    if (settings.notifyTrialExpiring) {
+        const expiringTrials = await prisma.user.findMany({
+            where: {
+                status: "TRIAL",
+                role: { not: "ADMIN" },
+                trialEndsAt: { not: null }
+            }
+        });
+
+        for (const tUser of expiringTrials) {
+            if (!tUser.email || !tUser.trialEndsAt) continue;
+            const tExpiry = new Date(tUser.trialEndsAt);
+            const msLeft = tExpiry.getTime() - now.getTime();
+            const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+
+            if (daysLeft <= 0 || daysLeft > 3) continue;
+
+            const tCycleTarget = tExpiry.toISOString().slice(0, 10);
+            let tReminderState: { cycleTarget: string; milestones: string[] } = {
+                cycleTarget: tCycleTarget,
+                milestones: []
+            };
+
+            if (tUser.renewalRemindersSent) {
+                try {
+                    const parsed = JSON.parse(tUser.renewalRemindersSent);
+                    if (parsed && parsed.cycleTarget === tCycleTarget && Array.isArray(parsed.milestones)) {
+                        tReminderState = parsed;
+                    }
+                } catch (_) {}
+            }
+
+            if (!tReminderState.milestones.includes("trial_expiring")) {
+                try {
+                    const formattedExp = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(tExpiry);
+                    const { subject, html } = await renderEmailTemplate("trial_expiring_soon", {
+                        username: tUser.username,
+                        email: tUser.email,
+                        daysRemaining: String(daysLeft),
+                        expirationDate: formattedExp,
+                        renewUrl: `${appUrl}/settings/profile#billing`,
+                        appUrl
+                    });
+
+                    await sendOrQueueEmail({
+                        to: tUser.email,
+                        subject,
+                        html,
+                        templateId: "trial_expiring_soon",
+                        targetUser: tUser.username,
+                        userId: tUser.id
+                    });
+
+                    tReminderState.milestones.push("trial_expiring");
+                    await prisma.user.update({
+                        where: { id: tUser.id },
+                        data: {
+                            lastRenewalReminderSentAt: now,
+                            renewalRemindersSent: JSON.stringify(tReminderState)
+                        }
+                    });
+
+                    remindersSent.push({
+                        username: tUser.username,
+                        plan: "Trial",
+                        milestone: "trial_expiring",
+                        daysRemaining: daysLeft
+                    });
+
+                    logger.addLog("INFO", "EMAIL", `[TRIAL-REMINDER] Dispatched trial expiring notice to "${tUser.username}" (${tUser.email})`);
+                } catch (tErr: any) {
+                    logger.addLog("WARN", "EMAIL", `[TRIAL-REMINDER] Failed to dispatch trial reminder to "${tUser.username}": ${tErr.message}`);
+                }
+            }
+        }
+    }
+
+    return {
+        success: true,
+        scannedUsers: activeMembers.length,
+        remindersSent: remindersSent.length,
+        details: remindersSent
+    };
+}
+
+/**
+ * Admin action to trigger a manual subscription renewal reminder sweep
+ */
+export async function triggerSubscriptionRenewalCheckAction() {
+    try {
+        await verifyAdmin();
+        const result = await sendSubscriptionRenewalRemindersInternal();
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+
+        return {
+            success: true,
+            remindersSent: result.remindersSent,
+            scannedUsers: result.scannedUsers,
+            details: result.details,
+            message: result.remindersSent > 0
+                ? `Dispatched ${result.remindersSent} advance renewal reminder(s) across ${result.scannedUsers} member(s).`
+                : `Scan complete: Checked ${result.scannedUsers} active member(s). No renewal reminders due at this time.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to run renewal reminder sweep." };
+    }
+}
+
 
 
 

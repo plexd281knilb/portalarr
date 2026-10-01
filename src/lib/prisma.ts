@@ -566,6 +566,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["notifyTrialExpiring", `ALTER TABLE "Settings" ADD COLUMN "notifyTrialExpiring" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["notifyTrialExpired", `ALTER TABLE "Settings" ADD COLUMN "notifyTrialExpired" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["notifySubscriptionActive", `ALTER TABLE "Settings" ADD COLUMN "notifySubscriptionActive" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["notifySubscriptionRenewal", `ALTER TABLE "Settings" ADD COLUMN "notifySubscriptionRenewal" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["notifyReferralReward", `ALTER TABLE "Settings" ADD COLUMN "notifyReferralReward" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["agregarrSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "agregarrSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["agregarrSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "agregarrSyncSchedule" TEXT DEFAULT 'every_6_hours';`],
@@ -644,7 +645,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["autoApproveTv", `ALTER TABLE "User" ADD COLUMN "autoApproveTv" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["requestLimitMovies", `ALTER TABLE "User" ADD COLUMN "requestLimitMovies" INTEGER DEFAULT 10;`],
                 ["requestLimitTv", `ALTER TABLE "User" ADD COLUMN "requestLimitTv" INTEGER DEFAULT 10;`],
-                ["requestLimitDays", `ALTER TABLE "User" ADD COLUMN "requestLimitDays" INTEGER DEFAULT 7;`]
+                ["requestLimitDays", `ALTER TABLE "User" ADD COLUMN "requestLimitDays" INTEGER DEFAULT 7;`],
+                ["subscriptionCadence", `ALTER TABLE "User" ADD COLUMN "subscriptionCadence" TEXT DEFAULT 'YEARLY';`],
+                ["lastRenewalReminderSentAt", `ALTER TABLE "User" ADD COLUMN "lastRenewalReminderSentAt" DATETIME;`],
+                ["renewalRemindersSent", `ALTER TABLE "User" ADD COLUMN "renewalRemindersSent" TEXT;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {
@@ -1948,6 +1952,25 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         await expireDueTrialsAndSubscriptionsInternal();
       } catch (trialExpErr: any) {
         console.warn("[BACKGROUND-SCHEDULER] 1-minute trial expiration check error:", trialExpErr.message || trialExpErr);
+      }
+
+      // 1b. Subscription Expiration & Renewal Warnings (Evaluated hourly with milestone deduplication)
+      if (!(global as any).__PORTALARR_RENEWAL_REMINDERS_RUNNING) {
+        const lastReminderCheck = (global as any).__PORTALARR_LAST_RENEWAL_REMINDER_TIME || 0;
+        if (now.getTime() - lastReminderCheck >= 60 * 60 * 1000) {
+          (global as any).__PORTALARR_LAST_RENEWAL_REMINDER_TIME = now.getTime();
+          (global as any).__PORTALARR_RENEWAL_REMINDERS_RUNNING = true;
+          (async () => {
+            try {
+              const { sendSubscriptionRenewalRemindersInternal } = await import("../app/payment-actions");
+              await sendSubscriptionRenewalRemindersInternal();
+            } catch (remErr: any) {
+              console.warn("[BACKGROUND-SCHEDULER] Renewal reminders runner error:", remErr.message || remErr);
+            } finally {
+              (global as any).__PORTALARR_RENEWAL_REMINDERS_RUNNING = false;
+            }
+          })();
+        }
       }
 
       // 2. Poster Overlays Incremental Scan (Mutually exclusive with Deep Recheck)

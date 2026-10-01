@@ -899,6 +899,123 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "subscription_renewal_reminder_yearly",
+        name: "Annual Membership Renewal Warning (Yearly Plan)",
+        description: "Sent to members on the Annual Plan ($180/yr) at multiple milestones (30, 14, 7, 3, and 1 days remaining) so they have advance notice before their annual amount comes due.",
+        triggerEvent: "Triggered automatically at 30, 14, 7, 3, and 1 days before an annual subscription expires, detailing annual rate, referral reward discounts, monthly alternative, and payment methods.",
+        category: "PAYMENTS",
+        defaultSubject: "🔔 Annual Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
+        defaultBody: `<h2>Annual Membership Renewal Notice 🔔</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your annual DomsHomeLab (d281knilb) membership is scheduled for renewal on <strong>{renewalDate}</strong> (<strong>{daysRemaining} days remaining</strong>).</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 180px; color: #64748b;">Annual Membership Rate:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{basePrice}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Referral Rewards Earned:</td>
+            <td style="padding: 6px 0; color: #16a34a; font-weight: 700;">{referralDiscountText}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Net Amount Due:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 800; font-size: 16px;">{amountDue}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Renewal Expiration Date:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{renewalDate}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Switch to Monthly:</td>
+            <td style="padding: 6px 0; color: #4f46e5; font-weight: 600;">{monthlyAlternativeText}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Reconciliation Memo:</td>
+            <td style="padding: 6px 0; font-family: monospace; font-size: 13px; color: #0f172a; font-weight: bold;">{paymentMemo}</td>
+        </tr>
+    </table>
+</div>
+
+<p style="font-size: 14px; color: #334155; line-height: 1.6;">
+    {referralNoticeDetails}
+</p>
+
+<p style="font-size: 13px; color: #475569; line-height: 1.5; margin-top: 16px;">
+    To renew your membership, send your payment via <strong>Venmo</strong>, <strong>Cash App</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
+</p>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{billingUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment QR & Links</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
+        variables: [
+            { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
+            { key: "{daysRemaining}", description: "Days remaining until expiration", sampleValue: "30" },
+            { key: "{renewalDate}", description: "Expiration or renewal date", sampleValue: "January 1, 2027" },
+            { key: "{basePrice}", description: "Standard base annual price", sampleValue: "$180.00 / year" },
+            { key: "{referralDiscountText}", description: "Referral discount summary", sampleValue: "-$15.00 (1 friend referred)" },
+            { key: "{amountDue}", description: "Net amount due after referral credits", sampleValue: "$165.00" },
+            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
+            { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total)." },
+            { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/settings/profile#billing" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "subscription_renewal_reminder_monthly",
+        name: "Monthly Membership Renewal Warning (Monthly Plan)",
+        description: "Sent to members on the Monthly Plan ($15/mo) at 3 days and 1 day remaining, alerting them of their upcoming monthly payment.",
+        triggerEvent: "Triggered automatically at 3 days and 1 day before a monthly subscription renews, detailing renewal amount ($15/mo), payment memo, and payment instructions.",
+        category: "PAYMENTS",
+        defaultSubject: "🔔 Monthly Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
+        defaultBody: `<h2>Monthly Membership Renewal Notice 🔔</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Your monthly DomsHomeLab (d281knilb) membership is scheduled for renewal on <strong>{renewalDate}</strong> (<strong>{daysRemaining} days remaining</strong>).</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 180px; color: #64748b;">Monthly Membership Rate:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{basePrice}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Amount Due:</td>
+            <td style="padding: 6px 0; color: #15803d; font-weight: 800; font-size: 16px;">{amountDue}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Renewal Date:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{renewalDate}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Reconciliation Memo:</td>
+            <td style="padding: 6px 0; font-family: monospace; font-size: 13px; color: #0f172a; font-weight: bold;">{paymentMemo}</td>
+        </tr>
+    </table>
+</div>
+
+<p style="font-size: 13px; color: #475569; line-height: 1.5;">
+    To maintain uninterrupted access to your Plex libraries and media downloads, please submit your payment via <strong>Venmo</strong>, <strong>Cash App</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
+</p>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{billingUrl}" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment QR & Links</a>
+</div>
+<p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
+        variables: [
+            { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
+            { key: "{daysRemaining}", description: "Days remaining until expiration", sampleValue: "3" },
+            { key: "{renewalDate}", description: "Expiration or renewal date", sampleValue: "November 1, 2026" },
+            { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$15.00 / month" },
+            { key: "{amountDue}", description: "Net amount due", sampleValue: "$15.00" },
+            { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/settings/profile#billing" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
         id: "subscription_renewal_reminder",
         name: "Subscription Renewal & Payment Reminder",
         description: "Sent to members before their annual or monthly subscription renews, including any referral reward credits and discounted totals.",

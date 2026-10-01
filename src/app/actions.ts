@@ -1528,6 +1528,7 @@ export async function getEmailNotificationSettings() {
             notifyTrialExpiring: settings.notifyTrialExpiring ?? false,
             notifyTrialExpired: settings.notifyTrialExpired ?? false,
             notifySubscriptionActive: settings.notifySubscriptionActive ?? false,
+            notifySubscriptionRenewal: settings.notifySubscriptionRenewal ?? true,
             notifyReferralReward: settings.notifyReferralReward ?? false,
             notifySupportTickets: settings.notifySupportTickets ?? false,
             notifySendToKindle: settings.notifySendToKindle ?? false,
@@ -1546,6 +1547,7 @@ export async function saveEmailNotificationSettingsAction(data: {
     notifyTrialExpiring?: boolean;
     notifyTrialExpired?: boolean;
     notifySubscriptionActive?: boolean;
+    notifySubscriptionRenewal?: boolean;
     notifyReferralReward?: boolean;
     notifySupportTickets?: boolean;
     notifySendToKindle?: boolean;
@@ -1564,6 +1566,7 @@ export async function saveEmailNotificationSettingsAction(data: {
         if (data.notifyTrialExpiring !== undefined) updateData.notifyTrialExpiring = data.notifyTrialExpiring;
         if (data.notifyTrialExpired !== undefined) updateData.notifyTrialExpired = data.notifyTrialExpired;
         if (data.notifySubscriptionActive !== undefined) updateData.notifySubscriptionActive = data.notifySubscriptionActive;
+        if (data.notifySubscriptionRenewal !== undefined) updateData.notifySubscriptionRenewal = data.notifySubscriptionRenewal;
         if (data.notifyReferralReward !== undefined) updateData.notifyReferralReward = data.notifyReferralReward;
         if (data.notifySupportTickets !== undefined) updateData.notifySupportTickets = data.notifySupportTickets;
         if (data.notifySendToKindle !== undefined) updateData.notifySendToKindle = data.notifySendToKindle;
@@ -3002,6 +3005,9 @@ export async function getAppUsers() {
                 referralCode: true,
                 referredByUserId: true,
                 convertedAt: true,
+                subscriptionCadence: true,
+                lastRenewalReminderSentAt: true,
+                renewalRemindersSent: true,
                 paymentTransactions: {
                     select: {
                         id: true,
@@ -4350,11 +4356,19 @@ export async function setUserTrialOrSubscription(
             if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
         }
 
+        let subscriptionCadence = user.subscriptionCadence;
+        if (type === "REST_OF_YEAR" || type === "1_YEAR") {
+            subscriptionCadence = "YEARLY";
+        } else if (type === "30_DAYS") {
+            subscriptionCadence = "MONTHLY";
+        }
+
         await prisma.user.update({
             where: { id: userId },
             data: {
                 status,
                 membershipTier,
+                subscriptionCadence,
                 trialEndsAt,
                 subscriptionEndsAt,
                 convertedAt

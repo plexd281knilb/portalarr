@@ -58,8 +58,9 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby, X
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock
 } from "lucide-react";
+import { updateUserSubscriptionCadenceAction } from "@/app/payment-actions";
 import { format, differenceInDays } from "date-fns";
 import PaymentEmailManager from "@/components/payment-email-manager";
 
@@ -551,6 +552,22 @@ export default function AccessSettingsPage() {
             setTimeout(() => setReminderErrMsg(""), 5000);
         } finally {
             setSendingReminderUserId(null);
+        }
+    };
+
+    const handleUpdateCadence = async (userId: string, cadence: "YEARLY" | "MONTHLY") => {
+        try {
+            const res = await updateUserSubscriptionCadenceAction(userId, cadence);
+            if (res.success) {
+                if (subModalUser && subModalUser.id === userId) {
+                    setSubModalUser((prev: any) => prev ? { ...prev, subscriptionCadence: cadence } : null);
+                }
+                setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, subscriptionCadence: cadence } : u));
+            } else {
+                alert(res.error || "Failed to update subscription cadence.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Failed to update cadence.");
         }
     };
 
@@ -2215,7 +2232,12 @@ export default function AccessSettingsPage() {
                                                         )}
                                                         {user.status === "APPROVED" && user.subscriptionEndsAt && (
                                                             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
-                                                                <CheckCircle2 className="h-3 w-3" /> Subscribed ({format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
+                                                                <CheckCircle2 className="h-3 w-3" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} ({format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
+                                                            </Badge>
+                                                        )}
+                                                        {user.lastRenewalReminderSentAt && (
+                                                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] gap-1 font-medium" title={`Last renewal reminder dispatched on ${format(new Date(user.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}`}>
+                                                                <CalendarClock className="h-3 w-3 text-amber-400" /> Reminder Sent ({format(new Date(user.lastRenewalReminderSentAt), "MMM d")})
                                                             </Badge>
                                                         )}
                                                         {user.status === "APPROVED" && !user.subscriptionEndsAt && (
@@ -4312,10 +4334,25 @@ export default function AccessSettingsPage() {
                                 </div>
                             )}
 
-                            <div className="p-3 rounded-xl bg-muted/20 border border-border/40 space-y-1 text-xs">
-                                <div className="flex justify-between">
+                            <div className="p-3 rounded-xl bg-muted/20 border border-border/40 space-y-2 text-xs">
+                                <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">Current Status:</span>
                                     <span className="font-bold text-foreground">{subModalUser.status}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Plan Cadence:</span>
+                                    <Select 
+                                        value={subModalUser.subscriptionCadence || "YEARLY"} 
+                                        onValueChange={(val: "YEARLY" | "MONTHLY") => handleUpdateCadence(subModalUser.id, val)}
+                                    >
+                                        <SelectTrigger className="h-7 text-xs w-36 bg-background/80 font-semibold">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="YEARLY">Annual ($180/yr)</SelectItem>
+                                            <SelectItem value="MONTHLY">Monthly ($15/mo)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 {subModalUser.trialEndsAt && (
                                     <div className="flex justify-between">
@@ -4327,6 +4364,12 @@ export default function AccessSettingsPage() {
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Subscription Expires:</span>
                                         <span className="font-bold text-emerald-400">{format(new Date(subModalUser.subscriptionEndsAt), "MMM d, yyyy")}</span>
+                                    </div>
+                                )}
+                                {subModalUser.lastRenewalReminderSentAt && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Last Renewal Notice:</span>
+                                        <span className="font-medium text-amber-400">{format(new Date(subModalUser.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}</span>
                                     </div>
                                 )}
                             </div>

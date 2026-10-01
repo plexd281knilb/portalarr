@@ -29,8 +29,9 @@ import {
     Search, Users, Sparkles, RotateCcw, 
     Loader2, Shield, Key, BookOpen, LifeBuoy, UserCheck, 
     Bell, BellOff, CheckSquare, Square, 
-    Code, Eye, Check, Zap, DollarSign
+    Code, Eye, Check, Zap, DollarSign, CalendarClock
 } from "lucide-react";
+import { triggerSubscriptionRenewalCheckAction } from "@/app/payment-actions";
 
 interface BroadcastUser {
     id: string;
@@ -117,6 +118,7 @@ export default function EmailManagement() {
         notifyTrialExpiring: false,
         notifyTrialExpired: false,
         notifySubscriptionActive: false,
+        notifySubscriptionRenewal: true,
         notifyReferralReward: false,
         notifySupportTickets: false,
         notifySendToKindle: false,
@@ -124,6 +126,25 @@ export default function EmailManagement() {
     });
     const [savingEmailSettings, setSavingEmailSettings] = useState(false);
     const [emailSettingsMsg, setEmailSettingsMsg] = useState("");
+    const [runningRenewalCheck, setRunningRenewalCheck] = useState(false);
+    const [renewalCheckResult, setRenewalCheckResult] = useState<string | null>(null);
+
+    const handleRunRenewalSweep = async () => {
+        setRunningRenewalCheck(true);
+        setRenewalCheckResult(null);
+        try {
+            const res = await triggerSubscriptionRenewalCheckAction();
+            if (res.success) {
+                setRenewalCheckResult(res.message || "Renewal reminder check completed.");
+            } else {
+                setRenewalCheckResult(`Error: ${res.error || "Failed to check renewal reminders."}`);
+            }
+        } catch (e: any) {
+            setRenewalCheckResult(`Error: ${e.message || "Failed to run renewal reminder sweep."}`);
+        } finally {
+            setRunningRenewalCheck(false);
+        }
+    };
 
     const loadData = async () => {
         setLoading(true);
@@ -1611,6 +1632,76 @@ export default function EmailManagement() {
                                     onCheckedChange={(val) => handleToggleEmailSetting("notifyReferralReward", val)}
                                     disabled={!emailSettings.emailNotificationsEnabled}
                                 />
+                            </div>
+
+                            {/* 12. Advance Subscription Renewal Reminders */}
+                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
+                                <div className="space-y-1 pr-3">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <CalendarClock className="h-4 w-4 text-amber-500" /> Advance Renewal Reminders
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                        Send multi-stage advance renewal warnings before annual ($180/yr at 30d, 14d, 7d, 3d, 1d) or monthly ($15/mo at 3d, 1d) subscriptions expire, including transparent payment memos and discounted balances.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={emailSettings.notifySubscriptionRenewal}
+                                    onCheckedChange={(val) => handleToggleEmailSetting("notifySubscriptionRenewal", val)}
+                                    disabled={!emailSettings.emailNotificationsEnabled}
+                                />
+                            </div>
+                        </div>
+
+                        {/* RENEWAL ENGINE SWEEP TRIGGER */}
+                        <div className="mt-6 pt-6 border-t border-border/40">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm">
+                                <div className="space-y-1">
+                                    <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                                        <CalendarClock className="h-4 w-4 text-amber-500" />
+                                        <span>Automated Subscription Renewal Reminder Sweep</span>
+                                        <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10">
+                                            Runs Hourly in Background
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+                                        The renewal reminder engine scans all active subscriptions and evaluates impending expirations. Annual subscribers receive staged reminders at 30, 14, 7, 3, and 1 days before expiration, while monthly members receive reminders at 3 and 1 days. All sent milestones are recorded idempotently on the user profile to prevent duplicate reminders within the same billing cycle.
+                                    </p>
+                                    {renewalCheckResult && (
+                                        <div className={`mt-2 text-xs font-semibold flex items-center gap-1.5 p-2 rounded-lg ${
+                                            renewalCheckResult.startsWith("Error") 
+                                                ? "bg-red-950/40 text-red-400 border border-red-800/40" 
+                                                : "bg-emerald-950/40 text-emerald-400 border border-emerald-800/40"
+                                        }`}>
+                                            {renewalCheckResult.startsWith("Error") ? (
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                            ) : (
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            )}
+                                            <span>{renewalCheckResult}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="shrink-0">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={runningRenewalCheck || !emailSettings.emailNotificationsEnabled}
+                                        onClick={handleRunRenewalSweep}
+                                        className="gap-2 text-xs font-bold border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 w-full sm:w-auto"
+                                    >
+                                        {runningRenewalCheck ? (
+                                            <>
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                Evaluating Reminders...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Zap className="h-3.5 w-3.5" />
+                                                Run Renewal Sweep Now
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </CardContent>

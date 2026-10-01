@@ -15,7 +15,8 @@ import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
 import { logger } from "../src/lib/logger";
 import { matchesPlexUser } from "../src/lib/plex";
-import { scanPaymentEmailsInternal } from "../src/lib/payment-email-scraper";
+import { scanPaymentEmailsInternal, extractAmount, parseCashAppEmail, calculateAlignedExpiryDate } from "../src/lib/payment-email-scraper";
+import { sendSubscriptionRenewalRemindersInternal } from "../src/app/payment-actions";
 import { isScheduleDue } from "../src/lib/prisma";
 import { calculateNextRunTime, formatScheduleLabel, formatLastRunDisplay, SCHEDULE_OPTIONS } from "../src/lib/curation/schedule-helper";
 import { inferBookRating } from "../src/lib/books/book-rating";
@@ -2686,6 +2687,189 @@ async function runTestSuite() {
 
         // Clean up test request
         await prisma.bookRequest.delete({ where: { id: kidsReq.id } }).catch(() => {});
+    });
+
+    // 83. Payment Email Scraper: Positive Amount Extraction vs $0.00 Fees
+    await assertTest("Payments: Amount Extraction with Zero-Fees and HTML Splits", async () => {
+        // Test 1: $0.00 fee before actual positive payment
+        const emailWithZeroFee = "Transaction Receipt:\nFee: $0.00 USD\nNet Amount Received: $180.00 USD\nStatus: Completed";
+        const val180 = extractAmount(emailWithZeroFee);
+        if (val180 !== 180) {
+            throw new Error(`Expected extracted amount 180 from email with $0.00 fee, got: ${val180}`);
+        }
+
+        // Test 2: Venmo split newline HTML formatting
+        const venmoSplitText = "Payment Details\n$\n 15\n 00\n .\nFrom: Alex";
+        const val15 = extractAmount(venmoSplitText);
+        if (val15 !== 15) {
+            throw new Error(`Expected extracted amount 15 from Venmo split newline format, got: ${val15}`);
+        }
+
+        // Test 3: Standard single dollar format
+        const standardVal = extractAmount("You received $25.50 from Mark for Plex subscription");
+        if (standardVal !== 25.5) {
+            throw new Error(`Expected 25.5, got: ${standardVal}`);
+        }
+    });
+
+    // 84. Payment Email Scraper: Cash App Cashtag Isolation
+    await assertTest("Payments: Cash App Cashtag vs Dollar Value Extraction", async () => {
+        // Test 1: Subject contains dollar amount $180 - must NOT capture $180 as the user's cashtag
+        const mockNumericOnly: any = {
+            subject: "Alex sent you $180 for Plex",
+            text: "Alex sent you $180.00 on Cash App for Plex. Available in your Cash balance immediately.",
+            from: { text: "Cash App <cash@square.com>" },
+            date: new Date()
+        };
+        const parsedNumeric = parseCashAppEmail(mockNumericOnly, "test-numeric-uid");
+        if (parsedNumeric?.senderHandle === "$180") {
+            throw new Error(`CRITICAL: Cash App parser incorrectly captured numeric amount as handle! Got "${parsedNumeric.senderHandle}"`);
+        }
+        if (parsedNumeric?.amount !== 180) {
+            throw new Error(`Expected amount 180, got ${parsedNumeric?.amount}`);
+        }
+
+        // Test 2: Email contains real cashtag
+        const mockRealTag: any = {
+            subject: "Alex ($alexdev) sent you $15 for Plex",
+            text: "Alex ($alexdev) sent you $15.00 on Cash App. Note: Plex monthly pass",
+            from: { text: "Cash App <cash@square.com>" },
+            date: new Date()
+        };
+        const parsedReal = parseCashAppEmail(mockRealTag, "test-tag-uid");
+        if (parsedReal?.senderHandle !== "$alexdev") {
+            throw new Error(`Expected cashtag $alexdev, got "${parsedReal?.senderHandle}"`);
+        }
+        if (parsedReal?.amount !== 15) {
+            throw new Error(`Expected amount 15, got ${parsedReal?.amount}`);
+        }
+    });
+
+    // 85. Payment Calculations: Q4 Monthly Cadence vs Annual Expiry Alignment
+    await assertTest("Payments: Q4 Monthly vs Annual Calendar Cadence Calculation", async () => {
+        // Test 1a: Monthly payment made on Oct 1st aligns to Nov 1st of same year
+        const oct1Date = new Date(2026, 9, 1); // October 1, 2026
+        const monthlyOct1 = calculateAlignedExpiryDate({
+            paymentDate: oct1Date,
+            totalAmount: 15,
+            monthlyPrice: 15,
+            yearlyPrice: 180,
+            existingExpiry: null
+        });
+        if (monthlyOct1.cadence !== "MONTHLY") {
+            throw new Error(`Expected cadence MONTHLY, got: ${monthlyOct1.cadence}`);
+        }
+        if (monthlyOct1.newExpiryDate.getFullYear() !== 2026 || monthlyOct1.newExpiryDate.getMonth() !== 10) {
+            throw new Error(`Expected November 2026 for Oct 1st monthly payment, got: ${monthlyOct1.newExpiryDate.toISOString()}`);
+        }
+
+        // Test 1b: Mid-month payment (Oct 15) receives minimum 25-day guarantee aligning to Dec 1st of SAME year (never jumping to 2027)
+        const oct15Date = new Date(2026, 9, 15);
+        const monthlyOct15 = calculateAlignedExpiryDate({
+            paymentDate: oct15Date,
+            totalAmount: 15,
+            monthlyPrice: 15,
+            yearlyPrice: 180,
+            existingExpiry: null
+        });
+        if (monthlyOct15.cadence !== "MONTHLY") {
+            throw new Error(`Expected cadence MONTHLY, got: ${monthlyOct15.cadence}`);
+        }
+        if (monthlyOct15.newExpiryDate.getFullYear() !== 2026 || monthlyOct15.newExpiryDate.getMonth() !== 11) {
+            throw new Error(`Expected Dec 1, 2026 for Oct 15 mid-month payment with 25d minimum, got: ${monthlyOct15.newExpiryDate.toISOString()}`);
+        }
+
+        // Test 2: Annual payment made in October covers rest of 2026 + all of 2027 -> Jan 1, 2028
+        const yearlyOct = calculateAlignedExpiryDate({
+            paymentDate: oct15Date,
+            totalAmount: 180,
+            monthlyPrice: 15,
+            yearlyPrice: 180,
+            existingExpiry: null
+        });
+        if (yearlyOct.cadence !== "YEARLY") {
+            throw new Error(`Expected cadence YEARLY, got: ${yearlyOct.cadence}`);
+        }
+        if (yearlyOct.newExpiryDate.getFullYear() !== 2028 || yearlyOct.newExpiryDate.getMonth() !== 0 || yearlyOct.newExpiryDate.getDate() !== 1) {
+            throw new Error(`Expected Jan 1, 2028 for Q4 annual renewal, got: ${yearlyOct.newExpiryDate.toISOString()}`);
+        }
+
+        // Test 3: Annual payment made in March covers rest of 2026 -> Jan 1, 2027
+        const marDate = new Date(2026, 2, 10); // March 10, 2026
+        const yearlyMar = calculateAlignedExpiryDate({
+            paymentDate: marDate,
+            totalAmount: 180,
+            monthlyPrice: 15,
+            yearlyPrice: 180,
+            existingExpiry: null
+        });
+        if (yearlyMar.cadence !== "YEARLY") {
+            throw new Error(`Expected cadence YEARLY, got: ${yearlyMar.cadence}`);
+        }
+        if (yearlyMar.newExpiryDate.getFullYear() !== 2027 || yearlyMar.newExpiryDate.getMonth() !== 0 || yearlyMar.newExpiryDate.getDate() !== 1) {
+            throw new Error(`Expected Jan 1, 2027 for Spring annual renewal, got: ${yearlyMar.newExpiryDate.toISOString()}`);
+        }
+    });
+
+    // 86. Subscription Renewal Reminders Engine & Milestone Deduplication
+    await assertTest("Payments: Multi-Stage Renewal Reminders Engine & Deduplication", async () => {
+        // Ensure global settings enable renewal notifications for testing
+        const prevSettings = await prisma.settings.findUnique({ where: { id: "global" } });
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { emailNotificationsEnabled: true, notifySubscriptionRenewal: true },
+            create: { id: "global", emailNotificationsEnabled: true, notifySubscriptionRenewal: true }
+        });
+
+        const testUsername = `renew_verify_${Date.now()}`;
+        // Set user to expire in exactly 14 days (triggers the "14d" annual reminder milestone)
+        const expiry14d = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        const testUser = await prisma.user.create({
+            data: {
+                username: testUsername,
+                password: "hashed_dummy_password",
+                email: `${testUsername}@example.com`,
+                role: "USER",
+                status: "APPROVED",
+                subscriptionCadence: "YEARLY",
+                subscriptionEndsAt: expiry14d,
+                membershipTier: "STANDARD"
+            }
+        });
+
+        try {
+            // First sweep: should evaluate the 14d milestone
+            const firstResult = await sendSubscriptionRenewalRemindersInternal();
+            const userAfterFirst = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (!userAfterFirst?.lastRenewalReminderSentAt) {
+                throw new Error("Expected lastRenewalReminderSentAt to be updated after sweep");
+            }
+            const history = JSON.parse(userAfterFirst.renewalRemindersSent || "{}");
+            if (!Array.isArray(history.milestones) || !history.milestones.includes("14d")) {
+                throw new Error(`Expected '14d' milestone recorded in renewalRemindersSent, got: ${userAfterFirst.renewalRemindersSent}`);
+            }
+
+            const initialSentTimestamp = userAfterFirst.lastRenewalReminderSentAt.getTime();
+
+            // Second sweep: should NOT resend or update timestamp for the same 14d milestone
+            const secondResult = await sendSubscriptionRenewalRemindersInternal();
+            const userAfterSecond = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (userAfterSecond?.lastRenewalReminderSentAt?.getTime() !== initialSentTimestamp) {
+                throw new Error("Duplicate reminder dispatched! Milestone deduplication failed.");
+            }
+        } finally {
+            // Clean up test user and restore settings
+            await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
+            if (prevSettings) {
+                await prisma.settings.update({
+                    where: { id: "global" },
+                    data: {
+                        emailNotificationsEnabled: prevSettings.emailNotificationsEnabled,
+                        notifySubscriptionRenewal: prevSettings.notifySubscriptionRenewal
+                    }
+                }).catch(() => {});
+            }
+        }
     });
 
     console.log("\n==========================================================");

@@ -1149,7 +1149,7 @@ export default function UserProfilePage() {
                         <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2.5 text-xs">
                             <div className="flex items-center justify-between">
                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
-                                    Active Annual Subscription
+                                    {user.subscriptionCadence === "MONTHLY" ? "Active Monthly Subscription" : "Active Annual Subscription"}
                                 </span>
                                 {referralInfo?.renewalSummary?.convertedReferralsCount > 0 && (
                                     <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-[10px] gap-1 font-semibold">
@@ -1185,7 +1185,9 @@ export default function UserProfilePage() {
                                 </div>
                             ) : (
                                 <p className="text-[11px] text-muted-foreground">
-                                    Renews at ${effectiveYearlyPrice}/year for the following calendar year.
+                                    {user.subscriptionCadence === "MONTHLY" 
+                                        ? `Renews at $${paymentConfig?.monthlyPrice || 15}/month.` 
+                                        : `Renews at $${effectiveYearlyPrice}/year for the following calendar year.`}
                                 </p>
                             )}
                         </div>
@@ -2471,7 +2473,7 @@ export default function UserProfilePage() {
                                     </Badge>
                                 ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
-                                        <CheckCircle2 className="h-3.5 w-3.5" /> Subscribed (Expires {format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} (Expires {format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
                                     </Badge>
                                 ) : user?.status === "APPROVED" ? (
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">

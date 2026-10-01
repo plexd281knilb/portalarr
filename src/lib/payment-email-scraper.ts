@@ -149,30 +149,37 @@ function isDisallowedSubjectOrBody(subject: string, text: string): boolean {
  * Supports formats: $180.00, $180, 180.00 USD, split HTML lines ($ \n 180 \n 00 \n .), etc.
  * Enforces valid P2P bounds: $0 < amount <= $5,000.00
  */
-function extractAmount(text: string): number | null {
+export function extractAmount(text: string): number | null {
     if (!text) return null;
 
     // 1. Look for split format (e.g. Venmo HTML text rendering: "$\n180\n00\n." or "$\s*180\s+00\s*\.")
-    const splitMatch = text.match(/\$\s*(\d{1,5})\s*[\r\n\s]+(\d{2})\s*\./);
-    if (splitMatch && splitMatch[1] && splitMatch[2]) {
-        const val = parseFloat(`${splitMatch[1]}.${splitMatch[2]}`);
-        if (!isNaN(val) && val > 0 && val <= 5000) return val;
+    const splitMatches = text.matchAll(/\$\s*(\d{1,5})\s*[\r\n\s]+(\d{2})\s*\./gi);
+    for (const splitMatch of splitMatches) {
+        if (splitMatch[1] && splitMatch[2]) {
+            const val = parseFloat(`${splitMatch[1]}.${splitMatch[2]}`);
+            if (!isNaN(val) && val > 0 && val <= 5000) return val;
+        }
     }
 
     // 2. Look for standard dollar formatting: $180.00 or $180 or $ 180.00 or $1,200.00
-    const dollarMatch = text.match(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i);
-    if (dollarMatch && dollarMatch[1]) {
-        const clean = dollarMatch[1].replace(/,/g, "");
-        const val = parseFloat(clean);
-        if (!isNaN(val) && val > 0 && val <= 5000) return val;
+    // Use matchAll so "$0.00 fee" doesn't hide the actual positive payment amount later in the text
+    const dollarMatches = text.matchAll(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/gi);
+    for (const match of dollarMatches) {
+        if (match[1]) {
+            const clean = match[1].replace(/,/g, "");
+            const val = parseFloat(clean);
+            if (!isNaN(val) && val > 0 && val <= 5000) return val;
+        }
     }
 
     // 3. Look for 180.00 USD or 180 USD or 180.00 dollars
-    const usdMatch = text.match(/([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)\s*(?:USD|dollars)/i);
-    if (usdMatch && usdMatch[1]) {
-        const clean = usdMatch[1].replace(/,/g, "");
-        const val = parseFloat(clean);
-        if (!isNaN(val) && val > 0 && val <= 5000) return val;
+    const usdMatches = text.matchAll(/([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)\s*(?:USD|dollars)/gi);
+    for (const match of usdMatches) {
+        if (match[1]) {
+            const clean = match[1].replace(/,/g, "");
+            const val = parseFloat(clean);
+            if (!isNaN(val) && val > 0 && val <= 5000) return val;
+        }
     }
 
     return null;
@@ -452,7 +459,7 @@ function parseZelleEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null
 /**
  * Extract payment details from Cash App notification emails
  */
-function parseCashAppEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null {
+export function parseCashAppEmail(parsed: ParsedMail, uid: string): ScrapedPayment | null {
     const subject = parsed.subject || "";
     const text = parsed.text || parsed.html || "";
     const fromAddress = parsed.from?.text || "";
@@ -490,8 +497,11 @@ function parseCashAppEmail(parsed: ParsedMail, uid: string): ScrapedPayment | nu
         senderName = cashNameMatch[1].replace(/["']/g, "").trim();
     }
 
-    const tagMatch = text.match(/\$([a-zA-Z0-9_-]{2,30})/);
-    if (tagMatch && tagMatch[1]) {
+    // Cashtag extraction - must start with or contain letters, never pure numbers/amounts like $180
+    const tagMatch = text.match(/(?:Cashtag|Cash App tag|cashtag|tag):\s*\$([a-zA-Z][a-zA-Z0-9_-]{1,29})/i) ||
+                     subject.match(/\(\$([a-zA-Z][a-zA-Z0-9_-]{1,29})\)/i) ||
+                     text.match(/\$([a-zA-Z][a-zA-Z0-9_-]{1,29})/);
+    if (tagMatch && tagMatch[1] && !/^\d+(\.\d+)?$/.test(tagMatch[1])) {
         senderHandle = `$${tagMatch[1]}`;
     }
 
@@ -590,7 +600,8 @@ export function calculateAlignedExpiryDate(params: {
     periodGrantedText: string; 
     isYearly: boolean; 
     isProratedRestOfYear: boolean; 
-    monthsGranted: number 
+    monthsGranted: number;
+    cadence: "YEARLY" | "MONTHLY";
 } {
     const { paymentDate, totalAmount, yearlyPrice, monthlyPrice, existingExpiry } = params;
     
@@ -653,34 +664,44 @@ export function calculateAlignedExpiryDate(params: {
             monthsGranted = 1;
         }
 
-        if (existingExpiry && existingExpiry.getTime() > paymentDate.getTime()) {
+        // Check if existingExpiry is active or expired within recent grace period (30 days)
+        const isRecentExpiry = existingExpiry && (existingExpiry.getTime() > (paymentDate.getTime() - 30 * 24 * 60 * 60 * 1000));
+
+        if (isRecentExpiry) {
             newExpiryDate = new Date(existingExpiry);
             newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
             newExpiryDate.setDate(1);
             newExpiryDate.setHours(23, 59, 59, 999);
         } else {
-            // If paying in Q4 (e.g. Dec), 6 months ($90) grants through July 1st of next year!
-            if (payMonth >= 9) {
-                newExpiryDate = new Date(payYear + 1, 0, 1, 23, 59, 59, 999);
-                newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
-                newExpiryDate.setDate(1);
-                newExpiryDate.setHours(23, 59, 59, 999);
+            // New user or lapsed account paying monthly
+            if (paymentDate.getDate() <= 2) {
+                // Paid on 1st or 2nd: expires on 1st of target month
+                newExpiryDate = new Date(payYear, payMonth + monthsGranted, 1, 23, 59, 59, 999);
+            } else if (totalAmount < monthlyPrice - 1) {
+                // Prorated payment for remaining days in current month: credits through 1st of next month
+                newExpiryDate = new Date(payYear, payMonth + 1, 1, 23, 59, 59, 999);
             } else {
-                newExpiryDate = new Date(paymentDate);
-                newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
-                newExpiryDate.setDate(1);
-                newExpiryDate.setHours(23, 59, 59, 999);
+                // Full monthly payment ($15) made mid-month:
+                // Credit full month(s) from payment date aligned to next month's 1st:
+                newExpiryDate = new Date(payYear, payMonth + monthsGranted, 1, 23, 59, 59, 999);
+                // Guarantee user receives at least 25 days of access for a full monthly fee:
+                if ((newExpiryDate.getTime() - paymentDate.getTime()) < 25 * 24 * 60 * 60 * 1000) {
+                    newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+                }
             }
         }
         periodGrantedText = `${monthsGranted} Month${monthsGranted > 1 ? "s" : ""} (Active until ${newExpiryDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })})`;
     }
+
+    const cadence: "YEARLY" | "MONTHLY" = isYearly || isProratedRestOfYear ? "YEARLY" : "MONTHLY";
 
     return {
         newExpiryDate,
         periodGrantedText,
         isYearly,
         isProratedRestOfYear,
-        monthsGranted
+        monthsGranted,
+        cadence
     };
 }
 
@@ -853,7 +874,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
 
     const existingExpiry = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
 
-    const { newExpiryDate, periodGrantedText } = calculateAlignedExpiryDate({
+    const { newExpiryDate, periodGrantedText, cadence } = calculateAlignedExpiryDate({
         paymentDate,
         totalAmount: payment.amount,
         yearlyPrice,
@@ -875,6 +896,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         data: {
             status: targetStatus,
             membershipTier: newTier,
+            subscriptionCadence: cadence,
             trialEndsAt: targetStatus === "APPROVED" ? null : user.trialEndsAt,
             subscriptionEndsAt: newExpiryDate,
             convertedAt: convertedAtDate

@@ -409,7 +409,19 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
-## 🛠️ How to Update and Tweak This Skill
+### 24. Multi-Stage Subscription Renewal Reminders & Payment Engine Architecture
+- **Payment Email Scraper Hardening (`src/lib/payment-email-scraper.ts`)**:
+  - **Zero-Fee Resilience (`extractAmount`)**: Uses `matchAll` to bypass zero amounts (e.g. `Fee: $0.00 USD`) and accurately extract the actual positive payment amount (`Net: $180.00 USD`).
+  - **Cash App Cashtag Isolation (`parseCashAppEmail`)**: Enforces alphabetic characters (`/[a-zA-Z]/`) in cashtag extraction, rejecting numeric amounts like `$180` from accidentally being recorded as the user's handle.
+  - **Calendar Alignment & Q4 Monthly Math (`calculateAlignedExpiryDate`)**: Fixed Q4 monthly payment math so monthly payments made in October/November/December credit 1 month without leaping across calendar years. Preserves a 25-day minimum access guarantee for full monthly payments made mid-month. Returns explicit `cadence: "YEARLY" | "MONTHLY"`.
+- **Multi-Stage Advance Renewal Warnings (`sendSubscriptionRenewalRemindersInternal`)**:
+  - **Annual Plan Milestones ($180/yr)**: 30 days, 14 days, 7 days, 3 days, and 1 day before expiration. Includes net balance due (with earned referral credits deducted), alternative monthly breakdown ($15/mo), payment memo username, and P2P handle options.
+  - **Monthly Plan Milestones ($15/mo)**: 3 days and 1 day before expiration with standard $15 rate and memo username.
+  - **Cycle-Based Milestone Deduplication**: Persists `{ cycleTarget: "YYYY-MM-DD", milestones: ["30d", "14d"] }` in `User.renewalRemindersSent`. Idempotent across hourly background sweeps; automatically resets upon subscription renewal when `cycleTarget` changes.
+- **UI Components & Admin Controls**:
+  - **Email Management Hub (`/settings?tab=emails`)**: Notification toggle for `notifySubscriptionRenewal` in Dispatch Controls, alongside a manual "Run Renewal Sweep Now" diagnostic button with live user scan and reminder counts.
+  - **Access Management (`/settings/access`)**: User status badges display `Monthly Plan (Expires ...)` or `Annual Plan (Expires ...)`, with a dedicated `Reminder Sent (MMM d)` badge. Access & Timer modal (`subModalUser`) features a 1-click Plan Cadence switcher (`updateUserSubscriptionCadenceAction`) and displays the last reminder dispatch timestamp.
+  - **Profile Page (`/settings/profile`)**: Renders `"Active Monthly Subscription"` at `$15/month` for monthly members and `"Active Annual Subscription"` for yearly members.
 
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
