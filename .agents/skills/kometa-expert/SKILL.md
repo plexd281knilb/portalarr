@@ -97,3 +97,9 @@ Portalarr separates overlay generation into two distinct, decoupled automated sc
 12. **Orphan Artwork Backup Reclamation**:
     - Cause: Media items removed or upgraded in Plex leave orphaned `.jpg` backups and SQLite rows in `mediaArtBackup` in `data/art_backups`.
     - Rule: Provide `pruneOrphanArtworkBackupsAction` to reconcile active PMS rating keys against backup records, unlinking orphaned physical `.jpg` files and reclaiming disk storage.
+13. **Dual Automation Schedules, Mutual Exclusion & Scheduler Precision**:
+    - **Dual Schedules**: Fast Incremental Scan (`overlayIncrementalSchedule`, default `every_hour`) scans only unbadged/upgraded items, while Deep Library Recheck (`overlayRecheckSchedule`, default `daily_4am`) inspects the entire library.
+    - **Mutual Exclusion**: Background runners in `src/lib/prisma.ts` and actions in `src/app/curation-actions.ts` enforce that `__PORTALARR_OVERLAY_INC_RUNNING` and `__PORTALARR_OVERLAY_RECHECK_RUNNING` mutually exclude each other, preventing two overlay jobs from reading and writing the same poster art simultaneously.
+    - **Error Recovery**: Catch blocks in `runOverlayIncrementalSyncInternal` and `runOverlayRecheckSyncInternal` update `LastRunAt` to prevent the 60-second background ticker from re-triggering repeatedly on transient errors.
+    - **Catch-up Guard**: Fixed daily (`daily_4am`), weekly Sunday, and monthly schedules enforce `lastRun && elapsedMs >= threshold` for catch-up, preventing fresh installations from prematurely triggering deep rechecks during peak hours.
+

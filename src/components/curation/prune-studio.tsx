@@ -1409,7 +1409,7 @@ export function PruneStudio() {
                     }
                     setBaselineSettings({
                         curationSyncPruning: settingsRes.curationSyncPruning ?? true,
-                        curationSyncSchedule: settingsRes.curationSyncSchedule || "daily_5am",
+                        curationSyncSchedule: settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_5am",
                         pruneDryRun: settingsRes.pruneDryRun ?? true,
                         enableAutoPruneDeletion: settingsRes.enableAutoPruneDeletion ?? false,
                         leavingSoonDiskThreshold: settingsRes.leavingSoonDiskThreshold ?? 15,

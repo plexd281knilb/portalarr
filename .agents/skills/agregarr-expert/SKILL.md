@@ -106,9 +106,11 @@ Agregarr manages metadata labels on items:
 6. **Hub Reordering & Visibility Timeouts**:
    - Use `PUT /hubs/sections/{sectionKey}/manage/{hubId}/move?after={afterHubId}` alongside locked `titleSort` prefixes for immediate, stable home screen positioning.
    - Concurrently dispatch visibility updates (`promotedToOwnHome`, `promotedToSharedHome`, `promotedToRecommended`) using `Promise.all` wrapped in 4s timeout guards (`AbortSignal.timeout(4000)`) to prevent single unresponsive endpoints from stalling execution.
-7. **Automated Scheduler Execution & Missing Token Guard**:
-   - Agregarr curation sync runs automatically via `isScheduleDue()` in `src/lib/prisma.ts`.
-   - If Plex tokens or global settings are missing, `runFullCurationSyncInternal` must persist `curationLastRunAt: new Date()` to prevent the 60-second background ticker from triggering repeatedly every minute.
+7. **Automated Scheduler Execution, Mutex Locks & Telemetry Resilience**:
+   - Agregarr curation sync runs automatically via `isScheduleDue()` in `src/lib/prisma.ts` evaluated against `agregarrSyncSchedule` (default `every_6_hours`) and `agregarrLastRunAt`.
+   - Global concurrency lock `(global as any).__PORTALARR_AGREGARR_RUNNING` protects `runAgregarrSyncInternal` against simultaneous runs from background cron timers and manual admin triggers.
+   - If execution fails or Plex tokens are missing, `agregarrLastRunAt` and `agregarrLastRunStatus` are explicitly updated in `prisma.settings` (capturing error telemetry) to prevent infinite 60-second retry loops and surface error states directly in the UI.
+   - Fixed daily, weekly Sunday, and monthly schedules enforce `lastRun && elapsedMs >= threshold` for catch-up, preventing fresh installations from prematurely triggering calendar-locked jobs outside their intended low-traffic maintenance window.
 8. **Collection Title Truncation with Placeholders**:
    - Cause: Hardcoded `max-w-[200px]` constraints with `truncate` on collection title spans cause names like "Netflix Trending & Top Charts" to be cut off as "Netflix Trending & ..." when badges (e.g. `Placeholders: ON`, `Seasonal`, `Limit`) are enabled.
    - Rule: Let collection titles take natural width (`font-bold text-white text-xs sm:text-sm tracking-tight`) inside flex header containers so titles and status badges wrap cleanly without clipping.

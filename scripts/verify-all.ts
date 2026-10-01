@@ -16,6 +16,8 @@ import { encryptData, decryptData } from "../src/lib/encryption";
 import { logger } from "../src/lib/logger";
 import { matchesPlexUser } from "../src/lib/plex";
 import { scanPaymentEmailsInternal } from "../src/lib/payment-email-scraper";
+import { isScheduleDue } from "../src/lib/prisma";
+import { calculateNextRunTime, formatScheduleLabel, formatLastRunDisplay, SCHEDULE_OPTIONS } from "../src/lib/curation/schedule-helper";
 
 
 async function runTestSuite() {
@@ -2228,6 +2230,91 @@ async function runTestSuite() {
             }
         }, kidSafeConfig);
         if (blockedBySeverity.allowed) throw new Error("Severe nudity should be blocked by Kid-Safe limits");
+    });
+
+    // 45. Curation Automation: Schedule Calculations, isScheduleDue, and Next-Run Precision
+    await assertTest("Curation Scheduling: Schedule Calculations, isScheduleDue & Next-Run Precision", async () => {
+        const now = new Date();
+
+        // 1. calculateNextRunTime for interval schedules
+        const lastRun5hAgo = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+        const next6h = calculateNextRunTime("every_6_hours", lastRun5hAgo);
+        if (next6h.isDue) throw new Error("every_6_hours with last run 5h ago should NOT be due yet");
+        if (!next6h.relativeText.includes("in 1h") && !next6h.relativeText.includes("in 60 mins") && !next6h.relativeText.includes("in 59 mins")) {
+            throw new Error(`Unexpected relativeText for 6h interval: ${next6h.relativeText}`);
+        }
+
+        const lastRun7hAgo = new Date(now.getTime() - 7 * 60 * 60 * 1000);
+        const due6h = calculateNextRunTime("every_6_hours", lastRun7hAgo);
+        if (!due6h.isDue) throw new Error("every_6_hours with last run 7h ago SHOULD be due");
+        if (due6h.relativeText !== "Due on next scheduler tick") {
+            throw new Error(`Expected 'Due on next scheduler tick', got '${due6h.relativeText}'`);
+        }
+
+        // 2. calculateNextRunTime for disabled schedules
+        const disabledRun = calculateNextRunTime("disabled");
+        if (disabledRun.isDue || disabledRun.relativeText !== "Disabled") {
+            throw new Error(`Disabled schedule should return isDue=false and 'Disabled', got: ${JSON.stringify(disabledRun)}`);
+        }
+
+        // 3. calculateNextRunTime for monthly_1st
+        const monthlyRun = calculateNextRunTime("monthly_1st");
+        if (!monthlyRun.nextRunDate || !monthlyRun.relativeText.includes("4:00 AM")) {
+            throw new Error(`monthly_1st should compute valid nextRunDate with 4:00 AM, got: ${JSON.stringify(monthlyRun)}`);
+        }
+
+        // 4. isScheduleDue for intervals
+        const dueEveryHour = isScheduleDue("every_hour", new Date(now.getTime() - 56 * 60 * 1000), now);
+        if (!dueEveryHour) throw new Error("every_hour with 56m elapsed should be due");
+
+        const notDueEveryHour = isScheduleDue("every_hour", new Date(now.getTime() - 30 * 60 * 1000), now);
+        if (notDueEveryHour) throw new Error("every_hour with 30m elapsed should NOT be due");
+
+        // 5. isScheduleDue for daily fixed hours
+        const target4amNow = new Date(now);
+        target4amNow.setHours(4, 15, 0, 0); // 4:15 AM
+        const yesterday4am = new Date(target4amNow.getTime() - 24 * 60 * 60 * 1000);
+        const today4am = new Date(target4amNow.getTime() - 10 * 60 * 1000); // 4:05 AM today
+
+        // At 4:15 AM, not run today:
+        const isDueDaily4am = isScheduleDue("daily_4am", yesterday4am, target4amNow);
+        if (!isDueDaily4am) throw new Error("daily_4am at 4:15 AM (last run yesterday) SHOULD be due");
+
+        // At 4:15 AM, already run today:
+        const alreadyRunDaily4am = isScheduleDue("daily_4am", today4am, target4amNow);
+        if (alreadyRunDaily4am) throw new Error("daily_4am at 4:15 AM (already ran today at 4:05 AM) should NOT be due");
+
+        // Off-hour (2:00 PM), null lastRun (fresh install) MUST NOT trigger prematurely:
+        const target2pmNow = new Date(now);
+        target2pmNow.setHours(14, 0, 0, 0);
+        const freshInstallOffHour = isScheduleDue("daily_4am", null, target2pmNow);
+        if (freshInstallOffHour) throw new Error("daily_4am on fresh install at 2:00 PM should NOT trigger prematurely");
+
+        // On-hour (4:00 AM), null lastRun (fresh install) SHOULD trigger:
+        const freshInstallOnHour = isScheduleDue("daily_4am", null, target4amNow);
+        if (!freshInstallOnHour) throw new Error("daily_4am on fresh install at 4:15 AM SHOULD trigger");
+
+        // 6. isScheduleDue for weekly Sunday
+        const sunday4am = new Date(now);
+        sunday4am.setDate(sunday4am.getDate() + ((7 - sunday4am.getDay()) % 7)); // this/next Sunday
+        sunday4am.setHours(4, 10, 0, 0);
+        const lastSunday = new Date(sunday4am.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const isDueSunday = isScheduleDue("weekly_sun", lastSunday, sunday4am);
+        if (!isDueSunday) throw new Error("weekly_sun on Sunday at 4:10 AM should be due");
+
+        // Fresh install on Tuesday must not trigger weekly Sunday
+        const tuesday2pm = new Date(sunday4am.getTime() + 2 * 24 * 60 * 60 * 1000); // Tuesday
+        tuesday2pm.setHours(14, 0, 0, 0);
+        const notDueTuesday = isScheduleDue("weekly_sun", null, tuesday2pm);
+        if (notDueTuesday) throw new Error("weekly_sun on Tuesday with null lastRun should NOT be due");
+
+        // 7. Verify SCHEDULE_OPTIONS labels format properly
+        for (const opt of SCHEDULE_OPTIONS) {
+            const formatted = formatScheduleLabel(opt.value);
+            if (!formatted || formatted === opt.value) {
+                throw new Error(`Schedule option ${opt.value} did not format cleanly: ${formatted}`);
+            }
+        }
     });
 
     console.log("\n==========================================================");

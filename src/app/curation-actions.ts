@@ -6736,6 +6736,22 @@ export async function runOverlayIncrementalSyncInternal(targetServerId?: string,
     message: string;
     error?: string;
 }> {
+    if ((global as any).__PORTALARR_OVERLAY_INC_RUNNING || (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING) {
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: ["An overlay scan task is already in progress. Please wait for it to complete."],
+            timestamp: new Date().toISOString(),
+            message: "An overlay scan task is already in progress.",
+            error: "An overlay scan task is already in progress."
+        };
+    }
+
+    (global as any).__PORTALARR_OVERLAY_INC_RUNNING = true;
     const details: string[] = [];
     let overlaysAppliedCount = 0;
     let totalNewBadged = 0;
@@ -6863,6 +6879,10 @@ export async function runOverlayIncrementalSyncInternal(targetServerId?: string,
         };
     } catch (e: any) {
         logger.addLog("ERROR", "CURATION", `Incremental overlay sync failed: ${e.message}`);
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { overlayIncrementalLastRunAt: new Date() }
+        }).catch(() => {});
         return {
             success: false,
             overlaysAppliedCount: 0,
@@ -6875,6 +6895,8 @@ export async function runOverlayIncrementalSyncInternal(targetServerId?: string,
             message: e.message,
             error: e.message
         };
+    } finally {
+        (global as any).__PORTALARR_OVERLAY_INC_RUNNING = false;
     }
 }
 
@@ -6917,6 +6939,22 @@ export async function runOverlayRecheckSyncInternal(targetServerId?: string, tar
     message: string;
     error?: string;
 }> {
+    if ((global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING || (global as any).__PORTALARR_OVERLAY_INC_RUNNING) {
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: ["An overlay scan task is already in progress. Please wait for it to complete."],
+            timestamp: new Date().toISOString(),
+            message: "An overlay scan task is already in progress.",
+            error: "An overlay scan task is already in progress."
+        };
+    }
+
+    (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = true;
     const details: string[] = [];
     let overlaysAppliedCount = 0;
     let totalNewBadged = 0;
@@ -7046,6 +7084,10 @@ export async function runOverlayRecheckSyncInternal(targetServerId?: string, tar
         };
     } catch (e: any) {
         logger.addLog("ERROR", "CURATION", `Deep recheck overlay sync failed: ${e.message}`);
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { overlayRecheckLastRunAt: new Date() }
+        }).catch(() => {});
         return {
             success: false,
             overlaysAppliedCount: 0,
@@ -7058,6 +7100,8 @@ export async function runOverlayRecheckSyncInternal(targetServerId?: string, tar
             message: e.message,
             error: e.message
         };
+    } finally {
+        (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = false;
     }
 }
 
@@ -7130,6 +7174,18 @@ export async function runParentalTagsSyncInternal(targetServerId?: string, targe
     details: string[];
     error?: string;
 }> {
+    if ((global as any).__PORTALARR_TAGGING_RUNNING) {
+        return {
+            success: false,
+            totalTagged: 0,
+            totalEvaluated: 0,
+            timestamp: new Date().toISOString(),
+            details: ["A parental tagging sync task is already in progress. Please wait for it to complete."],
+            error: "A parental tagging sync task is already in progress."
+        };
+    }
+
+    (global as any).__PORTALARR_TAGGING_RUNNING = true;
     const details: string[] = [];
     let totalTagged = 0;
     let totalEvaluated = 0;
@@ -7208,6 +7264,13 @@ export async function runParentalTagsSyncInternal(targetServerId?: string, targe
         };
     } catch (e: any) {
         logger.addLog("ERROR", "TAGGING", `Parental Tagging Sync failed: ${e.message}`);
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                taggingLastRunAt: new Date(),
+                taggingLastRunStatus: JSON.stringify({ success: false, error: e.message || String(e), timestamp: new Date().toISOString() })
+            }
+        }).catch(() => {});
         return {
             success: false,
             totalTagged: 0,
@@ -7216,6 +7279,8 @@ export async function runParentalTagsSyncInternal(targetServerId?: string, targe
             details: [e.message],
             error: e.message
         };
+    } finally {
+        (global as any).__PORTALARR_TAGGING_RUNNING = false;
     }
 }
 
@@ -7256,6 +7321,18 @@ export async function runAgregarrSyncInternal(targetServerId?: string, targetSec
     timestamp: string;
     error?: string;
 }> {
+    if ((global as any).__PORTALARR_AGREGARR_RUNNING) {
+        return {
+            success: false,
+            evaluatedCount: 0,
+            activeCount: 0,
+            details: ["An Agregarr collection sync task is already in progress. Please wait for it to complete."],
+            timestamp: new Date().toISOString(),
+            error: "An Agregarr collection sync task is already in progress."
+        };
+    }
+
+    (global as any).__PORTALARR_AGREGARR_RUNNING = true;
     const details: string[] = [];
     let evaluatedCount = 0;
     let activeCount = 0;
@@ -7325,7 +7402,16 @@ export async function runAgregarrSyncInternal(targetServerId?: string, targetSec
         return { success: true, evaluatedCount, activeCount, timestamp: now.toISOString(), details };
     } catch (e: any) {
         logger.addLog("ERROR", "AGREGARR", `Agregarr Collection Sync failed: ${e.message}`);
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                agregarrLastRunAt: new Date(),
+                agregarrLastRunStatus: JSON.stringify({ success: false, error: e.message || String(e), timestamp: new Date().toISOString() })
+            }
+        }).catch(() => {});
         return { success: false, evaluatedCount: 0, activeCount: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
+    } finally {
+        (global as any).__PORTALARR_AGREGARR_RUNNING = false;
     }
 }
 
@@ -7356,6 +7442,18 @@ export async function runMaintainerrSyncInternal(targetServerId?: string, target
     timestamp: string;
     error?: string;
 }> {
+    if ((global as any).__PORTALARR_PRUNE_RUNNING) {
+        return {
+            success: false,
+            leavingCount: 0,
+            totalEvaluated: 0,
+            details: ["A Maintainerr prune sync task is already in progress. Please wait for it to complete."],
+            timestamp: new Date().toISOString(),
+            error: "A Maintainerr prune sync task is already in progress."
+        };
+    }
+
+    (global as any).__PORTALARR_PRUNE_RUNNING = true;
     const details: string[] = [];
     let leavingCount = 0;
     let totalEvaluated = 0;
@@ -7453,7 +7551,16 @@ export async function runMaintainerrSyncInternal(targetServerId?: string, target
         return { success: true, leavingCount, totalEvaluated, timestamp: now.toISOString(), details };
     } catch (e: any) {
         logger.addLog("ERROR", "MAINTAINERR", `Maintainerr Prune Sync failed: ${e.message}`);
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                pruneLastRunAt: new Date(),
+                pruneLastRunStatus: JSON.stringify({ success: false, error: e.message || String(e), timestamp: new Date().toISOString() })
+            }
+        }).catch(() => {});
         return { success: false, leavingCount: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
+    } finally {
+        (global as any).__PORTALARR_PRUNE_RUNNING = false;
     }
 }
 

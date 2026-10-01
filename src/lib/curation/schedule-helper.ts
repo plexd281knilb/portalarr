@@ -47,6 +47,11 @@ export function calculateNextRunTime(
     const lastRun = lastRunIsoOrDate ? new Date(lastRunIsoOrDate) : null;
     const s = (scheduleKey || "every_6_hours").toLowerCase().trim();
 
+    // Disabled or off
+    if (s === "disabled" || s === "off" || s === "never") {
+        return { nextRunDate: null, relativeText: "Disabled", isDue: false };
+    }
+
     // 1. Hourly interval options
     const intervalMap: Record<string, number> = {
         "every_hour": 1,
@@ -83,10 +88,10 @@ export function calculateNextRunTime(
         return { nextRunDate: nextDate, relativeText: relText, isDue: false };
     }
 
-    // 2. Daily fixed hour options (daily_3am, daily_4am, daily_5am, etc.)
+    // 2. Daily fixed hour options (daily_1am - daily_6am, etc.)
     let targetHour: number | null = null;
-    if (s === "daily_1am") targetHour = 1;
-    else if (s === "daily_2am") targetHour = 2;
+    if (s === "daily_1am" || s === "1am") targetHour = 1;
+    else if (s === "daily_2am" || s === "2am") targetHour = 2;
     else if (s === "daily_3am" || s === "3am") targetHour = 3;
     else if (s === "daily_4am" || s === "4am") targetHour = 4;
     else if (s === "daily_5am" || s === "5am") targetHour = 5;
@@ -105,9 +110,18 @@ export function calculateNextRunTime(
         const nextDate = new Date(now);
         nextDate.setHours(targetHour, 0, 0, 0);
 
-        // If target hour has passed today or already ran today during that hour, schedule for tomorrow
-        if (now.getHours() >= targetHour || (lastRun && lastRun.toDateString() === now.toDateString())) {
+        const hasRunToday = Boolean(lastRun && lastRun.toDateString() === now.toDateString());
+        if (hasRunToday || now.getHours() > targetHour) {
             nextDate.setDate(nextDate.getDate() + 1);
+        }
+
+        // If currently in the target hour window and has not run today, it is due immediately
+        if (now.getHours() === targetHour && !hasRunToday) {
+            return {
+                nextRunDate: nextDate,
+                relativeText: "Due on next scheduler tick",
+                isDue: true
+            };
         }
 
         const diffMs = nextDate.getTime() - now.getTime();
@@ -123,15 +137,64 @@ export function calculateNextRunTime(
     if (s === "weekly_sun" || s === "weekly") {
         const nextDate = new Date(now);
         const dayOfWeek = nextDate.getDay(); // 0 = Sunday
-        const daysUntilSunday = (7 - dayOfWeek) % 7 || 7;
+        const hasRunToday = Boolean(lastRun && lastRun.toDateString() === now.toDateString());
+
+        let daysUntilSunday = (7 - dayOfWeek) % 7;
+        if (dayOfWeek === 0) {
+            if (hasRunToday || now.getHours() > 4) {
+                daysUntilSunday = 7;
+            } else {
+                daysUntilSunday = 0;
+            }
+        }
         nextDate.setDate(nextDate.getDate() + daysUntilSunday);
         nextDate.setHours(4, 0, 0, 0);
+
+        if (dayOfWeek === 0 && now.getHours() === 4 && !hasRunToday) {
+            return {
+                nextRunDate: nextDate,
+                relativeText: "Due on next scheduler tick",
+                isDue: true
+            };
+        }
 
         const diffMs = nextDate.getTime() - now.getTime();
         const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
         return {
             nextRunDate: nextDate,
             relativeText: `in ${diffDays} day${diffDays === 1 ? '' : 's'} (Sunday 4:00 AM)`,
+            isDue: diffMs <= 0
+        };
+    }
+
+    // 4. Monthly on the 1st at 4:00 AM
+    if (s === "monthly_1st" || s === "monthly") {
+        const nextDate = new Date(now);
+        nextDate.setHours(4, 0, 0, 0);
+        const isFirst = now.getDate() === 1;
+        const hasRunToday = Boolean(lastRun && lastRun.toDateString() === now.toDateString());
+
+        if (isFirst && !hasRunToday && now.getHours() <= 4) {
+            nextDate.setDate(1);
+        } else {
+            nextDate.setMonth(nextDate.getMonth() + 1);
+            nextDate.setDate(1);
+        }
+
+        if (isFirst && now.getHours() === 4 && !hasRunToday) {
+            return {
+                nextRunDate: nextDate,
+                relativeText: "Due on next scheduler tick",
+                isDue: true
+            };
+        }
+
+        const diffMs = nextDate.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+        const monthLabel = nextDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        return {
+            nextRunDate: nextDate,
+            relativeText: `in ${diffDays} day${diffDays === 1 ? '' : 's'} (${monthLabel} 4:00 AM)`,
             isDue: diffMs <= 0
         };
     }

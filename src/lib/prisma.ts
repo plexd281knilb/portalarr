@@ -1815,11 +1815,14 @@ export function isScheduleDue(
     return elapsedMs >= (24 * 60 - 5) * 60 * 1000;
   }
 
-  // Daily fixed hour (e.g. daily_3am, daily_4am, daily_5am, or daily_HH)
+  // Daily fixed hour (e.g. daily_1am - daily_6am, or daily_HH)
   let targetDailyHour: number | null = null;
-  if (s === "daily_3am" || s === "3am") targetDailyHour = 3;
+  if (s === "daily_1am" || s === "1am") targetDailyHour = 1;
+  else if (s === "daily_2am" || s === "2am") targetDailyHour = 2;
+  else if (s === "daily_3am" || s === "3am") targetDailyHour = 3;
   else if (s === "daily_4am" || s === "4am") targetDailyHour = 4;
   else if (s === "daily_5am" || s === "5am") targetDailyHour = 5;
+  else if (s === "daily_6am" || s === "6am") targetDailyHour = 6;
   else if (s.startsWith("daily_")) {
     const match = s.match(/daily_(\d+)(am|pm)?/);
     if (match) {
@@ -1840,7 +1843,7 @@ export function isScheduleDue(
       return true;
     }
     // Catch-up if server was offline during the target hour and hasn't run in >28 hours
-    if (elapsedMs >= 28 * 60 * 60 * 1000) {
+    if (lastRun && elapsedMs >= 28 * 60 * 60 * 1000) {
       return true;
     }
     return false;
@@ -1857,7 +1860,7 @@ export function isScheduleDue(
       return true;
     }
     // Catch-up if missed and >8 days
-    if (elapsedMs >= 8 * 24 * 60 * 60 * 1000) {
+    if (lastRun && elapsedMs >= 8 * 24 * 60 * 60 * 1000) {
       return true;
     }
     return false;
@@ -1874,7 +1877,7 @@ export function isScheduleDue(
       return true;
     }
     // Catch-up if missed and >35 days
-    if (elapsedMs >= 35 * 24 * 60 * 60 * 1000) {
+    if (lastRun && elapsedMs >= 35 * 24 * 60 * 60 * 1000) {
       return true;
     }
     return false;
@@ -1943,11 +1946,11 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         console.warn("[BACKGROUND-SCHEDULER] 1-minute trial expiration check error:", trialExpErr.message || trialExpErr);
       }
 
-      // 2. Poster Overlays Incremental Scan
-      if (!(global as any).__PORTALARR_OVERLAY_INC_RUNNING) {
+      // 2. Poster Overlays Incremental Scan (Mutually exclusive with Deep Recheck)
+      if (!(global as any).__PORTALARR_OVERLAY_INC_RUNNING && !(global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING) {
         const incEnabled = settings?.overlayIncrementalEnabled ?? true;
         const incSchedule = settings?.overlayIncrementalSchedule || "every_hour";
-        const lastIncRun = settings?.overlayIncrementalLastRunAt;
+        const lastIncRun = settings?.overlayIncrementalLastRunAt || settings?.curationLastRunAt;
 
         if (incEnabled && isScheduleDue(incSchedule, lastIncRun, now)) {
           (global as any).__PORTALARR_OVERLAY_INC_RUNNING = true;
@@ -1958,6 +1961,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               await runOverlayIncrementalSyncInternal();
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
+              await prisma.settings.update({ where: { id: "global" }, data: { overlayIncrementalLastRunAt: new Date() } }).catch(() => {});
             } finally {
               (global as any).__PORTALARR_OVERLAY_INC_RUNNING = false;
             }
@@ -1965,11 +1969,11 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
-      // 3. Poster Overlays Deep Library Recheck Scan
-      if (!(global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING) {
+      // 3. Poster Overlays Deep Library Recheck Scan (Mutually exclusive with Incremental Scan)
+      if (!(global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING && !(global as any).__PORTALARR_OVERLAY_INC_RUNNING) {
         const recheckEnabled = settings?.overlayRecheckEnabled ?? true;
         const recheckSchedule = settings?.overlayRecheckSchedule || "daily_4am";
-        const lastRecheckRun = settings?.overlayRecheckLastRunAt;
+        const lastRecheckRun = settings?.overlayRecheckLastRunAt || settings?.curationLastRunAt;
 
         if (recheckEnabled && isScheduleDue(recheckSchedule, lastRecheckRun, now)) {
           (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = true;
@@ -1980,6 +1984,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               await runOverlayRecheckSyncInternal();
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
+              await prisma.settings.update({ where: { id: "global" }, data: { overlayRecheckLastRunAt: new Date() } }).catch(() => {});
             } finally {
               (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = false;
             }
@@ -2002,6 +2007,13 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               await runAgregarrSyncInternal();
             } catch (aErr: any) {
               console.error("[AGREGARR-TIMER] Error in Agregarr background runner:", aErr.message || aErr);
+              await prisma.settings.update({
+                where: { id: "global" },
+                data: {
+                  agregarrLastRunAt: new Date(),
+                  agregarrLastRunStatus: JSON.stringify({ success: false, error: aErr.message || String(aErr), timestamp: new Date().toISOString() })
+                }
+              }).catch(() => {});
             } finally {
               (global as any).__PORTALARR_AGREGARR_RUNNING = false;
             }
@@ -2013,7 +2025,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       if (!(global as any).__PORTALARR_PRUNE_RUNNING) {
         const pruneEnabled = settings?.pruneSyncEnabled ?? (settings?.curationSyncPruning ?? true);
         const pruneSchedule = settings?.pruneSyncSchedule || "daily_5am";
-        const lastPruneRun = settings?.pruneLastRunAt;
+        const lastPruneRun = settings?.pruneLastRunAt || settings?.curationLastRunAt;
 
         if (pruneEnabled && isScheduleDue(pruneSchedule, lastPruneRun, now)) {
           (global as any).__PORTALARR_PRUNE_RUNNING = true;
@@ -2024,6 +2036,13 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               await runMaintainerrSyncInternal();
             } catch (pErr: any) {
               console.error("[MAINTAINERR-TIMER] Error in Maintainerr background runner:", pErr.message || pErr);
+              await prisma.settings.update({
+                where: { id: "global" },
+                data: {
+                  pruneLastRunAt: new Date(),
+                  pruneLastRunStatus: JSON.stringify({ success: false, error: pErr.message || String(pErr), timestamp: new Date().toISOString() })
+                }
+              }).catch(() => {});
             } finally {
               (global as any).__PORTALARR_PRUNE_RUNNING = false;
             }
@@ -2035,7 +2054,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       if (!(global as any).__PORTALARR_TAGGING_RUNNING) {
         const taggingEnabled = settings?.taggingSyncEnabled ?? (settings?.parentalTaggingEnabled ?? (settings?.curationSyncParentalTags ?? true));
         const taggingSchedule = settings?.taggingSyncSchedule || "daily_3am";
-        const lastTaggingRun = settings?.taggingLastRunAt;
+        const lastTaggingRun = settings?.taggingLastRunAt || settings?.curationLastRunAt;
 
         if (taggingEnabled && isScheduleDue(taggingSchedule, lastTaggingRun, now)) {
           (global as any).__PORTALARR_TAGGING_RUNNING = true;
@@ -2046,6 +2065,13 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               await runParentalTagsSyncInternal();
             } catch (tErr: any) {
               console.error("[TAGGING-TIMER] Error in Tagging background runner:", tErr.message || tErr);
+              await prisma.settings.update({
+                where: { id: "global" },
+                data: {
+                  taggingLastRunAt: new Date(),
+                  taggingLastRunStatus: JSON.stringify({ success: false, error: tErr.message || String(tErr), timestamp: new Date().toISOString() })
+                }
+              }).catch(() => {});
             } finally {
               (global as any).__PORTALARR_TAGGING_RUNNING = false;
             }
