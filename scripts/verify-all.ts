@@ -2357,6 +2357,27 @@ async function runTestSuite() {
                 throw new Error(`Schedule option ${opt.value} did not format cleanly: ${formatted}`);
             }
         }
+
+        // 8. Verify scheduler tick debouncing: once triggered at `now`, subsequent 60s ticks MUST NOT re-trigger
+        const triggerTime = new Date();
+        const tick60sLater = new Date(triggerTime.getTime() + 60 * 1000);
+        const tick5mLater = new Date(triggerTime.getTime() + 5 * 60 * 1000);
+
+        // Incremental overlay (every_hour):
+        if (isScheduleDue("every_hour", triggerTime, tick60sLater)) {
+            throw new Error("every_hour MUST NOT be due 60s after triggering!");
+        }
+        if (isScheduleDue("every_hour", triggerTime, tick5mLater)) {
+            throw new Error("every_hour MUST NOT be due 5m after triggering!");
+        }
+
+        // Agregarr collection sync (every_6_hours):
+        if (isScheduleDue("every_6_hours", triggerTime, tick60sLater)) {
+            throw new Error("every_6_hours MUST NOT be due 60s after triggering!");
+        }
+        if (isScheduleDue("every_6_hours", triggerTime, tick5mLater)) {
+            throw new Error("every_6_hours MUST NOT be due 5m after triggering!");
+        }
     });
 
     // 66. Book Age & Maturity Rating Engine and Kids Mode Enforcement

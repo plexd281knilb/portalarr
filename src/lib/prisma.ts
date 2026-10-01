@@ -1980,17 +1980,18 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         const lastIncRun = settings?.overlayIncrementalLastRunAt || settings?.curationLastRunAt;
 
         if (incEnabled && isScheduleDue(incSchedule, lastIncRun, now)) {
-          (global as any).__PORTALARR_OVERLAY_INC_RUNNING = true;
+          if (settings) settings.overlayIncrementalLastRunAt = now;
+          await prisma.settings.update({ where: { id: "global" }, data: { overlayIncrementalLastRunAt: now } }).catch(() => {});
           (async () => {
             try {
               console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
               const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
-              await runOverlayIncrementalSyncInternal();
+              const res = await runOverlayIncrementalSyncInternal();
+              if (!res.success && res.error) {
+                console.warn("[OVERLAY-TIMER] Incremental overlay scan:", res.error);
+              }
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
-              await prisma.settings.update({ where: { id: "global" }, data: { overlayIncrementalLastRunAt: new Date() } }).catch(() => {});
-            } finally {
-              (global as any).__PORTALARR_OVERLAY_INC_RUNNING = false;
             }
           })();
         }
@@ -2003,17 +2004,18 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         const lastRecheckRun = settings?.overlayRecheckLastRunAt || settings?.curationLastRunAt;
 
         if (recheckEnabled && isScheduleDue(recheckSchedule, lastRecheckRun, now)) {
-          (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = true;
+          if (settings) settings.overlayRecheckLastRunAt = now;
+          await prisma.settings.update({ where: { id: "global" }, data: { overlayRecheckLastRunAt: now } }).catch(() => {});
           (async () => {
             try {
               console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
               const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
-              await runOverlayRecheckSyncInternal();
+              const res = await runOverlayRecheckSyncInternal();
+              if (!res.success && res.error) {
+                console.warn("[OVERLAY-TIMER] Deep recheck:", res.error);
+              }
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
-              await prisma.settings.update({ where: { id: "global" }, data: { overlayRecheckLastRunAt: new Date() } }).catch(() => {});
-            } finally {
-              (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = false;
             }
           })();
         }
@@ -2026,23 +2028,18 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         const lastAgregarrRun = settings?.agregarrLastRunAt || settings?.curationLastRunAt;
 
         if (agregarrEnabled && isScheduleDue(agregarrSchedule, lastAgregarrRun, now)) {
-          (global as any).__PORTALARR_AGREGARR_RUNNING = true;
+          if (settings) settings.agregarrLastRunAt = now;
+          await prisma.settings.update({ where: { id: "global" }, data: { agregarrLastRunAt: now } }).catch(() => {});
           (async () => {
             try {
               console.log(`[AGREGARR-TIMER] Triggering scheduled collection sync (${agregarrSchedule})...`);
               const { runAgregarrSyncInternal } = await import("../app/curation-actions");
-              await runAgregarrSyncInternal();
+              const aRes = await runAgregarrSyncInternal();
+              if (!aRes.success && aRes.error) {
+                console.warn("[AGREGARR-TIMER] Collection sync:", aRes.error);
+              }
             } catch (aErr: any) {
               console.error("[AGREGARR-TIMER] Error in Agregarr background runner:", aErr.message || aErr);
-              await prisma.settings.update({
-                where: { id: "global" },
-                data: {
-                  agregarrLastRunAt: new Date(),
-                  agregarrLastRunStatus: JSON.stringify({ success: false, error: aErr.message || String(aErr), timestamp: new Date().toISOString() })
-                }
-              }).catch(() => {});
-            } finally {
-              (global as any).__PORTALARR_AGREGARR_RUNNING = false;
             }
           })();
         }
@@ -2055,23 +2052,18 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         const lastPruneRun = settings?.pruneLastRunAt || settings?.curationLastRunAt;
 
         if (pruneEnabled && isScheduleDue(pruneSchedule, lastPruneRun, now)) {
-          (global as any).__PORTALARR_PRUNE_RUNNING = true;
+          if (settings) settings.pruneLastRunAt = now;
+          await prisma.settings.update({ where: { id: "global" }, data: { pruneLastRunAt: now } }).catch(() => {});
           (async () => {
             try {
               console.log(`[MAINTAINERR-TIMER] Triggering scheduled prune sync (${pruneSchedule})...`);
               const { runMaintainerrSyncInternal } = await import("../app/curation-actions");
-              await runMaintainerrSyncInternal();
+              const pRes = await runMaintainerrSyncInternal();
+              if (!pRes.success && pRes.error) {
+                console.warn("[MAINTAINERR-TIMER] Prune sync:", pRes.error);
+              }
             } catch (pErr: any) {
               console.error("[MAINTAINERR-TIMER] Error in Maintainerr background runner:", pErr.message || pErr);
-              await prisma.settings.update({
-                where: { id: "global" },
-                data: {
-                  pruneLastRunAt: new Date(),
-                  pruneLastRunStatus: JSON.stringify({ success: false, error: pErr.message || String(pErr), timestamp: new Date().toISOString() })
-                }
-              }).catch(() => {});
-            } finally {
-              (global as any).__PORTALARR_PRUNE_RUNNING = false;
             }
           })();
         }
@@ -2084,23 +2076,18 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         const lastTaggingRun = settings?.taggingLastRunAt || settings?.curationLastRunAt;
 
         if (taggingEnabled && isScheduleDue(taggingSchedule, lastTaggingRun, now)) {
-          (global as any).__PORTALARR_TAGGING_RUNNING = true;
+          if (settings) settings.taggingLastRunAt = now;
+          await prisma.settings.update({ where: { id: "global" }, data: { taggingLastRunAt: now } }).catch(() => {});
           (async () => {
             try {
               console.log(`[TAGGING-TIMER] Triggering scheduled IMDb parental tagging sync (${taggingSchedule})...`);
               const { runParentalTagsSyncInternal } = await import("../app/curation-actions");
-              await runParentalTagsSyncInternal();
+              const tRes = await runParentalTagsSyncInternal();
+              if (!tRes.success && tRes.error) {
+                console.warn("[TAGGING-TIMER] Tagging sync:", tRes.error);
+              }
             } catch (tErr: any) {
               console.error("[TAGGING-TIMER] Error in Tagging background runner:", tErr.message || tErr);
-              await prisma.settings.update({
-                where: { id: "global" },
-                data: {
-                  taggingLastRunAt: new Date(),
-                  taggingLastRunStatus: JSON.stringify({ success: false, error: tErr.message || String(tErr), timestamp: new Date().toISOString() })
-                }
-              }).catch(() => {});
-            } finally {
-              (global as any).__PORTALARR_TAGGING_RUNNING = false;
             }
           })();
         }
