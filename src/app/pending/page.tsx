@@ -84,7 +84,7 @@ export default function PendingPage() {
   const isRejected = user?.status === "REJECTED";
 
   const yearlyPrice = paymentConfig?.yearlyPrice ?? 180;
-  const monthlyPrice = paymentConfig?.monthlyPrice ?? paymentConfig?.proratedBilling?.monthlyRate ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+  const monthlyPrice = paymentConfig?.monthlyPrice ?? paymentConfig?.proratedBilling?.standaloneMonthlyRate ?? paymentConfig?.proratedBilling?.monthlyRate ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
   const prorated = paymentConfig?.proratedBilling;
   const yearlyAmountDue = prorated?.amountDueNow ?? yearlyPrice;
   const monthlyAmountDue = prorated?.monthlyAmountDueNow ?? monthlyPrice;

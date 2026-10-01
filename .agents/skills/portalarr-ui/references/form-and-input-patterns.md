@@ -63,9 +63,30 @@ To prevent users from losing unpersisted settings changes when navigating across
    />
    ```
 
+### ⚠️ Critical Gotcha: Never Wrap Mutable Ref Comparisons in `useMemo`
+- **The Bug**: Wrapping dirty checks like `const isDirty = useMemo(() => JSON.stringify(data) !== JSON.stringify(initialRef.current), [data])` fails to reset on save. When the save action updates `initialRef.current = clonedData` without changing the `data` state reference, React's `useMemo` dependencies have not changed, returning the stale cached `true` value. The card stays permanently locked in an amber glow (`● Unsaved Changes`).
+- **The Fix**: Evaluate dirty states as **direct booleans** during render (`const isDirty = Boolean(...)`) or ensure state references are updated/cloned.
+- **Array Equality**: For multiselect or checkbox arrays (e.g., library selections, channels), compare sorted elements (`[...a].sort().join(',') === [...b].sort().join(',')`) so order differences do not trigger false dirty states.
+
 ---
 
-## 3. Sensitive Tokens & Password Visibility
+## 3. Prorated Subscription Billing Display & Math
+
+When displaying live prorated billing calculations (e.g. on `/settings/access`, `/pending`, and onboarding):
+- **Annual Plan Proration**:
+  - Derived strictly from the yearly price divided by 12 (`annualMonthlyRate = yearlyRate / 12`).
+  - Daily rate: `dailyRate = annualMonthlyRate / daysInMonth`.
+  - Amount due now covers remaining days in the trial-end month plus all remaining full months in the calendar year.
+- **Standalone Monthly Plan**:
+  - Displays `standaloneMonthlyRate` (e.g. `$17.50/mo`, independent of annual proration).
+  - Daily rate: `monthlyDailyRate = standaloneMonthlyRate / daysInMonth`.
+  - Amount due now: `standaloneMonthlyRate * (daysRemaining / daysInMonth)`.
+  - Day range labels must NEVER prefix day numbers with a dollar sign (e.g. `(15–31)`, not `($15–31)`).
+  - All preview badges, daily rates, and renewal labels for the monthly plan MUST use `standaloneMonthlyRate` and `monthlyDailyRate`, reserving `annualMonthlyRate` and `dailyRate` strictly for the annual plan.
+
+---
+
+## 4. Sensitive Tokens & Password Visibility
 
 - Mask tokens by default (`type="password"`).
 - Provide an inline visibility toggle with Lucide `<Eye />` / `<EyeOff />`.
@@ -91,13 +112,13 @@ To prevent users from losing unpersisted settings changes when navigating across
 
 ---
 
-## 4. Live Connection Diagnostic Buttons ("Test")
+## 5. Live Connection Diagnostic Buttons ("Test")
 
 All third-party integration fields (Plex, Tautulli, Glances, Radarr, Sonarr, Prowlarr, SABnzbd, qBittorrent, SMTP, IMAP) must feature a live `"Test"` button that calls the backend diagnostic server action with immediate feedback badges (🟢 Connected vs 🔴 Connection Failed with detailed error text).
 
 ---
 
-## 5. Standard Input Sizing & Styling
+## 6. Standard Input Sizing & Styling
 
 - **Standard Inputs**: `h-9 text-xs sm:text-sm bg-slate-950 border-slate-700 text-slate-100 rounded-lg placeholder:text-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400`.
 - **Compact Inputs / Select Triggers**: `h-8 text-xs bg-slate-900 border-slate-700 text-slate-200 rounded-md`.
@@ -106,7 +127,7 @@ All third-party integration fields (Plex, Tautulli, Glances, Radarr, Sonarr, Pro
 
 ---
 
-## 6. Radix `SelectTrigger` Width & Truncation Guard
+## 7. Radix `SelectTrigger` Width & Truncation Guard
 
 In Radix UI Select components:
 - `SelectTrigger` MUST default to `w-full min-w-0` and enforce `*:data-[slot=select-value]:truncate` so that long option texts (e.g. `"🌙 Daily at 4:00 AM (Recommended for Deep Overlays)"`) truncate gracefully with ellipsis (`...`) instead of expanding and overflowing into neighboring columns.
@@ -119,7 +140,7 @@ In Radix UI Select components:
 
 ---
 
-## 7. Studio Schedule & Multi-Parameter Automation Layouts
+## 8. Studio Schedule & Multi-Parameter Automation Layouts
 
 When designing side-by-side automation cards (`grid-cols-1 lg:grid-cols-2`):
 - Avoid forcing 3 dropdowns side-by-side in a 3-column row (`sm:grid-cols-3`), as each column receives only ~140px-160px.

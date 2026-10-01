@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { 
@@ -157,103 +157,71 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
 
     const initialSeerrRef = useRef<any>(null);
 
-    const isFullQuotaDirty = useMemo(() => {
-        if (!initialSeerrRef.current) return false;
-        const init = initialSeerrRef.current;
-        return (
-            fullAutoApprove !== init.fullAutoApprove ||
-            fullUnlimited !== init.fullUnlimited ||
-            Number(fullQuotaMovies) !== Number(init.fullQuotaMovies) ||
-            Number(fullQuotaTv) !== Number(init.fullQuotaTv) ||
-            Number(fullQuotaDays) !== Number(init.fullQuotaDays)
-        );
-    }, [fullAutoApprove, fullUnlimited, fullQuotaMovies, fullQuotaTv, fullQuotaDays]);
+    const isFullQuotaDirty = Boolean(initialSeerrRef.current && (
+        fullAutoApprove !== initialSeerrRef.current.fullAutoApprove ||
+        fullUnlimited !== initialSeerrRef.current.fullUnlimited ||
+        Number(fullQuotaMovies) !== Number(initialSeerrRef.current.fullQuotaMovies) ||
+        Number(fullQuotaTv) !== Number(initialSeerrRef.current.fullQuotaTv) ||
+        Number(fullQuotaDays) !== Number(initialSeerrRef.current.fullQuotaDays)
+    ));
 
-    const isTrialQuotaDirty = useMemo(() => {
-        if (!initialSeerrRef.current) return false;
-        const init = initialSeerrRef.current;
-        return (
-            trialAutoApprove !== init.trialAutoApprove ||
-            Number(trialQuotaMovies) !== Number(init.trialQuotaMovies) ||
-            Number(trialQuotaTv) !== Number(init.trialQuotaTv)
-        );
-    }, [trialAutoApprove, trialQuotaMovies, trialQuotaTv]);
+    const isTrialQuotaDirty = Boolean(initialSeerrRef.current && (
+        trialAutoApprove !== initialSeerrRef.current.trialAutoApprove ||
+        Number(trialQuotaMovies) !== Number(initialSeerrRef.current.trialQuotaMovies) ||
+        Number(trialQuotaTv) !== Number(initialSeerrRef.current.trialQuotaTv)
+    ));
 
-    const isDual1080pDirty = useMemo(() => {
-        if (!initialSeerrRef.current) return false;
-        return autoDual1080pFor4k !== initialSeerrRef.current.autoDual1080pFor4k;
-    }, [autoDual1080pFor4k]);
+    const isDual1080pDirty = Boolean(initialSeerrRef.current && (
+        autoDual1080pFor4k !== initialSeerrRef.current.autoDual1080pFor4k
+    ));
 
-    const isNotificationsDirty = useMemo(() => {
-        if (!initialSeerrRef.current) return false;
-        const init = initialSeerrRef.current;
-        return (
-            notificationOnAvailable !== init.notificationOnAvailable ||
-            discordWebhookUrl.trim() !== (init.discordWebhookUrl || "").trim() ||
-            discordBotUsername.trim() !== (init.discordBotUsername || "DomsHomeLab").trim() ||
-            discordBotAvatarUrl.trim() !== (init.discordBotAvatarUrl || "").trim() ||
-            discordNotifyPending !== init.discordNotifyPending ||
-            discordNotifyAutoApproved !== init.discordNotifyAutoApproved ||
-            discordNotifyApproved !== init.discordNotifyApproved ||
-            discordNotifyDeclined !== init.discordNotifyDeclined ||
-            discordNotifyAvailable !== init.discordNotifyAvailable ||
-            discordNotifyFailed !== init.discordNotifyFailed ||
-            emailNotifyAdminNewRequest !== init.emailNotifyAdminNewRequest ||
-            emailNotifyUserAutoApproved !== init.emailNotifyUserAutoApproved ||
-            emailNotifyUserApproved !== init.emailNotifyUserApproved ||
-            emailNotifyUserDeclined !== init.emailNotifyUserDeclined ||
-            emailNotifyUserAvailable !== init.emailNotifyUserAvailable ||
-            emailNotifyUserFailed !== init.emailNotifyUserFailed
-        );
-    }, [
-        notificationOnAvailable, discordWebhookUrl, discordBotUsername, discordBotAvatarUrl,
-        discordNotifyPending, discordNotifyAutoApproved, discordNotifyApproved, discordNotifyDeclined,
-        discordNotifyAvailable, discordNotifyFailed, emailNotifyAdminNewRequest, emailNotifyUserAutoApproved,
-        emailNotifyUserApproved, emailNotifyUserDeclined, emailNotifyUserAvailable, emailNotifyUserFailed
-    ]);
+    const isNotificationsDirty = Boolean(initialSeerrRef.current && (
+        notificationOnAvailable !== initialSeerrRef.current.notificationOnAvailable ||
+        discordWebhookUrl.trim() !== (initialSeerrRef.current.discordWebhookUrl || "").trim() ||
+        discordBotUsername.trim() !== (initialSeerrRef.current.discordBotUsername || "DomsHomeLab").trim() ||
+        discordBotAvatarUrl.trim() !== (initialSeerrRef.current.discordBotAvatarUrl || "").trim() ||
+        discordNotifyPending !== initialSeerrRef.current.discordNotifyPending ||
+        discordNotifyAutoApproved !== initialSeerrRef.current.discordNotifyAutoApproved ||
+        discordNotifyApproved !== initialSeerrRef.current.discordNotifyApproved ||
+        discordNotifyDeclined !== initialSeerrRef.current.discordNotifyDeclined ||
+        discordNotifyAvailable !== initialSeerrRef.current.discordNotifyAvailable ||
+        discordNotifyFailed !== initialSeerrRef.current.discordNotifyFailed ||
+        emailNotifyAdminNewRequest !== initialSeerrRef.current.emailNotifyAdminNewRequest ||
+        emailNotifyUserAutoApproved !== initialSeerrRef.current.emailNotifyUserAutoApproved ||
+        emailNotifyUserApproved !== initialSeerrRef.current.emailNotifyUserApproved ||
+        emailNotifyUserDeclined !== initialSeerrRef.current.emailNotifyUserDeclined ||
+        emailNotifyUserAvailable !== initialSeerrRef.current.emailNotifyUserAvailable ||
+        emailNotifyUserFailed !== initialSeerrRef.current.emailNotifyUserFailed
+    ));
 
-    const isArrRoutingDirty = useMemo(() => {
-        if (!initialSeerrRef.current) return false;
-        const init = initialSeerrRef.current;
-        return (
-            defaultMovieAppId !== init.defaultMovieAppId ||
-            defaultMovieProfileId !== init.defaultMovieProfileId ||
-            defaultMovieRootFolder !== init.defaultMovieRootFolder ||
-            defaultMovie4kAppId !== init.defaultMovie4kAppId ||
-            defaultMovie4kProfileId !== init.defaultMovie4kProfileId ||
-            defaultMovie4kRootFolder !== init.defaultMovie4kRootFolder ||
-            defaultTvAppId !== init.defaultTvAppId ||
-            defaultTvProfileId !== init.defaultTvProfileId ||
-            defaultTvRootFolder !== init.defaultTvRootFolder ||
-            defaultTv4kAppId !== init.defaultTv4kAppId ||
-            defaultTv4kProfileId !== init.defaultTv4kProfileId ||
-            defaultTv4kRootFolder !== init.defaultTv4kRootFolder ||
-            kidsAutoApprovePg !== init.kidsAutoApprovePg ||
-            kidsRequireApprovalPg13 !== init.kidsRequireApprovalPg13 ||
-            kidsMovieAppId !== init.kidsMovieAppId ||
-            kidsMovieProfileId !== init.kidsMovieProfileId ||
-            kidsMovieRootFolder !== init.kidsMovieRootFolder ||
-            kidsMovie4kAppId !== init.kidsMovie4kAppId ||
-            kidsMovie4kProfileId !== init.kidsMovie4kProfileId ||
-            kidsMovie4kRootFolder !== init.kidsMovie4kRootFolder ||
-            kidsTvAppId !== init.kidsTvAppId ||
-            kidsTvProfileId !== init.kidsTvProfileId ||
-            kidsTvRootFolder !== init.kidsTvRootFolder ||
-            kidsTv4kAppId !== init.kidsTv4kAppId ||
-            kidsTv4kProfileId !== init.kidsTv4kProfileId ||
-            kidsTv4kRootFolder !== init.kidsTv4kRootFolder
-        );
-    }, [
-        defaultMovieAppId, defaultMovieProfileId, defaultMovieRootFolder,
-        defaultMovie4kAppId, defaultMovie4kProfileId, defaultMovie4kRootFolder,
-        defaultTvAppId, defaultTvProfileId, defaultTvRootFolder,
-        defaultTv4kAppId, defaultTv4kProfileId, defaultTv4kRootFolder,
-        kidsAutoApprovePg, kidsRequireApprovalPg13,
-        kidsMovieAppId, kidsMovieProfileId, kidsMovieRootFolder,
-        kidsMovie4kAppId, kidsMovie4kProfileId, kidsMovie4kRootFolder,
-        kidsTvAppId, kidsTvProfileId, kidsTvRootFolder,
-        kidsTv4kAppId, kidsTv4kProfileId, kidsTv4kRootFolder
-    ]);
+    const isArrRoutingDirty = Boolean(initialSeerrRef.current && (
+        defaultMovieAppId !== initialSeerrRef.current.defaultMovieAppId ||
+        defaultMovieProfileId !== initialSeerrRef.current.defaultMovieProfileId ||
+        defaultMovieRootFolder !== initialSeerrRef.current.defaultMovieRootFolder ||
+        defaultMovie4kAppId !== initialSeerrRef.current.defaultMovie4kAppId ||
+        defaultMovie4kProfileId !== initialSeerrRef.current.defaultMovie4kProfileId ||
+        defaultMovie4kRootFolder !== initialSeerrRef.current.defaultMovie4kRootFolder ||
+        defaultTvAppId !== initialSeerrRef.current.defaultTvAppId ||
+        defaultTvProfileId !== initialSeerrRef.current.defaultTvProfileId ||
+        defaultTvRootFolder !== initialSeerrRef.current.defaultTvRootFolder ||
+        defaultTv4kAppId !== initialSeerrRef.current.defaultTv4kAppId ||
+        defaultTv4kProfileId !== initialSeerrRef.current.defaultTv4kProfileId ||
+        defaultTv4kRootFolder !== initialSeerrRef.current.defaultTv4kRootFolder ||
+        kidsAutoApprovePg !== initialSeerrRef.current.kidsAutoApprovePg ||
+        kidsRequireApprovalPg13 !== initialSeerrRef.current.kidsRequireApprovalPg13 ||
+        kidsMovieAppId !== initialSeerrRef.current.kidsMovieAppId ||
+        kidsMovieProfileId !== initialSeerrRef.current.kidsMovieProfileId ||
+        kidsMovieRootFolder !== initialSeerrRef.current.kidsMovieRootFolder ||
+        kidsMovie4kAppId !== initialSeerrRef.current.kidsMovie4kAppId ||
+        kidsMovie4kProfileId !== initialSeerrRef.current.kidsMovie4kProfileId ||
+        kidsMovie4kRootFolder !== initialSeerrRef.current.kidsMovie4kRootFolder ||
+        kidsTvAppId !== initialSeerrRef.current.kidsTvAppId ||
+        kidsTvProfileId !== initialSeerrRef.current.kidsTvProfileId ||
+        kidsTvRootFolder !== initialSeerrRef.current.kidsTvRootFolder ||
+        kidsTv4kAppId !== initialSeerrRef.current.kidsTv4kAppId ||
+        kidsTv4kProfileId !== initialSeerrRef.current.kidsTv4kProfileId ||
+        kidsTv4kRootFolder !== initialSeerrRef.current.kidsTv4kRootFolder
+    ));
 
     const unsavedSections: string[] = [];
     if (isFullQuotaDirty) unsavedSections.push("Full Member Quotas");

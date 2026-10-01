@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
 import { 
@@ -159,57 +159,43 @@ export default function UserProfilePage() {
         selectedLibraries: string[];
     } | null>(null);
 
-    const isKindleDirty = useMemo(() => {
-        if (!initialProfileRef.current) return false;
-        return (
-            kindleEmail.trim() !== initialProfileRef.current.kindleEmail.trim() ||
-            bypassKindle !== initialProfileRef.current.bypassKindle
-        );
-    }, [kindleEmail, bypassKindle]);
+    const areProfileArraysEqual = (a: string[] = [], b: string[] = []) => {
+        if (a.length !== b.length) return false;
+        const sortedA = [...a].sort();
+        const sortedB = [...b].sort();
+        return sortedA.every((val, idx) => val === sortedB[idx]);
+    };
 
-    const isNotifDirty = useMemo(() => {
-        if (!initialProfileRef.current) return false;
-        const init = initialProfileRef.current.notifPrefs;
-        return (
-            notifPrefs.emailMediaReady !== init.emailMediaReady ||
-            notifPrefs.emailNewContent !== init.emailNewContent ||
-            notifPrefs.emailAnnouncements !== init.emailAnnouncements ||
-            notifPrefs.emailSupportTickets !== init.emailSupportTickets ||
-            notifPrefs.emailSubscriptionReminders !== init.emailSubscriptionReminders ||
-            notifPrefs.emailReferralRewards !== init.emailReferralRewards ||
-            notifPrefs.discordMediaReady !== init.discordMediaReady ||
-            notifPrefs.discordAnnouncements !== init.discordAnnouncements ||
-            (notifPrefs.discordWebhookUrl || "").trim() !== (init.discordWebhookUrl || "").trim()
-        );
-    }, [notifPrefs]);
+    const isKindleDirty = Boolean(initialProfileRef.current && (
+        kindleEmail.trim() !== initialProfileRef.current.kindleEmail.trim() ||
+        bypassKindle !== initialProfileRef.current.bypassKindle
+    ));
 
-    const isContentDirty = useMemo(() => {
-        if (!initialProfileRef.current) return false;
-        if (selectedSafetyUserId && user && selectedSafetyUserId !== user.id) return false;
-        const init = initialProfileRef.current.contentPrefs;
-        const areArraysEqual = (a: string[], b: string[]) => {
-            if (a.length !== b.length) return false;
-            const setA = new Set(a);
-            return b.every(x => setA.has(x));
-        };
-        return (
-            contentPrefs.maxContentRating !== init.maxContentRating ||
-            contentPrefs.hideLeavingSoon !== init.hideLeavingSoon ||
-            contentPrefs.hideHorror !== init.hideHorror ||
-            contentPrefs.hideNsfw !== init.hideNsfw ||
-            contentPrefs.hideGore !== init.hideGore ||
-            !areArraysEqual(contentPrefs.excludedGenresList, init.excludedGenresList) ||
-            !areArraysEqual(contentPrefs.excludedTagsList, init.excludedTagsList)
-        );
-    }, [contentPrefs, selectedSafetyUserId, user]);
+    const isNotifDirty = Boolean(initialProfileRef.current && (
+        notifPrefs.emailMediaReady !== initialProfileRef.current.notifPrefs.emailMediaReady ||
+        notifPrefs.emailNewContent !== initialProfileRef.current.notifPrefs.emailNewContent ||
+        notifPrefs.emailAnnouncements !== initialProfileRef.current.notifPrefs.emailAnnouncements ||
+        notifPrefs.emailSupportTickets !== initialProfileRef.current.notifPrefs.emailSupportTickets ||
+        notifPrefs.emailSubscriptionReminders !== initialProfileRef.current.notifPrefs.emailSubscriptionReminders ||
+        notifPrefs.emailReferralRewards !== initialProfileRef.current.notifPrefs.emailReferralRewards ||
+        notifPrefs.discordMediaReady !== initialProfileRef.current.notifPrefs.discordMediaReady ||
+        notifPrefs.discordAnnouncements !== initialProfileRef.current.notifPrefs.discordAnnouncements ||
+        (notifPrefs.discordWebhookUrl || "").trim() !== (initialProfileRef.current.notifPrefs.discordWebhookUrl || "").trim()
+    ));
 
-    const isLibrariesDirty = useMemo(() => {
-        if (!initialProfileRef.current) return false;
-        const init = initialProfileRef.current.selectedLibraries;
-        if (selectedLibraries.length !== init.length) return true;
-        const setInit = new Set(init);
-        return !selectedLibraries.every(x => setInit.has(x));
-    }, [selectedLibraries]);
+    const isContentDirty = Boolean(initialProfileRef.current && (!selectedSafetyUserId || !user || selectedSafetyUserId === user.id) && (
+        contentPrefs.maxContentRating !== initialProfileRef.current.contentPrefs.maxContentRating ||
+        contentPrefs.hideLeavingSoon !== initialProfileRef.current.contentPrefs.hideLeavingSoon ||
+        contentPrefs.hideHorror !== initialProfileRef.current.contentPrefs.hideHorror ||
+        contentPrefs.hideNsfw !== initialProfileRef.current.contentPrefs.hideNsfw ||
+        contentPrefs.hideGore !== initialProfileRef.current.contentPrefs.hideGore ||
+        !areProfileArraysEqual(contentPrefs.excludedGenresList, initialProfileRef.current.contentPrefs.excludedGenresList) ||
+        !areProfileArraysEqual(contentPrefs.excludedTagsList, initialProfileRef.current.contentPrefs.excludedTagsList)
+    ));
+
+    const isLibrariesDirty = Boolean(initialProfileRef.current && (
+        !areProfileArraysEqual(selectedLibraries, initialProfileRef.current.selectedLibraries)
+    ));
 
     const unsavedSections: string[] = [];
     if (isKindleDirty) unsavedSections.push("Send-to-Kindle");
@@ -722,6 +708,7 @@ export default function UserProfilePage() {
                 if (initialProfileRef.current) {
                     initialProfileRef.current.notifPrefs = { ...notifPrefs };
                 }
+                setNotifPrefs(prev => ({ ...prev }));
                 setTimeout(() => setNotifMsg(""), 4000);
                 return true;
             } else {
@@ -798,6 +785,11 @@ export default function UserProfilePage() {
                         excludedTagsList: [...contentPrefs.excludedTagsList]
                     };
                 }
+                setContentPrefs(prev => ({
+                    ...prev,
+                    excludedGenresList: [...prev.excludedGenresList],
+                    excludedTagsList: [...prev.excludedTagsList]
+                }));
                 setTimeout(() => setContentMsg(""), 4000);
                 return true;
             } else {

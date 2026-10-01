@@ -14,6 +14,9 @@ export interface ProratedBillingResult {
     remainingMonthsNames: string[];
     remainingMonthsText: string;
     monthlyRate: number;
+    standaloneMonthlyRate: number;
+    monthlyDailyRate: number;
+    annualMonthlyRate: number;
     yearlyRate: number;
     amountDueNow: number;
     amountDueText: string;
@@ -164,6 +167,9 @@ export function calculateProratedBilling(options: {
         remainingMonthsNames,
         remainingMonthsText,
         monthlyRate: annualMonthlyRate,
+        standaloneMonthlyRate,
+        monthlyDailyRate,
+        annualMonthlyRate,
         yearlyRate,
         amountDueNow,
         amountDueText,

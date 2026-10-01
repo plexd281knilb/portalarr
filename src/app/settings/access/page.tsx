@@ -2950,7 +2950,7 @@ export default function AccessSettingsPage() {
                                                         <CreditCard className="h-3 w-3" /> Monthly Plan (Prorated)
                                                     </span>
                                                     <Badge variant="outline" className="text-[9px] bg-purple-500/15 text-purple-300 border-purple-500/30">
-                                                        Tier 1 (${liveProrated.monthlyRate}/mo)
+                                                        Tier 1 (${liveProrated.standaloneMonthlyRate}/mo)
                                                     </Badge>
                                                 </div>
                                                 <div>
@@ -2960,11 +2960,11 @@ export default function AccessSettingsPage() {
                                                     </span>
                                                 </div>
                                                 <div className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded-lg space-y-0.5 font-mono">
-                                                    <div>• {liveProrated.daysRemainingInMonth} remaining days in {liveProrated.trialEndMonthName} (${liveProrated.trialEndDay}–{liveProrated.daysInTrialEndMonth})</div>
-                                                    <div>• Daily rate: <span className="text-foreground font-semibold">${liveProrated.dailyRate.toFixed(2)}/day</span> (${liveProrated.monthlyRate} ÷ {liveProrated.daysInTrialEndMonth} days)</div>
+                                                    <div>• {liveProrated.daysRemainingInMonth} remaining days in {liveProrated.trialEndMonthName} ({liveProrated.trialEndDay}–{liveProrated.daysInTrialEndMonth})</div>
+                                                    <div>• Daily rate: <span className="text-foreground font-semibold">${liveProrated.monthlyDailyRate.toFixed(2)}/day</span> (${liveProrated.standaloneMonthlyRate} ÷ {liveProrated.daysInTrialEndMonth} days)</div>
                                                 </div>
                                                 <p className="text-[10px] text-muted-foreground pt-0.5">
-                                                    Renews at standard rate <strong>${liveProrated.monthlyRate}/month</strong> on <strong>{liveProrated.nextMonthlyRenewalDate}</strong>.
+                                                    Renews at standard rate <strong>${liveProrated.standaloneMonthlyRate}/month</strong> on <strong>{liveProrated.nextMonthlyRenewalDate}</strong>.
                                                 </p>
                                             </div>
                                         </div>

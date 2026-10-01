@@ -575,6 +575,42 @@ async function runTestSuite() {
         }
     });
 
+    // 22b. Standalone Monthly Rate Proration ($17.50/mo standalone vs $180/yr annual base)
+    await assertTest("Billing: Standalone Monthly Rate Proration ($17.50/mo vs $180/yr)", async () => {
+        // Start date: Oct 1, 2026 with 14-day trial -> ends Oct 15, 2026
+        // Days remaining in Oct: 31 - 15 = 16 days
+        // Annual rate: $180/yr -> $15/mo base rate, dailyRate = $0.48/day, amountDueNow = 7.74 + 30 = $37.74
+        // Standalone monthly rate: $17.50/mo -> monthlyDailyRate = $0.56/day, monthlyAmountDueNow = $9.03
+        const result = calculateProratedBilling({
+            startDate: new Date("2026-10-01T12:00:00Z"),
+            trialDays: 14,
+            yearlyPrice: 180,
+            monthlyPrice: 17.5
+        });
+
+        if (result.standaloneMonthlyRate !== 17.5) {
+            throw new Error(`Expected standaloneMonthlyRate to be 17.5 but got ${result.standaloneMonthlyRate}`);
+        }
+        if (result.annualMonthlyRate !== 15) {
+            throw new Error(`Expected annualMonthlyRate to be 15 but got ${result.annualMonthlyRate}`);
+        }
+        if (result.monthlyDailyRate !== 0.56) {
+            throw new Error(`Expected monthlyDailyRate to be 0.56 but got ${result.monthlyDailyRate}`);
+        }
+        if (result.monthlyAmountDueNow !== 9.03) {
+            throw new Error(`Expected monthlyAmountDueNow to be 9.03 but got ${result.monthlyAmountDueNow}`);
+        }
+        if (result.amountDueNow !== 37.74) {
+            throw new Error(`Expected amountDueNow to be 37.74 but got ${result.amountDueNow}`);
+        }
+        if (result.dailyRate !== 0.48) {
+            throw new Error(`Expected dailyRate to be 0.48 but got ${result.dailyRate}`);
+        }
+        if (!result.monthlyBreakdownSummary.includes("$9.03 for 16 days remaining in October ($0.56/day)")) {
+            throw new Error(`Expected monthlyBreakdownSummary to include daily rate breakdown, got: ${result.monthlyBreakdownSummary}`);
+        }
+    });
+
     // 23. Onboarding: Member Reference Validation (Referral code, username, and full name)
     await assertTest("Onboarding: Member Reference & Referral Validation", async () => {
         const testReferrer = await prisma.user.create({
