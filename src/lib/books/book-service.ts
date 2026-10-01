@@ -239,7 +239,9 @@ export async function fetchTrendingEbooks(isKids: boolean = false): Promise<Book
 
                     const ratingRes = inferBookRating({
                         subjects: Array.isArray(work.subject) ? work.subject : (work.subject ? [work.subject] : (isKids ? ["juvenile fiction"] : [])),
-                        title: work.title
+                        title: work.title,
+                        author: authorName,
+                        series: typeof work.series === "string" ? work.series : (Array.isArray(work.series) ? work.series[0] : undefined)
                     });
 
                     if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
@@ -285,6 +287,7 @@ export async function fetchTrendingEbooks(isKids: boolean = false): Promise<Book
                             maturityRating: vol.maturityRating,
                             categories: vol.categories,
                             title: vol.title,
+                            author: authorName,
                             overview: vol.description
                         });
 
@@ -350,9 +353,18 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
                     if (seen.has(key)) continue;
                     seen.add(key);
 
+                    let seriesName: string | undefined;
+                    let volumeNumber: string | undefined;
+                    if (prod.series && prod.series.length > 0) {
+                        seriesName = prod.series[0].title;
+                        volumeNumber = prod.series[0].sequence;
+                    }
+
                     const ratingRes = inferBookRating({
                         categories: [isKids ? "children" : ""],
                         title: prod.title,
+                        author: authorName,
+                        series: seriesName,
                         overview: prod.publisher_summary || prod.merchandising_summary
                     });
 
@@ -361,13 +373,6 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
                     let coverUrl = "";
                     if (prod.product_images) {
                         coverUrl = prod.product_images["1024"] || prod.product_images["800"] || prod.product_images["500"] || "";
-                    }
-
-                    let seriesName: string | undefined;
-                    let volumeNumber: string | undefined;
-                    if (prod.series && prod.series.length > 0) {
-                        seriesName = prod.series[0].title;
-                        volumeNumber = prod.series[0].sequence;
                     }
 
                     results.push({
@@ -411,6 +416,7 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
                             genre: item.primaryGenreName,
                             categories: [item.primaryGenreName, isKids ? "children" : ""],
                             title,
+                            author,
                             overview: item.description
                         });
 
@@ -480,6 +486,8 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                             const ratingRes = inferBookRating({
                                 categories: prod.category_ladders?.map((c: any) => c.name) || [],
                                 title: prod.title,
+                                author,
+                                series: prod.series?.[0]?.title,
                                 overview: prod.publisher_summary || prod.merchandising_summary
                             });
 
@@ -526,6 +534,8 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                             const ratingRes = inferBookRating({
                                 subjects: Array.isArray(doc.subject) ? doc.subject : (doc.subject ? [doc.subject] : []),
                                 title: doc.title,
+                                author,
+                                series: typeof doc.series === "string" ? doc.series : (Array.isArray(doc.series) ? doc.series[0] : undefined),
                                 overview: doc.first_sentence ? (Array.isArray(doc.first_sentence) ? doc.first_sentence[0] : doc.first_sentence) : undefined
                             });
 
@@ -570,6 +580,7 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                                 maturityRating: vol.maturityRating,
                                 categories: vol.categories,
                                 title: vol.title,
+                                author,
                                 overview: vol.description
                             });
 
@@ -619,6 +630,7 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                                 genre: item.primaryGenreName,
                                 categories: [item.primaryGenreName],
                                 title,
+                                author,
                                 overview: item.description
                             });
 

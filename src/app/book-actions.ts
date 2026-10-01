@@ -130,6 +130,8 @@ export async function fetchMissingSeriesSuggestions(
 
                     const ratingRes = inferBookRating({
                         title: item.title,
+                        author: item.author || s.author,
+                        series: s.series,
                         categories: s.series ? [s.series] : []
                     });
 

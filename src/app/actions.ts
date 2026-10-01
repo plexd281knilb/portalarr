@@ -36,6 +36,7 @@ import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
 import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
+import { inferBookRating } from "@/lib/books/book-rating";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -8341,8 +8342,35 @@ export async function getLibraryBooks(libraryId?: string) {
         orderBy: { createdAt: "desc" }
     });
     
-    books.sort((a, b) => a.title.localeCompare(b.title));
-    return books;
+    // Evaluate and repair ratings dynamically (e.g. adult romance formerly saved as "All Ages" or null)
+    for (const b of books) {
+        if (!b.ageRating || b.ageRating === "All Ages") {
+            const inferred = inferBookRating({
+                title: b.title,
+                author: b.author,
+                series: b.series || undefined
+            });
+            if (inferred.isMature && b.ageRating !== "18+ Mature") {
+                b.ageRating = inferred.ageRating;
+                b.maturityRating = inferred.maturityRating;
+                prisma.book.update({
+                    where: { id: b.id },
+                    data: { ageRating: inferred.ageRating, maturityRating: inferred.maturityRating }
+                }).catch(() => {});
+            } else if (!b.ageRating) {
+                b.ageRating = inferred.ageRating;
+                b.maturityRating = inferred.maturityRating;
+            }
+        }
+    }
+
+    let resultBooks = books;
+    if (isKid) {
+        resultBooks = books.filter(b => b.maturityRating !== "MATURE" && b.ageRating !== "18+ Mature");
+    }
+
+    resultBooks.sort((a, b) => a.title.localeCompare(b.title));
+    return resultBooks;
 }
 
 export async function deleteBook(id: string) {
@@ -8364,11 +8392,20 @@ export async function updateBook(id: string, title: string, author: string, cove
     // Resolve and link Author and BookSeries in SQLite
     let authorId: string | undefined;
     let seriesId: string | undefined;
+    let inferredAgeRating: string | undefined;
+    let inferredMaturityRating: string | undefined;
     try {
         const currentBook = await prisma.book.findUnique({ where: { id } });
         const resolved = await resolveOrLinkAuthorAndSeries(author, currentBook?.series, currentBook?.volumeNumber);
         authorId = resolved.authorId;
         seriesId = resolved.seriesId;
+        const rating = inferBookRating({
+            title,
+            author,
+            series: currentBook?.series || undefined
+        });
+        inferredAgeRating = rating.ageRating;
+        inferredMaturityRating = rating.maturityRating;
     } catch (e) {}
 
     // 1. Immediately save the new text metadata and relational foreign keys
@@ -8379,7 +8416,9 @@ export async function updateBook(id: string, title: string, author: string, cove
             author,
             coverUrl,
             ...(authorId ? { authorId } : {}),
-            ...(seriesId ? { seriesId } : {})
+            ...(seriesId ? { seriesId } : {}),
+            ...(inferredAgeRating ? { ageRating: inferredAgeRating } : {}),
+            ...(inferredMaturityRating ? { maturityRating: inferredMaturityRating } : {})
         }
     });
     
@@ -10252,6 +10291,17 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     } catch (e) {}
                 }
 
+                // Ensure age rating and maturity are evaluated / updated
+                const ratingCheck = inferBookRating({
+                    title: existing.title,
+                    author: effectiveAuthor,
+                    series: effectiveSeries
+                });
+                if (!existing.ageRating || (ratingCheck.isMature && existing.ageRating !== "18+ Mature")) {
+                    updateData.ageRating = ratingCheck.ageRating;
+                    updateData.maturityRating = ratingCheck.maturityRating;
+                }
+
                 if (Object.keys(updateData).length > 0) {
                     logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" [${Object.keys(updateData).join(", ")}] (ID: ${existing.id}, Target Lib: "${library.name}", Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
                     console.log(`[SCANNER] 🔄 Updated book "${existing.title}" [${Object.keys(updateData).join(", ")}] in library "${library.name}" (ID: ${existing.id})`);
@@ -10390,6 +10440,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             if (!isAuthorMatch(b.author, author)) return false;
                             return true;
                         });
+                        const ratingResult = inferBookRating({
+                            title,
+                            author,
+                            series: series || undefined
+                        });
+
                         if (potentialMatch) {
                             newBook = potentialMatch;
                             await prisma.book.update({
@@ -10405,7 +10461,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                     seriesId: seriesId || newBook.seriesId,
                                     coverUrl: initialCoverUrl || newBook.coverUrl,
                                     mediaType: targetMediaType,
-                                    fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub")
+                                    fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub"),
+                                    ...(!newBook.ageRating || (ratingResult.isMature && newBook.ageRating !== "18+ Mature") ? { ageRating: ratingResult.ageRating, maturityRating: ratingResult.maturityRating } : {})
                                 }
                             });
                             logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${newBook.title}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -10414,6 +10471,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     }
 
                     if (!newBook) {
+                        const ratingResult = inferBookRating({
+                            title,
+                            author,
+                            series: series || undefined
+                        });
+
                         newBook = await prisma.book.create({
                             data: {
                                 title,
@@ -10428,7 +10491,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub"),
                                 mediaType: targetMediaType,
                                 libraryId: libraryId,
-                                createdAt: fileAddedDate
+                                createdAt: fileAddedDate,
+                                maturityRating: ratingResult.maturityRating,
+                                ageRating: ratingResult.ageRating
                             }
                         });
                         logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -11147,6 +11212,18 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                         seriesId = resolved.seriesId;
                     } catch (e) {}
 
+                    let stubAgeRating = req?.ageRating || null;
+                    let stubMaturityRating = req?.maturityRating || null;
+                    if (!stubAgeRating || !stubMaturityRating) {
+                        const inferred = inferBookRating({
+                            title,
+                            author: author || undefined,
+                            series: req?.series || undefined
+                        });
+                        stubAgeRating = stubAgeRating || inferred.ageRating;
+                        stubMaturityRating = stubMaturityRating || inferred.maturityRating;
+                    }
+
                     const newBook = await prisma.book.create({
                         data: {
                             title: title,
@@ -11161,8 +11238,8 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                             mediaType: reqMediaType,
                             libraryId: resolvedLibId,
                             coverUrl: req?.coverUrl || null,
-                            maturityRating: req?.maturityRating || null,
-                            ageRating: req?.ageRating || null
+                            maturityRating: stubMaturityRating,
+                            ageRating: stubAgeRating
                         }
                     });
 

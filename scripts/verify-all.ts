@@ -2387,7 +2387,43 @@ async function runTestSuite() {
             throw new Error(`Expected 'All Ages' and 'NOT_MATURE' for classic fiction, got: ${JSON.stringify(generalBook)}`);
         }
 
-        // 8. Test Database Persistence of ageRating and maturityRating on Book & BookRequest
+        // 8. Test Known Spicy Authors & Adult Romance Series (e.g. Elsie Silver - Gold Rush Ranch)
+        const elsieSilverBook = inferBookRating({
+            title: "Gold rush ranch",
+            author: "Elsie Silver",
+            series: "Gold Rush Ranch"
+        });
+        if (elsieSilverBook.ageRating !== "18+ Mature" || elsieSilverBook.maturityRating !== "MATURE" || !elsieSilverBook.isMature) {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for Elsie Silver / Gold Rush Ranch, got: ${JSON.stringify(elsieSilverBook)}`);
+        }
+
+        const colleenHoover = inferBookRating({
+            title: "It Ends With Us",
+            author: "Colleen Hoover"
+        });
+        if (colleenHoover.ageRating !== "18+ Mature" || !colleenHoover.isMature) {
+            throw new Error(`Expected Colleen Hoover to evaluate to '18+ Mature', got: ${JSON.stringify(colleenHoover)}`);
+        }
+
+        const spicyTropeBook = inferBookRating({
+            title: "Flawless",
+            author: "Unknown Author",
+            overview: "A steamy cowboy ranch romance with high heat, enemies to lovers, and open door scenes."
+        });
+        if (spicyTropeBook.ageRating !== "18+ Mature" || !spicyTropeBook.isMature) {
+            throw new Error(`Expected steamy romance trope book to evaluate to '18+ Mature', got: ${JSON.stringify(spicyTropeBook)}`);
+        }
+
+        const adultRomanceCategory = inferBookRating({
+            title: "A Heart Remembers",
+            author: "Jane Doe",
+            categories: ["Fiction / Romance / Contemporary"]
+        });
+        if (adultRomanceCategory.ageRating !== "18+ Mature") {
+            throw new Error(`Expected adult romance category to default to '18+ Mature', got: ${JSON.stringify(adultRomanceCategory)}`);
+        }
+
+        // 9. Test Database Persistence of ageRating and maturityRating on Book & BookRequest
         let testLibrary = await prisma.library.findFirst();
         if (!testLibrary) {
             testLibrary = await prisma.library.create({
