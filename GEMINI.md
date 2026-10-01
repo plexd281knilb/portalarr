@@ -127,8 +127,17 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - **Proxy Configuration:** All routes are protected by `src/proxy.ts` (Next.js 16 convention).
 - **Enforcement:** Users are redirected to `/login` if no valid session exists. API requests without valid sessions are rejected at the edge with HTTP 401.
 - **Strict Shelf Access Control:** `checkLibraryAccess()` validates username/email directly against `allowedUsers` and `restrictedUsers`. Empty or `*` allows all users, while explicit user lists strictly grant access ONLY to listed accounts. Fallbacks returning all libraries on empty matches are strictly prohibited.
-- **Role & Status Protection:** Admin routes (`/settings`, `/admin/*`) are restricted to users with the `ADMIN` role. Users with `PENDING` or `REJECTED` status are blocked from all app/API routes by `src/proxy.ts` and redirected to `/pending`. Non-admin users attempting to visit `/settings` are safely redirected to `/settings/profile`.
+- **Role & Status Protection:** Admin routes (`/settings`, `/admin/*`, `/curation/*`, `/api/curation/*`, `/api/users/*`, `/api/system/*`, `/api/debug/*`) are restricted to users with the `ADMIN` role. Users with `PENDING`, `REJECTED`, `SUSPENDED`, or `EXPIRED` status are blocked from all app/API routes by `src/proxy.ts` and redirected to `/pending`. Non-admin users attempting to visit `/settings` are safely redirected to `/profile`.
 - **Static Asset Guards:** Static asset bypass checks in `proxy.ts` explicitly exclude `/api` paths to prevent API route session bypasses via file extension tricks.
+- **Cloudflare Access & Edge Security Policy Paths (Strict Sync Rule):** All application routes are centrally declared in `src/lib/edge-policy-paths.ts` and rendered for administrators at `/settings` in `CloudflarePolicyCard`:
+  - **Bypass / Allow Everyone Policy (`CLOUDFLARE_BYPASS_PATHS`)**: Allows friends and family to sign in, request content, stream media, and view guides without encountering Cloudflare login walls (`/`, `/login`, `/join*`, `/pending`, `/discover*`, `/requests*`, `/library*`, `/guides*`, `/profile*`, `/settings/profile*`, `/beta*`, `/_next/*`, `/favicon.ico`, and member media APIs `/api/auth/*`, `/api/plex/*`, `/api/books*`, `/api/cover*`, `/api/media/*`, `/api/libraries*`, `/api/requests*`, `/api/stats*`, `/api/downloads*`, `/api/speedtest*`).
+  - **Admin-Only Protected Policy (`CLOUDFLARE_ADMIN_PATHS`)**: Requires SSO/2FA for sensitive settings, debug tools, curation studios, Servarr apps, and management APIs (`/settings*`, `/admin*`, `/curation*`, `/radarr*`, `/sonarr*`, `/api/system*`, `/api/debug*`, `/api/curation*`, `/api/users*`).
+  - **🚨 MANDATORY ROUTE CHANGE PROTOCOL:** Whenever adding, removing, or renaming any page (`src/app/**/page.tsx`) or API endpoint (`src/app/api/**/route.ts`), you MUST synchronously update:
+    1. `src/lib/edge-policy-paths.ts` (`CLOUDFLARE_BYPASS_PATHS` or `CLOUDFLARE_ADMIN_PATHS`).
+    2. `src/proxy.ts` (edge proxy routing and role enforcement).
+    3. `src/components/cloudflare-policy-card.tsx` (the WAF / reverse proxy reference card).
+    4. `scripts/verify-all.ts` (route coverage verification suite).
+    5. `.agents/skills/portalarr-ui/SKILL.md` (Edge Security Policy reference).
 
 ### 5. Account Approval, Plex Auto-Sync & Session Resilience
 - **Pending Account Requests:** New users can submit a temporary account request on `/login`. This sets `status = "PENDING"` and emails an admin notification via SMTP with dynamic public URL links (`getAppUrl()`). Admins manage approval/rejection at `/settings/access`.

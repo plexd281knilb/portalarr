@@ -20,6 +20,9 @@ import { sendSubscriptionRenewalRemindersInternal } from "../src/app/payment-act
 import { isScheduleDue } from "../src/lib/prisma";
 import { calculateNextRunTime, formatScheduleLabel, formatLastRunDisplay, SCHEDULE_OPTIONS } from "../src/lib/curation/schedule-helper";
 import { inferBookRating } from "../src/lib/books/book-rating";
+import fs from "fs";
+import path from "path";
+import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_ADMIN_PATHS, matchesCloudflareBypass, matchesCloudflareAdmin } from "../src/lib/edge-policy-paths";
 
 
 async function runTestSuite() {
@@ -2870,6 +2873,70 @@ async function runTestSuite() {
                 }).catch(() => {});
             }
         }
+    });
+
+    // 87. Edge Security & Cloudflare Access: 100% Route Policy Coverage
+    await assertTest("Security: Edge Policy & Cloudflare Access 100% Route Coverage", async () => {
+        let appDir = path.join(__dirname, "../src/app");
+        if (!fs.existsSync(appDir)) {
+            appDir = path.join(process.cwd(), "src/app");
+        }
+        if (!fs.existsSync(appDir)) {
+            throw new Error(`Cannot locate src/app directory from ${__dirname} or ${process.cwd()}`);
+        }
+
+        const foundRoutes: string[] = [];
+
+        function scanRoutes(dir: string) {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    scanRoutes(fullPath);
+                } else if (entry.isFile() && /^(page|route)\.tsx?$/.test(entry.name)) {
+                    const relative = path.relative(appDir, fullPath);
+                    let routePath = "/" + relative.replace(/\\/g, "/").replace(/\/?(page|route)\.tsx?$/, "");
+                    if (routePath === "") routePath = "/";
+                    foundRoutes.push(routePath);
+                }
+            }
+        }
+
+        scanRoutes(appDir);
+
+        if (foundRoutes.length === 0) {
+            throw new Error("No App Router routes detected during scan.");
+        }
+
+        const uncovered: string[] = [];
+        for (const route of foundRoutes) {
+            const isCovered = matchesCloudflareBypass(route) || matchesCloudflareAdmin(route);
+            if (!isCovered) {
+                uncovered.push(route);
+            }
+        }
+
+        if (uncovered.length > 0) {
+            throw new Error(`The following ${uncovered.length} route(s) are NOT covered by CLOUDFLARE_BYPASS_PATHS or CLOUDFLARE_ADMIN_PATHS in src/lib/edge-policy-paths.ts:\n${uncovered.join("\n")}\n\n🚨 MANDATORY RULE: Whenever a new page or API route is created, updated, or removed, you MUST update src/lib/edge-policy-paths.ts, src/proxy.ts, and src/components/cloudflare-policy-card.tsx!`);
+        }
+
+        // Additional assertion sanity checks for standard routes & edge wildcards
+        if (!matchesCloudflareBypass("/")) throw new Error("Root route / must match bypass");
+        if (!matchesCloudflareBypass("/login")) throw new Error("/login must match bypass");
+        if (!matchesCloudflareBypass("/join")) throw new Error("/join must match bypass");
+        if (!matchesCloudflareBypass("/join/custom")) throw new Error("/join/custom must match bypass");
+        if (!matchesCloudflareBypass("/invite/token-xyz")) throw new Error("/invite/token-xyz must match bypass");
+        if (!matchesCloudflareBypass("/library")) throw new Error("/library must match bypass");
+        if (!matchesCloudflareBypass("/requests")) throw new Error("/requests must match bypass");
+        if (!matchesCloudflareBypass("/api/books/123/stream")) throw new Error("/api/books/:id/stream must match bypass");
+        if (!matchesCloudflareBypass("/api/speedtest")) throw new Error("/api/speedtest must match bypass");
+        if (!matchesCloudflareAdmin("/settings")) throw new Error("/settings must match admin");
+        if (!matchesCloudflareAdmin("/settings/access")) throw new Error("/settings/access must match admin");
+        if (!matchesCloudflareAdmin("/admin/tickets")) throw new Error("/admin/tickets must match admin");
+        if (!matchesCloudflareAdmin("/curation/kometa")) throw new Error("/curation/kometa must match admin");
+        if (!matchesCloudflareAdmin("/api/curation/badges")) throw new Error("/api/curation/badges must match admin");
+        if (!matchesCloudflareAdmin("/api/users")) throw new Error("/api/users must match admin");
+        if (!matchesCloudflareAdmin("/api/system/logs")) throw new Error("/api/system/logs must match admin");
     });
 
     console.log("\n==========================================================");

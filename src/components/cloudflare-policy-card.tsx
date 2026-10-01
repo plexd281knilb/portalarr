@@ -5,35 +5,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Copy, Check, ExternalLink, Lock, Globe, AlertTriangle } from "lucide-react";
+import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_ADMIN_PATHS } from "@/lib/edge-policy-paths";
 
 export default function CloudflarePolicyCard() {
     const [copiedBypass, setCopiedBypass] = useState(false);
     const [copiedAdmin, setCopiedAdmin] = useState(false);
 
-    const bypassPaths = [
-        "/",
-        "/login",
-        "/join*",
-        "/pending",
-        "/discover*",
-        "/library*",
-        "/profile*",
-        "/settings/profile",
-        "/api/auth/*",
-        "/api/plex/*",
-        "/api/stats",
-        "/api/books/*/stream",
-        "/_next/*",
-        "/favicon.ico"
-    ];
-
-    const adminProtectedPaths = [
-        "/settings*",
-        "/admin*",
-        "/curation*",
-        "/api/system*",
-        "/api/debug*"
-    ];
+    const bypassPaths = CLOUDFLARE_BYPASS_PATHS;
+    const adminProtectedPaths = CLOUDFLARE_ADMIN_PATHS;
 
     const handleCopy = (text: string, type: "bypass" | "admin") => {
         navigator.clipboard.writeText(text);

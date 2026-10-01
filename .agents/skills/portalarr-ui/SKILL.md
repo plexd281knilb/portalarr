@@ -423,6 +423,27 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - **Access Management (`/settings/access`)**: User status badges display `Monthly Plan (Expires ...)` or `Annual Plan (Expires ...)`, with a dedicated `Reminder Sent (MMM d)` badge. Access & Timer modal (`subModalUser`) features a 1-click Plan Cadence switcher (`updateUserSubscriptionCadenceAction`) and displays the last reminder dispatch timestamp.
   - **Profile Page (`/settings/profile`)**: Renders `"Active Monthly Subscription"` at `$15/month` for monthly members and `"Active Annual Subscription"` for yearly members.
 
+---
+
+### 25. Cloudflare Access & Edge Security Policy Paths
+- **Single Source of Truth Module (`src/lib/edge-policy-paths.ts`)**:
+  - Defines `CLOUDFLARE_BYPASS_PATHS` (public & authenticated member endpoints) and `CLOUDFLARE_ADMIN_PATHS` (administrative management and configuration endpoints).
+  - Provides path matching utilities: `matchesCloudflareBypass(pathname)` and `matchesCloudflareAdmin(pathname)` supporting wildcard prefixes (`/*`).
+- **Cloudflare Bypass Policy (`CLOUDFLARE_BYPASS_PATHS`)**:
+  - Public onboarding, authentication & invitations: `/`, `/login`, `/join`, `/invite/*`, `/pending`.
+  - Member portal & media interfaces: `/hub`, `/library*`, `/requests*`, `/guides*`, `/beta*`.
+  - Authenticated member APIs: `/api/auth/*`, `/api/books/*`, `/api/cover*`, `/api/media/*`, `/api/libraries*`, `/api/requests*`, `/api/stats*`, `/api/downloads*`, `/api/speedtest*`.
+  - Static assets & browser hooks: `/favicon.ico`, `/icon.png`, `/robots.txt`, `/sitemap.xml`, `/_next/*`.
+- **Cloudflare Admin Policy (`CLOUDFLARE_ADMIN_PATHS`)**:
+  - Admin interfaces: `/settings*`, `/admin*`, `/curation*`, `/radarr*`, `/sonarr*`.
+  - Admin API endpoints: `/api/system*`, `/api/debug*`, `/api/curation*`, `/api/users*`.
+- **Edge Proxy Role Enforcement (`src/proxy.ts`)**:
+  - Synchronously guards administrative pages and APIs, requiring active `ADMIN` role authentication before proceeding to `/admin`, `/curation`, `/api/curation`, `/api/users`, `/api/debug`, and `/api/system`.
+- **Settings Reference Component (`src/components/cloudflare-policy-card.tsx`)**:
+  - Renders live path tables on `/settings` with 1-click clipboard copy for Cloudflare Zero Trust WAF rules and edge reverse proxies (Traefik, NGINX, Caddy).
+- **Mandatory Route Change Rule**:
+  - Whenever adding, removing, or renaming any page (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`), you MUST synchronously update `src/lib/edge-policy-paths.ts`, `src/proxy.ts`, `src/components/cloudflare-policy-card.tsx`, and `scripts/verify-all.ts`.
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.
