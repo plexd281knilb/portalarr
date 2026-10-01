@@ -937,7 +937,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["asin", `ALTER TABLE "Book" ADD COLUMN "asin" TEXT;`],
                 ["narrator", `ALTER TABLE "Book" ADD COLUMN "narrator" TEXT;`],
                 ["duration", `ALTER TABLE "Book" ADD COLUMN "duration" REAL;`],
-                ["chapters", `ALTER TABLE "Book" ADD COLUMN "chapters" TEXT;`]
+                ["chapters", `ALTER TABLE "Book" ADD COLUMN "chapters" TEXT;`],
+                ["maturityRating", `ALTER TABLE "Book" ADD COLUMN "maturityRating" TEXT;`],
+                ["ageRating", `ALTER TABLE "Book" ADD COLUMN "ageRating" TEXT;`]
             ];
             for (const [colName, ddl] of bookAddCols) {
                 if (!columns.includes(colName)) {
@@ -992,7 +994,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["userEmail", `ALTER TABLE "BookRequest" ADD COLUMN "userEmail" TEXT;`],
                 ["kindleEmail", `ALTER TABLE "BookRequest" ADD COLUMN "kindleEmail" TEXT;`],
                 ["sendToKindle", `ALTER TABLE "BookRequest" ADD COLUMN "sendToKindle" BOOLEAN NOT NULL DEFAULT 0;`],
-                ["libraryId", `ALTER TABLE "BookRequest" ADD COLUMN "libraryId" TEXT;`]
+                ["libraryId", `ALTER TABLE "BookRequest" ADD COLUMN "libraryId" TEXT;`],
+                ["maturityRating", `ALTER TABLE "BookRequest" ADD COLUMN "maturityRating" TEXT;`],
+                ["ageRating", `ALTER TABLE "BookRequest" ADD COLUMN "ageRating" TEXT;`]
             ];
             for (const [colName, ddl] of reqAddCols) {
                 if (!columns.includes(colName)) {

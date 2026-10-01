@@ -30,6 +30,11 @@ Posters and cards are the primary visual building blocks across Portalarr (Disco
     4K UHD
   </div>
   ```
+- **Book Age Rating Badges**: Standardized four-bracket pill styling:
+  - `Kids`: Emerald backdrop (`bg-emerald-500/25 text-emerald-300 border-emerald-500/40`)
+  - `YA (12+)`: Sky backdrop (`bg-sky-500/25 text-sky-300 border-sky-500/40`)
+  - `All Ages`: Slate backdrop (`bg-slate-900/80 text-slate-300 border-slate-700/60`)
+  - `18+ Mature`: Rose backdrop (`bg-rose-500/25 text-rose-300 border-rose-500/40`)
 - **Top-Left Corner**: Availability Status (`✓ Available`, `⏳ Downloading`, `⌛ Pending`, `🔥 Coming Soon`).
 - **Bottom Ribbon**: Dynamic Overlay ribbons (e.g. `LEAVING IN 3 DAYS`, `STREAMING ON {date}`, `4K HDR • ATMOS`).
 

@@ -8013,7 +8013,7 @@ async function verifyUser() {
         if (userId) {
             dbUser = await prisma.user.findUnique({
                 where: { id: userId },
-                select: { id: true, username: true, email: true, role: true, status: true }
+                select: { id: true, username: true, email: true, role: true, status: true, accountType: true }
             }).catch(() => null);
         }
         if (!dbUser && (username || email)) {
@@ -8025,7 +8025,7 @@ async function verifyUser() {
 
             dbUser = await prisma.user.findFirst({
                 where: { OR: conditions },
-                select: { id: true, username: true, email: true, role: true, status: true }
+                select: { id: true, username: true, email: true, role: true, status: true, accountType: true }
             }).catch(() => null);
         }
 
@@ -8036,7 +8036,8 @@ async function verifyUser() {
                 username: dbUser.username,
                 email: dbUser.email,
                 role: dbUser.role,
-                status: dbUser.status
+                status: dbUser.status,
+                accountType: dbUser.accountType
             };
         }
         return payload;
@@ -8307,8 +8308,17 @@ export async function getLibraryBooks(libraryId?: string) {
         targetLibraryIds = [libraryId];
     }
     
+    const isKid = (session as any)?.accountType === "KID";
+    const whereClause: any = { libraryId: { in: targetLibraryIds } };
+    if (isKid) {
+        whereClause.AND = [
+            { NOT: { maturityRating: "MATURE" } },
+            { NOT: { ageRating: "18+ Mature" } }
+        ];
+    }
+    
     const books = await prisma.book.findMany({
-        where: { libraryId: { in: targetLibraryIds } },
+        where: whereClause,
         orderBy: { createdAt: "desc" }
     });
     
@@ -11051,7 +11061,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                             fileSize: donorBook.fileSize || 0,
                             mediaType: reqMediaType,
                             libraryId: resolvedLibId,
-                            coverUrl: donorBook.coverUrl || req?.coverUrl || null
+                            coverUrl: donorBook.coverUrl || req?.coverUrl || null,
+                            maturityRating: req?.maturityRating || donorBook.maturityRating || null,
+                            ageRating: req?.ageRating || donorBook.ageRating || null
                         }
                     });
 
@@ -11129,7 +11141,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                             fileSize: 0,
                             mediaType: reqMediaType,
                             libraryId: resolvedLibId,
-                            coverUrl: req?.coverUrl || null
+                            coverUrl: req?.coverUrl || null,
+                            maturityRating: req?.maturityRating || null,
+                            ageRating: req?.ageRating || null
                         }
                     });
 

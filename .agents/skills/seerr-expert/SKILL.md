@@ -74,6 +74,12 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 ### 6. Kids Profile Isolation & Filtered Media Discovery
 - **Safe Content Enforcements**: Kids searches and carousels pass `include_adult=false`, enforce TMDb certification ratings (`G`, `PG`, `TV-Y`, `TV-Y7`, `TV-G`, `TV-PG`), and filter out adult keywords.
 - **Isolated Library Matching**: Kids views verify library availability strictly against kids-specific Plex libraries rather than unrestricted main adult libraries.
+- **Book Age & Maturity Rating Engine (`inferBookRating`)**:
+  - Deterministically evaluates publisher taxonomy (Google Books `volumeInfo.maturityRating` & `volumeInfo.categories` BISAC headings, Open Library `doc.subject`, Audible genres, and iTunes media tags).
+  - Assigns standardized age brackets: `"Kids"` (emerald), `"YA (12+)"` (sky), `"All Ages"` (slate), and `"18+ Mature"` (rose).
+  - Flags mature indicators (`"MATURE"` vs `"NOT_MATURE"`) from explicit publisher labels and adult/erotica keywords.
+  - **Kids Mode Filtering & Request Guard**: Whenever in Kids section mode (`section === "kids"`) or logged in under a child profile (`accountType === "KID"`), mature titles (`isMature === true` or `"18+ Mature"`) are completely omitted from trending ebooks/audiobooks, search results, missing series carousels, and `/library` shelf browsing. Attempting to submit a mature book request in Kids mode or under a kid profile is blocked at both client and server action levels (`submitBookOrAudiobookRequestAction`).
+  - **Badge Display**: Color-coded age rating badges are rendered across discovery cards (`BookCard`), media details (`BookDetailModal`), and library shelf cards (`renderBookCard` and `renderAudiobookCard`).
 
 ### 7. Unified Multi-Media Pipeline (Movies, TV, Ebooks & Audiobooks)
 Portalarr's native Seerr engine unifies all media types into a single mission control request registry (`/requests` and `/discover`):

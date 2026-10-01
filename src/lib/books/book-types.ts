@@ -17,6 +17,8 @@ export interface BookDiscoveryItem {
     rating?: number;
     ratingCount?: number;
     genres?: string[];
+    maturityRating?: "NOT_MATURE" | "MATURE" | string;
+    ageRating?: string;
     availability?: {
         status: BookAvailabilityStatus;
         bookId?: string;
@@ -94,4 +96,6 @@ export interface BookRequestInput {
     libraryId?: string;
     sendToKindle?: boolean;
     userNotes?: string;
+    maturityRating?: string;
+    ageRating?: string;
 }

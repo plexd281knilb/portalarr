@@ -19,6 +19,7 @@ import {
     isUserAllowedForLibrary,
     getSimilarBooks
 } from "@/lib/books/book-service";
+import { inferBookRating } from "@/lib/books/book-rating";
 import { autoDownloadBookRequest, findMissingBooksInSeries, renameBookFileOnDisk } from "@/app/actions";
 import { resolveMetadataWithAI } from "@/lib/ai-agent";
 import { revalidatePath } from "next/cache";
@@ -53,7 +54,8 @@ async function verifyAuth(): Promise<AuthSession> {
 export async function fetchMissingSeriesSuggestions(
     username?: string,
     email?: string,
-    mediaType: "all" | MediaType = "all"
+    mediaType: "all" | MediaType = "all",
+    isKids: boolean = false
 ): Promise<BookDiscoveryItem[]> {
     const suggestions: BookDiscoveryItem[] = [];
     const seen = new Set<string>();
@@ -113,13 +115,22 @@ export async function fetchMissingSeriesSuggestions(
                     if (seen.has(itemKey)) continue;
                     seen.add(itemKey);
 
+                    const ratingRes = inferBookRating({
+                        title: item.title,
+                        categories: s.series ? [s.series] : []
+                    });
+
+                    if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+
                     suggestions.push({
                         title: item.title,
                         author: item.author || s.author,
                         series: s.series,
                         volumeNumber: item.volumeNumber || undefined,
                         coverUrl: item.coverUrl || undefined,
-                        mediaType: s.mediaType
+                        mediaType: s.mediaType,
+                        maturityRating: ratingRes.maturityRating,
+                        ageRating: ratingRes.ageRating
                     });
                 }
             }
@@ -134,17 +145,25 @@ export async function fetchMissingSeriesSuggestions(
 /**
  * Loads Discovery Home for Ebooks and Audiobooks with hero spotlights and carousels
  */
-export async function getDiscoverBooksHomeAction(mediaType: "all" | MediaType = "all") {
+export async function getDiscoverBooksHomeAction(mediaType: "all" | MediaType = "all", isKidsMode: boolean = false) {
     try {
         const session = await verifyAuth();
+        const userRecord = await prisma.user.findUnique({
+            where: { username: session.username },
+            select: { accountType: true }
+        });
+        const effectiveKids = Boolean(isKidsMode || userRecord?.accountType === "KID");
 
         const [trendingEbooks, trendingAudiobooks, missingSeriesSuggestions] = await Promise.all([
-            (mediaType === "all" || mediaType === "ebook") ? fetchTrendingEbooks().catch(() => []) : [],
-            (mediaType === "all" || mediaType === "audiobook") ? fetchTrendingAudiobooks().catch(() => []) : [],
-            fetchMissingSeriesSuggestions(session.username, session.email, mediaType).catch(() => [])
+            (mediaType === "all" || mediaType === "ebook") ? fetchTrendingEbooks(effectiveKids).catch(() => []) : [],
+            (mediaType === "all" || mediaType === "audiobook") ? fetchTrendingAudiobooks(effectiveKids).catch(() => []) : [],
+            fetchMissingSeriesSuggestions(session.username, session.email, mediaType, effectiveKids).catch(() => [])
         ]);
 
-        const allItems: BookDiscoveryItem[] = [...missingSeriesSuggestions, ...trendingEbooks, ...trendingAudiobooks];
+        let allItems: BookDiscoveryItem[] = [...missingSeriesSuggestions, ...trendingEbooks, ...trendingAudiobooks];
+        if (effectiveKids) {
+            allItems = allItems.filter(i => i.maturityRating !== "MATURE" && i.ageRating !== "18+ Mature");
+        }
 
         // Pick top hero item with artwork & overview
         const heroCandidates = allItems.filter(i => Boolean(i.coverUrl && (i.overview || i.rating)));
@@ -166,7 +185,7 @@ export async function getDiscoverBooksHomeAction(mediaType: "all" | MediaType = 
         if (trendingEbooks.length > 0) {
             sections.push({
                 id: "trending-ebooks",
-                title: "Trending & Bestselling Ebooks",
+                title: effectiveKids ? "🧸 Kid-Safe & Family Ebooks" : "Trending & Bestselling Ebooks",
                 icon: "BookOpen",
                 mediaType: "ebook",
                 items: trendingEbooks
@@ -175,7 +194,7 @@ export async function getDiscoverBooksHomeAction(mediaType: "all" | MediaType = 
         if (trendingAudiobooks.length > 0) {
             sections.push({
                 id: "trending-audiobooks",
-                title: "Popular & Acclaimed Audiobooks",
+                title: effectiveKids ? "🧸 Kid-Safe & Family Audiobooks" : "Popular & Acclaimed Audiobooks",
                 icon: "Headphones",
                 mediaType: "audiobook",
                 items: trendingAudiobooks
@@ -197,14 +216,24 @@ export async function getDiscoverBooksHomeAction(mediaType: "all" | MediaType = 
 /**
  * Searches books & audiobooks with unified multi-provider failover
  */
-export async function searchBooksAction(query: string, mediaType: "all" | MediaType = "all") {
+export async function searchBooksAction(query: string, mediaType: "all" | MediaType = "all", isKidsMode: boolean = false) {
     try {
         const session = await verifyAuth();
         if (!query || query.trim().length < 2) {
             return { success: true, items: [], availabilityMap: {} };
         }
 
-        const items = await searchBooksUnified(query, mediaType);
+        const userRecord = await prisma.user.findUnique({
+            where: { username: session.username },
+            select: { accountType: true }
+        });
+        const effectiveKids = Boolean(isKidsMode || userRecord?.accountType === "KID");
+
+        let items = await searchBooksUnified(query, mediaType, effectiveKids);
+        if (effectiveKids) {
+            items = items.filter(i => i.maturityRating !== "MATURE" && i.ageRating !== "18+ Mature");
+        }
+
         const availabilityMap = await batchCheckBookAvailability(items, session.username, session.email);
 
         return {
@@ -255,7 +284,7 @@ export async function getBookSeriesDetailsAction(seriesTitle: string, authorName
 /**
  * Submits a new book or audiobook request with user logging & Send-to-Kindle options
  */
-export async function submitBookOrAudiobookRequestAction(input: BookRequestInput) {
+export async function submitBookOrAudiobookRequestAction(input: BookRequestInput, isKidsMode: boolean = false) {
     try {
         const session = await verifyAuth();
         const user = await prisma.user.findUnique({
@@ -268,6 +297,11 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
 
         if (user.canRequest === false) {
             return { success: false, error: "Your account does not have permission to submit media requests." };
+        }
+
+        const effectiveKids = Boolean(isKidsMode || user.accountType === "KID");
+        if (effectiveKids && (input.maturityRating === "MATURE" || input.ageRating === "18+ Mature")) {
+            return { success: false, error: "Mature titles cannot be requested in Kids & Family mode or from a Kid profile." };
         }
 
         const title = (input.title || "").trim();
@@ -312,6 +346,8 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                 volumeNumber: input.volumeNumber || null,
                 coverUrl: input.coverUrl || null,
                 publishYear: input.publishYear || null,
+                maturityRating: input.maturityRating || null,
+                ageRating: input.ageRating || null,
                 requestedBy: session.username,
                 requestedByUserId: user.id,
                 userEmail: user.email,
@@ -346,6 +382,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                     sendToKindle: Boolean(input.sendToKindle && mediaType === "ebook"),
                     posterPath: input.coverUrl || null,
                     releaseYear: input.publishYear || null,
+                    contentRating: input.ageRating || null,
                     status: autoApprove ? "APPROVED" : "PENDING"
                 }
             });

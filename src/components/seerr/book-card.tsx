@@ -94,7 +94,7 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                 {/* Gradient Shadow Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-black/30 opacity-70 group-hover:opacity-90 transition-opacity" />
 
-                {/* Top Badges (Format + Series Vol) */}
+                {/* Top Badges (Format + Age Rating + Series Vol) */}
                 <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none">
                     <Badge 
                         variant="secondary" 
@@ -107,14 +107,32 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                         {isAudiobook ? "🎧 AUDIOBOOK" : "📖 EBOOK"}
                     </Badge>
 
-                    {item.volumeNumber && (
-                        <Badge 
-                            variant="secondary" 
-                            className="bg-black/60 text-foreground/90 border border-white/10 text-[10px] font-bold px-1.5 py-0.5 backdrop-blur-md shadow-sm"
-                        >
-                            #{item.volumeNumber}
-                        </Badge>
-                    )}
+                    <div className="flex items-center gap-1">
+                        {item.ageRating && (
+                            <Badge
+                                variant="outline"
+                                className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded backdrop-blur-md border shadow-xs ${
+                                    item.ageRating === "Kids"
+                                        ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+                                        : item.ageRating === "YA (12+)"
+                                        ? "bg-sky-500/25 text-sky-300 border-sky-500/40"
+                                        : item.ageRating === "18+ Mature"
+                                        ? "bg-rose-500/25 text-rose-300 border-rose-500/40"
+                                        : "bg-slate-900/80 text-slate-300 border-slate-700/60"
+                                }`}
+                            >
+                                {item.ageRating}
+                            </Badge>
+                        )}
+                        {item.volumeNumber && (
+                            <Badge 
+                                variant="secondary" 
+                                className="bg-black/60 text-foreground/90 border border-white/10 text-[10px] font-bold px-1.5 py-0.5 backdrop-blur-md shadow-sm"
+                            >
+                                #{item.volumeNumber}
+                            </Badge>
+                        )}
+                    </div>
                 </div>
 
                 {/* Availability State Pill (Top-Right / Lower) */}
@@ -176,12 +194,27 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                 </div>
 
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 pt-1 border-t border-border/30">
-                    <span className="line-clamp-1 max-w-[70%]">
+                    <span className="line-clamp-1 max-w-[60%]">
                         {item.series ? item.series : (item.publishYear || "")}
                     </span>
-                    {item.publishYear && item.series && (
-                        <span>{item.publishYear}</span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                        {item.publishYear && item.series && (
+                            <span>{item.publishYear}</span>
+                        )}
+                        {item.ageRating && (
+                            <span className={`px-1 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                                item.ageRating === "Kids"
+                                    ? "bg-emerald-950/60 text-emerald-400 border-emerald-500/30"
+                                    : item.ageRating === "YA (12+)"
+                                    ? "bg-sky-950/60 text-sky-400 border-sky-500/30"
+                                    : item.ageRating === "18+ Mature"
+                                    ? "bg-rose-950/60 text-rose-400 border-rose-500/30"
+                                    : "bg-muted/40 text-muted-foreground border-border/30"
+                            }`}>
+                                {item.ageRating}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

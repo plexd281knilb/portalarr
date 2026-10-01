@@ -131,7 +131,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             setIsSearching(true);
             try {
                 if (activeTab === "ebooks" || activeTab === "audiobooks") {
-                    const bookRes = await searchBooksAction(debouncedQuery, activeTab === "ebooks" ? "ebook" : "audiobook");
+                    const bookRes = await searchBooksAction(debouncedQuery, activeTab === "ebooks" ? "ebook" : "audiobook", section === "kids");
                     if (!isCancelled && bookRes.success && bookRes.items) {
                         setBookSearchResults(bookRes.items);
                         setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
@@ -139,7 +139,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 } else {
                     const [mediaRes, bookRes] = await Promise.all([
                         searchMediaAction(debouncedQuery, 1, section === "kids"),
-                        searchBooksAction(debouncedQuery, "all")
+                        searchBooksAction(debouncedQuery, "all", section === "kids")
                     ]);
 
                     if (!isCancelled) {
@@ -239,15 +239,15 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     useEffect(() => {
         if (activeTab === "discover") {
             loadHomeData(section);
-            loadBooksData("all");
+            loadBooksData("all", section === "kids");
         } else if (activeTab === "movies") {
             loadGridData("movie", gridCategory, 1, section === "kids");
         } else if (activeTab === "tv") {
             loadGridData("tv", gridCategory, 1, section === "kids");
         } else if (activeTab === "ebooks") {
-            loadBooksData("ebook");
+            loadBooksData("ebook", section === "kids");
         } else if (activeTab === "audiobooks") {
-            loadBooksData("audiobook");
+            loadBooksData("audiobook", section === "kids");
         }
     }, [activeTab, section]);
 
@@ -265,10 +265,10 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
         }
     };
 
-    const loadBooksData = async (mediaType: "all" | "ebook" | "audiobook") => {
+    const loadBooksData = async (mediaType: "all" | "ebook" | "audiobook", isKidsMode: boolean = false) => {
         setLoadingBooks(true);
         try {
-            const res = await getDiscoverBooksHomeAction(mediaType);
+            const res = await getDiscoverBooksHomeAction(mediaType, isKidsMode);
             if (res.success) {
                 setBookHeroItem(res.heroItem || null);
                 setBookSections(res.sections || []);
@@ -769,6 +769,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             <BookDetailModal
                 item={selectedBook}
                 open={Boolean(selectedBook)}
+                isKids={section === "kids"}
                 onOpenChange={(val) => { if (!val) setSelectedBook(null); }}
                 onSelectAuthor={(name) => setSelectedAuthor(name)}
                 onSelectSeries={(title, author) => setSelectedSeries({ title, author })}

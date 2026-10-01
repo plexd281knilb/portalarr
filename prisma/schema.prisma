@@ -450,6 +450,8 @@ model Book {
   narrator     String?
   duration     Float?      // Duration in seconds for audiobooks
   chapters     String?     // JSON chapter metadata
+  maturityRating String?   // "NOT_MATURE" or "MATURE"
+  ageRating    String?     // "Kids", "YA (12+)", "All Ages", "18+ Mature"
   libraryId    String
   library      Library     @relation(fields: [libraryId], references: [id], onDelete: Cascade)
   authorId     String?
@@ -473,6 +475,8 @@ model BookRequest {
   volumeNumber        String?  // Volume or book number
   coverUrl            String?
   publishYear         String?
+  maturityRating      String?  // "NOT_MATURE" or "MATURE"
+  ageRating           String?  // "Kids", "YA (12+)", "All Ages", "18+ Mature"
   requestedBy         String   // Username
   requestedByUserId   String?
   userEmail           String?

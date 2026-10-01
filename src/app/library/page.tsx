@@ -310,6 +310,7 @@ function BookLibraryPageContent() {
   const [user, setUser] = useState<any>(null);
   const [fullUser, setFullUser] = useState<any>(null);
   const isAdmin = user?.role === "ADMIN" || fullUser?.role === "ADMIN";
+  const isKidUser = Boolean(user?.accountType === "KID" || fullUser?.accountType === "KID");
 
   useEffect(() => {
     const handleGlobalError = (event: PromiseRejectionEvent | ErrorEvent) => {
@@ -801,6 +802,26 @@ function BookLibraryPageContent() {
     return { displayTitle, displayAuthor };
   }
 
+  const renderAgeRatingBadge = (ageRating?: string | null) => {
+    if (!ageRating) return null;
+    return (
+      <Badge
+        variant="outline"
+        className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded backdrop-blur-md border shadow-xs ${
+          ageRating === "Kids"
+            ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+            : ageRating === "YA (12+)"
+            ? "bg-sky-500/25 text-sky-300 border-sky-500/40"
+            : ageRating === "18+ Mature"
+            ? "bg-rose-500/25 text-rose-300 border-rose-500/40"
+            : "bg-slate-900/80 text-slate-300 border-slate-700/60"
+        }`}
+      >
+        {ageRating}
+      </Badge>
+    );
+  };
+
   const renderBookCard = (book: any) => {
     let { displayTitle, displayAuthor } = normalizeBookCardMetadata(book);
     if (groupBySeries && book.cleanSeriesTitle) {
@@ -835,6 +856,7 @@ function BookLibraryPageContent() {
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
                 {book.fileType?.toUpperCase()}
               </Badge>
+              {renderAgeRatingBadge(book.ageRating)}
               {volumeBadge}
             </div>
           </div>
@@ -844,6 +866,7 @@ function BookLibraryPageContent() {
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
                 {book.fileType?.toUpperCase()}
               </Badge>
+              {renderAgeRatingBadge(book.ageRating)}
               {volumeBadge}
             </div>
             <div className="flex-1 flex flex-col justify-center items-center">
@@ -1152,6 +1175,7 @@ function BookLibraryPageContent() {
             <Badge className="bg-amber-500/90 text-black border border-amber-400/50 text-[10px] uppercase font-extrabold tracking-wider shadow">
               🎧 {ext}
             </Badge>
+            {renderAgeRatingBadge(book.ageRating)}
           </div>
         </div>
 
@@ -2229,12 +2253,19 @@ function BookLibraryPageContent() {
 
   const { sortedBooks, seriesGroups, standaloneBooks } = useMemo(() => {
     const sorted = [...books]
-      .filter(
-        (book) =>
+      .filter((book) => {
+        if (isKidUser) {
+          const isMature =
+            book.maturityRating === "MATURE" ||
+            book.ageRating === "18+ Mature";
+          if (isMature) return false;
+        }
+        return (
           book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (book.author &&
-            book.author.toLowerCase().includes(searchQuery.toLowerCase())),
-      )
+            book.author.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+      })
       .sort((a, b) => {
         if (sortBy === "title-asc") {
           return a.title.localeCompare(b.title);
@@ -2324,7 +2355,7 @@ function BookLibraryPageContent() {
       seriesGroups: sGroups,
       standaloneBooks: stBooks,
     };
-  }, [books, searchQuery, sortBy, requests, groupBySeries]);
+  }, [books, searchQuery, sortBy, requests, groupBySeries, isKidUser]);
 
 
 
@@ -2947,6 +2978,12 @@ function BookLibraryPageContent() {
                             missingBooksMap[seriesName] || []
                           )
                             .filter((mBook: any) => {
+                              if (isKidUser) {
+                                const isMature =
+                                  mBook.maturityRating === "MATURE" ||
+                                  mBook.ageRating === "18+ Mature";
+                                if (isMature) return false;
+                              }
                               const mNorm = (mBook.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
                               const mVol = String(mBook.volumeNumber || "").replace(/^0+/, "");
                               return !seriesBooks.some((b: any) => {

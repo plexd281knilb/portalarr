@@ -44,6 +44,7 @@ interface BookDetailModalProps {
     onSelectAuthor?: (authorName: string) => void;
     onSelectSeries?: (seriesTitle: string, authorName?: string) => void;
     onRequestSuccess?: () => void;
+    isKids?: boolean;
 }
 
 export function BookDetailModal({
@@ -52,7 +53,8 @@ export function BookDetailModal({
     onOpenChange,
     onSelectAuthor,
     onSelectSeries,
-    onRequestSuccess
+    onRequestSuccess,
+    isKids = false
 }: BookDetailModalProps) {
     const [activeBook, setActiveBook] = useState<BookDiscoveryItem | null>(item);
     const [history, setHistory] = useState<BookDiscoveryItem[]>([]);
@@ -155,10 +157,12 @@ export function BookDetailModal({
                 volumeNumber: activeBook.volumeNumber,
                 coverUrl: activeBook.coverUrl,
                 publishYear: activeBook.publishYear,
+                maturityRating: activeBook.maturityRating,
+                ageRating: activeBook.ageRating,
                 mediaType: activeBook.mediaType,
                 libraryId: selectedLibraryId || undefined,
                 sendToKindle: activeBook.mediaType !== "audiobook" && sendToKindle
-            });
+            }, Boolean(isKids));
 
             if (res.success) {
                 setRequestMessage(res.message || "Request submitted successfully!");
@@ -290,13 +294,43 @@ export function BookDetailModal({
                                 </div>
                             )}
 
-                            {/* Rating */}
-                            {activeBook.rating && activeBook.rating > 0 && (
-                                <div className="flex items-center justify-center sm:justify-start gap-1.5 pt-1 text-amber-400 text-xs font-bold">
-                                    <Star className="h-4 w-4 fill-amber-400" />
-                                    <span>{activeBook.rating.toFixed(1)} / 5</span>
-                                </div>
-                            )}
+                            {/* Badges Row: Format, Age Rating, Star Rating */}
+                            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                                <Badge 
+                                    variant="secondary" 
+                                    className={`text-[10px] font-bold tracking-wider px-2 py-0.5 border shadow-sm ${
+                                        isAudiobook 
+                                            ? "bg-amber-500/25 text-amber-300 border-amber-500/40" 
+                                            : "bg-purple-500/25 text-purple-300 border-purple-500/40"
+                                    }`}
+                                >
+                                    {isAudiobook ? "🎧 AUDIOBOOK" : "📖 EBOOK"}
+                                </Badge>
+
+                                {activeBook.ageRating && (
+                                    <Badge
+                                        variant="outline"
+                                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border shadow-xs ${
+                                            activeBook.ageRating === "Kids"
+                                                ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+                                                : activeBook.ageRating === "YA (12+)"
+                                                ? "bg-sky-500/25 text-sky-300 border-sky-500/40"
+                                                : activeBook.ageRating === "18+ Mature"
+                                                ? "bg-rose-500/25 text-rose-300 border-rose-500/40"
+                                                : "bg-slate-900/80 text-slate-300 border-slate-700/60"
+                                        }`}
+                                    >
+                                        {activeBook.ageRating}
+                                    </Badge>
+                                )}
+
+                                {activeBook.rating && activeBook.rating > 0 && (
+                                    <div className="flex items-center gap-1 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                                        <Star className="h-3.5 w-3.5 fill-amber-400" />
+                                        <span>{activeBook.rating.toFixed(1)} / 5</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -304,6 +338,14 @@ export function BookDetailModal({
                     {activeBook.overview && (
                         <div className="space-y-1 bg-muted/20 p-3.5 rounded-xl border border-border/30 text-xs sm:text-sm text-muted-foreground max-h-36 overflow-y-auto leading-relaxed min-w-0">
                             <p>{activeBook.overview}</p>
+                        </div>
+                    )}
+
+                    {/* Kids Mode Warning for Mature Titles */}
+                    {isKids && (activeBook.maturityRating === "MATURE" || activeBook.ageRating === "18+ Mature") && (
+                        <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2.5">
+                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                            <span>This title contains mature content and cannot be requested in Kids & Family mode.</span>
                         </div>
                     )}
 
@@ -384,6 +426,11 @@ export function BookDetailModal({
                                 <Button size="sm" disabled className="bg-amber-600/50 text-white text-xs gap-1.5 font-semibold h-9 px-4">
                                     <Clock className="h-3.5 w-3.5" />
                                     <span>Request Pending</span>
+                                </Button>
+                            ) : isKids && (activeBook?.maturityRating === "MATURE" || activeBook?.ageRating === "18+ Mature") ? (
+                                <Button size="sm" disabled className="bg-rose-950/40 text-rose-400 border border-rose-500/30 text-xs gap-1.5 font-semibold h-9 px-4 cursor-not-allowed">
+                                    <AlertCircle className="h-3.5 w-3.5 text-rose-400" />
+                                    <span>Mature Title (Restricted)</span>
                                 </Button>
                             ) : (
                                 <Button 

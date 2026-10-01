@@ -18,6 +18,7 @@ import { matchesPlexUser } from "../src/lib/plex";
 import { scanPaymentEmailsInternal } from "../src/lib/payment-email-scraper";
 import { isScheduleDue } from "../src/lib/prisma";
 import { calculateNextRunTime, formatScheduleLabel, formatLastRunDisplay, SCHEDULE_OPTIONS } from "../src/lib/curation/schedule-helper";
+import { inferBookRating } from "../src/lib/books/book-rating";
 
 
 async function runTestSuite() {
@@ -2314,6 +2315,146 @@ async function runTestSuite() {
             if (!formatted || formatted === opt.value) {
                 throw new Error(`Schedule option ${opt.value} did not format cleanly: ${formatted}`);
             }
+        }
+    });
+
+    // 66. Book Age & Maturity Rating Engine and Kids Mode Enforcement
+    await assertTest("Books: Age & Maturity Rating Engine & Kids Isolation", async () => {
+        // 1. Test inferBookRating with explicit Google Books maturityRating
+        const matureGb = inferBookRating({ maturityRating: "MATURE", title: "Dark Nights", overview: "A gripping thriller" });
+        if (matureGb.ageRating !== "18+ Mature" || matureGb.maturityRating !== "MATURE") {
+            throw new Error(`Expected '18+ Mature' and 'MATURE', got: ${JSON.stringify(matureGb)}`);
+        }
+
+        // 2. Test inferBookRating with BISAC Juvenile categories
+        const juvenileBook = inferBookRating({
+            categories: ["Juvenile Fiction / Action & Adventure / General"],
+            title: "Percy Jackson and the Lightning Thief"
+        });
+        if (juvenileBook.ageRating !== "Kids" || juvenileBook.maturityRating !== "NOT_MATURE") {
+            throw new Error(`Expected 'Kids' and 'NOT_MATURE' for juvenile category, got: ${JSON.stringify(juvenileBook)}`);
+        }
+
+        // 3. Test inferBookRating with Young Adult categories
+        const yaBook = inferBookRating({
+            categories: ["Young Adult Fiction / Dystopian"],
+            title: "The Hunger Games"
+        });
+        if (yaBook.ageRating !== "YA (12+)" || yaBook.maturityRating !== "NOT_MATURE") {
+            throw new Error(`Expected 'YA (12+)' and 'NOT_MATURE' for YA category, got: ${JSON.stringify(yaBook)}`);
+        }
+
+        // 4. Test inferBookRating with OpenLibrary subjects
+        const olKids = inferBookRating({
+            subjects: ["Children's stories", "Picture books for children"],
+            title: "Where the Wild Things Are"
+        });
+        if (olKids.ageRating !== "Kids") {
+            throw new Error(`Expected 'Kids' from OpenLibrary subjects, got: ${JSON.stringify(olKids)}`);
+        }
+
+        const olYa = inferBookRating({
+            subjects: ["Young adult literature", "Teenagers -- Fiction"],
+            title: "The Fault in Our Stars"
+        });
+        if (olYa.ageRating !== "YA (12+)") {
+            throw new Error(`Expected 'YA (12+)' from OpenLibrary subjects, got: ${JSON.stringify(olYa)}`);
+        }
+
+        // 5. Test inferBookRating with Erotica / Explicit keywords
+        const eroticaBook = inferBookRating({
+            categories: ["Fiction / Erotica / General"],
+            title: "Passionate Desires",
+            overview: "An explicit erotic romance novel for adults."
+        });
+        if (eroticaBook.ageRating !== "18+ Mature" || eroticaBook.maturityRating !== "MATURE") {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for erotica, got: ${JSON.stringify(eroticaBook)}`);
+        }
+
+        // 6. Test inferBookRating title heuristics for famous kids titles
+        const peppaBook = inferBookRating({ title: "Peppa Pig Goes Swimming" });
+        if (peppaBook.ageRating !== "Kids") {
+            throw new Error(`Expected 'Kids' for Peppa Pig title, got: ${JSON.stringify(peppaBook)}`);
+        }
+
+        // 7. Test inferBookRating for general fiction
+        const generalBook = inferBookRating({
+            title: "The Great Gatsby",
+            author: "F. Scott Fitzgerald",
+            categories: ["Fiction / Classics"]
+        });
+        if (generalBook.ageRating !== "All Ages" || generalBook.maturityRating !== "NOT_MATURE") {
+            throw new Error(`Expected 'All Ages' and 'NOT_MATURE' for classic fiction, got: ${JSON.stringify(generalBook)}`);
+        }
+
+        // 8. Test Database Persistence of ageRating and maturityRating on Book & BookRequest
+        let testLibrary = await prisma.library.findFirst();
+        if (!testLibrary) {
+            testLibrary = await prisma.library.create({
+                data: {
+                    name: "Test Rating Library",
+                    path: "/test/books",
+                    mediaType: "ebook"
+                }
+            });
+        }
+        if (testLibrary) {
+            const testBookKid = await prisma.book.create({
+                data: {
+                    title: "Test Kid Book Verification",
+                    author: "Test Author",
+                    libraryId: testLibrary.id,
+                    ageRating: "Kids",
+                    maturityRating: "NOT_MATURE",
+                    fileType: "epub",
+                    filePath: "/test/books/kid.epub"
+                }
+            });
+
+            const testBookMature = await prisma.book.create({
+                data: {
+                    title: "Test Mature Book Verification",
+                    author: "Test Author",
+                    libraryId: testLibrary.id,
+                    ageRating: "18+ Mature",
+                    maturityRating: "MATURE",
+                    fileType: "epub",
+                    filePath: "/test/books/mature.epub"
+                }
+            });
+
+            const testReq = await prisma.bookRequest.create({
+                data: {
+                    title: "Test Book Request Rating",
+                    author: "Test Author",
+                    mediaType: "ebook",
+                    type: "single",
+                    status: "Approved",
+                    ageRating: "Kids",
+                    maturityRating: "NOT_MATURE",
+                    requestedBy: "test_verifier",
+                    libraryId: testLibrary.id
+                }
+            });
+
+            const fetchedKid = await prisma.book.findUnique({ where: { id: testBookKid.id } });
+            if (!fetchedKid || fetchedKid.ageRating !== "Kids" || fetchedKid.maturityRating !== "NOT_MATURE") {
+                throw new Error(`Prisma failed to persist ageRating/maturityRating on Book: ${JSON.stringify(fetchedKid)}`);
+            }
+
+            const fetchedMature = await prisma.book.findUnique({ where: { id: testBookMature.id } });
+            if (!fetchedMature || fetchedMature.ageRating !== "18+ Mature" || fetchedMature.maturityRating !== "MATURE") {
+                throw new Error(`Prisma failed to persist mature ageRating on Book: ${JSON.stringify(fetchedMature)}`);
+            }
+
+            const fetchedReq = await prisma.bookRequest.findUnique({ where: { id: testReq.id } });
+            if (!fetchedReq || fetchedReq.ageRating !== "Kids" || fetchedReq.maturityRating !== "NOT_MATURE") {
+                throw new Error(`Prisma failed to persist ageRating/maturityRating on BookRequest: ${JSON.stringify(fetchedReq)}`);
+            }
+
+            // Cleanup test records
+            await prisma.book.deleteMany({ where: { id: { in: [testBookKid.id, testBookMature.id] } } });
+            await prisma.bookRequest.deleteMany({ where: { id: testReq.id } });
         }
     });
 

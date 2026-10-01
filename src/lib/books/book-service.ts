@@ -8,6 +8,7 @@ import {
     SeriesSummary,
     BookAvailabilityStatus
 } from "./book-types";
+import { inferBookRating } from "./book-rating";
 import { logger } from "@/lib/logger";
 
 async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 7000): Promise<Response | null> {
@@ -104,7 +105,9 @@ export async function batchCheckBookAvailability(
                 filePath: true,
                 fileType: true,
                 mediaType: true,
-                libraryId: true
+                libraryId: true,
+                ageRating: true,
+                maturityRating: true
             }
         });
 
@@ -156,6 +159,8 @@ export async function batchCheckBookAvailability(
             // 1. Check Library Availability
             const matchedBook = bookIndex.get(`${mType}:${normTitle}:${normAuthor}`) || bookIndex.get(`${mType}:${normTitle}`);
             if (matchedBook) {
+                if (!item.ageRating && matchedBook.ageRating) item.ageRating = matchedBook.ageRating;
+                if (!item.maturityRating && matchedBook.maturityRating) item.maturityRating = matchedBook.maturityRating;
                 resultMap[itemKey] = {
                     status: "AVAILABLE",
                     bookId: matchedBook.id,
@@ -195,23 +200,32 @@ export async function batchCheckBookAvailability(
 /**
  * Fetches Trending / Bestselling Ebooks from OpenLibrary & Google Books
  */
-export async function fetchTrendingEbooks(): Promise<BookDiscoveryItem[]> {
+export async function fetchTrendingEbooks(isKids: boolean = false): Promise<BookDiscoveryItem[]> {
     const results: BookDiscoveryItem[] = [];
     const seen = new Set<string>();
 
     try {
-        // 1. OpenLibrary Trending Works / Subject: Fiction & Bestsellers
-        const olUrl = "https://openlibrary.org/trending/daily.json?limit=24";
+        // 1. OpenLibrary Trending Works / Subject: Fiction & Bestsellers (or Juvenile Fiction in Kids Mode)
+        const olUrl = isKids 
+            ? "https://openlibrary.org/subjects/juvenile_fiction.json?limit=24"
+            : "https://openlibrary.org/trending/daily.json?limit=24";
         const olRes = await fetchWithTimeout(olUrl, { headers: { Accept: "application/json" } }, 6000);
         if (olRes && olRes.ok) {
             const olData = await olRes.json();
             if (olData && olData.works) {
                 for (const work of olData.works) {
                     if (!work.title) continue;
-                    const authorName = Array.isArray(work.author_name) ? work.author_name[0] : (work.author_name || "Unknown Author");
+                    const authorName = Array.isArray(work.author_name) ? work.author_name[0] : (work.author_name || (Array.isArray(work.authors) ? work.authors[0]?.name : "Unknown Author"));
                     const key = normalizeKey(work.title + authorName);
                     if (seen.has(key)) continue;
                     seen.add(key);
+
+                    const ratingRes = inferBookRating({
+                        subjects: Array.isArray(work.subject) ? work.subject : (work.subject ? [work.subject] : (isKids ? ["juvenile fiction"] : [])),
+                        title: work.title
+                    });
+
+                    if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
 
                     const coverUrl = work.cover_i 
                         ? `https://covers.openlibrary.org/b/id/${work.cover_i}-L.jpg`
@@ -222,7 +236,9 @@ export async function fetchTrendingEbooks(): Promise<BookDiscoveryItem[]> {
                         author: authorName,
                         coverUrl,
                         publishYear: work.first_publish_year ? String(work.first_publish_year) : undefined,
-                        mediaType: "ebook"
+                        mediaType: "ebook",
+                        maturityRating: ratingRes.maturityRating,
+                        ageRating: ratingRes.ageRating
                     });
                 }
             }
@@ -232,7 +248,10 @@ export async function fetchTrendingEbooks(): Promise<BookDiscoveryItem[]> {
     // 2. Google Books Bestsellers Fallback / Enrichment
     if (results.length < 15) {
         try {
-            const gUrl = "https://www.googleapis.com/books/v1/volumes?q=subject:fiction+bestseller&orderBy=relevance&maxResults=20";
+            const gQuery = isKids 
+                ? "subject:juvenile+fiction+children&orderBy=relevance&maxResults=20"
+                : "subject:fiction+bestseller&orderBy=relevance&maxResults=20";
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${gQuery}`;
             const gRes = await fetchWithTimeout(gUrl, { headers: { Accept: "application/json" } }, 6000);
             if (gRes && gRes.ok) {
                 const gData = await gRes.json();
@@ -245,6 +264,15 @@ export async function fetchTrendingEbooks(): Promise<BookDiscoveryItem[]> {
                         if (seen.has(key)) continue;
                         seen.add(key);
 
+                        const ratingRes = inferBookRating({
+                            maturityRating: vol.maturityRating,
+                            categories: vol.categories,
+                            title: vol.title,
+                            overview: vol.description
+                        });
+
+                        if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+
                         const cover = vol.imageLinks?.thumbnail 
                             ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") 
                             : undefined;
@@ -256,7 +284,9 @@ export async function fetchTrendingEbooks(): Promise<BookDiscoveryItem[]> {
                             publishYear: vol.publishedDate ? vol.publishedDate.substring(0, 4) : undefined,
                             overview: vol.description,
                             mediaType: "ebook",
-                            isbn: vol.industryIdentifiers?.[0]?.identifier
+                            isbn: vol.industryIdentifiers?.[0]?.identifier,
+                            maturityRating: ratingRes.maturityRating,
+                            ageRating: ratingRes.ageRating
                         });
                     }
                 }
@@ -270,13 +300,15 @@ export async function fetchTrendingEbooks(): Promise<BookDiscoveryItem[]> {
 /**
  * Fetches Popular / Trending Audiobooks from Audible & iTunes
  */
-export async function fetchTrendingAudiobooks(): Promise<BookDiscoveryItem[]> {
+export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<BookDiscoveryItem[]> {
     const results: BookDiscoveryItem[] = [];
     const seen = new Set<string>();
 
     try {
-        // 1. Audible Catalog Popular Hits
-        const audUrl = "https://api.audible.com/1.0/catalog/products?num_results=24&products_sort_by=BestSellers&response_groups=product_attrs,contributors,product_desc";
+        // 1. Audible Catalog Popular Hits (Children's in Kids Mode)
+        const audUrl = isKids
+            ? "https://api.audible.com/1.0/catalog/products?keywords=children+audiobooks&num_results=24&products_sort_by=BestSellers&response_groups=product_attrs,contributors,product_desc"
+            : "https://api.audible.com/1.0/catalog/products?num_results=24&products_sort_by=BestSellers&response_groups=product_attrs,contributors,product_desc";
         const audRes = await fetchWithTimeout(audUrl, { headers: { Accept: "application/json" } }, 6000);
         if (audRes && audRes.ok) {
             const audData = await audRes.json();
@@ -291,6 +323,14 @@ export async function fetchTrendingAudiobooks(): Promise<BookDiscoveryItem[]> {
                     const key = normalizeKey(prod.title + authorName);
                     if (seen.has(key)) continue;
                     seen.add(key);
+
+                    const ratingRes = inferBookRating({
+                        categories: [isKids ? "children" : ""],
+                        title: prod.title,
+                        overview: prod.publisher_summary || prod.merchandising_summary
+                    });
+
+                    if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
 
                     let coverUrl = "";
                     if (prod.product_images) {
@@ -315,7 +355,9 @@ export async function fetchTrendingAudiobooks(): Promise<BookDiscoveryItem[]> {
                         mediaType: "audiobook",
                         asin: prod.asin,
                         rating: prod.rating?.overall_distribution?.average_rating,
-                        ratingCount: prod.rating?.overall_distribution?.num_ratings
+                        ratingCount: prod.rating?.overall_distribution?.num_ratings,
+                        maturityRating: ratingRes.maturityRating,
+                        ageRating: ratingRes.ageRating
                     });
                 }
             }
@@ -325,7 +367,8 @@ export async function fetchTrendingAudiobooks(): Promise<BookDiscoveryItem[]> {
     // 2. iTunes Audiobook Top Charts Fallback
     if (results.length < 10) {
         try {
-            const itunesUrl = "https://itunes.apple.com/search?term=bestseller&entity=audiobook&limit=20";
+            const itunesTerm = isKids ? "children" : "bestseller";
+            const itunesUrl = `https://itunes.apple.com/search?term=${itunesTerm}&entity=audiobook&limit=20`;
             const itunesRes = await fetchWithTimeout(itunesUrl, { headers: { Accept: "application/json" } }, 6000);
             if (itunesRes && itunesRes.ok) {
                 const itunesData = await itunesRes.json();
@@ -338,6 +381,15 @@ export async function fetchTrendingAudiobooks(): Promise<BookDiscoveryItem[]> {
                         if (seen.has(key)) continue;
                         seen.add(key);
 
+                        const ratingRes = inferBookRating({
+                            genre: item.primaryGenreName,
+                            categories: [item.primaryGenreName, isKids ? "children" : ""],
+                            title,
+                            overview: item.description
+                        });
+
+                        if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+
                         const cover = item.artworkUrl100 ? item.artworkUrl100.replace("100x100bb", "600x600bb") : undefined;
 
                         results.push({
@@ -346,7 +398,9 @@ export async function fetchTrendingAudiobooks(): Promise<BookDiscoveryItem[]> {
                             coverUrl: cover,
                             publishYear: item.releaseDate ? item.releaseDate.substring(0, 4) : undefined,
                             overview: item.description,
-                            mediaType: "audiobook"
+                            mediaType: "audiobook",
+                            maturityRating: ratingRes.maturityRating,
+                            ageRating: ratingRes.ageRating
                         });
                     }
                 }
@@ -360,7 +414,7 @@ export async function fetchTrendingAudiobooks(): Promise<BookDiscoveryItem[]> {
 /**
  * Searches books & audiobooks across OpenLibrary, Google Books, Audible, and iTunes
  */
-export async function searchBooksUnified(query: string, mediaType: "all" | MediaType = "all"): Promise<BookDiscoveryItem[]> {
+export async function searchBooksUnified(query: string, mediaType: "all" | MediaType = "all", isKids: boolean = false): Promise<BookDiscoveryItem[]> {
     if (!query || query.trim().length < 2) return [];
     const cleanQuery = query.trim();
     const results: BookDiscoveryItem[] = [];
@@ -387,6 +441,14 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                             if (seen.has(key)) continue;
                             seen.add(key);
 
+                            const ratingRes = inferBookRating({
+                                categories: prod.category_ladders?.map((c: any) => c.name) || [],
+                                title: prod.title,
+                                overview: prod.publisher_summary || prod.merchandising_summary
+                            });
+
+                            if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+
                             const cover = prod.product_images?.["800"] || prod.product_images?.["500"] || "";
                             results.push({
                                 title: prod.title,
@@ -398,7 +460,9 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                                 overview: prod.publisher_summary,
                                 mediaType: "audiobook",
                                 asin: prod.asin,
-                                rating: prod.rating?.overall_distribution?.average_rating
+                                rating: prod.rating?.overall_distribution?.average_rating,
+                                maturityRating: ratingRes.maturityRating,
+                                ageRating: ratingRes.ageRating
                             });
                         }
                     }
@@ -411,7 +475,7 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
     if (shouldSearchEbooks) {
         fetchTasks.push((async () => {
             try {
-                const olUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=15&fields=key,title,author_name,cover_i,first_publish_year,first_sentence`;
+                const olUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=15&fields=key,title,author_name,cover_i,first_publish_year,first_sentence,subject`;
                 const olRes = await fetchWithTimeout(olUrl, { headers: { Accept: "application/json" } }, 5000);
                 if (olRes && olRes.ok) {
                     const data = await olRes.json();
@@ -423,6 +487,14 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                             if (seen.has(key)) continue;
                             seen.add(key);
 
+                            const ratingRes = inferBookRating({
+                                subjects: Array.isArray(doc.subject) ? doc.subject : (doc.subject ? [doc.subject] : []),
+                                title: doc.title,
+                                overview: doc.first_sentence ? (Array.isArray(doc.first_sentence) ? doc.first_sentence[0] : doc.first_sentence) : undefined
+                            });
+
+                            if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+
                             const cover = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : undefined;
                             results.push({
                                 title: doc.title,
@@ -430,7 +502,9 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                                 coverUrl: cover,
                                 publishYear: doc.first_publish_year ? String(doc.first_publish_year) : undefined,
                                 overview: doc.first_sentence ? (Array.isArray(doc.first_sentence) ? doc.first_sentence[0] : doc.first_sentence) : undefined,
-                                mediaType: "ebook"
+                                mediaType: "ebook",
+                                maturityRating: ratingRes.maturityRating,
+                                ageRating: ratingRes.ageRating
                             });
                         }
                     }
@@ -456,6 +530,15 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                             if (seen.has(key)) continue;
                             seen.add(key);
 
+                            const ratingRes = inferBookRating({
+                                maturityRating: vol.maturityRating,
+                                categories: vol.categories,
+                                title: vol.title,
+                                overview: vol.description
+                            });
+
+                            if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+
                             const cover = vol.imageLinks?.thumbnail 
                                 ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") 
                                 : undefined;
@@ -468,7 +551,9 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                                 overview: vol.description,
                                 mediaType: "ebook",
                                 isbn: vol.industryIdentifiers?.[0]?.identifier,
-                                rating: vol.averageRating
+                                rating: vol.averageRating,
+                                maturityRating: ratingRes.maturityRating,
+                                ageRating: ratingRes.ageRating
                             });
                         }
                     }
@@ -494,6 +579,15 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                             if (seen.has(key)) continue;
                             seen.add(key);
 
+                            const ratingRes = inferBookRating({
+                                genre: item.primaryGenreName,
+                                categories: [item.primaryGenreName],
+                                title,
+                                overview: item.description
+                            });
+
+                            if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+
                             const cover = item.artworkUrl100 ? item.artworkUrl100.replace("100x100bb", "600x600bb") : undefined;
                             results.push({
                                 title,
@@ -501,7 +595,9 @@ export async function searchBooksUnified(query: string, mediaType: "all" | Media
                                 coverUrl: cover,
                                 publishYear: item.releaseDate ? item.releaseDate.substring(0, 4) : undefined,
                                 overview: item.description,
-                                mediaType: "audiobook"
+                                mediaType: "audiobook",
+                                maturityRating: ratingRes.maturityRating,
+                                ageRating: ratingRes.ageRating
                             });
                         }
                     }
