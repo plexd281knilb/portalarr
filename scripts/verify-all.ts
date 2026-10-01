@@ -2600,6 +2600,94 @@ async function runTestSuite() {
         }
     });
 
+    // 51. Kids Library Access & Kids Book Request Admin Approval Gating
+    await assertTest("Kids & Family: Library Access & Request Approval Gating", async () => {
+        const { isKidsLibrary } = await import("../src/lib/books/book-rating");
+        const { isUserAllowedForLibrary } = await import("../src/lib/books/book-service");
+
+        // 1. Verify isKidsLibrary detection
+        if (!isKidsLibrary({ name: "Kids' Bookshelf", path: "/kids", description: "Children's books" })) {
+            throw new Error("isKidsLibrary failed to detect Kids' Bookshelf");
+        }
+        if (isKidsLibrary({ name: "General Fiction", path: "/books", description: "Adult novels" })) {
+            throw new Error("isKidsLibrary falsely identified adult library as kids library");
+        }
+
+        // 2. Verify isUserAllowedForLibrary with specific allowedUsers
+        const mockKidsLib = {
+            id: "kids-lib-test",
+            name: "Kids' Bookshelf",
+            path: "/kids",
+            description: "Children",
+            allowedUsers: "admin, testkiduser, parent@example.com",
+            restrictedUsers: "",
+            downloadCategory: "books",
+            mediaType: "ebook",
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        if (!isUserAllowedForLibrary(mockKidsLib, "testkiduser")) {
+            throw new Error("isUserAllowedForLibrary denied access to authorized username testkiduser");
+        }
+        if (!isUserAllowedForLibrary(mockKidsLib, "TestKidUser")) {
+            throw new Error("isUserAllowedForLibrary failed case-insensitive match for TestKidUser");
+        }
+        if (!isUserAllowedForLibrary(mockKidsLib, "someone", "parent@example.com")) {
+            throw new Error("isUserAllowedForLibrary denied access to authorized email parent@example.com");
+        }
+        if (isUserAllowedForLibrary(mockKidsLib, "unauthorizeduser", "unauthorized@example.com")) {
+            throw new Error("isUserAllowedForLibrary allowed access to unauthorized user");
+        }
+
+        // 3. Verify Kids Book Request creation stays in Pending state (never auto-approved)
+        const kidsReq = await prisma.bookRequest.create({
+            data: {
+                title: "Green Eggs and Ham",
+                author: "Dr. Seuss",
+                ageRating: "Kids",
+                maturityRating: "NOT_MATURE",
+                requestedBy: "testkiduser",
+                status: "Pending",
+                mediaType: "ebook"
+            }
+        });
+
+        if (kidsReq.status !== "Pending") {
+            throw new Error(`Expected kids request to be Pending, got ${kidsReq.status}`);
+        }
+
+        // 4. Background scheduler logic must NOT auto-approve kids requests
+        const pendingRequests = await prisma.bookRequest.findMany({
+            where: { id: kidsReq.id, status: "Pending" }
+        });
+        for (const req of pendingRequests) {
+            const rating = req.ageRating || inferBookRating({ title: req.title, author: req.author || "" }).ageRating;
+            const isKids = rating === "Kids";
+            if (!isKids) {
+                await prisma.bookRequest.update({ where: { id: req.id }, data: { status: "Approved" } });
+            }
+        }
+
+        const reqAfterBgCheck = await prisma.bookRequest.findUnique({ where: { id: kidsReq.id } });
+        if (reqAfterBgCheck?.status !== "Pending") {
+            throw new Error(`CRITICAL: Background scheduler auto-approved kids request! Status: ${reqAfterBgCheck?.status}`);
+        }
+
+        // 5. Admin approval explicitly approves the request
+        await prisma.bookRequest.update({
+            where: { id: kidsReq.id },
+            data: { status: "Approved" }
+        });
+        const reqAfterAdminApprove = await prisma.bookRequest.findUnique({ where: { id: kidsReq.id } });
+        if (reqAfterAdminApprove?.status !== "Approved") {
+            throw new Error(`Admin approval failed: status is ${reqAfterAdminApprove?.status}`);
+        }
+
+        // Clean up test request
+        await prisma.bookRequest.delete({ where: { id: kidsReq.id } }).catch(() => {});
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

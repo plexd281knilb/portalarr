@@ -124,3 +124,14 @@ export function inferBookRating(input: {
         isMature: false
     };
 }
+
+/**
+ * Checks if a library object is a dedicated kids/children reading shelf
+ */
+export function isKidsLibrary(lib?: { name?: string | null; path?: string | null; description?: string | null } | null): boolean {
+    if (!lib) return false;
+    const name = (lib.name || "").toLowerCase();
+    const p = (lib.path || "").toLowerCase();
+    const desc = (lib.description || "").toLowerCase();
+    return name.includes("kid") || p.includes("kid") || desc.includes("kid");
+}

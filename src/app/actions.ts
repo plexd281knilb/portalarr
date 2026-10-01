@@ -36,7 +36,7 @@ import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
 import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
-import { inferBookRating } from "@/lib/books/book-rating";
+import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
 
 // ============================================================================
 // --- SECURITY LAYER ---
@@ -8298,6 +8298,192 @@ export async function deleteLibrary(id: string) {
     }
 }
 
+
+export async function getUserKidsLibraryAccessAction() {
+    try {
+        const session: any = await verifyUser();
+        const username = String(session?.username || "").toLowerCase().trim();
+        const email = String(session?.email || "").toLowerCase().trim();
+
+        const allLibraries = await prisma.library.findMany();
+        const kidsLibraries = allLibraries.filter(l => isKidsLibrary(l));
+
+        if (kidsLibraries.length === 0) {
+            return {
+                success: true,
+                hasKidsAccess: false,
+                kidsLibraries: []
+            };
+        }
+
+        const libsStatus = kidsLibraries.map(l => {
+            const rawAllowed = (l.allowedUsers || "").trim();
+            const allowed = rawAllowed.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+            const isAllowed = rawAllowed === "*" || allowed.includes("*") || (username && allowed.includes(username)) || (email && allowed.includes(email));
+            return {
+                id: l.id,
+                name: l.name,
+                isAllowed
+            };
+        });
+
+        const hasKidsAccess = libsStatus.some(l => l.isAllowed);
+
+        return {
+            success: true,
+            hasKidsAccess,
+            kidsLibraries: libsStatus
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to get kids library access status" };
+    }
+}
+
+export async function updateUserKidsLibraryAccessAction(enable: boolean) {
+    try {
+        const session: any = await verifyUser();
+        const targetUsername = String(session?.username || "").trim();
+        const safeUserLower = targetUsername.toLowerCase();
+        const userEmail = String(session?.email || "").toLowerCase().trim();
+
+        let allLibraries = await prisma.library.findMany();
+        let kidsLibraries = allLibraries.filter(l => isKidsLibrary(l));
+
+        // Auto-provision standard Kids bookshelf if none exist
+        if (kidsLibraries.length === 0) {
+            const defaultKidsLib = await prisma.library.create({
+                data: {
+                    name: "Kids' Bookshelf",
+                    description: "Comics, picture books, and age-appropriate reading.",
+                    path: fs.existsSync("/Kidsbooks") ? "/Kidsbooks" : (fs.existsSync("./Kidsbooks") ? "./Kidsbooks" : ""),
+                    allowedUsers: enable ? `admin, ${targetUsername}` : "admin",
+                    restrictedUsers: "",
+                    downloadCategory: "books",
+                    mediaType: "ebook"
+                }
+            });
+            kidsLibraries = [defaultKidsLib];
+        } else {
+            for (const lib of kidsLibraries) {
+                let currentUsers: string[] = [];
+                const raw = (lib.allowedUsers || "").trim();
+                if (raw === "*") {
+                    currentUsers = ["admin"];
+                } else if (raw.length > 0) {
+                    currentUsers = raw.split(",").map(u => u.trim()).filter(Boolean);
+                }
+
+                if (enable) {
+                    const exists = currentUsers.some(u => u.toLowerCase() === safeUserLower || (userEmail && u.toLowerCase() === userEmail));
+                    if (!exists) {
+                        currentUsers.push(targetUsername);
+                    }
+                } else {
+                    currentUsers = currentUsers.filter(u => u.toLowerCase() !== safeUserLower && (!userEmail || u.toLowerCase() !== userEmail));
+                    if (currentUsers.length === 0) {
+                        currentUsers = ["admin"];
+                    }
+                }
+
+                const newAllowedUsers = currentUsers.join(", ");
+                await prisma.library.update({
+                    where: { id: lib.id },
+                    data: { allowedUsers: newAllowedUsers }
+                });
+                logger.addLog("INFO", "DATABASE", `Updated kids library "${lib.name}" allowedUsers: "${newAllowedUsers}" (User: ${targetUsername})`);
+            }
+        }
+
+        revalidatePath("/settings/profile");
+        revalidatePath("/library");
+        revalidatePath("/discover");
+
+        return {
+            success: true,
+            message: enable ? "Kids library added to your access list!" : "Kids library removed from your access list."
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update kids library access" };
+    }
+}
+
+export async function toggleLibraryUserAccessAction(libraryId: string, username: string) {
+    try {
+        await verifyAdmin();
+        const lib = await prisma.library.findUnique({ where: { id: libraryId } });
+        if (!lib) return { success: false, error: "Library not found" };
+
+        const targetUser = username.trim();
+        const targetLower = targetUser.toLowerCase();
+        let allowedList: string[] = [];
+
+        const raw = (lib.allowedUsers || "").trim();
+        if (raw === "*") {
+            allowedList = ["admin"];
+        } else if (raw.length > 0) {
+            allowedList = raw.split(",").map(u => u.trim()).filter(Boolean);
+        }
+
+        const isCurrentlyAllowed = allowedList.some(u => u.toLowerCase() === targetLower);
+        let updatedList: string[];
+        if (isCurrentlyAllowed) {
+            updatedList = allowedList.filter(u => u.toLowerCase() !== targetLower);
+            if (updatedList.length === 0) updatedList = ["admin"];
+        } else {
+            updatedList = [...allowedList, targetUser];
+        }
+
+        const newAllowedStr = updatedList.join(", ");
+        await prisma.library.update({
+            where: { id: libraryId },
+            data: { allowedUsers: newAllowedStr }
+        });
+
+        logger.addLog("INFO", "DATABASE", `Toggled user "${targetUser}" on library "${lib.name}": now "${newAllowedStr}"`);
+        revalidatePath("/library");
+        revalidatePath("/settings/profile");
+
+        return { success: true, allowedUsers: newAllowedStr };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to toggle library user access" };
+    }
+}
+
+export async function approveBookRequestAction(requestId: string) {
+    try {
+        await verifyAdmin();
+        const request = await prisma.bookRequest.findUnique({
+            where: { id: requestId }
+        });
+        if (!request) return { success: false, error: "Request not found" };
+
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: "Approved" }
+        });
+
+        // Mirror to MediaRequest
+        await prisma.mediaRequest.updateMany({
+            where: {
+                title: request.title,
+                requestedByUsername: request.requestedBy,
+                status: "PENDING"
+            },
+            data: { status: "APPROVED" }
+        }).catch(() => {});
+
+        autoDownloadBookRequest(requestId, request.title, request.author || "").catch(err => {
+            console.error(`[BOOK-REQUEST-APPROVAL] Auto-download error for "${request.title}":`, err);
+        });
+
+        revalidatePath("/library");
+        revalidatePath("/requests");
+        return { success: true, message: `Approved request for "${request.title}". Searching indexers...` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to approve request" };
+    }
+}
+
 export async function getLibraryBooks(libraryId?: string) {
     let session: any = null;
     try {
@@ -8887,14 +9073,24 @@ export async function createBookRequest(formData: FormData) {
         }
         
         const libraryId = formData.get("libraryId") as string;
+        let targetLib: any = null;
         if (libraryId) {
+            targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
             finalCover = finalCover 
                 ? (finalCover.includes("?") ? `${finalCover}&lib=${libraryId}` : `${finalCover}?lib=${libraryId}`) 
                 : `?lib=${libraryId}`;
         }
 
+        const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+        const inferredRating = inferBookRating({
+            title: finalTitle,
+            author: finalAuthor,
+            series: finalSeries
+        });
+        const isKidsBook = isKidsLib || inferredRating.ageRating === "Kids";
+
         if (type === "series") {
-            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId);
+            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId, isKidsBook);
             if (expanded) {
                 // Save the parent series request record itself in the DB
                 await prisma.bookRequest.create({
@@ -8905,10 +9101,12 @@ export async function createBookRequest(formData: FormData) {
                         volumeNumber: finalVolNum,
                         coverUrl: finalCover,
                         publishYear: finalYear,
+                        maturityRating: inferredRating.maturityRating || null,
+                        ageRating: inferredRating.ageRating || null,
                         requestedBy: targetUser,
                         type: "series",
                         mediaType,
-                        status: "Approved"
+                        status: isKidsBook ? "Pending" : "Approved"
                     }
                 });
 
@@ -8923,11 +9121,16 @@ export async function createBookRequest(formData: FormData) {
                     console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
                 });
                 revalidatePath("/library");
-                return { success: true, message: "Series request submitted successfully!" };
+                return { 
+                    success: true, 
+                    message: isKidsBook 
+                        ? "Kids series request submitted for admin review." 
+                        : "Series request submitted successfully!" 
+                };
             }
         }
         
-        const isApproved = true; // Auto-approve all requests
+        const isApproved = !isKidsBook; // Kids books require admin approval
         const disableAutoDownload = formData.get("disableAutoDownload") === "true";
         const sendToKindleVal = formData.get("sendToKindle") === "true";
         
@@ -8943,6 +9146,8 @@ export async function createBookRequest(formData: FormData) {
                 volumeNumber: finalVolNum,
                 coverUrl: finalCover,
                 publishYear: finalYear,
+                maturityRating: inferredRating.maturityRating || null,
+                ageRating: inferredRating.ageRating || null,
                 requestedBy: targetUser,
                 requestedByUserId: reqUser?.id || null,
                 userEmail: reqUser?.email || null,
@@ -8973,6 +9178,7 @@ export async function createBookRequest(formData: FormData) {
                     sendToKindle: Boolean(sendToKindleVal && mediaType === "ebook"),
                     posterPath: finalCover || null,
                     releaseYear: finalYear || null,
+                    contentRating: inferredRating.ageRating || null,
                     status: isApproved ? "PROCESSING" : "PENDING"
                 }
             });
@@ -8998,14 +9204,19 @@ export async function createBookRequest(formData: FormData) {
         });
 
         revalidatePath("/library");
-        return { success: true, message: "Request submitted successfully!" };
+        return { 
+            success: true, 
+            message: isKidsBook 
+                ? "Kids book request submitted for admin review." 
+                : "Request submitted successfully!" 
+        };
     } catch (e: any) {
         console.error("[CREATE-BOOK-REQUEST-ERROR]:", e);
         return { success: false, error: e.message || "Failed to submit request" };
     }
 }
 
-async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string): Promise<boolean> {
+async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string, isKidsSeries: boolean = false): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
         const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
@@ -9078,23 +9289,35 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
         if (uniqueBooks.length === 0) return false;
         
         for (const book of uniqueBooks) {
+            const inferred = inferBookRating({
+                title: book.title,
+                author: book.author,
+                series: seriesTitle
+            });
+            const isKidsBook = isKidsSeries || inferred.ageRating === "Kids";
+
             const req = await prisma.bookRequest.create({
                 data: {
                     title: book.title,
                     author: book.author,
+                    series: seriesTitle,
                     coverUrl: book.coverUrl,
                     publishYear: book.publishYear,
+                    maturityRating: inferred.maturityRating || null,
+                    ageRating: inferred.ageRating || null,
                     requestedBy,
                     libraryId: libraryId || null,
                     type: "book",
                     mediaType,
-                    status: "Approved"
+                    status: isKidsBook ? "Pending" : "Approved"
                 }
             });
             
-            autoDownloadBookRequest(req.id, book.title, book.author).catch(err => {
-                console.error(`[AUTO-DOWNLOAD] Background process failed for series book:`, err);
-            });
+            if (!isKidsBook) {
+                autoDownloadBookRequest(req.id, book.title, book.author).catch(err => {
+                    console.error(`[AUTO-DOWNLOAD] Background process failed for series book:`, err);
+                });
+            }
         }
         
         return true;
@@ -14657,6 +14880,12 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
             targetUser = requestedFor;
         }
         
+        let targetLib: any = null;
+        if (libraryId) {
+            targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
+        }
+        const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+
         for (const book of booksList) {
             let finalCover = book.coverUrl;
             if (libraryId) {
@@ -14665,22 +14894,34 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
                     : `?lib=${libraryId}`;
             }
             
+            const rating = inferBookRating({
+                title: book.title,
+                author: book.author
+            });
+            const isKidsBook = isKidsLib || rating.ageRating === "Kids";
+            const isApproved = !isKidsBook;
+
             const request = await prisma.bookRequest.create({
                 data: {
                     title: book.title,
                     author: book.author,
                     coverUrl: finalCover,
                     publishYear: book.publishYear,
+                    maturityRating: rating.maturityRating || null,
+                    ageRating: rating.ageRating || null,
                     requestedBy: targetUser,
+                    libraryId: libraryId || null,
                     type: "book",
                     mediaType: mediaType,
-                    status: "Approved"
+                    status: isApproved ? "Approved" : "Pending"
                 }
             });
             
-            autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
-                console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
-            });
+            if (isApproved) {
+                autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
+                    console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
+                });
+            }
         }
 
         if (booksList.length > 0) {

@@ -19,7 +19,7 @@ import {
     isUserAllowedForLibrary,
     getSimilarBooks
 } from "@/lib/books/book-service";
-import { inferBookRating } from "@/lib/books/book-rating";
+import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
 import { autoDownloadBookRequest, findMissingBooksInSeries, renameBookFileOnDisk } from "@/app/actions";
 import { resolveMetadataWithAI } from "@/lib/ai-agent";
 import { revalidatePath } from "next/cache";
@@ -333,20 +333,31 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
         // 1. Resolve Target Library
         let targetLibId = input.libraryId;
         const accessibleLibs = await getAccessibleLibrariesForUser(session.username, user.email, mediaType);
+        let chosenLib: any = null;
         
         if (targetLibId) {
-            const chosenLib = accessibleLibs.find(l => l.id === targetLibId);
+            chosenLib = accessibleLibs.find(l => l.id === targetLibId);
             if (!chosenLib) {
                 return { success: false, error: "You do not have access to the selected library." };
             }
         } else {
             // Auto-select first accessible library matching mediaType
             if (accessibleLibs.length > 0) {
-                targetLibId = accessibleLibs[0].id;
+                chosenLib = accessibleLibs[0];
+                targetLibId = chosenLib.id;
             } else {
                 return { success: false, error: `No accessible ${mediaType} library found for your account.` };
             }
         }
+
+        const isTargetKidsLib = chosenLib ? isKidsLibrary(chosenLib) : false;
+        const inferredRating = inferBookRating({
+            title,
+            author,
+            series: input.series,
+            maturityRating: input.maturityRating
+        });
+        const isKidsBook = Boolean(effectiveKids || input.ageRating === "Kids" || inferredRating.ageRating === "Kids" || isTargetKidsLib);
 
         // 2. Resolve or Link Relational Author and Series
         const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(
@@ -364,8 +375,8 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                 volumeNumber: input.volumeNumber || null,
                 coverUrl: input.coverUrl || null,
                 publishYear: input.publishYear || null,
-                maturityRating: input.maturityRating || null,
-                ageRating: input.ageRating || null,
+                maturityRating: input.maturityRating || inferredRating.maturityRating || null,
+                ageRating: input.ageRating || inferredRating.ageRating || null,
                 requestedBy: session.username,
                 requestedByUserId: user.id,
                 userEmail: user.email,
@@ -380,7 +391,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
 
         // 4. Also mirror to MediaRequest for unified /requests table
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const autoApprove = settings?.seerrAutoApproveAll !== false;
+        const autoApprove = !isKidsBook && (settings?.seerrAutoApproveAll !== false);
 
         let mediaReq: any = null;
         try {
@@ -400,7 +411,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                     sendToKindle: Boolean(input.sendToKindle && mediaType === "ebook"),
                     posterPath: input.coverUrl || null,
                     releaseYear: input.publishYear || null,
-                    contentRating: input.ageRating || null,
+                    contentRating: input.ageRating || inferredRating.ageRating || null,
                     status: autoApprove ? "APPROVED" : "PENDING"
                 }
             });
@@ -408,7 +419,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
             console.warn("[BOOK-REQUEST] MediaRequest mirror notice:", mErr?.message || mErr);
         }
 
-        logger.addLog("SUCCESS", "SEERR", `User ${session.username} submitted ${mediaType.toUpperCase()} request: "${title}" by ${author}`);
+        logger.addLog("SUCCESS", "SEERR", `User ${session.username} submitted ${mediaType.toUpperCase()} request: "${title}" by ${author} (${isKidsBook ? "Kids - Pending Admin Review" : (autoApprove ? "Auto-Approved" : "Pending")})`);
 
         // 5. If auto-approved, trigger Prowlarr search & grab
         if (autoApprove) {

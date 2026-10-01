@@ -381,6 +381,19 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 22. Kids & Family Library Access and Administration Controls
+- **User Account Settings (`/settings/profile`)**:
+  - **Kids & Family Library Access Card**: Renders an opt-in toggle card allowing approved, non-trial members (or members with `FAMILY` / `VIP_ALL_ACCESS` tiers) to add the household Kids Library to their personal access list.
+  - Toggling executes `updateUserKidsLibraryAccessAction(enable)` to atomically append or remove the user's username in SQLite across all libraries flagged as kids shelves (`isKidsLibrary(lib)`), automatically bootstrapping a default `"Kids' Bookshelf"` if none exists.
+  - Features real-time state feedback with an emerald `ACTIVE FAMILY ACCESS` badge, managed library list chips, and an amber tier lock warning for trial users.
+- **Library Management Tab (`/library` -> Manage Tab)**:
+  - **Kids Shelf Visual Badges**: Automatically detects and highlights kids shelves using `isKidsLibrary(lib)` with an emerald `Baby` icon badge (`Kids Shelf`).
+  - **Interactive User Badges**: Renders individual allowed usernames as removable pill badges (`bg-slate-800/80 text-slate-300`) with an inline `X` button calling `handleToggleUserAccess(lib.id, u.username)` for instant 1-click revocation.
+  - **Manage Users Popover Dropdown**: Provides an admin dropdown menu on each library card that lists all system users with toggle checkmarks, allowing administrators to grant or revoke access for any user with 1 click without opening the edit dialog.
+  - **Edit Library Form Allowed Users Quick Toggles**: Allows administrators to toggle between `* (All Users)` and individual specific usernames with case-insensitive checks and clean comma-separated formatting.
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:

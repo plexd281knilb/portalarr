@@ -37,7 +37,10 @@ import {
   retryKindleDelivery,
   clearKindleDeliveryLogs,
   diagnoseKindleHealth,
+  toggleLibraryUserAccessAction,
+  approveBookRequestAction,
 } from "@/app/actions";
+import { isKidsLibrary } from "@/lib/books/book-rating";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
 import { BookMatchModal } from "@/components/book-match-modal";
@@ -105,6 +108,8 @@ import {
   Ban,
   MoreVertical,
   User,
+  Baby,
+  Users,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1665,6 +1670,25 @@ function BookLibraryPageContent() {
     } catch (e: any) {
       console.error("Failed to seed default libraries:", e);
       alert(e.message || "Failed to seed default libraries.");
+    }
+  }
+
+  async function handleToggleUserAccess(libraryId: string, username: string) {
+    try {
+      const res = await toggleLibraryUserAccessAction(libraryId, username);
+      if (res && res.success && res.allowedUsers !== undefined) {
+        setLibraries((prev) =>
+          prev.map((lib) =>
+            lib.id === libraryId
+              ? { ...lib, allowedUsers: res.allowedUsers }
+              : lib,
+          ),
+        );
+      } else {
+        alert(res?.error || "Failed to toggle user access.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to toggle user access.");
     }
   }
 
@@ -3596,26 +3620,38 @@ function BookLibraryPageContent() {
                       </div>
 
                       <div className="space-y-2 border border-muted/80 p-3 rounded-md bg-muted/20">
-                        <Label className="text-xs font-semibold block border-b border-muted pb-1 mb-1 text-primary">
-                          Allowed Users Quick Toggle List
-                        </Label>
-                        {libAllowedUsers === "*" ? (
-                          <div className="text-[10px] text-muted-foreground flex justify-between items-center">
-                            <span>
-                              Everyone has access (<code>*</code>)
-                            </span>
+                        <div className="flex items-center justify-between border-b border-muted pb-1 mb-1">
+                          <Label className="text-xs font-semibold text-primary">
+                            Allowed Users Quick Toggle List
+                          </Label>
+                          {libAllowedUsers === "*" ? (
                             <Button
                               type="button"
-                              variant="outline"
-                              className="h-5 text-[9px] px-2 py-0 border-primary/20 text-primary hover:bg-primary/10"
-                              onClick={() => setLibAllowedUsers("")}
+                              variant="ghost"
+                              className="h-4 text-[9px] p-0 text-primary hover:underline hover:bg-transparent font-semibold"
+                              onClick={() => setLibAllowedUsers("admin")}
                             >
-                              Restrict Access
+                              Switch to Specific Users
                             </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-4 text-[9px] p-0 text-primary hover:underline hover:bg-transparent font-semibold"
+                              onClick={() => setLibAllowedUsers("*")}
+                            >
+                              Grant to Everyone (*)
+                            </Button>
+                          )}
+                        </div>
+
+                        {libAllowedUsers === "*" ? (
+                          <div className="p-2 rounded bg-primary/5 border border-primary/20 text-[11px] text-muted-foreground flex items-center justify-between">
+                            <span>Everyone currently has access (<code>*</code>). Click above to restrict to selected users.</span>
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-0.5">
+                            <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-0.5">
                               {allUsers.length === 0 ? (
                                 <span className="text-[10px] text-muted-foreground italic">
                                   No users found.
@@ -3626,52 +3662,49 @@ function BookLibraryPageContent() {
                                     .split(",")
                                     .map((item) => item.trim())
                                     .filter(Boolean);
-                                  const isAllowed = allowedList.includes(
-                                    u.username,
+                                  const isAllowed = allowedList.some(
+                                    (item) => item.toLowerCase() === u.username.toLowerCase(),
                                   );
                                   return (
                                     <Badge
                                       key={u.id}
-                                      variant={
-                                        isAllowed ? "default" : "outline"
-                                      }
-                                      className={`cursor-pointer transition-colors text-[9px] px-2 py-0.5 ${
+                                      variant={isAllowed ? "default" : "outline"}
+                                      className={`cursor-pointer transition-colors text-[10px] px-2 py-0.5 font-mono ${
                                         isAllowed
                                           ? "bg-primary text-black hover:bg-primary/80 font-bold border-primary"
                                           : "hover:bg-muted/30 border-muted-foreground/30 text-muted-foreground"
                                       }`}
                                       onClick={() => {
-                                        let newList;
+                                        let newList: string[];
                                         if (isAllowed) {
                                           newList = allowedList.filter(
-                                            (item) => item !== u.username,
+                                            (item) => item.toLowerCase() !== u.username.toLowerCase(),
                                           );
+                                          if (newList.length === 0) newList = ["admin"];
                                         } else {
-                                          newList = [
-                                            ...allowedList,
-                                            u.username,
-                                          ];
+                                          newList = [...allowedList.filter(i => i !== "*"), u.username];
                                         }
                                         setLibAllowedUsers(newList.join(", "));
                                       }}
                                     >
                                       {u.username}
+                                      {isAllowed && " ✓"}
                                     </Badge>
                                   );
                                 })
                               )}
                             </div>
-                            <div className="flex justify-between items-center text-[9px]">
+                            <div className="flex justify-between items-center text-[9px] pt-1">
                               <span className="text-muted-foreground">
                                 Click badges to grant or revoke library access.
                               </span>
                               <Button
                                 type="button"
                                 variant="ghost"
-                                className="h-4 text-[9px] p-0 text-primary hover:underline hover:bg-transparent font-semibold"
-                                onClick={() => setLibAllowedUsers("*")}
+                                className="h-4 text-[9px] p-0 text-muted-foreground hover:text-red-400 hover:bg-transparent"
+                                onClick={() => setLibAllowedUsers("admin")}
                               >
-                                Grant to Everyone (*)
+                                Reset to Admin Only
                               </Button>
                             </div>
                           </div>
@@ -3823,64 +3856,156 @@ function BookLibraryPageContent() {
                       </div>
                     ) : (
                       <div className="divide-y divide-muted/50">
-                        {libraries.map((lib) => (
-                          <div
-                            key={lib.id}
-                            className="p-4 flex items-center justify-between gap-4"
-                          >
-                            <div className="space-y-1">
-                              <h4 className="font-semibold text-sm">
-                                {lib.name}
-                              </h4>
-                              <p className="text-xs text-muted-foreground">
-                                {lib.description || "No description."}
-                              </p>
-                              <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
-                                  Access:{" "}
-                                  {lib.allowedUsers === "*"
-                                    ? "Public"
-                                    : lib.allowedUsers || "Private"}
-                                </Badge>
-                                {lib.restrictedUsers && (
-                                  <Badge
-                                    variant="destructive"
-                                    className="bg-red-950/80 text-red-300 border border-red-800 text-[10px] flex items-center gap-1"
-                                  >
-                                    <UserX className="h-3 w-3" /> Excluded:{" "}
-                                    {lib.restrictedUsers}
+                        {libraries.map((lib: any) => {
+                          const isKids = isKidsLibrary(lib);
+                          const rawAllowed = (lib.allowedUsers || "").trim();
+                          const isPublic = rawAllowed === "*";
+                          const allowedList = isPublic 
+                            ? [] 
+                            : rawAllowed.split(",").map((u: string) => u.trim()).filter(Boolean);
+
+                          return (
+                            <div
+                              key={lib.id}
+                              className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                            >
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-semibold text-sm">
+                                    {lib.name}
+                                  </h4>
+                                  {isKids && (
+                                    <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] flex items-center gap-1 font-semibold">
+                                      <Baby className="h-3 w-3" /> Kids Shelf
+                                    </Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                                    {lib.mediaType === "audiobook" ? "🎧 Audiobook" : "📖 Ebook"}
                                   </Badge>
-                                )}
-                                {lib.path && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] border-primary/20 text-primary bg-primary/5"
-                                  >
-                                    Path: {lib.path}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {lib.description || "No description."}
+                                </p>
+                                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                  <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
+                                    Access: {isPublic ? "Public (*)" : `${allowedList.length} User${allowedList.length === 1 ? "" : "s"}`}
                                   </Badge>
+                                  {lib.restrictedUsers && (
+                                    <Badge
+                                      variant="destructive"
+                                      className="bg-red-950/80 text-red-300 border border-red-800 text-[10px] flex items-center gap-1"
+                                    >
+                                      <UserX className="h-3 w-3" /> Excluded:{" "}
+                                      {lib.restrictedUsers}
+                                    </Badge>
+                                  )}
+                                  {lib.path && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] border-primary/20 text-primary bg-primary/5"
+                                    >
+                                      Path: {lib.path}
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                {/* Allowed Users Badges & Quick Management */}
+                                {!isPublic && (
+                                  <div className="pt-1.5 space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                                        <Users className="h-3 w-3 text-primary" /> Allowed Members:
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {allowedList.map((uname: string) => (
+                                        <Badge
+                                          key={uname}
+                                          variant="secondary"
+                                          className="text-[10px] font-mono bg-primary/10 border border-primary/25 text-primary hover:bg-red-950/40 hover:text-red-400 hover:border-red-800/40 cursor-pointer transition-colors group"
+                                          title={`Click to remove ${uname}`}
+                                          onClick={() => handleToggleUserAccess(lib.id, uname)}
+                                        >
+                                          {uname}
+                                          <X className="h-2.5 w-2.5 ml-1 opacity-60 group-hover:opacity-100" />
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
                                 )}
                               </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Quick User Access Dropdown */}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                                    >
+                                      <Users className="h-3.5 w-3.5" />
+                                      <span>Manage Users</span>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56 p-1 bg-slate-900 border-slate-800">
+                                    <DropdownMenuLabel className="text-xs font-semibold px-2 py-1.5 flex items-center justify-between">
+                                      <span>Toggle Member Access</span>
+                                      <span className="text-[10px] text-muted-foreground font-normal">Click user</span>
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator className="bg-slate-800" />
+                                    <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
+                                      {allUsers.length === 0 ? (
+                                        <div className="p-2 text-xs text-muted-foreground text-center">No users available</div>
+                                      ) : (
+                                        allUsers.map((u: any) => {
+                                          const userAllowed = isPublic || allowedList.some((item: string) => item.toLowerCase() === u.username.toLowerCase());
+                                          return (
+                                            <DropdownMenuItem
+                                              key={u.id}
+                                              className="flex items-center justify-between text-xs cursor-pointer py-1.5 px-2 rounded hover:bg-slate-800"
+                                              onSelect={(e) => {
+                                                e.preventDefault();
+                                                handleToggleUserAccess(lib.id, u.username);
+                                              }}
+                                            >
+                                              <span className="font-mono">{u.username}</span>
+                                              {userAllowed ? (
+                                                <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] px-1 py-0 h-4">
+                                                  Allowed
+                                                </Badge>
+                                              ) : (
+                                                <span className="text-[10px] text-muted-foreground">+ Add</span>
+                                              )}
+                                            </DropdownMenuItem>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 p-1"
+                                  title="Edit Library"
+                                  onClick={() => startEditLibrary(lib)}
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 p-1"
+                                  title="Delete Library"
+                                  onClick={() => handleDeleteLibrary(lib.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-1"
-                                onClick={() => startEditLibrary(lib)}
-                              >
-                                <Edit3 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="h-8 w-8 p-1"
-                                onClick={() => handleDeleteLibrary(lib.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>

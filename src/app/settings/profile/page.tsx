@@ -18,7 +18,9 @@ import {
     createOrUpdateSubAccountAction,
     deleteSubAccountAction,
     getAvailableAddonsAction,
-    toggleFreeAddonAction
+    toggleFreeAddonAction,
+    getUserKidsLibraryAccessAction,
+    updateUserKidsLibraryAccessAction
 } from "@/app/actions";
 import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -139,6 +141,13 @@ export default function UserProfilePage() {
     const [togglingAddonId, setTogglingAddonId] = useState<string | null>(null);
     const [addonMsg, setAddonMsg] = useState("");
     const [addonErr, setAddonErr] = useState("");
+
+    // Kids Library Access State
+    const [hasKidsAccess, setHasKidsAccess] = useState(false);
+    const [kidsLibraries, setKidsLibraries] = useState<any[]>([]);
+    const [savingKidsAccess, setSavingKidsAccess] = useState(false);
+    const [kidsAccessMsg, setKidsAccessMsg] = useState("");
+    const [kidsAccessErr, setKidsAccessErr] = useState("");
 
     const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && user?.role !== "ADMIN";
 
@@ -330,6 +339,13 @@ export default function UserProfilePage() {
                 if (addRes?.success) {
                     setAddonsCatalog(addRes.catalog || []);
                     setUserEnabledAddons(addRes.userEnabledAddons || []);
+                }
+
+                // Load Kids Library Access Status
+                const kidsLibRes = await getUserKidsLibraryAccessAction();
+                if (kidsLibRes?.success) {
+                    setHasKidsAccess(Boolean(kidsLibRes.hasKidsAccess));
+                    setKidsLibraries(kidsLibRes.kidsLibraries || []);
                 }
 
                 initialProfileRef.current = {
@@ -645,6 +661,31 @@ export default function UserProfilePage() {
                 initialProfileRef.current.kindleEmail = "";
                 initialProfileRef.current.bypassKindle = false;
             }
+        }
+    };
+
+    const handleToggleKidsLibraryAccess = async (enable: boolean) => {
+        setSavingKidsAccess(true);
+        setKidsAccessMsg("");
+        setKidsAccessErr("");
+        try {
+            const res = await updateUserKidsLibraryAccessAction(enable);
+            if (res.success) {
+                setHasKidsAccess(enable);
+                setKidsAccessMsg(res.message || "Kids library access updated successfully.");
+                setTimeout(() => setKidsAccessMsg(""), 5000);
+                const updated = await getUserKidsLibraryAccessAction();
+                if (updated?.success) {
+                    setHasKidsAccess(Boolean(updated.hasKidsAccess));
+                    setKidsLibraries(updated.kidsLibraries || []);
+                }
+            } else {
+                setKidsAccessErr(res.error || "Failed to update kids library access.");
+            }
+        } catch (e: any) {
+            setKidsAccessErr(e.message || "Error updating kids library access");
+        } finally {
+            setSavingKidsAccess(false);
         }
     };
 
@@ -2254,6 +2295,107 @@ export default function UserProfilePage() {
                             </p>
                         )}
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* KIDS & FAMILY LIBRARY ACCESS CARD */}
+            <Card id="kids-library" className="border-emerald-500/30 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Baby className="h-5 w-5 text-emerald-400" /> Kids & Family Library Access
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Add age-appropriate children's books, picture books, and family reading shelves to your accessible libraries list.
+                            </CardDescription>
+                        </div>
+                        {isTrial ? (
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                                <Lock className="h-3.5 w-3.5" /> Full Member Perk
+                            </Badge>
+                        ) : hasKidsAccess ? (
+                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Added to Access List
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs font-semibold w-fit flex items-center gap-1">
+                                Not Added
+                            </Badge>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {kidsAccessMsg && (
+                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>{kidsAccessMsg}</span>
+                        </div>
+                    )}
+                    {kidsAccessErr && (
+                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <XCircle className="h-4 w-4 shrink-0" />
+                            <span>{kidsAccessErr}</span>
+                        </div>
+                    )}
+
+                    {isTrial ? (
+                        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+                            <p className="font-semibold flex items-center gap-1.5 text-amber-400">
+                                <Lock className="h-3.5 w-3.5" /> Available with Membership Upgrade
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                Dedicated Kids & Family libraries are protected and reserved for active full members. Upgrade your account to enable children's bookshelves and age-filtered reading profiles.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-border/50 gap-4">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="kidsLibraryToggle" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
+                                        <span>Include Kids & Family Bookshelf</span>
+                                        {savingKidsAccess && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        When enabled, children's books and age-appropriate reading shelves appear in your library and discovery feeds. All requests for kids books require administrator review before downloading.
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="kidsLibraryToggle"
+                                    checked={hasKidsAccess}
+                                    disabled={savingKidsAccess}
+                                    onCheckedChange={handleToggleKidsLibraryAccess}
+                                />
+                            </div>
+
+                            {kidsLibraries.length > 0 && (
+                                <div className="p-3 rounded-lg bg-background/50 border border-border/40 space-y-1.5">
+                                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                                        Managed Family Libraries
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {kidsLibraries.map((kl: any) => (
+                                            <div
+                                                key={kl.id}
+                                                className={`text-xs px-2.5 py-1 rounded-md border flex items-center gap-1.5 font-mono ${
+                                                    kl.isAllowed 
+                                                        ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-400" 
+                                                        : "bg-muted/20 border-border text-muted-foreground"
+                                                }`}
+                                            >
+                                                <Baby className="h-3 w-3" />
+                                                <span>{kl.name}</span>
+                                                <Badge variant="outline" className={`text-[9px] px-1 py-0 h-3.5 border-0 ${kl.isAllowed ? "text-emerald-400" : "text-muted-foreground"}`}>
+                                                    {kl.isAllowed ? "Access Granted" : "Not In List"}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
