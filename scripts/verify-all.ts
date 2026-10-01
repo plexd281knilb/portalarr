@@ -20,6 +20,7 @@ import { sendSubscriptionRenewalRemindersInternal } from "../src/app/payment-act
 import { isScheduleDue } from "../src/lib/prisma";
 import { calculateNextRunTime, formatScheduleLabel, formatLastRunDisplay, SCHEDULE_OPTIONS } from "../src/lib/curation/schedule-helper";
 import { inferBookRating } from "../src/lib/books/book-rating";
+import { parseAmazonBounceEmail } from "../src/lib/kindle-email-scanner";
 import fs from "fs";
 import path from "path";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_ADMIN_PATHS, matchesCloudflareBypass, matchesCloudflareAdmin } from "../src/lib/edge-policy-paths";
@@ -2427,6 +2428,32 @@ async function runTestSuite() {
             throw new Error(`Expected adult romance category to default to '18+ Mature', got: ${JSON.stringify(adultRomanceCategory)}`);
         }
 
+        // Test Tessa Dare historical romance titles
+        const tessaDare1 = inferBookRating({
+            title: "A Night to Surrender",
+            author: "Tessa Dare"
+        });
+        if (tessaDare1.ageRating !== "18+ Mature" || !tessaDare1.isMature) {
+            throw new Error(`Expected Tessa Dare 'A Night to Surrender' to evaluate to '18+ Mature', got: ${JSON.stringify(tessaDare1)}`);
+        }
+
+        const tessaDare2 = inferBookRating({
+            title: "Do You Want to Start a Scandal",
+            author: "Tessa Dare"
+        });
+        if (tessaDare2.ageRating !== "18+ Mature" || !tessaDare2.isMature) {
+            throw new Error(`Expected Tessa Dare 'Do You Want to Start a Scandal' to evaluate to '18+ Mature', got: ${JSON.stringify(tessaDare2)}`);
+        }
+
+        // Test romance title signatures without explicit author
+        const scandalBook = inferBookRating({
+            title: "A Scandalous Affair with the Duke",
+            author: "Anonymous Author"
+        });
+        if (scandalBook.ageRating !== "18+ Mature" || !scandalBook.isMature) {
+            throw new Error(`Expected scandalous romance title to evaluate to '18+ Mature', got: ${JSON.stringify(scandalBook)}`);
+        }
+
         // 9. Test Database Persistence of ageRating and maturityRating on Book & BookRequest
         let testLibrary = await prisma.library.findFirst();
         if (!testLibrary) {
@@ -2937,6 +2964,85 @@ async function runTestSuite() {
         if (!matchesCloudflareAdmin("/api/curation/badges")) throw new Error("/api/curation/badges must match admin");
         if (!matchesCloudflareAdmin("/api/users")) throw new Error("/api/users must match admin");
         if (!matchesCloudflareAdmin("/api/system/logs")) throw new Error("/api/system/logs must match admin");
+    });
+
+    // 88. Kindle: Amazon Send-to-Kindle Bounce Email Scanner & Rejection Parser
+    await assertTest("Kindle: Amazon Send-to-Kindle Bounce Email Scanner & Rejection Parser", async () => {
+        // 1. Test Amazon unapproved sender bounce email parsing
+        const unapprovedSenderMail: any = {
+            from: { text: "kindle-cs@amazon.com" },
+            subject: "An email from books@domshomelab.com with the subject Deliver Book: Test did not have an approved sender address",
+            text: "Dear Customer, you sent a personal document to Kindle. The sender address (books@domshomelab.com) is not on your approved personal document e-mail list. You can update your Approved Personal Document E-mail List on Manage Your Content and Devices.",
+            date: new Date()
+        };
+        const bounce1 = parseAmazonBounceEmail(unapprovedSenderMail);
+        if (!bounce1 || !bounce1.isBounce) {
+            throw new Error(`Expected Amazon bounce email to be detected, got: ${JSON.stringify(bounce1)}`);
+        }
+        if (!bounce1.reason.includes("Approved Personal Document")) {
+            throw new Error(`Expected reason to mention Approved Personal Document, got: "${bounce1.reason}"`);
+        }
+
+        // 2. Test Amazon document format rejection bounce
+        const formatProblemMail: any = {
+            from: { text: "do-not-reply@amazon.com" },
+            subject: "There was a problem with the document you sent to Kindle",
+            text: "The Kindle Personal Documents Service could not deliver your document due to an unsupported file format or corruption.",
+            date: new Date()
+        };
+        const bounce2 = parseAmazonBounceEmail(formatProblemMail);
+        if (!bounce2 || !bounce2.isBounce) {
+            throw new Error(`Expected format problem bounce to be detected, got: ${JSON.stringify(bounce2)}`);
+        }
+        if (!bounce2.reason.includes("format") && !bounce2.reason.includes("document")) {
+            throw new Error(`Expected reason to mention format or document, got: "${bounce2.reason}"`);
+        }
+
+        // 3. Test non-bounce email returns null
+        const normalMail: any = {
+            from: { text: "updates@github.com" },
+            subject: "New commit in repository",
+            text: "A new push was made to main.",
+            date: new Date()
+        };
+        const bounce3 = parseAmazonBounceEmail(normalMail);
+        if (bounce3 !== null) {
+            throw new Error(`Expected normal non-bounce email to return null, got: ${JSON.stringify(bounce3)}`);
+        }
+
+        // 4. Test KindleDeliveryLog model lifecycle for bounce reconciliation
+        const testDelivery = await prisma.kindleDeliveryLog.create({
+            data: {
+                bookTitle: "Test Bounce Book",
+                recipientEmail: "testuser@kindle.com",
+                username: "testuser",
+                status: "DELIVERED"
+            }
+        });
+        if (!testDelivery.id || testDelivery.status !== "DELIVERED") {
+            throw new Error("Failed to create test Kindle delivery log");
+        }
+
+        // Simulate bounce scanner updating status to FAILED
+        await prisma.kindleDeliveryLog.update({
+            where: { id: testDelivery.id },
+            data: {
+                status: "FAILED",
+                errorMessage: bounce1.reason,
+                diagnostics: JSON.stringify({
+                    detectedBy: "IMAP Amazon Bounce Scanner",
+                    bounceSubject: bounce1.subject
+                })
+            }
+        });
+
+        const updated = await prisma.kindleDeliveryLog.findUnique({ where: { id: testDelivery.id } });
+        if (updated?.status !== "FAILED" || !updated.errorMessage?.includes("Approved Personal Document")) {
+            throw new Error(`Expected log status FAILED with bounce reason, got: ${JSON.stringify(updated)}`);
+        }
+
+        // Clean up
+        await prisma.kindleDeliveryLog.delete({ where: { id: testDelivery.id } }).catch(() => {});
     });
 
     console.log("\n==========================================================");

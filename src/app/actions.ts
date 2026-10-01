@@ -8566,7 +8566,11 @@ export async function getLibraryBooks(libraryId?: string) {
 
     let resultBooks = books;
     if (isKid) {
-        resultBooks = books.filter(b => b.maturityRating !== "MATURE" && b.ageRating !== "18+ Mature");
+        // Strict Whitelist for Kids: Child accounts strictly only see verified Kids or YA books
+        resultBooks = books.filter(b => {
+            if (b.maturityRating === "MATURE" || b.ageRating === "18+ Mature") return false;
+            return b.ageRating === "Kids" || b.ageRating === "YA (12+)";
+        });
     }
 
     resultBooks.sort((a, b) => a.title.localeCompare(b.title));
@@ -13653,6 +13657,21 @@ export async function clearKindleDeliveryLogs() {
         return { success: true, message: "Kindle delivery logs cleared." };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to clear logs" };
+    }
+}
+
+export async function scanKindleBouncesAction(lookbackHours: number = 24) {
+    try {
+        const session = await verifyUser();
+        const { scanKindleBouncesInternal } = await import("@/lib/kindle-email-scanner");
+        const res = await scanKindleBouncesInternal({
+            lookbackMinutes: lookbackHours * 60,
+            forceCheckAll: true
+        });
+        revalidatePath("/library");
+        return res;
+    } catch (e: any) {
+        return { success: false, checked: 0, bouncesFound: 0, message: "", error: e.message || "Failed to scan for Amazon bounces." };
     }
 }
 

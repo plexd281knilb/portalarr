@@ -36,6 +36,7 @@ import {
   getKindleDeliveryLogs,
   retryKindleDelivery,
   clearKindleDeliveryLogs,
+  scanKindleBouncesAction,
   diagnoseKindleHealth,
   toggleLibraryUserAccessAction,
   approveBookRequestAction,
@@ -82,6 +83,7 @@ import {
   Loader2,
   Sparkles,
   Mail,
+  MailCheck,
   Send,
   AlertTriangle,
   ArrowRight,
@@ -526,6 +528,7 @@ function BookLibraryPageContent() {
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
   const [clearingKindleLogs, setClearingKindleLogs] = useState(false);
+  const [scanningBounces, setScanningBounces] = useState(false);
 
   const loadKindleLogs = useCallback(async () => {
     setLoadingKindleLogs(true);
@@ -538,6 +541,27 @@ function BookLibraryPageContent() {
       setLoadingKindleLogs(false);
     }
   }, []);
+
+  const handleScanBounces = async () => {
+    setScanningBounces(true);
+    try {
+      const res = await scanKindleBouncesAction(24);
+      if (res.success) {
+        if (res.bouncesFound > 0) {
+          alert(`Detected ${res.bouncesFound} Amazon rejection(s)! Delivery status updated to FAILED with error details.`);
+        } else {
+          alert(res.message || "Inbox scanned. No Amazon rejection emails detected.");
+        }
+        await loadKindleLogs();
+      } else {
+        alert(res.error || "Failed to scan inbox for Amazon bounces.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Error scanning inbox for bounces.");
+    } finally {
+      setScanningBounces(false);
+    }
+  };
 
   const handleRunKindleDiagnostics = async () => {
     setRunningDiagnostics(true);
@@ -808,7 +832,7 @@ function BookLibraryPageContent() {
   }
 
   const renderAgeRatingBadge = (ageRating?: string | null) => {
-    if (!ageRating) return null;
+    if (!ageRating || ageRating === "All Ages" || ageRating === "General") return null;
     return (
       <Badge
         variant="outline"
@@ -2279,6 +2303,8 @@ function BookLibraryPageContent() {
             book.maturityRating === "MATURE" ||
             book.ageRating === "18+ Mature";
           if (isMature) return false;
+          // Strict whitelist: Child accounts strictly only see verified Kids or YA books
+          if (book.ageRating !== "Kids" && book.ageRating !== "YA (12+)") return false;
         }
         return (
           book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -4230,6 +4256,17 @@ function BookLibraryPageContent() {
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+                  disabled={scanningBounces}
+                  onClick={handleScanBounces}
+                  title="Scan email inbox for Amazon Send-to-Kindle rejection / bounce notices"
+                >
+                  <MailCheck className={`h-3 w-3 ${scanningBounces ? "animate-spin" : ""}`} />
+                  {scanningBounces ? "Scanning..." : "Check Inbox for Bounces"}
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"

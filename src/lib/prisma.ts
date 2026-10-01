@@ -2153,6 +2153,36 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
+      // 6b. Kindle Delivery Bounce & Failure Email Scanner (Monitors 5m & 10m post-delivery)
+      if (!(global as any).__PORTALARR_KINDLE_BOUNCE_SCAN_RUNNING) {
+        const lastKindleCheck = (global as any).__PORTALARR_LAST_KINDLE_BOUNCE_CHECK || 0;
+        if (now.getTime() - lastKindleCheck >= 2 * 60 * 1000) {
+          (global as any).__PORTALARR_LAST_KINDLE_BOUNCE_CHECK = now.getTime();
+          (async () => {
+            try {
+              const pendingDeliveries = await prisma.kindleDeliveryLog.count({
+                where: {
+                  status: "DELIVERED",
+                  createdAt: {
+                    gte: new Date(now.getTime() - 25 * 60 * 1000)
+                  }
+                }
+              }).catch(() => 0);
+
+              if (pendingDeliveries > 0) {
+                (global as any).__PORTALARR_KINDLE_BOUNCE_SCAN_RUNNING = true;
+                const { scanKindleBouncesInternal } = await import("./kindle-email-scanner");
+                await scanKindleBouncesInternal({ lookbackMinutes: 30 });
+              }
+            } catch (kErr: any) {
+              console.error("[KINDLE-BOUNCE-TIMER] Error in Kindle bounce scanner:", kErr.message || kErr);
+            } finally {
+              (global as any).__PORTALARR_KINDLE_BOUNCE_SCAN_RUNNING = false;
+            }
+          })();
+        }
+      }
+
       // 7. Library Auto-Scan, Plex Friends Sync, and Book Requests Retry
       if (!(global as any).__PORTALARR_LIBRARY_SCAN_RUNNING) {
         const intervalMinutes = settings?.autoSyncInterval || 5;

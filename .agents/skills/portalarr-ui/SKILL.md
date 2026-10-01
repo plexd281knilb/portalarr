@@ -444,6 +444,21 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Mandatory Route Change Rule**:
   - Whenever adding, removing, or renaming any page (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`), you MUST synchronously update `src/lib/edge-policy-paths.ts`, `src/proxy.ts`, `src/components/cloudflare-policy-card.tsx`, and `scripts/verify-all.ts`.
 
+---
+
+### 26. Kindle Delivery Failure Inbox Scanner & Rethought Book Rating Isolation
+- **Amazon Delivery Failure Inbox Scanner (`src/lib/kindle-email-scanner.ts`)**:
+  - Automatically resolves IMAP credentials from active `PaymentEmailSource` entries or primary SMTP credentials (`settings.smtpUser`, decrypted `settings.smtpPass`, and derived host e.g. `imap.gmail.com`).
+  - Evaluates recent outgoing Kindle dispatches (`status: "DELIVERED"`) at 5-minute and 10-minute milestones post-delivery via the background scheduler loop (`src/lib/prisma.ts`).
+  - Scans for Amazon Send-to-Kindle failure emails (`kindle-cs@amazon.com`, `do-not-reply@amazon.com`) checking for unapproved sender address rejections or format issues.
+  - Dynamically transitions `KindleDeliveryLog.status` to `"FAILED"`, updates `errorMessage` with the exact Amazon rejection reason, records failure diagnostics, and emits system alerts.
+  - **Manual UI Trigger**: Adds a **"Check Inbox for Bounces"** button to the Kindle Delivery History panel in `/library` with live toast feedback.
+- **Rethought Book Rating Engine & Badge Isolation (`src/lib/books/book-rating.ts`)**:
+  - **Suppressed Misleading "All Ages" Badges**: Removed the default "All Ages" badge from general fiction and adult literature. Visual shelf badges are strictly reserved for verified `Kids` (emerald), `YA (12+)` (sky), and `18+ Mature` (rose). General audience books display cleanly without misleading badges.
+  - **Expanded Romance & Spicy Detection**: Added Tessa Dare and leading historical and contemporary romance authors (`julia quinn`, `lisa kleypas`, `sarah maclean`, `courtney milan`, etc.) and historical series to `KNOWN_SPICY_AUTHORS_REGEX` and `KNOWN_SPICY_SERIES_REGEX`.
+  - **Romance Title Signatures (`ADULT_ROMANCE_TITLE_REGEX`)**: Evaluates classic adult romance tropes and title keywords (`surrender`, `scandal`, `scandalous`, `seduction`, `affair`, `duchess`, `duke`, `rake`, `scoundrel`, `wicked`) as `18+ Mature`.
+  - **Strict Whitelist for Kids Mode**: Child accounts (`accountType === "KID"` or `section === "kids"`) operate on a strict whitelist requiring `ageRating === "Kids"` or `YA (12+)`. Unverified general fiction and uncaught adult books are strictly barred from entering a child's reading view.
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.
