@@ -15,15 +15,24 @@ const DEFAULT_TMDB_API_KEY = "431a8708161bcd1f1fbe7536137e61ed";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original";
 
+let cachedApiKey: { key: string; timestamp: number } | null = null;
+const API_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function getTmdbApiKey(): Promise<string> {
+    const now = Date.now();
+    if (cachedApiKey && (now - cachedApiKey.timestamp < API_KEY_CACHE_TTL)) {
+        return cachedApiKey.key;
+    }
+    let key = process.env.TMDB_API_KEY || DEFAULT_TMDB_API_KEY;
     try {
         const { prisma } = await import("@/lib/prisma");
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (settings?.tmdbApiKey && settings.tmdbApiKey.trim()) {
-            return settings.tmdbApiKey.trim();
+            key = settings.tmdbApiKey.trim();
         }
     } catch (e) {}
-    return process.env.TMDB_API_KEY || DEFAULT_TMDB_API_KEY;
+    cachedApiKey = { key, timestamp: now };
+    return key;
 }
 
 async function tmdbFetch(endpoint: string, params: Record<string, string | number> = {}): Promise<any> {
@@ -42,6 +51,7 @@ async function tmdbFetch(endpoint: string, params: Record<string, string | numbe
     try {
         const res = await fetch(url, {
             headers: { "Accept": "application/json" },
+            signal: AbortSignal.timeout(7000), // 7-second network timeout to prevent hanging
             next: { revalidate: 3600 } // Cache for 1 hour
         });
 
@@ -324,14 +334,27 @@ export async function getTmdbMovieDetails(tmdbId: number): Promise<TmdbMediaItem
     }
 }
 
+// In-memory certification cache (TTL: 24 hours) to avoid repetitive external TMDb requests
+const certificationCache = new Map<string, { cert?: string; timestamp: number }>();
+const CERT_CACHE_TTL = 24 * 60 * 60 * 1000;
+
 /**
  * Fetch detailed certification for a Movie or TV show directly from TMDb
  */
 export async function fetchMediaCertification(id: number, mediaType: "movie" | "tv"): Promise<string | undefined> {
+    const cacheKey = `${mediaType}:${id}`;
+    const cached = certificationCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < CERT_CACHE_TTL)) {
+        return cached.cert;
+    }
+
     try {
         const endpoint = mediaType === "movie" ? `/movie/${id}/release_dates` : `/tv/${id}/content_ratings`;
         const data = await tmdbFetch(endpoint);
-        if (!data?.results || !Array.isArray(data.results)) return undefined;
+        if (!data?.results || !Array.isArray(data.results)) {
+            certificationCache.set(cacheKey, { cert: undefined, timestamp: Date.now() });
+            return undefined;
+        }
 
         if (mediaType === "movie") {
             let foundCert: string | undefined;
@@ -360,6 +383,7 @@ export async function fetchMediaCertification(id: number, mediaType: "movie" | "
                     if (foundCert) break;
                 }
             }
+            certificationCache.set(cacheKey, { cert: foundCert, timestamp: Date.now() });
             return foundCert;
         } else {
             let foundRating: string | undefined;
@@ -376,12 +400,12 @@ export async function fetchMediaCertification(id: number, mediaType: "movie" | "
                     }
                 }
             }
+            certificationCache.set(cacheKey, { cert: foundRating, timestamp: Date.now() });
             return foundRating;
         }
     } catch {
         return undefined;
     }
-    return undefined;
 }
 
 /**

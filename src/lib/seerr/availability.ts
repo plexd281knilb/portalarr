@@ -50,13 +50,14 @@ export interface PlexGuidEntry {
     year?: number;
 }
 
-// In-memory cache for fast availability checking (TTL: 2 minutes)
+// In-memory cache for fast availability checking (TTL: 15 minutes)
 let plexLibraryGuidCache: {
     timestamp: number;
     guids: Map<string, PlexGuidEntry[]>;
 } | null = null;
 
-const CACHE_TTL_MS = 2 * 60 * 1000;
+let inFlightPlexPromise: Promise<Map<string, PlexGuidEntry[]>> | null = null;
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 function addGuidEntry(map: Map<string, PlexGuidEntry[]>, key: string, entry: PlexGuidEntry) {
     const existing = map.get(key) || [];
@@ -75,104 +76,116 @@ export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map
         return plexLibraryGuidCache.guids;
     }
 
-    const index = new Map<string, PlexGuidEntry[]>();
-
-    try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        if (!token) return index;
-
-        const servers = await getPlexServers(token).catch(() => []);
-        
-        await Promise.allSettled(servers.map(async (srv) => {
-            const sToken = srv.accessToken || token;
-            const primaryConn = srv.connections[0];
-            if (!primaryConn?.uri) return;
-
-            const base = primaryConn.uri.replace(/\/+$/, "");
-
-            try {
-                // Fetch library sections
-                const secRes = await fetch(`${base}/library/sections?X-Plex-Token=${encodeURIComponent(sToken)}`, {
-                    headers: { "Accept": "application/json" },
-                    cache: "no-store"
-                });
-                if (!secRes.ok) return;
-
-                const secData = await secRes.json();
-                const sections = secData.MediaContainer?.Directory || [];
-
-                await Promise.allSettled(sections.map(async (sec: any) => {
-                    const secType = sec.type;
-                    if (secType !== "movie" && secType !== "show") return;
-
-                    const secTitle = String(sec.title || "");
-                    const isKidsSection = /kids|children|family|cartoon|disney|junior|youth/i.test(secTitle);
-
-                    try {
-                        const itemsRes = await fetch(`${base}/library/sections/${sec.key}/all?includeGuids=1&X-Plex-Token=${encodeURIComponent(sToken)}`, {
-                            headers: { "Accept": "application/json" },
-                            cache: "no-store"
-                        });
-                        if (!itemsRes.ok) return;
-
-                        const itemsData = await itemsRes.json();
-                        const items = itemsData.MediaContainer?.Metadata || [];
-
-                        for (const item of items) {
-                            const streamInfo = analyzeMediaStreamInfo(item);
-                            // CRITICAL: Skip placeholders, trailer stubs, and missing stubs so they are not marked as available
-                            if (streamInfo.isPlaceholder) {
-                                continue;
-                            }
-                            const ratingKey = String(item.ratingKey);
-                            const is4k = streamInfo.detectedBadges.resolution === "4K";
-                            const quality = streamInfo.detectedBadges.videoFormatLabel || streamInfo.detectedBadges.resolution || "1080p";
-                            const record: PlexGuidEntry = {
-                                ratingKey,
-                                serverName: srv.name,
-                                sectionKey: String(sec.key),
-                                sectionTitle: secTitle || (secType === "show" ? "TV Shows" : "Movies"),
-                                isKidsSection,
-                                quality,
-                                is4k,
-                                type: secType === "show" ? "tv" : "movie",
-                                title: item.title,
-                                year: item.year ? parseInt(item.year, 10) : undefined
-                            };
-
-                            // Index by TMDb GUID
-                            if (streamInfo.guids.tmdb) {
-                                addGuidEntry(index, `tmdb:${secType === "show" ? "tv" : "movie"}:${streamInfo.guids.tmdb}`, record);
-                            }
-                            // Index by IMDb GUID
-                            if (streamInfo.guids.imdb) {
-                                addGuidEntry(index, `imdb:${streamInfo.guids.imdb}`, record);
-                            }
-                            // Index by TVDb GUID
-                            if (streamInfo.guids.tvdb) {
-                                addGuidEntry(index, `tvdb:${streamInfo.guids.tvdb}`, record);
-                            }
-                            // Index by normalized title + year
-                            if (item.title) {
-                                const normTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                                addGuidEntry(index, `title:${secType === "show" ? "tv" : "movie"}:${normTitle}:${item.year || ""}`, record);
-                            }
-                        }
-                    } catch (e) {}
-                }));
-            } catch (e) {}
-        }));
-
-        plexLibraryGuidCache = {
-            timestamp: now,
-            guids: index
-        };
-    } catch (e) {
-        logger.addLog("WARN", "SEERR", `Failed building Plex GUID cache: ${(e as Error).message}`);
+    if (inFlightPlexPromise) {
+        return inFlightPlexPromise;
     }
 
-    return index;
+    inFlightPlexPromise = (async () => {
+        const index = new Map<string, PlexGuidEntry[]>();
+
+        try {
+            const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+            const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+            if (!token) return index;
+
+            const servers = await getPlexServers(token).catch(() => []);
+            
+            await Promise.allSettled(servers.map(async (srv) => {
+                const sToken = srv.accessToken || token;
+                const primaryConn = srv.connections[0];
+                if (!primaryConn?.uri) return;
+
+                const base = primaryConn.uri.replace(/\/+$/, "");
+
+                try {
+                    // Fetch library sections
+                    const secRes = await fetch(`${base}/library/sections?X-Plex-Token=${encodeURIComponent(sToken)}`, {
+                        headers: { "Accept": "application/json" },
+                        signal: AbortSignal.timeout(8000),
+                        cache: "no-store"
+                    });
+                    if (!secRes.ok) return;
+
+                    const secData = await secRes.json();
+                    const sections = secData.MediaContainer?.Directory || [];
+
+                    await Promise.allSettled(sections.map(async (sec: any) => {
+                        const secType = sec.type;
+                        if (secType !== "movie" && secType !== "show") return;
+
+                        const secTitle = String(sec.title || "");
+                        const isKidsSection = /kids|children|family|cartoon|disney|junior|youth/i.test(secTitle);
+
+                        try {
+                            const itemsRes = await fetch(`${base}/library/sections/${sec.key}/all?includeGuids=1&X-Plex-Token=${encodeURIComponent(sToken)}`, {
+                                headers: { "Accept": "application/json" },
+                                signal: AbortSignal.timeout(10000),
+                                cache: "no-store"
+                            });
+                            if (!itemsRes.ok) return;
+
+                            const itemsData = await itemsRes.json();
+                            const items = itemsData.MediaContainer?.Metadata || [];
+
+                            for (const item of items) {
+                                const streamInfo = analyzeMediaStreamInfo(item);
+                                // CRITICAL: Skip placeholders, trailer stubs, and missing stubs so they are not marked as available
+                                if (streamInfo.isPlaceholder) {
+                                    continue;
+                                }
+                                const ratingKey = String(item.ratingKey);
+                                const is4k = streamInfo.detectedBadges.resolution === "4K";
+                                const quality = streamInfo.detectedBadges.videoFormatLabel || streamInfo.detectedBadges.resolution || "1080p";
+                                const record: PlexGuidEntry = {
+                                    ratingKey,
+                                    serverName: srv.name,
+                                    sectionKey: String(sec.key),
+                                    sectionTitle: secTitle || (secType === "show" ? "TV Shows" : "Movies"),
+                                    isKidsSection,
+                                    quality,
+                                    is4k,
+                                    type: secType === "show" ? "tv" : "movie",
+                                    title: item.title,
+                                    year: item.year ? parseInt(item.year, 10) : undefined
+                                };
+
+                                // Index by TMDb GUID
+                                if (streamInfo.guids.tmdb) {
+                                    addGuidEntry(index, `tmdb:${secType === "show" ? "tv" : "movie"}:${streamInfo.guids.tmdb}`, record);
+                                }
+                                // Index by IMDb GUID
+                                if (streamInfo.guids.imdb) {
+                                    addGuidEntry(index, `imdb:${streamInfo.guids.imdb}`, record);
+                                }
+                                // Index by TVDb GUID
+                                if (streamInfo.guids.tvdb) {
+                                    addGuidEntry(index, `tvdb:${streamInfo.guids.tvdb}`, record);
+                                }
+                                // Index by normalized title + year
+                                if (item.title) {
+                                    const normTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                                    addGuidEntry(index, `title:${secType === "show" ? "tv" : "movie"}:${normTitle}:${item.year || ""}`, record);
+                                }
+                            }
+                        } catch (e) {}
+                    }));
+                } catch (e) {}
+            }));
+
+            plexLibraryGuidCache = {
+                timestamp: Date.now(),
+                guids: index
+            };
+        } catch (e) {
+            logger.addLog("WARN", "SEERR", `Failed building Plex GUID cache: ${(e as Error).message}`);
+        } finally {
+            inFlightPlexPromise = null;
+        }
+
+        return index;
+    })();
+
+    return inFlightPlexPromise;
 }
 
 /**

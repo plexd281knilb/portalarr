@@ -69,7 +69,8 @@ interface ArrIndexCache {
 }
 
 let arrCache: ArrIndexCache | null = null;
-const ARR_CACHE_TTL_MS = 60 * 1000; // 1 minute
+let inFlightArrPromise: Promise<ArrIndexCache> | null = null;
+const ARR_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 function normalizeTitle(t?: string): string {
     return (t || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -84,127 +85,124 @@ export async function getArrIndex(forceRefresh = false): Promise<ArrIndexCache> 
         return arrCache;
     }
 
-    const newIndex: ArrIndexCache = {
-        timestamp: now,
-        radarr1080p: new Map(),
-        radarr4k: new Map(),
-        sonarr1080p: new Map(),
-        sonarr4k: new Map(),
-        sonarrTitles1080p: new Map(),
-        sonarrTitles4k: new Map()
-    };
-
-    try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const radarrAppsRes = await getEnabledArrInstancesInternal("radarr");
-        const sonarrAppsRes = await getEnabledArrInstancesInternal("sonarr");
-
-        const radarrApps = (radarrAppsRes.success && radarrAppsRes.data) ? radarrAppsRes.data : [];
-        const sonarrApps = (sonarrAppsRes.success && sonarrAppsRes.data) ? sonarrAppsRes.data : [];
-
-        // Identify target instances for 1080p and 4K
-        const defaultRadarr1080p = radarrApps.find(a => a.id === settings?.seerrDefaultMovieAppId) || radarrApps.find(a => !a.name.toLowerCase().includes("4k")) || radarrApps[0];
-        const defaultRadarr4k = (settings?.seerrDefaultMovie4kAppId && settings.seerrDefaultMovie4kAppId !== "none")
-            ? radarrApps.find(a => a.id === settings.seerrDefaultMovie4kAppId)
-            : null;
-
-        const defaultSonarr1080p = sonarrApps.find(a => a.id === settings?.seerrDefaultTvAppId) || sonarrApps.find(a => !a.name.toLowerCase().includes("4k")) || sonarrApps[0];
-        const defaultSonarr4k = (settings?.seerrDefaultTv4kAppId && settings.seerrDefaultTv4kAppId !== "none")
-            ? sonarrApps.find(a => a.id === settings.seerrDefaultTv4kAppId)
-            : null;
-
-        // Fetch Radarr 1080p
-        if (defaultRadarr1080p) {
-            try {
-                const res = await arrApiGet(defaultRadarr1080p, "/api/v3/movie");
-                if (res.success && Array.isArray(res.data)) {
-                    for (const m of res.data) {
-                        if (m.tmdbId) {
-                            newIndex.radarr1080p.set(m.tmdbId, {
-                                id: m.id,
-                                monitored: Boolean(m.monitored),
-                                hasFile: Boolean(m.hasFile)
-                            });
-                        }
-                    }
-                }
-            } catch {}
-        }
-
-        // Fetch Radarr 4K
-        if (defaultRadarr4k) {
-            try {
-                const res = await arrApiGet(defaultRadarr4k, "/api/v3/movie");
-                if (res.success && Array.isArray(res.data)) {
-                    for (const m of res.data) {
-                        if (m.tmdbId) {
-                            newIndex.radarr4k.set(m.tmdbId, {
-                                id: m.id,
-                                monitored: Boolean(m.monitored),
-                                hasFile: Boolean(m.hasFile)
-                            });
-                        }
-                    }
-                }
-            } catch {}
-        }
-
-        // Fetch Sonarr 1080p
-        if (defaultSonarr1080p) {
-            try {
-                const res = await arrApiGet(defaultSonarr1080p, "/api/v3/series");
-                if (res.success && Array.isArray(res.data)) {
-                    for (const s of res.data) {
-                        if (s.tvdbId) {
-                            newIndex.sonarr1080p.set(s.tvdbId, {
-                                id: s.id,
-                                monitored: Boolean(s.monitored),
-                                seasons: s.seasons || []
-                            });
-                        }
-                        if (s.title) {
-                            newIndex.sonarrTitles1080p.set(normalizeTitle(s.title), {
-                                id: s.id,
-                                monitored: Boolean(s.monitored),
-                                seasons: s.seasons || []
-                            });
-                        }
-                    }
-                }
-            } catch {}
-        }
-
-        // Fetch Sonarr 4K
-        if (defaultSonarr4k) {
-            try {
-                const res = await arrApiGet(defaultSonarr4k, "/api/v3/series");
-                if (res.success && Array.isArray(res.data)) {
-                    for (const s of res.data) {
-                        if (s.tvdbId) {
-                            newIndex.sonarr4k.set(s.tvdbId, {
-                                id: s.id,
-                                monitored: Boolean(s.monitored),
-                                seasons: s.seasons || []
-                            });
-                        }
-                        if (s.title) {
-                            newIndex.sonarrTitles4k.set(normalizeTitle(s.title), {
-                                id: s.id,
-                                monitored: Boolean(s.monitored),
-                                seasons: s.seasons || []
-                            });
-                        }
-                    }
-                }
-            } catch {}
-        }
-
-        arrCache = newIndex;
-    } catch (e: any) {
-        logger.addLog("WARN", "SEERR", `Failed refreshing Arr index: ${e.message}`);
+    if (inFlightArrPromise) {
+        return inFlightArrPromise;
     }
 
-    return newIndex;
+    inFlightArrPromise = (async () => {
+        const newIndex: ArrIndexCache = {
+            timestamp: Date.now(),
+            radarr1080p: new Map(),
+            radarr4k: new Map(),
+            sonarr1080p: new Map(),
+            sonarr4k: new Map(),
+            sonarrTitles1080p: new Map(),
+            sonarrTitles4k: new Map()
+        };
+
+        try {
+            const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+            const radarrAppsRes = await getEnabledArrInstancesInternal("radarr");
+            const sonarrAppsRes = await getEnabledArrInstancesInternal("sonarr");
+
+            const radarrApps = (radarrAppsRes.success && radarrAppsRes.data) ? radarrAppsRes.data : [];
+            const sonarrApps = (sonarrAppsRes.success && sonarrAppsRes.data) ? sonarrAppsRes.data : [];
+
+            // Identify target instances for 1080p and 4K
+            const defaultRadarr1080p = radarrApps.find(a => a.id === settings?.seerrDefaultMovieAppId) || radarrApps.find(a => !a.name.toLowerCase().includes("4k")) || radarrApps[0];
+            const defaultRadarr4k = (settings?.seerrDefaultMovie4kAppId && settings.seerrDefaultMovie4kAppId !== "none")
+                ? radarrApps.find(a => a.id === settings.seerrDefaultMovie4kAppId)
+                : null;
+
+            const defaultSonarr1080p = sonarrApps.find(a => a.id === settings?.seerrDefaultTvAppId) || sonarrApps.find(a => !a.name.toLowerCase().includes("4k")) || sonarrApps[0];
+            const defaultSonarr4k = (settings?.seerrDefaultTv4kAppId && settings.seerrDefaultTv4kAppId !== "none")
+                ? sonarrApps.find(a => a.id === settings.seerrDefaultTv4kAppId)
+                : null;
+
+            // Fetch Radarr 1080p, Radarr 4k, Sonarr 1080p, Sonarr 4k in parallel with timeouts
+            await Promise.allSettled([
+                defaultRadarr1080p ? arrApiGet(defaultRadarr1080p, "/api/v3/movie").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const m of res.data) {
+                            if (m.tmdbId) {
+                                newIndex.radarr1080p.set(m.tmdbId, {
+                                    id: m.id,
+                                    monitored: Boolean(m.monitored),
+                                    hasFile: Boolean(m.hasFile)
+                                });
+                            }
+                        }
+                    }
+                }).catch(() => {}) : Promise.resolve(),
+
+                defaultRadarr4k ? arrApiGet(defaultRadarr4k, "/api/v3/movie").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const m of res.data) {
+                            if (m.tmdbId) {
+                                newIndex.radarr4k.set(m.tmdbId, {
+                                    id: m.id,
+                                    monitored: Boolean(m.monitored),
+                                    hasFile: Boolean(m.hasFile)
+                                });
+                            }
+                        }
+                    }
+                }).catch(() => {}) : Promise.resolve(),
+
+                defaultSonarr1080p ? arrApiGet(defaultSonarr1080p, "/api/v3/series").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const s of res.data) {
+                            if (s.tvdbId) {
+                                newIndex.sonarr1080p.set(s.tvdbId, {
+                                    id: s.id,
+                                    monitored: Boolean(s.monitored),
+                                    seasons: s.seasons || []
+                                });
+                            }
+                            if (s.title) {
+                                newIndex.sonarrTitles1080p.set(normalizeTitle(s.title), {
+                                    id: s.id,
+                                    monitored: Boolean(s.monitored),
+                                    seasons: s.seasons || []
+                                });
+                            }
+                        }
+                    }
+                }).catch(() => {}) : Promise.resolve(),
+
+                defaultSonarr4k ? arrApiGet(defaultSonarr4k, "/api/v3/series").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const s of res.data) {
+                            if (s.tvdbId) {
+                                newIndex.sonarr4k.set(s.tvdbId, {
+                                    id: s.id,
+                                    monitored: Boolean(s.monitored),
+                                    seasons: s.seasons || []
+                                });
+                            }
+                            if (s.title) {
+                                newIndex.sonarrTitles4k.set(normalizeTitle(s.title), {
+                                    id: s.id,
+                                    monitored: Boolean(s.monitored),
+                                    seasons: s.seasons || []
+                                });
+                            }
+                        }
+                    }
+                }).catch(() => {}) : Promise.resolve()
+            ]);
+
+            arrCache = newIndex;
+        } catch (e: any) {
+            logger.addLog("WARN", "SEERR", `Failed refreshing Arr index: ${e.message}`);
+        } finally {
+            inFlightArrPromise = null;
+        }
+
+        return newIndex;
+    })();
+
+    return inFlightArrPromise;
 }
 
 /**

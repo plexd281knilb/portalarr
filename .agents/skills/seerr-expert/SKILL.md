@@ -109,14 +109,20 @@ Portalarr's native Seerr engine unifies all media types into a single mission co
 To achieve sub-second page loads and eliminate blank-screen flashing on tab changes:
 - **Server-Side In-Memory Discovery Caches**:
   - `discoverHomeCache`: Stores curated hero spotlights and category sections per section mode (`main` vs `kids`) with a 5-minute TTL. Availability checks run dynamically against SQLite/Arr in ~5ms.
-  - `discoverMediaCache`: Caches paginated category grids (`trending`, `popular`, `upcoming`, `top_rated`) keyed by `${category}:${mediaType}:${page}:${isKids}` with a 5-minute TTL.
+  - `discoverMediaCache`: Caches paginated category grids (`trending`, `popular`, `upcoming`, `top_rated`) keyed by `${category}:${mediaType}:${page}:${isKids}` with a 5-minute TTL. Primes `popular:movie:1` and `popular:tv:1` during `getDiscoverHomeAction` so default grid tabs execute in 0ms directly from RAM.
   - `mediaSearchCache` & `booksSearchCache`: Caches full-text search results for 5 minutes, preventing redundant upstream API calls when users re-search or navigate back.
   - `mediaDetailsCache`: Caches TMDb full movie/TV metadata for 10 minutes. Deep Arr and recommendations availability run concurrently via `Promise.all([checkMediaAvailability, batchCheckMediaAvailability])`.
+  - `certificationCache`: In-memory cache for US content certifications with a 24-hour TTL in `src/lib/curation/tmdb.ts`, eliminating repetitive HTTP requests to TMDb release dates/content ratings.
+  - `cachedApiKey`: In-memory cache for TMDb API key with a 5-minute TTL to prevent redundant SQLite queries on high-throughput media operations.
+  - `inFlightPlexPromise` & `inFlightArrPromise`: In-flight Promise deduplication in `getPlexLibraryGuidIndex` and `getArrIndex` ensures that concurrent requests share the exact same background indexing run, preventing duplicate full Plex/Radarr/Sonarr sweeps.
+  - `CACHE_TTL_MS` & `ARR_CACHE_TTL_MS`: Extended cache retention of 15 minutes for Plex GUID index and Arr monitoring index with AbortSignal timeouts (8s–10s) on individual server sockets.
   - `trendingEbooksCache` & `trendingAudiobooksCache`: Caches OpenLibrary, Google Books, and Audible trending works with a 15-minute TTL in `src/lib/books/book-service.ts`.
   - `missingSeriesCandidatesCache`: Caches discovered series volumes with a 30-minute TTL in `findMissingBooksInSeries`, eliminating up to 15 sequential external API calls during library scans and home loads.
   - `reconcileBookRequestsWithMediaRequests`: Throttled to a 30-second interval (`Date.now() - lastReconcileTime < 30_000`) so repeated request listing queries execute immediately without running SQLite PRAGMA table audits or 300-row updates, with a `force = true` bypass for manual syncs and new request submissions.
-- **Client-Side Stale-While-Revalidate Tab Caching (`tabCacheRef`)**:
+- **Client-Side Stale-While-Revalidate Tab Caching (`tabCacheRef`) & Background Pre-Warming**:
   - `DiscoverHub` maintains an in-memory ref caching previously visited tabs (`discover`, `movies`, `tv`, `ebooks`, `audiobooks`).
+  - Background Tab Pre-warming: Silently pre-loads `movie:popular:1` and `tv:popular:1` tabs into `tabCacheRef.current.grid` 80ms after Browse loads, making the very first click on "Movies" or "TV Shows" 100% instant (0ms, zero spinner).
+  - Race Condition Guards: Tracks `activeTabRef` to ensure that fast switching between "Movies" and "TV Shows" never allows older in-flight promises to overwrite the active tab's grid items.
   - Switching between tabs instantly displays cached data with `0ms` latency (zero loading spinner, zero screen flicker), then revalidates in the background if older than 2 minutes.
   - Search debounce is optimized to `350ms` for fluid responsiveness. Searches on `movies` and `tv` tabs strictly query TMDb media without firing redundant book APIs, while `ebooks` and `audiobooks` tabs strictly query book registries.
 - **Request Manager Module-Level Cache**:

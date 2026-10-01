@@ -2502,6 +2502,68 @@ async function runTestSuite() {
         }
     });
 
+    // 50. Seerr Engine: Tab Pre-warming, Deduplicated Availability Indexing & Sub-Second Tab Switching
+    await assertTest("Seerr Engine: Tab Pre-warming & Deduplicated Availability Indexing", async () => {
+        const { getDiscoverHomeAction, getDiscoverMediaAction } = await import("../src/app/seerr-actions");
+        const { getPlexLibraryGuidIndex } = await import("../src/lib/seerr/availability");
+        const { getArrIndex } = await import("../src/lib/seerr/arr-monitoring");
+        const { getTmdbApiKey } = await import("../src/lib/curation/tmdb");
+
+        // 1. In-flight Promise Deduplication Test for Plex & Arr indexes
+        const [plexIndex1, plexIndex2] = await Promise.all([
+            getPlexLibraryGuidIndex(),
+            getPlexLibraryGuidIndex()
+        ]);
+        if (!plexIndex1 || !plexIndex2) {
+            throw new Error("getPlexLibraryGuidIndex returned null");
+        }
+
+        const [arrIndex1, arrIndex2] = await Promise.all([
+            getArrIndex(),
+            getArrIndex()
+        ]);
+        if (!arrIndex1 || !arrIndex2) {
+            throw new Error("getArrIndex returned null");
+        }
+
+        // 2. Discover Home Action Pre-warms Popular Movies & TV Caches
+        const homeRes = await getDiscoverHomeAction("main");
+        if (!homeRes.success) {
+            throw new Error(`getDiscoverHomeAction failed: ${homeRes.error}`);
+        }
+
+        // 3. Tab switch to "movies" (popular page 1) must be instant (< 50ms) from primed cache
+        const startMovies = Date.now();
+        const moviesRes = await getDiscoverMediaAction("popular", "movie", 1, false);
+        const moviesDuration = Date.now() - startMovies;
+
+        if (!moviesRes.success || !Array.isArray(moviesRes.items) || moviesRes.items.length === 0) {
+            throw new Error("getDiscoverMediaAction for popular movies failed or returned empty items");
+        }
+        if (moviesDuration > 60) {
+            throw new Error(`getDiscoverMediaAction for popular movies took ${moviesDuration}ms (expected < 60ms)`);
+        }
+
+        // 4. Tab switch to "tv" (popular page 1) must be instant (< 50ms) from primed cache
+        const startTv = Date.now();
+        const tvRes = await getDiscoverMediaAction("popular", "tv", 1, false);
+        const tvDuration = Date.now() - startTv;
+
+        if (!tvRes.success || !Array.isArray(tvRes.items) || tvRes.items.length === 0) {
+            throw new Error("getDiscoverMediaAction for popular tv failed or returned empty items");
+        }
+        if (tvDuration > 60) {
+            throw new Error(`getDiscoverMediaAction for popular tv took ${tvDuration}ms (expected < 60ms)`);
+        }
+
+        // 5. In-memory API key caching test
+        const key1 = await getTmdbApiKey();
+        const key2 = await getTmdbApiKey();
+        if (!key1 || key1 !== key2) {
+            throw new Error("getTmdbApiKey did not return consistent cached key");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

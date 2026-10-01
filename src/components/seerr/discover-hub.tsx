@@ -91,6 +91,11 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     const [gridPage, setGridPage] = useState(1);
     const [loadingGrid, setLoadingGrid] = useState(false);
 
+    const activeTabRef = useRef(activeTab);
+    useEffect(() => {
+        activeTabRef.current = activeTab;
+    }, [activeTab]);
+
     // In-memory Client Cache for instantaneous (0ms) tab switching & silent background revalidation
     const tabCacheRef = useRef<{
         home?: { [sec: string]: { heroItem: any; sections: any[]; availabilityMap: any; timestamp: number } };
@@ -346,6 +351,9 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
         }
         try {
             const res = await getDiscoverMediaAction(category, type, page, isKidsMode);
+            const expectedTab = type === "movie" ? "movies" : "tv";
+            if (activeTabRef.current !== expectedTab) return;
+
             if (res.success && res.items) {
                 setGridItems(res.items);
                 setGridPage(page);
@@ -359,9 +367,54 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 };
             }
         } catch (e) {} finally {
-            setLoadingGrid(false);
+            const expectedTab = type === "movie" ? "movies" : "tv";
+            if (activeTabRef.current === expectedTab) {
+                setLoadingGrid(false);
+            }
         }
     };
+
+    // Background tab pre-warming: Silently pre-loads Movies & TV popular tabs so first click is 0ms
+    useEffect(() => {
+        if (!loading && heroItem) {
+            const timer = setTimeout(async () => {
+                try {
+                    const isKidsMode = section === "kids";
+                    const movieKey = `movie:popular:1:${isKidsMode}`;
+                    if (!tabCacheRef.current.grid?.[movieKey]) {
+                        const movieRes = await getDiscoverMediaAction("popular", "movie", 1, isKidsMode);
+                        if (movieRes.success && movieRes.items) {
+                            if (!tabCacheRef.current.grid) tabCacheRef.current.grid = {};
+                            tabCacheRef.current.grid[movieKey] = {
+                                items: movieRes.items,
+                                availabilityMap: movieRes.availabilityMap || {},
+                                page: 1,
+                                timestamp: Date.now()
+                            };
+                            setAvailabilityMap(prev => ({ ...prev, ...(movieRes.availabilityMap || {}) }));
+                        }
+                    }
+
+                    const tvKey = `tv:popular:1:${isKidsMode}`;
+                    if (!tabCacheRef.current.grid?.[tvKey]) {
+                        const tvRes = await getDiscoverMediaAction("popular", "tv", 1, isKidsMode);
+                        if (tvRes.success && tvRes.items) {
+                            if (!tabCacheRef.current.grid) tabCacheRef.current.grid = {};
+                            tabCacheRef.current.grid[tvKey] = {
+                                items: tvRes.items,
+                                availabilityMap: tvRes.availabilityMap || {},
+                                page: 1,
+                                timestamp: Date.now()
+                            };
+                            setAvailabilityMap(prev => ({ ...prev, ...(tvRes.availabilityMap || {}) }));
+                        }
+                    }
+                } catch (e) {}
+            }, 80);
+
+            return () => clearTimeout(timer);
+        }
+    }, [loading, heroItem, section]);
 
 
     const handleQuickRequest = async (item: TmdbMediaItem) => {

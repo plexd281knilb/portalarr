@@ -111,20 +111,31 @@ export async function getDiscoverHomeAction(section: "main" | "kids" = "main") {
             heroItem = cached.data.heroItem;
             sections = cached.data.sections;
         } else {
+            let popularMoviesList: TmdbMediaItem[] = [];
             if (section === "kids") {
                 const [
                     kidsTrendingMovies,
                     kidsTrendingTv,
                     disneyPixar,
                     popularKidsTv,
+                    popularKidsMovies,
                     topRatedFamily
                 ] = await Promise.all([
                     getTmdbKidsTrending("movie", 1).catch(() => []),
                     getTmdbKidsTrending("tv", 1).catch(() => []),
                     getTmdbDisneyPixar(1).catch(() => []),
                     getTmdbKidsPopular("tv", 1).catch(() => []),
+                    getTmdbKidsPopular("movie", 1).catch(() => []),
                     getTmdbKidsTopRated("movie", 1).catch(() => [])
                 ]);
+
+                popularMoviesList = popularKidsMovies;
+
+                // Prime discoverMediaCache so tabs (Movies & TV) load in 0ms
+                discoverMediaCache.set(`popular:movie:1:true`, { data: popularKidsMovies, timestamp: Date.now() });
+                discoverMediaCache.set(`popular:tv:1:true`, { data: popularKidsTv, timestamp: Date.now() });
+                discoverMediaCache.set(`trending:movie:1:true`, { data: kidsTrendingMovies, timestamp: Date.now() });
+                discoverMediaCache.set(`trending:tv:1:true`, { data: kidsTrendingTv, timestamp: Date.now() });
 
                 // Select top trending kids movie or show for hero spotlight
                 const heroCandidates = [...kidsTrendingMovies, ...kidsTrendingTv, ...disneyPixar].filter(item => Boolean(item.backdropPath && item.overview));
@@ -144,14 +155,24 @@ export async function getDiscoverHomeAction(section: "main" | "kids" = "main") {
                     trendingTv,
                     upcomingMovies,
                     popularTv,
+                    popularMovies,
                     topRatedMovies
                 ] = await Promise.all([
                     getTmdbTrending("movie", "week", 1).catch(() => []),
                     getTmdbTrending("tv", "week", 1).catch(() => []),
                     getTmdbUpcomingMovies().catch(() => []),
                     getTmdbPopularTv(1).catch(() => []),
+                    getTmdbPopularMovies(1).catch(() => []),
                     getTmdbTopRatedMovies(1).catch(() => [])
                 ]);
+
+                popularMoviesList = popularMovies;
+
+                // Prime discoverMediaCache so tabs (Movies & TV) load in 0ms
+                discoverMediaCache.set(`popular:movie:1:false`, { data: popularMovies, timestamp: Date.now() });
+                discoverMediaCache.set(`popular:tv:1:false`, { data: popularTv, timestamp: Date.now() });
+                discoverMediaCache.set(`trending:movie:1:false`, { data: trendingMovies, timestamp: Date.now() });
+                discoverMediaCache.set(`trending:tv:1:false`, { data: trendingTv, timestamp: Date.now() });
 
                 // Select top trending movie or show for hero spotlight
                 const heroCandidates = [...trendingMovies, ...trendingTv].filter(item => Boolean(item.backdropPath && item.overview));
@@ -175,7 +196,8 @@ export async function getDiscoverHomeAction(section: "main" | "kids" = "main") {
         // Collect all media items for batch availability check (real-time against local library & Arr)
         const allItems = [
             ...(heroItem ? [heroItem] : []),
-            ...sections.flatMap(s => s.items)
+            ...sections.flatMap(s => s.items),
+            ...(discoverMediaCache.get(`popular:movie:1:${section === "kids"}`)?.data || [])
         ];
 
         const availabilityMap = await batchCheckMediaAvailability(allItems, section === "kids");
