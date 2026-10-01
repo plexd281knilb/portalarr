@@ -148,4 +148,5 @@ Standard grid layout for media shelves and discovery pages:
 ```
 
 - **Radix Sub-Menu Portaling Rule (`DropdownMenuSubContent`):** `DropdownMenuSubContent` MUST be wrapped in `<DropdownMenuPrimitive.Portal>`. If rendered without a Portal, the sub-menu is inserted inline into parent `DropdownMenuContent` which has `overflow: hidden`, completely clipping and hiding the expanded sub-menu from view.
+- **Send-to-Kindle Button Truncation Protection & Active Sending State:** In responsive multi-column book grids (e.g. mobile 2-col or desktop split screen), card widths can narrow to ~155px. To guarantee zero text truncation ("Send to..."), use compact padding and sizing: row `gap-1 sm:gap-1.5`, button `px-1.5 sm:px-2`, typography `text-[11px] sm:text-xs`, square dropdown trigger `h-7 w-7 p-0 flex items-center justify-center`, responsive label `<span className="hidden min-[420px]:inline">Send to </span>Kindle`, and display an unambiguous `Sending...` state with spinner when active.
 

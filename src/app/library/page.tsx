@@ -927,11 +927,11 @@ function BookLibraryPageContent() {
                 </Button>
 
                 {/* 2. Secondary Action & More Options Row */}
-                <div className="flex items-center gap-1.5 w-full">
+                <div className="flex items-center gap-1 sm:gap-1.5 w-full">
                   <Button
                     variant="outline"
                     size="sm"
-                    className={`flex-1 h-7 text-xs border-amber-500/30 text-amber-400 font-semibold px-2 gap-1.5 min-w-0 ${
+                    className={`flex-1 h-7 text-[11px] sm:text-xs border-amber-500/30 text-amber-400 font-semibold px-1.5 sm:px-2 gap-1 sm:gap-1.5 min-w-0 ${
                       isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-amber-500/10"
                     }`}
                     title={
@@ -947,7 +947,13 @@ function BookLibraryPageContent() {
                     ) : (
                       <Send className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    <span className="truncate">Send to Kindle</span>
+                    {sendingToKindleId === book.id ? (
+                      <span className="truncate">Sending...</span>
+                    ) : (
+                      <span className="truncate">
+                        <span className="hidden min-[420px]:inline">Send to </span>Kindle
+                      </span>
+                    )}
                   </Button>
 
                   <DropdownMenu>
@@ -955,7 +961,7 @@ function BookLibraryPageContent() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 px-2 border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                        className="h-7 w-7 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
                         title="More Actions"
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
@@ -1187,11 +1193,11 @@ function BookLibraryPageContent() {
           </Button>
 
           {/* 2. Secondary Action & Options Row */}
-          <div className="flex items-center gap-1.5 w-full">
+          <div className="flex items-center gap-1 sm:gap-1.5 w-full">
             <Button
               variant="outline"
               size="sm"
-              className="flex-1 h-7 text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1.5 px-2 min-w-0"
+              className="flex-1 h-7 text-[11px] sm:text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1 sm:gap-1.5 px-1.5 sm:px-2 min-w-0"
               asChild
               title="Direct Download Audiobook"
             >
@@ -1206,7 +1212,7 @@ function BookLibraryPageContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                  className="h-7 w-7 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
                   title="More Actions"
                 >
                   <MoreVertical className="h-3.5 w-3.5" />
