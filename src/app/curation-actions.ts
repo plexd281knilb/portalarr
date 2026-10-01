@@ -124,7 +124,7 @@ import {
     convertKometaLibraryToPortalarrOverlay,
     ParsedKometaConfig
 } from "@/lib/curation/kometa-importer";
-import { getEnabledArrInstances, getEnabledArrInstancesInternal, arrApiGet, arrApiDelete } from "@/app/arr-actions";
+import { getEnabledArrInstances, getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, arrApiDelete } from "@/app/arr-actions";
 
 // Verify admin permissions
 async function verifyAdmin() {
@@ -2985,7 +2985,15 @@ export async function syncSeasonalAndScheduledCollectionsAction(serverId?: strin
     }
 }
 
-export async function syncLeavingSoonCollectionHubInternal(serverId?: string, sectionKey?: string) {
+export async function syncLeavingSoonCollectionHubInternal(
+    serverId?: string,
+    sectionKey?: string,
+    options: {
+        skipWatchRecheck?: boolean;
+        skipExpiredPrune?: boolean;
+        crossServerActivityMap?: any;
+    } = {}
+) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const resolved = await resolveWorkingPlexServerConnection(serverId);
@@ -2996,9 +3004,11 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
 
         // 0. Auto-unflag items that users have watched while staged in Leaving Soon
-        await recheckLeavingSoonWatchActivityInternal(targetServerId, false).catch(err => {
-            console.warn(`[PRUNE-SYNC] Error checking watch activity for Leaving Soon on ${resolved.serverName}:`, err.message);
-        });
+        if (!options.skipWatchRecheck) {
+            await recheckLeavingSoonWatchActivityInternal(targetServerId, false).catch(err => {
+                console.warn(`[PRUNE-SYNC] Error checking watch activity for Leaving Soon on ${resolved.serverName}:`, err.message);
+            });
+        }
 
         // 1. Automated Two-Tier Storage Headroom Capacity Evaluation
         const warningThreshold = (settings as any)?.pruneWarningThresholdPercent ?? 85;
@@ -3006,11 +3016,17 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         const targetHeadroomGb = (settings as any)?.pruneTargetHeadroomGb ?? 100;
         const legacyThreshold = settings?.leavingSoonDiskThreshold ?? 15; // percent free
 
-        // Check Glances disk capacity metrics
+        // Check Glances disk capacity metrics with intelligent mount heuristic
         const glancesResult = await getGlancesDisksInternal().catch(() => null);
         const disks = glancesResult?.disks || [];
         const selectedDiskId = (settings as any)?.selectedGlancesDiskId;
-        const matchedDisk = disks.find(d => selectedDiskId ? d.id === selectedDiskId : d.percent > 0);
+        const matchedDisk = disks.find(d => selectedDiskId ? d.id === selectedDiskId : false)
+            || disks.find(d => {
+                const pt = (d.mntPoint || "").toLowerCase();
+                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank");
+            })
+            || disks.find(d => d.percent > 0 && d.mntPoint !== "/" && d.mntPoint !== "/boot")
+            || disks.find(d => d.percent > 0);
 
         let capacityWarningTriggered = false;
         let capacityDangerTriggered = false;
@@ -3029,25 +3045,28 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         // Auto-stage prune candidates if storage warning threshold is breached
         if (capacityWarningTriggered && serverUrl && token) {
             try {
-                const allPlexServers = await getPlexServers(token).catch(() => []);
-                const allResolvedServers: Array<{ serverId: string; serverName: string; serverUrl: string; token: string }> = [];
-                for (const s of allPlexServers) {
-                    const r = await resolveWorkingPlexServerConnection(s.clientIdentifier);
-                    if (r && r.serverUrl) {
-                        allResolvedServers.push({
-                            serverId: s.clientIdentifier,
-                            serverName: s.name,
-                            serverUrl: r.serverUrl,
-                            token: r.token
-                        });
+                let crossServerActivityMap = options.crossServerActivityMap;
+                if (!crossServerActivityMap) {
+                    const allPlexServers = await getPlexServers(token).catch(() => []);
+                    const allResolvedServers: Array<{ serverId: string; serverName: string; serverUrl: string; token: string }> = [];
+                    for (const s of allPlexServers) {
+                        const r = await resolveWorkingPlexServerConnection(s.clientIdentifier);
+                        if (r && r.serverUrl) {
+                            allResolvedServers.push({
+                                serverId: s.clientIdentifier,
+                                serverName: s.name,
+                                serverUrl: r.serverUrl,
+                                token: r.token
+                            });
+                        }
                     }
-                }
 
-                const crossServerActivityMap = allResolvedServers.length > 1
-                    ? await buildCrossServerPlaybackIndex(allResolvedServers, {
-                        evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true
-                    })
-                    : undefined;
+                    crossServerActivityMap = allResolvedServers.length > 1
+                        ? await buildCrossServerPlaybackIndex(allResolvedServers, {
+                            evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true
+                        })
+                        : undefined;
+                }
 
                 const srvSections = await getPlexServerSections(token, targetServerId);
                 const eligibleSections = sectionKey 
@@ -3116,7 +3135,7 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         }
 
         // 2. Active Reclamation for Expired Items (if Master Deletion ON & Dry Run OFF)
-        if (settings?.enableAutoPruneDeletion && !settings?.pruneDryRun) {
+        if (!options.skipExpiredPrune && settings?.enableAutoPruneDeletion && !settings?.pruneDryRun) {
             const expiredItems = await prisma.mediaContentAdvisory.findMany({
                 where: {
                     isLeavingSoon: true,
@@ -3135,12 +3154,28 @@ export async function syncLeavingSoonCollectionHubInternal(serverId?: string, se
         }
 
         // 3. Query active leaving soon items
-        const leavingSoonItems = await prisma.mediaContentAdvisory.findMany({
+        const allLeavingRecords = await prisma.mediaContentAdvisory.findMany({
             where: {
                 isLeavingSoon: true,
                 ...(serverId ? { serverId } : {})
             }
         });
+
+        // Isolate items that belong to the targeted library section if sectionKey is specified
+        const targetSecKeyStr = sectionKey ? String(sectionKey) : undefined;
+        const leavingSoonItems: typeof allLeavingRecords = [];
+
+        for (const adv of allLeavingRecords) {
+            if (targetSecKeyStr && serverUrl && token) {
+                try {
+                    const meta = await getPlexSingleItemMetadata(serverUrl, token, adv.ratingKey);
+                    if (meta && meta.librarySectionID && String(meta.librarySectionID) !== targetSecKeyStr) {
+                        continue; // Belongs to a different library section
+                    }
+                } catch (e) {}
+            }
+            leavingSoonItems.push(adv);
+        }
 
         const autoHideEmpty = settings?.leavingSoonAutoHideEmpty ?? true;
         const shouldPromote = leavingSoonItems.length > 0 ? (settings?.leavingSoonPromotedToHome ?? true) : !autoHideEmpty;
@@ -5197,10 +5232,10 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
                             const currentLastViewedAt = itemMeta.lastViewedAt ? parseInt(itemMeta.lastViewedAt, 10) * 1000 : null;
                             const flaggedAt = rec.updatedAt ? rec.updatedAt.getTime() : rec.createdAt.getTime();
 
-                            // Item is watched if viewCount > 0 AND (lastViewedAt > flaggedAt - 1 day OR viewCount increased)
-                            const isRecentlyWatched = currentLastViewedAt && (currentLastViewedAt >= (flaggedAt - 86400000));
+                            // Item is watched during grace period if lastViewedAt is since (or within 24h prior to) staging
+                            const isRecentlyWatched = Boolean(currentLastViewedAt && (currentLastViewedAt >= (flaggedAt - 86400000)));
 
-                            if (isRecentlyWatched || currentViewCount > 0) {
+                            if (isRecentlyWatched) {
                                 // Unflag in database
                                 await prisma.mediaContentAdvisory.update({
                                     where: { id: rec.id },
@@ -5589,20 +5624,33 @@ export async function executePruneAction(
                 // If pruneDeleteFromArr is enabled, also unmonitor and delete from Radarr / Sonarr
                 if (settings?.pruneDeleteFromArr && it.title) {
                     try {
-                        const cleanTitle = it.title.replace(/\s*\(\d{4}\).*$/, "").replace(/\s*-\s*Season\s*\d+.*$/i, "").trim();
-                        const radarrRes = await getEnabledArrInstancesInternal("radarr");
-                        if (radarrRes.success && radarrRes.data) {
-                            for (const app of radarrRes.data) {
-                                const lookupRes = await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(cleanTitle)}`);
-                                if (lookupRes.success && Array.isArray(lookupRes.data)) {
-                                    const match = lookupRes.data.find((m: any) => m.title?.toLowerCase() === cleanTitle.toLowerCase() && m.id);
-                                    if (match && match.id) {
-                                        const delRes = await arrApiDelete(app, `/api/v3/movie/${match.id}?deleteFiles=true&addImportExclusion=false`);
-                                        if (delRes.success) arrDeleted = true;
+                        const seasonMatch = it.title.match(/(?:-\s*Season\s*|\(Season\s*)(\d+)\)?/i);
+                        const seasonNum = seasonMatch ? parseInt(seasonMatch[1], 10) : null;
+                        const isSeasonItem = seasonNum !== null && !isNaN(seasonNum);
+                        const cleanTitle = it.title
+                            .replace(/\s*\(\d{4}\).*$/, "")
+                            .replace(/\s*-\s*Season\s*\d+.*$/i, "")
+                            .replace(/\s*\(Season\s*\d+\).*$/i, "")
+                            .trim();
+
+                        // 1. Radarr Handling (Movies only - skip if item is a TV season)
+                        if (!isSeasonItem) {
+                            const radarrRes = await getEnabledArrInstancesInternal("radarr");
+                            if (radarrRes.success && radarrRes.data) {
+                                for (const app of radarrRes.data) {
+                                    const lookupRes = await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(cleanTitle)}`);
+                                    if (lookupRes.success && Array.isArray(lookupRes.data)) {
+                                        const match = lookupRes.data.find((m: any) => m.title?.toLowerCase() === cleanTitle.toLowerCase() && m.id);
+                                        if (match && match.id) {
+                                            const delRes = await arrApiDelete(app, `/api/v3/movie/${match.id}?deleteFiles=true&addImportExclusion=false`);
+                                            if (delRes.success) arrDeleted = true;
+                                        }
                                     }
                                 }
                             }
                         }
+
+                        // 2. Sonarr Handling: Check for TV Series or Season-specific pruning
                         const sonarrRes = await getEnabledArrInstancesInternal("sonarr");
                         if (sonarrRes.success && sonarrRes.data) {
                             for (const app of sonarrRes.data) {
@@ -5610,8 +5658,37 @@ export async function executePruneAction(
                                 if (seriesRes.success && Array.isArray(seriesRes.data)) {
                                     const match = seriesRes.data.find((s: any) => s.title?.toLowerCase() === cleanTitle.toLowerCase() && s.id);
                                     if (match && match.id) {
-                                        const delRes = await arrApiDelete(app, `/api/v3/series/${match.id}?deleteFiles=true&addImportExclusion=false`);
-                                        if (delRes.success) arrDeleted = true;
+                                        if (isSeasonItem) {
+                                            // SEASON-SPECIFIC PRUNING: Only delete episode files of this season and unmonitor season. NEVER delete whole series!
+                                            try {
+                                                const epRes = await arrApiGet(app, `/api/v3/episode?seriesId=${match.id}&seasonNumber=${seasonNum}`);
+                                                if (epRes.success && Array.isArray(epRes.data) && epRes.data.length > 0) {
+                                                    for (const ep of epRes.data) {
+                                                        if (ep.episodeFileId && ep.episodeFileId > 0) {
+                                                            await arrApiDelete(app, `/api/v3/episodefile/${ep.episodeFileId}`);
+                                                            arrDeleted = true;
+                                                        }
+                                                    }
+                                                    const epIds = epRes.data.map((e: any) => e.id).filter(Boolean);
+                                                    if (epIds.length > 0) {
+                                                        await arrApiPut(app, "/api/v3/episode/monitor", { episodeIds: epIds, monitored: false });
+                                                    }
+                                                }
+                                                if (Array.isArray(match.seasons)) {
+                                                    const targetSeason = match.seasons.find((s: any) => s.seasonNumber === seasonNum);
+                                                    if (targetSeason) {
+                                                        targetSeason.monitored = false;
+                                                        await arrApiPut(app, `/api/v3/series/${match.id}`, match);
+                                                    }
+                                                }
+                                            } catch (seasonErr: any) {
+                                                console.warn(`[PRUNE-ARR-DELETE] Error pruning Season ${seasonNum} from Sonarr for "${cleanTitle}":`, seasonErr.message);
+                                            }
+                                        } else {
+                                            // WHOLE SERIES PRUNING: Safe to remove entire series when no season was specified
+                                            const delRes = await arrApiDelete(app, `/api/v3/series/${match.id}?deleteFiles=true&addImportExclusion=false`);
+                                            if (delRes.success) arrDeleted = true;
+                                        }
                                     }
                                 }
                             }
@@ -7179,6 +7256,31 @@ export async function runMaintainerrSyncInternal(targetServerId?: string, target
 
         for (const srv of serversWithSections) {
             if (targetServerId && srv.serverId !== targetServerId) continue;
+
+            // 1. Hoist watch activity re-check once per server pass
+            await recheckLeavingSoonWatchActivityInternal(srv.serverId, false).catch(err => {
+                console.warn(`[PRUNE-SYNC] Error checking watch activity for Leaving Soon on ${srv.serverName}:`, err.message);
+            });
+
+            // 2. Hoist expired items active reclamation once per server pass (if Master Deletion ON & Dry Run OFF)
+            if (settings?.enableAutoPruneDeletion && !settings?.pruneDryRun) {
+                const expiredItems = await prisma.mediaContentAdvisory.findMany({
+                    where: {
+                        isLeavingSoon: true,
+                        leavingSoonDate: { lte: new Date() },
+                        serverId: srv.serverId
+                    }
+                });
+
+                if (expiredItems.length > 0) {
+                    logger.addLog("WARN", "CURATION", `[${srv.serverName}] Auto-pruning ${expiredItems.length} expired Leaving Soon items.`);
+                    await executePruneAction(
+                        expiredItems.map(it => ({ ratingKey: it.ratingKey, serverId: it.serverId || srv.serverId, title: it.title || undefined })),
+                        { forceLiveDelete: true }
+                    );
+                }
+            }
+
             for (const sec of srv.sections || []) {
                 const sKey = String(sec.key);
                 if (targetSectionKey && sKey !== String(targetSectionKey)) continue;
@@ -7190,7 +7292,10 @@ export async function runMaintainerrSyncInternal(targetServerId?: string, target
                 }
 
                 try {
-                    const res = await syncLeavingSoonCollectionHubInternal(srv.serverId, sKey);
+                    const res = await syncLeavingSoonCollectionHubInternal(srv.serverId, sKey, {
+                        skipWatchRecheck: true,
+                        skipExpiredPrune: true
+                    });
                     if (res && (res as any).leavingCount !== undefined) {
                         leavingCount += (res as any).leavingCount || 0;
                         totalEvaluated += (res as any).evaluatedCount || (res as any).totalEvaluated || 0;

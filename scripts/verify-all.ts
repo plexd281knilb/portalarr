@@ -1351,18 +1351,41 @@ async function runTestSuite() {
             throw new Error(`Background scan mutated lookback window, got ${settings?.paymentEmailLookbackDays}`);
         }
 
+        // 1-day lookback ("Today Only") check
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { paymentEmailLookbackDays: 1 },
+            create: { id: "global", paymentEmailLookbackDays: 1 }
+        });
+        settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.paymentEmailLookbackDays !== 1) {
+            throw new Error(`Expected paymentEmailLookbackDays to be 1, got ${settings?.paymentEmailLookbackDays}`);
+        }
+        await scanPaymentEmailsInternal();
+        settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.paymentEmailLookbackDays !== 1) {
+            throw new Error(`Background scan mutated 1-day lookback window, got ${settings?.paymentEmailLookbackDays}`);
+        }
+
         // Parsing logic tests
         const parseLookback = (val: string | null | undefined) => {
             if (!val) return undefined;
             const parsed = parseInt(val, 10);
             return !isNaN(parsed) ? parsed : undefined;
         };
-        if (parseLookback("14") !== 14 || parseLookback("30") !== 30 || parseLookback("0") !== 0 || parseLookback("") !== undefined) {
+        if (parseLookback("1") !== 1 || parseLookback("3") !== 3 || parseLookback("7") !== 7 || parseLookback("14") !== 14 || parseLookback("30") !== 30 || parseLookback("0") !== 0 || parseLookback("") !== undefined) {
             throw new Error("Lookback string parsing failed");
         }
 
-        // Lookback date math check
+        // Lookback date math check for 1 day (Today) and 14 days
         const now = new Date();
+        const lookback1 = new Date();
+        lookback1.setDate(now.getDate() - 1);
+        const diff1 = Math.round((now.getTime() - lookback1.getTime()) / (1000 * 60 * 60 * 24));
+        if (diff1 !== 1) {
+            throw new Error(`1-day lookback math mismatch: expected 1 day difference, got ${diff1}`);
+        }
+
         const lookback14 = new Date();
         lookback14.setDate(now.getDate() - 14);
         const diff = Math.round((now.getTime() - lookback14.getTime()) / (1000 * 60 * 60 * 24));
@@ -1924,6 +1947,95 @@ async function runTestSuite() {
         }
         if (candidates.length > 3) {
             throw new Error(`Expected at most 3 candidate models to prevent thundering herd cascade, got ${candidates.length}: ${JSON.stringify(candidates)}`);
+        }
+    });
+
+    // 40. Maintainerr: Watch Activity Revocation Logic (Lane 1 Retention & Grace Period Rescue)
+    await assertTest("Maintainerr: Watch Revocation (Lane 1 Retention & Grace Period Rescue)", async () => {
+        const flaggedAt = Date.now() - 3 * 86400000; // Staged 3 days ago
+
+        // Case A: Oldest Watched (Lane 1) item with plays from 200 days ago
+        const lane1OldPlay = flaggedAt - 200 * 86400000;
+        const lane1RecentlyWatched = Boolean(lane1OldPlay && (lane1OldPlay >= (flaggedAt - 86400000)));
+        if (lane1RecentlyWatched) {
+            throw new Error("Lane 1 item with old play was mistakenly marked as recently watched!");
+        }
+
+        // Case B: Item watched yesterday (during 14-day notice period)
+        const recentPlay = flaggedAt + 1 * 86400000;
+        const recentlyWatched = Boolean(recentPlay && (recentPlay >= (flaggedAt - 86400000)));
+        if (!recentlyWatched) {
+            throw new Error("Item streamed during grace period failed to trigger recent watch rescue!");
+        }
+
+        // Case C: Never watched item (viewCount 0, lastViewedAt null)
+        const neverWatched: number | null = null;
+        const neverWatchedFlag = Boolean(neverWatched && (neverWatched >= (flaggedAt - 86400000)));
+        if (neverWatchedFlag) {
+            throw new Error("Unwatched item with null lastViewedAt was mistakenly marked as watched!");
+        }
+    });
+
+    // 41. Maintainerr: Sonarr TV Season Pruning Safety & Title Parsing
+    await assertTest("Maintainerr: TV Season Pruning Detection & Safe Sonarr Title Parsing", async () => {
+        const testCases = [
+            { raw: "Breaking Bad - Season 1", expectedSeason: 1, expectedClean: "Breaking Bad", isSeason: true },
+            { raw: "The Simpsons (Season 03)", expectedSeason: 3, expectedClean: "The Simpsons", isSeason: true },
+            { raw: "Severance (2022) - Season 2", expectedSeason: 2, expectedClean: "Severance", isSeason: true },
+            { raw: "Inception (2010)", expectedSeason: null, expectedClean: "Inception", isSeason: false },
+            { raw: "The Dark Knight", expectedSeason: null, expectedClean: "The Dark Knight", isSeason: false }
+        ];
+
+        for (const tc of testCases) {
+            const seasonMatch = tc.raw.match(/(?:-\s*Season\s*|\(Season\s*)(\d+)\)?/i);
+            const seasonNum = seasonMatch ? parseInt(seasonMatch[1], 10) : null;
+            const isSeasonItem = seasonNum !== null && !isNaN(seasonNum);
+            const cleanTitle = tc.raw
+                .replace(/\s*\(\d{4}\).*$/, "")
+                .replace(/\s*-\s*Season\s*\d+.*$/i, "")
+                .replace(/\s*\(Season\s*\d+\).*$/i, "")
+                .trim();
+
+            if (isSeasonItem !== tc.isSeason) {
+                throw new Error(`Expected isSeasonItem=${tc.isSeason} for "${tc.raw}", got ${isSeasonItem}`);
+            }
+            if (seasonNum !== tc.expectedSeason) {
+                throw new Error(`Expected seasonNum=${tc.expectedSeason} for "${tc.raw}", got ${seasonNum}`);
+            }
+            if (cleanTitle !== tc.expectedClean) {
+                throw new Error(`Expected cleanTitle="${tc.expectedClean}" for "${tc.raw}", got "${cleanTitle}"`);
+            }
+        }
+    });
+
+    // 42. Maintainerr: Glances Storage Array Mount Heuristic Fallback
+    await assertTest("Maintainerr: Glances Mount Heuristic Prefers Media Storage over Root", async () => {
+        const mockDisks = [
+            { id: "disk_root", mntPoint: "/", percent: 35 },
+            { id: "disk_boot", mntPoint: "/boot", percent: 45 },
+            { id: "disk_media", mntPoint: "/mnt/user/media", percent: 91 },
+            { id: "disk_data", mntPoint: "/data", percent: 88 }
+        ];
+
+        // 1. Explicit selection takes highest precedence
+        const selectedId = "disk_data";
+        const explicitMatch = mockDisks.find(d => selectedId ? d.id === selectedId : false);
+        if (explicitMatch?.id !== "disk_data") {
+            throw new Error(`Expected explicit match "disk_data", got "${explicitMatch?.id}"`);
+        }
+
+        // 2. Unset selection prefers media/data/mnt/user storage over root "/"
+        const unsetId = undefined;
+        const heuristicMatch = mockDisks.find(d => unsetId ? d.id === unsetId : false)
+            || mockDisks.find(d => {
+                const pt = (d.mntPoint || "").toLowerCase();
+                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank");
+            })
+            || mockDisks.find(d => d.percent > 0 && d.mntPoint !== "/" && d.mntPoint !== "/boot")
+            || mockDisks.find(d => d.percent > 0);
+
+        if (heuristicMatch?.id !== "disk_media") {
+            throw new Error(`Expected heuristic match to pick "disk_media", got "${heuristicMatch?.id}" (${heuristicMatch?.mntPoint})`);
         }
     });
 

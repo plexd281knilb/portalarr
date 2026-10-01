@@ -33,15 +33,30 @@ To visually alert users browsing library posters:
 
 ---
 
-## 3. Prune Actions & Safe Disk Deletion
+## 3. Autonomous Watch Activity Revocation (Self-Healing)
+
+When household users browse the `⚠️ Leaving Soon` collection on the Plex Home screen, playback activity rescues staged items:
+- **Revocation Condition**: `recheckLeavingSoonWatchActivityInternal` polls PMS for `lastViewedAt`. An item is unflagged ONLY if `lastViewedAt >= (flaggedAt - 24 hours)`.
+- **Lane 1 Retention Integrity**: Items staged under Lane 1 (Oldest Watched) already have `viewCount > 0` and legacy `lastViewedAt` timestamps from months ago. Checking strictly against the staging window prevents false-positive revocation loops where Lane 1 items unflag themselves immediately upon staging.
+- **Artwork Vault Restoration**: When an item is rescued by watch activity, its original un-badged poster is automatically restored from the local artwork vault (`restoreItemOriginalArtwork`), ensuring no permanent visual artifacts remain on library posters.
+
+---
+
+## 4. Prune Actions & Safe Disk Deletion
 
 When the grace period expires without activity:
 1. **Radarr Prune**:
    - Calls `DELETE /api/v3/movie/{id}?deleteFiles=true&addImportExclusion=false`.
-2. **Sonarr Prune**:
-   - Calls `DELETE /api/v3/series/{id}?deleteFiles=true&addImportExclusion=false` or deletes specific season/episode files.
-3. **Download Client Purge**:
+2. **Sonarr TV Season Pruning Safety**:
+   - For season-level items (`- Season X` or `(Season X)`): Queries `/api/v3/episode?seriesId={id}&seasonNumber={seasonNum}`, deletes the individual episode files via `DELETE /api/v3/episodefile/{episodeFileId}`, unmonitors the episodes via `/api/v3/episode/monitor`, and unmonitors the season in the series model. **NEVER deletes the root series entity**.
+   - For entire series items (no season specified): Calls `DELETE /api/v3/series/{id}?deleteFiles=true&addImportExclusion=false`.
+3. **Scheduled Sync Optimization**:
+   - `runMaintainerrSyncInternal` hoists watch activity rechecks and expired item reclamation to run once per server pass rather than repeating N times inside the library section loop.
+   - `syncLeavingSoonCollectionHubInternal` isolates items by `sectionKey`, preventing cross-library section rating key leakage into foreign collection hubs.
+4. **Glances Storage Array Mount Detection**:
+   - Heuristically prioritizes storage array mounts (`/mnt/user`, `/media`, `/data`, `/storage`, `pool`, `tank`) when `selectedGlancesDiskId` is unset, preventing accidental fallback to container root (`/`).
+5. **Download Client Purge**:
    - Instructs qBittorrent, SABnzbd, or Transmission to delete associated torrents and NZBs to prevent re-downloads.
-4. **Filesystem Cleanup**:
+6. **Filesystem Cleanup**:
    - Removes empty parent folders (`purgeEmptyDirectories`).
    - Cleans up associated `.nfo`, `.srt`, and subtitle files.

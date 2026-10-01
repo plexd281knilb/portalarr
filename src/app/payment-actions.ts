@@ -63,7 +63,7 @@ export async function getPaymentEmailSources() {
             config: {
                 paymentEmailAutoScan: settings?.paymentEmailAutoScan ?? true,
                 paymentEmailScanInterval: settings?.paymentEmailScanInterval ?? 15,
-                paymentEmailLookbackDays: (settings as any)?.paymentEmailLookbackDays ?? 365,
+                paymentEmailLookbackDays: (settings as any)?.paymentEmailLookbackDays ?? 1,
                 paymentLastScanAt: settings?.paymentLastScanAt,
                 paymentLastScanResult: settings?.paymentLastScanResult ? JSON.parse(settings.paymentLastScanResult) : null
             }
@@ -212,7 +212,7 @@ export async function scanPaymentEmailsAction(sourceId?: string, lookbackDays?: 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const effectiveLookback = typeof lookbackDays === "number" && !isNaN(lookbackDays)
             ? lookbackDays
-            : (settings?.paymentEmailLookbackDays ?? 365);
+            : (settings?.paymentEmailLookbackDays ?? 1);
 
         // Ensure database settings persists the lookback window
         if (typeof lookbackDays === "number" && !isNaN(lookbackDays)) {
@@ -457,7 +457,7 @@ export async function savePaymentEmailScraperConfig(formData: FormData) {
             id: "global",
             paymentEmailAutoScan,
             paymentEmailScanInterval,
-            paymentEmailLookbackDays: paymentEmailLookbackDays ?? 365
+            paymentEmailLookbackDays: paymentEmailLookbackDays ?? 1
         };
 
         await prisma.settings.upsert({

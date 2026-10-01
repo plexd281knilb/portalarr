@@ -41,7 +41,7 @@ export default function PaymentEmailManager() {
     const [config, setConfig] = useState<any>({
         paymentEmailAutoScan: true,
         paymentEmailScanInterval: 15,
-        paymentEmailLookbackDays: 365,
+        paymentEmailLookbackDays: 1,
         paymentLastScanAt: null,
         paymentLastScanResult: null
     });
@@ -49,7 +49,7 @@ export default function PaymentEmailManager() {
     const [allUsers, setAllUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [scanning, setScanning] = useState(false);
-    const [scanLookback, setScanLookback] = useState("365");
+    const [scanLookback, setScanLookback] = useState("1");
     const [scanResult, setScanResult] = useState<any>(null);
 
     // Source Add/Edit Modal
@@ -274,7 +274,7 @@ export default function PaymentEmailManager() {
         setScanResult(null);
         try {
             const parsed = parseInt(scanLookback, 10);
-            const days = !isNaN(parsed) ? parsed : (config.paymentEmailLookbackDays ?? 365);
+            const days = !isNaN(parsed) ? parsed : (config.paymentEmailLookbackDays ?? 1);
             const res = await scanPaymentEmailsAction(sourceId, days);
             setScanResult(res);
             loadData();
@@ -285,9 +285,9 @@ export default function PaymentEmailManager() {
         }
     };
 
-    const handleSaveScheduleConfig = async (enabled: boolean, interval: number) => {
+    const handleSaveScheduleConfig = async (enabled: boolean, interval: number, customLookback?: number) => {
         const parsed = parseInt(scanLookback, 10);
-        const lookbackDays = !isNaN(parsed) ? parsed : (config.paymentEmailLookbackDays ?? 365);
+        const lookbackDays = customLookback !== undefined ? customLookback : (!isNaN(parsed) ? parsed : (config.paymentEmailLookbackDays ?? 1));
         const formData = new FormData();
         formData.append("paymentEmailAutoScan", String(enabled));
         formData.append("paymentEmailScanInterval", String(interval));
@@ -304,7 +304,7 @@ export default function PaymentEmailManager() {
     const handleLookbackChange = async (val: string) => {
         setScanLookback(val);
         const parsed = parseInt(val, 10);
-        const lookbackDays = isNaN(parsed) ? 365 : parsed;
+        const lookbackDays = isNaN(parsed) ? 1 : parsed;
         const formData = new FormData();
         formData.append("paymentEmailAutoScan", String(config.paymentEmailAutoScan ?? true));
         formData.append("paymentEmailScanInterval", String(config.paymentEmailScanInterval ?? 15));
@@ -685,15 +685,18 @@ export default function PaymentEmailManager() {
                             <div className="flex items-center gap-1.5 bg-background/60 p-1 rounded-lg border border-border/60">
                                 <span className="text-[10px] text-muted-foreground uppercase font-bold px-1.5 hidden sm:inline">Lookback:</span>
                                 <Select value={scanLookback} onValueChange={handleLookbackChange}>
-                                    <SelectTrigger className="h-8 text-xs w-full sm:w-36 bg-background border-border/40 font-medium">
+                                    <SelectTrigger className="h-8 text-xs w-full sm:w-40 bg-background border-border/40 font-medium">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="365">Past 1 Year (365d)</SelectItem>
-                                        <SelectItem value="180">Past 6 Months (180d)</SelectItem>
+                                        <SelectItem value="1">Today Only (1 day)</SelectItem>
+                                        <SelectItem value="3">Past 3 Days (3d)</SelectItem>
+                                        <SelectItem value="7">Past 7 Days (7d)</SelectItem>
+                                        <SelectItem value="14">Past 14 Days (14d)</SelectItem>
+                                        <SelectItem value="30">Past 30 Days (30d)</SelectItem>
                                         <SelectItem value="90">Past 3 Months (90d)</SelectItem>
-                                        <SelectItem value="30">Past 30 Days</SelectItem>
-                                        <SelectItem value="14">Past 14 Days</SelectItem>
+                                        <SelectItem value="180">Past 6 Months (180d)</SelectItem>
+                                        <SelectItem value="365">Past 1 Year (365d)</SelectItem>
                                         <SelectItem value="0">All Recent (300 msgs)</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -713,7 +716,7 @@ export default function PaymentEmailManager() {
 
                 <CardContent className="space-y-4 pt-0">
                     {/* Telemetry Summary & Schedule Controls */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3.5 rounded-xl bg-black/40 border border-border/40 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 rounded-xl bg-black/40 border border-border/40 text-xs">
                         <div className="space-y-1">
                             <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider block">Auto-Scan Schedule</span>
                             <div className="flex items-center gap-2.5">
@@ -741,6 +744,26 @@ export default function PaymentEmailManager() {
                                     </Select>
                                 )}
                             </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider block">Auto-Scan Lookback</span>
+                            <Select value={scanLookback} onValueChange={handleLookbackChange}>
+                                <SelectTrigger className="h-7 text-xs w-full bg-background border-border/60">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1">Today Only (1 day)</SelectItem>
+                                    <SelectItem value="3">Past 3 Days (3d)</SelectItem>
+                                    <SelectItem value="7">Past 7 Days (7d)</SelectItem>
+                                    <SelectItem value="14">Past 14 Days (14d)</SelectItem>
+                                    <SelectItem value="30">Past 30 Days (30d)</SelectItem>
+                                    <SelectItem value="90">Past 3 Months (90d)</SelectItem>
+                                    <SelectItem value="180">Past 6 Months (180d)</SelectItem>
+                                    <SelectItem value="365">Past 1 Year (365d)</SelectItem>
+                                    <SelectItem value="0">All Recent (300 msgs)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="space-y-1">

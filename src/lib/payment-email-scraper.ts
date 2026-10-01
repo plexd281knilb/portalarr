@@ -1014,7 +1014,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
     const effectiveLookbackDays = typeof lookbackDays === "number" 
         ? lookbackDays 
-        : (settings?.paymentEmailLookbackDays ?? 365);
+        : (settings?.paymentEmailLookbackDays ?? 1);
 
     const whereClause = sourceId ? { id: sourceId, enabled: true } : { enabled: true };
     const sources = await prisma.paymentEmailSource.findMany({ where: whereClause });
@@ -1087,7 +1087,8 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
                 if (effectiveLookbackDays && effectiveLookbackDays > 0) {
                     const sinceDate = new Date();
                     sinceDate.setDate(sinceDate.getDate() - effectiveLookbackDays);
-                    logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Scanning source "${src.name}" (${src.user}) in mailbox "${mailboxName}" since ${sinceDate.toLocaleDateString()} (${effectiveLookbackDays} days lookback)`);
+                    const lookbackLabel = effectiveLookbackDays === 1 ? "Today (1 day lookback)" : `${effectiveLookbackDays} days lookback`;
+                    logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Scanning source "${src.name}" (${src.user}) in mailbox "${mailboxName}" since ${sinceDate.toLocaleDateString()} (${lookbackLabel})`);
                     messages = client.fetch(
                         { since: sinceDate },
                         { uid: true, envelope: true, source: true }
