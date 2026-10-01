@@ -459,6 +459,20 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - **Romance Title Signatures (`ADULT_ROMANCE_TITLE_REGEX`)**: Evaluates classic adult romance tropes and title keywords (`surrender`, `scandal`, `scandalous`, `seduction`, `affair`, `duchess`, `duke`, `rake`, `scoundrel`, `wicked`) as `18+ Mature`.
   - **Strict Whitelist for Kids Mode**: Child accounts (`accountType === "KID"` or `section === "kids"`) operate on a strict whitelist requiring `ageRating === "Kids"` or `YA (12+)`. Unverified general fiction and uncaught adult books are strictly barred from entering a child's reading view.
 
+---
+
+### 27. Settings Dirty Checking & Unsaved Changes State Lifecycle
+- **Never Depend on `useMemo` for Ref Snapshots (`initialDataRef`)**:
+  - `useMemo` compares its dependency array by identity (`Object.is`). It DOES NOT and CANNOT track mutations to `ref.current`.
+  - If a save handler updates `initialDataRef.current` without altering state references (or if the memo dependency array only contains state), `useMemo` will return the stale cached `true` value from the previous render, leaving "● Unsaved Changes" and the floating action bar permanently visible even after successful save operations.
+  - **Rule**: Compute dirty checks directly as clean, lightweight boolean expressions during component render (e.g. `isPricingDirty = Boolean(initialRef.current && (...))`).
+- **State & Snapshot Synchronization on Save**:
+  - On successful save actions (`savePaymentAndTrialSettings`), synchronously update `initialPaymentSettingsRef.current` with the new snapshot AND call the corresponding `setState` hooks with cloned data to ensure all render cycles are completely in sync.
+  - Return authoritative updated settings from Server Actions so the frontend saves match server normalizations and defaults.
+- **Robust Array Equality**:
+  - Compare string array settings (such as default library IDs) by sorting copies prior to index-by-index equality checks (`[...a].sort()`), preventing false-positive dirty states caused by array order permutations.
+  - Always set state arrays explicitly even when loaded strings are empty (e.g., `""` &rarr; `[]`), preventing stale key retention.
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

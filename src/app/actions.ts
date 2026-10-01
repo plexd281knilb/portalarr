@@ -5363,7 +5363,14 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
-        return { success: true, message: "Payment & Trial settings saved successfully!" };
+        return {
+            success: true,
+            message: "Payment & Trial settings saved successfully!",
+            settings: {
+                ...updateData,
+                discordInviteUrl: discordInviteUrl || ""
+            }
+        };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to save settings" };
     }

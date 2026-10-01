@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { UnsavedChangesPrompt, CustomPendingNavigation } from "@/components/ui/unsaved-changes-prompt";
 import { 
     getAppUsers, 
@@ -177,53 +177,43 @@ export default function AccessSettingsPage() {
     } | null>(null);
     const [customPendingNav, setCustomPendingNav] = useState<CustomPendingNavigation | null>(null);
 
-    const isPricingDirty = useMemo(() => {
-        if (!initialPaymentSettingsRef.current) return false;
-        const init = initialPaymentSettingsRef.current.paymentSettings;
-        return (
-            paymentSettings.defaultTrialDays !== init.defaultTrialDays ||
-            paymentSettings.subscriptionPrice !== init.subscriptionPrice ||
-            paymentSettings.yearlyPrice !== init.yearlyPrice ||
-            paymentSettings.monthlyPrice !== init.monthlyPrice ||
-            (paymentSettings.tier2YearlyPrice ?? 240) !== (init.tier2YearlyPrice ?? 240) ||
-            (paymentSettings.tier2MonthlyPrice ?? 25) !== (init.tier2MonthlyPrice ?? 25) ||
-            paymentSettings.renewalMonth !== init.renewalMonth ||
-            paymentSettings.renewalDay !== init.renewalDay ||
-            paymentSettings.billingType !== init.billingType ||
-            (paymentSettings.membershipTiersEnabled ?? true) !== (init.membershipTiersEnabled ?? true)
-        );
-    }, [paymentSettings]);
+    const areArraysEqual = (a: string[] = [], b: string[] = []) => {
+        if (a.length !== b.length) return false;
+        const sortedA = [...a].sort();
+        const sortedB = [...b].sort();
+        return sortedA.every((val, idx) => val === sortedB[idx]);
+    };
 
-    const isPaymentMethodsDirty = useMemo(() => {
-        if (!initialPaymentSettingsRef.current) return false;
-        const init = initialPaymentSettingsRef.current.paymentSettings;
-        return (
-            (paymentSettings.paymentPaypal || "") !== (init.paymentPaypal || "") ||
-            (paymentSettings.paymentVenmo || "") !== (init.paymentVenmo || "") ||
-            (paymentSettings.paymentCashApp || "") !== (init.paymentCashApp || "") ||
-            (paymentSettings.paymentZelle || "") !== (init.paymentZelle || "") ||
-            (paymentSettings.paymentInstructions || "") !== (init.paymentInstructions || "") ||
-            (paymentSettings.discordInviteUrl || "") !== (init.discordInviteUrl || "") ||
-            (paymentSettings.subscriptionGracePeriodDays ?? 3) !== (init.subscriptionGracePeriodDays ?? 3) ||
-            (paymentSettings.autoSuspendExpiredAccounts ?? false) !== (init.autoSuspendExpiredAccounts ?? false) ||
-            (paymentSettings.requireReferralForSignup ?? false) !== (init.requireReferralForSignup ?? false)
-        );
-    }, [paymentSettings]);
+    const isPricingDirty = Boolean(initialPaymentSettingsRef.current && (
+        paymentSettings.defaultTrialDays !== initialPaymentSettingsRef.current.paymentSettings.defaultTrialDays ||
+        paymentSettings.subscriptionPrice !== initialPaymentSettingsRef.current.paymentSettings.subscriptionPrice ||
+        paymentSettings.yearlyPrice !== initialPaymentSettingsRef.current.paymentSettings.yearlyPrice ||
+        paymentSettings.monthlyPrice !== initialPaymentSettingsRef.current.paymentSettings.monthlyPrice ||
+        (paymentSettings.tier2YearlyPrice ?? 240) !== (initialPaymentSettingsRef.current.paymentSettings.tier2YearlyPrice ?? 240) ||
+        (paymentSettings.tier2MonthlyPrice ?? 25) !== (initialPaymentSettingsRef.current.paymentSettings.tier2MonthlyPrice ?? 25) ||
+        paymentSettings.renewalMonth !== initialPaymentSettingsRef.current.paymentSettings.renewalMonth ||
+        paymentSettings.renewalDay !== initialPaymentSettingsRef.current.paymentSettings.renewalDay ||
+        paymentSettings.billingType !== initialPaymentSettingsRef.current.paymentSettings.billingType ||
+        (paymentSettings.membershipTiersEnabled ?? true) !== (initialPaymentSettingsRef.current.paymentSettings.membershipTiersEnabled ?? true)
+    ));
 
-    const isDefaultLibrariesDirty = useMemo(() => {
-        if (!initialPaymentSettingsRef.current) return false;
-        const init = initialPaymentSettingsRef.current;
-        const areArraysEqual = (a: string[], b: string[]) => {
-            if (a.length !== b.length) return false;
-            const setA = new Set(a);
-            return b.every(x => setA.has(x));
-        };
-        return (
-            !areArraysEqual(defaultSelectedKeys, init.defaultSelectedKeys) ||
-            !areArraysEqual(defaultTrialSelectedKeys, init.defaultTrialSelectedKeys) ||
-            !areArraysEqual(defaultKidsSelectedKeys, init.defaultKidsSelectedKeys)
-        );
-    }, [defaultSelectedKeys, defaultTrialSelectedKeys, defaultKidsSelectedKeys]);
+    const isPaymentMethodsDirty = Boolean(initialPaymentSettingsRef.current && (
+        (paymentSettings.paymentPaypal || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentPaypal || "") ||
+        (paymentSettings.paymentVenmo || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentVenmo || "") ||
+        (paymentSettings.paymentCashApp || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentCashApp || "") ||
+        (paymentSettings.paymentZelle || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentZelle || "") ||
+        (paymentSettings.paymentInstructions || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentInstructions || "") ||
+        (paymentSettings.discordInviteUrl || "") !== (initialPaymentSettingsRef.current.paymentSettings.discordInviteUrl || "") ||
+        (paymentSettings.subscriptionGracePeriodDays ?? 3) !== (initialPaymentSettingsRef.current.paymentSettings.subscriptionGracePeriodDays ?? 3) ||
+        (paymentSettings.autoSuspendExpiredAccounts ?? false) !== (initialPaymentSettingsRef.current.paymentSettings.autoSuspendExpiredAccounts ?? false) ||
+        (paymentSettings.requireReferralForSignup ?? false) !== (initialPaymentSettingsRef.current.paymentSettings.requireReferralForSignup ?? false)
+    ));
+
+    const isDefaultLibrariesDirty = Boolean(initialPaymentSettingsRef.current && (
+        !areArraysEqual(defaultSelectedKeys, initialPaymentSettingsRef.current.defaultSelectedKeys) ||
+        !areArraysEqual(defaultTrialSelectedKeys, initialPaymentSettingsRef.current.defaultTrialSelectedKeys) ||
+        !areArraysEqual(defaultKidsSelectedKeys, initialPaymentSettingsRef.current.defaultKidsSelectedKeys)
+    ));
 
     const unsavedSections: string[] = [];
     if (isPricingDirty) unsavedSections.push("Subscription & Trial Pricing");
@@ -576,30 +566,30 @@ export default function AccessSettingsPage() {
             const res = await getPaymentAndTrialSettings();
             if (res && res.success && res.settings) {
                 setPaymentSettings(res.settings);
-                let loadedKeys: string[] = [];
-                let loadedTrialKeys: string[] = [];
-                let loadedKidsKeys: string[] = [];
-                if (res.settings.defaultPlexLibraries) {
-                    loadedKeys = res.settings.defaultPlexLibraries
+                const loadedKeys = res.settings.defaultPlexLibraries
+                    ? res.settings.defaultPlexLibraries
                         .split(",")
                         .map((s: string) => s.trim())
-                        .filter(Boolean);
-                    setDefaultSelectedKeys(loadedKeys);
-                }
-                if (res.settings.defaultTrialPlexLibraries) {
-                    loadedTrialKeys = res.settings.defaultTrialPlexLibraries
+                        .filter(Boolean)
+                    : [];
+                setDefaultSelectedKeys(loadedKeys);
+
+                const loadedTrialKeys = res.settings.defaultTrialPlexLibraries
+                    ? res.settings.defaultTrialPlexLibraries
                         .split(",")
                         .map((s: string) => s.trim())
-                        .filter(Boolean);
-                    setDefaultTrialSelectedKeys(loadedTrialKeys);
-                }
-                if (res.settings.defaultKidsPlexLibraries) {
-                    loadedKidsKeys = res.settings.defaultKidsPlexLibraries
+                        .filter(Boolean)
+                    : [];
+                setDefaultTrialSelectedKeys(loadedTrialKeys);
+
+                const loadedKidsKeys = res.settings.defaultKidsPlexLibraries
+                    ? res.settings.defaultKidsPlexLibraries
                         .split(",")
                         .map((s: string) => s.trim())
-                        .filter(Boolean);
-                    setDefaultKidsSelectedKeys(loadedKidsKeys);
-                }
+                        .filter(Boolean)
+                    : [];
+                setDefaultKidsSelectedKeys(loadedKidsKeys);
+
                 initialPaymentSettingsRef.current = {
                     paymentSettings: { ...res.settings },
                     defaultSelectedKeys: loadedKeys,
@@ -1326,15 +1316,24 @@ export default function AccessSettingsPage() {
         setSavingSettings(false);
         if (res.success) {
             setSettingsSuccessMsg(res.message || "Payment & Trial settings saved successfully!");
-            initialPaymentSettingsRef.current = {
-                paymentSettings: { ...paymentSettings },
+            setTimeout(() => setSettingsSuccessMsg(""), 5000);
+
+            const savedSettings = (res as any).settings ? { ...(res as any).settings } : { ...paymentSettings };
+            const snapshot = {
+                paymentSettings: { ...savedSettings },
                 defaultSelectedKeys: [...defaultSelectedKeys],
                 defaultTrialSelectedKeys: [...defaultTrialSelectedKeys],
                 defaultKidsSelectedKeys: [...defaultKidsSelectedKeys]
             };
+            initialPaymentSettingsRef.current = snapshot;
+            setPaymentSettings(snapshot.paymentSettings);
+            setDefaultSelectedKeys([...snapshot.defaultSelectedKeys]);
+            setDefaultTrialSelectedKeys([...snapshot.defaultTrialSelectedKeys]);
+            setDefaultKidsSelectedKeys([...snapshot.defaultKidsSelectedKeys]);
             return true;
         } else {
             setSettingsErrMsg(res.error || "Failed to save settings.");
+            setTimeout(() => setSettingsErrMsg(""), 5000);
             return false;
         }
     };
