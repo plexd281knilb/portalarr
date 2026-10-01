@@ -942,46 +942,17 @@ function BookLibraryPageContent() {
             const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
             return (
               <>
-                {/* 1. Primary Hero Action (Zero Truncation) */}
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="w-full h-8 text-xs font-bold text-black bg-primary hover:bg-primary/90 gap-1.5 shadow-sm min-w-0 cursor-pointer"
-                  title={hasProgress ? `Resume reading (${displayPercentage}%)` : isComic ? "Open Comic Reader" : "Read Book"}
-                  onClick={() => setActiveReadingBook(book)}
-                >
-                  <BookOpen className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{hasProgress ? `Resume (${displayPercentage}%)` : isComic ? "Read Comic" : "Read Book"}</span>
-                </Button>
-
-                {/* 2. Secondary Action & More Options Row */}
-                <div className="flex items-center gap-1 sm:gap-1.5 w-full">
+                {/* 1. Primary Action & More Options Row */}
+                <div className="flex items-center gap-1.5 w-full">
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
-                    className={`flex-1 h-7 text-[11px] sm:text-xs border-amber-500/30 text-amber-400 font-semibold px-1.5 sm:px-2 gap-1 sm:gap-1.5 min-w-0 ${
-                      isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-amber-500/10"
-                    }`}
-                    title={
-                      isComic
-                        ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle."
-                        : "Send to Kindle"
-                    }
-                    disabled={sendingToKindleId !== null || isComic}
-                    onClick={() => !isComic && handleSendToKindle(book.id)}
+                    className="flex-1 h-8 text-xs font-bold text-black bg-primary hover:bg-primary/90 gap-1.5 shadow-sm min-w-0 cursor-pointer"
+                    title={hasProgress ? `Resume reading (${displayPercentage}%)` : isComic ? "Open Comic Reader" : "Read Book"}
+                    onClick={() => setActiveReadingBook(book)}
                   >
-                    {sendingToKindleId === book.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                    ) : (
-                      <Send className="h-3.5 w-3.5 shrink-0" />
-                    )}
-                    {sendingToKindleId === book.id ? (
-                      <span className="truncate">Sending...</span>
-                    ) : (
-                      <span className="truncate">
-                        <span className="hidden min-[420px]:inline">Send to </span>Kindle
-                      </span>
-                    )}
+                    <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{hasProgress ? `Resume (${displayPercentage}%)` : isComic ? "Read Comic" : "Read Book"}</span>
                   </Button>
 
                   <DropdownMenu>
@@ -989,7 +960,7 @@ function BookLibraryPageContent() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 w-7 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                        className="h-8 w-8 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
                         title="More Actions"
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
@@ -1143,6 +1114,31 @@ function BookLibraryPageContent() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
+
+                {/* 2. Send to Kindle Full-Width Action (Zero Truncation Guaranteed) */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`w-full h-7.5 text-xs border-amber-500/30 text-amber-400 font-semibold px-2 gap-1.5 min-w-0 shadow-sm transition-colors cursor-pointer ${
+                    isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-amber-500/10"
+                  }`}
+                  title={
+                    isComic
+                      ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle."
+                      : "Send to Kindle"
+                  }
+                  disabled={sendingToKindleId !== null || isComic}
+                  onClick={() => !isComic && handleSendToKindle(book.id)}
+                >
+                  {sendingToKindleId === book.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-400" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                  )}
+                  <span className="whitespace-nowrap font-medium text-xs">
+                    {sendingToKindleId === book.id ? "Sending to Kindle..." : "Send to Kindle"}
+                  </span>
+                </Button>
               </>
             );
           })()}

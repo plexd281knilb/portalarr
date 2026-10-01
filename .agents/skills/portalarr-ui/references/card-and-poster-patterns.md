@@ -153,5 +153,7 @@ Standard grid layout for media shelves and discovery pages:
 ```
 
 - **Radix Sub-Menu Portaling Rule (`DropdownMenuSubContent`):** `DropdownMenuSubContent` MUST be wrapped in `<DropdownMenuPrimitive.Portal>`. If rendered without a Portal, the sub-menu is inserted inline into parent `DropdownMenuContent` which has `overflow: hidden`, completely clipping and hiding the expanded sub-menu from view.
-- **Send-to-Kindle Button Truncation Protection & Active Sending State:** In responsive multi-column book grids (e.g. mobile 2-col or desktop split screen), card widths can narrow to ~155px. To guarantee zero text truncation ("Send to..."), use compact padding and sizing: row `gap-1 sm:gap-1.5`, button `px-1.5 sm:px-2`, typography `text-[11px] sm:text-xs`, square dropdown trigger `h-7 w-7 p-0 flex items-center justify-center`, responsive label `<span className="hidden min-[420px]:inline">Send to </span>Kindle`, and display an unambiguous `Sending...` state with spinner when active.
+- **Send-to-Kindle Full-Width Action & Zero-Truncation Layout:** In responsive multi-column book grids (e.g. 5–8 columns on desktop/laptop, or 2-column mobile), card widths narrow to ~155px–175px. Sharing Row 2 with a 3-dot dropdown trigger causes "Send to Kindle" (14 chars) to truncate to "Send to Kin..." on any standard screen. To guarantee 100% zero text truncation:
+  - **Row 1**: Pair the primary reading CTA (`Read Book` / `Resume (X%)`) with the `MoreVertical` (`h-8 w-8`) dropdown trigger in a `flex items-center gap-1.5 w-full` row.
+  - **Row 2**: Render `Send to Kindle` as a dedicated full-width button (`w-full h-7.5 text-xs`) with `whitespace-nowrap font-medium`, guaranteeing complete visibility across all screen sizes and column widths.
 
