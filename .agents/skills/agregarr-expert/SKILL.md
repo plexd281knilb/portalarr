@@ -112,4 +112,7 @@ Agregarr manages metadata labels on items:
 8. **Collection Title Truncation with Placeholders**:
    - Cause: Hardcoded `max-w-[200px]` constraints with `truncate` on collection title spans cause names like "Netflix Trending & Top Charts" to be cut off as "Netflix Trending & ..." when badges (e.g. `Placeholders: ON`, `Seasonal`, `Limit`) are enabled.
    - Rule: Let collection titles take natural width (`font-bold text-white text-xs sm:text-sm tracking-tight`) inside flex header containers so titles and status badges wrap cleanly without clipping.
+9. **Custom Collection Media Type Isolation & Server ID Resilience**:
+   - Custom collections created via `handleCreateCustomCollection` must dynamically inherit `type: isTvSection ? "show" : "movie"` from the active library section so TV collection queries match series models instead of movie models.
+   - Server Actions (`getMediaCollectionsAction`, `deleteAllPlexCollectionsAction`, `syncSeasonalAndScheduledCollectionsInternal`) must resolve candidate server identifiers (`[serverId, resolved?.serverId, "main"]`) to ensure collections created under legacy `"main"` or discovered PMS machine identifiers are consistently retrieved and wiped without leaving orphaned records.
 

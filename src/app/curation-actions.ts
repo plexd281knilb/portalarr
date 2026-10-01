@@ -1109,10 +1109,13 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
         await verifyAdmin();
 
         await ensureSchemaColumns();
+        const resolved = serverId ? await resolveWorkingPlexServerConnection(serverId).catch(() => null) : null;
+        const serverIdCandidates = [serverId, resolved?.serverId, "main"].filter(Boolean) as string[];
+
         const rawCollections = await prisma.mediaCollection.findMany({
             where: {
                 isIgnored: false,
-                ...(serverId ? { serverId } : {}),
+                ...(serverId ? { serverId: { in: serverIdCandidates } } : {}),
                 ...(sectionKey ? { sectionKey: String(sectionKey) } : {})
             },
             orderBy: [
@@ -3447,10 +3450,11 @@ export async function deleteAllPlexCollectionsAction(
         }
 
         // 2. Also wipe all mediaCollection records for this server & section in DB
+        const serverIdCandidates = [serverId, resolved?.serverId, "main"].filter(Boolean) as string[];
         const dbResult = await prisma.mediaCollection.deleteMany({
             where: {
-                serverId,
-                sectionKey
+                serverId: { in: serverIdCandidates },
+                sectionKey: String(sectionKey)
             }
         });
 

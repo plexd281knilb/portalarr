@@ -1249,7 +1249,7 @@ export function AgregarrStudio() {
             const res = await saveMediaCollectionAction({
                 title: newCollTitle.trim(),
                 summary: newCollSummary.trim(),
-                type: "movie",
+                type: isTvSection ? "show" : "movie",
                 category: "custom",
                 serverId: selectedServerId,
                 sectionKey: selectedSectionKey,
