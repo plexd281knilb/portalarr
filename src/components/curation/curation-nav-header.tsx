@@ -95,70 +95,78 @@ export function CurationNavHeader({
             </div>
 
             {/* 4-Way Mode Switcher Navigation Tabs */}
-            <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-lg backdrop-blur-md">
-                <Link href="/curation/kometa" className="w-full md:flex-1 md:min-w-0">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-lg backdrop-blur-md">
+                <Link href="/curation/kometa" className="w-full min-w-0">
                     <button
                         type="button"
-                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`w-full flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                             isKometa
                                 ? "bg-purple-600 text-white shadow-lg shadow-purple-950/60 border border-purple-400/50 ring-1 ring-purple-400/40"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                         }`}
                     >
-                        <Sparkles className={`h-4 w-4 shrink-0 ${isKometa ? "text-white" : "text-purple-400"}`} />
-                        <span className="truncate">🎨 Kometa Overlays</span>
-                        <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${isKometa ? "border-purple-300 text-purple-100 bg-purple-700/60" : "border-slate-700 text-slate-400"}`}>
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <Sparkles className={`h-4 w-4 shrink-0 ${isKometa ? "text-white" : "text-purple-400"}`} />
+                            <span className="font-bold text-xs whitespace-nowrap">Kometa Overlays</span>
+                        </div>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 font-medium ${isKometa ? "border-purple-300 text-purple-100 bg-purple-700/60" : "border-slate-700 text-slate-400"}`}>
                             Badges
                         </Badge>
                     </button>
                 </Link>
 
-                <Link href="/curation/agregarr" className="w-full md:flex-1 md:min-w-0">
+                <Link href="/curation/agregarr" className="w-full min-w-0">
                     <button
                         type="button"
-                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`w-full flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                             isAgregarr
                                 ? "bg-amber-500 text-slate-950 shadow-lg shadow-amber-950/60 border border-amber-300/50 ring-1 ring-amber-300/40 font-black"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                         }`}
                     >
-                        <Film className={`h-4 w-4 shrink-0 ${isAgregarr ? "text-slate-950" : "text-amber-400"}`} />
-                        <span className="truncate">🎬 Agregarr Hubs</span>
-                        <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${isAgregarr ? "border-amber-900/60 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <Film className={`h-4 w-4 shrink-0 ${isAgregarr ? "text-slate-950" : "text-amber-400"}`} />
+                            <span className="font-bold text-xs whitespace-nowrap">Agregarr Hubs</span>
+                        </div>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 font-medium ${isAgregarr ? "border-amber-900/60 text-slate-950 bg-amber-400" : "border-slate-700 text-slate-400"}`}>
                             Collections
                         </Badge>
                     </button>
                 </Link>
 
-                <Link href="/curation/prune" className="w-full md:flex-1 md:min-w-0">
+                <Link href="/curation/prune" className="w-full min-w-0">
                     <button
                         type="button"
-                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`w-full flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                             isPrune
                                 ? "bg-rose-600 text-white shadow-lg shadow-rose-950/60 border border-rose-400/50 ring-1 ring-rose-400/40"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                         }`}
                     >
-                        <Trash2 className={`h-4 w-4 shrink-0 ${isPrune ? "text-white" : "text-rose-400"}`} />
-                        <span className="truncate">🧹 Maintainerr Prune</span>
-                        <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${isPrune ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <Trash2 className={`h-4 w-4 shrink-0 ${isPrune ? "text-white" : "text-rose-400"}`} />
+                            <span className="font-bold text-xs whitespace-nowrap">Maintainerr Prune</span>
+                        </div>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 font-medium ${isPrune ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
                             Storage
                         </Badge>
                     </button>
                 </Link>
 
-                <Link href="/curation/tagging" className="w-full md:flex-1 md:min-w-0">
+                <Link href="/curation/tagging" className="w-full min-w-0">
                     <button
                         type="button"
-                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`w-full flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                             isTagging
                                 ? "bg-emerald-600 text-white shadow-lg shadow-emerald-950/60 border border-emerald-400/50 ring-1 ring-emerald-400/40"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                         }`}
                     >
-                        <Tag className={`h-4 w-4 shrink-0 ${isTagging ? "text-white" : "text-emerald-400"}`} />
-                        <span className="truncate">🏷️ Tagging Studio</span>
-                        <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${isTagging ? "border-emerald-300 text-emerald-100 bg-emerald-700/60" : "border-slate-700 text-slate-400"}`}>
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <Tag className={`h-4 w-4 shrink-0 ${isTagging ? "text-white" : "text-emerald-400"}`} />
+                            <span className="font-bold text-xs whitespace-nowrap">Tagging Studio</span>
+                        </div>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 font-medium ${isTagging ? "border-emerald-300 text-emerald-100 bg-emerald-700/60" : "border-slate-700 text-slate-400"}`}>
                             Parental
                         </Badge>
                     </button>

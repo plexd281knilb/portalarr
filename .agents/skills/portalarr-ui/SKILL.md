@@ -394,6 +394,21 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 23. Curation Studio Responsive 4-Way Mode Switcher Tabs (`CurationNavHeader`)
+- **Outer Grid Breakpoints**: `grid grid-cols-2 xl:grid-cols-4 gap-2`
+  - Replaces rigid `md:flex` (which forced 4 buttons into 1 cramped row starting at 768px, truncating titles on tablets, laptops, and snapped half-screen windows).
+  - **Large Screens (`xl:` $\ge 1280px$)**: Expands to 4 equal-width buttons in a single horizontal row across the top.
+  - **Medium Screens / Tablets / Laptops / Split Windows (640px–1279px)**: Renders as a 2x2 grid (`grid-cols-2`), giving each button 300px–500px of width.
+  - **Mobile Screens ($< 640px$)**: Renders as a 2x2 grid with an adaptive stacked internal button layout (`flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2`).
+- **Internal Button Layout Adaptation**:
+  - **Top Row on Mobile / Left on Desktop**: Centered Lucide icon paired with concise studio title (`Kometa Overlays`, `Agregarr Hubs`, `Maintainerr Prune`, `Tagging Studio`).
+  - **Bottom Row on Mobile / Right on Desktop**: Dedicated studio badge (`Badges`, `Collections`, `Storage`, `Parental`).
+  - Eliminates duplicate icon/emoji pairings (`<Sparkles />` + `🎨`) to recover horizontal space.
+  - Enforces `whitespace-nowrap font-bold text-xs` so titles never truncate or wrap awkwardly on mobile devices.
+- **Component**: `src/components/curation/curation-nav-header.tsx`
+
+---
+
 ## 🛠️ How to Update and Tweak This Skill
 
 As the Portalarr frontend evolves or new design decisions are finalized:
