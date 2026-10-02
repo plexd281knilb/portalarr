@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import prisma, { ensureSchemaColumns } from "@/lib/prisma";
+import { isPlexMaintenanceWindow } from "@/lib/curation/schedule-helper";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
@@ -457,7 +458,7 @@ export async function getCurationSettingsAction() {
 
         // Maintainerr / Prune Dedicated Schedule
         pruneSyncEnabled: settings?.pruneSyncEnabled ?? (settings?.curationSyncPruning ?? true),
-        pruneSyncSchedule: settings?.pruneSyncSchedule || "daily_5am",
+        pruneSyncSchedule: settings?.pruneSyncSchedule || "daily_6am",
         pruneLastRunAt: settings?.pruneLastRunAt ? settings.pruneLastRunAt.toISOString() : null,
         pruneLastRunStatus: safeJsonParse(settings?.pruneLastRunStatus, null),
 
@@ -6736,6 +6737,21 @@ export async function runOverlayIncrementalSyncInternal(targetServerId?: string,
     message: string;
     error?: string;
 }> {
+    if (isPlexMaintenanceWindow()) {
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: ["Plex maintenance window is active (5:00 AM – 5:30 AM). Unraid is checking databases and restarting containers."],
+            timestamp: new Date().toISOString(),
+            message: "Plex maintenance window active (5:00 AM – 5:30 AM).",
+            error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Scheduled and manual Plex sync tasks are paused during container maintenance."
+        };
+    }
+
     if ((global as any).__PORTALARR_OVERLAY_INC_RUNNING || (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING) {
         return {
             success: false,
@@ -6939,6 +6955,21 @@ export async function runOverlayRecheckSyncInternal(targetServerId?: string, tar
     message: string;
     error?: string;
 }> {
+    if (isPlexMaintenanceWindow()) {
+        return {
+            success: false,
+            overlaysAppliedCount: 0,
+            newBadgedCount: 0,
+            upgradedCount: 0,
+            skippedCount: 0,
+            totalEvaluated: 0,
+            details: ["Plex maintenance window is active (5:00 AM – 5:30 AM). Unraid is checking databases and restarting containers."],
+            timestamp: new Date().toISOString(),
+            message: "Plex maintenance window active (5:00 AM – 5:30 AM).",
+            error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Scheduled and manual Plex sync tasks are paused during container maintenance."
+        };
+    }
+
     if ((global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING || (global as any).__PORTALARR_OVERLAY_INC_RUNNING) {
         return {
             success: false,
@@ -7174,6 +7205,17 @@ export async function runParentalTagsSyncInternal(targetServerId?: string, targe
     details: string[];
     error?: string;
 }> {
+    if (isPlexMaintenanceWindow()) {
+        return {
+            success: false,
+            totalTagged: 0,
+            totalEvaluated: 0,
+            timestamp: new Date().toISOString(),
+            details: ["Plex maintenance window is active (5:00 AM – 5:30 AM). Unraid is checking databases and restarting containers."],
+            error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Scheduled and manual Plex sync tasks are paused during container maintenance."
+        };
+    }
+
     if ((global as any).__PORTALARR_TAGGING_RUNNING) {
         return {
             success: false,
@@ -7321,6 +7363,17 @@ export async function runAgregarrSyncInternal(targetServerId?: string, targetSec
     timestamp: string;
     error?: string;
 }> {
+    if (isPlexMaintenanceWindow()) {
+        return {
+            success: false,
+            evaluatedCount: 0,
+            activeCount: 0,
+            details: ["Plex maintenance window is active (5:00 AM – 5:30 AM). Unraid is checking databases and restarting containers."],
+            timestamp: new Date().toISOString(),
+            error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Scheduled and manual Plex sync tasks are paused during container maintenance."
+        };
+    }
+
     if ((global as any).__PORTALARR_AGREGARR_RUNNING) {
         return {
             success: false,
@@ -7442,6 +7495,17 @@ export async function runMaintainerrSyncInternal(targetServerId?: string, target
     timestamp: string;
     error?: string;
 }> {
+    if (isPlexMaintenanceWindow()) {
+        return {
+            success: false,
+            leavingCount: 0,
+            totalEvaluated: 0,
+            details: ["Plex maintenance window is active (5:00 AM – 5:30 AM). Unraid is checking databases and restarting containers."],
+            timestamp: new Date().toISOString(),
+            error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Scheduled and manual Plex sync tasks are paused during container maintenance."
+        };
+    }
+
     if ((global as any).__PORTALARR_PRUNE_RUNNING) {
         return {
             success: false,

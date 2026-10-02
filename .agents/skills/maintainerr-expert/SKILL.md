@@ -78,8 +78,9 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
    - Cause: Truncating `- Season X` to the base show title and calling `DELETE /api/v3/series/{id}?deleteFiles=true` deleted the entire series and all seasons from Sonarr instead of just the expired season.
    - Fix: Inspect for season numbering; when present, query `/api/v3/episode?seriesId={id}&seasonNumber={seasonNum}`, delete the individual episode files via `/api/v3/episodefile/{id}`, unmonitor the season's episodes and season model, and never delete the parent series entity.
 8. **Automated Scheduler Execution, Baseline Parity & Mutex Locks**:
-   - In `prune-studio.tsx`, initialize `baselineSettings.curationSyncSchedule` with `settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_5am"` so that the dedicated prune schedule matches initial state and does not trigger false unsaved changes flags (`isScheduleDirty`).
+   - In `prune-studio.tsx`, initialize `baselineSettings.curationSyncSchedule` with `settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_6am"` so that the dedicated prune schedule matches initial state and does not trigger false unsaved changes flags (`isScheduleDirty`).
    - Concurrency lock `(global as any).__PORTALARR_PRUNE_RUNNING` prevents background evaluations from colliding with manual admin triggers.
    - In `runMaintainerrSyncInternal`, `catch (e: any)` updates `pruneLastRunAt: new Date()` and `pruneLastRunStatus` with error telemetry to prevent 60-second crash loops and surface errors in the UI.
-   - Fixed daily schedules (`daily_5am`) require `lastRun` for catch-up (`lastRun && elapsedMs >= 28h`), ensuring new installations wait for the 5:00 AM maintenance window instead of executing prune evaluations during peak streaming hours.
+   - **Unraid Plex Container Maintenance Blackout (5:00 AM – 5:30 AM)**: Unraid runs database integrity checks and restarts Plex containers daily from 5:00 AM to 5:30 AM. Maintainerr's recommended schedule is `daily_6am` (6:00 AM). The universal helper `isPlexMaintenanceWindow(now)` strictly blocks all scheduled and manual Maintainerr pruning runs during 5:00:00 AM – 5:29:59 AM. Existing legacy schedules set to `daily_5am` automatically defer to 5:30:00 AM after maintenance concludes.
+
 

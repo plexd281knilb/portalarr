@@ -21,7 +21,7 @@ import {
     findPlexUserFriend,
     getPlexCloudServersMap
 } from "@/lib/plex";
-import prisma, { ensureSchemaColumns } from "@/lib/prisma";
+import prisma, { ensureSchemaColumns, isPlexMaintenanceWindow } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 import type { AiAssistantResponse, UserDiagnosticSnapshot } from "@/lib/ai-server-assistant-types";
 
@@ -15042,6 +15042,11 @@ export async function syncPlexFriendsInternal() {
         if (!settings?.mainPlexToken) {
             console.log("[PLEX-SYNC] Skipped: Server Admin has not configured a Plex Token in Settings.");
             return { success: false, error: "Admin Plex Token is not configured. Go to Settings -> General Setup to enter your Admin Plex Token (or sign in once with Plex)." };
+        }
+
+        if (isPlexMaintenanceWindow()) {
+            console.log("[PLEX-SYNC] Skipped: Plex maintenance window is active (5:00 AM – 5:30 AM).");
+            return { success: false, error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Unraid is checking databases and restarting containers." };
         }
 
         const adminToken = decryptData(settings.mainPlexToken);

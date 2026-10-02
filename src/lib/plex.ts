@@ -1,6 +1,7 @@
 import dns from "dns";
 import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
+import { isPlexMaintenanceWindow } from "@/lib/curation/schedule-helper";
 import { logger, maskToken } from "@/lib/logger";
 
 // In-memory DNS resolver for *.plex.direct domains to bypass router DNS Rebinding Protection
@@ -467,6 +468,10 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
 }
 
 export async function getPlexActiveSessions(adminToken: string): Promise<{ serverName: string; serverUrl: string; serverId: string; token: string; sessions: any[] }[]> {
+    if (isPlexMaintenanceWindow()) {
+        return [];
+    }
+
     const servers = await getPlexServers(adminToken);
     const results: { serverName: string; serverUrl: string; serverId: string; token: string; sessions: any[] }[] = [];
 

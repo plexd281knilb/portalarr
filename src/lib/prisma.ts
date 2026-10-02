@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
+import { isPlexMaintenanceWindow } from "./curation/schedule-helper";
+
+export { isPlexMaintenanceWindow };
 
 if (typeof window === "undefined" && !(global as any).__loggerPatched) {
     (global as any).__loggerPatched = true;
@@ -573,7 +576,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["agregarrLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "agregarrLastRunAt" DATETIME;`],
                 ["agregarrLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "agregarrLastRunStatus" TEXT;`],
                 ["pruneSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "pruneSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
-                ["pruneSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "pruneSyncSchedule" TEXT DEFAULT 'daily_5am';`],
+                ["pruneSyncSchedule", `ALTER TABLE "Settings" ADD COLUMN "pruneSyncSchedule" TEXT DEFAULT 'daily_6am';`],
                 ["pruneLastRunAt", `ALTER TABLE "Settings" ADD COLUMN "pruneLastRunAt" DATETIME;`],
                 ["pruneLastRunStatus", `ALTER TABLE "Settings" ADD COLUMN "pruneLastRunStatus" TEXT;`],
                 ["taggingSyncEnabled", `ALTER TABLE "Settings" ADD COLUMN "taggingSyncEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
@@ -1796,6 +1799,13 @@ export function isScheduleDue(
     return false;
   }
 
+  // 🚨 CRITICAL: Universal 5:00 AM – 5:30 AM Plex Maintenance Blackout
+  // Unraid executes daily database integrity checks and restarts Plex containers from 5:00 AM to 5:30 AM.
+  // Block all scheduled Plex curation and sync runners during this 30-minute blackout window.
+  if (isPlexMaintenanceWindow(now)) {
+    return false;
+  }
+
   const lastRun = lastRunAt ? new Date(lastRunAt) : null;
   const elapsedMs = lastRun && !isNaN(lastRun.getTime()) ? now.getTime() - lastRun.getTime() : Infinity;
   const s = schedule.toLowerCase().trim();
@@ -2048,7 +2058,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       // 5. Maintainerr / Prune Leaving Soon Sync (Independent Studio Schedule)
       if (!(global as any).__PORTALARR_PRUNE_RUNNING) {
         const pruneEnabled = settings?.pruneSyncEnabled ?? (settings?.curationSyncPruning ?? true);
-        const pruneSchedule = settings?.pruneSyncSchedule || "daily_5am";
+        const pruneSchedule = settings?.pruneSyncSchedule || "daily_6am";
         const lastPruneRun = settings?.pruneLastRunAt || settings?.curationLastRunAt;
 
         if (pruneEnabled && isScheduleDue(pruneSchedule, lastPruneRun, now)) {
@@ -2123,20 +2133,28 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
       // 6. Media Requests (Seerr) Queue & Availability Background Sync (every 2 minutes)
       if (!(global as any).__PORTALARR_SEERR_SYNC_RUNNING) {
-        const lastSeerrTime = globalForScheduler.lastSeerrSyncTime || 0;
-        if (now.getTime() - lastSeerrTime >= 2 * 60 * 1000) {
-          globalForScheduler.lastSeerrSyncTime = now.getTime();
-          (global as any).__PORTALARR_SEERR_SYNC_RUNNING = true;
-          (async () => {
-            try {
-              const { syncMediaRequestsQueueAndAvailabilityInternal } = await import("../app/seerr-actions");
-              await syncMediaRequestsQueueAndAvailabilityInternal();
-            } catch (seerrErr: any) {
-              console.error("[SEERR-SYNC-TIMER] Error in media requests queue sync:", seerrErr.message || seerrErr);
-            } finally {
-              (global as any).__PORTALARR_SEERR_SYNC_RUNNING = false;
-            }
-          })();
+        if (isPlexMaintenanceWindow(now)) {
+          if (!(global as any).__PORTALARR_SEERR_MAINTENANCE_LOGGED) {
+            console.log("[SEERR-SYNC-TIMER] Paused during daily 5:00 AM – 5:30 AM Plex container maintenance window.");
+            (global as any).__PORTALARR_SEERR_MAINTENANCE_LOGGED = true;
+          }
+        } else {
+          (global as any).__PORTALARR_SEERR_MAINTENANCE_LOGGED = false;
+          const lastSeerrTime = globalForScheduler.lastSeerrSyncTime || 0;
+          if (now.getTime() - lastSeerrTime >= 2 * 60 * 1000) {
+            globalForScheduler.lastSeerrSyncTime = now.getTime();
+            (global as any).__PORTALARR_SEERR_SYNC_RUNNING = true;
+            (async () => {
+              try {
+                const { syncMediaRequestsQueueAndAvailabilityInternal } = await import("../app/seerr-actions");
+                await syncMediaRequestsQueueAndAvailabilityInternal();
+              } catch (seerrErr: any) {
+                console.error("[SEERR-SYNC-TIMER] Error in media requests queue sync:", seerrErr.message || seerrErr);
+              } finally {
+                (global as any).__PORTALARR_SEERR_SYNC_RUNNING = false;
+              }
+            })();
+          }
         }
       }
 
@@ -2182,12 +2200,16 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               console.log(`[BACKGROUND-SCHEDULER] Starting scheduled library scan and Plex friends sync (Interval: ${intervalMinutes}m)...`);
               const { scanLibraryInternal, syncPlexFriendsInternal } = await import("../app/actions");
 
-              // Sync Plex Friends list and user accounts
-              try {
-                console.log(`[BACKGROUND-SCHEDULER] Syncing Plex friends...`);
-                await syncPlexFriendsInternal();
-              } catch (plexErr: any) {
-                console.error(`[BACKGROUND-SCHEDULER] Error syncing Plex friends:`, plexErr.message || plexErr);
+              // Sync Plex Friends list and user accounts (Suppressed during 5:00 AM – 5:30 AM Plex maintenance)
+              if (isPlexMaintenanceWindow(now)) {
+                console.log("[BACKGROUND-SCHEDULER] Skipping Plex friends sync during 5:00 AM – 5:30 AM Plex container maintenance window.");
+              } else {
+                try {
+                  console.log(`[BACKGROUND-SCHEDULER] Syncing Plex friends...`);
+                  await syncPlexFriendsInternal();
+                } catch (plexErr: any) {
+                  console.error(`[BACKGROUND-SCHEDULER] Error syncing Plex friends:`, plexErr.message || plexErr);
+                }
               }
 
               // Scan configured libraries

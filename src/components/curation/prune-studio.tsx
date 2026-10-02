@@ -235,7 +235,7 @@ export function PruneStudio() {
 
     // Automated Schedule & Enabled Library States
     const [curationSyncPruning, setCurationSyncPruning] = useState<boolean>(true);
-    const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("daily_5am");
+    const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("daily_6am");
     const [pruneDryRun, setPruneDryRun] = useState<boolean>(true);
     const [enableAutoPruneDeletion, setEnableAutoPruneDeletion] = useState<boolean>(false);
     const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
@@ -1291,7 +1291,7 @@ export function PruneStudio() {
                         setSelectedGlancesDiskId(savedDiskId);
                     }
                     setCurationSyncPruning(settingsRes.pruneSyncEnabled ?? settingsRes.curationSyncPruning ?? true);
-                    setCurationSyncSchedule(settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_5am");
+                    setCurationSyncSchedule(settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_6am");
                     setPruneDryRun(settingsRes.pruneDryRun ?? true);
                     setEnableAutoPruneDeletion(settingsRes.enableAutoPruneDeletion ?? false);
                     setCurationLastRunAt(settingsRes.pruneLastRunAt || settingsRes.curationLastRunAt || null);
@@ -1409,7 +1409,7 @@ export function PruneStudio() {
                     }
                     setBaselineSettings({
                         curationSyncPruning: settingsRes.curationSyncPruning ?? true,
-                        curationSyncSchedule: settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_5am",
+                        curationSyncSchedule: settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_6am",
                         pruneDryRun: settingsRes.pruneDryRun ?? true,
                         enableAutoPruneDeletion: settingsRes.enableAutoPruneDeletion ?? false,
                         leavingSoonDiskThreshold: settingsRes.leavingSoonDiskThreshold ?? 15,

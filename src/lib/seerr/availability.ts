@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { getPlexServers } from "@/lib/plex";
+import { isPlexMaintenanceWindow } from "@/lib/curation/schedule-helper";
 import { analyzeMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { logger } from "@/lib/logger";
 import {
@@ -71,6 +72,10 @@ function addGuidEntry(map: Map<string, PlexGuidEntry[]>, key: string, entry: Ple
  * Builds or retrieves the Plex GUID lookup cache across all configured servers
  */
 export async function getPlexLibraryGuidIndex(forceRefresh = false): Promise<Map<string, PlexGuidEntry[]>> {
+    if (isPlexMaintenanceWindow()) {
+        return plexLibraryGuidCache ? plexLibraryGuidCache.guids : new Map();
+    }
+
     const now = Date.now();
     if (!forceRefresh && plexLibraryGuidCache && (now - plexLibraryGuidCache.timestamp < CACHE_TTL_MS)) {
         return plexLibraryGuidCache.guids;

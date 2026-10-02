@@ -11,6 +11,17 @@ export interface ScheduleOption {
     recommendedFor?: string;
 }
 
+/**
+ * Unraid / Server Maintenance Blackout Window
+ * Unraid executes database integrity checks and restarts Plex containers daily from 5:00 AM to 5:30 AM.
+ * No automated tasks or background runners should contact Plex Media Server during this 30-minute window.
+ */
+export function isPlexMaintenanceWindow(now: Date = new Date()): boolean {
+    const h = now.getHours();
+    const m = now.getMinutes();
+    return h === 5 && m < 30; // 5:00:00 AM – 5:29:59.999 AM
+}
+
 export const SCHEDULE_OPTIONS: ScheduleOption[] = [
     { value: "every_hour", label: "⚡ Hourly (Every 60 minutes)", description: "Runs once every hour", recommendedFor: "Fast incremental overlay scan" },
     { value: "every_2_hours", label: "⏱️ Every 2 Hours", description: "Runs every 2 hours" },
@@ -23,8 +34,8 @@ export const SCHEDULE_OPTIONS: ScheduleOption[] = [
     { value: "daily_2am", label: "🌙 Daily at 2:00 AM", description: "Runs every night at 2:00 AM" },
     { value: "daily_3am", label: "🌙 Daily at 3:00 AM (Recommended for Tagging)", description: "Runs every night at 3:00 AM", recommendedFor: "IMDb parental tagging" },
     { value: "daily_4am", label: "🌙 Daily at 4:00 AM (Recommended for Deep Overlays)", description: "Runs every night at 4:00 AM", recommendedFor: "Kometa deep library recheck" },
-    { value: "daily_5am", label: "🌙 Daily at 5:00 AM (Recommended for Maintainerr)", description: "Runs every night at 5:00 AM", recommendedFor: "Maintainerr Leaving Soon sync" },
-    { value: "daily_6am", label: "🌙 Daily at 6:00 AM", description: "Runs every morning at 6:00 AM" },
+    { value: "daily_5am", label: "⚠️ Daily at 5:00 AM (Defers to 5:30 AM Post-Maintenance)", description: "Defers to 5:30 AM to avoid 5:00 AM Unraid Plex database checks and container restarts" },
+    { value: "daily_6am", label: "🌙 Daily at 6:00 AM (Recommended for Maintainerr)", description: "Runs every morning at 6:00 AM (after 5am server maintenance)", recommendedFor: "Maintainerr Leaving Soon sync" },
     { value: "weekly_sun", label: "📅 Weekly on Sunday (at 4:00 AM)", description: "Runs every Sunday morning at 4:00 AM" },
     { value: "monthly_1st", label: "📅 Monthly on the 1st (at 4:00 AM)", description: "Runs on the 1st of every month at 4:00 AM" }
 ];
@@ -41,9 +52,9 @@ export function formatScheduleLabel(scheduleKey: string): string {
 
 export function calculateNextRunTime(
     scheduleKey: string,
-    lastRunIsoOrDate?: string | Date | null
+    lastRunIsoOrDate?: string | Date | null,
+    now: Date = new Date()
 ): { nextRunDate: Date | null; relativeText: string; isDue: boolean } {
-    const now = new Date();
     const lastRun = lastRunIsoOrDate ? new Date(lastRunIsoOrDate) : null;
     const s = (scheduleKey || "every_6_hours").toLowerCase().trim();
 
@@ -79,6 +90,13 @@ export function calculateNextRunTime(
 
         const diffMs = nextDate.getTime() - now.getTime();
         if (diffMs <= 0) {
+            if (isPlexMaintenanceWindow(now)) {
+                return {
+                    nextRunDate: nextDate,
+                    relativeText: "Paused for Unraid Plex maintenance (resumes 5:30 AM)",
+                    isDue: false
+                };
+            }
             return { nextRunDate: nextDate, relativeText: "Due on next scheduler tick", isDue: true };
         }
         const diffMins = Math.round(diffMs / (60 * 1000));
@@ -108,15 +126,26 @@ export function calculateNextRunTime(
 
     if (targetHour !== null) {
         const nextDate = new Date(now);
-        nextDate.setHours(targetHour, 0, 0, 0);
+        // If targetHour is 5 (5:00 AM), defer target minute to 5:30 AM to bypass Unraid maintenance
+        const targetMinute = targetHour === 5 ? 30 : 0;
+        nextDate.setHours(targetHour, targetMinute, 0, 0);
 
         const hasRunToday = Boolean(lastRun && lastRun.toDateString() === now.toDateString());
-        if (hasRunToday || now.getHours() > targetHour) {
+        if (hasRunToday || (now.getHours() > targetHour || (now.getHours() === targetHour && now.getMinutes() >= targetMinute))) {
             nextDate.setDate(nextDate.getDate() + 1);
         }
 
-        // If currently in the target hour window and has not run today, it is due immediately
+        // If currently in the target hour window and has not run today
         if (now.getHours() === targetHour && !hasRunToday) {
+            if (targetHour === 5 && now.getMinutes() < 30) {
+                const diffMs = nextDate.getTime() - now.getTime();
+                const diffMins = Math.max(1, Math.round(diffMs / (60 * 1000)));
+                return {
+                    nextRunDate: nextDate,
+                    relativeText: `in ~${diffMins} mins (at 5:30 AM post-maintenance)`,
+                    isDue: false
+                };
+            }
             return {
                 nextRunDate: nextDate,
                 relativeText: "Due on next scheduler tick",

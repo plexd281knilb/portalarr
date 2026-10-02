@@ -17,7 +17,7 @@ import { logger } from "../src/lib/logger";
 import { matchesPlexUser } from "../src/lib/plex";
 import { scanPaymentEmailsInternal, extractAmount, parseCashAppEmail, calculateAlignedExpiryDate } from "../src/lib/payment-email-scraper";
 import { sendSubscriptionRenewalRemindersInternal } from "../src/app/payment-actions";
-import { isScheduleDue } from "../src/lib/prisma";
+import { isScheduleDue, isPlexMaintenanceWindow } from "../src/lib/prisma";
 import { calculateNextRunTime, formatScheduleLabel, formatLastRunDisplay, SCHEDULE_OPTIONS } from "../src/lib/curation/schedule-helper";
 import { inferBookRating } from "../src/lib/books/book-rating";
 import { parseAmazonBounceEmail } from "../src/lib/kindle-email-scanner";
@@ -2305,11 +2305,12 @@ async function runTestSuite() {
             throw new Error(`monthly_1st should compute valid nextRunDate with 4:00 AM, got: ${JSON.stringify(monthlyRun)}`);
         }
 
-        // 4. isScheduleDue for intervals
-        const dueEveryHour = isScheduleDue("every_hour", new Date(now.getTime() - 56 * 60 * 1000), now);
+        // 4. isScheduleDue for intervals (evaluated outside maintenance window)
+        const afternoonRef = new Date("2026-10-02T14:00:00");
+        const dueEveryHour = isScheduleDue("every_hour", new Date(afternoonRef.getTime() - 56 * 60 * 1000), afternoonRef);
         if (!dueEveryHour) throw new Error("every_hour with 56m elapsed should be due");
 
-        const notDueEveryHour = isScheduleDue("every_hour", new Date(now.getTime() - 30 * 60 * 1000), now);
+        const notDueEveryHour = isScheduleDue("every_hour", new Date(afternoonRef.getTime() - 30 * 60 * 1000), afternoonRef);
         if (notDueEveryHour) throw new Error("every_hour with 30m elapsed should NOT be due");
 
         // 5. isScheduleDue for daily fixed hours
@@ -2359,7 +2360,7 @@ async function runTestSuite() {
         }
 
         // 8. Verify scheduler tick debouncing: once triggered at `now`, subsequent 60s ticks MUST NOT re-trigger
-        const triggerTime = new Date();
+        const triggerTime = new Date("2026-10-02T14:00:00");
         const tick60sLater = new Date(triggerTime.getTime() + 60 * 1000);
         const tick5mLater = new Date(triggerTime.getTime() + 5 * 60 * 1000);
 
@@ -2377,6 +2378,62 @@ async function runTestSuite() {
         }
         if (isScheduleDue("every_6_hours", triggerTime, tick5mLater)) {
             throw new Error("every_6_hours MUST NOT be due 5m after triggering!");
+        }
+
+        // 9. 5:00 AM – 5:30 AM Unraid Plex Maintenance Window Blackout Verification
+        const t459 = new Date("2026-10-02T04:59:59");
+        const t500 = new Date("2026-10-02T05:00:00");
+        const t515 = new Date("2026-10-02T05:15:30");
+        const t529 = new Date("2026-10-02T05:29:59");
+        const t530 = new Date("2026-10-02T05:30:00");
+        const t535 = new Date("2026-10-02T05:35:00");
+        const t600 = new Date("2026-10-02T06:00:00");
+
+        if (isPlexMaintenanceWindow(t459)) throw new Error("4:59:59 AM should NOT be in maintenance window");
+        if (!isPlexMaintenanceWindow(t500)) throw new Error("5:00:00 AM MUST be in maintenance window");
+        if (!isPlexMaintenanceWindow(t515)) throw new Error("5:15:30 AM MUST be in maintenance window");
+        if (!isPlexMaintenanceWindow(t529)) throw new Error("5:29:59 AM MUST be in maintenance window");
+        if (isPlexMaintenanceWindow(t530)) throw new Error("5:30:00 AM should NOT be in maintenance window");
+        if (isPlexMaintenanceWindow(t535)) throw new Error("5:35:00 AM should NOT be in maintenance window");
+        if (isPlexMaintenanceWindow(t600)) throw new Error("6:00:00 AM should NOT be in maintenance window");
+
+        // Schedule suppression during 5:00 AM – 5:30 AM blackout
+        const yesterday5am = new Date("2026-10-01T05:30:00");
+        const twoHoursAgo = new Date(t515.getTime() - 2 * 60 * 60 * 1000);
+
+        if (isScheduleDue("daily_5am", yesterday5am, t515)) {
+            throw new Error("daily_5am MUST be suppressed during 5:00-5:30 AM maintenance window!");
+        }
+        if (isScheduleDue("every_hour", twoHoursAgo, t515)) {
+            throw new Error("every_hour MUST be suppressed during 5:00-5:30 AM maintenance window!");
+        }
+        if (isScheduleDue("every_6_hours", twoHoursAgo, t515)) {
+            throw new Error("every_6_hours MUST be suppressed during 5:00-5:30 AM maintenance window!");
+        }
+
+        // Resumption immediately at 5:30:00 AM after maintenance completes
+        if (!isScheduleDue("daily_5am", yesterday5am, t530)) {
+            throw new Error("daily_5am MUST become due at 5:30 AM once maintenance window ends!");
+        }
+        if (!isScheduleDue("every_hour", twoHoursAgo, t530)) {
+            throw new Error("every_hour MUST become due at 5:30 AM once maintenance window ends!");
+        }
+
+        // calculateNextRunTime transparency during maintenance
+        const nextRunAt515 = calculateNextRunTime("daily_5am", yesterday5am, t515);
+        if (nextRunAt515.isDue || !nextRunAt515.relativeText.includes("5:30 AM")) {
+            throw new Error(`calculateNextRunTime at 5:15 AM should indicate deferral to 5:30 AM, got: ${JSON.stringify(nextRunAt515)}`);
+        }
+
+        const hourlyAt515 = calculateNextRunTime("every_hour", twoHoursAgo, t515);
+        if (hourlyAt515.isDue || !hourlyAt515.relativeText.includes("maintenance")) {
+            throw new Error(`calculateNextRunTime for every_hour at 5:15 AM should indicate maintenance pause, got: ${JSON.stringify(hourlyAt515)}`);
+        }
+
+        // Verify Maintainerr recommendation in SCHEDULE_OPTIONS is daily_6am
+        const opt6am = SCHEDULE_OPTIONS.find(o => o.value === "daily_6am");
+        if (!opt6am || !opt6am.recommendedFor?.toLowerCase().includes("maintainerr")) {
+            throw new Error("SCHEDULE_OPTIONS must recommend daily_6am for Maintainerr!");
         }
     });
 

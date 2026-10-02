@@ -86,5 +86,9 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - **Dual Endpoint Updating**: Always dispatch tag updates to both `PUT /library/metadata/{ratingKey}` and `PUT /library/sections/{sectionKey}/all?type={typeId}&id={ratingKey}` to maintain 100% compatibility across legacy and modern PMS versions.
     - **Pre-Filtering to Avoid Excessive HTTP Calls**: When clearing tags or applying custom rules across thousands of media items, inspect known stream/section tags (`item.labels`, `item.genres`, `item.collections`) before initiating individual `GET /library/metadata/{ratingKey}` requests. Items that already lack the tag should be skipped immediately to maintain sub-second execution speeds.
     - **Collection Untagging and Container Deletion**: When clearing custom collection tags from a library, untagging the items should be accompanied by `deletePlexCollection` to cleanly remove the collection container entity from PMS.
+13. **Unraid Daily 5:00 AM – 5:30 AM Plex Container Maintenance Blackout**:
+    - **Blackout Protocol (`isPlexMaintenanceWindow`)**: Unraid executes scheduled database integrity checks and restarts Plex containers daily from 5:00 AM to 5:30 AM. No background runner, automated scheduled task, or direct PMS polling (`getPlexActiveSessions`, `getPlexServerLibrarySections`, `runOverlayIncrementalSyncInternal`, `runOverlayRecheckSyncInternal`, `runAgregarrSyncInternal`, `runMaintainerrSyncInternal`, `runParentalTagsSyncInternal`, `syncPlexFriendsInternal`, `syncMediaRequestsQueueAndAvailabilityInternal`, `getPlexLibraryGuidIndex`) is permitted to hit Plex Media Server during 5:00:00 AM – 5:29:59 AM.
+    - All schedules due at or during 5:00 AM automatically defer to 5:30:00 AM once the container restart concludes. Maintainerr's recommended default is `daily_6am`.
+
 
 

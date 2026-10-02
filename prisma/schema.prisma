@@ -227,7 +227,7 @@ model Settings {
 
   // Maintainerr / Prune Dedicated Sync Schedule
   pruneSyncEnabled                 Boolean   @default(true)
-  pruneSyncSchedule                String?   @default("daily_5am") // "daily_5am", "every_12_hours", "every_24_hours", "weekly_sun"
+  pruneSyncSchedule                String?   @default("daily_6am") // "daily_6am", "every_12_hours", "every_24_hours", "weekly_sun"
   pruneLastRunAt                   DateTime?
   pruneLastRunStatus               String?
 
