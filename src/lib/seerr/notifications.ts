@@ -1,4 +1,3 @@
-import nodemailer from "nodemailer";
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { getAppUrl } from "@/lib/app-url";
@@ -287,16 +286,6 @@ export async function sendSeerrEmailNotification(
         const appUrl = await getAppUrl();
         const senderEmail = settings.smtpFrom || settings.smtpUser;
 
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
-
         // Parse seasons for TV
         let seasonsText = "";
         if (!isMovie && request.seasons) {
@@ -344,22 +333,24 @@ export async function sendSeerrEmailNotification(
 
             if (admins.length === 0) return { success: true };
 
+            const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
+            if (adminEmails.length === 0) return { success: true };
+
             const { subject, html } = await renderEmailTemplate("seerr_request_new_admin", {
                 ...commonVars,
                 requestedBy: request.requestedByUsername
             });
 
-            for (const admin of admins) {
-                if (!admin.email || !admin.email.includes("@")) continue;
-                await transporter.sendMail({
-                    from: senderEmail,
-                    to: admin.email,
-                    subject,
-                    html
-                }).catch(e => logger.addLog("WARN", "SEERR", `Failed sending admin email to ${admin.email}: ${e.message}`));
-            }
+            const { sendOrQueueEmail } = await import("../../app/actions");
+            await sendOrQueueEmail({
+                to: adminEmails,
+                subject,
+                html,
+                templateId: "seerr_request_new_admin",
+                targetUser: request.requestedByUsername
+            });
 
-            logger.addLog("INFO", "SEERR", `Dispatched admin request notification for "${request.title}"`);
+            logger.addLog("INFO", "SEERR", `Dispatched or staged admin request notification for "${request.title}"`);
             return { success: true };
         }
 

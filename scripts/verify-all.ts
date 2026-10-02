@@ -714,7 +714,7 @@ async function runTestSuite() {
     await assertTest("Admin Approval Gates: Strict Enforcement of Require Buttons", async () => {
         const { revokePlexAccessForUserInternal, sendOrQueueEmail } = await import("../src/app/actions");
         
-        // 1. Ensure gates are turned ON
+        // 1. Ensure gates are turned ON (requireApproval = true)
         await prisma.settings.update({
             where: { id: "global" },
             data: {
@@ -736,18 +736,19 @@ async function runTestSuite() {
         });
 
         try {
-            // A. Email gate enforcement: verify no email is sent and item is strictly queued in AdminApproval
+            // A. Email gate enforcement ON: verify email is NOT sent and item is strictly queued in AdminApproval
             const emailRes = await sendOrQueueEmail({
                 to: testUser.email,
                 subject: "Gated Test Notification",
                 html: "<p>This must not be sent without approval</p>",
                 templateId: "user_approval",
                 targetUser: testUser.username,
-                userId: testUser.id
+                userId: testUser.id,
+                attachments: [{ filename: "test.pdf", path: "/tmp/test.pdf", contentType: "application/pdf" }]
             });
 
             if (!emailRes.queued || !emailRes.approvalId) {
-                throw new Error("Expected email to be queued for approval, but it was not queued");
+                throw new Error("Expected email to be queued for approval when requireApprovalForEmails=true, but it was not queued");
             }
 
             const emailApproval = await prisma.adminApproval.findUnique({
@@ -756,11 +757,15 @@ async function runTestSuite() {
             if (!emailApproval || emailApproval.status !== "PENDING" || emailApproval.type !== "EMAIL") {
                 throw new Error("Email approval record was not properly created with PENDING status");
             }
+            const parsedPayload = JSON.parse(emailApproval.payload);
+            if (!Array.isArray(parsedPayload.attachments) || parsedPayload.attachments.length !== 1) {
+                throw new Error("Email approval payload did not properly preserve attachments");
+            }
 
-            // B. Plex access change gate enforcement: verify no live Plex share deletion happens without approval
+            // B. Plex access change gate enforcement ON: verify no live Plex share deletion happens without approval
             const revokeRes = await revokePlexAccessForUserInternal(testUser, "Test automated suspension");
             if (!revokeRes.staged || !revokeRes.approvalId) {
-                throw new Error("Expected Plex revocation to be staged for approval, but it was not staged");
+                throw new Error("Expected Plex revocation to be staged for approval when requireApprovalForPlexChanges=true, but it was not staged");
             }
 
             const plexApproval = await prisma.adminApproval.findUnique({
@@ -770,10 +775,54 @@ async function runTestSuite() {
                 throw new Error("Plex revocation approval record was not properly created with PENDING status");
             }
 
-            // C. Clean up staged approvals
+            // Clean up staged approvals from ON test
             await prisma.adminApproval.delete({ where: { id: emailRes.approvalId } });
             await prisma.adminApproval.delete({ where: { id: revokeRes.approvalId } });
+
+            // 2. Test gates turned OFF (requireApproval = false): verify items are NOT staged in AdminApproval
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: {
+                    requireApprovalForPlexChanges: false,
+                    requireApprovalForEmails: false
+                }
+            });
+
+            const approvalsCountBefore = await prisma.adminApproval.count();
+
+            // C. Email gate OFF: sendOrQueueEmail must NOT queue into AdminApproval
+            const directEmailRes = await sendOrQueueEmail({
+                to: testUser.email,
+                subject: "Direct Non-Gated Notification",
+                html: "<p>Direct notification when gate is OFF</p>",
+                templateId: "user_approval",
+                targetUser: testUser.username,
+                userId: testUser.id
+            });
+
+            if (directEmailRes.queued) {
+                throw new Error("Expected email NOT to be queued when requireApprovalForEmails=false");
+            }
+
+            // D. Plex gate OFF: revokePlexAccessForUserInternal must NOT stage into AdminApproval
+            const directRevokeRes = await revokePlexAccessForUserInternal(testUser, "Test direct suspension when gate is OFF");
+            if (directRevokeRes.staged) {
+                throw new Error("Expected Plex revocation NOT to be staged when requireApprovalForPlexChanges=false");
+            }
+
+            const approvalsCountAfter = await prisma.adminApproval.count();
+            if (approvalsCountAfter !== approvalsCountBefore) {
+                throw new Error("New AdminApproval records were unexpectedly created while approval gates were turned OFF");
+            }
         } finally {
+            // Restore default safety settings
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: {
+                    requireApprovalForPlexChanges: true,
+                    requireApprovalForEmails: true
+                }
+            });
             await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
         }
     });

@@ -18,7 +18,6 @@ import {
 import { getPlexServers } from "@/lib/plex";
 import { searchPlexLibraryItems, inspectPlexMediaItemFull, type PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost } from "@/app/arr-actions";
-import nodemailer from "nodemailer";
 
 /**
  * Strips conversational filler, intent verbs, and noise to extract canonical title and year.
@@ -1042,15 +1041,7 @@ ${params.recommendation}
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false) {
             try {
-                const transporter = nodemailer.createTransport({
-                    host: settings.smtpHost,
-                    port: settings.smtpPort,
-                    secure: settings.smtpPort === 465,
-                    auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) }
-                } as any);
-
                 const appUrl = await getAppUrl();
-                const senderEmail = settings.smtpFrom || settings.smtpUser;
                 const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
                     name: `AI Agent (${userName})`,
                     email: userEmail,
@@ -1062,16 +1053,17 @@ ${params.recommendation}
                     appUrl
                 });
 
-                await transporter.sendMail({
-                    from: senderEmail,
+                const { sendOrQueueEmail } = await import("@/app/actions");
+                await sendOrQueueEmail({
                     to: settings.smtpUser,
-                    replyTo: userEmail,
                     subject: `🚨 [AI Escalation] ${params.title || "Stream Issue"} - Action Required`,
+                    html,
                     text: formattedIssue,
-                    html
+                    templateId: "ticket_error_alert",
+                    targetUser: userName
                 });
 
-                logAgentEvent("INFO", `Admin notification email dispatched for ticket #${ticketId}`);
+                logAgentEvent("INFO", `Admin notification email dispatched or queued for ticket #${ticketId}`);
             } catch (mailErr: any) {
                 logAgentEvent("WARN", `Failed to send escalation email: ${mailErr.message}`);
             }

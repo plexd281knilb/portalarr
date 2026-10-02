@@ -1814,17 +1814,6 @@ export async function sendBroadcastEmailAction(payload: {
         return { success: false, error: "No matching users found for the selected IDs." };
     }
 
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-    const transporter = nodemailer.createTransport({
-        host: settings.smtpHost,
-        port: settings.smtpPort || 587,
-        secure: settings.smtpPort === 465,
-        auth: {
-            user: settings.smtpUser,
-            pass: decryptData(settings.smtpPass)
-        }
-    });
-
     const appUrl = await getAppUrl();
     const isFullDoc = payload.isCustomHtml && (payload.body.includes("<html") || payload.body.includes("<!DOCTYPE"));
 
@@ -2780,24 +2769,18 @@ export async function notifyAdminUserRoleOrAccessChange(params: {
             appUrl,
             accessUrl: `${appUrl}/settings/access`
         });
-
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
-
-        await transporter.sendMail({
-            from: senderEmail,
-            to: recipientEmails.join(", "),
+        const res = await sendOrQueueEmail({
+            to: recipientEmails.length === 1 ? recipientEmails[0] : recipientEmails,
             subject,
-            html
+            html,
+            templateId: "admin_user_access_revoked",
+            targetUser: username
         });
 
+        if (res.queued) {
+            console.log(`[AUTH-AUDIT] Admin notification email for user access/role change on "${username}" queued for admin approval (ID: ${res.approvalId}).`);
+            return { success: true, emailed: false, queued: true };
+        }
         console.log(`[AUTH-AUDIT] Admin notification email dispatched for user access/role change on "${username}".`);
         return { success: true, emailed: true };
     } catch (e: any) {
@@ -3203,7 +3186,7 @@ export async function rejectAppUser(id: string) {
         });
 
         if (user) {
-            await revokePlexAccessForUserInternal(user, "Account access rejected by administrator.", { bypassApproval: true });
+            await revokePlexAccessForUserInternal(user, "Account access rejected by administrator.");
             await notifyAdminUserRoleOrAccessChange({
                 username: user.username,
                 email: user.email,
@@ -3369,14 +3352,6 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
         if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
-            const senderEmail = settings.smtpFrom || settings.smtpUser;
-            const transporter = nodemailer.createTransport({
-                host: settings.smtpHost,
-                port: settings.smtpPort || 587,
-                secure: settings.smtpPort === 465, 
-                auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-            } as any);
-
             const appUrl = await getAppUrl();
             const adminCommentBlock = adminComment ? `<div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 12px; margin: 16px 0;"><strong>Admin Reply:</strong><br/>${adminComment}</div>` : "";
             const { subject, html } = await renderEmailTemplate("ticket_update", {
@@ -3891,6 +3866,7 @@ export async function sendOrQueueEmail(options: {
     targetUser?: string;
     userId?: string;
     bypassApproval?: boolean;
+    attachments?: Array<{ filename: string; path: string; contentType?: string }>;
 }): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string }> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
@@ -3904,12 +3880,14 @@ export async function sendOrQueueEmail(options: {
         const requireApproval = (settings?.requireApprovalForEmails ?? true) && !options.bypassApproval;
 
         if (requireApproval) {
+            const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
+            const attachmentNote = options.attachments && options.attachments.length > 0 ? ` [${options.attachments.length} attachment(s)]` : "";
             const approval = await prisma.adminApproval.create({
                 data: {
                     type: "EMAIL",
                     status: "PENDING",
                     title: `Email: ${options.subject}`,
-                    description: `To: ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`,
+                    description: `To: ${recipientStr}${attachmentNote}`,
                     targetUser: options.targetUser || null,
                     targetEmail: Array.isArray(options.to) ? options.to[0] : options.to,
                     userId: options.userId || null,
@@ -3919,11 +3897,12 @@ export async function sendOrQueueEmail(options: {
                         html: options.html,
                         text: options.text,
                         templateId: options.templateId,
-                        targetUser: options.targetUser
+                        targetUser: options.targetUser,
+                        attachments: options.attachments
                     })
                 }
             });
-            logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(", ") : options.to} queued for admin approval (ID: ${approval.id}).`);
+            logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${recipientStr} queued for admin approval (ID: ${approval.id}).`);
             return { success: true, queued: true, approvalId: approval.id };
         }
 
@@ -3932,7 +3911,8 @@ export async function sendOrQueueEmail(options: {
             return { success: false, error: "SMTP settings not configured" };
         }
 
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
+        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
@@ -3948,7 +3928,8 @@ export async function sendOrQueueEmail(options: {
             to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
             subject: options.subject,
             html: options.html,
-            text: options.text
+            text: options.text,
+            attachments: options.attachments
         });
 
         logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`);
@@ -4055,6 +4036,7 @@ export async function approveAdminApprovalAction(approvalId: string) {
                 text: payload.text,
                 templateId: payload.templateId,
                 targetUser: payload.targetUser,
+                attachments: payload.attachments,
                 bypassApproval: true
             });
             if (!sendRes.success) {
@@ -4064,9 +4046,10 @@ export async function approveAdminApprovalAction(approvalId: string) {
             if (payload.action === "EXPIRE_SUSPEND") {
                 const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
                 if (targetUser) {
+                    const targetStatus = (targetUser.status === "SUSPENDED" || targetUser.status === "REJECTED") ? targetUser.status : "EXPIRED";
                     await prisma.user.update({
                         where: { id: targetUser.id },
-                        data: { status: "EXPIRED", plexLibrarySectionIds: "" }
+                        data: { status: targetStatus, plexLibrarySectionIds: "" }
                     });
                     await revokePlexAccessForUserInternal(targetUser, payload.reason || "Subscription/trial ended.", { bypassApproval: true });
                 }
@@ -4113,6 +4096,12 @@ export async function approveAdminApprovalAction(approvalId: string) {
                     const adminToken = decryptData(settings.mainPlexToken);
                     const rawKeys: string[] = payload.selectedKeys || [];
                     await syncUserPlexShareInternal(adminToken, targetUser, rawKeys);
+                    if (rawKeys.length > 0) {
+                        await prisma.user.update({
+                            where: { id: targetUser.id },
+                            data: { plexLibrarySectionIds: rawKeys.join(",") }
+                        }).catch(() => {});
+                    }
                 }
             } else {
                 const updateRes = await executePlexLibraryAccessUpdateInternal(
@@ -5846,30 +5835,23 @@ export async function sendManualEmail(formData: FormData) {
     if (!to || !subject || !message) return { error: "All fields are required." };
 
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        
-        if (!settings?.smtpHost || !settings?.smtpUser) {
-            return { error: "SMTP settings not configured." };
-        }
-
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort,
-            secure: settings.smtpPort === 465, 
-            auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-        } as any);
-
-        await transporter.sendMail({
-            from: (settings.smtpFrom?.trim()?.includes("<") ? settings.smtpFrom.trim() : `"DomsHomeLab (d281knilb)" <${settings.smtpFrom?.trim() || settings.smtpUser}>`),
-            to: to,
-            subject: subject,
-            html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${message}</div>` 
+        const mailRes = await sendOrQueueEmail({
+            to,
+            subject,
+            html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${message}</div>`,
+            text: message,
+            templateId: "manual_email",
+            targetUser: to
         });
 
-        return { success: true };
+        if (!mailRes.success) {
+            return { error: mailRes.error || "Failed to send email. Please check your SMTP settings in the General tab." };
+        }
+
+        return { success: true, queued: mailRes.queued, message: mailRes.queued ? "Email staged in Admin Approval Queue for review." : "Email sent successfully!" };
     } catch (e: any) {
         console.error("Email Failed:", e);
-        return { error: "Failed to send email. Please check your SMTP settings in the General tab." };
+        return { error: e.message || "Failed to send email. Please check your SMTP settings in the General tab." };
     }
 }
 
@@ -6610,7 +6592,37 @@ export async function createOrUpdateSubAccountAction(payload: {
                     ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
                     : (parentUser.selectedPlexLibrarySectionIds || parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
                 if (targetKeys.length > 0) {
-                    await syncUserPlexShareInternal(adminToken, updated, targetKeys);
+                    const requirePlexApproval = settings?.requireApprovalForPlexChanges !== false;
+                    if (requirePlexApproval) {
+                        const existing = await prisma.adminApproval.findFirst({
+                            where: {
+                                userId: updated.id,
+                                type: "PLEX_ACCESS_GRANT",
+                                status: "PENDING"
+                            }
+                        });
+                        if (!existing) {
+                            const approval = await prisma.adminApproval.create({
+                                data: {
+                                    type: "PLEX_ACCESS_GRANT",
+                                    status: "PENDING",
+                                    title: `Plex Access: Sub-Account (${cleanLabel})`,
+                                    description: `Sub-account ${cleanType} for ${parentUser.username} (${cleanPlexHandle}). Pending admin approval before syncing ${targetKeys.length} Plex libraries.`,
+                                    targetUser: updated.username,
+                                    targetEmail: updated.email,
+                                    userId: updated.id,
+                                    payload: JSON.stringify({
+                                        userId: updated.id,
+                                        action: "SYNC_SHARE",
+                                        selectedKeys: targetKeys
+                                    })
+                                }
+                            });
+                            logger.addLog("INFO", "APPROVAL", `Sub-account Plex access for "${updated.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                        }
+                    } else {
+                        await syncUserPlexShareInternal(adminToken, updated, targetKeys);
+                    }
                 }
             }
 
@@ -6687,13 +6699,43 @@ export async function createOrUpdateSubAccountAction(payload: {
                 }).catch(() => {});
             }
 
-            // Grant Plex share immediately if parent is active
+            // Grant Plex share if parent is active
             if (adminToken && (parentUser.status === "APPROVED" || parentUser.status === "TRIAL")) {
                 const targetKeys = cleanType === "KID"
                     ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
                     : (parentUser.selectedPlexLibrarySectionIds || parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
                 if (targetKeys.length > 0) {
-                    await syncUserPlexShareInternal(adminToken, newSub, targetKeys);
+                    const requirePlexApproval = settings?.requireApprovalForPlexChanges !== false;
+                    if (requirePlexApproval) {
+                        const existing = await prisma.adminApproval.findFirst({
+                            where: {
+                                userId: newSub.id,
+                                type: "PLEX_ACCESS_GRANT",
+                                status: "PENDING"
+                            }
+                        });
+                        if (!existing) {
+                            const approval = await prisma.adminApproval.create({
+                                data: {
+                                    type: "PLEX_ACCESS_GRANT",
+                                    status: "PENDING",
+                                    title: `Plex Access: New Sub-Account (${cleanLabel})`,
+                                    description: `New sub-account ${cleanType} for ${parentUser.username} (${cleanPlexHandle}). Pending admin approval before granting ${targetKeys.length} Plex libraries.`,
+                                    targetUser: newSub.username,
+                                    targetEmail: newSub.email,
+                                    userId: newSub.id,
+                                    payload: JSON.stringify({
+                                        userId: newSub.id,
+                                        action: "SYNC_SHARE",
+                                        selectedKeys: targetKeys
+                                    })
+                                }
+                            });
+                            logger.addLog("INFO", "APPROVAL", `New sub-account Plex access for "${newSub.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                        }
+                    } else {
+                        await syncUserPlexShareInternal(adminToken, newSub, targetKeys);
+                    }
                 }
             }
 
@@ -7088,15 +7130,7 @@ export async function submitSupportTicket(formData: FormData) {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
         if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
-            const transporter = nodemailer.createTransport({
-                host: settings.smtpHost,
-                port: settings.smtpPort,
-                secure: settings.smtpPort === 465, 
-                auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-            } as any);
-
             const appUrl = await getAppUrl();
-            const senderEmail = settings.smtpFrom || settings.smtpUser;
             const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
                 name,
                 email,
@@ -7108,13 +7142,13 @@ export async function submitSupportTicket(formData: FormData) {
                 appUrl
             });
 
-            await transporter.sendMail({
-                from: senderEmail,
-                to: settings.smtpUser, 
-                replyTo: email,
+            await sendOrQueueEmail({
+                to: settings.smtpUser,
                 subject,
+                html,
                 text: `User: ${name} (${email})\n\nIssue:\n${issue}\n\nQuick Actions:\nManage User: ${appUrl}/settings/access?search=${encodeURIComponent(email)}\nTickets: ${appUrl}/admin/tickets`,
-                html
+                templateId: "ticket_error_alert",
+                targetUser: name
             });
         }
         revalidatePath("/");
@@ -7174,15 +7208,7 @@ export async function submitAutoErrorTicketAction(errorPayload: {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             try {
-                const transporter = nodemailer.createTransport({
-                    host: settings.smtpHost,
-                    port: settings.smtpPort || 587,
-                    secure: settings.smtpPort === 465,
-                    auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-                } as any);
-
                 const appUrl = await getAppUrl();
-                const senderEmail = settings.smtpFrom || settings.smtpUser;
                 const userNoteBlock = errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : "";
 
                 const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
@@ -7196,13 +7222,13 @@ export async function submitAutoErrorTicketAction(errorPayload: {
                     appUrl
                 });
 
-                await transporter.sendMail({
-                    from: senderEmail,
+                await sendOrQueueEmail({
                     to: settings.smtpUser,
-                    replyTo: email,
                     subject,
+                    html,
                     text: formattedIssue,
-                    html
+                    templateId: "ticket_error_alert",
+                    targetUser: name
                 });
             } catch (mailErr: any) {
                 console.error("[AUTO-TICKET] Failed to send email alert for ticket:", mailErr.message || mailErr);
@@ -8930,18 +8956,6 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
         const title = book?.title || request.title;
         const author = book?.author || request.author || "Unknown Author";
         const appUrl = await getAppUrl();
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
-
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
-
         const coverUrl = book?.coverUrl || request.coverUrl;
         const cleanCoverUrl = coverUrl ? (coverUrl.startsWith("http") ? coverUrl : `${appUrl}${coverUrl}`) : null;
 
@@ -8997,16 +9011,8 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
         const isAudiobook = request.mediaType === "audiobook";
         const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
 
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
+        const adminEmails = admins.map(a => a.email).filter(Boolean) as string[];
+        if (adminEmails.length === 0) return;
 
         const appUrl = await getAppUrl();
         const { subject, html } = await renderEmailTemplate("media_request_admin", {
@@ -9021,16 +9027,14 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             appUrl
         });
 
-        for (const admin of admins) {
-            if (!admin.email) continue;
-            await transporter.sendMail({
-                from: senderEmail,
-                to: admin.email,
-                subject,
-                html
-            });
-        }
-        console.log(`[SMTP-NOTIFICATION] Request notification sent successfully for "${request.title}" (${mediaLabel})`);
+        await sendOrQueueEmail({
+            to: adminEmails,
+            subject,
+            html,
+            templateId: "media_request_admin",
+            targetUser: request.requestedBy
+        });
+        console.log(`[SMTP-NOTIFICATION] Request notification sent or queued for "${request.title}" (${mediaLabel})`);
     } catch (e: any) {
         console.error("[SMTP-NOTIFICATION] Failed to send request email notification to admins:", e);
     }
@@ -13232,33 +13236,52 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
         }
 
         const senderEmail = settings.smtpFrom || settings.smtpUser;
-        
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
-
-        const mailOptions = {
-            from: senderEmail,
-            to: user.kindleEmail,
-            subject: `Deliver Book: ${book.title}`,
-            text: `Delivering your ebook "${book.title}" to your Kindle device.`,
-            attachments: [
-                {
-                    filename: validation.cleanAttachmentName,
-                    path: validation.filePath || book.filePath
-                }
-            ]
-        };
 
         try {
-            await transporter.sendMail(mailOptions);
-            
+            const mailRes = await sendOrQueueEmail({
+                to: user.kindleEmail,
+                subject: `Deliver Book: ${book.title}`,
+                text: `Delivering your ebook "${book.title}" to your Kindle device.`,
+                html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
+                templateId: "kindle_delivery",
+                targetUser: user.username,
+                userId: user.id,
+                attachments: [
+                    {
+                        filename: validation.cleanAttachmentName || `${book.title}.epub`,
+                        path: validation.filePath || book.filePath
+                    }
+                ]
+            });
+
+            if (!mailRes.success) {
+                throw new Error(mailRes.error || "Failed to send or queue email");
+            }
+
+            if (mailRes.queued) {
+                await prisma.kindleDeliveryLog.create({
+                    data: {
+                        bookId: book.id,
+                        bookTitle: book.title,
+                        bookAuthor: book.author || "Unknown",
+                        recipientEmail: user.kindleEmail,
+                        userEmail: user.email || "",
+                        username: user.username,
+                        status: "STAGED",
+                        fileSize: validation.fileSize,
+                        fileType: validation.ext?.replace(".", "") || "epub",
+                        diagnostics: JSON.stringify({
+                            sanitizedAttachment: validation.cleanAttachmentName,
+                            sizeMb: `${validation.fileSizeMb} MB`,
+                            approvalId: mailRes.approvalId,
+                            stagedAt: new Date().toISOString()
+                        })
+                    }
+                }).catch(() => {});
+                revalidatePath("/library");
+                return { success: true, staged: true, message: "Kindle delivery staged in Admin Approval Queue for review." };
+            }
+
             // Record successful delivery
             await prisma.kindleDeliveryLog.create({
                 data: {
@@ -13374,18 +13397,6 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
             return { success: false, error: "Email file delivery is currently disabled in Email Notification Settings." };
         }
 
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
-        
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
-
         const ext = path.extname(book.filePath).toLowerCase();
         const cleanAttachmentName = path.basename(book.filePath, ext)
             .replace(/[^a-zA-Z0-9]/g, "_")
@@ -13395,8 +13406,7 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         const isAudio = book.mediaType === "audiobook";
         const itemTypeLabel = isAudio ? "Audiobook" : "Ebook";
 
-        const mailOptions = {
-            from: senderEmail,
+        const mailRes = await sendOrQueueEmail({
             to: user.email,
             subject: `📦 DomsHomeLab Book Delivery: ${book.title}`,
             html: `
@@ -13414,15 +13424,23 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
                     <p style="font-size: 13px; color: #64748b;">The media file is attached directly to this email so you can save or transfer it to your device.</p>
                 </div>
             `,
+            templateId: "book_file_delivery",
+            targetUser: user.username,
+            userId: user.id,
             attachments: [
                 {
                     filename: cleanAttachmentName,
                     path: book.filePath
                 }
             ]
-        };
+        });
 
-        await transporter.sendMail(mailOptions);
+        if (!mailRes.success) {
+            return { success: false, error: mailRes.error || "Failed to deliver email." };
+        }
+        if (mailRes.queued) {
+            return { success: true, staged: true, message: "File delivery staged in Admin Approval Queue for review." };
+        }
         console.log(`[SMTP-DELIVERY] Successfully emailed ${book.title} to ${user.email}`);
         return { success: true };
     } catch (e: any) {
@@ -13497,32 +13515,52 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
     }
 
     const senderEmail = settings.smtpFrom || settings.smtpUser;
-    
-    const transporter = nodemailer.createTransport({
-        host: settings.smtpHost,
-        port: settings.smtpPort || 587,
-        secure: settings.smtpPort === 465,
-        auth: {
-            user: settings.smtpUser,
-            pass: decryptData(settings.smtpPass)
-        }
-    });
-
-    const mailOptions = {
-        from: senderEmail,
-        to: user.kindleEmail,
-        subject: `Deliver Book: ${book.title}`,
-        text: `Delivering your ebook "${book.title}" to your Kindle device.`,
-        attachments: [
-            {
-                filename: validation.cleanAttachmentName,
-                path: validation.filePath || book.filePath
-            }
-        ]
-    };
 
     try {
-        await transporter.sendMail(mailOptions);
+        const mailRes = await sendOrQueueEmail({
+            to: user.kindleEmail,
+            subject: `Deliver Book: ${book.title}`,
+            text: `Delivering your ebook "${book.title}" to your Kindle device.`,
+            html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
+            templateId: "kindle_delivery",
+            targetUser: username,
+            userId: user.id,
+            attachments: [
+                {
+                    filename: validation.cleanAttachmentName || `${book.title}.epub`,
+                    path: validation.filePath || book.filePath
+                }
+            ]
+        });
+
+        if (!mailRes.success) {
+            throw new Error(mailRes.error || "Failed to send or queue email");
+        }
+
+        if (mailRes.queued) {
+            console.log(`[AUTO-KINDLE] Ebook "${book.title}" delivery staged for admin approval (ID: ${mailRes.approvalId})`);
+            await prisma.kindleDeliveryLog.create({
+                data: {
+                    bookId: book.id,
+                    bookTitle: book.title,
+                    bookAuthor: book.author || "Unknown",
+                    recipientEmail: user.kindleEmail,
+                    userEmail: user.email || "",
+                    username: user.username,
+                    status: "STAGED",
+                    fileSize: validation.fileSize,
+                    fileType: validation.ext?.replace(".", "") || "epub",
+                    diagnostics: JSON.stringify({
+                        sanitizedAttachment: validation.cleanAttachmentName,
+                        sizeMb: `${validation.fileSizeMb} MB`,
+                        approvalId: mailRes.approvalId,
+                        stagedAt: new Date().toISOString()
+                    })
+                }
+            }).catch(() => {});
+            return { success: true, staged: true };
+        }
+
         console.log(`[AUTO-KINDLE] Ebook "${book.title}" successfully emailed to ${user.kindleEmail} for ${username}`);
         
         await prisma.kindleDeliveryLog.create({
@@ -14386,20 +14424,9 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 
         const adminEmails = admins
             .map(admin => admin.email)
-            .filter(email => !!email);
+            .filter(email => !!email) as string[];
 
-        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
-
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
+        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser as string];
 
         const appUrl = await getAppUrl();
         const { subject, html } = await renderEmailTemplate("library_access_request", {
@@ -14411,12 +14438,17 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
         });
 
         try {
-            await transporter.sendMail({
-                from: senderEmail,
-                to: recipientEmails.join(", "),
+            const mailRes = await sendOrQueueEmail({
+                to: recipientEmails,
                 subject,
-                html
+                html,
+                templateId: "library_access_request",
+                targetUser: user.username,
+                userId: user.id
             });
+            if (!mailRes.success) {
+                return { success: false, error: mailRes.error || "Failed to send request email" };
+            }
             return { success: true };
         } catch (e: any) {
             console.error("Failed to email admin about access request:", e);

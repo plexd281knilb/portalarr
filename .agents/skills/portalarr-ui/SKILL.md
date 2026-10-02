@@ -473,6 +473,19 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Compare string array settings (such as default library IDs) by sorting copies prior to index-by-index equality checks (`[...a].sort()`), preventing false-positive dirty states caused by array order permutations.
   - Always set state arrays explicitly even when loaded strings are empty (e.g., `""` &rarr; `[]`), preventing stale key retention.
 
+---
+
+### 28. Action Approval Gates & Governance (Strict Staging & Manual Review)
+- **Email Dispatch Gating (`requireApprovalForEmails`)**:
+  - 100% of outgoing emails across the entire codebase route through `sendOrQueueEmail` in `src/app/actions.ts`.
+  - When `requireApprovalForEmails` is `true` (default), outgoing emails (user approvals, trial reminders, subscription notices, request alerts, Kindle deliveries, support ticket escalations, etc.) are strictly staged in the `AdminApproval` table with `type: "EMAIL"` and status `"PENDING"`.
+  - Staged emails preserve recipient, subject, rendered HTML, templateId, and file attachments in `payload`.
+  - Emails are ONLY dispatched via SMTP when an administrator explicitly approves the item in the Action Approval Queue (`approveAdminApprovalAction`) or when the toggle is turned OFF (`requireApprovalForEmails === false`).
+- **Live Plex Modification Gating (`requireApprovalForPlexChanges`)**:
+  - All operations that grant, sync, modify, or revoke Plex server shares (`revokePlexAccessForUserInternal`, `updateUserPlexLibraries`, `setUserTrialOrSubscription`, `createOrUpdateSubAccountAction`, `registerUserWithInviteAction`, `updateUserSelectedPlexLibrariesAction`) respect `requireApprovalForPlexChanges`.
+  - When active (`true`), modifications are strictly staged in `AdminApproval` (`PLEX_ACCESS_GRANT` or `PLEX_ACCESS_REVOKE`). PMS friends and library share updates are withheld until an administrator explicitly reviews and approves the staged change.
+  - When turned OFF (`requireApprovalForPlexChanges === false`), operations execute directly on the target Plex Media Server instances.
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

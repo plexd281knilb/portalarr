@@ -4,7 +4,6 @@ import { compare, hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
-import nodemailer from "nodemailer";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
@@ -433,20 +432,8 @@ async function sendAdminNewAccountRequestEmail(user: { id: string; username: str
       where: { role: "ADMIN" }
     });
 
-    const adminEmails = admins.map(a => a.email).filter(Boolean);
-    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort || 587,
-      secure: settings.smtpPort === 465,
-      auth: {
-        user: settings.smtpUser,
-        pass: decryptData(settings.smtpPass)
-      }
-    });
-
+    const adminEmails = admins.map(a => a.email).filter(Boolean) as string[];
+    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser as string];
     const appUrl = await getAppUrl();
     const { subject, html } = await renderEmailTemplate("admin_new_user", {
       username: user.username,
@@ -456,13 +443,16 @@ async function sendAdminNewAccountRequestEmail(user: { id: string; username: str
       accessUrl: `${appUrl}/settings/access`
     });
 
-    await transporter.sendMail({
-      from: senderEmail,
-      to: recipientEmails.join(", "),
+    const { sendOrQueueEmail } = await import("./actions");
+    await sendOrQueueEmail({
+      to: recipientEmails as string[],
       subject,
-      html
+      html,
+      templateId: "admin_new_user",
+      targetUser: user.username,
+      userId: user.id
     });
-    console.log(`[AUTH] Account request notification email sent to admins for ${user.username}`);
+    console.log(`[AUTH] Account request notification email sent or queued for admins for ${user.username}`);
   } catch (err) {
     console.error("[AUTH] Error sending account request email:", err);
   }
@@ -668,17 +658,6 @@ export async function requestForgotPassword(formData: FormData) {
   });
 
   try {
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort || 587,
-      secure: settings.smtpPort === 465,
-      auth: {
-        user: settings.smtpUser,
-        pass: decryptData(settings.smtpPass)
-      }
-    });
-
     const appUrl = await getAppUrl();
     const { subject, html } = await renderEmailTemplate("password_reset", {
       username: user.username,
