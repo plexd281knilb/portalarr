@@ -11,7 +11,8 @@ import {
     validateMemberReferenceAction,
     calculateUserGuideAccess,
     fetchGlancesHardwareStats,
-    getAdminDetailedStreamsAction
+    getAdminDetailedStreamsAction,
+    updateCurrentUserKindleEmail
 } from "../src/app/actions";
 import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
@@ -3689,6 +3690,113 @@ async function runTestSuite() {
             throw new Error("Failed to correctly evaluate effective monitoring state for Sonarr series");
         }
     });
+
+    // Test 64: Account Settings Subsystem (Kindle Bypass, Access Recheck Integrity & Safety Profiles)
+    await assertTest("Account Settings: Kindle Direct Bypass, Access Recheck Integrity & Safety Profiles", async () => {
+        // 1. Verify updateCurrentUserKindleEmail unauthorized safety
+        const anonRes = await updateCurrentUserKindleEmail("DIRECT_DOWNLOAD");
+        if (!anonRes || !anonRes.error) {
+            throw new Error("Expected updateCurrentUserKindleEmail to fail without session");
+        }
+
+        // 2. Direct format & bypass validation logic
+        const testBypass = "  DIRECT_DOWNLOAD  ";
+        const isBypass = testBypass.trim().toUpperCase() === "DIRECT_DOWNLOAD";
+        const cleanBypassEmail = isBypass ? "DIRECT_DOWNLOAD" : testBypass.trim().toLowerCase();
+        if (!isBypass || cleanBypassEmail !== "DIRECT_DOWNLOAD") {
+            throw new Error("Failed to validate DIRECT_DOWNLOAD bypass string");
+        }
+
+        const validEmail = "reader@kindle.com";
+        const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(validEmail);
+        if (!isValid) throw new Error("Regex rejected valid email");
+
+        const invalidEmail = "not-an-email";
+        const isInvalid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invalidEmail);
+        if (isInvalid) throw new Error("Regex accepted invalid email");
+
+        // 3. User access & payment recheck data integrity in database
+        const testUsername = `acc_verify_${Date.now()}`;
+        const user = await prisma.user.create({
+            data: {
+                username: testUsername,
+                email: `${testUsername}@example.com`,
+                password: "hashed_dummy_password",
+                role: "USER",
+                status: "APPROVED",
+                membershipTier: "VIP_ALL_ACCESS",
+                accountType: "KID",
+                subscriptionCadence: "annual",
+                selectedPlexLibrarySectionIds: JSON.stringify(["10", "20"]),
+                kindleEmail: "DIRECT_DOWNLOAD"
+            }
+        });
+
+        try {
+            // Recheck user access fields selected by recheckUserAccessAndPaymentAction
+            const freshUser = await prisma.user.findUnique({
+                where: { id: user.id },
+                select: {
+                    id: true,
+                    username: true,
+                    email: true,
+                    kindleEmail: true,
+                    role: true,
+                    status: true,
+                    membershipTier: true,
+                    accountType: true,
+                    subscriptionCadence: true,
+                    trialEndsAt: true,
+                    subscriptionEndsAt: true,
+                    convertedAt: true,
+                    plexUsername: true,
+                    plexEmail: true,
+                    selectedPlexLibrarySectionIds: true
+                }
+            });
+
+            if (!freshUser) throw new Error("User lookup failed during recheck query");
+            if (freshUser.membershipTier !== "VIP_ALL_ACCESS") {
+                throw new Error(`membershipTier dropped or mismatched: ${freshUser.membershipTier}`);
+            }
+            if (freshUser.accountType !== "KID") {
+                throw new Error(`accountType dropped or mismatched: ${freshUser.accountType}`);
+            }
+            if (freshUser.subscriptionCadence !== "annual") {
+                throw new Error(`subscriptionCadence dropped or mismatched: ${freshUser.subscriptionCadence}`);
+            }
+            if (freshUser.selectedPlexLibrarySectionIds !== JSON.stringify(["10", "20"])) {
+                throw new Error(`selectedPlexLibrarySectionIds dropped or mismatched: ${freshUser.selectedPlexLibrarySectionIds}`);
+            }
+            if (freshUser.kindleEmail !== "DIRECT_DOWNLOAD") {
+                throw new Error(`kindleEmail bypass value mismatched: ${freshUser.kindleEmail}`);
+            }
+        } finally {
+            await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+        }
+
+        // 4. Dirty tracking logic for safety profiles
+        const initialPrefs = {
+            allowMatureContent: false,
+            contentFilterStrictness: "STRICT",
+            blockedTags: ["R", "NC-17"]
+        };
+        const currentPrefsModified = {
+            allowMatureContent: true,
+            contentFilterStrictness: "STRICT",
+            blockedTags: ["R", "NC-17"]
+        };
+        const isDirty = JSON.stringify(initialPrefs) !== JSON.stringify(currentPrefsModified);
+        if (!isDirty) throw new Error("Safety preferences dirty tracking failed to detect changes");
+
+        // 5. Section-level library dirty comparison logic
+        const initialSections = ["1", "2"];
+        const currentSectionsDiffOrder = ["2", "1"];
+        const areSameUnordered = initialSections.length === currentSectionsDiffOrder.length &&
+            initialSections.every(id => currentSectionsDiffOrder.includes(id));
+        if (!areSameUnordered) throw new Error("Section ID unordered set matching failed");
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

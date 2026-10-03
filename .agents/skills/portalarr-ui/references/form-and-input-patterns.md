@@ -148,3 +148,13 @@ When designing side-by-side automation cards (`grid-cols-1 lg:grid-cols-2`):
   - **Row 1 (Full width / `sm:col-span-2`)**: Primary Schedule Frequency dropdown (gives ample breathing room for descriptive frequency labels).
   - **Row 2 (`grid grid-cols-1 sm:grid-cols-2 gap-2.5`)**: Secondary parameters side-by-side (e.g. Recheck Scope & Batch Size).
 - Ensure all grid columns and wrapper containers specify `min-w-0` to prevent CSS Grid blowouts.
+
+---
+
+## 9. Account Settings, Sub-Account Profile Safety & Password Confirmation
+
+- **Password Changes with Confirmation**: Always provide a "Confirm New Password" field alongside the "New Password" field to prevent accidental typo lockouts. Both fields (plus the current password field) should feature inline `<Eye />` / `<EyeOff />` visibility toggles, standard `min-length` checks, and client-side mismatch alerts before dispatching to backend server actions.
+- **Multi-Profile Dirty State Tracking**: When an account settings page allows switching between active sub-profiles (e.g. Primary Account, Living Room TV Profile, Kid Profile), track initial snapshots per profile ID (`initialSafetyPrefsRef.current[profileId]`). This ensures editing a sub-profile's content safety switches (e.g. `requireApproval`, `allowMatureContent`, strictness levels) marks the form dirty, enables the floating save prompt, and allows discarding or persisting without mutating or dropping other profiles.
+- **Kindle Direct Download Bypass Mode**: When users lack an `@kindle.com` email address, allow activating a `"DIRECT_DOWNLOAD"` bypass mode. In bypass mode, the email input is disabled/hidden, the dirty tracker evaluates bypass state against the initial snapshot rather than stale input text, and the submit button enables only when an actual change is detected.
+- **Section-Level Library Comparison**: When comparing user Plex library selections against initial state, evaluate selected status at the library item / section level rather than comparing raw strings or unnormalized IDs, preventing false dirty states caused by variations in composite ID formats (`"serverId:sectionId"` vs `"sectionId"`).
+

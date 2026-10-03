@@ -13227,17 +13227,25 @@ export async function saveUserKindleSettings(formData: FormData) {
 }
 
 export async function updateCurrentUserKindleEmail(kindleEmail: string) {
-    const session: any = await verifyUser();
-    const userId = session.userId || session.id;
-    const username = session.username;
+    let session: any;
+    try {
+        session = await verifyUser();
+    } catch {
+        return { error: "User session not found." };
+    }
+    const userId = session?.userId || session?.id;
+    const username = session?.username;
 
     if (!userId && !username) {
         return { error: "User session not found." };
     }
 
     try {
-        const cleanEmail = (kindleEmail || "").trim().toLowerCase();
-        if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        const rawTrimmed = (kindleEmail || "").trim();
+        const isBypass = rawTrimmed.toUpperCase() === "DIRECT_DOWNLOAD";
+        const cleanEmail = isBypass ? "DIRECT_DOWNLOAD" : rawTrimmed.toLowerCase();
+
+        if (cleanEmail && !isBypass && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
             return { error: "Please enter a valid email address (e.g. yourname@kindle.com)." };
         }
 
@@ -13259,9 +13267,11 @@ export async function updateCurrentUserKindleEmail(kindleEmail: string) {
         return {
             success: true,
             kindleEmail: cleanEmail,
-            message: cleanEmail
-                ? "Your Send-to-Kindle email address has been updated successfully!"
-                : "Your Send-to-Kindle email address has been cleared."
+            message: isBypass
+                ? "Direct download & browser reading bypass unlocked! Book Library access granted."
+                : (cleanEmail
+                    ? "Your Send-to-Kindle email address has been updated successfully!"
+                    : "Your Send-to-Kindle email address has been cleared.")
         };
     } catch (e: any) {
         return { error: e.message || "Failed to update Send-to-Kindle email address." };

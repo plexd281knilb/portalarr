@@ -74,6 +74,10 @@ See detailed reference: [card-and-poster-patterns.md](./references/card-and-post
   - Provide an inline toggle button with Lucide `<Eye />` / `<EyeOff />`.
 - **Live Connection Diagnostics**:
   - Provide a dedicated `"Test"` button next to server/app URLs and API tokens with `<Loader2 className="animate-spin" />` feedback.
+- **Multi-Profile Settings & Password Confirmation**:
+  - Snapshot sub-profiles individually (`initialSafetyPrefsRef.current[profileId]`) so dirty state is scoped properly across primary, living room, and kid accounts.
+  - Require explicit "Confirm New Password" verification inputs with eye visibility toggles to prevent typo lockouts.
+  - Support `"DIRECT_DOWNLOAD"` bypass mode on Kindle integration without false email validation rejections.
 
 See detailed reference: [form-and-input-patterns.md](./references/form-and-input-patterns.md).
 

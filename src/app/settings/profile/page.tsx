@@ -37,7 +37,7 @@ import {
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
     CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
     Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock, Baby, Monitor, FolderCheck,
-    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music
+    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import FeatureGuideModal from "@/components/feature-guide-modal";
@@ -62,6 +62,10 @@ export default function UserProfilePage() {
     // Change Password State
     const [passCurrent, setPassCurrent] = useState("");
     const [passNew, setPassNew] = useState("");
+    const [passConfirm, setPassConfirm] = useState("");
+    const [showPassCurrent, setShowPassCurrent] = useState(false);
+    const [showPassNew, setShowPassNew] = useState(false);
+    const [showPassConfirm, setShowPassConfirm] = useState(false);
     const [passMsg, setPassMsg] = useState("");
     const [passErr, setPassErr] = useState("");
     const [passLoading, setPassLoading] = useState(false);
@@ -134,6 +138,7 @@ export default function UserProfilePage() {
     const [subModalErr, setSubModalErr] = useState("");
     const [deleteSubConfirmId, setDeleteSubConfirmId] = useState<string | null>(null);
     const [deletingSub, setDeletingSub] = useState(false);
+    const [deleteSubErr, setDeleteSubErr] = useState("");
 
     // Account Add-Ons State
     const [addonsCatalog, setAddonsCatalog] = useState<any[]>([]);
@@ -159,6 +164,11 @@ export default function UserProfilePage() {
         selectedLibraries: string[];
     } | null>(null);
 
+    const initialSafetyPrefsRef = useRef<{
+        targetUserId: string;
+        prefs: typeof contentPrefs;
+    } | null>(null);
+
     const areProfileArraysEqual = (a: string[] = [], b: string[] = []) => {
         if (a.length !== b.length) return false;
         const sortedA = [...a].sort();
@@ -167,8 +177,8 @@ export default function UserProfilePage() {
     };
 
     const isKindleDirty = Boolean(initialProfileRef.current && (
-        kindleEmail.trim() !== initialProfileRef.current.kindleEmail.trim() ||
-        bypassKindle !== initialProfileRef.current.bypassKindle
+        bypassKindle !== initialProfileRef.current.bypassKindle ||
+        (!bypassKindle && kindleEmail.trim() !== initialProfileRef.current.kindleEmail.trim())
     ));
 
     const isNotifDirty = Boolean(initialProfileRef.current && (
@@ -183,19 +193,63 @@ export default function UserProfilePage() {
         (notifPrefs.discordWebhookUrl || "").trim() !== (initialProfileRef.current.notifPrefs.discordWebhookUrl || "").trim()
     ));
 
-    const isContentDirty = Boolean(initialProfileRef.current && (!selectedSafetyUserId || !user || selectedSafetyUserId === user.id) && (
-        contentPrefs.maxContentRating !== initialProfileRef.current.contentPrefs.maxContentRating ||
-        contentPrefs.hideLeavingSoon !== initialProfileRef.current.contentPrefs.hideLeavingSoon ||
-        contentPrefs.hideHorror !== initialProfileRef.current.contentPrefs.hideHorror ||
-        contentPrefs.hideNsfw !== initialProfileRef.current.contentPrefs.hideNsfw ||
-        contentPrefs.hideGore !== initialProfileRef.current.contentPrefs.hideGore ||
-        !areProfileArraysEqual(contentPrefs.excludedGenresList, initialProfileRef.current.contentPrefs.excludedGenresList) ||
-        !areProfileArraysEqual(contentPrefs.excludedTagsList, initialProfileRef.current.contentPrefs.excludedTagsList)
-    ));
+    const isContentDirty = Boolean(
+        initialSafetyPrefsRef.current &&
+        initialSafetyPrefsRef.current.targetUserId === (selectedSafetyUserId || user?.id) &&
+        (
+            contentPrefs.maxContentRating !== initialSafetyPrefsRef.current.prefs.maxContentRating ||
+            contentPrefs.hideLeavingSoon !== initialSafetyPrefsRef.current.prefs.hideLeavingSoon ||
+            contentPrefs.hideHorror !== initialSafetyPrefsRef.current.prefs.hideHorror ||
+            contentPrefs.hideNsfw !== initialSafetyPrefsRef.current.prefs.hideNsfw ||
+            contentPrefs.hideGore !== initialSafetyPrefsRef.current.prefs.hideGore ||
+            !areProfileArraysEqual(contentPrefs.excludedGenresList, initialSafetyPrefsRef.current.prefs.excludedGenresList) ||
+            !areProfileArraysEqual(contentPrefs.excludedTagsList, initialSafetyPrefsRef.current.prefs.excludedTagsList)
+        )
+    );
 
-    const isLibrariesDirty = Boolean(initialProfileRef.current && (
-        !areProfileArraysEqual(selectedLibraries, initialProfileRef.current.selectedLibraries)
-    ));
+    const isInitialSectionSelected = (sec: any, server?: any) => {
+        if (!initialProfileRef.current) return false;
+        const initKeys = initialProfileRef.current.selectedLibraries;
+        const secId = String(sec?.id ?? "");
+        const secKey = String(sec?.key ?? "");
+        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
+        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
+        const title = String(sec?.title ?? "").toLowerCase().trim();
+
+        return (
+            initKeys.includes(uniqueKey) ||
+            initKeys.includes(uniqueServerKey) ||
+            initKeys.includes(secId) ||
+            initKeys.includes(secKey) ||
+            initKeys.some(sk => {
+                const skClean = String(sk).trim();
+                return (
+                    skClean === secId ||
+                    skClean === secKey ||
+                    skClean.endsWith(`:${secId}`) ||
+                    skClean.endsWith(`:${secKey}`) ||
+                    skClean.toLowerCase() === title
+                );
+            })
+        );
+    };
+
+    const isLibrariesDirty = Boolean(
+        initialProfileRef.current && (
+            serverLibraries.length > 0
+                ? serverLibraries.some(srv => {
+                    if (isTrial) {
+                        const sName = (srv.serverName || "").toLowerCase();
+                        if (sName.includes("kid") || sName.includes("backup")) return false;
+                    }
+                    return (srv.sections || []).some((sec: any) => {
+                        if (!isSectionAllowed(sec, srv)) return false;
+                        return isSectionSelected(sec, srv) !== isInitialSectionSelected(sec, srv);
+                    });
+                })
+                : !areProfileArraysEqual(selectedLibraries, initialProfileRef.current.selectedLibraries)
+        )
+    );
 
     const unsavedSections: string[] = [];
     if (isKindleDirty) unsavedSections.push("Send-to-Kindle");
@@ -211,11 +265,19 @@ export default function UserProfilePage() {
         setKindleEmail(init.kindleEmail);
         setBypassKindle(init.bypassKindle);
         setNotifPrefs({ ...init.notifPrefs });
-        setContentPrefs({
-            ...init.contentPrefs,
-            excludedGenresList: [...init.contentPrefs.excludedGenresList],
-            excludedTagsList: [...init.contentPrefs.excludedTagsList]
-        });
+        if (initialSafetyPrefsRef.current) {
+            setContentPrefs({
+                ...initialSafetyPrefsRef.current.prefs,
+                excludedGenresList: [...initialSafetyPrefsRef.current.prefs.excludedGenresList],
+                excludedTagsList: [...initialSafetyPrefsRef.current.prefs.excludedTagsList]
+            });
+        } else {
+            setContentPrefs({
+                ...init.contentPrefs,
+                excludedGenresList: [...init.contentPrefs.excludedGenresList],
+                excludedTagsList: [...init.contentPrefs.excludedTagsList]
+            });
+        }
         setSelectedLibraries([...init.selectedLibraries]);
     };
 
@@ -235,8 +297,34 @@ export default function UserProfilePage() {
             if (res.success) {
                 if (res.user) setUser(res.user);
                 setStatusSyncMsg(res.message || "Payment status and access verification complete!");
-                const ref = await getUserReferralInfo();
+                const [ref, libRes, subRes, addRes, kidsLibRes] = await Promise.all([
+                    getUserReferralInfo(),
+                    getUserAllowedPlexLibrariesAction(),
+                    getUserSubAccountsAction(),
+                    getAvailableAddonsAction(),
+                    getUserKidsLibraryAccessAction()
+                ]);
                 if (ref?.success) setReferralInfo(ref);
+                if (libRes?.success) {
+                    setAllowedLibraries(libRes.allowedKeys || []);
+                    setSelectedLibraries(libRes.selectedKeys || []);
+                    setServerLibraries(libRes.servers || []);
+                    if (initialProfileRef.current) {
+                        initialProfileRef.current.selectedLibraries = libRes.selectedKeys || [];
+                    }
+                }
+                if (subRes?.success) {
+                    setSubAccounts(subRes.subAccounts || []);
+                    if (subRes.limits) setSubLimits(subRes.limits);
+                }
+                if (addRes?.success) {
+                    setAddonsCatalog(addRes.catalog || []);
+                    setUserEnabledAddons(addRes.userEnabledAddons || []);
+                }
+                if (kidsLibRes?.success) {
+                    setHasKidsAccess(Boolean(kidsLibRes.hasKidsAccess));
+                    setKidsLibraries(kidsLibRes.kidsLibraries || []);
+                }
                 setTimeout(() => setStatusSyncMsg(""), 6000);
             } else {
                 setStatusSyncErr(res.error || "Failed to sync payment status.");
@@ -358,6 +446,19 @@ export default function UserProfilePage() {
                         excludedTagsList: contentRes?.preferences?.excludedTagsList || []
                     },
                     selectedLibraries: libRes?.selectedKeys || []
+                };
+
+                initialSafetyPrefsRef.current = {
+                    targetUserId: u?.id || "",
+                    prefs: {
+                        maxContentRating: contentRes?.preferences?.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(contentRes?.preferences?.hideLeavingSoon),
+                        hideHorror: Boolean(contentRes?.preferences?.hideHorror),
+                        hideNsfw: Boolean(contentRes?.preferences?.hideNsfw),
+                        hideGore: Boolean(contentRes?.preferences?.hideGore),
+                        excludedGenresList: contentRes?.preferences?.excludedGenresList || [],
+                        excludedTagsList: contentRes?.preferences?.excludedTagsList || []
+                    }
                 };
             } catch (e) {
                 console.error("fetchProfile error:", e);
@@ -555,6 +656,7 @@ export default function UserProfilePage() {
 
     const handleDeleteSubAccount = async (id: string) => {
         setDeletingSub(true);
+        setDeleteSubErr("");
         try {
             const res = await deleteSubAccountAction(id);
             if (res.success) {
@@ -567,9 +669,11 @@ export default function UserProfilePage() {
                     handleSelectSafetyAccount(user?.id);
                 }
                 setDeleteSubConfirmId(null);
+            } else {
+                setDeleteSubErr(res.error || "Failed to remove sub-account");
             }
-        } catch (err) {
-            console.error("Failed to delete sub-account:", err);
+        } catch (err: any) {
+            setDeleteSubErr(err.message || "Failed to delete sub-account");
         } finally {
             setDeletingSub(false);
         }
@@ -608,7 +712,7 @@ export default function UserProfilePage() {
         setKindleMsg("");
         setKindleErr("");
 
-        const targetEmail = bypassKindle ? "DIRECT_DOWNLOAD" : kindleEmail;
+        const targetEmail = bypassKindle ? "DIRECT_DOWNLOAD" : kindleEmail.trim();
         const res = await updateCurrentUserKindleEmail(targetEmail);
         setKindleSaving(false);
 
@@ -620,12 +724,15 @@ export default function UserProfilePage() {
                 : (res.message || "Your Send-to-Kindle email address has been updated successfully!"));
             setUser((prev: any) => ({ ...prev, kindleEmail: targetEmail }));
             if (!bypassKindle) {
-                setKindleEmail(res.kindleEmail || "");
+                setKindleEmail(res.kindleEmail || kindleEmail.trim());
+            } else {
+                setKindleEmail("");
             }
             if (initialProfileRef.current) {
-                initialProfileRef.current.kindleEmail = bypassKindle ? "" : (res.kindleEmail || kindleEmail);
+                initialProfileRef.current.kindleEmail = bypassKindle ? "" : (res.kindleEmail || kindleEmail.trim());
                 initialProfileRef.current.bypassKindle = bypassKindle;
             }
+            setTimeout(() => setKindleMsg(""), 5000);
         }
     };
 
@@ -677,10 +784,27 @@ export default function UserProfilePage() {
 
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
-        setPassLoading(true);
         setPassMsg("");
         setPassErr("");
 
+        if (!passCurrent) {
+            setPassErr("Please enter your current password.");
+            return;
+        }
+        if (!passNew) {
+            setPassErr("Please enter a new password.");
+            return;
+        }
+        if (passNew.length < 6) {
+            setPassErr("New password must be at least 6 characters long.");
+            return;
+        }
+        if (passNew !== passConfirm) {
+            setPassErr("New passwords do not match. Please re-enter.");
+            return;
+        }
+
+        setPassLoading(true);
         const formData = new FormData();
         formData.append("currentPassword", passCurrent);
         formData.append("newPassword", passNew);
@@ -694,6 +818,8 @@ export default function UserProfilePage() {
             setPassMsg(res.message || "Your password has been updated successfully!");
             setPassCurrent("");
             setPassNew("");
+            setPassConfirm("");
+            setTimeout(() => setPassMsg(""), 5000);
         }
     };
 
@@ -737,7 +863,7 @@ export default function UserProfilePage() {
         try {
             const contentRes = await getUserContentPreferencesAction(effectiveId);
             if (contentRes?.success && contentRes.preferences) {
-                setContentPrefs({
+                const loaded = {
                     maxContentRating: contentRes.preferences.maxContentRating || "ALL",
                     hideLeavingSoon: Boolean(contentRes.preferences.hideLeavingSoon),
                     hideHorror: Boolean(contentRes.preferences.hideHorror),
@@ -745,7 +871,16 @@ export default function UserProfilePage() {
                     hideGore: Boolean(contentRes.preferences.hideGore),
                     excludedGenresList: contentRes.preferences.excludedGenresList || [],
                     excludedTagsList: contentRes.preferences.excludedTagsList || []
-                });
+                };
+                setContentPrefs(loaded);
+                initialSafetyPrefsRef.current = {
+                    targetUserId: effectiveId,
+                    prefs: {
+                        ...loaded,
+                        excludedGenresList: [...loaded.excludedGenresList],
+                        excludedTagsList: [...loaded.excludedTagsList]
+                    }
+                };
             } else if (contentRes?.error) {
                 setContentErr(contentRes.error);
             }
@@ -778,6 +913,14 @@ export default function UserProfilePage() {
                     ? `"${targetSub.subAccountLabel || (targetSub.accountType === "KID" ? "Kids Account" : "Living Room")}"`
                     : "Primary Account";
                 setContentMsg(`Content safety preferences saved for ${targetName}!`);
+                initialSafetyPrefsRef.current = {
+                    targetUserId: targetId,
+                    prefs: {
+                        ...contentPrefs,
+                        excludedGenresList: [...contentPrefs.excludedGenresList],
+                        excludedTagsList: [...contentPrefs.excludedTagsList]
+                    }
+                };
                 if (initialProfileRef.current && (!selectedSafetyUserId || selectedSafetyUserId === user?.id)) {
                     initialProfileRef.current.contentPrefs = {
                         ...contentPrefs,
@@ -1028,9 +1171,11 @@ export default function UserProfilePage() {
                             <Badge variant="outline" className={`text-xs font-bold ${
                                 isTrial 
                                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
-                                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                    : user?.role === "ADMIN"
+                                        ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                             }`}>
-                                {isTrial ? "⏱️ Trial User" : "⭐ Full User"}
+                                {isTrial ? "⏱️ Trial User" : (user?.role === "ADMIN" ? "🛡️ Administrator" : "⭐ Full User")}
                             </Badge>
                             {currentAccountType !== "STANDARD" && (
                                 <Badge variant="outline" className="text-xs font-medium bg-muted/40 border-border">
@@ -1045,11 +1190,11 @@ export default function UserProfilePage() {
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Account Status</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : "text-emerald-400"}`} />
-                                {isTrial ? "Trial User" : "Full User"}
+                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : (user?.role === "ADMIN" ? "text-indigo-400" : "text-emerald-400")}`} />
+                                {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Server Administrator" : "Full User")}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                                {isTrial ? "Temporary trial access pass." : "Full active membership."}
+                                {isTrial ? "Temporary trial access pass." : (user?.role === "ADMIN" ? "Full system & curation administrator." : "Full active membership.")}
                             </p>
                         </div>
 
@@ -1057,9 +1202,11 @@ export default function UserProfilePage() {
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Media Quotas</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
                                 <Sparkles className="h-4 w-4 text-amber-400" />
-                                {isTrial ? "Trial Requests Active" : "Full Library Quotas"}
+                                {isTrial ? "Trial Requests Active" : (user?.role === "ADMIN" ? "Unlimited Requests" : "Full Library Quotas")}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">Movie, TV show & book requests.</p>
+                            <p className="text-[10px] text-muted-foreground">
+                                {user?.role === "ADMIN" ? "No daily or monthly quota limits." : "Movie, TV show & book requests."}
+                            </p>
                         </div>
 
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
@@ -1424,7 +1571,7 @@ export default function UserProfilePage() {
                                                 <div className="space-y-0.5 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Living Room TV"}</span>
-                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shrink-0">Active</Badge>
                                                     </div>
                                                     <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
                                                     <span className="inline-flex items-center text-[10px] text-indigo-300/90 font-medium">
@@ -1518,7 +1665,7 @@ export default function UserProfilePage() {
                                                 <div className="space-y-0.5 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Kids Account"}</span>
-                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Active</Badge>
+                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shrink-0">Active</Badge>
                                                     </div>
                                                     <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
                                                     <span className="inline-flex items-center text-[10px] text-purple-300/90 font-medium">
@@ -2221,8 +2368,8 @@ export default function UserProfilePage() {
                         <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
                             <Button
                                 type="submit"
-                                disabled={kindleSaving || (!hasChangedKindle && Boolean(user?.kindleEmail))}
-                                className="w-full sm:w-auto font-semibold gap-2 transition-all hover:ring-2 hover:ring-primary/50 text-xs h-9"
+                                disabled={kindleSaving || !hasChangedKindle || (!bypassKindle && !cleanKindleInput)}
+                                className="w-full sm:w-auto font-semibold gap-2 transition-all hover:ring-2 hover:ring-primary/50 text-xs h-9 cursor-pointer active:scale-95"
                             >
                                 {kindleSaving ? (
                                     <>
@@ -2240,7 +2387,7 @@ export default function UserProfilePage() {
                                     variant="outline"
                                     disabled={kindleSaving}
                                     onClick={handleClearKindleEmail}
-                                    className="w-full sm:w-auto text-xs h-9 text-muted-foreground hover:text-red-400 hover:border-red-500/40 gap-1.5"
+                                    className="w-full sm:w-auto text-xs h-9 text-muted-foreground hover:text-red-400 hover:border-red-500/40 gap-1.5 cursor-pointer"
                                 >
                                     <Trash2 className="h-3.5 w-3.5" /> Remove Address
                                 </Button>
@@ -2506,30 +2653,80 @@ export default function UserProfilePage() {
                             
                             <div className="space-y-1.5">
                                 <Label htmlFor="currentPassword" className="text-xs font-semibold">Current or Temporary Password</Label>
-                                <Input 
-                                    id="currentPassword"
-                                    type="password" 
-                                    required 
-                                    value={passCurrent} 
-                                    onChange={(e) => setPassCurrent(e.target.value)} 
-                                    placeholder="Enter current or temp password"
-                                    className="bg-background/60"
-                                    autoComplete="current-password"
-                                />
+                                <div className="relative">
+                                    <Input 
+                                        id="currentPassword"
+                                        type={showPassCurrent ? "text" : "password"} 
+                                        required 
+                                        value={passCurrent} 
+                                        onChange={(e) => setPassCurrent(e.target.value)} 
+                                        placeholder="Enter current or temp password"
+                                        className="bg-background/60 pr-10"
+                                        autoComplete="current-password"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowPassCurrent(!showPassCurrent)}
+                                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground cursor-pointer"
+                                        tabIndex={-1}
+                                    >
+                                        {showPassCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
                             </div>
 
                             <div className="space-y-1.5">
                                 <Label htmlFor="newPassword" className="text-xs font-semibold">New Password</Label>
-                                <Input 
-                                    id="newPassword"
-                                    type="password" 
-                                    required 
-                                    value={passNew} 
-                                    onChange={(e) => setPassNew(e.target.value)} 
-                                    placeholder="Minimum 6 characters"
-                                    className="bg-background/60"
-                                    autoComplete="new-password"
-                                />
+                                <div className="relative">
+                                    <Input 
+                                        id="newPassword"
+                                        type={showPassNew ? "text" : "password"} 
+                                        required 
+                                        value={passNew} 
+                                        onChange={(e) => setPassNew(e.target.value)} 
+                                        placeholder="Minimum 6 characters"
+                                        className="bg-background/60 pr-10"
+                                        autoComplete="new-password"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowPassNew(!showPassNew)}
+                                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground cursor-pointer"
+                                        tabIndex={-1}
+                                    >
+                                        {showPassNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="confirmPassword" className="text-xs font-semibold">Confirm New Password</Label>
+                                <div className="relative">
+                                    <Input 
+                                        id="confirmPassword"
+                                        type={showPassConfirm ? "text" : "password"} 
+                                        required 
+                                        value={passConfirm} 
+                                        onChange={(e) => setPassConfirm(e.target.value)} 
+                                        placeholder="Re-enter new password"
+                                        className="bg-background/60 pr-10"
+                                        autoComplete="new-password"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowPassConfirm(!showPassConfirm)}
+                                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground cursor-pointer"
+                                        tabIndex={-1}
+                                    >
+                                        {showPassConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
+                                </div>
                             </div>
 
                             <Button type="submit" disabled={passLoading} className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
@@ -2720,7 +2917,12 @@ export default function UserProfilePage() {
             </Dialog>
 
             {/* DELETE SUB-ACCOUNT CONFIRM DIALOG */}
-            <Dialog open={Boolean(deleteSubConfirmId)} onOpenChange={(open) => !open && setDeleteSubConfirmId(null)}>
+            <Dialog open={Boolean(deleteSubConfirmId)} onOpenChange={(open) => {
+                if (!open) {
+                    setDeleteSubConfirmId(null);
+                    setDeleteSubErr("");
+                }
+            }}>
                 <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
@@ -2730,13 +2932,22 @@ export default function UserProfilePage() {
                             Are you sure you want to remove this sub-account? This will immediately revoke their Plex server access and delete the sub-profile.
                         </DialogDescription>
                     </DialogHeader>
+                    {deleteSubErr && (
+                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <XCircle className="h-4 w-4 shrink-0" />
+                            <span>{deleteSubErr}</span>
+                        </div>
+                    )}
                     <DialogFooter className="pt-2 flex sm:justify-between gap-2 shrink-0">
                         <Button 
                             type="button" 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => setDeleteSubConfirmId(null)}
-                            className="text-xs"
+                            onClick={() => {
+                                setDeleteSubConfirmId(null);
+                                setDeleteSubErr("");
+                            }}
+                            className="text-xs cursor-pointer"
                         >
                             Cancel
                         </Button>
@@ -2746,7 +2957,7 @@ export default function UserProfilePage() {
                             variant="destructive"
                             disabled={deletingSub}
                             onClick={() => deleteSubConfirmId && handleDeleteSubAccount(deleteSubConfirmId)}
-                            className="font-bold text-xs gap-1.5 cursor-pointer"
+                            className="font-bold text-xs gap-1.5 cursor-pointer active:scale-95"
                         >
                             {deletingSub ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                             Confirm Removal

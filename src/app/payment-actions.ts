@@ -500,11 +500,15 @@ export async function recheckUserAccessAndPaymentAction() {
                 kindleEmail: true,
                 role: true,
                 status: true,
+                membershipTier: true,
+                accountType: true,
+                subscriptionCadence: true,
                 trialEndsAt: true,
                 subscriptionEndsAt: true,
                 convertedAt: true,
                 plexUsername: true,
-                plexEmail: true
+                plexEmail: true,
+                selectedPlexLibrarySectionIds: true
             }
         });
 
