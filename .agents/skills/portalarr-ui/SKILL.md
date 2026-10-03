@@ -598,6 +598,15 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - **Rule 2 (Super Users & Admin - Priority 2)**: Action = `Allow`, Selector = `CLOUDFLARE_SUPER_USER_PATHS` (`/radarr*`, `/sonarr*`), Include = `Emails: [your-email, superuser-emails]`.
   - **Rule 3 (Public / End-User Bypass - Lower Priority)**: Action = `Bypass`, Selector = `CLOUDFLARE_BYPASS_PATHS`, Include = `Everyone`. Allows friends and family to stream, request, and manage their account profile without Cloudflare login walls.
 
+### 34. Real-time Telemetry & API Route Dynamic Prerender Guards
+- **Strict Dynamic Route Export (`dynamic = 'force-dynamic'`, `revalidate = 0`)**:
+  - Telemetry and live status endpoints (`/api/stats`, `/api/downloads`, `/api/system/logs`) must NEVER be statically prerendered at build time.
+  - Next.js Turbopack App Router prerenders route handlers lacking `export const dynamic = 'force-dynamic'` as static content (`○ /api/stats 5s 1y`). During Docker image builds (e.g. GitHub Actions), local homelab addresses (`192.168.1.x`) are unreachable, resulting in static build artifacts with false-positive offline states.
+  - Adding `export const dynamic = "force-dynamic";` and `export const revalidate = 0;` guarantees on-demand evaluation upon each live incoming request.
+- **Cache-Control & No-Store Headers**:
+  - Responses must explicitly specify `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0` to prevent edge proxies (Cloudflare) and intermediate CDNs from serving stale status snapshots.
+  - Client components (`SimpleSystemHealth`, `SystemStatus`, etc.) must fetch with `{ cache: "no-store" }`.
+
 ---
 
 

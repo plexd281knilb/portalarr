@@ -13,7 +13,7 @@ export default function SystemStatus() {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const res = await fetch("/api/stats");
+                const res = await fetch("/api/stats", { cache: "no-store" });
                 if (!res.ok) throw new Error("Failed to fetch");
                 const fresh = await res.json();
                 if (fresh) setStats(fresh);

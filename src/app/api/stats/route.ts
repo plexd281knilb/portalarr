@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getLandingStats } from "@/app/actions";
 
-// Cache the response for 30 seconds
-export const revalidate = 5; 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
     try {
@@ -29,9 +29,20 @@ export async function GET() {
             })) || []
         };
 
-        return NextResponse.json(safeStats);
+        return NextResponse.json(safeStats, {
+            headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        });
     } catch (error) {
         console.error("Stats API Error:", error);
-        return NextResponse.json({ error: "Service unavailable" }, { status: 500 });
+        return NextResponse.json({ error: "Service unavailable" }, { 
+            status: 500,
+            headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+            }
+        });
     }
 }

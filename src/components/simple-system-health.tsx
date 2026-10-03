@@ -13,7 +13,7 @@ export default function SimpleSystemHealth() {
         let mounted = true;
         const fetchStats = async () => {
             try {
-                const res = await fetch("/api/stats");
+                const res = await fetch("/api/stats", { cache: "no-store" });
                 if (res.ok) {
                     const data = await res.json();
                     if (mounted) setStats(data);
