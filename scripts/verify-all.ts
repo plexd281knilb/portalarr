@@ -1324,6 +1324,8 @@ async function runTestSuite() {
         }
 
         // F. Integration test in SQLite: Verify recalculateUserSubscriptionFromPayments and cleanup on delete
+        await prisma.paymentTransaction.deleteMany({ where: { matchedUser: { email: "payment_test@example.com" } } }).catch(() => {});
+        await prisma.user.deleteMany({ where: { OR: [{ email: "payment_test@example.com" }, { username: "test_payment_member" }] } }).catch(() => {});
         const testPaymentUser = await prisma.user.create({
             data: {
                 username: "test_payment_member",
@@ -2204,7 +2206,6 @@ async function runTestSuite() {
         }
     });
 
-<<<<<<< HEAD
     // 44. Tagging Studio: Parental Advisory Tag Formatting, Severity Matching, Server Guard Rails, and Custom Tag Rule Logic
     await assertTest("Tagging Studio: Parental Tagging Formats, Server Guard Rails & Content Advisory Engine", async () => {
         const {
