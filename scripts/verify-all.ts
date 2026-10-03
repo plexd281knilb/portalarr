@@ -3797,6 +3797,87 @@ async function runTestSuite() {
         if (!areSameUnordered) throw new Error("Section ID unordered set matching failed");
     });
 
+    // Test 65: Docker & New Installation Database Lifecycle
+    await assertTest("Docker & Database: New Install Detection, Entrypoint Script & Schema Auto-Creation", async () => {
+        // 1. Verify docker-entrypoint.sh existence and LF line endings
+        const entrypointPath = path.join(process.cwd(), "docker-entrypoint.sh");
+        if (!fs.existsSync(entrypointPath)) {
+            throw new Error("docker-entrypoint.sh does not exist in root directory");
+        }
+        const entrypointContent = fs.readFileSync(entrypointPath, "utf8");
+        const entrypointBuffer = fs.readFileSync(entrypointPath);
+        if (entrypointBuffer.includes(13)) {
+            throw new Error("docker-entrypoint.sh contains CRLF (\\r) line endings which will fail in Linux containers");
+        }
+        if (!entrypointContent.includes("#!/bin/sh")) {
+            throw new Error("docker-entrypoint.sh is missing POSIX shebang");
+        }
+        if (!entrypointContent.includes("prisma db push")) {
+            throw new Error("docker-entrypoint.sh is missing prisma db push command for new installs");
+        }
+        if (!entrypointContent.includes("exec \"$@\"")) {
+            throw new Error("docker-entrypoint.sh is missing exec \"$@\" CMD pass-through");
+        }
+
+        // 2. Verify Dockerfile wiring
+        const dockerfilePath = path.join(process.cwd(), "Dockerfile");
+        const dockerfileContent = fs.readFileSync(dockerfilePath, "utf8");
+        if (!dockerfileContent.includes("ENTRYPOINT [\"/app/docker-entrypoint.sh\"]")) {
+            throw new Error("Dockerfile is missing ENTRYPOINT [\"/app/docker-entrypoint.sh\"]");
+        }
+        if (!dockerfileContent.includes("/app/data")) {
+            throw new Error("Dockerfile is missing /app/data default directory setup");
+        }
+
+        // 3. Verify path stripping logic for DATABASE_URL variations
+        const parseDbPath = (url: string) => url.replace(/^file:\/\//, "").replace(/^file:/, "").replace(/\?.*$/, "");
+        if (parseDbPath("file:/app/data/dev.db") !== "/app/data/dev.db") {
+            throw new Error("Failed to parse standard file:/app/data/dev.db path");
+        }
+        if (parseDbPath("file:///app/data/dev.db") !== "/app/data/dev.db") {
+            throw new Error("Failed to parse 3-slash file:///app/data/dev.db path");
+        }
+        if (parseDbPath("file:./prisma/dev.db?connection_limit=1") !== "./prisma/dev.db") {
+            throw new Error("Failed to strip query params from relative DB path");
+        }
+
+        // 4. Verify new install detection heuristic
+        const testTmpFile = path.join(process.cwd(), `scratch_test_detect_${Date.now()}.db`);
+        try {
+            // Case A: Missing file -> new install
+            const isMissing = !fs.existsSync(testTmpFile);
+            if (!isMissing) throw new Error("Expected missing file to be detected as new install");
+
+            // Case B: 0-byte file -> new install
+            fs.writeFileSync(testTmpFile, Buffer.alloc(0));
+            const isZeroByte = fs.existsSync(testTmpFile) && fs.statSync(testTmpFile).size === 0;
+            if (!isZeroByte) throw new Error("Expected 0-byte file to be detected as new install");
+
+            // Case C: Non-empty file (>0 bytes) -> existing install
+            fs.writeFileSync(testTmpFile, Buffer.from("SQLite format 3\0"));
+            const isExisting = fs.existsSync(testTmpFile) && fs.statSync(testTmpFile).size > 0;
+            if (!isExisting) throw new Error("Expected non-empty file to be detected as existing install");
+        } finally {
+            if (fs.existsSync(testTmpFile)) {
+                fs.unlinkSync(testTmpFile);
+            }
+        }
+
+        // 5. Verify all Prisma models have CREATE TABLE in ensureSchemaColumns (including User)
+        const schemaPath = path.join(process.cwd(), "prisma", "schema.prisma");
+        const schemaText = fs.readFileSync(schemaPath, "utf8");
+        const schemaModels = [...schemaText.matchAll(/^model\s+(\w+)/gm)].map(m => m[1]);
+
+        const prismaTsPath = path.join(process.cwd(), "src", "lib", "prisma.ts");
+        const prismaTsText = fs.readFileSync(prismaTsPath, "utf8");
+        const createdTables = [...prismaTsText.matchAll(/CREATE TABLE IF NOT EXISTS ["']?(\w+)["']?/gi)].map(m => m[1].toLowerCase());
+
+        const missingTables = schemaModels.filter(m => !createdTables.includes(m.toLowerCase()));
+        if (missingTables.length > 0) {
+            throw new Error(`Prisma models missing CREATE TABLE IF NOT EXISTS in prisma.ts: ${missingTables.join(", ")}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

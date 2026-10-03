@@ -623,6 +623,51 @@ export async function ensureSchemaColumns(): Promise<void> {
 
         // --- 2. USER TABLE ---
         try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "User" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT,
+                    "username" TEXT NOT NULL,
+                    "email" TEXT NOT NULL,
+                    "password" TEXT NOT NULL,
+                    "kindleEmail" TEXT NOT NULL DEFAULT '',
+                    "role" TEXT NOT NULL DEFAULT 'USER',
+                    "status" TEXT NOT NULL DEFAULT 'APPROVED',
+                    "trialEndsAt" DATETIME,
+                    "subscriptionEndsAt" DATETIME,
+                    "plexUsername" TEXT,
+                    "plexEmail" TEXT,
+                    "plexLibrarySectionIds" TEXT,
+                    "referralCode" TEXT,
+                    "referredByUserId" TEXT,
+                    "referralBonusMonths" INTEGER DEFAULT 0,
+                    "parentUserId" TEXT,
+                    "subAccountLabel" TEXT,
+                    "accountType" TEXT NOT NULL DEFAULT 'STANDARD',
+                    "membershipTier" TEXT NOT NULL DEFAULT 'STANDARD',
+                    "selectedPlexLibrarySectionIds" TEXT,
+                    "enabledAddons" TEXT,
+                    "convertedAt" DATETIME,
+                    "lastLogin" DATETIME,
+                    "subscriptionCadence" TEXT DEFAULT 'YEARLY',
+                    "lastRenewalReminderSentAt" DATETIME,
+                    "renewalRemindersSent" TEXT,
+                    "canRequest" BOOLEAN NOT NULL DEFAULT 1,
+                    "canRequest4k" BOOLEAN NOT NULL DEFAULT 0,
+                    "autoApproveMovies" BOOLEAN NOT NULL DEFAULT 1,
+                    "autoApproveTv" BOOLEAN NOT NULL DEFAULT 1,
+                    "requestLimitMovies" INTEGER DEFAULT 10,
+                    "requestLimitTv" INTEGER DEFAULT 10,
+                    "requestLimitDays" INTEGER DEFAULT 7,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "User_referredByUserId_fkey" FOREIGN KEY ("referredByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                    CONSTRAINT "User_parentUserId_fkey" FOREIGN KEY ("parentUserId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_username_key" ON "User"("username");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_referralCode_key" ON "User"("referralCode");`).catch(() => {});
+
             const tableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("User");`);
             const cols = tableInfo.map((c: any) => c.name);
 
