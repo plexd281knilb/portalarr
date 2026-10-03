@@ -38,6 +38,10 @@ import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epu
 import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
 import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
 
+if (typeof process !== "undefined" && process.env) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 // ============================================================================
 // --- SECURITY LAYER ---
 // ============================================================================
@@ -2656,7 +2660,7 @@ export async function testTautulliConnectionAction(id: string) {
     }
 }
 
-export async function fetchGlancesHardwareStats(rawUrl: string, timeoutMs = 3500): Promise<{ online: boolean; cpu: number; ram: number }> {
+export async function fetchGlancesHardwareStats(rawUrl: string, timeoutMs = 4000): Promise<{ online: boolean; cpu: number; ram: number }> {
     if (!rawUrl) return { online: false, cpu: 0, ram: 0 };
 
     let clean = cleanUrl(rawUrl.trim());
@@ -2679,47 +2683,59 @@ export async function fetchGlancesHardwareStats(rawUrl: string, timeoutMs = 3500
         ...authHeaders
     };
 
-    // 1. Try quicklook endpoints first (single round-trip returning both CPU and RAM)
+    // 1. Try quicklook endpoints in parallel (prioritizing /api/3 as most common in homelabs)
     const quicklookEndpoints = [
-        "/api/4/quicklook",
         "/api/3/quicklook",
+        "/api/4/quicklook",
         "/quicklook",
         "/api/2/quicklook"
     ];
 
-    for (const ep of quicklookEndpoints) {
-        try {
-            const controller = new AbortController();
-            const tid = setTimeout(() => controller.abort(), timeoutMs);
-            const res = await fetch(`${baseGlances}${ep}`, {
-                headers: reqHeaders,
-                signal: controller.signal,
-                cache: "no-store"
-            }).catch(() => null);
-            clearTimeout(tid);
-
-            if (res && res.ok) {
-                const data = await res.json().catch(() => null);
-                if (data && (typeof data.cpu === 'number' || typeof data.cpu?.total === 'number' || typeof data.mem === 'number' || typeof data.mem?.percent === 'number')) {
-                    const cpuVal = typeof data.cpu === 'number' 
-                        ? data.cpu 
-                        : (typeof data.cpu?.total === 'number' ? data.cpu.total : (typeof data.cpu?.user === 'number' ? data.cpu.user + (data.cpu.system || 0) : 0));
-                    const memVal = typeof data.mem === 'number' 
-                        ? data.mem 
-                        : (typeof data.mem?.percent === 'number' ? data.mem.percent : (data.mem?.total && data.mem?.used ? (data.mem.used / data.mem.total) * 100 : 0));
-                    
-                    return {
-                        online: true,
-                        cpu: Math.round(cpuVal),
-                        ram: Math.round(memVal)
-                    };
+    try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), timeoutMs);
+        const quicklookResults = await Promise.all(
+            quicklookEndpoints.map(async (ep) => {
+                try {
+                    const res = await fetch(`${baseGlances}${ep}`, {
+                        headers: reqHeaders,
+                        signal: controller.signal,
+                        cache: "no-store"
+                    });
+                    if (res && res.ok) {
+                        const data = await res.json().catch(() => null);
+                        return { ok: true, status: res.status, data };
+                    }
+                    return { ok: false, status: res?.status || 0, data: null };
+                } catch {
+                    return null;
                 }
+            })
+        );
+        clearTimeout(tid);
+
+        for (const item of quicklookResults) {
+            if (!item || !item.data) continue;
+            const data = item.data;
+            if (typeof data.cpu === 'number' || typeof data.cpu?.total === 'number' || typeof data.mem === 'number' || typeof data.mem?.percent === 'number') {
+                const cpuVal = typeof data.cpu === 'number' 
+                    ? data.cpu 
+                    : (typeof data.cpu?.total === 'number' ? data.cpu.total : (typeof data.cpu?.user === 'number' ? data.cpu.user + (data.cpu.system || 0) : 0));
+                const memVal = typeof data.mem === 'number' 
+                    ? data.mem 
+                    : (typeof data.mem?.percent === 'number' ? data.mem.percent : (data.mem?.total && data.mem?.used ? (data.mem.used / data.mem.total) * 100 : 0));
+                
+                return {
+                    online: true,
+                    cpu: Math.round(cpuVal),
+                    ram: Math.round(memVal)
+                };
             }
-        } catch {}
-    }
+        }
+    } catch {}
 
     // 2. Fallback: Query CPU and MEM separately across version prefixes in parallel
-    const versionPrefixes = ["/api/4", "/api/3", "/api/2", ""];
+    const versionPrefixes = ["/api/3", "/api/4", "/api/2", ""];
     for (const v of versionPrefixes) {
         try {
             const controller = new AbortController();
@@ -2751,6 +2767,37 @@ export async function fetchGlancesHardwareStats(rawUrl: string, timeoutMs = 3500
                         ram: ramPercent
                     };
                 }
+            }
+        } catch {}
+    }
+
+    // 3. Fallback: Reachability ping check across system/version endpoints
+    // If Glances is online but telemetry parsing didn't find cpu/mem, confirm the host server is reachable
+    const pingEndpoints = [
+        "/api/3/system",
+        "/api/4/system",
+        "/api/3/version",
+        "/api/4/version",
+        "/version",
+        ""
+    ];
+    for (const ep of pingEndpoints) {
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 3000);
+            const res = await fetch(ep ? `${baseGlances}${ep}` : baseGlances, {
+                headers: reqHeaders,
+                signal: controller.signal,
+                cache: "no-store"
+            }).catch(() => null);
+            clearTimeout(tid);
+
+            if (res && ((res.status >= 200 && res.status < 500) || res.status === 401 || res.status === 403)) {
+                return {
+                    online: true,
+                    cpu: 0,
+                    ram: 0
+                };
             }
         } catch {}
     }
@@ -7744,6 +7791,134 @@ export async function getActiveDownloads() {
     }
 }
 
+/**
+ * Lightweight, resilient reachability check for monitored MediaApp instances.
+ * Targets native API status endpoints first with decrypted API credentials,
+ * falling back gracefully to base web server responses.
+ * Treats any HTTP 200..499 status (including redirects and auth challenges) as reachable.
+ */
+export async function checkMediaAppReachability(app: { name: string; type?: string | null; url?: string | null; apiKey?: string | null }, timeoutMs = 4500): Promise<boolean> {
+    if (!app || !app.url) return false;
+
+    let clean = cleanUrl(app.url.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    const cleanBase = clean.replace(/\/api(\/v?[123])?$/, "").replace(/\/+$/, "");
+
+    let apiKey = "";
+    if (app.apiKey) {
+        try {
+            apiKey = decryptData(app.apiKey).trim();
+        } catch {
+            apiKey = (app.apiKey || "").trim();
+        }
+    }
+
+    const typeStr = (app.type || "").toLowerCase().trim();
+    const nameStr = (app.name || "").toLowerCase().trim();
+
+    const candidates: { url: string; headers?: Record<string, string>; method?: string; body?: string }[] = [];
+
+    if (typeStr.includes("sabnzb") || nameStr.includes("sabnzb")) {
+        if (apiKey) {
+            candidates.push({ url: `${cleanBase}/api?mode=version&output=json&apikey=${encodeURIComponent(apiKey)}` });
+            candidates.push({ url: `${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(apiKey)}` });
+        }
+        candidates.push({ url: `${cleanBase}/api?mode=version&output=json` });
+    } else if (typeStr.includes("qbit") || nameStr.includes("qbit")) {
+        candidates.push({ url: `${cleanBase}/api/v2/app/version` });
+        candidates.push({ url: `${cleanBase}/api/v2/app/webapiVersion` });
+    } else if (typeStr.includes("nzbget") || nameStr.includes("nzbget")) {
+        let authHeader: Record<string, string> = { "Content-Type": "application/json" };
+        if (apiKey && apiKey.includes(":")) {
+            authHeader["Authorization"] = `Basic ${Buffer.from(apiKey).toString("base64")}`;
+        }
+        candidates.push({ 
+            url: `${cleanBase}/jsonrpc`, 
+            method: "POST", 
+            headers: authHeader, 
+            body: JSON.stringify({ method: "version", params: [] }) 
+        });
+        candidates.push({ url: `${cleanBase}/jsonrpc/version` });
+    } else if (typeStr.includes("prowlarr") || nameStr.includes("prowlarr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/ping` });
+    } else if (typeStr.includes("readarr") || nameStr.includes("readarr") || typeStr.includes("lidarr") || nameStr.includes("lidarr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/ping` });
+    } else if (typeStr.includes("radarr") || nameStr.includes("radarr") || typeStr.includes("sonarr") || nameStr.includes("sonarr") || typeStr.includes("whisparr") || nameStr.includes("whisparr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v3/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/ping` });
+    } else if (typeStr.includes("seerr") || nameStr.includes("seerr") || typeStr.includes("overseerr") || nameStr.includes("overseerr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v1/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+    } else if (typeStr.includes("ombi") || nameStr.includes("ombi")) {
+        const headers = apiKey ? { "ApiKey": apiKey } : undefined;
+        candidates.push({ url: `${cleanBase}/api/v1/Status`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/Status/info`, headers });
+    } else if (typeStr.includes("bazarr") || nameStr.includes("bazarr")) {
+        const headers = apiKey ? { "X-API-KEY": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/system/status${q}`, headers });
+    } else if (typeStr.includes("maintainerr") || nameStr.includes("maintainerr")) {
+        const headers = apiKey ? { "X-API-KEY": apiKey } : undefined;
+        candidates.push({ url: `${cleanBase}/api/version`, headers });
+        candidates.push({ url: `${cleanBase}/api/health` });
+    } else {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v3/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/status${q}`, headers });
+    }
+
+    candidates.push({ url: cleanBase });
+
+    for (const target of candidates) {
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), timeoutMs);
+            const reqHeaders: Record<string, string> = {
+                "Accept": "application/json, text/plain, */*",
+                ...(target.headers || {})
+            };
+            const res = await fetch(target.url, {
+                method: target.method || "GET",
+                headers: reqHeaders,
+                body: target.body,
+                signal: controller.signal,
+                cache: "no-store",
+                redirect: "follow"
+            });
+            clearTimeout(tid);
+
+            // Any HTTP response from 200 to 499 indicates the web server is online and running
+            if (res.status >= 200 && res.status < 500) {
+                return true;
+            }
+
+            // SABnzbd check
+            if (typeStr.includes("sabnzb") || nameStr.includes("sabnzb")) {
+                const sabJson = await res.json().catch(() => null);
+                if (sabJson && (sabJson.version || sabJson.status !== undefined)) {
+                    return true;
+                }
+            }
+        } catch {}
+    }
+
+    return false;
+}
+
 export async function getLandingStats() {
     try {
         await ensureSchemaColumns();
@@ -7780,7 +7955,7 @@ export async function getLandingStats() {
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
                 const actResult = await fetchTautulliApiJson(fullUrl, controller.signal, { revalidate: 10 });
                 clearTimeout(timeoutId);
                 if (actResult.ok && actResult.data) {
@@ -7799,7 +7974,7 @@ export async function getLandingStats() {
         // 2. Glances Host Hardware Stats & Reachability (only for monitored instances)
         const serverStats = await Promise.all(monitoredGlances.map(async (g) => {
             try {
-                const stats = await fetchGlancesHardwareStats(g.url);
+                const stats = await fetchGlancesHardwareStats(g.url, 4000);
                 if (stats.online) {
                     return { 
                         name: g.name, 
@@ -7820,16 +7995,8 @@ export async function getLandingStats() {
         // 3. Media Apps Reachability (only for monitored apps)
         await Promise.all(monitoredApps.map(async (app) => {
             try {
-                let clean = cleanUrl(app.url?.trim() || "");
-                if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-                    clean = `http://${clean}`;
-                }
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), 3000); 
-                const res = await fetch(clean, { signal: controller.signal, cache: "no-store" });
-                clearTimeout(id);
-                // Status 200..399, 401, 403 indicate the web server process is up and responding
-                if (!res.ok && res.status !== 401 && res.status !== 403 && res.status >= 500) {
+                const isOnline = await checkMediaAppReachability(app);
+                if (!isOnline) {
                     downApps.push(app.name);
                 }
             } catch (e) {
@@ -7846,7 +8013,7 @@ export async function getLandingStats() {
                 }
                 clean = clean.replace(/\/+$/, "");
                 const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), 3000);
+                const id = setTimeout(() => controller.abort(), 5000);
                 const sToken = ps.token ? decryptData(ps.token) : adminToken;
                 const testUrl = `${clean}/identity?X-Plex-Token=${encodeURIComponent(sToken || adminToken || "")}`;
                 const res = await fetch(testUrl, {

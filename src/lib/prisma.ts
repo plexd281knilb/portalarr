@@ -5,6 +5,12 @@ import { isPlexMaintenanceWindow } from "./curation/schedule-helper";
 
 export { isPlexMaintenanceWindow };
 
+if (typeof window === "undefined") {
+    if (typeof process !== "undefined" && process.env) {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    }
+}
+
 if (typeof window === "undefined" && !(global as any).__loggerPatched) {
     (global as any).__loggerPatched = true;
 

@@ -11,9 +11,11 @@ import {
     validateMemberReferenceAction,
     calculateUserGuideAccess,
     fetchGlancesHardwareStats,
+    checkMediaAppReachability,
     getAdminDetailedStreamsAction,
     updateCurrentUserKindleEmail
 } from "../src/app/actions";
+import http from "http";
 import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
 import { logger } from "../src/lib/logger";
@@ -3295,6 +3297,77 @@ async function runTestSuite() {
         }
         if (existing.type !== "Direct PMS (Offline) + Tautulli") {
             throw new Error(`Expected type 'Direct PMS (Offline) + Tautulli', got '${existing.type}'`);
+        }
+
+        // Test 4: checkMediaAppReachability recognizes API endpoints, auth challenges, and redirects as UP
+        const testHttpServer = http.createServer((req, res) => {
+            if (req.url?.includes("/api/v3/system/status")) {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ version: "10.0.0" }));
+            } else if (req.url?.includes("/login")) {
+                res.writeHead(200, { "Content-Type": "text/html" });
+                res.end("<html>Login</html>");
+            } else if (req.url === "/") {
+                res.writeHead(302, { Location: "/login" });
+                res.end();
+            } else if (req.url?.includes("/api/v1/status")) {
+                res.writeHead(401, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Unauthorized" }));
+            } else {
+                res.writeHead(404);
+                res.end();
+            }
+        });
+        await new Promise<void>((resolve) => testHttpServer.listen(0, "127.0.0.1", () => resolve()));
+        const testPort = (testHttpServer.address() as any).port;
+        const testBase = `http://127.0.0.1:${testPort}`;
+
+        try {
+            // Sonarr candidate: hits /api/v3/system/status
+            const sonarrReachable = await checkMediaAppReachability({
+                name: "Main Sonarr",
+                type: "sonarr",
+                url: testBase,
+                apiKey: "testkey"
+            });
+            if (!sonarrReachable) {
+                throw new Error("Expected Sonarr to be recognized as reachable via /api/v3/system/status");
+            }
+
+            // Seerr candidate returning 401: must still be recognized as reachable (process is alive!)
+            const seerrReachable = await checkMediaAppReachability({
+                name: "Main Seerr",
+                type: "overseerr",
+                url: testBase,
+                apiKey: "badkey"
+            });
+            if (!seerrReachable) {
+                throw new Error("Expected Seerr to be recognized as reachable even when returning 401 auth challenge");
+            }
+
+            // Redirecting candidate (root 302 -> /login): must be recognized as reachable
+            const redirectReachable = await checkMediaAppReachability({
+                name: "Custom Web App",
+                type: "custom",
+                url: testBase,
+                apiKey: ""
+            });
+            if (!redirectReachable) {
+                throw new Error("Expected redirecting web app to be recognized as reachable");
+            }
+
+            // Non-existent port/offline: must return false
+            const offlineReachable = await checkMediaAppReachability({
+                name: "Dead App",
+                type: "radarr",
+                url: "http://127.0.0.1:59999",
+                apiKey: "key"
+            }, 1000);
+            if (offlineReachable) {
+                throw new Error("Expected dead app port 59999 to return false");
+            }
+        } finally {
+            testHttpServer.close();
         }
     });
 
