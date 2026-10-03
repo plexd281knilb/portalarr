@@ -3421,24 +3421,34 @@ async function runTestSuite() {
             }
         }
 
-        // 3. Validate ranking and telemetry math for 3 Plex Servers
+        // 3. Validate ranking and telemetry math for 3 Plex Servers (with audio conversion not counted as transcode)
         const mockSessions = [
             { serverName: "Main Plex", videoDecision: "direct play", audioDecision: "direct play", streamBitrate: 8000 },
-            { serverName: "Main Plex", videoDecision: "transcode", audioDecision: "direct play", streamBitrate: 4000 },
+            { serverName: "Main Plex", videoDecision: "transcode", audioDecision: "direct play", streamBitrate: 4000 }, // Actual video transcode
+            { serverName: "Main Plex", videoDecision: "direct play", audioDecision: "transcode", streamBitrate: 6000 }, // Audio conversion only -> NOT using transcode power
             { serverName: "Kids Plex", videoDecision: "direct play", audioDecision: "direct play", streamBitrate: 3500 },
-            { serverName: "Main Plex", videoDecision: "direct play", audioDecision: "direct play", streamBitrate: 12000 }
+            { serverName: "Main Plex", videoDecision: "direct play", audioDecision: "direct play", streamBitrate: 6000 }
         ];
 
         const totalStreams = mockSessions.length;
         const serverMap = new Map<string, any>();
-        const plexServers = ["Main Plex", "Kids Plex", "4K Plex"];
-        for (const name of plexServers) {
-            serverMap.set(name.toLowerCase(), {
-                name,
+        const configuredServers = [
+            { name: "Main Plex", monitored: true },
+            { name: "Kids Plex", monitored: true },
+            { name: "4K Plex", monitored: true },
+            { name: "Decommissioned Old PMS", monitored: false } // Unmonitored server
+        ];
+
+        // Seed ONLY monitored servers with monitoring turned on
+        for (const s of configuredServers) {
+            if (s.monitored === false) continue; // Exclude unmonitored servers
+            serverMap.set(s.name.toLowerCase(), {
+                name: s.name,
                 streamCount: 0,
                 directPlayCount: 0,
                 transcodeCount: 0,
-                bandwidthKbps: 0
+                bandwidthKbps: 0,
+                monitored: true
             });
         }
 
@@ -3446,7 +3456,8 @@ async function runTestSuite() {
             const entry = serverMap.get(s.serverName.toLowerCase());
             if (entry) {
                 entry.streamCount++;
-                if (s.videoDecision === "transcode" || s.audioDecision === "transcode") {
+                // ONLY count as transcode if videoDecision is transcode (audio conversion does NOT use transcoding power)
+                if (s.videoDecision === "transcode") {
                     entry.transcodeCount++;
                 } else {
                     entry.directPlayCount++;
@@ -3461,27 +3472,38 @@ async function runTestSuite() {
             percentOfTotal: totalStreams > 0 ? Math.round((srv.streamCount / totalStreams) * 100) : 0
         })).sort((a, b) => b.streamCount - a.streamCount || b.bandwidthKbps - a.bandwidthKbps);
 
-        // Assert 3 Plex servers tracked
+        // Assert strictly 3 monitored Plex servers tracked (unmonitored "Decommissioned Old PMS" must be excluded)
         if (ranked.length !== 3) {
-            throw new Error(`Expected 3 Plex servers, got ${ranked.length}`);
+            throw new Error(`Expected exactly 3 monitored Plex servers, got ${ranked.length}`);
+        }
+        if (ranked.some(r => r.name === "Decommissioned Old PMS")) {
+            throw new Error("CRITICAL: Unmonitored server 'Decommissioned Old PMS' was included in serversUsage!");
         }
 
-        // Rank #1: Main Plex (3 streams, 2 DP, 1 Transcode, 24.0 Mbps, 75% total)
+        // Rank #1: Main Plex (4 streams total: 3 DP [including the 1 audio-transcode stream], 1 Transcode, 24.0 Mbps, 80% total)
         const topServer = ranked[0];
         if (topServer.name !== "Main Plex") {
             throw new Error(`Expected rank #1 to be 'Main Plex', got '${topServer.name}'`);
         }
-        if (topServer.streamCount !== 3 || topServer.directPlayCount !== 2 || topServer.transcodeCount !== 1) {
-            throw new Error(`Invalid stream count breakdown on top server: ${JSON.stringify(topServer)}`);
+        if (topServer.streamCount !== 4) {
+            throw new Error(`Expected 4 streams on Main Plex, got ${topServer.streamCount}`);
+        }
+        // Direct play MUST be 3 (1 pure DP + 1 audio-transcode DP + 1 pure DP = 3 DP)
+        if (topServer.directPlayCount !== 3) {
+            throw new Error(`Expected 3 Direct Play streams (audio conversion must not count as transcode), got ${topServer.directPlayCount}`);
+        }
+        // Transcode MUST be exactly 1 (only the video transcode)
+        if (topServer.transcodeCount !== 1) {
+            throw new Error(`Expected exactly 1 Transcode stream on Main Plex, got ${topServer.transcodeCount}`);
         }
         if (topServer.bandwidthMbps !== 24.0) {
             throw new Error(`Expected 24.0 Mbps, got ${topServer.bandwidthMbps}`);
         }
-        if (topServer.percentOfTotal !== 75) {
-            throw new Error(`Expected 75% of total, got ${topServer.percentOfTotal}%`);
+        if (topServer.percentOfTotal !== 80) {
+            throw new Error(`Expected 80% of total, got ${topServer.percentOfTotal}%`);
         }
 
-        // Rank #2: Kids Plex (1 stream, 1 DP, 0 Transcode, 3.5 Mbps, 25% total)
+        // Rank #2: Kids Plex (1 stream, 1 DP, 0 Transcode, 3.5 Mbps, 20% total)
         const secondServer = ranked[1];
         if (secondServer.name !== "Kids Plex" || secondServer.streamCount !== 1 || secondServer.directPlayCount !== 1) {
             throw new Error(`Invalid secondary server metrics: ${JSON.stringify(secondServer)}`);
@@ -3491,6 +3513,25 @@ async function runTestSuite() {
         const idleServer = ranked[2];
         if (idleServer.name !== "4K Plex" || idleServer.streamCount !== 0) {
             throw new Error(`Invalid idle server metrics: ${JSON.stringify(idleServer)}`);
+        }
+
+        // 4. Validate Season and Episode formatting
+        const testEpisodeSession = {
+            grandparentTitle: "Breaking Bad",
+            parentMediaIndex: 2,
+            mediaIndex: 5,
+            title: "Breakage"
+        };
+        const sNum = String(testEpisodeSession.parentMediaIndex).padStart(2, "0");
+        const eNum = String(testEpisodeSession.mediaIndex).padStart(2, "0");
+        const seasonEpTag = `S${sNum}E${eNum}`;
+        const formattedTitle = `${testEpisodeSession.grandparentTitle} - ${seasonEpTag}: ${testEpisodeSession.title}`;
+
+        if (seasonEpTag !== "S02E05") {
+            throw new Error(`Expected 'S02E05', got '${seasonEpTag}'`);
+        }
+        if (formattedTitle !== "Breaking Bad - S02E05: Breakage") {
+            throw new Error(`Unexpected formattedTitle: '${formattedTitle}'`);
         }
     });
     console.log("\n==========================================================");

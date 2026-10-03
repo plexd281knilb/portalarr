@@ -14675,6 +14675,11 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         let totalStreamCount = 0;
         const coveredServerNames = new Set<string>();
 
+        // Build set of unmonitored Plex server names to strictly exclude from active stream tallies
+        const unmonitoredPlexNames = new Set(
+            plexServers.filter(ps => ps.monitored === false).map(ps => ps.name.toLowerCase().trim())
+        );
+
         // 1. Tautulli Session Collection
         for (const t of tautulliInstances) {
             if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
@@ -14702,6 +14707,22 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(s.grandparent_title || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
                             : null;
 
+                        const isEpisode = s.media_type === "episode" || !!s.grandparent_title;
+                        const seasonNum = s.parent_media_index ? Number(s.parent_media_index) : undefined;
+                        const episodeNum = s.media_index ? Number(s.media_index) : undefined;
+                        const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
+                            ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
+                            : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parent_title || ""));
+
+                        let fullTitle = s.title || "Unknown Media";
+                        if (isEpisode && s.grandparent_title) {
+                            if (seasonEpisodeTag) {
+                                fullTitle = `${s.grandparent_title} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
+                            } else {
+                                fullTitle = `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}`;
+                            }
+                        }
+
                         allSessions.push({
                             instanceId: t.id,
                             serverName: t.name,
@@ -14709,10 +14730,14 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             sessionId: String(s.session_id || ""),
                             user: s.friendly_name || s.user || "Plex User",
                             email: s.email || "",
-                            title: s.grandparent_title 
-                                ? `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}` 
-                                : (s.title || "Unknown Media"),
-                            mediaType: s.media_type || (s.grandparent_title ? "episode" : "movie"),
+                            title: fullTitle,
+                            grandparentTitle: s.grandparent_title || "",
+                            parentTitle: s.parent_title || "",
+                            seasonNum: seasonNum,
+                            episodeNum: episodeNum,
+                            seasonEpisodeTag: seasonEpisodeTag,
+                            episodeTitle: isEpisode ? (s.title || "") : "",
+                            mediaType: isEpisode ? "episode" : "movie",
                             year: s.year || "",
                             thumb: thumbUrl,
                             player: s.player || s.platform || "Plex Client",
@@ -14749,15 +14774,29 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                 const directPlexResults = await getPlexActiveSessions(adminToken);
                 for (const srv of directPlexResults) {
                     const norm = srv.serverName.toLowerCase().trim();
+                    // Skip if Plex server is unmonitored (monitored: false)
+                    if (unmonitoredPlexNames.has(norm)) continue;
+
                     const isCovered = Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
                     if (!isCovered && srv.sessions && srv.sessions.length > 0) {
                         for (const s of srv.sessions) {
                             const isTranscode = s.TranscodeSession || (s.Media && s.Media[0]?.Part && s.Media[0]?.Part[0]?.decision === "transcode");
                             const userTitle = s.User?.title || s.User?.username || s.User?.name || s.username || "Plex User";
-                            const mediaType = s.type || (s.grandparentTitle ? "episode" : "movie");
-                            const fullTitle = mediaType === "episode" && s.grandparentTitle
-                                ? `${s.grandparentTitle} - ${s.title || "Episode"}`
-                                : (s.title || "Unknown Media");
+                            const isEpisode = s.type === "episode" || !!s.grandparentTitle;
+                            const seasonNum = s.parentIndex ? Number(s.parentIndex) : undefined;
+                            const episodeNum = s.index ? Number(s.index) : undefined;
+                            const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
+                                ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
+                                : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parentTitle || ""));
+
+                            let fullTitle = s.title || "Unknown Media";
+                            if (isEpisode && s.grandparentTitle) {
+                                if (seasonEpisodeTag) {
+                                    fullTitle = `${s.grandparentTitle} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
+                                } else {
+                                    fullTitle = `${s.grandparentTitle} - ${s.title || "Episode"}`;
+                                }
+                            }
                             
                             const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : 0;
                             totalStreamCount++;
@@ -14769,7 +14808,13 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 user: userTitle,
                                 email: s.User?.email || "",
                                 title: fullTitle,
-                                mediaType,
+                                grandparentTitle: s.grandparentTitle || "",
+                                parentTitle: s.parentTitle || "",
+                                seasonNum: seasonNum,
+                                episodeNum: episodeNum,
+                                seasonEpisodeTag: seasonEpisodeTag,
+                                episodeTitle: isEpisode ? (s.title || "") : "",
+                                mediaType: isEpisode ? "episode" : "movie",
                                 year: s.year || "",
                                 thumb: s.thumb ? `${srv.serverUrl}${s.thumb}?X-Plex-Token=${srv.token}` : null,
                                 player: s.Player?.title || s.Player?.device || "Plex Client",
@@ -14792,7 +14837,7 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             } catch (e) {}
         }
 
-        // 3. Streams Per Plex Server Registry & Usage Calculation
+        // 3. Streams Per Plex Server Registry & Usage Calculation (ONLY monitored servers with monitoring turned on)
         const serverUsageMap = new Map<string, {
             id: string;
             name: string;
@@ -14805,8 +14850,9 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             monitored: boolean;
         }>();
 
-        // Seed with configured Plex servers
+        // Seed with configured Plex servers that have monitoring TURNED ON
         for (const ps of plexServers) {
+            if (ps.monitored === false) continue; // STRICT: only monitored servers
             const normKey = ps.name.toLowerCase().trim();
             serverUsageMap.set(normKey, {
                 id: ps.id,
@@ -14817,12 +14863,13 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                 transcodeCount: 0,
                 bandwidthKbps: 0,
                 online: true,
-                monitored: ps.monitored !== false
+                monitored: true
             });
         }
 
-        // Seed or merge with Tautulli instances
+        // Seed or merge with Tautulli instances that have monitoring TURNED ON
         for (const t of tautulliInstances) {
+            if (t.monitored === false) continue; // STRICT: only monitored instances
             const normKey = t.name.toLowerCase().trim();
             if (!serverUsageMap.has(normKey)) {
                 serverUsageMap.set(normKey, {
@@ -14834,7 +14881,7 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     transcodeCount: 0,
                     bandwidthKbps: 0,
                     online: true,
-                    monitored: t.monitored !== false
+                    monitored: true
                 });
             }
         }
@@ -14842,6 +14889,8 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         // Tally active streams and bandwidth per server
         for (const s of allSessions) {
             const srvKey = (s.serverName || "").toLowerCase().trim();
+            if (unmonitoredPlexNames.has(srvKey)) continue;
+
             let entry = serverUsageMap.get(srvKey);
             if (!entry) {
                 for (const [k, v] of serverUsageMap.entries()) {
@@ -14852,22 +14901,26 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                 }
             }
             if (!entry && s.serverName) {
-                entry = {
-                    id: s.instanceId || s.serverName,
-                    name: s.serverName,
-                    type: "Plex Media Server",
-                    streamCount: 0,
-                    directPlayCount: 0,
-                    transcodeCount: 0,
-                    bandwidthKbps: 0,
-                    online: true,
-                    monitored: true
-                };
-                serverUsageMap.set(srvKey, entry);
+                const isExplicitlyUnmonitored = plexServers.some(p => p.monitored === false && p.name.toLowerCase().trim() === srvKey);
+                if (!isExplicitlyUnmonitored) {
+                    entry = {
+                        id: s.instanceId || s.serverName,
+                        name: s.serverName,
+                        type: "Plex Media Server",
+                        streamCount: 0,
+                        directPlayCount: 0,
+                        transcodeCount: 0,
+                        bandwidthKbps: 0,
+                        online: true,
+                        monitored: true
+                    };
+                    serverUsageMap.set(srvKey, entry);
+                }
             }
             if (entry) {
                 entry.streamCount++;
-                if (s.videoDecision === "transcode" || s.audioDecision === "transcode") {
+                // ONLY count as transcode if it's actually using video transcoding power (audio transcode does NOT use transcoding power)
+                if (s.videoDecision === "transcode") {
                     entry.transcodeCount++;
                 } else {
                     entry.directPlayCount++;
@@ -14876,12 +14929,15 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             }
         }
 
-        // Convert to array and rank by highest usage first
-        const serversUsage = Array.from(serverUsageMap.values()).map(srv => ({
-            ...srv,
-            bandwidthMbps: Number((srv.bandwidthKbps / 1000).toFixed(1)),
-            percentOfTotal: totalStreamCount > 0 ? Math.round((srv.streamCount / totalStreamCount) * 100) : 0
-        })).sort((a, b) => b.streamCount - a.streamCount || b.bandwidthKbps - a.bandwidthKbps);
+        // Convert to array and rank by highest usage first (ONLY monitored servers with monitoring turned on)
+        const serversUsage = Array.from(serverUsageMap.values())
+            .filter(srv => srv.monitored !== false)
+            .map(srv => ({
+                ...srv,
+                bandwidthMbps: Number((srv.bandwidthKbps / 1000).toFixed(1)),
+                percentOfTotal: totalStreamCount > 0 ? Math.round((srv.streamCount / totalStreamCount) * 100) : 0
+            }))
+            .sort((a, b) => b.streamCount - a.streamCount || b.bandwidthKbps - a.bandwidthKbps);
 
         // 4. Glances Hardware Monitoring
         const glancesStats: any[] = await Promise.all(glances.map(async (g) => {

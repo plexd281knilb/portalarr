@@ -73,7 +73,7 @@ export default function AdminDetailedStreams() {
     const glances = data?.glances || [];
     const serversUsage = data?.serversUsage || [];
 
-    const transcodeCount = sessions.filter((s: any) => s.videoDecision === "transcode" || s.audioDecision === "transcode").length;
+    const transcodeCount = sessions.filter((s: any) => s.videoDecision === "transcode").length;
     const directPlayCount = sessions.length - transcodeCount;
     const hwCount = sessions.filter((s: any) => s.videoDecision === "transcode" && (s.transcodeHwRequested || s.transcodeHwEncoding || s.transcodeHwDecoding)).length;
     const totalBandwidthKbps = sessions.reduce((acc: number, s: any) => acc + (s.streamBitrate || 0), 0);
@@ -103,7 +103,7 @@ export default function AdminDetailedStreams() {
                             </Badge>
                         </div>
                         <CardDescription className="text-xs">
-                            Real-time session monitoring across your {serversUsage.length || 3} Plex servers & {glances.length || 2} hardware host machines.
+                            Real-time session monitoring across your {serversUsage.length} monitored Plex {serversUsage.length === 1 ? "server" : "servers"} & {glances.filter((g: any) => g.monitored !== false).length || glances.length} hardware host machines.
                         </CardDescription>
                     </div>
 
@@ -270,13 +270,13 @@ export default function AdminDetailedStreams() {
                                 </span>
                             </div>
                             <Badge variant="outline" className="text-[10px] font-semibold bg-sky-500/10 text-sky-400 border-sky-500/30">
-                                {serversUsage.length} Plex {serversUsage.length === 1 ? "Server" : "Servers"} • Ranked
+                                {serversUsage.length} Monitored {serversUsage.length === 1 ? "Server" : "Servers"} • Ranked
                             </Badge>
                         </div>
 
                         {serversUsage.length === 0 ? (
                             <div className="text-xs text-muted-foreground py-4 text-center">
-                                No Plex servers detected. Add servers in Settings &gt; Monitoring.
+                                No monitored Plex servers active. Turn on monitoring in Settings &gt; Monitoring.
                             </div>
                         ) : (
                             <div className="space-y-2.5">
@@ -438,6 +438,10 @@ export default function AdminDetailedStreams() {
                             const isAudioTranscoding = stream.audioDecision === "transcode";
                             const isHw = isTranscoding && (stream.transcodeHwRequested || stream.transcodeHwEncoding || stream.transcodeHwDecoding);
 
+                            // Season & Episode tag detection (from field or fallback title regex)
+                            const titleMatch = stream.title ? stream.title.match(/S(\d+)\s*E(\d+)/i) : null;
+                            const seasonEpBadge = stream.seasonEpisodeTag || (titleMatch ? titleMatch[0].toUpperCase() : null);
+
                             return (
                                 <div 
                                     key={stream.sessionKey || idx}
@@ -479,11 +483,66 @@ export default function AdminDetailedStreams() {
                                                         ({stream.ipAddress})
                                                     </span>
                                                 )}
+                                                {/* STREAM PLAYBACK MODE: only show TRANSCODING if it's using video transcoding power */}
+                                                {isTranscoding ? (
+                                                    <Badge className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/40 gap-1 animate-pulse">
+                                                        <Zap className="h-3 w-3 text-amber-400" />
+                                                        TRANSCODING
+                                                    </Badge>
+                                                ) : isAudioTranscoding ? (
+                                                    <Badge variant="outline" className="text-[10px] font-semibold bg-sky-500/10 text-sky-300 border-sky-500/20">
+                                                        DIRECT STREAM
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                        DIRECT PLAY
+                                                    </Badge>
+                                                )}
                                             </div>
 
-                                            <h4 className="text-xs sm:text-sm font-bold text-foreground truncate" title={stream.title}>
-                                                {stream.title} {stream.year ? `(${stream.year})` : ""}
-                                            </h4>
+                                            {/* Title & Season / Episode */}
+                                            {stream.grandparentTitle ? (
+                                                <div className="space-y-0.5">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-foreground truncate" title={stream.title}>
+                                                        {stream.grandparentTitle}
+                                                    </h4>
+                                                    <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                                                        {seasonEpBadge ? (
+                                                            <Badge variant="outline" className="text-[10px] font-mono font-bold bg-sky-500/15 text-sky-300 border-sky-500/30 px-1.5 py-0">
+                                                                {seasonEpBadge}
+                                                            </Badge>
+                                                        ) : (stream.seasonNum || stream.episodeNum) ? (
+                                                            <Badge variant="outline" className="text-[10px] font-mono font-bold bg-sky-500/15 text-sky-300 border-sky-500/30 px-1.5 py-0">
+                                                                {stream.seasonNum ? `S${String(stream.seasonNum).padStart(2, "0")}` : "S??"}{stream.episodeNum ? `E${String(stream.episodeNum).padStart(2, "0")}` : ""}
+                                                            </Badge>
+                                                        ) : null}
+                                                        <span className="text-foreground/90 font-medium truncate text-[11px] sm:text-xs" title={stream.episodeTitle || stream.title}>
+                                                            {stream.episodeTitle || (stream.parentTitle ? `${stream.parentTitle}` : stream.title)}
+                                                        </span>
+                                                        {stream.year && (
+                                                            <span className="text-muted-foreground text-[10px]">({stream.year})</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-0.5">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-foreground truncate" title={stream.title}>
+                                                        {stream.title} {stream.year ? `(${stream.year})` : ""}
+                                                    </h4>
+                                                    {seasonEpBadge && (
+                                                        <div className="flex items-center gap-1.5 text-xs">
+                                                            <Badge variant="outline" className="text-[10px] font-mono font-bold bg-sky-500/15 text-sky-300 border-sky-500/30 px-1.5 py-0">
+                                                                {seasonEpBadge}
+                                                            </Badge>
+                                                            {stream.episodeTitle && (
+                                                                <span className="text-muted-foreground text-[11px] truncate">
+                                                                    {stream.episodeTitle}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                                                 <span className="flex items-center gap-1 text-foreground/90">
@@ -513,7 +572,7 @@ export default function AdminDetailedStreams() {
                                                 variant="outline" 
                                                 className={`text-[10px] font-semibold ${
                                                     isTranscoding 
-                                                        ? "bg-amber-500/15 text-amber-300 border-amber-500/40" 
+                                                        ? "bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold" 
                                                         : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                                                 }`}
                                             >
@@ -527,11 +586,12 @@ export default function AdminDetailedStreams() {
                                                 variant="outline" 
                                                 className={`text-[10px] font-semibold ${
                                                     isAudioTranscoding 
-                                                        ? "bg-purple-500/15 text-purple-300 border-purple-500/40" 
+                                                        ? "bg-sky-500/10 text-sky-300 border-sky-500/20" 
                                                         : "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"
                                                 }`}
+                                                title={isAudioTranscoding ? "Audio conversion (Direct Stream - minimal CPU, no transcoding power)" : "Direct Play audio"}
                                             >
-                                                {isAudioTranscoding ? "TRANSCODE" : "DIRECT PLAY"} ({stream.audioCodec || "RAW"})
+                                                {isAudioTranscoding ? "CONVERT" : "DIRECT PLAY"} ({stream.audioCodec || "RAW"})
                                             </Badge>
                                         </div>
 

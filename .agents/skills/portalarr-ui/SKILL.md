@@ -206,7 +206,14 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Homelabs frequently host multiple Plex instances (e.g. Primary Plex, Kids Plex, 4K Plex) across physical hardware machines (e.g. Unraid primary, secondary backup server).
   - Telemetry is split into a **Dual Telemetry Command Center** (`grid grid-cols-1 lg:grid-cols-2 gap-3`):
     1. **Host Hardware Telemetry (Glances)**: Renders physical hardware host nodes with live CPU & RAM percentage meters, color-coded threshold progress bars (emerald `<60%`, amber `60-80%`, rose `>80%`), and status badges (`ONLINE`, `PAUSED`, `OFFLINE`).
-    2. **Streams Per Plex Server**: Renders all Plex Media Servers and Tautulli instances ranked descending by active stream volume (`streamCount`) and bandwidth.
+    2. **Streams Per Plex Server**: Renders strictly **monitored Plex servers with monitoring turned on** (`monitored !== false`), ranked descending by active playback volume (`streamCount`) and bandwidth. Unmonitored servers are strictly excluded.
+- **Transcoding Power vs Audio Conversion Isolation**:
+  - Transcoding power is exclusively consumed by video transcoding (`videoDecision === "transcode"`, e.g. GPU NVENC or multi-threaded CPU video rendering).
+  - Audio transcoding (e.g. TrueHD or DTS to AAC/AC3/EAC3) takes negligible CPU and zero GPU power. It is classified as **Direct Stream** in Plex and is **NOT** counted as using transcoding power.
+  - In cluster stats and server usage meters, `transcodeCount` strictly counts video transcoding (`videoDecision === "transcode"`). Audio-only transcoding is counted under Direct Play / Direct Stream.
+  - In the session card, overall status displays an amber `TRANSCODING` badge only if video is transcoding; otherwise it displays `DIRECT STREAM` or `DIRECT PLAY`. The audio badge is cleanly styled as `CONVERT ({codec})` rather than a misleading `TRANSCODE` tag.
+- **TV Show Season & Episode Formatting**:
+  - For active TV episode streams, session cards display the canonical Show Title (`grandparentTitle`), a styled monospace Season & Episode pill badge (e.g. `S02E05`), and the Episode Title (`episodeTitle`), ensuring administrators instantly identify which installment is currently streaming.
 - **Top Load Server Promotion**:
   - The server with the highest active playback count receives a prominent `#1 HIGHEST LOAD` badge with an animated flame icon and amber glowing border (`border-amber-500/30 bg-amber-500/[0.04]`).
 - **Cluster Load Proportional Bars**:
