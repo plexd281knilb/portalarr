@@ -149,7 +149,7 @@ export default function AdminDetailedStreams() {
                             <div className="text-xs font-medium space-y-0.5 pt-0.5">
                                 {glances.map((g: any, i: number) => (
                                     <div key={i} className="flex justify-between items-center text-[11px]">
-                                        <span className="truncate max-w-[80px] text-muted-foreground">{g.name}:</span>
+                                        <span className="truncate max-w-[110px] text-muted-foreground" title={g.name}>{g.name}:</span>
                                         {g.online ? (
                                             <span className="font-mono text-foreground font-semibold">
                                                 CPU {g.cpu}% • RAM {g.ram}%

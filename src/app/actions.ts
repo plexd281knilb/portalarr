@@ -2656,21 +2656,140 @@ export async function testTautulliConnectionAction(id: string) {
     }
 }
 
+export async function fetchGlancesHardwareStats(rawUrl: string, timeoutMs = 3500): Promise<{ online: boolean; cpu: number; ram: number }> {
+    if (!rawUrl) return { online: false, cpu: 0, ram: 0 };
+
+    let clean = cleanUrl(rawUrl.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "").replace(/\/+$/, "");
+
+    let authHeaders: Record<string, string> = {};
+    try {
+        const parsed = new URL(clean);
+        if (parsed.username || parsed.password) {
+            const credentials = Buffer.from(`${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`).toString('base64');
+            authHeaders = { Authorization: `Basic ${credentials}` };
+        }
+    } catch {}
+
+    const reqHeaders = {
+        "Accept": "application/json",
+        ...authHeaders
+    };
+
+    // 1. Try quicklook endpoints first (single round-trip returning both CPU and RAM)
+    const quicklookEndpoints = [
+        "/api/4/quicklook",
+        "/api/3/quicklook",
+        "/quicklook",
+        "/api/2/quicklook"
+    ];
+
+    for (const ep of quicklookEndpoints) {
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), timeoutMs);
+            const res = await fetch(`${baseGlances}${ep}`, {
+                headers: reqHeaders,
+                signal: controller.signal,
+                cache: "no-store"
+            }).catch(() => null);
+            clearTimeout(tid);
+
+            if (res && res.ok) {
+                const data = await res.json().catch(() => null);
+                if (data && (typeof data.cpu === 'number' || typeof data.cpu?.total === 'number' || typeof data.mem === 'number' || typeof data.mem?.percent === 'number')) {
+                    const cpuVal = typeof data.cpu === 'number' 
+                        ? data.cpu 
+                        : (typeof data.cpu?.total === 'number' ? data.cpu.total : (typeof data.cpu?.user === 'number' ? data.cpu.user + (data.cpu.system || 0) : 0));
+                    const memVal = typeof data.mem === 'number' 
+                        ? data.mem 
+                        : (typeof data.mem?.percent === 'number' ? data.mem.percent : (data.mem?.total && data.mem?.used ? (data.mem.used / data.mem.total) * 100 : 0));
+                    
+                    return {
+                        online: true,
+                        cpu: Math.round(cpuVal),
+                        ram: Math.round(memVal)
+                    };
+                }
+            }
+        } catch {}
+    }
+
+    // 2. Fallback: Query CPU and MEM separately across version prefixes in parallel
+    const versionPrefixes = ["/api/4", "/api/3", "/api/2", ""];
+    for (const v of versionPrefixes) {
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), timeoutMs);
+            const [resCpu, resMem] = await Promise.all([
+                fetch(`${baseGlances}${v}/cpu`, { headers: reqHeaders, signal: controller.signal, cache: "no-store" }).catch(() => null),
+                fetch(`${baseGlances}${v}/mem`, { headers: reqHeaders, signal: controller.signal, cache: "no-store" }).catch(() => null)
+            ]);
+            clearTimeout(tid);
+
+            if (resCpu && resCpu.ok && resMem && resMem.ok) {
+                const [cpuData, memData] = await Promise.all([
+                    resCpu.json().catch(() => null),
+                    resMem.json().catch(() => null)
+                ]);
+
+                if (cpuData && memData) {
+                    const cpuTotal = typeof cpuData?.total === 'number' 
+                        ? Math.round(cpuData.total) 
+                        : (typeof cpuData?.user === 'number' ? Math.round(cpuData.user + (cpuData.system || 0)) : (typeof cpuData === 'number' ? Math.round(cpuData) : 0));
+                        
+                    const ramPercent = typeof memData?.percent === 'number' 
+                        ? Math.round(memData.percent) 
+                        : (memData?.total && memData?.used ? Math.round((memData.used / memData.total) * 100) : (typeof memData === 'number' ? Math.round(memData) : 0));
+
+                    return {
+                        online: true,
+                        cpu: cpuTotal,
+                        ram: ramPercent
+                    };
+                }
+            }
+        } catch {}
+    }
+
+    return { online: false, cpu: 0, ram: 0 };
+}
+
 export async function testGlancesConfigAction(rawUrl: string) {
     try {
         await verifyAdmin();
         if (!rawUrl) return { success: false, error: "URL is required" };
+
+        const stats = await fetchGlancesHardwareStats(rawUrl, 4000);
+        if (stats.online) {
+            logger.addLog("SUCCESS", "APPS", `Successfully connected to Glances server! (CPU: ${stats.cpu}%, RAM: ${stats.ram}%)`, `URL: ${rawUrl}`);
+            return { success: true, message: `Successfully connected to Glances server! (CPU: ${stats.cpu}%, RAM: ${stats.ram}%)` };
+        }
 
         let clean = cleanUrl(rawUrl.trim());
         if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
             clean = `http://${clean}`;
         }
 
-        // Strip trailing /api, /api/4, /api/3, /api/2 if user entered a subpath
-        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
+        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "").replace(/\/+$/, "");
+
+        let authHeaders: Record<string, string> = {};
+        try {
+            const parsed = new URL(clean);
+            if (parsed.username || parsed.password) {
+                const credentials = Buffer.from(`${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`).toString('base64');
+                authHeaders = { Authorization: `Basic ${credentials}` };
+            }
+        } catch {}
 
         // Test Glances endpoints across supported versions (v4, v3, v2)
         const testEndpoints = [
+            "/api/4/quicklook",
+            "/api/3/quicklook",
+            "/quicklook",
             "/api/4/cpu",
             "/api/3/cpu",
             "/api/2/cpu",
@@ -2678,8 +2797,6 @@ export async function testGlancesConfigAction(rawUrl: string) {
             "/api/3/system",
             "/api/4/version",
             "/api/3/version",
-            "/api/3/quicklook",
-            "/api/4/quicklook",
             "/cpu",
             "/version",
             ""
@@ -2692,7 +2809,11 @@ export async function testGlancesConfigAction(rawUrl: string) {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 4000);
                 const targetUrl = ep ? `${baseGlances}${ep}` : baseGlances;
-                const res = await fetch(targetUrl, { signal: controller.signal, cache: "no-store" });
+                const res = await fetch(targetUrl, { 
+                    headers: { "Accept": "application/json", ...authHeaders },
+                    signal: controller.signal, 
+                    cache: "no-store" 
+                });
                 clearTimeout(timeoutId);
 
                 if (res.ok) {
@@ -7633,53 +7754,19 @@ export async function getLandingStats() {
 
         // 2. Glances Host Hardware Stats & Reachability (only for monitored instances)
         const serverStats = await Promise.all(monitoredGlances.map(async (g) => {
-            let clean = cleanUrl(g.url?.trim() || "");
-            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-                clean = `http://${clean}`;
-            }
-            const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
-            
-            const fetchGlancesMetric = async (endpoint: string) => {
-                const versions = [4, 3, 2]; 
-                for (const v of versions) {
-                    try {
-                        const controller = new AbortController();
-                        const id = setTimeout(() => controller.abort(), 3000);
-                        const url = `${baseGlances}/api/${v}/${endpoint}`;
-                        const res = await fetch(url, { signal: controller.signal, next: { revalidate: 10 } });
-                        clearTimeout(id);
-                        if (res.ok) return await res.json();
-                    } catch (e) { }
-                }
-                try {
-                    const controller = new AbortController();
-                    const id = setTimeout(() => controller.abort(), 3000);
-                    const url = `${baseGlances}/${endpoint}`;
-                    const res = await fetch(url, { signal: controller.signal, next: { revalidate: 10 } });
-                    clearTimeout(id);
-                    if (res.ok) return await res.json();
-                } catch (e) { }
-                throw new Error(`Failed`);
-            };
-
             try {
-                const cpu = await fetchGlancesMetric("cpu");
-                const mem = await fetchGlancesMetric("mem");
-                
-                const cpuTotal = typeof cpu?.total === 'number' 
-                    ? Math.round(cpu.total) 
-                    : (typeof cpu?.user === 'number' ? Math.round(cpu.user + (cpu.system || 0)) : (typeof cpu === 'number' ? Math.round(cpu) : 0));
-                    
-                const ramPercent = typeof mem?.percent === 'number' 
-                    ? Math.round(mem.percent) 
-                    : (mem?.total && mem?.used ? Math.round((mem.used / mem.total) * 100) : (typeof mem === 'number' ? Math.round(mem) : 0));
-
-                return { 
-                    name: g.name, 
-                    cpu: cpuTotal, 
-                    ram: ramPercent, 
-                    online: true 
-                };
+                const stats = await fetchGlancesHardwareStats(g.url);
+                if (stats.online) {
+                    return { 
+                        name: g.name, 
+                        cpu: stats.cpu, 
+                        ram: stats.ram, 
+                        online: true 
+                    };
+                } else {
+                    downApps.push(`${g.name} (Host Server)`);
+                    return { name: g.name, cpu: 0, ram: 0, online: false };
+                }
             } catch (e: any) {
                 downApps.push(`${g.name} (Host Server)`);
                 return { name: g.name, cpu: 0, ram: 0, online: false };
@@ -14637,41 +14724,24 @@ export async function getAdminDetailedStreamsAction() {
             }
         }
 
-        // Glances
-        const glancesStats: any[] = [];
-        for (const g of glances) {
+        // Glances Hardware Monitoring
+        const glancesStats: any[] = await Promise.all(glances.map(async (g) => {
             if (g.monitored === false) {
-                glancesStats.push({ name: g.name, online: false, monitored: false, cpu: 0, ram: 0 });
-                continue;
+                return { name: g.name, online: false, monitored: false, cpu: 0, ram: 0 };
             }
-            let clean = cleanUrl(g.url?.trim() || "");
-            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-                clean = `http://${clean}`;
-            }
-            const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const resCpu = await fetch(`${baseGlances}/api/3/cpu`, { signal: controller.signal, cache: "no-store" }).catch(() => null);
-                const resMem = await fetch(`${baseGlances}/api/3/mem`, { signal: controller.signal, cache: "no-store" }).catch(() => null);
-                clearTimeout(timeoutId);
-                if (resCpu && resCpu.ok && resMem && resMem.ok) {
-                    const cpu = await resCpu.json();
-                    const mem = await resMem.json();
-                    glancesStats.push({
-                        name: g.name,
-                        online: true,
-                        monitored: true,
-                        cpu: Math.round(cpu.total ?? (cpu.user + (cpu.system || 0))),
-                        ram: Math.round(mem.percent ?? ((mem.used / mem.total) * 100))
-                    });
-                } else {
-                    glancesStats.push({ name: g.name, online: false, monitored: true, cpu: 0, ram: 0 });
-                }
+                const stats = await fetchGlancesHardwareStats(g.url);
+                return {
+                    name: g.name,
+                    online: stats.online,
+                    monitored: true,
+                    cpu: stats.cpu,
+                    ram: stats.ram
+                };
             } catch {
-                glancesStats.push({ name: g.name, online: false, monitored: true, cpu: 0, ram: 0 });
+                return { name: g.name, online: false, monitored: true, cpu: 0, ram: 0 };
             }
-        }
+        }));
 
         return {
             success: true,

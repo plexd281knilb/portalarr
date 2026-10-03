@@ -9,7 +9,8 @@ import {
     getAlertBanner,
     getRoadmapText,
     validateMemberReferenceAction,
-    calculateUserGuideAccess
+    calculateUserGuideAccess,
+    fetchGlancesHardwareStats
 } from "../src/app/actions";
 import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
@@ -3375,6 +3376,17 @@ async function runTestSuite() {
         const hubEntry = hubServerMap.get("test-key");
         if (hubEntry?.monitored !== false) {
             throw new Error(`Expected hubEntry.monitored to be false, got ${hubEntry?.monitored}`);
+        }
+
+        // 5. Test fetchGlancesHardwareStats resiliency & multi-version fallback
+        const emptyStats = await fetchGlancesHardwareStats("");
+        if (emptyStats.online !== false || emptyStats.cpu !== 0 || emptyStats.ram !== 0) {
+            throw new Error(`Expected empty URL stats to be offline (0, 0), got: ${JSON.stringify(emptyStats)}`);
+        }
+
+        const unreachableStats = await fetchGlancesHardwareStats("http://127.0.0.1:59999", 500);
+        if (unreachableStats.online !== false) {
+            throw new Error(`Expected unreachable host to be offline, got: ${JSON.stringify(unreachableStats)}`);
         }
     });
     console.log("\n==========================================================");
