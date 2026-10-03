@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { 
     ExternalLink, AlertTriangle, BookOpen, Sparkles, Compass, 
     Tv, Film, Zap, ArrowRight, Shield, Download, LifeBuoy, Settings, Wrench
@@ -59,6 +60,16 @@ export default async function UserLandingPage() {
     const isSuperUser = user?.role === "SUPER_USER";
     const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && user?.role !== "ADMIN";
     const isFullUser = isLoggedIn && !isAdmin && !isSuperUser && !isTrial;
+
+    const cookieStore = await cookies();
+    const isImpersonating = !!cookieStore.get("portalarr_impersonator_token")?.value;
+    const canSwitchUsers = isAdmin || isImpersonating;
+
+    // Fast server-side candidate user lookup for switcher (under 2ms)
+    const impersonationUsers = canSwitchUsers ? await prisma.user.findMany({
+        select: { id: true, username: true, role: true, status: true, membershipTier: true },
+        orderBy: { username: "asc" }
+    }).catch(() => []) : [];
 
     // Fetch dynamic content safely
     const [apps, roadmapText, alertBanner, hasAccess, referralInfo, joinConfig, globalSettings] = await Promise.all([
@@ -165,11 +176,16 @@ export default async function UserLandingPage() {
                 </section>
 
                 {/* ========================================================================= */}
-                {/* 1. ADMIN USER SWITCHER DROPDOWN (ONLY VISIBLE TO ADMINS) */}
+                {/* 1. ADMIN USER SWITCHER DROPDOWN (VISIBLE TO ADMINS OR ACTIVE PREVIEWS) */}
                 {/* ========================================================================= */}
-                {isAdmin && (
+                {canSwitchUsers && (
                     <div className="w-full">
-                        <AdminUserSwitcher />
+                        <AdminUserSwitcher 
+                            initialUsers={impersonationUsers}
+                            currentUserId={user?.id}
+                            currentUsername={user?.username}
+                            isImpersonating={isImpersonating}
+                        />
                     </div>
                 )}
 

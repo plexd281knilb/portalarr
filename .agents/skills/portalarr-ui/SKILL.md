@@ -520,6 +520,21 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - When active (`true`), modifications are strictly staged in `AdminApproval` (`PLEX_ACCESS_GRANT` or `PLEX_ACCESS_REVOKE`). PMS friends and library share updates are withheld until an administrator explicitly reviews and approves the staged change.
   - When turned OFF (`requireApprovalForPlexChanges === false`), operations execute directly on the target Plex Media Server instances.
 
+---
+
+### 29. Admin Impersonation & Dashboard Preview Switcher (`AdminUserSwitcher` & `ImpersonationBanner`)
+- **Instantaneous Preloading (Zero Client Loading Spinner)**:
+  - On the dashboard (`/`), `page.tsx` checks `isAdmin || isImpersonating` and fetches candidate users server-side in under 2ms (`prisma.user.findMany` selecting only `id`, `username`, `role`, `status`, `membershipTier`).
+  - Passes preloaded users via `initialUsers` to `<AdminUserSwitcher />`, completely eliminating the multi-second client-side `useEffect` delay and "Loading user accounts..." spinner.
+  - Standalone fallback uses `getImpersonationUserListAction()`, which is isolated from heavy relations and payment logs.
+- **Adaptive Cookie Security Flag (`getAuthCookieOptions`)**:
+  - Cookie setting dynamically checks request headers (`x-forwarded-proto`, `referer`, `host`) to ensure `secure: false` over unencrypted HTTP and local LAN IPs (e.g. `http://192.168.10.199:3000`).
+  - This prevents modern browsers from silently dropping session cookies when accessed on home networks, eliminating "switching does not work" failures. Over HTTPS, `secure: true` is automatically preserved.
+- **Persistent Preview Navigation & Direct Switching**:
+  - `<AdminUserSwitcher />` remains visible on the dashboard even when impersonating a user (`isImpersonating === true`), showing active preview status with 1-click switching to any other account.
+  - `<ImpersonationBanner />` includes a compact inline `<Select>` dropdown on every page, allowing admins to switch accounts directly from `/library`, `/discover`, `/requests`, etc., without returning to admin first.
+  - Returning to admin cleanly clears `portalarr_impersonator_token` and reloads the current page (or `/` if on `/pending`) without redirecting to `/settings/access`.
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

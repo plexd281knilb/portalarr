@@ -1,7 +1,7 @@
 "use server";
 
 import { compare, hash } from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
 import { decryptData, encryptData } from "@/lib/encryption";
@@ -143,9 +143,44 @@ export async function requestAccount(formData: FormData) {
 // --- 5. LOGOUT ---
 export async function logout() {
   const cookieStore = await cookies();
+  cookieStore.set("session", "", { path: "/", maxAge: 0 });
   cookieStore.delete("session");
+  cookieStore.set("portalarr_impersonator_token", "", { path: "/", maxAge: 0 });
   cookieStore.delete("portalarr_impersonator_token");
   redirect("/login");
+}
+
+// --- HELPER: GET ADAPTIVE COOKIE OPTIONS ---
+export async function getAuthCookieOptions(customMaxAge?: number) {
+  let isSecure = process.env.NODE_ENV === "production";
+  try {
+    const h = await headers();
+    const proto = h.get("x-forwarded-proto");
+    const referer = h.get("referer");
+    const host = h.get("host") || "";
+
+    // If requested over plain unencrypted HTTP, or accessing local LAN IP directly without https, do NOT set secure flag
+    // otherwise Chrome, Edge, Safari, and Firefox silently discard the cookie and prevent view switching!
+    if (proto === "http" || referer?.startsWith("http://")) {
+      isSecure = false;
+    } else if (proto === "https" || referer?.startsWith("https://")) {
+      isSecure = true;
+    } else if (/^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(host)) {
+      if (proto !== "https" && !referer?.startsWith("https://")) {
+        isSecure = false;
+      }
+    }
+  } catch {
+    // In contexts where headers() cannot be read, fallback safely
+  }
+
+  return {
+    httpOnly: true,
+    secure: isSecure,
+    path: "/",
+    sameSite: "lax" as const,
+    ...(customMaxAge !== undefined ? { maxAge: customMaxAge } : {})
+  };
 }
 
 // --- HELPER: CREATE SESSION ---
@@ -156,18 +191,21 @@ export async function createSession(
   status: string = "APPROVED",
   trialEndsAt?: Date | string | null,
   subscriptionEndsAt?: Date | string | null,
-  membershipTier?: string | null
+  membershipTier?: string | null,
+  skipLastLoginUpdate: boolean = false
 ) {
   const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30; // 30 Days persistent login
   const expiresAt = new Date(Date.now() + THIRTY_DAYS_SEC * 1000);
 
-  try {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { lastLogin: new Date() }
-    });
-  } catch (e) {
-    console.error("[AUTH] Failed to update lastLogin for user:", e);
+  if (!skipLastLoginUpdate) {
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { lastLogin: new Date() }
+      });
+    } catch (e) {
+      console.error("[AUTH] Failed to update lastLogin for user:", e);
+    }
   }
 
   const token = await new SignJWT({ 
@@ -185,12 +223,9 @@ export async function createSession(
     .sign(getJwtSecret());
 
   try {
+    const cookieOpts = await getAuthCookieOptions(THIRTY_DAYS_SEC);
     (await cookies()).set("session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: THIRTY_DAYS_SEC, 
-      path: "/",
-      sameSite: "lax",
+      ...cookieOpts,
       expires: expiresAt
     });
   } catch (cookieErr) {
@@ -721,6 +756,48 @@ export async function changeUserPassword(formData: FormData) {
 // ============================================================================
 const IMPERSONATOR_COOKIE_NAME = "portalarr_impersonator_token";
 
+/**
+ * Blazing fast candidate user list for impersonation switcher (under 2ms).
+ * Excludes heavy relations, payment logs, and expiration routines.
+ */
+export async function getImpersonationUserListAction() {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get("session")?.value;
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+
+  let callerIsAdmin = false;
+  if (sessionToken) {
+    try {
+      const { payload } = await jwtVerify(sessionToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) callerIsAdmin = true;
+    } catch {}
+  }
+  if (!callerIsAdmin && impersonatorToken) {
+    try {
+      const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) {
+        const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
+        if (dbAdmin && dbAdmin.role === "ADMIN") callerIsAdmin = true;
+      }
+    } catch {}
+  }
+
+  if (!callerIsAdmin) {
+    return [];
+  }
+
+  return await prisma.user.findMany({
+    select: {
+      id: true,
+      username: true,
+      role: true,
+      status: true,
+      membershipTier: true
+    },
+    orderBy: { username: "asc" }
+  });
+}
+
 export async function impersonateUserAction(targetUserId: string) {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get("session")?.value;
@@ -728,12 +805,14 @@ export async function impersonateUserAction(targetUserId: string) {
 
   // 1. Verify caller is an Admin (either current active session or original impersonator token is Admin)
   let callerIsAdmin = false;
+  let adminUserId = "";
 
   if (sessionToken) {
     try {
       const { payload } = await jwtVerify(sessionToken, getJwtSecret());
       if (payload.role === "ADMIN" && payload.userId) {
         callerIsAdmin = true;
+        adminUserId = payload.userId as string;
       }
     } catch {
       // ignore
@@ -747,6 +826,7 @@ export async function impersonateUserAction(targetUserId: string) {
         const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
         if (dbAdmin && dbAdmin.role === "ADMIN") {
           callerIsAdmin = true;
+          adminUserId = dbAdmin.id;
         }
       }
     } catch {
@@ -768,22 +848,49 @@ export async function impersonateUserAction(targetUserId: string) {
     return { error: "Target user not found." };
   }
 
-  // 3. Preserve original Admin session token if not already impersonating
-  if (!impersonatorToken && sessionToken) {
-    cookieStore.set(IMPERSONATOR_COOKIE_NAME, sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-      sameSite: "lax"
-    });
+  // 3. If target user is an Admin (or the original admin user themselves), restore Admin mode cleanly!
+  if (targetUser.role === "ADMIN" || targetUser.id === adminUserId) {
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+    cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+    await createSession(
+      targetUser.id, 
+      targetUser.username, 
+      targetUser.role, 
+      targetUser.status, 
+      targetUser.trialEndsAt, 
+      targetUser.subscriptionEndsAt, 
+      targetUser.membershipTier,
+      true
+    );
+    return {
+      success: true,
+      isRestoredAdmin: true,
+      targetUsername: targetUser.username,
+      targetRole: targetUser.role
+    };
   }
 
-  // 4. Create fresh session cookie for the target user
-  await createSession(targetUser.id, targetUser.username, targetUser.role, targetUser.status, targetUser.trialEndsAt, targetUser.subscriptionEndsAt, targetUser.membershipTier);
+  // 4. Preserve original Admin session token if not already impersonating
+  if (!impersonatorToken && sessionToken) {
+    const cookieOpts = await getAuthCookieOptions(60 * 60 * 24 * 7); // 7 days
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, sessionToken, cookieOpts);
+  }
+
+  // 5. Create fresh session cookie for the target user (skip lastLogin DB write for preview)
+  await createSession(
+    targetUser.id, 
+    targetUser.username, 
+    targetUser.role, 
+    targetUser.status, 
+    targetUser.trialEndsAt, 
+    targetUser.subscriptionEndsAt, 
+    targetUser.membershipTier,
+    true
+  );
 
   return {
     success: true,
+    isRestoredAdmin: false,
     targetUsername: targetUser.username,
     targetRole: targetUser.role
   };
@@ -800,6 +907,7 @@ export async function stopImpersonationAction() {
   try {
     const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
     if (!payload.userId) {
+      cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
       cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
       return { error: "Invalid impersonator session token." };
     }
@@ -810,17 +918,29 @@ export async function stopImpersonationAction() {
     });
 
     if (!adminUser || adminUser.role !== "ADMIN") {
+      cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
       cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
       return { error: "Original admin user not found or no longer has admin privileges." };
     }
 
-    // Restore original Admin session
-    await createSession(adminUser.id, adminUser.username, adminUser.role, adminUser.status, adminUser.trialEndsAt, adminUser.subscriptionEndsAt, adminUser.membershipTier);
+    // Restore original Admin session (skip lastLogin write)
+    await createSession(
+      adminUser.id, 
+      adminUser.username, 
+      adminUser.role, 
+      adminUser.status, 
+      adminUser.trialEndsAt, 
+      adminUser.subscriptionEndsAt, 
+      adminUser.membershipTier,
+      true
+    );
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
     cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
 
     return { success: true, adminUsername: adminUser.username };
   } catch (err: any) {
     console.error("[AUTH] Failed to stop impersonation:", err);
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
     cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
     return { error: "Failed to restore admin session." };
   }
@@ -840,6 +960,13 @@ export async function getImpersonationStatusAction() {
     const { payload: currentPayload } = await jwtVerify(sessionToken, getJwtSecret());
 
     if (!adminPayload.userId || adminPayload.role !== "ADMIN") {
+      return { isImpersonating: false };
+    }
+
+    // If current session is already the admin, clean up stale impersonator token
+    if (currentPayload.userId === adminPayload.userId && currentPayload.role === "ADMIN") {
+      cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+      cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
       return { isImpersonating: false };
     }
 

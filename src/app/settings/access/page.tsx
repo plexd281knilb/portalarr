@@ -769,7 +769,7 @@ export default function AccessSettingsPage() {
                 setImpersonatingUserId(null);
                 return;
             }
-            window.location.href = "/";
+            window.location.assign("/");
         } catch (err: any) {
             console.error("Impersonate error:", err);
             alert("Failed to switch user. Please try again.");
