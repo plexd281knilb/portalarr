@@ -577,23 +577,29 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Auto-generated diagnostic tickets created by the AI Assistant or client errors include comprehensive telemetry payloads (stream health, audio codecs, transcode metrics, user client info) and an `[AUTO-TICKET]` tag in the title.
   - In-app status badges distinguish ticket priorities (`HIGH`, `MEDIUM`, `LOW`) and state transitions (`OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`) with semantic color accents and real-time refresh.
 
-### 33. Cloudflare Access & Edge Security Policy Paths (Strict Zero-Trust Separation)
+### 33. Cloudflare Access & Edge Security Policy Paths (Strict 3-Tier Zero-Trust Matrix)
 - **Single Source of Truth (`src/lib/edge-policy-paths.ts`)**:
-  - All routes are centrally declared and categorized into `CLOUDFLARE_ADMIN_PATHS` and `CLOUDFLARE_BYPASS_PATHS`.
+  - All routes are centrally declared and categorized into `CLOUDFLARE_ADMIN_PATHS`, `CLOUDFLARE_SUPER_USER_PATHS`, and `CLOUDFLARE_BYPASS_PATHS`.
   - Rendered in `/settings` via `<CloudflarePolicyCard />` with 1-click clipboard actions and step-by-step Zero Trust setup instructions.
 - **Strict Admin-Only Path Isolation (`CLOUDFLARE_ADMIN_PATHS`)**:
-  - Covers all management and privileged surfaces: `/settings*`, `/admin*`, `/curation*`, `/radarr*`, `/sonarr*`, `/api/system*`, `/api/debug*`, `/api/curation*`, `/api/users*`, and `/api/books/upload*`.
+  - Covers all management and privileged surfaces: `/settings*`, `/admin*`, `/curation*`, `/api/system*`, `/api/debug*`, `/api/curation*`, `/api/users*`, and `/api/books/upload*`.
   - In `src/proxy.ts`, all admin paths reject non-admin users with 403 Forbidden for APIs, redirect non-admins on `/settings` to `/profile`, and redirect non-admins on other admin pages to `/`.
+- **Media Apps for Super Users & Admins (`CLOUDFLARE_SUPER_USER_PATHS`)**:
+  - Covers movie and TV show library management (`/radarr*`, `/sonarr*`).
+  - Allowed for `ADMIN` and `SUPER_USER` roles in both `src/proxy.ts` and `src/app/arr-actions.ts`.
+  - In Cloudflare Zero Trust, Rule 2 permits both Admin and Super User emails, or can be bypassed at the edge while strictly guarded by Portalarr session authentication.
 - **Zero-Conflict End-User Routing (`/profile*`)**:
   - `/settings*` is 100% strictly Admin-Only. End-users manage profile settings, Kindle email, preferences, and subscription billing exclusively at `/profile` (eliminating `/settings/profile` bypass conflicts).
   - All email notifications (renewal notices, trial expiration alerts) dispatch links with `{billingUrl}` = `/profile#billing`.
 - **Strict Non-Bypassable Admin Guard (`matchesCloudflareBypass`)**:
   - `matchesCloudflareBypass()` explicitly verifies that if `matchesCloudflareAdmin(path)` is true, the route is NEVER bypassed, guaranteeing zero leakage or path collisions.
-- **Two-Rule Cloudflare Zero Trust Setup**:
+- **Three-Rule Cloudflare Zero Trust Setup**:
   - **Rule 1 (Admin Only - High Priority)**: Action = `Allow`, Selector = `CLOUDFLARE_ADMIN_PATHS`, Include = `Emails: [your-admin-email@example.com]`. Blocks all outsiders with HTTP 403 at Cloudflare's edge before requests reach the server.
-  - **Rule 2 (Public / End-User Bypass - Lower Priority)**: Action = `Bypass`, Selector = `CLOUDFLARE_BYPASS_PATHS`, Include = `Everyone`. Allows friends and family to stream, request, and manage their account profile without Cloudflare login walls.
+  - **Rule 2 (Super Users & Admin - Priority 2)**: Action = `Allow`, Selector = `CLOUDFLARE_SUPER_USER_PATHS` (`/radarr*`, `/sonarr*`), Include = `Emails: [your-email, superuser-emails]`.
+  - **Rule 3 (Public / End-User Bypass - Lower Priority)**: Action = `Bypass`, Selector = `CLOUDFLARE_BYPASS_PATHS`, Include = `Everyone`. Allows friends and family to stream, request, and manage their account profile without Cloudflare login walls.
 
 ---
+
 
 
 

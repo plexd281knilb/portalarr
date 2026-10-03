@@ -111,7 +111,7 @@ export async function proxy(req: NextRequest) {
     // 6. Role-based protection for Radarr/Sonarr routes
     if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
       if (pathname.startsWith("/api")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return NextResponse.json({ error: "Forbidden: Admin or Super User access required" }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/", req.url));
     }

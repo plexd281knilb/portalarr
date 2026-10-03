@@ -34,12 +34,15 @@ export const CLOUDFLARE_BYPASS_PATHS: string[] = [
     "/favicon.ico"
 ];
 
+export const CLOUDFLARE_SUPER_USER_PATHS: string[] = [
+    "/radarr*",
+    "/sonarr*"
+];
+
 export const CLOUDFLARE_ADMIN_PATHS: string[] = [
     "/settings*",
     "/admin*",
     "/curation*",
-    "/radarr*",
-    "/sonarr*",
     "/api/system*",
     "/api/debug*",
     "/api/curation*",
@@ -69,6 +72,21 @@ export function matchesCloudflareBypass(path: string): boolean {
 }
 
 /**
+ * Test whether a given route path is covered by Cloudflare Super User (Media Apps) policy
+ */
+export function matchesCloudflareSuperUser(path: string): boolean {
+    const cleanPath = path.split("?")[0].replace(/\/$/, "") || "/";
+    return CLOUDFLARE_SUPER_USER_PATHS.some((pattern) => {
+        if (pattern === cleanPath) return true;
+        if (pattern.endsWith("*")) {
+            const prefix = pattern.slice(0, -1).replace(/\/$/, "");
+            return cleanPath === prefix || cleanPath.startsWith(prefix + "/");
+        }
+        return false;
+    });
+}
+
+/**
  * Test whether a given route path is covered by Cloudflare Admin Protected policy
  */
 export function matchesCloudflareAdmin(path: string): boolean {
@@ -82,4 +100,5 @@ export function matchesCloudflareAdmin(path: string): boolean {
         return false;
     });
 }
+
 

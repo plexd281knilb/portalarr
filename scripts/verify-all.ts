@@ -26,7 +26,7 @@ import { inferBookRating } from "../src/lib/books/book-rating";
 import { parseAmazonBounceEmail } from "../src/lib/kindle-email-scanner";
 import fs from "fs";
 import path from "path";
-import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_ADMIN_PATHS, matchesCloudflareBypass, matchesCloudflareAdmin } from "../src/lib/edge-policy-paths";
+import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS, matchesCloudflareBypass, matchesCloudflareSuperUser, matchesCloudflareAdmin } from "../src/lib/edge-policy-paths";
 
 
 async function runTestSuite() {
@@ -3105,14 +3105,14 @@ async function runTestSuite() {
 
         const uncovered: string[] = [];
         for (const route of foundRoutes) {
-            const isCovered = matchesCloudflareBypass(route) || matchesCloudflareAdmin(route);
+            const isCovered = matchesCloudflareBypass(route) || matchesCloudflareAdmin(route) || matchesCloudflareSuperUser(route);
             if (!isCovered) {
                 uncovered.push(route);
             }
         }
 
         if (uncovered.length > 0) {
-            throw new Error(`The following ${uncovered.length} route(s) are NOT covered by CLOUDFLARE_BYPASS_PATHS or CLOUDFLARE_ADMIN_PATHS in src/lib/edge-policy-paths.ts:\n${uncovered.join("\n")}\n\n🚨 MANDATORY RULE: Whenever a new page or API route is created, updated, or removed, you MUST update src/lib/edge-policy-paths.ts, src/proxy.ts, and src/components/cloudflare-policy-card.tsx!`);
+            throw new Error(`The following ${uncovered.length} route(s) are NOT covered by CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, or CLOUDFLARE_ADMIN_PATHS in src/lib/edge-policy-paths.ts:\n${uncovered.join("\n")}\n\n🚨 MANDATORY RULE: Whenever a new page or API route is created, updated, or removed, you MUST update src/lib/edge-policy-paths.ts, src/proxy.ts, and src/components/cloudflare-policy-card.tsx!`);
         }
 
         // Additional assertion sanity checks for standard routes & edge wildcards
@@ -3133,10 +3133,10 @@ async function runTestSuite() {
         if (matchesCloudflareAdmin("/profile")) throw new Error("/profile must NOT match admin");
         if (!matchesCloudflareAdmin("/admin/tickets")) throw new Error("/admin/tickets must match admin");
         if (!matchesCloudflareAdmin("/curation/kometa")) throw new Error("/curation/kometa must match admin");
-        if (!matchesCloudflareAdmin("/radarr")) throw new Error("/radarr must match admin");
-        if (matchesCloudflareBypass("/radarr")) throw new Error("/radarr must NEVER match bypass");
-        if (!matchesCloudflareAdmin("/sonarr")) throw new Error("/sonarr must match admin");
-        if (matchesCloudflareBypass("/sonarr")) throw new Error("/sonarr must NEVER match bypass");
+        if (!matchesCloudflareSuperUser("/radarr")) throw new Error("/radarr must match super user (media apps)");
+        if (matchesCloudflareAdmin("/radarr")) throw new Error("/radarr must NOT be restricted to admin-only (super users need access)");
+        if (!matchesCloudflareSuperUser("/sonarr")) throw new Error("/sonarr must match super user (media apps)");
+        if (matchesCloudflareAdmin("/sonarr")) throw new Error("/sonarr must NOT be restricted to admin-only (super users need access)");
         if (!matchesCloudflareAdmin("/api/curation/badges")) throw new Error("/api/curation/badges must match admin");
         if (!matchesCloudflareAdmin("/api/users")) throw new Error("/api/users must match admin");
         if (matchesCloudflareBypass("/api/users")) throw new Error("/api/users must NEVER match bypass");
