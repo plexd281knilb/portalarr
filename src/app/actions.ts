@@ -1389,6 +1389,8 @@ export async function addPlexServerAction(formData: FormData) {
     const rawToken = (formData.get("token") as string || "").trim();
     let clientIdentifier = (formData.get("clientIdentifier") as string || "").trim();
     const isDefault = formData.get("isDefault") === "true" || formData.get("isDefault") === "on";
+    const monitoredParam = formData.get("monitored");
+    const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
 
     if (!url) return { success: false, error: "Server URL is required." };
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -1418,13 +1420,15 @@ export async function addPlexServerAction(formData: FormData) {
             url,
             token: rawToken ? encryptData(rawToken) : null,
             clientIdentifier: clientIdentifier || null,
-            isDefault: shouldBeDefault
+            isDefault: shouldBeDefault,
+            monitored
         }
     });
 
     revalidatePath("/settings");
     revalidatePath("/curation");
-    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url})`);
+    revalidatePath("/");
+    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url}) [Monitored: ${monitored}]`);
     return { success: true, message: `Plex server "${name}" added successfully!`, server: created };
 }
 
@@ -1461,6 +1465,11 @@ export async function updatePlexServerAction(formData: FormData) {
         isDefault
     };
 
+    if (formData.has("monitored")) {
+        const monitoredParam = formData.get("monitored");
+        updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+    }
+
     if (clientIdentifier) {
         updateData.clientIdentifier = clientIdentifier;
     }
@@ -1477,6 +1486,7 @@ export async function updatePlexServerAction(formData: FormData) {
 
     revalidatePath("/settings");
     revalidatePath("/curation");
+    revalidatePath("/");
     logger.addLog("SUCCESS", "PLEX", `Updated Plex server: "${name}" (${url})`);
     return { success: true, message: `Plex server "${name}" updated successfully!` };
 }
@@ -1496,6 +1506,7 @@ export async function removePlexServerAction(id: string) {
 
     revalidatePath("/settings");
     revalidatePath("/curation");
+    revalidatePath("/");
     logger.addLog("INFO", "PLEX", `Removed Plex server: "${server?.name || id}"`);
     return { success: true, message: "Plex server removed." };
 }
@@ -1510,6 +1521,130 @@ export async function setDefaultPlexServerAction(id: string) {
     revalidatePath("/settings");
     revalidatePath("/curation");
     return { success: true, message: "Default Plex server updated." };
+}
+
+export async function togglePlexServerMonitoringAction(id: string, monitored: boolean) {
+    await verifyAdmin();
+    const server = await prisma.plexServer.update({
+        where: { id },
+        data: { monitored }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/");
+    logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} health monitoring for Plex server "${server.name}"`);
+    return { success: true, monitored: server.monitored, message: `Plex server "${server.name}" monitoring ${monitored ? "enabled" : "paused"}.` };
+}
+
+export async function getDiscoveredPlexServersAction() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            return { success: false, error: "No Admin Plex token linked. Please link your Plex account in General & Setup." };
+        }
+        let adminToken = "";
+        try {
+            adminToken = decryptData(settings.mainPlexToken);
+        } catch {
+            return { success: false, error: "Failed to decrypt Plex admin token." };
+        }
+
+        const [rawDiscovered, dbServers] = await Promise.all([
+            getPlexServers(adminToken, true).catch(() => []),
+            prisma.plexServer.findMany().catch(() => [])
+        ]);
+
+        const dbServerByClientId = new Map<string, typeof dbServers[0]>();
+        const dbServerByName = new Map<string, typeof dbServers[0]>();
+        for (const s of dbServers) {
+            if (s.clientIdentifier) {
+                dbServerByClientId.set(s.clientIdentifier.toLowerCase().trim(), s);
+            }
+            dbServerByName.set(s.name.toLowerCase().trim(), s);
+        }
+
+        const discovered = rawDiscovered.map(s => {
+            const clientKey = (s.clientIdentifier || "").toLowerCase().trim();
+            const nameKey = (s.name || "").toLowerCase().trim();
+            const matchedDb = (clientKey && dbServerByClientId.get(clientKey)) || dbServerByName.get(nameKey);
+
+            return {
+                name: s.name,
+                clientIdentifier: s.clientIdentifier,
+                accessToken: s.accessToken,
+                connections: s.connections || [],
+                isConfigured: !!matchedDb,
+                configuredId: matchedDb?.id || null,
+                monitored: matchedDb ? matchedDb.monitored : undefined
+            };
+        });
+
+        return { success: true, discovered };
+    } catch (e: any) {
+        console.error("[GET-DISCOVERED-PLEX-SERVERS-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to discover Plex servers." };
+    }
+}
+
+export async function importDiscoveredPlexServerAction(params: {
+    name: string;
+    url: string;
+    clientIdentifier?: string;
+    token?: string;
+    monitored?: boolean;
+    isDefault?: boolean;
+}) {
+    await verifyAdmin();
+    const { name, url, clientIdentifier, token, monitored = true, isDefault = false } = params;
+    if (!url) return { success: false, error: "Server URL is required." };
+    if (!name) return { success: false, error: "Server name is required." };
+
+    let clean = cleanUrl(url.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    clean = clean.replace(/\/+$/, "");
+
+    let existing = null;
+    if (clientIdentifier) {
+        existing = await prisma.plexServer.findFirst({ where: { clientIdentifier } });
+    }
+    if (!existing) {
+        existing = await prisma.plexServer.findFirst({ where: { name } });
+    }
+
+    if (existing) {
+        await prisma.plexServer.update({
+            where: { id: existing.id },
+            data: {
+                url: clean,
+                monitored,
+                token: token ? encryptData(token) : existing.token
+            }
+        });
+        revalidatePath("/settings");
+        revalidatePath("/");
+        logger.addLog("SUCCESS", "PLEX", `Updated imported Plex server: "${name}" (${clean}) [Monitored: ${monitored}]`);
+        return { success: true, message: `Plex server "${name}" updated and set to ${monitored ? "Monitored" : "Paused"}.` };
+    } else {
+        const count = await prisma.plexServer.count();
+        const shouldBeDefault = isDefault || count === 0;
+
+        await prisma.plexServer.create({
+            data: {
+                name,
+                url,
+                clientIdentifier: clientIdentifier || null,
+                token: token ? encryptData(token) : null,
+                isDefault: shouldBeDefault,
+                monitored
+            }
+        });
+        revalidatePath("/settings");
+        revalidatePath("/");
+        logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${clean}) [Monitored: ${monitored}]`);
+        return { success: true, message: `Plex server "${name}" added successfully [Monitored: ${monitored ? "Enabled" : "Paused"}]!` };
+    }
 }
 
 export async function getEmailNotificationSettings() {
@@ -2054,18 +2189,23 @@ export async function addTautulliInstance(formData: FormData) {
   const name = formData.get("name") as string;
   const url = formData.get("url") as string;
   const rawApiKey = formData.get("apiKey") as string;
+  const monitoredParam = formData.get("monitored");
+  const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
   
   // Encrypt before saving
   await prisma.tautulliInstance.create({ 
-      data: { name, url, apiKey: encryptData(rawApiKey) } 
+      data: { name, url, apiKey: encryptData(rawApiKey), monitored } 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `Added Tautulli instance "${name}" [Monitored: ${monitored}]`);
 }
 
 export async function removeTautulliInstance(id: string) {
   await verifyAdmin();
   await prisma.tautulliInstance.delete({ where: { id } });
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 export async function updateTautulliInstance(formData: FormData) {
@@ -2077,13 +2217,32 @@ export async function updateTautulliInstance(formData: FormData) {
   
   if (!id) return { success: false, error: "ID missing" };
   
+  const updateData: any = { name, url, apiKey: encryptData(rawApiKey) };
+  if (formData.has("monitored")) {
+      const monitoredParam = formData.get("monitored");
+      updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+  }
+
   // Encrypt before saving
   await prisma.tautulliInstance.update({ 
       where: { id },
-      data: { name, url, apiKey: encryptData(rawApiKey) } 
+      data: updateData 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
   return { success: true };
+}
+
+export async function toggleTautulliMonitoringAction(id: string, monitored: boolean) {
+  await verifyAdmin();
+  const inst = await prisma.tautulliInstance.update({
+      where: { id },
+      data: { monitored }
+  });
+  revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} stream monitoring for Tautulli instance "${inst.name}"`);
+  return { success: true, monitored: inst.monitored, message: `Tautulli "${inst.name}" monitoring ${monitored ? "enabled" : "paused"}.` };
 }
 
 export async function getTautulliInstances() {
@@ -2102,14 +2261,19 @@ export async function addGlancesInstance(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;
   const url = formData.get("url") as string;
-  await prisma.glancesInstance.create({ data: { name, url } });
+  const monitoredParam = formData.get("monitored");
+  const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
+  await prisma.glancesInstance.create({ data: { name, url, monitored } });
   revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `Added Glances instance "${name}" [Monitored: ${monitored}]`);
 }
 
 export async function removeGlancesInstance(id: string) {
   await verifyAdmin();
   await prisma.glancesInstance.delete({ where: { id } });
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 export async function updateGlancesInstance(formData: FormData) {
@@ -2120,12 +2284,31 @@ export async function updateGlancesInstance(formData: FormData) {
   
   if (!id) return { success: false, error: "ID missing" };
 
+  const updateData: any = { name, url };
+  if (formData.has("monitored")) {
+      const monitoredParam = formData.get("monitored");
+      updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+  }
+
   await prisma.glancesInstance.update({ 
       where: { id },
-      data: { name, url } 
+      data: updateData 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
   return { success: true };
+}
+
+export async function toggleGlancesMonitoringAction(id: string, monitored: boolean) {
+  await verifyAdmin();
+  const inst = await prisma.glancesInstance.update({
+      where: { id },
+      data: { monitored }
+  });
+  revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} hardware monitoring for Glances host "${inst.name}"`);
+  return { success: true, monitored: inst.monitored, message: `Glances "${inst.name}" monitoring ${monitored ? "enabled" : "paused"}.` };
 }
 
 export async function getGlancesInstances() {
@@ -2162,12 +2345,16 @@ export async function addMediaApp(formData: FormData) {
   const enabledForUsers = formData.get("enabledForUsers") === "true";
   const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
   const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
+  const monitoredParam = formData.get("monitored");
+  const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
   
   // Encrypt before saving
   await prisma.mediaApp.create({ 
-      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds } 
+      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds, monitored } 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `Added Media App "${name}" (${type}) [Monitored: ${monitored}]`);
 }
 
 export async function updateMediaApp(formData: FormData) {
@@ -2182,18 +2369,39 @@ export async function updateMediaApp(formData: FormData) {
     const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
     const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
 
+    const updateData: any = { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds };
+    if (formData.has("monitored")) {
+        const monitoredParam = formData.get("monitored");
+        updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+    }
+
     // Encrypt before saving
     await prisma.mediaApp.update({
         where: { id },
-        data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds }
+        data: updateData
     });
     revalidatePath("/settings");
+    revalidatePath("/");
+    return { success: true };
+}
+
+export async function toggleMediaAppMonitoringAction(id: string, monitored: boolean) {
+    await verifyAdmin();
+    const app = await prisma.mediaApp.update({
+        where: { id },
+        data: { monitored }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/");
+    logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} reachability monitoring for ${app.name} (${app.type.toUpperCase()})`);
+    return { success: true, monitored: app.monitored, message: `${app.name} monitoring ${monitored ? "enabled" : "paused"}.` };
 }
 
 export async function removeMediaApp(id: string) {
   await verifyAdmin();
   await prisma.mediaApp.delete({ where: { id } });
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 export async function testMediaAppConfigAction(type: string, rawUrl: string, rawApiKey?: string) {
@@ -7391,8 +7599,16 @@ export async function getLandingStats() {
 
         const downApps: string[] = [];
 
-        // 1. Tautulli Stream Stats & Reachability
-        const streamStats = await Promise.all(tautulli.map(async (t) => {
+        // STRICT SYSTEM OPERATION MONITORING:
+        // Only monitor items that have monitoring turned ON in settings (monitored !== false).
+        // Discovered unconfigured servers or items with monitored: false are completely skipped.
+        const monitoredTautulli = tautulli.filter(t => t.monitored !== false);
+        const monitoredGlances = glances.filter(g => g.monitored !== false);
+        const monitoredApps = apps.filter(a => a.monitored !== false);
+        const monitoredPlex = plexServers.filter(p => p.monitored !== false);
+
+        // 1. Tautulli Stream Stats & Reachability (only for monitored instances)
+        const streamStats = await Promise.all(monitoredTautulli.map(async (t) => {
             let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
             const apiKey = decryptData(t.apiKey);
             const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
@@ -7415,8 +7631,8 @@ export async function getLandingStats() {
             }
         }));
 
-        // 2. Glances Host Hardware Stats & Reachability
-        const serverStats = await Promise.all(glances.map(async (g) => {
+        // 2. Glances Host Hardware Stats & Reachability (only for monitored instances)
+        const serverStats = await Promise.all(monitoredGlances.map(async (g) => {
             let clean = cleanUrl(g.url?.trim() || "");
             if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
                 clean = `http://${clean}`;
@@ -7470,22 +7686,28 @@ export async function getLandingStats() {
             }
         }));
 
-        // 3. Media Apps Reachability
-        await Promise.all(apps.map(async (app) => {
+        // 3. Media Apps Reachability (only for monitored apps)
+        await Promise.all(monitoredApps.map(async (app) => {
             try {
+                let clean = cleanUrl(app.url?.trim() || "");
+                if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                    clean = `http://${clean}`;
+                }
                 const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), 2500); 
-                await fetch(app.url, { signal: controller.signal, mode: 'no-cors' });
+                const id = setTimeout(() => controller.abort(), 3000); 
+                const res = await fetch(clean, { signal: controller.signal, cache: "no-store" });
                 clearTimeout(id);
+                // Status 200..399, 401, 403 indicate the web server process is up and responding
+                if (!res.ok && res.status !== 401 && res.status !== 403 && res.status >= 500) {
+                    downApps.push(app.name);
+                }
             } catch (e) {
                 downApps.push(app.name);
             }
         }));
 
-        // 4. Plex Servers Reachability
-        const checkedPlexNames = new Set<string>();
-        await Promise.all(plexServers.map(async (ps) => {
-            checkedPlexNames.add(ps.name.toLowerCase().trim());
+        // 4. Plex Servers Reachability (strictly ONLY for configured, monitored Plex servers)
+        await Promise.all(monitoredPlex.map(async (ps) => {
             try {
                 let clean = cleanUrl(ps.url?.trim() || "");
                 if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
@@ -7502,46 +7724,13 @@ export async function getLandingStats() {
                     cache: "no-store"
                 });
                 clearTimeout(id);
-                if (!res.ok && res.status !== 401) {
+                if (!res.ok && res.status !== 401 && res.status !== 403) {
                     downApps.push(`${ps.name} (Plex Server)`);
                 }
             } catch (e) {
                 downApps.push(`${ps.name} (Plex Server)`);
             }
         }));
-
-        if (adminToken) {
-            try {
-                const discovered = await getPlexServers(adminToken);
-                for (const ds of discovered) {
-                    const norm = ds.name.toLowerCase().trim();
-                    if (!checkedPlexNames.has(norm)) {
-                        checkedPlexNames.add(norm);
-                        let isOnline = false;
-                        for (const conn of ds.connections) {
-                            try {
-                                const cleanBase = conn.uri.replace(/\/+$/, "");
-                                const controller = new AbortController();
-                                const id = setTimeout(() => controller.abort(), 2500);
-                                const res = await fetch(`${cleanBase}/identity?X-Plex-Token=${encodeURIComponent(ds.accessToken || adminToken)}`, {
-                                    headers: { "Accept": "application/json", "X-Plex-Token": ds.accessToken || adminToken },
-                                    signal: controller.signal,
-                                    cache: "no-store"
-                                });
-                                clearTimeout(id);
-                                if (res.ok || res.status === 401) {
-                                    isOnline = true;
-                                    break;
-                                }
-                            } catch (e) {}
-                        }
-                        if (!isOnline && ds.connections.length > 0) {
-                            downApps.push(`${ds.name} (Plex Server)`);
-                        }
-                    }
-                }
-            } catch (e) {}
-        }
 
         return { streamStats, serverStats, downApps };
     } catch (e) {
@@ -14390,6 +14579,7 @@ export async function getAdminDetailedStreamsAction() {
         let totalStreamCount = 0;
 
         for (const t of tautulliInstances) {
+            if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
             let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
             const apiKey = decryptData(t.apiKey);
             const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
@@ -14450,6 +14640,10 @@ export async function getAdminDetailedStreamsAction() {
         // Glances
         const glancesStats: any[] = [];
         for (const g of glances) {
+            if (g.monitored === false) {
+                glancesStats.push({ name: g.name, online: false, monitored: false, cpu: 0, ram: 0 });
+                continue;
+            }
             let clean = cleanUrl(g.url?.trim() || "");
             if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
                 clean = `http://${clean}`;
@@ -14467,14 +14661,15 @@ export async function getAdminDetailedStreamsAction() {
                     glancesStats.push({
                         name: g.name,
                         online: true,
+                        monitored: true,
                         cpu: Math.round(cpu.total ?? (cpu.user + (cpu.system || 0))),
                         ram: Math.round(mem.percent ?? ((mem.used / mem.total) * 100))
                     });
                 } else {
-                    glancesStats.push({ name: g.name, online: false, cpu: 0, ram: 0 });
+                    glancesStats.push({ name: g.name, online: false, monitored: true, cpu: 0, ram: 0 });
                 }
             } catch {
-                glancesStats.push({ name: g.name, online: false, cpu: 0, ram: 0 });
+                glancesStats.push({ name: g.name, online: false, monitored: true, cpu: 0, ram: 0 });
             }
         }
 
@@ -17034,8 +17229,11 @@ export async function getUserPlexHubData() {
         }
 
         const isAdmin = user.role === "ADMIN";
-        const settings = await prisma.settings.findFirst().catch(() => null);
-        const tautulli = await prisma.tautulliInstance.findMany().catch(() => []);
+        const [settings, tautulli, dbPlexServers] = await Promise.all([
+            prisma.settings.findFirst().catch(() => null),
+            prisma.tautulliInstance.findMany().catch(() => []),
+            prisma.plexServer.findMany().catch(() => [])
+        ]);
     
     const safeUsername = String(user?.username || "");
     const safeEmail = String(user?.email || "");
@@ -17140,38 +17338,45 @@ export async function getUserPlexHubData() {
         directPms: boolean;
         tautulli: boolean;
         online: boolean;
+        monitored?: boolean;
     }>();
+
+    // Populate serverMap with explicitly configured Plex servers first
+    for (const ps of dbPlexServers) {
+        const normKey = ps.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        serverMap.set(normKey, {
+            id: ps.id,
+            name: ps.name,
+            type: "Plex Media Server",
+            directPms: true,
+            tautulli: false,
+            online: false,
+            monitored: ps.monitored !== false
+        });
+    }
 
     // --- 1. DIRECT PLEX MEDIA SERVER MONITORING (Via Admin Stored Plex Token) ---
     if (adminToken) {
         try {
-            const allDiscovered = await getPlexServers(adminToken).catch(() => []);
-            for (const srv of allDiscovered) {
-                const srvId = `plex::${srv.clientIdentifier || srv.name}`;
-                const normKey = srv.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-                serverMap.set(normKey, {
-                    id: srvId,
-                    name: srv.name,
-                    type: "Plex Media Server",
-                    directPms: true,
-                    tautulli: false,
-                    online: false
-                });
-            }
-
             const directPlexResults = await getPlexActiveSessions(adminToken);
             
             for (const srv of directPlexResults) {
                 const srvId = `plex::${srv.serverId}::${srv.serverUrl}`;
                 const normKey = srv.serverName.toLowerCase().replace(/[^a-z0-9]/g, "");
-                serverMap.set(normKey, {
-                    id: srvId,
-                    name: srv.serverName,
-                    type: "Plex Media Server",
-                    directPms: true,
-                    tautulli: false,
-                    online: true
-                });
+                const existing = serverMap.get(normKey);
+                if (existing) {
+                    existing.online = true;
+                } else {
+                    serverMap.set(normKey, {
+                        id: srvId,
+                        name: srv.serverName,
+                        type: "Plex Media Server",
+                        directPms: true,
+                        tautulli: false,
+                        online: true,
+                        monitored: true
+                    });
+                }
 
                 for (const s of srv.sessions) {
                     const sessionUser = (s.User?.title || s.User?.username || s.User?.name || s.username || s.user || "").toLowerCase().trim();
@@ -17267,7 +17472,8 @@ export async function getUserPlexHubData() {
                     type: "Tautulli Monitor",
                     directPms: false,
                     tautulli: true,
-                    online: false
+                    online: false,
+                    monitored: t.monitored !== false
                 });
             }
             return;
@@ -17336,7 +17542,8 @@ export async function getUserPlexHubData() {
                         type: "Tautulli Monitor",
                         directPms: false,
                         tautulli: true,
-                        online: true
+                        online: true,
+                        monitored: t.monitored !== false
                     });
                 }
 
@@ -17422,7 +17629,8 @@ export async function getUserPlexHubData() {
                         type: "Tautulli Monitor",
                         directPms: false,
                         tautulli: true,
-                        online: false
+                        online: false,
+                        monitored: t.monitored !== false
                     });
                 }
             }

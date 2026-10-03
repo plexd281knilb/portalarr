@@ -38,6 +38,7 @@ const LOG_CATEGORIES: LogCategoryMeta[] = [
     { id: "APPS", label: "APPS", icon: "⚡", badgeStyle: "bg-sky-500/20 text-sky-300 border-sky-500/30", activeStyle: "bg-sky-500/25 text-sky-300 border-sky-500/60 font-bold ring-1 ring-sky-500/30" },
     { id: "DATABASE", label: "DATABASE", icon: "💾", badgeStyle: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30", activeStyle: "bg-yellow-500/25 text-yellow-300 border-yellow-500/60 font-bold ring-1 ring-yellow-500/30" },
     { id: "API", label: "API", icon: "🌐", badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", activeStyle: "bg-cyan-500/25 text-cyan-300 border-cyan-500/60 font-bold ring-1 ring-cyan-500/30" },
+    { id: "MONITORING", label: "MONITORING", icon: "📡", badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", activeStyle: "bg-emerald-500/25 text-emerald-300 border-emerald-500/60 font-bold ring-1 ring-emerald-500/30" },
     { id: "CURATION", label: "CURATION", icon: "🎨", badgeStyle: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30", activeStyle: "bg-fuchsia-500/25 text-fuchsia-300 border-fuchsia-500/60 font-bold ring-1 ring-fuchsia-500/30" },
     { id: "SYSTEM", label: "SYSTEM", icon: "⚙️", badgeStyle: "bg-slate-500/20 text-slate-300 border-slate-500/30", activeStyle: "bg-slate-500/25 text-slate-300 border-slate-500/60 font-bold ring-1 ring-slate-500/30" },
 ];

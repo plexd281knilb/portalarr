@@ -154,6 +154,11 @@ export default function AdminDetailedStreams() {
                                             <span className="font-mono text-foreground font-semibold">
                                                 CPU {g.cpu}% • RAM {g.ram}%
                                             </span>
+                                        ) : g.monitored === false ? (
+                                            <span className="font-mono text-muted-foreground font-semibold text-[10px] flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                                PAUSED
+                                            </span>
                                         ) : (
                                             <span className="font-mono text-rose-400 font-bold text-[10px] flex items-center gap-1">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />

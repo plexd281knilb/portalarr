@@ -630,9 +630,11 @@ export default function MyPlexHub() {
                                                     {srv.name}
                                                 </div>
                                                 <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${srv.online ? "bg-emerald-400" : "bg-rose-500 animate-pulse"}`} />
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${srv.online ? "bg-emerald-400" : srv.monitored === false ? "bg-slate-500" : "bg-rose-500 animate-pulse"}`} />
                                                     {srv.online ? (
                                                         <span className="text-emerald-400 font-medium">Online & Active</span>
+                                                    ) : srv.monitored === false ? (
+                                                        <span className="text-muted-foreground font-medium">Monitoring Paused</span>
                                                     ) : (
                                                         <span className="text-rose-400 font-semibold">Offline / Unreachable</span>
                                                     )}
@@ -641,6 +643,11 @@ export default function MyPlexHub() {
                                         </div>
 
                                         <div className="flex items-center gap-1 shrink-0">
+                                            {srv.monitored === false && (
+                                                <Badge variant="outline" className="text-[9px] font-semibold bg-slate-500/10 text-slate-400 border-slate-500/30">
+                                                    Paused
+                                                </Badge>
+                                            )}
                                             {srv.directPms && (
                                                 <Badge variant="outline" className="text-[9px] font-semibold bg-primary/10 text-primary border-primary/30">
                                                     Direct PMS

@@ -6,10 +6,11 @@ import {
     getAppUsers, createAppUser, deleteAppUser, 
     getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
     getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
+    togglePlexServerMonitoringAction, getDiscoveredPlexServersAction, importDiscoveredPlexServerAction,
     getEmailNotificationSettings, saveEmailNotificationSettingsAction,
-    getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance,
-    getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance,
-    getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
+    getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance, toggleTautulliMonitoringAction,
+    getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance, toggleGlancesMonitoringAction,
+    getMediaApps, addMediaApp, updateMediaApp, removeMediaApp, toggleMediaAppMonitoringAction,
     getBetaDashboardText, updateBetaDashboardText,
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
     getRoadmapText, updateRoadmapText,
@@ -172,6 +173,15 @@ function SettingsPageContent() {
     const [plexServerFormUrl, setPlexServerFormUrl] = useState("");
     const [plexServerFormToken, setPlexServerFormToken] = useState("");
     const [plexServerFormIsDefault, setPlexServerFormIsDefault] = useState(false);
+    const [plexServerFormMonitored, setPlexServerFormMonitored] = useState(true);
+    const [togglingPlexServerId, setTogglingPlexServerId] = useState<string | null>(null);
+    const [togglingTautulliId, setTogglingTautulliId] = useState<string | null>(null);
+    const [togglingGlancesId, setTogglingGlancesId] = useState<string | null>(null);
+    const [togglingMediaAppId, setTogglingMediaAppId] = useState<string | null>(null);
+    const [discoveredPlexServers, setDiscoveredPlexServers] = useState<any[]>([]);
+    const [loadingDiscoveredPlexServers, setLoadingDiscoveredPlexServers] = useState(false);
+    const [importingDiscoveredServerKey, setImportingDiscoveredServerKey] = useState<string | null>(null);
+    const [discoveredPlexServersMsg, setDiscoveredPlexServersMsg] = useState("");
 
     // Curation & Metadata API Key States
     const [tmdbKey, setTmdbKey] = useState("");
@@ -518,6 +528,107 @@ function SettingsPageContent() {
             setPlexServerFormTestResult({ success: false, err: err.message || "Failed to test connection" });
         } finally {
             setTestingPlexServerForm(false);
+        }
+    };
+
+    const handleTogglePlexServerMonitoring = async (id: string, current: boolean) => {
+        setTogglingPlexServerId(id);
+        const next = !current;
+        setPlexServers(prev => prev.map(s => s.id === id ? { ...s, monitored: next } : s));
+        try {
+            await togglePlexServerMonitoringAction(id, next);
+        } catch {
+            setPlexServers(prev => prev.map(s => s.id === id ? { ...s, monitored: current } : s));
+        } finally {
+            setTogglingPlexServerId(null);
+        }
+    };
+
+    const handleToggleTautulliMonitoring = async (id: string, current: boolean) => {
+        setTogglingTautulliId(id);
+        const next = !current;
+        setTautulli(prev => prev.map(t => t.id === id ? { ...t, monitored: next } : t));
+        try {
+            await toggleTautulliMonitoringAction(id, next);
+        } catch {
+            setTautulli(prev => prev.map(t => t.id === id ? { ...t, monitored: current } : t));
+        } finally {
+            setTogglingTautulliId(null);
+        }
+    };
+
+    const handleToggleGlancesMonitoring = async (id: string, current: boolean) => {
+        setTogglingGlancesId(id);
+        const next = !current;
+        setGlances(prev => prev.map(g => g.id === id ? { ...g, monitored: next } : g));
+        try {
+            await toggleGlancesMonitoringAction(id, next);
+        } catch {
+            setGlances(prev => prev.map(g => g.id === id ? { ...g, monitored: current } : g));
+        } finally {
+            setTogglingGlancesId(null);
+        }
+    };
+
+    const handleToggleMediaAppMonitoring = async (id: string, current: boolean) => {
+        setTogglingMediaAppId(id);
+        const next = !current;
+        setMediaApps(prev => prev.map(a => a.id === id ? { ...a, monitored: next } : a));
+        try {
+            await toggleMediaAppMonitoringAction(id, next);
+        } catch {
+            setMediaApps(prev => prev.map(a => a.id === id ? { ...a, monitored: current } : a));
+        } finally {
+            setTogglingMediaAppId(null);
+        }
+    };
+
+    const handleFetchDiscoveredPlexServers = async () => {
+        setLoadingDiscoveredPlexServers(true);
+        setDiscoveredPlexServersMsg("");
+        try {
+            const res = await getDiscoveredPlexServersAction();
+            if (res.success && res.discovered) {
+                setDiscoveredPlexServers(res.discovered);
+            } else {
+                setDiscoveredPlexServersMsg(res.error || "No servers discovered.");
+            }
+        } catch (e: any) {
+            setDiscoveredPlexServersMsg(e.message || "Failed to query Plex.tv for servers.");
+        } finally {
+            setLoadingDiscoveredPlexServers(false);
+        }
+    };
+
+    const handleImportDiscoveredPlexServer = async (srv: any, monitored: boolean) => {
+        const key = srv.clientIdentifier || srv.name;
+        setImportingDiscoveredServerKey(key);
+        try {
+            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+            const url = conn ? conn.uri : "";
+            if (!url) {
+                alert(`No valid connection URI found for "${srv.name}".`);
+                return;
+            }
+            const res = await importDiscoveredPlexServerAction({
+                name: srv.name,
+                url,
+                clientIdentifier: srv.clientIdentifier,
+                token: srv.accessToken,
+                monitored
+            });
+            if (res.success) {
+                setPlexServerActionMsg(res.message || "Plex server imported successfully.");
+                setTimeout(() => setPlexServerActionMsg(""), 4000);
+                await loadAllData();
+                await handleFetchDiscoveredPlexServers();
+            } else {
+                alert(res.error || "Failed to import server.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Import error");
+        } finally {
+            setImportingDiscoveredServerKey(null);
         }
     };
 
@@ -872,6 +983,12 @@ function SettingsPageContent() {
     };
 
     useEffect(() => { loadAllData(); }, []);
+
+    useEffect(() => {
+        if (activeTab === "monitoring" && discoveredPlexServers.length === 0 && !loadingDiscoveredPlexServers) {
+            handleFetchDiscoveredPlexServers();
+        }
+    }, [activeTab]);
 
     const handleTabChange = (value: string) => {
         if (hasUnsavedChanges && value !== activeTab) {
@@ -1827,7 +1944,27 @@ function SettingsPageContent() {
                                                                     <code>{server.url}</code>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex gap-1 shrink-0 items-center">
+                                                            <div className="flex gap-1.5 shrink-0 items-center">
+                                                                <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                                    <Switch 
+                                                                        id={`monitored-plex-gen-${server.id}`}
+                                                                        checked={server.monitored !== false}
+                                                                        disabled={togglingPlexServerId === server.id}
+                                                                        onCheckedChange={() => handleTogglePlexServerMonitoring(server.id, server.monitored !== false)}
+                                                                    />
+                                                                    <Label htmlFor={`monitored-plex-gen-${server.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                        {server.monitored !== false ? (
+                                                                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-muted-foreground flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                            </span>
+                                                                        )}
+                                                                    </Label>
+                                                                </div>
+
                                                                 <Button 
                                                                     type="button"
                                                                     size="sm" 
@@ -1870,6 +2007,7 @@ function SettingsPageContent() {
                                                                         setPlexServerFormUrl(server.url);
                                                                         setPlexServerFormToken(server.token || "");
                                                                         setPlexServerFormIsDefault(server.isDefault);
+                                                                        setPlexServerFormMonitored(server.monitored !== false);
                                                                         setPlexServerFormTestResult(null);
                                                                     }}
                                                                     title="Edit Server"
@@ -1921,6 +2059,7 @@ function SettingsPageContent() {
                                         onSubmit={async (e) => {
                                             e.preventDefault();
                                             const formData = new FormData(e.currentTarget);
+                                            formData.set("monitored", plexServerFormMonitored ? "true" : "false");
                                             if (editingPlexServer) {
                                                 formData.append("id", editingPlexServer.id);
                                             }
@@ -1936,6 +2075,7 @@ function SettingsPageContent() {
                                                 setPlexServerFormUrl("");
                                                 setPlexServerFormToken("");
                                                 setPlexServerFormIsDefault(false);
+                                                setPlexServerFormMonitored(true);
                                                 setPlexServerFormTestResult(null);
                                                 loadAllData();
                                             } else {
@@ -2040,6 +2180,21 @@ function SettingsPageContent() {
                                             </Label>
                                         </div>
 
+                                        <div className="flex items-center space-x-2 pt-1">
+                                            <input 
+                                                type="checkbox" 
+                                                id="plex-server-monitored" 
+                                                name="monitored" 
+                                                value="true" 
+                                                checked={plexServerFormMonitored}
+                                                onChange={(e) => setPlexServerFormMonitored(e.target.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                            />
+                                            <Label htmlFor="plex-server-monitored" className="text-xs font-medium cursor-pointer">
+                                                Monitor server reachability & active stream sessions
+                                            </Label>
+                                        </div>
+
                                         {/* Test Connection Banner */}
                                         {plexServerFormTestResult && (
                                             <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-2 ${
@@ -2086,6 +2241,7 @@ function SettingsPageContent() {
                                                         setPlexServerFormUrl("");
                                                         setPlexServerFormToken("");
                                                         setPlexServerFormIsDefault(false);
+                                                        setPlexServerFormMonitored(true);
                                                         setPlexServerFormTestResult(null); 
                                                     }}
                                                 >
@@ -3038,7 +3194,224 @@ function SettingsPageContent() {
 
                 {/* --- TAB 4: MONITORING & APPS --- */}
                 <TabsContent value="monitoring" className="space-y-6">
-                    <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                        {/* PLEX MEDIA SERVERS & AUTO-DISCOVERY */}
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Tv className="h-5 w-5 text-amber-500"/> Plex Media Servers
+                                        </CardTitle>
+                                        <CardDescription>Direct Plex servers and Plex.tv account auto-discovery with per-server monitoring controls.</CardDescription>
+                                    </div>
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                                        {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"}
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
+                                {plexServerActionMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                        <span>{plexServerActionMsg}</span>
+                                    </div>
+                                )}
+
+                                {/* LIST OF CONFIGURED SERVERS */}
+                                <div>
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between">
+                                        <span>Configured Plex Servers ({plexServers.length})</span>
+                                        <span className="text-[10px] text-muted-foreground font-normal">Toggle switch to pause/resume monitoring</span>
+                                    </div>
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {plexServers.length === 0 && (
+                                            <p className="text-xs text-muted-foreground italic">No Plex servers configured. Import from discovered servers below or add one in General & Setup.</p>
+                                        )}
+                                        {plexServers.map(s => (
+                                            <div key={s.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                <div className="flex justify-between items-center gap-2">
+                                                    <div className="truncate space-y-0.5">
+                                                        <div className="font-semibold flex items-center gap-1.5 truncate">
+                                                            <span className="truncate">{s.name}</span>
+                                                            {s.isDefault && (
+                                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-0.5 px-1 py-0">
+                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-400" /> Default
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[11px] font-mono text-muted-foreground truncate">
+                                                            <code>{s.url}</code>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-plex-tab-${s.id}`}
+                                                                checked={s.monitored !== false}
+                                                                disabled={togglingPlexServerId === s.id}
+                                                                onCheckedChange={() => handleTogglePlexServerMonitoring(s.id, s.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-plex-tab-${s.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {s.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                            disabled={testingPlexServerId === s.id}
+                                                            onClick={() => handleTestPlexServer(s.id)}
+                                                        >
+                                                            {testingPlexServerId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="ghost" 
+                                                            className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" 
+                                                            onClick={async () => {
+                                                                if (confirm(`Remove Plex server "${s.name}"?`)) {
+                                                                    await removePlexServerAction(s.id);
+                                                                    setPlexServerActionMsg(`Plex server "${s.name}" removed.`);
+                                                                    setTimeout(() => setPlexServerActionMsg(""), 3000);
+                                                                    await loadAllData();
+                                                                    await handleFetchDiscoveredPlexServers();
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                {plexServerTestResults[s.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${plexServerTestResults[s.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {plexServerTestResults[s.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{plexServerTestResults[s.id].msg || plexServerTestResults[s.id].err}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* PLEX.TV AUTO-DISCOVERY SECTION */}
+                                <div className="border-t border-border/40 pt-3 space-y-2 mt-auto">
+                                    <div className="flex justify-between items-center">
+                                        <div className="space-y-0.5">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                <Radio className="h-3 w-3 text-amber-500 animate-pulse" />
+                                                <span>Plex.tv Discovered Servers</span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">Passive inventory on linked account. Unadded servers are never probed or marked down.</p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-[10px] px-2.5 font-semibold gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95 transition-all"
+                                            disabled={loadingDiscoveredPlexServers}
+                                            onClick={handleFetchDiscoveredPlexServers}
+                                        >
+                                            {loadingDiscoveredPlexServers ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                                            {loadingDiscoveredPlexServers ? "Scanning..." : "Scan Plex.tv"}
+                                        </Button>
+                                    </div>
+
+                                    {discoveredPlexServersMsg && (
+                                        <p className="text-xs text-muted-foreground italic bg-muted/20 p-2 rounded-md border border-border/30">
+                                            {discoveredPlexServersMsg}
+                                        </p>
+                                    )}
+
+                                    {discoveredPlexServers.length > 0 && (
+                                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                                            {discoveredPlexServers.map((srv, idx) => {
+                                                const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+                                                const connUri = conn ? conn.uri : "No connection URI";
+                                                const isImporting = importingDiscoveredServerKey === (srv.clientIdentifier || srv.name);
+
+                                                return (
+                                                    <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/60 border border-border/30 text-xs">
+                                                        <div className="truncate space-y-0.5 max-w-[55%]">
+                                                            <div className="font-medium truncate flex items-center gap-1.5">
+                                                                <span className="truncate">{srv.name}</span>
+                                                                {srv.isConfigured ? (
+                                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                        Configured
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                        Discovered
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[10px] font-mono text-muted-foreground truncate">
+                                                                {connUri}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            {srv.isConfigured && srv.configuredId ? (
+                                                                <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                                    <Switch 
+                                                                        id={`disc-monitored-${srv.configuredId}`}
+                                                                        checked={srv.monitored !== false}
+                                                                        disabled={togglingPlexServerId === srv.configuredId}
+                                                                        onCheckedChange={() => handleTogglePlexServerMonitoring(srv.configuredId, srv.monitored !== false)}
+                                                                    />
+                                                                    <Label htmlFor={`disc-monitored-${srv.configuredId}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                        {srv.monitored !== false ? (
+                                                                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-muted-foreground flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                            </span>
+                                                                        )}
+                                                                    </Label>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1">
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-6 text-[10px] px-2 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                                                                        disabled={isImporting}
+                                                                        onClick={() => handleImportDiscoveredPlexServer(srv, true)}
+                                                                    >
+                                                                        {isImporting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "+ Add & Monitor"}
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
+                                                                        disabled={isImporting}
+                                                                        onClick={() => handleImportDiscoveredPlexServer(srv, false)}
+                                                                    >
+                                                                        + Add (Paused)
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* TAUTULLI INSTANCES */}
                         <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
@@ -3055,7 +3428,26 @@ function SettingsPageContent() {
                                             <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{t.name}</span>
-                                                    <div className="flex items-center gap-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-tautulli-${t.id}`}
+                                                                checked={t.monitored !== false}
+                                                                disabled={togglingTautulliId === t.id}
+                                                                onCheckedChange={() => handleToggleTautulliMonitoring(t.id, t.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-tautulli-${t.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {t.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
@@ -3143,6 +3535,20 @@ function SettingsPageContent() {
                                             <p className="text-[10px] text-muted-foreground mt-1">Found in Tautulli Settings → Web Interface → API.</p>
                                         </div>
                                     </div>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="tautulli-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingTautulli ? editingTautulli.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                        />
+                                        <Label htmlFor="tautulli-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor active streams and reachability
+                                        </Label>
+                                    </div>
                                     {tautulliFormTestResult && (
                                         <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${tautulliFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
                                             {tautulliFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
@@ -3190,7 +3596,26 @@ function SettingsPageContent() {
                                             <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{g.name}</span>
-                                                    <div className="flex items-center gap-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-glances-${g.id}`}
+                                                                checked={g.monitored !== false}
+                                                                disabled={togglingGlancesId === g.id}
+                                                                onCheckedChange={() => handleToggleGlancesMonitoring(g.id, g.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-glances-${g.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {g.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
@@ -3253,6 +3678,20 @@ function SettingsPageContent() {
                                             data-lpignore="true"
                                         />
                                     </div>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="glances-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingGlances ? editingGlances.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-sky-500 focus:ring-sky-400" 
+                                        />
+                                        <Label htmlFor="glances-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor CPU/RAM metrics and host reachability
+                                        </Label>
+                                    </div>
                                     {glancesFormTestResult && (
                                         <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
                                             {glancesFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
@@ -3303,7 +3742,26 @@ function SettingsPageContent() {
                                                         <div className="font-semibold">{app.name}</div>
                                                         <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{app.type}</div>
                                                     </div>
-                                                    <div className="flex gap-1 shrink-0">
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-app-${app.id}`}
+                                                                checked={app.monitored !== false}
+                                                                disabled={togglingMediaAppId === app.id}
+                                                                onCheckedChange={() => handleToggleMediaAppMonitoring(app.id, app.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-app-${app.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {app.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
@@ -3515,6 +3973,21 @@ function SettingsPageContent() {
                                                 </div>
                                             </div>
                                         )}
+                                    </div>
+
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="app-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingApp ? editingApp.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                        />
+                                        <Label htmlFor="app-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor service reachability on dashboard
+                                        </Label>
                                     </div>
 
                                     {appFormTestResult && (

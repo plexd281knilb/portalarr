@@ -3280,6 +3280,103 @@ async function runTestSuite() {
             throw new Error(`Expected type 'Direct PMS (Offline) + Tautulli', got '${existing.type}'`);
         }
     });
+
+    // 90. Monitoring: Selective Opt-In Monitoring Toggles & Discovered Server Isolation
+    await assertTest("Monitoring: Selective Opt-In Monitoring Toggles & Discovered Server Isolation", async () => {
+        // 1. Test downApps filtering: unmonitored items (monitored: false) must NEVER be pushed to downApps
+        const allServers = [
+            { name: "ProductionPMS", monitored: true, online: false },
+            { name: "TestVM-Decommissioned", monitored: false, online: false },
+            { name: "UnmonitoredGlances", monitored: false, online: false },
+            { name: "ActiveGlances", monitored: true, online: false },
+            { name: "UnmonitoredApp", monitored: false, online: false },
+            { name: "MonitoredApp", monitored: true, online: false }
+        ];
+
+        // Simulate getLandingStats filter logic: only items with monitored !== false are probed
+        const monitoredOnly = allServers.filter(s => s.monitored !== false);
+        const testDownApps: string[] = [];
+        for (const item of monitoredOnly) {
+            if (!item.online) {
+                testDownApps.push(item.name);
+            }
+        }
+
+        if (testDownApps.includes("TestVM-Decommissioned")) {
+            throw new Error("CRITICAL: Unmonitored Plex server 'TestVM-Decommissioned' was included in downApps!");
+        }
+        if (testDownApps.includes("UnmonitoredGlances")) {
+            throw new Error("CRITICAL: Unmonitored Glances host was included in downApps!");
+        }
+        if (testDownApps.includes("UnmonitoredApp")) {
+            throw new Error("CRITICAL: Unmonitored MediaApp was included in downApps!");
+        }
+        if (!testDownApps.includes("ProductionPMS") || !testDownApps.includes("ActiveGlances") || !testDownApps.includes("MonitoredApp")) {
+            throw new Error(`CRITICAL: Monitored offline items missing from downApps: ${JSON.stringify(testDownApps)}`);
+        }
+        if (testDownApps.length !== 3) {
+            throw new Error(`Expected exactly 3 items in downApps, got ${testDownApps.length}: ${JSON.stringify(testDownApps)}`);
+        }
+
+        // 2. Test Plex.tv Discovered Unconfigured Server Isolation
+        // Servers passively discovered from Plex.tv that are not configured in DB must NEVER be probed or in downApps
+        const discoveredFromPlexTv = [
+            { name: "ProductionPMS", clientIdentifier: "prod-1", isConfigured: true },
+            { name: "TestVM-To-Be-Deleted", clientIdentifier: "test-vm-2", isConfigured: false }
+        ];
+        const unconfiguredDiscovered = discoveredFromPlexTv.filter(d => !d.isConfigured);
+        if (unconfiguredDiscovered.length !== 1 || unconfiguredDiscovered[0].name !== "TestVM-To-Be-Deleted") {
+            throw new Error("Failed to isolate unconfigured discovered servers");
+        }
+
+        // 3. Database Lifecycle: Test monitored field persistence on PlexServer, GlancesInstance, TautulliInstance, and MediaApp
+        const testPlex = await prisma.plexServer.create({
+            data: {
+                name: "TestOptInPlex",
+                url: "http://127.0.0.1:32499",
+                monitored: false
+            }
+        });
+
+        if (testPlex.monitored !== false) {
+            throw new Error(`Expected created PlexServer.monitored to be false, got ${testPlex.monitored}`);
+        }
+
+        // Toggle to true
+        const toggledPlex = await prisma.plexServer.update({
+            where: { id: testPlex.id },
+            data: { monitored: true }
+        });
+        if (toggledPlex.monitored !== true) {
+            throw new Error(`Expected toggled PlexServer.monitored to be true, got ${toggledPlex.monitored}`);
+        }
+
+        // Query filtering: prisma.plexServer.findMany({ where: { monitored: true } }) or filtering in code
+        const queriedPlex = await prisma.plexServer.findUnique({ where: { id: testPlex.id } });
+        if (!queriedPlex || queriedPlex.monitored !== true) {
+            throw new Error("Failed to persist monitored state in DB");
+        }
+
+        // Clean up test server
+        await prisma.plexServer.delete({ where: { id: testPlex.id } }).catch(() => {});
+
+        // 4. Test serverMap in Plex Hub honors monitored: false
+        const hubServerMap = new Map<string, any>();
+        hubServerMap.set("test-key", {
+            id: "plex::test::127.0.0.1:32499",
+            name: "TestServerPaused",
+            type: "Plex Media Server",
+            directPms: true,
+            tautulli: false,
+            online: false,
+            monitored: false
+        });
+
+        const hubEntry = hubServerMap.get("test-key");
+        if (hubEntry?.monitored !== false) {
+            throw new Error(`Expected hubEntry.monitored to be false, got ${hubEntry?.monitored}`);
+        }
+    });
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

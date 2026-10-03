@@ -273,6 +273,7 @@ model PlexServer {
   token            String?  // Optional server-specific token (encrypted), falls back to mainPlexToken
   clientIdentifier String?  // Machine/client ID
   isDefault        Boolean  @default(false)
+  monitored        Boolean  @default(true) // Health & Reachability Monitoring
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
 }
@@ -282,6 +283,7 @@ model TautulliInstance {
   name      String
   url       String
   apiKey    String
+  monitored Boolean  @default(true) // Stream Monitoring & Health
   createdAt DateTime @default(now())
 }
 
@@ -289,6 +291,7 @@ model GlancesInstance {
   id        String   @id @default(cuid())
   name      String
   url       String
+  monitored Boolean  @default(true) // Hardware Health & Metric Monitoring
   createdAt DateTime @default(now())
 }
 
@@ -307,6 +310,7 @@ model MediaApp {
   externalUrl String?  // External/Public Link
   apiKey      String?
   enabledForUsers Boolean @default(false)
+  monitored   Boolean  @default(true) // Health & Reachability Monitoring
   allowedQualityProfileIds String?
   allowedRootFolderIds String?
   createdAt   DateTime @default(now())

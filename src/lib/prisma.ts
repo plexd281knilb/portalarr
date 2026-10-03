@@ -706,6 +706,9 @@ export async function ensureSchemaColumns(): Promise<void> {
             if (!cols.includes("allowedRootFolderIds")) {
                 await prisma.$executeRawUnsafe(`ALTER TABLE "MediaApp" ADD COLUMN "allowedRootFolderIds" TEXT;`);
             }
+            if (!cols.includes("monitored")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "MediaApp" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 1;`);
+            }
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] MediaApp table check error:", e.message || e);
         }
@@ -718,17 +721,31 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "name" TEXT NOT NULL,
                     "url" TEXT NOT NULL,
                     "apiKey" TEXT NOT NULL,
+                    "monitored" BOOLEAN NOT NULL DEFAULT 1,
                     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             `);
+            const tautulliInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("TautulliInstance");`);
+            const tautulliCols = tautulliInfo.map((c: any) => c.name);
+            if (!tautulliCols.includes("monitored")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "TautulliInstance" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 1;`);
+            }
+
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "GlancesInstance" (
                     "id" TEXT PRIMARY KEY,
                     "name" TEXT NOT NULL,
                     "url" TEXT NOT NULL,
+                    "monitored" BOOLEAN NOT NULL DEFAULT 1,
                     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             `);
+            const glancesInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("GlancesInstance");`);
+            const glancesCols = glancesInfo.map((c: any) => c.name);
+            if (!glancesCols.includes("monitored")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "GlancesInstance" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 1;`);
+            }
+
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "Service" (
                     "id" TEXT PRIMARY KEY,
@@ -768,10 +785,16 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "token" TEXT,
                     "clientIdentifier" TEXT,
                     "isDefault" BOOLEAN NOT NULL DEFAULT 0,
+                    "monitored" BOOLEAN NOT NULL DEFAULT 1,
                     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             `);
+            const plexServerInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("PlexServer");`);
+            const plexServerCols = plexServerInfo.map((c: any) => c.name);
+            if (!plexServerCols.includes("monitored")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 1;`);
+            }
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Auxiliary tables check error:", e.message || e);
         }

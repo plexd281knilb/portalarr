@@ -102,7 +102,17 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
-### 6. Multi-Resolution Responsive Layout System (Mobile, 720p, 1080p, 4K)
+### 6. Inline Service & Server Monitoring Toggles (Selective Opt-In Pattern)
+- When presenting monitorable hosts, apps, or media servers (`PlexServer`, `TautulliInstance`, `GlancesInstance`, `MediaApp`), provide a compact inline switch with state label:
+  - Container: `flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40`
+  - Active: Emerald text with glowing dot `<span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored`
+  - Paused: Slate text with muted dot `<span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused`
+  - Behavior: Instant optimistic toggle calling dedicated server actions (`togglePlexServerMonitoringAction`, `toggleTautulliMonitoringAction`, etc.) with zero full-page reloads.
+  - Plex.tv Discovered Servers: Display passive inventory from linked accounts with `+ Add & Monitor` and `+ Add (Paused)` actions, ensuring unconfigured servers are never auto-probed or marked down.
+
+---
+
+### 7. Multi-Resolution Responsive Layout System (Mobile, 720p, 1080p, 4K)
 
 - **Mobile Phones (`< 640px`)**:
   - Container padding: `p-2.5 sm:p-4 md:p-6 lg:p-8 3xl:p-10`.

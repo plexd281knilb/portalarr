@@ -23,6 +23,7 @@ export type LogCategory =
     | "BOOK_ENGINE"
     | "AUTO_GRAB"
     | "APPROVAL"
+    | "MONITORING"
     | "PLEX_HUB"; // backward compatibility
 
 export interface SystemLogEntry {
