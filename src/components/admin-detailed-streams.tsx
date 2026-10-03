@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { 
     Activity, Tv, Film, Monitor, Cpu, HardDrive, RefreshCw, 
-    Play, Pause, XCircle, Zap, Shield, Sparkles, Loader2, Server
+    Play, Pause, XCircle, Zap, Shield, Sparkles, Loader2, Server,
+    Layers, Trophy, Flame, Filter, BarChart3, CheckCircle2
 } from "lucide-react";
 
 export default function AdminDetailedStreams() {
@@ -16,6 +17,7 @@ export default function AdminDetailedStreams() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [killingSessionKey, setKillingSessionKey] = useState<string | null>(null);
+    const [selectedServerFilter, setSelectedServerFilter] = useState<string | null>(null);
 
     const loadStreams = async (isManual = false) => {
         if (isManual) setRefreshing(true);
@@ -69,6 +71,7 @@ export default function AdminDetailedStreams() {
     const sessions = data?.sessions || [];
     const totalStreams = data?.totalStreams || sessions.length;
     const glances = data?.glances || [];
+    const serversUsage = data?.serversUsage || [];
 
     const transcodeCount = sessions.filter((s: any) => s.videoDecision === "transcode" || s.audioDecision === "transcode").length;
     const directPlayCount = sessions.length - transcodeCount;
@@ -76,9 +79,18 @@ export default function AdminDetailedStreams() {
     const totalBandwidthKbps = sessions.reduce((acc: number, s: any) => acc + (s.streamBitrate || 0), 0);
     const totalBandwidthMbps = (totalBandwidthKbps / 1000).toFixed(1);
 
+    // Filter sessions by selected server if active
+    const filteredSessions = selectedServerFilter 
+        ? sessions.filter((s: any) => {
+            const sName = (s.serverName || "").toLowerCase().trim();
+            const fName = selectedServerFilter.toLowerCase().trim();
+            return sName === fName || sName.includes(fName) || fName.includes(sName);
+        })
+        : sessions;
+
     return (
         <Card className="border-primary/30 bg-[#121218]/90 backdrop-blur-md shadow-md overflow-hidden">
-            <CardHeader className="p-4 sm:p-5 border-b border-border/40">
+            <CardHeader className="p-4 sm:p-5 border-b border-border/40 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
@@ -91,7 +103,7 @@ export default function AdminDetailedStreams() {
                             </Badge>
                         </div>
                         <CardDescription className="text-xs">
-                            Real-time session monitoring across all Tautulli & Plex servers with full transcode specs.
+                            Real-time session monitoring across your {serversUsage.length || 3} Plex servers & {glances.length || 2} hardware host machines.
                         </CardDescription>
                     </div>
 
@@ -109,8 +121,8 @@ export default function AdminDetailedStreams() {
                     </div>
                 </div>
 
-                {/* TELEMETRY STATS GRID */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5 pt-4">
+                {/* 1. TOP CLUSTER TELEMETRY STATS GRID (4 STATS) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-0.5">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Active Streams</span>
                         <div className="text-lg font-black text-foreground flex items-center gap-1.5">
@@ -119,6 +131,7 @@ export default function AdminDetailedStreams() {
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                             </span>
                             {totalStreams}
+                            <span className="text-[11px] font-normal text-muted-foreground ml-1">cluster</span>
                         </div>
                     </div>
 
@@ -142,47 +155,285 @@ export default function AdminDetailedStreams() {
                             {totalBandwidthMbps} <span className="text-xs font-normal text-muted-foreground">Mbps</span>
                         </div>
                     </div>
+                </div>
 
-                    {glances.length > 0 && (
-                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-0.5 col-span-2 sm:col-span-4 lg:col-span-1">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Server Load</span>
-                            <div className="text-xs font-medium space-y-0.5 pt-0.5">
-                                {glances.map((g: any, i: number) => (
-                                    <div key={i} className="flex justify-between items-center text-[11px]">
-                                        <span className="truncate max-w-[110px] text-muted-foreground" title={g.name}>{g.name}:</span>
-                                        {g.online ? (
-                                            <span className="font-mono text-foreground font-semibold">
-                                                CPU {g.cpu}% • RAM {g.ram}%
-                                            </span>
-                                        ) : g.monitored === false ? (
-                                            <span className="font-mono text-muted-foreground font-semibold text-[10px] flex items-center gap-1">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                                                PAUSED
-                                            </span>
-                                        ) : (
-                                            <span className="font-mono text-rose-400 font-bold text-[10px] flex items-center gap-1">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                                                OFFLINE
-                                            </span>
-                                        )}
-                                    </div>
-                                ))}
+                {/* 2. DUAL TELEMETRY COMMAND CENTER (HARDWARE HOSTS VS PLEX SERVERS) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 pt-1">
+                    {/* LEFT: GLANCES PHYSICAL HOST TELEMETRY */}
+                    <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
+                        <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-2">
+                            <div className="flex items-center gap-2">
+                                <Cpu className="h-4 w-4 text-emerald-400" />
+                                <span className="text-xs font-bold text-foreground tracking-wide uppercase">
+                                    Host Hardware Telemetry (Glances)
+                                </span>
                             </div>
+                            <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                {glances.length} Physical {glances.length === 1 ? "Host" : "Hosts"}
+                            </Badge>
                         </div>
-                    )}
+
+                        {glances.length === 0 ? (
+                            <div className="text-xs text-muted-foreground py-4 text-center">
+                                No Glances hardware servers configured. Add hosts in Settings &gt; Monitoring.
+                            </div>
+                        ) : (
+                            <div className="space-y-2.5">
+                                {glances.map((g: any, i: number) => {
+                                    const cpuColor = g.cpu > 80 ? "bg-rose-500" : g.cpu > 60 ? "bg-amber-400" : "bg-emerald-400";
+                                    const ramColor = g.ram > 85 ? "bg-rose-500" : g.ram > 70 ? "bg-amber-400" : "bg-emerald-400";
+
+                                    return (
+                                        <div 
+                                            key={i} 
+                                            className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] space-y-2"
+                                        >
+                                            <div className="flex items-center justify-between text-xs">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-400">
+                                                        <HardDrive className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <span className="font-semibold text-foreground truncate max-w-[150px] sm:max-w-[200px]" title={g.name}>
+                                                        {g.name}
+                                                    </span>
+                                                </div>
+
+                                                {g.online ? (
+                                                    <span className="font-mono text-[10px] text-emerald-400 font-bold flex items-center gap-1.5 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                        ONLINE
+                                                    </span>
+                                                ) : g.monitored === false ? (
+                                                    <span className="font-mono text-[10px] text-slate-400 font-medium flex items-center gap-1.5 bg-slate-500/10 px-2 py-0.5 rounded-md border border-slate-500/30">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                                        PAUSED
+                                                    </span>
+                                                ) : (
+                                                    <span className="font-mono text-[10px] text-rose-400 font-bold flex items-center gap-1.5 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/30">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                                                        OFFLINE
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {g.online ? (
+                                                <div className="grid grid-cols-2 gap-2 text-[11px] pt-0.5">
+                                                    {/* CPU Gauge */}
+                                                    <div className="space-y-1 bg-white/[0.02] p-2 rounded-lg border border-white/[0.04]">
+                                                        <div className="flex justify-between items-center text-muted-foreground font-mono">
+                                                            <span className="text-[10px] uppercase font-bold tracking-wider">CPU</span>
+                                                            <span className="font-bold text-foreground">{g.cpu}%</span>
+                                                        </div>
+                                                        <div className="h-1.5 w-full bg-white/[0.08] rounded-full overflow-hidden">
+                                                            <div 
+                                                                className={`h-full ${cpuColor} transition-all duration-500 rounded-full`}
+                                                                style={{ width: `${Math.min(100, Math.max(3, g.cpu))}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* RAM Gauge */}
+                                                    <div className="space-y-1 bg-white/[0.02] p-2 rounded-lg border border-white/[0.04]">
+                                                        <div className="flex justify-between items-center text-muted-foreground font-mono">
+                                                            <span className="text-[10px] uppercase font-bold tracking-wider">RAM</span>
+                                                            <span className="font-bold text-foreground">{g.ram}%</span>
+                                                        </div>
+                                                        <div className="h-1.5 w-full bg-white/[0.08] rounded-full overflow-hidden">
+                                                            <div 
+                                                                className={`h-full ${ramColor} transition-all duration-500 rounded-full`}
+                                                                style={{ width: `${Math.min(100, Math.max(3, g.ram))}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-[11px] text-muted-foreground italic px-1">
+                                                    {g.monitored === false 
+                                                        ? "Monitoring paused in Settings" 
+                                                        : "Host unreachable (verify Glances is active on port 61208)"}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* RIGHT: STREAMS PER PLEX SERVER (RANKED BY USAGE) */}
+                    <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
+                        <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-2">
+                            <div className="flex items-center gap-2">
+                                <Layers className="h-4 w-4 text-sky-400" />
+                                <span className="text-xs font-bold text-foreground tracking-wide uppercase">
+                                    Streams Per Plex Server
+                                </span>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] font-semibold bg-sky-500/10 text-sky-400 border-sky-500/30">
+                                {serversUsage.length} Plex {serversUsage.length === 1 ? "Server" : "Servers"} • Ranked
+                            </Badge>
+                        </div>
+
+                        {serversUsage.length === 0 ? (
+                            <div className="text-xs text-muted-foreground py-4 text-center">
+                                No Plex servers detected. Add servers in Settings &gt; Monitoring.
+                            </div>
+                        ) : (
+                            <div className="space-y-2.5">
+                                {serversUsage.map((srv: any, idx: number) => {
+                                    const isTopActive = idx === 0 && srv.streamCount > 0;
+                                    const isFiltered = selectedServerFilter === srv.name;
+
+                                    return (
+                                        <div 
+                                            key={srv.id || idx}
+                                            onClick={() => {
+                                                if (srv.streamCount > 0) {
+                                                    setSelectedServerFilter(isFiltered ? null : srv.name);
+                                                }
+                                            }}
+                                            className={`p-2.5 rounded-xl border transition-all space-y-1.5 cursor-pointer ${
+                                                isFiltered
+                                                    ? "bg-primary/10 border-primary shadow-sm"
+                                                    : "bg-black/40 border-white/[0.06] hover:border-white/20"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between text-xs gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    {isTopActive ? (
+                                                        <Badge className="text-[9px] font-extrabold uppercase px-1.5 py-0 bg-amber-500/20 text-amber-300 border-amber-500/40 gap-1 shrink-0">
+                                                            <Flame className="h-3 w-3 text-amber-400 fill-amber-400" /> #1 HIGHEST LOAD
+                                                        </Badge>
+                                                    ) : srv.streamCount > 0 ? (
+                                                        <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 bg-sky-500/10 text-sky-400 border-sky-500/30 shrink-0">
+                                                            #{idx + 1}
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-[9px] font-medium px-1.5 py-0 text-muted-foreground border-white/[0.08] shrink-0">
+                                                            IDLE
+                                                        </Badge>
+                                                    )}
+
+                                                    <span className="font-semibold text-foreground truncate max-w-[140px] sm:max-w-[180px]" title={srv.name}>
+                                                        {srv.name}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <span className="text-[11px] font-black text-foreground">
+                                                        {srv.streamCount} {srv.streamCount === 1 ? "stream" : "streams"}
+                                                    </span>
+                                                    {isFiltered && (
+                                                        <span className="text-[9px] font-semibold text-primary bg-primary/20 px-1 rounded">
+                                                            FILTERED
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Subtitle Telemetry & Mini Load Bar */}
+                                            <div className="space-y-1 pt-0.5">
+                                                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                                                    <span>
+                                                        <strong className="text-emerald-400 font-bold">{srv.directPlayCount} DP</strong> / <strong className="text-amber-400 font-bold">{srv.transcodeCount} Transcode</strong>
+                                                    </span>
+                                                    <span className="text-foreground/90 font-bold">
+                                                        {srv.bandwidthMbps} Mbps {totalStreams > 0 ? `(${srv.percentOfTotal}%)` : ""}
+                                                    </span>
+                                                </div>
+
+                                                {totalStreams > 0 && (
+                                                    <div className="h-1 w-full bg-white/[0.08] rounded-full overflow-hidden">
+                                                        <div 
+                                                            className={`h-full transition-all duration-500 rounded-full ${
+                                                                isTopActive ? "bg-amber-400" : "bg-sky-400"
+                                                            }`}
+                                                            style={{ width: `${Math.min(100, Math.max(3, srv.percentOfTotal))}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </CardHeader>
 
             <CardContent className="p-4 sm:p-5 space-y-3">
-                {sessions.length === 0 ? (
+                {/* ACTIVE STREAMS SECTION HEADER & SERVER FILTER PILLS */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
+                    <div className="flex items-center gap-2">
+                        <Tv className="h-4 w-4 text-primary" />
+                        <h3 className="text-xs sm:text-sm font-bold text-foreground uppercase tracking-wider">
+                            Active Playback Sessions
+                        </h3>
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            {filteredSessions.length} {filteredSessions.length === 1 ? "stream" : "streams"}
+                        </Badge>
+                    </div>
+
+                    {serversUsage.length > 1 && totalStreams > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-1">Filter:</span>
+                            <Button
+                                size="sm"
+                                variant={selectedServerFilter === null ? "default" : "outline"}
+                                className={`h-6 text-[10px] px-2 rounded-full ${selectedServerFilter === null ? "bg-primary text-primary-foreground font-bold" : "border-white/10 hover:bg-white/[0.05]"}`}
+                                onClick={() => setSelectedServerFilter(null)}
+                            >
+                                All ({sessions.length})
+                            </Button>
+                            {serversUsage.map((srv: any) => (
+                                <Button
+                                    key={srv.name}
+                                    size="sm"
+                                    variant={selectedServerFilter === srv.name ? "default" : "outline"}
+                                    disabled={srv.streamCount === 0}
+                                    className={`h-6 text-[10px] px-2 rounded-full ${
+                                        selectedServerFilter === srv.name 
+                                            ? "bg-primary text-primary-foreground font-bold" 
+                                            : srv.streamCount === 0 
+                                                ? "opacity-40 border-white/[0.04]" 
+                                                : "border-white/10 hover:bg-white/[0.05]"
+                                    }`}
+                                    onClick={() => setSelectedServerFilter(selectedServerFilter === srv.name ? null : srv.name)}
+                                >
+                                    {srv.name} ({srv.streamCount})
+                                </Button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {filteredSessions.length === 0 ? (
                     <div className="py-8 text-center space-y-2 text-muted-foreground">
                         <Tv className="h-8 w-8 mx-auto opacity-40 text-primary" />
-                        <p className="text-sm font-semibold text-foreground">No active streams playing right now</p>
-                        <p className="text-xs">All media servers are idle and standing by for playback.</p>
+                        {selectedServerFilter ? (
+                            <>
+                                <p className="text-sm font-semibold text-foreground">No active streams playing on "{selectedServerFilter}"</p>
+                                <p className="text-xs">Select "All" or click another server to view active playback.</p>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => setSelectedServerFilter(null)}
+                                    className="text-xs mt-2"
+                                >
+                                    Clear Filter
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-sm font-semibold text-foreground">No active streams playing right now</p>
+                                <p className="text-xs">All media servers are idle and standing by for playback.</p>
+                            </>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {sessions.map((stream: any, idx: number) => {
+                        {filteredSessions.map((stream: any, idx: number) => {
                             const isTranscoding = stream.videoDecision === "transcode";
                             const isAudioTranscoding = stream.audioDecision === "transcode";
                             const isHw = isTranscoding && (stream.transcodeHwRequested || stream.transcodeHwEncoding || stream.transcodeHwDecoding);

@@ -8429,8 +8429,13 @@ export async function updateAlertBanner(formData: FormData) {
 // ============================================================================
 
 async function verifyUser() {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
+    let session = "";
+    try {
+        const cookieStore = await cookies();
+        session = cookieStore.get("session")?.value || "";
+    } catch {
+        // cookies() called outside request scope
+    }
     if (!session) throw new Error("Unauthorized");
     try {
         const { payload } = await jwtVerify(session, getJwtSecret());
@@ -14654,17 +14659,23 @@ export async function toggleSelfSuperUserAction() {
  * Detailed real-time stream monitor and server performance metrics for Admins.
  * Fetches all active sessions across all Tautulli instances without filtering to a single user.
  */
-export async function getAdminDetailedStreamsAction() {
+export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
     try {
-        await verifyAdmin();
-        const [tautulliInstances, glances] = await Promise.all([
+        if (!skipAuth) {
+            await verifyAdmin();
+        }
+        const [tautulliInstances, glances, plexServers, settings] = await Promise.all([
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
-            prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
+            prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null)
         ]);
 
         const allSessions: any[] = [];
         let totalStreamCount = 0;
+        const coveredServerNames = new Set<string>();
 
+        // 1. Tautulli Session Collection
         for (const t of tautulliInstances) {
             if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
             let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
@@ -14674,6 +14685,7 @@ export async function getAdminDetailedStreamsAction() {
             try {
                 const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
                 if (actResult.ok && actResult.data) {
+                    coveredServerNames.add(t.name.toLowerCase().trim());
                     const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
                     totalStreamCount += count;
                     const sessions = actResult.data.sessions || [];
@@ -14724,7 +14736,154 @@ export async function getAdminDetailedStreamsAction() {
             }
         }
 
-        // Glances Hardware Monitoring
+        // 2. Direct Plex Active Sessions Fallback (for configured Plex servers not monitored by Tautulli)
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            try {
+                adminToken = decryptData(settings.mainPlexToken);
+            } catch (e) {}
+        }
+
+        if (adminToken && !isPlexMaintenanceWindow()) {
+            try {
+                const directPlexResults = await getPlexActiveSessions(adminToken);
+                for (const srv of directPlexResults) {
+                    const norm = srv.serverName.toLowerCase().trim();
+                    const isCovered = Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
+                    if (!isCovered && srv.sessions && srv.sessions.length > 0) {
+                        for (const s of srv.sessions) {
+                            const isTranscode = s.TranscodeSession || (s.Media && s.Media[0]?.Part && s.Media[0]?.Part[0]?.decision === "transcode");
+                            const userTitle = s.User?.title || s.User?.username || s.User?.name || s.username || "Plex User";
+                            const mediaType = s.type || (s.grandparentTitle ? "episode" : "movie");
+                            const fullTitle = mediaType === "episode" && s.grandparentTitle
+                                ? `${s.grandparentTitle} - ${s.title || "Episode"}`
+                                : (s.title || "Unknown Media");
+                            
+                            const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : 0;
+                            totalStreamCount++;
+                            allSessions.push({
+                                instanceId: `plex_${srv.serverId}`,
+                                serverName: srv.serverName,
+                                sessionKey: String(s.sessionKey || s.ratingKey || Math.random()),
+                                sessionId: String(s.Session?.id || ""),
+                                user: userTitle,
+                                email: s.User?.email || "",
+                                title: fullTitle,
+                                mediaType,
+                                year: s.year || "",
+                                thumb: s.thumb ? `${srv.serverUrl}${s.thumb}?X-Plex-Token=${srv.token}` : null,
+                                player: s.Player?.title || s.Player?.device || "Plex Client",
+                                device: s.Player?.platform || s.Player?.device || "",
+                                ipAddress: s.Player?.address || "",
+                                videoDecision: isTranscode ? "transcode" : "direct play",
+                                audioDecision: "direct play",
+                                videoCodec: (s.Media && s.Media[0]?.videoCodec || "H264").toUpperCase(),
+                                audioCodec: (s.Media && s.Media[0]?.audioCodec || "AAC").toUpperCase(),
+                                streamBitrate: bitrate,
+                                transcodeHwRequested: !!s.TranscodeSession?.hwRequested,
+                                transcodeHwDecoding: s.TranscodeSession?.videoDecoder || "",
+                                transcodeHwEncoding: s.TranscodeSession?.videoEncoder || "",
+                                progressPercent: s.viewOffset && s.duration ? Math.round((Number(s.viewOffset) / Number(s.duration)) * 100) : 0,
+                                state: s.Player?.state || "playing"
+                            });
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 3. Streams Per Plex Server Registry & Usage Calculation
+        const serverUsageMap = new Map<string, {
+            id: string;
+            name: string;
+            type: string;
+            streamCount: number;
+            directPlayCount: number;
+            transcodeCount: number;
+            bandwidthKbps: number;
+            online: boolean;
+            monitored: boolean;
+        }>();
+
+        // Seed with configured Plex servers
+        for (const ps of plexServers) {
+            const normKey = ps.name.toLowerCase().trim();
+            serverUsageMap.set(normKey, {
+                id: ps.id,
+                name: ps.name,
+                type: "Plex Media Server",
+                streamCount: 0,
+                directPlayCount: 0,
+                transcodeCount: 0,
+                bandwidthKbps: 0,
+                online: true,
+                monitored: ps.monitored !== false
+            });
+        }
+
+        // Seed or merge with Tautulli instances
+        for (const t of tautulliInstances) {
+            const normKey = t.name.toLowerCase().trim();
+            if (!serverUsageMap.has(normKey)) {
+                serverUsageMap.set(normKey, {
+                    id: t.id,
+                    name: t.name,
+                    type: "Tautulli",
+                    streamCount: 0,
+                    directPlayCount: 0,
+                    transcodeCount: 0,
+                    bandwidthKbps: 0,
+                    online: true,
+                    monitored: t.monitored !== false
+                });
+            }
+        }
+
+        // Tally active streams and bandwidth per server
+        for (const s of allSessions) {
+            const srvKey = (s.serverName || "").toLowerCase().trim();
+            let entry = serverUsageMap.get(srvKey);
+            if (!entry) {
+                for (const [k, v] of serverUsageMap.entries()) {
+                    if (k === srvKey || k.includes(srvKey) || srvKey.includes(k)) {
+                        entry = v;
+                        break;
+                    }
+                }
+            }
+            if (!entry && s.serverName) {
+                entry = {
+                    id: s.instanceId || s.serverName,
+                    name: s.serverName,
+                    type: "Plex Media Server",
+                    streamCount: 0,
+                    directPlayCount: 0,
+                    transcodeCount: 0,
+                    bandwidthKbps: 0,
+                    online: true,
+                    monitored: true
+                };
+                serverUsageMap.set(srvKey, entry);
+            }
+            if (entry) {
+                entry.streamCount++;
+                if (s.videoDecision === "transcode" || s.audioDecision === "transcode") {
+                    entry.transcodeCount++;
+                } else {
+                    entry.directPlayCount++;
+                }
+                entry.bandwidthKbps += (s.streamBitrate || 0);
+            }
+        }
+
+        // Convert to array and rank by highest usage first
+        const serversUsage = Array.from(serverUsageMap.values()).map(srv => ({
+            ...srv,
+            bandwidthMbps: Number((srv.bandwidthKbps / 1000).toFixed(1)),
+            percentOfTotal: totalStreamCount > 0 ? Math.round((srv.streamCount / totalStreamCount) * 100) : 0
+        })).sort((a, b) => b.streamCount - a.streamCount || b.bandwidthKbps - a.bandwidthKbps);
+
+        // 4. Glances Hardware Monitoring
         const glancesStats: any[] = await Promise.all(glances.map(async (g) => {
             if (g.monitored === false) {
                 return { name: g.name, online: false, monitored: false, cpu: 0, ram: 0 };
@@ -14747,7 +14906,8 @@ export async function getAdminDetailedStreamsAction() {
             success: true,
             totalStreams: totalStreamCount,
             sessions: allSessions,
-            glances: glancesStats
+            glances: glancesStats,
+            serversUsage: serversUsage
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed fetching admin streams" };

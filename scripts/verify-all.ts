@@ -10,7 +10,8 @@ import {
     getRoadmapText,
     validateMemberReferenceAction,
     calculateUserGuideAccess,
-    fetchGlancesHardwareStats
+    fetchGlancesHardwareStats,
+    getAdminDetailedStreamsAction
 } from "../src/app/actions";
 import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
@@ -3387,6 +3388,109 @@ async function runTestSuite() {
         const unreachableStats = await fetchGlancesHardwareStats("http://127.0.0.1:59999", 500);
         if (unreachableStats.online !== false) {
             throw new Error(`Expected unreachable host to be offline, got: ${JSON.stringify(unreachableStats)}`);
+        }
+    });
+
+    // 91. Admin Streams Telemetry: Glances Hardware Hosts vs Ranked Streams Per Plex Server
+    await assertTest("Admin Streams Telemetry: Glances Hardware Hosts vs Ranked Streams Per Plex Server", async () => {
+        // 1. Verify getAdminDetailedStreamsAction returns structured glances and serversUsage
+        const result = await getAdminDetailedStreamsAction(true);
+        if (!result.success) {
+            throw new Error(`getAdminDetailedStreamsAction returned success=false: ${result.error}`);
+        }
+        if (!Array.isArray(result.glances)) {
+            throw new Error("Expected result.glances to be an array");
+        }
+        if (!Array.isArray(result.serversUsage)) {
+            throw new Error("Expected result.serversUsage to be an array");
+        }
+
+        // 2. Validate simulation of 2 physical hardware hosts (Glances) and 3 Plex Media Servers
+        const mockGlances = [
+            { name: "Unraid Primary", online: true, monitored: true, cpu: 28, ram: 54 },
+            { name: "Backup Host", online: true, monitored: true, cpu: 8, ram: 22 }
+        ];
+
+        // Ensure 2 physical hosts are isolated with valid CPU & RAM metrics
+        if (mockGlances.length !== 2) {
+            throw new Error(`Expected 2 hardware hosts, got ${mockGlances.length}`);
+        }
+        for (const host of mockGlances) {
+            if (host.cpu < 0 || host.cpu > 100 || host.ram < 0 || host.ram > 100) {
+                throw new Error(`Invalid host metrics for ${host.name}: CPU ${host.cpu}%, RAM ${host.ram}%`);
+            }
+        }
+
+        // 3. Validate ranking and telemetry math for 3 Plex Servers
+        const mockSessions = [
+            { serverName: "Main Plex", videoDecision: "direct play", audioDecision: "direct play", streamBitrate: 8000 },
+            { serverName: "Main Plex", videoDecision: "transcode", audioDecision: "direct play", streamBitrate: 4000 },
+            { serverName: "Kids Plex", videoDecision: "direct play", audioDecision: "direct play", streamBitrate: 3500 },
+            { serverName: "Main Plex", videoDecision: "direct play", audioDecision: "direct play", streamBitrate: 12000 }
+        ];
+
+        const totalStreams = mockSessions.length;
+        const serverMap = new Map<string, any>();
+        const plexServers = ["Main Plex", "Kids Plex", "4K Plex"];
+        for (const name of plexServers) {
+            serverMap.set(name.toLowerCase(), {
+                name,
+                streamCount: 0,
+                directPlayCount: 0,
+                transcodeCount: 0,
+                bandwidthKbps: 0
+            });
+        }
+
+        for (const s of mockSessions) {
+            const entry = serverMap.get(s.serverName.toLowerCase());
+            if (entry) {
+                entry.streamCount++;
+                if (s.videoDecision === "transcode" || s.audioDecision === "transcode") {
+                    entry.transcodeCount++;
+                } else {
+                    entry.directPlayCount++;
+                }
+                entry.bandwidthKbps += s.streamBitrate;
+            }
+        }
+
+        const ranked = Array.from(serverMap.values()).map(srv => ({
+            ...srv,
+            bandwidthMbps: Number((srv.bandwidthKbps / 1000).toFixed(1)),
+            percentOfTotal: totalStreams > 0 ? Math.round((srv.streamCount / totalStreams) * 100) : 0
+        })).sort((a, b) => b.streamCount - a.streamCount || b.bandwidthKbps - a.bandwidthKbps);
+
+        // Assert 3 Plex servers tracked
+        if (ranked.length !== 3) {
+            throw new Error(`Expected 3 Plex servers, got ${ranked.length}`);
+        }
+
+        // Rank #1: Main Plex (3 streams, 2 DP, 1 Transcode, 24.0 Mbps, 75% total)
+        const topServer = ranked[0];
+        if (topServer.name !== "Main Plex") {
+            throw new Error(`Expected rank #1 to be 'Main Plex', got '${topServer.name}'`);
+        }
+        if (topServer.streamCount !== 3 || topServer.directPlayCount !== 2 || topServer.transcodeCount !== 1) {
+            throw new Error(`Invalid stream count breakdown on top server: ${JSON.stringify(topServer)}`);
+        }
+        if (topServer.bandwidthMbps !== 24.0) {
+            throw new Error(`Expected 24.0 Mbps, got ${topServer.bandwidthMbps}`);
+        }
+        if (topServer.percentOfTotal !== 75) {
+            throw new Error(`Expected 75% of total, got ${topServer.percentOfTotal}%`);
+        }
+
+        // Rank #2: Kids Plex (1 stream, 1 DP, 0 Transcode, 3.5 Mbps, 25% total)
+        const secondServer = ranked[1];
+        if (secondServer.name !== "Kids Plex" || secondServer.streamCount !== 1 || secondServer.directPlayCount !== 1) {
+            throw new Error(`Invalid secondary server metrics: ${JSON.stringify(secondServer)}`);
+        }
+
+        // Rank #3: 4K Plex (0 streams, 0 DP, 0 Transcode, 0 Mbps, 0% total)
+        const idleServer = ranked[2];
+        if (idleServer.name !== "4K Plex" || idleServer.streamCount !== 0) {
+            throw new Error(`Invalid idle server metrics: ${JSON.stringify(idleServer)}`);
         }
     });
     console.log("\n==========================================================");

@@ -198,6 +198,23 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Payment scrapers retain backwards-compatible substring matching for plain usernames as well as legacy `#DOMSHOMELAB-`, `#D281KNILB-`, and `#PORTALARR-` tags.
 - **Client & Device Dialogs**:
   - In Plex stream termination messages, prompt kill alerts as: `"Stream ended by user via DomsHomeLab My Plex Hub"`.
+
+---
+
+### 12. Admin Stream Matrix & Dual Telemetry Command Center (`admin-detailed-streams.tsx`)
+- **Hardware Hosts vs Media Servers Differentiation**:
+  - Homelabs frequently host multiple Plex instances (e.g. Primary Plex, Kids Plex, 4K Plex) across physical hardware machines (e.g. Unraid primary, secondary backup server).
+  - Telemetry is split into a **Dual Telemetry Command Center** (`grid grid-cols-1 lg:grid-cols-2 gap-3`):
+    1. **Host Hardware Telemetry (Glances)**: Renders physical hardware host nodes with live CPU & RAM percentage meters, color-coded threshold progress bars (emerald `<60%`, amber `60-80%`, rose `>80%`), and status badges (`ONLINE`, `PAUSED`, `OFFLINE`).
+    2. **Streams Per Plex Server**: Renders all Plex Media Servers and Tautulli instances ranked descending by active stream volume (`streamCount`) and bandwidth.
+- **Top Load Server Promotion**:
+  - The server with the highest active playback count receives a prominent `#1 HIGHEST LOAD` badge with an animated flame icon and amber glowing border (`border-amber-500/30 bg-amber-500/[0.04]`).
+- **Cluster Load Proportional Bars**:
+  - Each server card displays a Direct Play vs Transcode split (`X DP / Y Transcode`), total bandwidth in Mbps, and a proportional horizontal load bar reflecting its percentage share of total cluster streams.
+- **Interactive Server Filter Pills**:
+  - Clicking any server in the Streams Per Plex Server list or the filter pill bar (`All Servers`, `Server 1`, `Server 2`) filters active playback sessions instantly on the client with zero network round-trips. Clear filter action resets back to cluster-wide inspection.
+- **Session Telemetry Fidelity**:
+  - Active sessions display transcode decisions, hardware NVENC acceleration status, video/audio codecs, real-time bitrate, stream progress, user/device identifiers, and direct admin stream termination controls.
   - In Plex OAuth flow, register client application name as `DomsHomeLab`.
 
 ---
