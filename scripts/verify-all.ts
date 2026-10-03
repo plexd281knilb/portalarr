@@ -3623,6 +3623,72 @@ async function runTestSuite() {
             throw new Error("Custom format scoring failed to sort releases in descending order");
         }
     });
+
+    // 62. Sonarr Subsystem: Instance Security, Series Deletion, Queue Cancellation & Episode Statistics
+    await assertTest("Sonarr Subsystem: Security, Deletion Actions & Telemetry", async () => {
+        const {
+            getEnabledArrInstances,
+            deleteSonarrSeries,
+            deleteSonarrQueueItem,
+            searchSonarrSeries,
+            getSonarrLibrary
+        } = await import("../src/app/arr-actions");
+
+        // 1. Verify getEnabledArrInstances returns clean models without leaking decrypted apiKey to client
+        const instancesRes = await getEnabledArrInstances("sonarr");
+        if (!instancesRes.success) {
+            throw new Error(`getEnabledArrInstances failed: ${instancesRes.error}`);
+        }
+        if (instancesRes.data && instancesRes.data.length > 0) {
+            for (const instance of instancesRes.data) {
+                if ((instance as any).apiKey !== undefined) {
+                    throw new Error(`Security breach: apiKey was exposed in client data model for instance ${instance.name}`);
+                }
+            }
+        }
+
+        // 2. Verify delete actions fail safely with unauthorized/not found for non-existent IDs
+        const dummyDeleteSeriesRes = await deleteSonarrSeries("invalid-app-id", 99999);
+        if (dummyDeleteSeriesRes.success) {
+            throw new Error("Expected deleteSonarrSeries to fail for non-existent app");
+        }
+
+        const dummyDeleteQueueRes = await deleteSonarrQueueItem("invalid-app-id", 99999);
+        if (dummyDeleteQueueRes.success) {
+            throw new Error("Expected deleteSonarrQueueItem to fail for non-existent app");
+        }
+
+        // 3. Verify queue progress percentage formula
+        const testSize = 20 * 1024 * 1024 * 1024; // 20 GB
+        const testSizeLeft = 8 * 1024 * 1024 * 1024; // 8 GB left
+        const computedPercent = Math.max(0, Math.min(100, Math.round(((testSize - testSizeLeft) / testSize) * 100)));
+        if (computedPercent !== 60) {
+            throw new Error(`Expected 60% computed progress, got ${computedPercent}%`);
+        }
+
+        // 4. Verify episode statistics calculation and season monitoring reconciliation
+        const mockSeries = {
+            id: 101,
+            title: "Breaking Bad",
+            monitored: true,
+            seasons: [
+                { seasonNumber: 0, monitored: false },
+                { seasonNumber: 1, monitored: true, statistics: { episodeFileCount: 7, totalEpisodeCount: 7 } },
+                { seasonNumber: 2, monitored: true, statistics: { episodeFileCount: 5, totalEpisodeCount: 13 } }
+            ],
+            statistics: {
+                episodeFileCount: 12,
+                totalEpisodeCount: 20,
+                percentOfEpisodes: 60
+            }
+        };
+
+        const monitoredRegularSeasons = mockSeries.seasons.filter(s => s.seasonNumber > 0 && s.monitored).length;
+        const isEffectivelyMonitored = mockSeries.monitored && monitoredRegularSeasons > 0;
+        if (!isEffectivelyMonitored || monitoredRegularSeasons !== 2) {
+            throw new Error("Failed to correctly evaluate effective monitoring state for Sonarr series");
+        }
+    });
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

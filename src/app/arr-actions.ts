@@ -602,6 +602,20 @@ export async function updateSonarrSeries(appId: string, series: any) {
     }
 }
 
+export async function deleteSonarrSeries(
+    appId: string,
+    seriesId: number,
+    deleteFiles: boolean = false,
+    addImportListExclusion: boolean = false
+) {
+    try {
+        const app = await getArrAppById(appId, "sonarr");
+        return await arrApiDelete(app, `/api/v3/series/${seriesId}?deleteFiles=${deleteFiles}&addImportListExclusion=${addImportListExclusion}`);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function triggerSonarrSearch(appId: string, seriesId: number) {
     try {
         const app = await getArrAppById(appId, "sonarr");
@@ -657,6 +671,20 @@ export async function getSonarrQueue(appId: string) {
     try {
         const app = await getArrAppById(appId, "sonarr");
         return await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000&sortKey=timeLeft&sortDirection=ascending");
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteSonarrQueueItem(
+    appId: string,
+    queueId: number,
+    removeFromClient: boolean = true,
+    blocklist: boolean = false
+) {
+    try {
+        const app = await getArrAppById(appId, "sonarr");
+        return await arrApiDelete(app, `/api/v3/queue/${queueId}?removeFromClient=${removeFromClient}&blocklist=${blocklist}`);
     } catch (e: any) {
         return { success: false, error: e.message };
     }

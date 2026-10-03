@@ -7,9 +7,11 @@ import {
   searchSonarrSeries,
   addSonarrSeries,
   getSonarrQueue,
+  deleteSonarrQueueItem,
   forceImportSonarrQueueItem,
   getSonarrLibrary,
   updateSonarrSeries,
+  deleteSonarrSeries,
   triggerSonarrSearch,
   getSonarrReleases,
   downloadSonarrRelease,
@@ -52,6 +54,11 @@ import {
   RefreshCw,
   XCircle,
   CheckCircle2,
+  Trash2,
+  Sparkles,
+  Clock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import ErrorTicketModal from "@/components/error-ticket-modal";
@@ -69,6 +76,24 @@ export default function SonarrPage() {
   const [instances, setInstances] = useState<any[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  const [activeTab, setActiveTab] = useState<string>("search");
+
+  // Floating Toast Notification
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
+
+  const showToast = (
+    message: string,
+    type: "success" | "error" | "info" = "success"
+  ) => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
 
   // Error Ticket Modal State
   const [errorModal, setErrorModal] = useState<{
@@ -105,6 +130,7 @@ export default function SonarrPage() {
   const [queueLoading, setQueueLoading] = useState(true);
   const [queueSearch, setQueueSearch] = useState("");
   const [importingId, setImportingId] = useState<string | null>(null);
+  const [deletingQueueId, setDeletingQueueId] = useState<number | null>(null);
 
   // Library state
   const [library, setLibrary] = useState<any[]>([]);
@@ -112,11 +138,24 @@ export default function SonarrPage() {
   const [librarySearch, setLibrarySearch] = useState("");
   const [modifyingId, setModifyingId] = useState<number | null>(null);
   const [libSort, setLibSort] = useState<
-    "addedDesc" | "addedAsc" | "titleAsc" | "titleDesc"
+    "addedDesc" | "addedAsc" | "titleAsc" | "titleDesc" | "downloadedDesc"
   >("addedDesc");
   const [libFilterStatus, setLibFilterStatus] = useState<
     "all" | "monitored" | "unmonitored" | "missing" | "downloaded"
   >("all");
+
+  // Series Delete Dialog state
+  const [deleteSeriesDialog, setDeleteSeriesDialog] = useState<{
+    open: boolean;
+    series: any | null;
+    deleteFiles: boolean;
+    loading: boolean;
+  }>({
+    open: false,
+    series: null,
+    deleteFiles: false,
+    loading: false,
+  });
 
   // Interactive Release Modal
   const [releasesModalOpen, setReleasesModalOpen] = useState(false);
@@ -234,7 +273,15 @@ export default function SonarrPage() {
           selectedFolderId,
         );
         if (res.success) {
-          alert("Show added and search started!");
+          showToast(`Added "${activeSeasonsSeries.title}" and started search!`);
+          // Reflect added state in search results immediately
+          setSearchResults((prev) =>
+            prev.map((s) =>
+              s.tvdbId === activeSeasonsSeries.tvdbId
+                ? { ...s, id: res.data?.id || 1, monitored: true }
+                : s
+            )
+          );
           setSeasonsModalOpen(false);
           fetchLibrary();
         } else {
@@ -248,6 +295,7 @@ export default function SonarrPage() {
     } else {
       const res = await updateSonarrSeries(selectedAppId, updatedSeries);
       if (res.success) {
+        showToast(`Updated seasons for "${activeSeasonsSeries.title}"`);
         setSeasonsModalOpen(false);
         fetchLibrary();
       } else {
@@ -300,9 +348,9 @@ export default function SonarrPage() {
         release.indexerId,
       );
       if (res.success) {
-        alert("Download started!");
+        showToast(`Download started for "${activeSeries?.title || release.title}"!`);
         setReleasesModalOpen(false);
-        setTimeout(fetchQueue, 2000);
+        setTimeout(() => fetchQueue(true), 1500);
       } else {
         showErrorModal(res.error || "Failed to send release to download client", "Download Client Error", activeSeries.title);
       }
@@ -327,6 +375,22 @@ export default function SonarrPage() {
       console.error("Library fetch error", e);
     }
     setLibraryLoading(false);
+  };
+
+  const fetchQueue = async (silent = false) => {
+    if (!selectedAppId) return;
+    if (!silent) setQueueLoading(true);
+    try {
+      const res = await getSonarrQueue(selectedAppId);
+      if (res.success && res.data) {
+        setQueue(res.data.records || []);
+      } else {
+        console.error(res.error);
+      }
+    } catch (e) {
+      console.error("Queue fetch error", e);
+    }
+    if (!silent) setQueueLoading(false);
   };
 
   useEffect(() => {
@@ -370,21 +434,16 @@ export default function SonarrPage() {
     }
   }, [selectedAppId]);
 
-  const fetchQueue = async () => {
-    if (!selectedAppId) return;
-    setQueueLoading(true);
-    try {
-      const res = await getSonarrQueue(selectedAppId);
-      if (res.success && res.data) {
-        setQueue(res.data.records || []);
-      } else {
-        console.error(res.error);
-      }
-    } catch (e) {
-      console.error("Queue fetch error", e);
+  // Auto-poll queue every 5 seconds when queue tab is open
+  useEffect(() => {
+    if (activeTab === "queue" && selectedAppId) {
+      fetchQueue(true);
+      const timer = setInterval(() => {
+        fetchQueue(true);
+      }, 5000);
+      return () => clearInterval(timer);
     }
-    setQueueLoading(false);
-  };
+  }, [activeTab, selectedAppId]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -418,6 +477,11 @@ export default function SonarrPage() {
         setSearchResults((prev) =>
           prev.map((s) => (s.id === series.id ? res.data : s)),
         );
+        showToast(
+          updatedSeries.monitored
+            ? `Now monitoring "${series.title}"`
+            : `Unmonitored "${series.title}"`
+        );
       } else {
         showErrorModal(res.error || "Failed to update monitored state", "Monitor Error", series.title);
       }
@@ -434,7 +498,7 @@ export default function SonarrPage() {
     try {
       const res = await triggerSonarrSearch(selectedAppId, series.id);
       if (res.success) {
-        alert(`Search command sent for: ${series.title}`);
+        showToast(`Automatic search command sent for "${series.title}"`);
       } else {
         showErrorModal(res.error || "Failed to trigger search", "Search Trigger Error", series.title);
       }
@@ -451,8 +515,8 @@ export default function SonarrPage() {
     try {
       const res = await forceImportSonarrQueueItem(selectedAppId, downloadId);
       if (res.success) {
-        alert("Import command sent!");
-        setTimeout(fetchQueue, 2000);
+        showToast("Import command sent to Sonarr!");
+        setTimeout(() => fetchQueue(true), 2000);
       } else {
         showErrorModal(res.error || "Failed to force import queue item", "Import Error", `Queue ID: ${downloadId}`);
       }
@@ -461,6 +525,77 @@ export default function SonarrPage() {
       showErrorModal(e.message || "Failed to force import queue item.", "Import Error", `Queue ID: ${downloadId}`);
     }
     setImportingId(null);
+  };
+
+  const handleDeleteQueueItem = async (item: any) => {
+    if (!selectedAppId) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to cancel and remove "${item.series?.title || item.title}" from the queue?`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingQueueId(item.id);
+    try {
+      const res = await deleteSonarrQueueItem(selectedAppId, item.id, true, false);
+      if (res.success) {
+        showToast(`Removed "${item.series?.title || item.title}" from queue`);
+        setQueue((prev) => prev.filter((q) => q.id !== item.id));
+      } else {
+        showErrorModal(res.error || "Failed to remove download from queue", "Queue Error", item.title);
+      }
+    } catch (e: any) {
+      console.error(e);
+      showErrorModal(e.message || "Failed to remove download from queue.", "Queue Error", item.title);
+    }
+    setDeletingQueueId(null);
+  };
+
+  const openDeleteSeriesDialog = (series: any) => {
+    setDeleteSeriesDialog({
+      open: true,
+      series,
+      deleteFiles: false,
+      loading: false,
+    });
+  };
+
+  const handleConfirmDeleteSeries = async () => {
+    if (!selectedAppId || !deleteSeriesDialog.series) return;
+    setDeleteSeriesDialog((prev) => ({ ...prev, loading: true }));
+    try {
+      const series = deleteSeriesDialog.series;
+      const res = await deleteSonarrSeries(
+        selectedAppId,
+        series.id,
+        deleteSeriesDialog.deleteFiles,
+        false
+      );
+      if (res.success) {
+        showToast(`Deleted "${series.title}" from Sonarr`);
+        setLibrary((prev) => prev.filter((s) => s.id !== series.id));
+        setSearchResults((prev) =>
+          prev.map((s) =>
+            s.id === series.id ? { ...s, id: undefined, monitored: false } : s
+          )
+        );
+        setDeleteSeriesDialog({
+          open: false,
+          series: null,
+          deleteFiles: false,
+          loading: false,
+        });
+      } else {
+        showErrorModal(res.error || "Failed to delete series", "Delete Series Error", series.title);
+        setDeleteSeriesDialog((prev) => ({ ...prev, loading: false }));
+      }
+    } catch (e: any) {
+      console.error(e);
+      showErrorModal(e.message || "Failed to delete series.", "Delete Series Error", deleteSeriesDialog.series?.title);
+      setDeleteSeriesDialog((prev) => ({ ...prev, loading: false }));
+    }
   };
 
   if (loading)
@@ -500,6 +635,11 @@ export default function SonarrPage() {
     });
   }
 
+  const downloadedCount = library.filter((s) => (s.statistics?.percentOfEpisodes || 0) === 100).length;
+  const missingCount = library.filter((s) => s.monitored && (s.statistics?.episodeFileCount || 0) === 0).length;
+  const monitoredCount = library.filter((s) => s.monitored).length;
+  const unmonitoredCount = library.filter((s) => !s.monitored).length;
+
   filteredLibrary.sort((a, b) => {
     if (libSort === "titleAsc")
       return (a.title || "").localeCompare(b.title || "");
@@ -513,6 +653,11 @@ export default function SonarrPage() {
       return (
         new Date(a.added || 0).getTime() - new Date(b.added || 0).getTime()
       );
+    if (libSort === "downloadedDesc") {
+      const pctA = a.statistics?.percentOfEpisodes || 0;
+      const pctB = b.statistics?.percentOfEpisodes || 0;
+      return pctB - pctA;
+    }
     return 0;
   });
 
@@ -546,7 +691,7 @@ export default function SonarrPage() {
         )}
       </div>
 
-      <Tabs defaultValue="search" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-1 sm:grid-cols-3 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger value="search" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-cyan-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:bg-muted/80 min-w-0">
             <Search className="h-4 w-4 text-cyan-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -772,16 +917,16 @@ export default function SonarrPage() {
                         value={libFilterStatus}
                         onValueChange={(val: any) => setLibFilterStatus(val)}
                       >
-                        <SelectTrigger className="flex-1 sm:w-[140px] min-w-[120px] bg-background/80">
+                        <SelectTrigger className="flex-1 sm:w-[150px] min-w-[130px] bg-background/80">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="downloaded">Downloaded</SelectItem>
-                          <SelectItem value="missing">Missing</SelectItem>
-                          <SelectItem value="monitored">Monitored</SelectItem>
+                          <SelectItem value="all">All Status ({library.length})</SelectItem>
+                          <SelectItem value="downloaded">Downloaded ({downloadedCount})</SelectItem>
+                          <SelectItem value="missing">Missing ({missingCount})</SelectItem>
+                          <SelectItem value="monitored">Monitored ({monitoredCount})</SelectItem>
                           <SelectItem value="unmonitored">
-                            Unmonitored
+                            Unmonitored ({unmonitoredCount})
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -789,7 +934,7 @@ export default function SonarrPage() {
                         value={libSort}
                         onValueChange={(val: any) => setLibSort(val)}
                       >
-                        <SelectTrigger className="flex-1 sm:w-[160px] min-w-[140px] bg-background/80">
+                        <SelectTrigger className="flex-1 sm:w-[170px] min-w-[140px] bg-background/80">
                           <SelectValue placeholder="Sort" />
                         </SelectTrigger>
                         <SelectContent>
@@ -801,12 +946,13 @@ export default function SonarrPage() {
                           </SelectItem>
                           <SelectItem value="titleAsc">Title (A-Z)</SelectItem>
                           <SelectItem value="titleDesc">Title (Z-A)</SelectItem>
+                          <SelectItem value="downloadedDesc">Episodes (% Downloaded)</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={fetchLibrary}
+                        onClick={() => fetchLibrary()}
                         disabled={libraryLoading}
                         title="Refresh Library"
                         className="shrink-0 transition-all duration-200 hover:ring-2 hover:ring-cyan-500/40"
@@ -908,9 +1054,47 @@ export default function SonarrPage() {
                               >
                                 Manage Seasons
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-border/60 hover:bg-cyan-500/10 hover:border-cyan-500/40 text-cyan-400 font-semibold transition-all duration-200"
+                                title="Auto Search Series"
+                                disabled={modifyingId === series.id}
+                                onClick={() => handleTriggerSearch(series)}
+                              >
+                                {modifyingId === series.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3 mr-1" />
+                                )}
+                                Search
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 w-7 p-0 border-border/60 hover:bg-red-500/10 hover:border-red-500/40 text-muted-foreground hover:text-red-400 transition-all duration-200 shrink-0"
+                                title="Delete Series"
+                                disabled={modifyingId === series.id}
+                                onClick={() => openDeleteSeriesDialog(series)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </div>
-                          <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                          <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                              title={series.monitored ? "Unmonitor Series" : "Monitor Series"}
+                              onClick={() => handleToggleMonitor(series)}
+                            >
+                              {series.monitored ? (
+                                <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                              ) : (
+                                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                              )}
+                            </Button>
                             {series.monitored && (
                               <Badge
                                 variant="secondary"
@@ -950,7 +1134,7 @@ export default function SonarrPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={fetchQueue}
+                onClick={() => fetchQueue()}
                 disabled={queueLoading}
                 className="transition-all duration-200 hover:ring-2 hover:ring-cyan-500/40"
               >
@@ -981,104 +1165,147 @@ export default function SonarrPage() {
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {filteredQueue.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/30 transition-all duration-200"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="font-medium text-sm truncate text-foreground"
-                          title={item.series?.title || item.title}
-                        >
-                          {item.series?.title || item.title}{" "}
-                          {item.episode
-                            ? `- S${String(item.episode.seasonNumber).padStart(2, "0")}E${String(item.episode.episodeNumber).padStart(2, "0")}`
-                            : ""}
-                        </div>
-                        {item.series?.title && (
+                  {filteredQueue.map((item: any) => {
+                    const progressPct =
+                      item.size > 0
+                        ? Math.min(
+                            100,
+                            Math.max(
+                              0,
+                              Math.round(
+                                ((item.size - item.sizeleft) / item.size) *
+                                  100,
+                              ),
+                            ),
+                          )
+                        : 0;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/30 transition-all duration-200"
+                      >
+                        <div className="flex-1 min-w-0">
                           <div
-                            className="text-xs text-muted-foreground truncate mt-0.5"
-                            title={item.title}
+                            className="font-medium text-sm truncate text-foreground"
+                            title={item.series?.title || item.title}
                           >
-                            {item.title}
+                            {item.series?.title || item.title}{" "}
+                            {item.episode
+                              ? `- S${String(item.episode.seasonNumber).padStart(2, "0")}E${String(item.episode.episodeNumber).padStart(2, "0")}`
+                              : ""}
                           </div>
-                        )}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                          <span className="text-cyan-400 font-medium">{item.status}</span>
-                          {item.sizeleft > 0 && item.size > 0 && (
-                            <span>
-                              {Math.round(
-                                (1 - item.sizeleft / item.size) * 100,
-                              )}
-                              %
-                            </span>
-                          )}
-                          {item.timeleft && <span>ETA: {item.timeleft}</span>}
-                        </div>
-                        {item.errorMessage && (
-                          <div
-                            className="text-[10px] text-amber-500 mt-1 line-clamp-1"
-                            title={item.errorMessage}
-                          >
-                            ⚠️ {item.errorMessage}
-                          </div>
-                        )}
-                        {item.statusMessages &&
-                          item.statusMessages.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {item.statusMessages.map(
-                                (msg: any, i: number) => (
-                                  <div
-                                    key={i}
-                                    className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded-lg border border-amber-500/20"
-                                  >
-                                    {msg.title && msg.title !== item.title && (
-                                      <span className="font-semibold flex items-center gap-1">
-                                        <AlertCircle className="h-3 w-3" />{" "}
-                                        {msg.title}
-                                      </span>
-                                    )}
-                                    {msg.messages &&
-                                      msg.messages.map(
-                                        (m: string, j: number) => (
-                                          <span
-                                            key={j}
-                                            className="text-[10px] text-amber-500/80 ml-4 flex items-center gap-1"
-                                          >
-                                            {(!msg.title ||
-                                              msg.title === item.title) &&
-                                              j === 0 && (
-                                                <AlertCircle className="h-3 w-3 shrink-0" />
-                                              )}{" "}
-                                            {m}
-                                          </span>
-                                        ),
-                                      )}
-                                  </div>
-                                ),
-                              )}
+                          {item.series?.title && (
+                            <div
+                              className="text-xs text-muted-foreground truncate mt-0.5"
+                              title={item.title}
+                            >
+                              {item.title}
                             </div>
                           )}
-                      </div>
-                      <div className="shrink-0 flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-cyan-500/40 active:scale-95"
-                          onClick={() => handleForceImport(item.downloadId)}
-                          disabled={importingId === item.downloadId}
-                        >
-                          {importingId === item.downloadId ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : (
-                            <Download className="h-3 w-3 mr-1" />
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                            <span className="text-cyan-400 font-medium">
+                              {item.status}
+                            </span>
+                            {item.size > 0 && (
+                              <span>
+                                {formatBytes(item.size - item.sizeleft)} of{" "}
+                                {formatBytes(item.size)} ({progressPct}%)
+                              </span>
+                            )}
+                            {item.timeleft && (
+                              <span>ETA: {item.timeleft}</span>
+                            )}
+                          </div>
+
+                          {item.size > 0 && (
+                            <div className="w-full bg-muted/40 h-1.5 rounded-full overflow-hidden mt-2">
+                              <div
+                                className="bg-cyan-500 h-full rounded-full transition-all duration-300"
+                                style={{ width: `${progressPct}%` }}
+                              />
+                            </div>
                           )}
-                          Force Import
-                        </Button>
+
+                          {item.errorMessage && (
+                            <div
+                              className="text-[10px] text-amber-500 mt-1 line-clamp-1"
+                              title={item.errorMessage}
+                            >
+                              ⚠️ {item.errorMessage}
+                            </div>
+                          )}
+                          {item.statusMessages &&
+                            item.statusMessages.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {item.statusMessages.map(
+                                  (msg: any, i: number) => (
+                                    <div
+                                      key={i}
+                                      className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded-lg border border-amber-500/20"
+                                    >
+                                      {msg.title &&
+                                        msg.title !== item.title && (
+                                          <span className="font-semibold flex items-center gap-1">
+                                            <AlertCircle className="h-3 w-3" />{" "}
+                                            {msg.title}
+                                          </span>
+                                        )}
+                                      {msg.messages &&
+                                        msg.messages.map(
+                                          (m: string, j: number) => (
+                                            <span
+                                              key={j}
+                                              className="text-[10px] text-amber-500/80 ml-4 flex items-center gap-1"
+                                            >
+                                              {(!msg.title ||
+                                                msg.title === item.title) &&
+                                                j === 0 && (
+                                                  <AlertCircle className="h-3 w-3 shrink-0" />
+                                                )}{" "}
+                                              {m}
+                                            </span>
+                                          ),
+                                        )}
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            )}
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-cyan-500/40 active:scale-95"
+                            onClick={() => handleForceImport(item.downloadId)}
+                            disabled={importingId === item.downloadId}
+                          >
+                            {importingId === item.downloadId ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : (
+                              <Download className="h-3 w-3 mr-1" />
+                            )}
+                            Force Import
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 border-border/60 hover:bg-red-500/10 hover:border-red-500/40 text-muted-foreground hover:text-red-400 transition-all duration-200"
+                            title="Cancel & Remove Download"
+                            disabled={deletingQueueId === item.id}
+                            onClick={() => handleDeleteQueueItem(item)}
+                          >
+                            {deletingQueueId === item.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -1153,10 +1380,30 @@ export default function SonarrPage() {
                               <Badge variant="outline" className="text-[10px] border-border/60">
                                 {release.quality?.quality?.name || "Unknown"}
                               </Badge>
+                              {release.customFormatScore !== undefined && (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] font-mono font-semibold ${
+                                    release.customFormatScore > 0
+                                      ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+                                      : release.customFormatScore < 0
+                                        ? "bg-red-500/10 text-red-400 border-red-500/30"
+                                        : "border-border/60 text-muted-foreground"
+                                  }`}
+                                >
+                                  CF: {release.customFormatScore > 0 ? `+${release.customFormatScore}` : release.customFormatScore}
+                                </Badge>
+                              )}
                               <span className="flex items-center">
                                 <Download className="h-3 w-3 mr-1" />{" "}
                                 {formatBytes(release.size)}
                               </span>
+                              {release.age !== undefined && (
+                                <span className="flex items-center text-muted-foreground">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {release.age === 0 ? "Today" : `${release.age}d ago`}
+                                </span>
+                              )}
                               <span className="capitalize">
                                 {release.protocol}
                               </span>
@@ -1172,11 +1419,16 @@ export default function SonarrPage() {
                             </div>
                             {release.rejected &&
                               release.rejections?.length > 0 && (
-                                <div
-                                  className={`mt-2 text-xs flex items-start gap-1 ${rejected ? "text-red-400" : "text-amber-500"}`}
-                                >
-                                  <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                                  <span>{release.rejections[0]}</span>
+                                <div className="mt-2 space-y-1">
+                                  {release.rejections.map((rej: string, rIdx: number) => (
+                                    <div
+                                      key={rIdx}
+                                      className={`text-xs flex items-start gap-1 ${rejected ? "text-red-400" : "text-amber-500"}`}
+                                    >
+                                      <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                      <span>{rej}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                           </div>
@@ -1378,6 +1630,93 @@ export default function SonarrPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* DELETE SERIES CONFIRMATION DIALOG */}
+      <Dialog
+        open={deleteSeriesDialog.open}
+        onOpenChange={(open) =>
+          !deleteSeriesDialog.loading &&
+          setDeleteSeriesDialog((prev) => ({ ...prev, open }))
+        }
+      >
+        <DialogContent className="sm:max-w-md bg-[#121218] border-border/60">
+          <DialogHeader>
+            <DialogTitle className="text-red-400 font-bold flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-400" /> Delete Series
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove{" "}
+              <span className="font-semibold text-foreground">
+                "{deleteSeriesDialog.series?.title}"
+              </span>{" "}
+              from Sonarr?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-red-950/20 border border-red-900/30">
+              <div className="space-y-0.5">
+                <div className="text-sm font-semibold text-foreground">
+                  Delete Episode Files From Disk
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Permanently delete downloaded season and episode files from disk storage.
+                </div>
+              </div>
+              <Switch
+                checked={deleteSeriesDialog.deleteFiles}
+                onCheckedChange={(checked) =>
+                  setDeleteSeriesDialog((prev) => ({
+                    ...prev,
+                    deleteFiles: checked,
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                setDeleteSeriesDialog((prev) => ({ ...prev, open: false }))
+              }
+              disabled={deleteSeriesDialog.loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteSeries}
+              disabled={deleteSeriesDialog.loading}
+              className="font-semibold"
+            >
+              {deleteSeriesDialog.loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Delete Series
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-[#121218]/95 border border-cyan-500/40 shadow-xl backdrop-blur-md text-sm text-foreground animate-in fade-in slide-in-from-bottom-2 duration-200">
+          {toast.type === "success" && (
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          )}
+          {toast.type === "error" && (
+            <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+          )}
+          {toast.type === "info" && (
+            <Sparkles className="h-4 w-4 text-cyan-400 shrink-0" />
+          )}
+          <span className="font-medium">{toast.message}</span>
+        </div>
+      )}
 
       {/* AUTOMATED ERROR TICKET MODAL */}
       <ErrorTicketModal

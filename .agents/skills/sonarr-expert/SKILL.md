@@ -81,3 +81,12 @@ See detailed runbook: [series-parsing-and-models.md](./references/series-parsing
    - Query `/api/v3/queue?page=1&pageSize=1000` and match `record.seriesId` against active requests to compute exact download progress percentages (`((size - sizeleft) / size) * 100`).
 7. **Reconciling Season Monitoring Completeness**:
    - When inspecting series monitoring, evaluate `episodes` list: if `monitoredEpisodeCount === totalEpisodeCount`, flag `isFullyMonitored = true`; if `0 < monitoredEpisodeCount < totalEpisodeCount`, flag `isPartiallyMonitored = true`.
+8. **Series & Queue Deletion Endpoints**:
+   - `deleteSonarrSeries`: `DELETE /api/v3/series/{id}?deleteFiles={deleteFiles}&addImportListExclusion={addImportListExclusion}` allows removing television shows with optional disk media cleanup.
+   - `deleteSonarrQueueItem`: `DELETE /api/v3/queue/{id}?removeFromClient={removeFromClient}&blocklist={blocklist}` cancels stuck or unwanted downloads from the download client.
+9. **Interactive Release Search Custom Format Scoring & Rejections**:
+   - Query `/api/v3/release?seriesId={id}` or `?episodeId={id}` and prioritize candidates by `b.customFormatScore - a.customFormatScore`.
+   - Render `CF: +score` badges, release age indicators (`Clock` icon), and multi-line rejection warnings while filtering out benign non-fatal notes.
+10. **Background Queue Auto-Polling & Non-Intrusive UI Telemetry**:
+    - When the activity/queue tab is active, trigger 5-second automatic silent refreshes of `/api/v3/queue`.
+    - Render animated progress bars, formatted transferred bytes (`formatBytes(size - sizeleft)} of ${formatBytes(size)}`), and replace tab-blocking `alert()` calls with floating glassmorphic toasts.
