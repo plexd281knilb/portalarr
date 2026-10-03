@@ -7374,30 +7374,48 @@ export async function getActiveDownloads() {
 export async function getLandingStats() {
     try {
         await ensureSchemaColumns();
-        const [tautulli, glances, apps] = await Promise.all([
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            try {
+                adminToken = decryptData(settings.mainPlexToken);
+            } catch (e) {}
+        }
+
+        const [tautulli, glances, apps, plexServers] = await Promise.all([
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
-            prisma.mediaApp.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
+            prisma.mediaApp.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
         ]);
 
+        const downApps: string[] = [];
+
+        // 1. Tautulli Stream Stats & Reachability
         const streamStats = await Promise.all(tautulli.map(async (t) => {
             let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
             const apiKey = decryptData(t.apiKey);
             const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
 
             try {
-                const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 10 });
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const actResult = await fetchTautulliApiJson(fullUrl, controller.signal, { revalidate: 10 });
+                clearTimeout(timeoutId);
                 if (actResult.ok && actResult.data) {
                     const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
-                    return { name: t.name, count };
+                    return { name: t.name, count, online: true };
                 } else {
-                    return { name: t.name, count: 0 };
+                    downApps.push(`${t.name} (Tautulli)`);
+                    return { name: t.name, count: 0, online: false };
                 }
             } catch (e: any) { 
-                return { name: t.name, count: 0 }; 
+                downApps.push(`${t.name} (Tautulli)`);
+                return { name: t.name, count: 0, online: false }; 
             }
         }));
 
+        // 2. Glances Host Hardware Stats & Reachability
         const serverStats = await Promise.all(glances.map(async (g) => {
             let clean = cleanUrl(g.url?.trim() || "");
             if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
@@ -7409,14 +7427,20 @@ export async function getLandingStats() {
                 const versions = [4, 3, 2]; 
                 for (const v of versions) {
                     try {
+                        const controller = new AbortController();
+                        const id = setTimeout(() => controller.abort(), 3000);
                         const url = `${baseGlances}/api/${v}/${endpoint}`;
-                        const res = await fetch(url, { next: { revalidate: 10 } });
+                        const res = await fetch(url, { signal: controller.signal, next: { revalidate: 10 } });
+                        clearTimeout(id);
                         if (res.ok) return await res.json();
                     } catch (e) { }
                 }
                 try {
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), 3000);
                     const url = `${baseGlances}/${endpoint}`;
-                    const res = await fetch(url, { next: { revalidate: 10 } });
+                    const res = await fetch(url, { signal: controller.signal, next: { revalidate: 10 } });
+                    clearTimeout(id);
                     if (res.ok) return await res.json();
                 } catch (e) { }
                 throw new Error(`Failed`);
@@ -7441,21 +7465,83 @@ export async function getLandingStats() {
                     online: true 
                 };
             } catch (e: any) {
+                downApps.push(`${g.name} (Host Server)`);
                 return { name: g.name, cpu: 0, ram: 0, online: false };
             }
         }));
 
-        const downApps: string[] = [];
+        // 3. Media Apps Reachability
         await Promise.all(apps.map(async (app) => {
             try {
                 const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), 2000); 
+                const id = setTimeout(() => controller.abort(), 2500); 
                 await fetch(app.url, { signal: controller.signal, mode: 'no-cors' });
                 clearTimeout(id);
             } catch (e) {
                 downApps.push(app.name);
             }
         }));
+
+        // 4. Plex Servers Reachability
+        const checkedPlexNames = new Set<string>();
+        await Promise.all(plexServers.map(async (ps) => {
+            checkedPlexNames.add(ps.name.toLowerCase().trim());
+            try {
+                let clean = cleanUrl(ps.url?.trim() || "");
+                if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                    clean = `http://${clean}`;
+                }
+                clean = clean.replace(/\/+$/, "");
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 3000);
+                const sToken = ps.token ? decryptData(ps.token) : adminToken;
+                const testUrl = `${clean}/identity?X-Plex-Token=${encodeURIComponent(sToken || adminToken || "")}`;
+                const res = await fetch(testUrl, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": sToken || adminToken || "" },
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(id);
+                if (!res.ok && res.status !== 401) {
+                    downApps.push(`${ps.name} (Plex Server)`);
+                }
+            } catch (e) {
+                downApps.push(`${ps.name} (Plex Server)`);
+            }
+        }));
+
+        if (adminToken) {
+            try {
+                const discovered = await getPlexServers(adminToken);
+                for (const ds of discovered) {
+                    const norm = ds.name.toLowerCase().trim();
+                    if (!checkedPlexNames.has(norm)) {
+                        checkedPlexNames.add(norm);
+                        let isOnline = false;
+                        for (const conn of ds.connections) {
+                            try {
+                                const cleanBase = conn.uri.replace(/\/+$/, "");
+                                const controller = new AbortController();
+                                const id = setTimeout(() => controller.abort(), 2500);
+                                const res = await fetch(`${cleanBase}/identity?X-Plex-Token=${encodeURIComponent(ds.accessToken || adminToken)}`, {
+                                    headers: { "Accept": "application/json", "X-Plex-Token": ds.accessToken || adminToken },
+                                    signal: controller.signal,
+                                    cache: "no-store"
+                                });
+                                clearTimeout(id);
+                                if (res.ok || res.status === 401) {
+                                    isOnline = true;
+                                    break;
+                                }
+                            } catch (e) {}
+                        }
+                        if (!isOnline && ds.connections.length > 0) {
+                            downApps.push(`${ds.name} (Plex Server)`);
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
 
         return { streamStats, serverStats, downApps };
     } catch (e) {
@@ -14370,8 +14456,11 @@ export async function getAdminDetailedStreamsAction() {
             }
             const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
             try {
-                const resCpu = await fetch(`${baseGlances}/api/3/cpu`, { next: { revalidate: 5 } }).catch(() => null);
-                const resMem = await fetch(`${baseGlances}/api/3/mem`, { next: { revalidate: 5 } }).catch(() => null);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const resCpu = await fetch(`${baseGlances}/api/3/cpu`, { signal: controller.signal, cache: "no-store" }).catch(() => null);
+                const resMem = await fetch(`${baseGlances}/api/3/mem`, { signal: controller.signal, cache: "no-store" }).catch(() => null);
+                clearTimeout(timeoutId);
                 if (resCpu && resCpu.ok && resMem && resMem.ok) {
                     const cpu = await resCpu.json();
                     const mem = await resMem.json();
@@ -14381,6 +14470,8 @@ export async function getAdminDetailedStreamsAction() {
                         cpu: Math.round(cpu.total ?? (cpu.user + (cpu.system || 0))),
                         ram: Math.round(mem.percent ?? ((mem.used / mem.total) * 100))
                     });
+                } else {
+                    glancesStats.push({ name: g.name, online: false, cpu: 0, ram: 0 });
                 }
             } catch {
                 glancesStats.push({ name: g.name, online: false, cpu: 0, ram: 0 });
@@ -17054,6 +17145,20 @@ export async function getUserPlexHubData() {
     // --- 1. DIRECT PLEX MEDIA SERVER MONITORING (Via Admin Stored Plex Token) ---
     if (adminToken) {
         try {
+            const allDiscovered = await getPlexServers(adminToken).catch(() => []);
+            for (const srv of allDiscovered) {
+                const srvId = `plex::${srv.clientIdentifier || srv.name}`;
+                const normKey = srv.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                serverMap.set(normKey, {
+                    id: srvId,
+                    name: srv.name,
+                    type: "Plex Media Server",
+                    directPms: true,
+                    tautulli: false,
+                    online: false
+                });
+            }
+
             const directPlexResults = await getPlexActiveSessions(adminToken);
             
             for (const srv of directPlexResults) {
@@ -17220,8 +17325,10 @@ export async function getUserPlexHubData() {
                 if (existingKey && serverMap.has(existingKey)) {
                     const existing = serverMap.get(existingKey)!;
                     existing.tautulli = true;
-                    existing.type = "Direct PMS + Tautulli";
-                    existing.online = true;
+                    existing.type = existing.directPms && existing.online ? "Direct PMS + Tautulli" : (existing.directPms ? "Direct PMS (Offline) + Tautulli" : "Tautulli Monitor");
+                    if (!existing.directPms) {
+                        existing.online = true;
+                    }
                 } else {
                     serverMap.set(normTName || t.id, {
                         id: t.id,

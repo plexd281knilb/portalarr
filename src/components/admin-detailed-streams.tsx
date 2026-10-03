@@ -150,9 +150,16 @@ export default function AdminDetailedStreams() {
                                 {glances.map((g: any, i: number) => (
                                     <div key={i} className="flex justify-between items-center text-[11px]">
                                         <span className="truncate max-w-[80px] text-muted-foreground">{g.name}:</span>
-                                        <span className="font-mono text-foreground font-semibold">
-                                            CPU {g.cpu}% • RAM {g.ram}%
-                                        </span>
+                                        {g.online ? (
+                                            <span className="font-mono text-foreground font-semibold">
+                                                CPU {g.cpu}% • RAM {g.ram}%
+                                            </span>
+                                        ) : (
+                                            <span className="font-mono text-rose-400 font-bold text-[10px] flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                                                OFFLINE
+                                            </span>
+                                        )}
                                     </div>
                                 ))}
                             </div>

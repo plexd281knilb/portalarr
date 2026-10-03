@@ -114,19 +114,24 @@ export default function MyPlexHub() {
                         <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">
                             {safeData.user?.username}
                         </Badge>
-                        {safeData.serversCount > 0 && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setServersModalOpen(true)}
-                                className="h-5 px-2 text-[10px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] border-border/60 text-muted-foreground hover:text-foreground gap-1.5 transition-all rounded-full cursor-pointer shadow-xs"
-                                title="Click to view connected servers"
-                            >
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                {safeData.serversCount} {safeData.serversCount === 1 ? "Server" : "Servers"} Connected
-                                <ChevronDown className="h-3 w-3 opacity-60" />
-                            </Button>
-                        )}
+                        {safeData.serversCount > 0 && (() => {
+                            const allServers = safeData.servers || [];
+                            const onlineServers = allServers.filter((s: any) => s.online !== false);
+                            const allOnline = allServers.length > 0 && onlineServers.length === allServers.length;
+                            return (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setServersModalOpen(true)}
+                                    className={`h-5 px-2 text-[10px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] ${allOnline ? "border-border/60 text-muted-foreground" : "border-amber-500/40 text-amber-400"} hover:text-foreground gap-1.5 transition-all rounded-full cursor-pointer shadow-xs`}
+                                    title="Click to view connected servers"
+                                >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${allOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
+                                    {allOnline ? `${safeData.serversCount} ${safeData.serversCount === 1 ? "Server" : "Servers"} Connected` : `${onlineServers.length}/${allServers.length} Servers Online`}
+                                    <ChevronDown className="h-3 w-3 opacity-60" />
+                                </Button>
+                            );
+                        })()}
                     </div>
                     <p className="text-xs text-muted-foreground">
                         Your personalized stream monitor, playback diagnostics, and watch history.
@@ -625,8 +630,12 @@ export default function MyPlexHub() {
                                                     {srv.name}
                                                 </div>
                                                 <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                                    Online & Active
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${srv.online ? "bg-emerald-400" : "bg-rose-500 animate-pulse"}`} />
+                                                    {srv.online ? (
+                                                        <span className="text-emerald-400 font-medium">Online & Active</span>
+                                                    ) : (
+                                                        <span className="text-rose-400 font-semibold">Offline / Unreachable</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

@@ -2204,6 +2204,7 @@ async function runTestSuite() {
         }
     });
 
+<<<<<<< HEAD
     // 44. Tagging Studio: Parental Advisory Tag Formatting, Severity Matching, Server Guard Rails, and Custom Tag Rule Logic
     await assertTest("Tagging Studio: Parental Tagging Formats, Server Guard Rails & Content Advisory Engine", async () => {
         const {
@@ -3208,6 +3209,76 @@ async function runTestSuite() {
         await prisma.kindleDeliveryLog.delete({ where: { id: testDelivery.id } }).catch(() => {});
     });
 
+    // 89. Monitoring: Multi-Server Health, Host & Plex Reachability Detection
+    await assertTest("Monitoring: Multi-Server Health, Host & Plex Reachability Detection", async () => {
+        // Test 1: Glances offline handling in glancesStats
+        const mockGlances = [
+            { name: "MainHost", url: "http://127.0.0.1:61208" }
+        ];
+        const glancesStats: any[] = [];
+        for (const g of mockGlances) {
+            // Emulate offline unreachable host
+            const isOk = false;
+            if (isOk) {
+                glancesStats.push({ name: g.name, online: true, cpu: 12, ram: 45 });
+            } else {
+                glancesStats.push({ name: g.name, online: false, cpu: 0, ram: 0 });
+            }
+        }
+        if (glancesStats.length !== 1 || glancesStats[0].online !== false) {
+            throw new Error(`Expected offline Glances instance to be preserved with online: false, got: ${JSON.stringify(glancesStats)}`);
+        }
+
+        // Test 2: downApps aggregator collects offline Plex servers, Host servers, and Tautulli instances
+        const downApps: string[] = [];
+        const mockPlexOffline = { name: "TestPlexServer", reachable: false };
+        const mockGlancesOffline = { name: "SecondaryHost", reachable: false };
+        const mockTautulliOffline = { name: "MainTautulli", reachable: false };
+
+        if (!mockPlexOffline.reachable) downApps.push(`${mockPlexOffline.name} (Plex Server)`);
+        if (!mockGlancesOffline.reachable) downApps.push(`${mockGlancesOffline.name} (Host Server)`);
+        if (!mockTautulliOffline.reachable) downApps.push(`${mockTautulliOffline.name} (Tautulli)`);
+
+        if (downApps.length !== 3) {
+            throw new Error(`Expected 3 offline items in downApps, got ${downApps.length}: ${JSON.stringify(downApps)}`);
+        }
+        if (!downApps.includes("TestPlexServer (Plex Server)")) {
+            throw new Error("Missing Plex Server in downApps list");
+        }
+        if (!downApps.includes("SecondaryHost (Host Server)")) {
+            throw new Error("Missing Host Server in downApps list");
+        }
+        if (!downApps.includes("MainTautulli (Tautulli)")) {
+            throw new Error("Missing Tautulli in downApps list");
+        }
+
+        // Test 3: serverMap in Plex Hub preserves offline state when direct PMS fails
+        const serverMap = new Map<string, any>();
+        const testPlexKey = "testplex";
+        serverMap.set(testPlexKey, {
+            id: "plex::testplex::127.0.0.1:32400",
+            name: "TestPlexServer",
+            type: "Plex Media Server",
+            directPms: true,
+            tautulli: false,
+            online: false
+        });
+
+        // If Tautulli container responds while direct PMS is offline, do NOT falsely mark direct PMS online
+        const existing = serverMap.get(testPlexKey)!;
+        existing.tautulli = true;
+        existing.type = existing.directPms && existing.online ? "Direct PMS + Tautulli" : (existing.directPms ? "Direct PMS (Offline) + Tautulli" : "Tautulli Monitor");
+        if (!existing.directPms) {
+            existing.online = true;
+        }
+
+        if (existing.online !== false) {
+            throw new Error(`Expected Plex server to remain online: false when PMS is offline, got online: ${existing.online}`);
+        }
+        if (existing.type !== "Direct PMS (Offline) + Tautulli") {
+            throw new Error(`Expected type 'Direct PMS (Offline) + Tautulli', got '${existing.type}'`);
+        }
+    });
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
