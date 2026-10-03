@@ -960,7 +960,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total)." },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
-            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/settings/profile#billing" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -1011,7 +1011,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$15.00 / month" },
             { key: "{amountDue}", description: "Net amount due", sampleValue: "$15.00" },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
-            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/settings/profile#billing" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },

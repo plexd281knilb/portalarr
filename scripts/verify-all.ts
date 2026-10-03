@@ -3127,11 +3127,25 @@ async function runTestSuite() {
         if (!matchesCloudflareBypass("/api/speedtest")) throw new Error("/api/speedtest must match bypass");
         if (!matchesCloudflareAdmin("/settings")) throw new Error("/settings must match admin");
         if (!matchesCloudflareAdmin("/settings/access")) throw new Error("/settings/access must match admin");
+        if (!matchesCloudflareAdmin("/settings/profile")) throw new Error("/settings/profile must match admin (isolated)");
+        if (matchesCloudflareBypass("/settings/profile")) throw new Error("/settings/profile must NEVER match bypass");
+        if (!matchesCloudflareBypass("/profile")) throw new Error("/profile must match bypass for users");
+        if (matchesCloudflareAdmin("/profile")) throw new Error("/profile must NOT match admin");
         if (!matchesCloudflareAdmin("/admin/tickets")) throw new Error("/admin/tickets must match admin");
         if (!matchesCloudflareAdmin("/curation/kometa")) throw new Error("/curation/kometa must match admin");
+        if (!matchesCloudflareAdmin("/radarr")) throw new Error("/radarr must match admin");
+        if (matchesCloudflareBypass("/radarr")) throw new Error("/radarr must NEVER match bypass");
+        if (!matchesCloudflareAdmin("/sonarr")) throw new Error("/sonarr must match admin");
+        if (matchesCloudflareBypass("/sonarr")) throw new Error("/sonarr must NEVER match bypass");
         if (!matchesCloudflareAdmin("/api/curation/badges")) throw new Error("/api/curation/badges must match admin");
         if (!matchesCloudflareAdmin("/api/users")) throw new Error("/api/users must match admin");
+        if (matchesCloudflareBypass("/api/users")) throw new Error("/api/users must NEVER match bypass");
         if (!matchesCloudflareAdmin("/api/system/logs")) throw new Error("/api/system/logs must match admin");
+        if (matchesCloudflareBypass("/api/system/logs")) throw new Error("/api/system/logs must NEVER match bypass");
+        if (!matchesCloudflareAdmin("/api/debug/db")) throw new Error("/api/debug/db must match admin");
+        if (matchesCloudflareBypass("/api/debug/db")) throw new Error("/api/debug/db must NEVER match bypass");
+        if (!matchesCloudflareAdmin("/api/books/upload")) throw new Error("/api/books/upload must match admin");
+        if (matchesCloudflareBypass("/api/books/upload")) throw new Error("/api/books/upload must NEVER match bypass");
     });
 
     // 88. Kindle: Amazon Send-to-Kindle Bounce Email Scanner & Rejection Parser

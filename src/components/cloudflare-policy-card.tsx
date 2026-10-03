@@ -94,7 +94,7 @@ export default function CloudflarePolicyCard() {
                                 </Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                These routes contain administrative settings, database tools, and API tokens. You can optionally require 2FA/SSO in Cloudflare Access for these specific prefixes:
+                                These routes contain administrative consoles, database diagnostics, curation studios, Radarr/Sonarr, and API tokens. Cloudflare Access must require your admin email/2FA for these prefixes:
                             </p>
 
                             <pre className="p-2.5 rounded-lg bg-black/50 border border-white/10 font-mono text-[11px] text-orange-300/90 whitespace-pre overflow-x-auto max-h-48">
@@ -111,6 +111,47 @@ export default function CloudflarePolicyCard() {
                             {copiedAdmin ? <Check className="h-3.5 w-3.5 text-orange-400" /> : <Copy className="h-3.5 w-3.5" />}
                             {copiedAdmin ? "Copied Admin Paths!" : "Copy Admin Protect Paths to Clipboard"}
                         </Button>
+                    </div>
+                </div>
+
+                {/* ZERO TRUST CONFIGURATION INSTRUCTIONS & BEST PRACTICES */}
+                <div className="p-3.5 rounded-xl bg-orange-950/20 border border-orange-500/30 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-orange-400 shrink-0" />
+                        <span className="font-bold text-xs text-orange-300">
+                            Cloudflare Zero Trust Setup Guide (Ensuring Admin Paths Are Blocked for Everyone Else)
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-muted-foreground leading-relaxed">
+                        <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06] space-y-1.5">
+                            <span className="font-semibold text-orange-300 flex items-center gap-1">
+                                <Lock className="h-3 w-3 text-orange-400" />
+                                1. Admin Protection Rule (Priority 1 / High)
+                            </span>
+                            <ul className="list-disc list-inside space-y-1 text-slate-300/90">
+                                <li><strong>Action:</strong> <code className="text-orange-300">Allow</code></li>
+                                <li><strong>Paths:</strong> Add all <strong>Admin-Only Paths</strong> listed above (e.g. <code className="text-orange-300">/settings*</code>, <code className="text-orange-300">/admin*</code>, etc.).</li>
+                                <li><strong>Include:</strong> <code className="text-orange-300">Emails: [your-admin-email@example.com]</code></li>
+                                <li><strong>Result:</strong> Anyone outside of you trying to access these paths will be stopped with an HTTP 403 / Access Denied at Cloudflare&apos;s edge before reaching your server.</li>
+                            </ul>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06] space-y-1.5">
+                            <span className="font-semibold text-emerald-300 flex items-center gap-1">
+                                <Globe className="h-3 w-3 text-emerald-400" />
+                                2. End-User & Family Rule (Priority 2 / Lower)
+                            </span>
+                            <ul className="list-disc list-inside space-y-1 text-slate-300/90">
+                                <li><strong>Action:</strong> <code className="text-emerald-300">Bypass</code></li>
+                                <li><strong>Paths:</strong> Add all <strong>End-User & Public Paths</strong> listed above.</li>
+                                <li><strong>Include:</strong> <code className="text-emerald-300">Everyone</code></li>
+                                <li><strong>Result:</strong> Friends & family can freely stream, request media, and manage their account profile (<code className="text-emerald-300">/profile</code>) without seeing Cloudflare login barriers.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                        <span><strong>Zero-Leakage Architecture:</strong> <code className="text-slate-300">/settings*</code> is 100% admin-only. User profile, Kindle email, and billing settings are accessed via <code className="text-slate-300">/profile</code> to guarantee zero policy conflicts.</span>
                     </div>
                 </div>
             </CardContent>

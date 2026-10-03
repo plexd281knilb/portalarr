@@ -21,10 +21,7 @@ export const CLOUDFLARE_BYPASS_PATHS: string[] = [
     "/library*",
     "/guides*",
     "/profile*",
-    "/settings/profile*",
     "/beta*",
-    "/api/auth/*",
-    "/api/plex/*",
     "/api/books*",
     "/api/cover*",
     "/api/media/*",
@@ -46,13 +43,20 @@ export const CLOUDFLARE_ADMIN_PATHS: string[] = [
     "/api/system*",
     "/api/debug*",
     "/api/curation*",
-    "/api/users*"
+    "/api/users*",
+    "/api/books/upload*"
 ];
 
 /**
- * Test whether a given route path is covered by Cloudflare Bypass policy
+ * Test whether a given route path is covered by Cloudflare Bypass policy.
+ * Strict Zero-Trust Guard: If a path matches any admin protected route,
+ * it is NEVER bypassed.
  */
 export function matchesCloudflareBypass(path: string): boolean {
+    if (matchesCloudflareAdmin(path)) {
+        return false;
+    }
+
     const cleanPath = path.split("?")[0].replace(/\/$/, "") || "/";
     return CLOUDFLARE_BYPASS_PATHS.some((pattern) => {
         if (pattern === cleanPath) return true;
@@ -78,3 +82,4 @@ export function matchesCloudflareAdmin(path: string): boolean {
         return false;
     });
 }
+
