@@ -7311,6 +7311,50 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
 }
 
 /**
+ * Toggles an add-on on or off for a specific user (Admin only).
+ */
+export async function toggleUserAddonAdminAction(userId: string, addonId: string, enabled: boolean) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        let enabledList: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                enabledList = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {
+                enabledList = [];
+            }
+        }
+
+        if (enabled) {
+            if (!enabledList.includes(addonId)) enabledList.push(addonId);
+        } else {
+            enabledList = enabledList.filter(id => id !== addonId);
+        }
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { enabledAddons: JSON.stringify(enabledList) }
+        });
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return {
+            success: true,
+            message: `Updated add-on preference for ${dbUser.username}`,
+            enabledAddons: enabledList
+        };
+    } catch (e: any) {
+        console.error("[TOGGLE-USER-ADDON-ADMIN-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to update user add-on" };
+    }
+}
+
+/**
  * Toggles an add-on's global availability (Admin only).
  */
 export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvailable: boolean) {

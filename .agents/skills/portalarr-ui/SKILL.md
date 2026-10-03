@@ -553,6 +553,24 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Search filter matches concurrently across `log.message`, `log.category`, `log.details`, and `log.level` (e.g. typing "ERROR" or "WARN").
   - Timestamps format dynamically as `HH:mm:ss` for events logged today and `MMM D HH:mm:ss` for historical entries, paired with full locale date tooltips on hover.
 
+### 31. User Directory, Tiers, Cadence & Add-on Controls (Controlled State & Alert Suppression)
+- **Radix UI `Select` Controlled State (`value` vs `defaultValue`)**:
+  - In user directories and management lists where items re-render or update optimistically upon mutations, always bind `value={...}` instead of `defaultValue={...}` on `Select` components (e.g. `value={user.membershipTier || "STANDARD"}` and `value={user.role}`).
+  - Using uncontrolled `defaultValue` causes the dropdown display to become desynchronized from the actual server state when the underlying user object changes.
+- **100% Elimination of Tab-Blocking `alert()` Modals**:
+  - Never call native browser `alert()` or `confirm()` in user management handlers (such as cadence updates, referral unlinking, access revocations, or add-on toggling).
+  - Use lightweight feedback mechanisms (e.g., non-intrusive floating toasts, status badges, or modal action states) to maintain a modern, seamless application feel.
+- **Dynamic Tier 1 vs Tier 2 Display & Calculations**:
+  - In member profile cards and subscription modals, calculate rates dynamically from `paymentSettings`:
+    - Tier 1 (`STANDARD`): default $180/yr ($15/mo annual base) or $15/mo standalone.
+    - Tier 2 (`TIER_2_VIP`): default $240/yr ($20/mo annual base) or $25/mo standalone (`paymentSettings.tier2YearlyPrice` & `paymentSettings.tier2MonthlyPrice`).
+  - Render a prominent `🛡️ Tier 2: Managed Support` badge in member profile views to clearly signal dedicated white-glove support and priority assistance.
+- **Interactive Active Add-ons Manager**:
+  - Provide an inline "Active Add-ons & Profile Perks" manager in the user's Access & Timer dialog (`subModalUser`), allowing administrators to toggle available add-ons with immediate optimistic UI updates (`toggleUserAddonAdminAction`).
+  - Active add-ons display on member cards with a yellow `Zap` icon badge, count, and multi-line hover tooltip detailing all active perks.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

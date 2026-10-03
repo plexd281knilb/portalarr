@@ -23,6 +23,7 @@ import {
     getPaymentAndTrialSettings,
     savePaymentAndTrialSettings,
     updateUserMembershipTierAction,
+    toggleUserAddonAdminAction,
     toggleAdminAddonAvailabilityAction,
     getAvailableAddonsAction,
     restoreAllUsersPlexAccessAction,
@@ -58,7 +59,7 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap
 } from "lucide-react";
 import { updateUserSubscriptionCadenceAction } from "@/app/payment-actions";
 import { format, differenceInDays } from "date-fns";
@@ -517,10 +518,10 @@ export default function AccessSettingsPage() {
                 await loadUsers();
                 await loadReferrals();
             } else {
-                alert(res.error || "Failed to unlink referral.");
+                console.error("Failed to unlink referral:", res.error);
             }
         } catch (e: any) {
-            alert(e.message || "Failed to unlink referral.");
+            console.error("Failed to unlink referral:", e.message);
         }
     };
 
@@ -553,11 +554,37 @@ export default function AccessSettingsPage() {
                     setSubModalUser((prev: any) => prev ? { ...prev, subscriptionCadence: cadence } : null);
                 }
                 setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, subscriptionCadence: cadence } : u));
+                setSubSuccessMsg(`Updated plan cadence to ${cadence === "YEARLY" ? "Annual" : "Monthly"}`);
+                setTimeout(() => setSubSuccessMsg(""), 3000);
             } else {
-                alert(res.error || "Failed to update subscription cadence.");
+                setSubErrMsg(res.error || "Failed to update subscription cadence.");
             }
         } catch (e: any) {
-            alert(e.message || "Failed to update cadence.");
+            setSubErrMsg(e.message || "Failed to update cadence.");
+        }
+    };
+
+    const [togglingAddonUserId, setTogglingAddonUserId] = useState<string | null>(null);
+    const handleToggleUserAddon = async (userId: string, addonId: string, enabled: boolean) => {
+        setTogglingAddonUserId(`${userId}:${addonId}`);
+        setSubErrMsg("");
+        try {
+            const res = await toggleUserAddonAdminAction(userId, addonId, enabled);
+            if (res.success && res.enabledAddons) {
+                const updatedAddonsJson = JSON.stringify(res.enabledAddons);
+                setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, enabledAddons: updatedAddonsJson } : u));
+                if (subModalUser && subModalUser.id === userId) {
+                    setSubModalUser((prev: any) => prev ? { ...prev, enabledAddons: updatedAddonsJson } : null);
+                }
+                setSubSuccessMsg(res.message || "Updated add-on!");
+                setTimeout(() => setSubSuccessMsg(""), 3000);
+            } else {
+                setSubErrMsg(res.error || "Failed to toggle add-on.");
+            }
+        } catch (e: any) {
+            setSubErrMsg(e.message || "Failed to toggle add-on.");
+        } finally {
+            setTogglingAddonUserId(null);
         }
     };
 
@@ -670,10 +697,10 @@ export default function AccessSettingsPage() {
                 await loadUsers();
                 await loadLibraries();
             } else {
-                alert(res.error || "Failed to revoke Plex access.");
+                setSyncMessage(res.error || "Failed to revoke Plex access.");
             }
         } catch (e: any) {
-            alert(e.message || "An error occurred.");
+            setSyncMessage(e.message || "An error occurred.");
         } finally {
             setRevokingUserId(null);
         }
@@ -734,11 +761,13 @@ export default function AccessSettingsPage() {
     };
 
     const handleRoleChange = async (userId: string, newRole: string) => {
+        setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
         await updateAppUserRole(userId, newRole);
         loadUsers();
     };
 
     const handleMembershipTierChange = async (userId: string, newTier: string) => {
+        setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, membershipTier: newTier } : u));
         await updateUserMembershipTierAction(userId, newTier);
         loadUsers();
     };
@@ -765,14 +794,14 @@ export default function AccessSettingsPage() {
         try {
             const res = await impersonateUserAction(targetUserId);
             if (res?.error) {
-                alert("Unable to switch user: " + res.error);
+                setSyncMessage("Unable to switch user: " + res.error);
                 setImpersonatingUserId(null);
                 return;
             }
             window.location.assign("/");
         } catch (err: any) {
             console.error("Impersonate error:", err);
-            alert("Failed to switch user. Please try again.");
+            setSyncMessage("Failed to switch user. Please try again.");
             setImpersonatingUserId(null);
         }
     };
@@ -2210,6 +2239,30 @@ export default function AccessSettingsPage() {
                                                                 ⭐ Tier 1 (Regular)
                                                             </Badge>
                                                         )}
+                                                        {(() => {
+                                                            let userAddonList: string[] = [];
+                                                            try {
+                                                                if (user.enabledAddons) userAddonList = JSON.parse(user.enabledAddons);
+                                                            } catch {}
+                                                            if (userAddonList.length === 0) return null;
+                                                            return (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-xs font-semibold gap-1 cursor-pointer hover:bg-amber-500/25 transition-colors"
+                                                                    onClick={() => {
+                                                                        setSubModalUser(user);
+                                                                        setShowCustomTrialScreen(false);
+                                                                        setCustomTrialDaysInput(paymentSettings.defaultTrialDays || 7);
+                                                                        setSubSuccessMsg("");
+                                                                        setSubErrMsg("");
+                                                                    }}
+                                                                    title={`Active Add-ons:\n${userAddonList.map((id: string) => `• ${adminAddonsCatalog.find((a: any) => a.id === id)?.name || id}`).join("\n")}`}
+                                                                >
+                                                                    <Zap className="h-3 w-3 text-amber-400" />
+                                                                    {userAddonList.length} Add-on{userAddonList.length > 1 ? "s" : ""}
+                                                                </Badge>
+                                                            );
+                                                        })()}
                                                         {user.subAccounts && user.subAccounts.length > 0 && (
                                                             <Badge 
                                                                 variant="outline" 
@@ -2387,6 +2440,33 @@ export default function AccessSettingsPage() {
                                                             <span className="text-muted-foreground italic text-xs">No payments recorded</span>
                                                         )}
                                                     </div>
+
+                                                    {/* ACTIVE ADD-ONS ROW */}
+                                                    <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
+                                                        <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                        <span className="text-muted-foreground shrink-0 font-medium">Add-ons:</span>
+                                                        {(() => {
+                                                            let userAddonList: string[] = [];
+                                                            try {
+                                                                if (user.enabledAddons) userAddonList = JSON.parse(user.enabledAddons);
+                                                            } catch {}
+                                                            if (userAddonList.length === 0) {
+                                                                return <span className="text-muted-foreground italic text-xs">None enabled</span>;
+                                                            }
+                                                            return (
+                                                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                                                    {userAddonList.map((addonId: string) => {
+                                                                        const catalogItem = adminAddonsCatalog.find((a: any) => a.id === addonId);
+                                                                        return (
+                                                                            <Badge key={addonId} variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30 px-1.5 py-0 font-medium">
+                                                                                {catalogItem?.name || addonId}
+                                                                            </Badge>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
                                                 </div>
 
                                                 {/* BOTTOM ROW: ACTIONS TOOLBAR */}
@@ -2481,7 +2561,7 @@ export default function AccessSettingsPage() {
 
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         {/* MEMBERSHIP TIER SELECTOR */}
-                                                        <Select defaultValue={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
+                                                        <Select value={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
                                                             <SelectTrigger className="h-8 text-xs w-44 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
                                                                 <SelectValue />
                                                             </SelectTrigger>
@@ -2493,7 +2573,7 @@ export default function AccessSettingsPage() {
                                                         </Select>
 
                                                         {/* ROLE SELECTOR */}
-                                                        <Select defaultValue={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
+                                                        <Select value={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
                                                             <SelectTrigger className="h-8 text-xs w-28 bg-background/80 border-border/60 font-semibold" title="User Permission Role">
                                                                 <SelectValue />
                                                             </SelectTrigger>
@@ -4310,8 +4390,8 @@ export default function AccessSettingsPage() {
             {/* ========================================================================= */}
             {subModalUser && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md bg-[#121218] border-border/60 shadow-2xl">
-                        <CardHeader className="pb-3 border-b border-border/40">
+                    <Card className="w-full max-w-md bg-[#121218] border-border/60 shadow-2xl max-h-[90vh] flex flex-col">
+                        <CardHeader className="pb-3 border-b border-border/40 shrink-0">
                             <CardTitle className="flex items-center gap-2 text-lg font-bold text-blue-400">
                                 <Timer className="h-5 w-5 text-blue-400" /> Trial & Subscription Controls
                             </CardTitle>
@@ -4319,7 +4399,7 @@ export default function AccessSettingsPage() {
                                 Set access timers, extend subscriptions, or suspend access for <strong>{subModalUser.username}</strong>.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4 pt-4">
+                        <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1">
                             {subSuccessMsg && (
                                 <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -4339,19 +4419,36 @@ export default function AccessSettingsPage() {
                                     <span className="font-bold text-foreground">{subModalUser.status}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Membership Tier:</span>
+                                    <span className="font-semibold text-foreground">
+                                        {subModalUser.membershipTier === "TIER_2_VIP" ? "🛡️ Tier 2: Managed Support" : subModalUser.membershipTier === "TRIAL" ? "⏱️ Trial Pass" : "⭐ Tier 1: Regular Member"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">Plan Cadence:</span>
-                                    <Select 
-                                        value={subModalUser.subscriptionCadence || "YEARLY"} 
-                                        onValueChange={(val: "YEARLY" | "MONTHLY") => handleUpdateCadence(subModalUser.id, val)}
-                                    >
-                                        <SelectTrigger className="h-7 text-xs w-36 bg-background/80 font-semibold">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="YEARLY">Annual ($180/yr)</SelectItem>
-                                            <SelectItem value="MONTHLY">Monthly ($15/mo)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    {(() => {
+                                        const isModalUserTier2 = subModalUser.membershipTier === "TIER_2_VIP";
+                                        const modalYearlyPrice = isModalUserTier2 
+                                            ? (paymentSettings.tier2YearlyPrice ?? 240) 
+                                            : (paymentSettings.yearlyPrice ?? 180);
+                                        const modalMonthlyPrice = isModalUserTier2 
+                                            ? (paymentSettings.tier2MonthlyPrice ?? 25) 
+                                            : (paymentSettings.monthlyPrice ?? 15);
+                                        return (
+                                            <Select 
+                                                value={subModalUser.subscriptionCadence || "YEARLY"} 
+                                                onValueChange={(val: "YEARLY" | "MONTHLY") => handleUpdateCadence(subModalUser.id, val)}
+                                            >
+                                                <SelectTrigger className="h-7 text-xs w-44 bg-background/80 font-semibold">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="YEARLY">Annual (${modalYearlyPrice}/yr)</SelectItem>
+                                                    <SelectItem value="MONTHLY">Monthly (${modalMonthlyPrice}/mo)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        );
+                                    })()}
                                 </div>
                                 {subModalUser.trialEndsAt && (
                                     <div className="flex justify-between">
@@ -4371,6 +4468,51 @@ export default function AccessSettingsPage() {
                                         <span className="font-medium text-amber-400">{format(new Date(subModalUser.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}</span>
                                     </div>
                                 )}
+
+                                {/* ASSIGNED ADD-ONS MANAGEMENT */}
+                                <div className="pt-2 border-t border-border/30 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground font-semibold flex items-center gap-1.5">
+                                            <Zap className="h-3.5 w-3.5 text-amber-400" />
+                                            Active Add-ons & Profile Perks:
+                                        </span>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        {adminAddonsCatalog
+                                            .filter((addon: any) => addon.isAvailable !== false && !addon.comingSoon && addon.status !== "coming_soon")
+                                            .map((addon: any) => {
+                                                let userAddonList: string[] = [];
+                                                try {
+                                                    if (subModalUser.enabledAddons) userAddonList = JSON.parse(subModalUser.enabledAddons);
+                                                } catch {}
+                                                const isEnabled = userAddonList.includes(addon.id);
+                                                const isToggling = togglingAddonUserId === `${subModalUser.id}:${addon.id}`;
+                                                return (
+                                                    <div key={addon.id} className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/40 text-xs">
+                                                        <div className="space-y-0.5 min-w-0 pr-2">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-semibold text-foreground truncate">{addon.name}</span>
+                                                                {addon.isFree ? (
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">${addon.price}/mo</Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground line-clamp-1">{addon.description}</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {isToggling && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
+                                                            <Switch 
+                                                                checked={isEnabled}
+                                                                disabled={isToggling}
+                                                                onCheckedChange={(checked) => handleToggleUserAddon(subModalUser.id, addon.id, checked)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                </div>
                             </div>
 
                             {showCustomTrialScreen ? (

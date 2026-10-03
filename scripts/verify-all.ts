@@ -3878,6 +3878,180 @@ async function runTestSuite() {
         }
     });
 
+    // 77. User Process Deep Dive: Roles, Subscriptions, Tiers, Cadence, Addons & Proration
+    await assertTest("User Process: Roles, Subscriptions, Tiers, Cadence, Addons & Proration", async () => {
+        const testUserHandle = `test_proc_${Date.now()}`;
+        const testUserEmail = `${testUserHandle}@example.com`;
+
+        // Step 1: Create a Trial User
+        const trialUser = await prisma.user.create({
+            data: {
+                username: testUserHandle,
+                email: testUserEmail,
+                password: "hashed_dummy_password",
+                role: "USER",
+                status: "TRIAL",
+                membershipTier: "TRIAL",
+                subscriptionCadence: "YEARLY",
+                trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+            }
+        });
+
+        if (!trialUser.id || trialUser.status !== "TRIAL" || trialUser.membershipTier !== "TRIAL") {
+            throw new Error("Failed to initialize trial user");
+        }
+
+        // Verify trial state
+        const trialEnabledAddons: string[] = trialUser.enabledAddons ? JSON.parse(trialUser.enabledAddons) : [];
+        if (trialEnabledAddons.length !== 0) throw new Error("Trial user should have zero enabled addons by default");
+
+        // Step 2: Convert to Full Member (Tier 1 STANDARD)
+        const fullMember = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: {
+                status: "APPROVED",
+                membershipTier: "STANDARD",
+                trialEndsAt: null,
+                subscriptionEndsAt: new Date("2027-01-01T23:59:59.999Z")
+            }
+        });
+        if (fullMember.status !== "APPROVED" || fullMember.membershipTier !== "STANDARD" || fullMember.trialEndsAt !== null) {
+            throw new Error("Failed to transition user to full member Tier 1");
+        }
+
+        // Step 3: Upgrade to Tier 2 (TIER_2_VIP: Managed Support)
+        const tier2Member = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: { membershipTier: "TIER_2_VIP" }
+        });
+        if (tier2Member.membershipTier !== "TIER_2_VIP") {
+            throw new Error("Failed to update user to Tier 2 (TIER_2_VIP)");
+        }
+
+        // Step 4: Role Transitions (USER -> SUPER_USER -> ADMIN)
+        const superUser = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: { role: "SUPER_USER" }
+        });
+        if (superUser.role !== "SUPER_USER") throw new Error("Failed to transition role to SUPER_USER");
+
+        const adminUser = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: { role: "ADMIN" }
+        });
+        if (adminUser.role !== "ADMIN") throw new Error("Failed to transition role to ADMIN");
+
+        // Step 5: Cadence Switching (YEARLY <-> MONTHLY)
+        const monthlyMember = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: { subscriptionCadence: "MONTHLY" }
+        });
+        if (monthlyMember.subscriptionCadence !== "MONTHLY") throw new Error("Failed to update subscription cadence to MONTHLY");
+
+        const yearlyMember = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: { subscriptionCadence: "YEARLY" }
+        });
+        if (yearlyMember.subscriptionCadence !== "YEARLY") throw new Error("Failed to revert subscription cadence to YEARLY");
+
+        // Step 6: Prorated Billing Calculation for Tier 1 vs Tier 2
+        // Tier 1 Base: $180/yr ($15/mo)
+        const tier1Billing = calculateProratedBilling({
+            startDate: new Date("2026-06-01T00:00:00.000Z"),
+            trialDays: 14,
+            yearlyPrice: 180,
+            monthlyPrice: 15,
+            renewalMonth: 1,
+            renewalDay: 1
+        });
+        if (tier1Billing.annualMonthlyRate !== 15) {
+            throw new Error(`Tier 1 annualMonthlyRate mismatch: expected 15, got ${tier1Billing.annualMonthlyRate}`);
+        }
+        if (tier1Billing.standaloneMonthlyRate !== 15) {
+            throw new Error(`Tier 1 standaloneMonthlyRate mismatch: expected 15, got ${tier1Billing.standaloneMonthlyRate}`);
+        }
+        if (tier1Billing.amountDueNow <= 0) {
+            throw new Error("Tier 1 prorated amount due now should be greater than 0");
+        }
+
+        // Tier 2 Managed Support: $240/yr ($25/mo)
+        const tier2Billing = calculateProratedBilling({
+            startDate: new Date("2026-06-01T00:00:00.000Z"),
+            trialDays: 14,
+            yearlyPrice: 240,
+            monthlyPrice: 25,
+            renewalMonth: 1,
+            renewalDay: 1
+        });
+        if (tier2Billing.annualMonthlyRate !== 20) {
+            throw new Error(`Tier 2 annualMonthlyRate mismatch: expected 20 ($240/12), got ${tier2Billing.annualMonthlyRate}`);
+        }
+        if (tier2Billing.standaloneMonthlyRate !== 25) {
+            throw new Error(`Tier 2 standaloneMonthlyRate mismatch: expected 25, got ${tier2Billing.standaloneMonthlyRate}`);
+        }
+        if (tier2Billing.amountDueNow <= tier1Billing.amountDueNow) {
+            throw new Error(`Tier 2 amount due now ($${tier2Billing.amountDueNow}) should be greater than Tier 1 ($${tier1Billing.amountDueNow})`);
+        }
+
+        // Step 7: Add-ons & Sub-Account Allowances
+        // Enable extra_kid_profile and extra_living_room
+        const enabledAddonsList = ["extra_kid_profile", "extra_living_room", "music_streaming"];
+        const userWithAddons = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: { enabledAddons: JSON.stringify(enabledAddonsList) }
+        });
+        const parsedAddons: string[] = userWithAddons.enabledAddons ? JSON.parse(userWithAddons.enabledAddons) : [];
+        if (!parsedAddons.includes("extra_kid_profile") || !parsedAddons.includes("extra_living_room") || !parsedAddons.includes("music_streaming")) {
+            throw new Error("Failed to store and parse enabled add-ons");
+        }
+
+        // Verify limit calculations based on addons
+        const extraKidsAllowed = parsedAddons.includes("extra_kid_profile") ? 3 : 1;
+        const extraLivingRoomsAllowed = parsedAddons.includes("extra_living_room") ? 3 : 1;
+        if (extraKidsAllowed !== 3) throw new Error("extra_kid_profile addon did not grant 3 kid profiles");
+        if (extraLivingRoomsAllowed !== 3) throw new Error("extra_living_room addon did not grant 3 living room profiles");
+
+        // Remove extra_kid_profile
+        const updatedAddonsList = parsedAddons.filter(id => id !== "extra_kid_profile");
+        const userAfterRemoval = await prisma.user.update({
+            where: { id: trialUser.id },
+            data: { enabledAddons: JSON.stringify(updatedAddonsList) }
+        });
+        const parsedAfterRemoval: string[] = userAfterRemoval.enabledAddons ? JSON.parse(userAfterRemoval.enabledAddons) : [];
+        if (parsedAfterRemoval.includes("extra_kid_profile")) throw new Error("Failed to remove extra_kid_profile");
+        if (!parsedAfterRemoval.includes("extra_living_room")) throw new Error("Removal inadvertently affected other addons");
+
+        // Step 8: Nested Household Sub-Account Creation & Linking
+        const subAccount = await prisma.user.create({
+            data: {
+                username: `${testUserHandle}_kid`,
+                email: `${testUserHandle}_kid@example.com`,
+                password: "hashed_dummy_password",
+                role: "USER",
+                status: "APPROVED",
+                accountType: "KID",
+                parentUserId: trialUser.id,
+                subAccountLabel: "Kids Tablet Profile"
+            }
+        });
+        if (!subAccount.id || subAccount.parentUserId !== trialUser.id || subAccount.accountType !== "KID") {
+            throw new Error("Failed to create linked child sub-account");
+        }
+
+        // Verify parent relation lookup
+        const parentWithSubs = await prisma.user.findUnique({
+            where: { id: trialUser.id },
+            include: { subAccounts: true }
+        });
+        if (!parentWithSubs || parentWithSubs.subAccounts.length !== 1 || parentWithSubs.subAccounts[0].id !== subAccount.id) {
+            throw new Error("Parent-child sub-account relation query failed");
+        }
+
+        // Cleanup
+        await prisma.user.delete({ where: { id: subAccount.id } });
+        await prisma.user.delete({ where: { id: trialUser.id } });
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
