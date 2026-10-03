@@ -15,9 +15,9 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const limitParam = searchParams.get("limit");
         const sinceId = searchParams.get("since") || undefined;
-        const limit = limitParam ? parseInt(limitParam, 10) : 1000;
+        const limit = limitParam ? parseInt(limitParam, 10) : 5000;
 
-        const logs = logger.getLogs(isNaN(limit) ? 1000 : limit, sinceId);
+        const logs = logger.getLogs(isNaN(limit) ? 5000 : limit, sinceId);
         const total = logger.getTotalCount();
 
         return NextResponse.json(

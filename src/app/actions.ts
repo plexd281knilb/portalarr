@@ -16989,7 +16989,7 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
     }
 }
 
-export async function getSystemLogsAction(limit = 1000, sinceId?: string) {
+export async function getSystemLogsAction(limit = 5000, sinceId?: string) {
     try {
         return logger.getLogs(limit, sinceId);
     } catch (e: any) {

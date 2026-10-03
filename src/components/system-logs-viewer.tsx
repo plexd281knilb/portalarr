@@ -28,11 +28,14 @@ const LOG_CATEGORIES: LogCategoryMeta[] = [
     { id: "ALL", label: "ALL", icon: "📋", badgeStyle: "bg-slate-500/20 text-slate-300 border-slate-500/30", activeStyle: "bg-slate-700 text-white border-slate-500 font-bold" },
     { id: "PLEX", label: "PLEX", icon: "📺", badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-500/30", activeStyle: "bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold ring-1 ring-amber-500/30" },
     { id: "TAUTULLI", label: "TAUTULLI", icon: "📊", badgeStyle: "bg-teal-500/20 text-teal-300 border-teal-500/30", activeStyle: "bg-teal-500/25 text-teal-300 border-teal-500/60 font-bold ring-1 ring-teal-500/30" },
+    { id: "SEERR", label: "SEERR", icon: "🍿", badgeStyle: "bg-orange-600/20 text-orange-300 border-orange-600/30", activeStyle: "bg-orange-600/25 text-orange-300 border-orange-600/60 font-bold ring-1 ring-orange-600/30" },
     { id: "SCANNER", label: "SCANNER", icon: "📚", badgeStyle: "bg-purple-500/20 text-purple-300 border-purple-500/30", activeStyle: "bg-purple-500/25 text-purple-300 border-purple-500/60 font-bold ring-1 ring-purple-500/30" },
     { id: "DOWNLOAD", label: "DOWNLOAD", icon: "📥", badgeStyle: "bg-blue-500/20 text-blue-300 border-blue-500/30", activeStyle: "bg-blue-500/25 text-blue-300 border-blue-500/60 font-bold ring-1 ring-blue-500/30" },
     { id: "AI_AGENT", label: "AI AGENT", icon: "🤖", badgeStyle: "bg-violet-500/20 text-violet-300 border-violet-500/30", activeStyle: "bg-violet-500/25 text-violet-300 border-violet-500/60 font-bold ring-1 ring-violet-500/30" },
     { id: "COVER", label: "COVER", icon: "🖼️", badgeStyle: "bg-pink-500/20 text-pink-300 border-pink-500/30", activeStyle: "bg-pink-500/25 text-pink-300 border-pink-500/60 font-bold ring-1 ring-pink-500/30" },
     { id: "AUTH", label: "AUTH", icon: "🔐", badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", activeStyle: "bg-emerald-500/25 text-emerald-300 border-emerald-500/60 font-bold ring-1 ring-emerald-500/30" },
+    { id: "SECURITY", label: "SECURITY", icon: "🔒", badgeStyle: "bg-rose-500/20 text-rose-300 border-rose-500/30", activeStyle: "bg-rose-500/25 text-rose-300 border-rose-500/60 font-bold ring-1 ring-rose-500/30" },
+    { id: "APPROVAL", label: "APPROVAL", icon: "🛡️", badgeStyle: "bg-amber-600/20 text-amber-300 border-amber-600/30", activeStyle: "bg-amber-600/25 text-amber-300 border-amber-600/60 font-bold ring-1 ring-amber-600/30" },
     { id: "KINDLE", label: "KINDLE", icon: "📖", badgeStyle: "bg-orange-500/20 text-orange-300 border-orange-500/30", activeStyle: "bg-orange-500/25 text-orange-300 border-orange-500/60 font-bold ring-1 ring-orange-500/30" },
     { id: "EMAIL", label: "EMAIL", icon: "✉️", badgeStyle: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30", activeStyle: "bg-indigo-500/25 text-indigo-300 border-indigo-500/60 font-bold ring-1 ring-indigo-500/30" },
     { id: "APPS", label: "APPS", icon: "⚡", badgeStyle: "bg-sky-500/20 text-sky-300 border-sky-500/30", activeStyle: "bg-sky-500/25 text-sky-300 border-sky-500/60 font-bold ring-1 ring-sky-500/30" },
@@ -42,6 +45,33 @@ const LOG_CATEGORIES: LogCategoryMeta[] = [
     { id: "CURATION", label: "CURATION", icon: "🎨", badgeStyle: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30", activeStyle: "bg-fuchsia-500/25 text-fuchsia-300 border-fuchsia-500/60 font-bold ring-1 ring-fuchsia-500/30" },
     { id: "SYSTEM", label: "SYSTEM", icon: "⚙️", badgeStyle: "bg-slate-500/20 text-slate-300 border-slate-500/30", activeStyle: "bg-slate-500/25 text-slate-300 border-slate-500/60 font-bold ring-1 ring-slate-500/30" },
 ];
+
+export function normalizeCategory(cat: string): string {
+    if (!cat) return "SYSTEM";
+    const u = cat.toUpperCase();
+    if (u === "PLEX_HUB") return "PLEX";
+    if (u === "BOOK_ENGINE" || u === "BOOK-ENGINE") return "SCANNER";
+    if (u === "AUTO_GRAB") return "DOWNLOAD";
+    if (u === "TAGGING" || u === "AGREGARR" || u === "MAINTAINERR" || u === "KOMETA") return "CURATION";
+    if (u === "SETTINGS") return "SYSTEM";
+    return u;
+}
+
+export function formatLogTimestamp(iso: string): string {
+    try {
+        const d = new Date(iso);
+        const now = new Date();
+        const isSameDay = d.getFullYear() === now.getFullYear() &&
+                          d.getMonth() === now.getMonth() &&
+                          d.getDate() === now.getDate();
+        const timePart = d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        if (isSameDay) return timePart;
+        const datePart = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return `${datePart} ${timePart}`;
+    } catch {
+        return iso;
+    }
+}
 
 export default function SystemLogsViewer() {
     const [logs, setLogs] = useState<SystemLogEntry[]>([]);
@@ -67,8 +97,8 @@ export default function SystemLogsViewer() {
         try {
             const sinceId = isIncremental ? latestLogIdRef.current : "";
             const url = sinceId 
-                ? `/api/system/logs?since=${encodeURIComponent(sinceId)}&limit=500`
-                : `/api/system/logs?limit=1000`;
+                ? `/api/system/logs?since=${encodeURIComponent(sinceId)}&limit=1000`
+                : `/api/system/logs?limit=5000`;
 
             const res = await fetch(url, {
                 cache: "no-store",
@@ -100,7 +130,7 @@ export default function SystemLogsViewer() {
                 }
             } else {
                 // Fallback to server action if API route is unavailable
-                const fallbackData = await getSystemLogsAction(1000, sinceId);
+                const fallbackData = await getSystemLogsAction(5000, sinceId);
                 if (isIncremental) {
                     if (fallbackData && fallbackData.length > 0) {
                         latestLogIdRef.current = fallbackData[0].id;
@@ -227,11 +257,30 @@ export default function SystemLogsViewer() {
         }
     };
 
+    // Dynamically include any categories that appear in active logs
+    const activeCategories = useMemo(() => {
+        const knownIds = new Set(LOG_CATEGORIES.map(c => c.id));
+        const extraCats: LogCategoryMeta[] = [];
+        for (const log of logs) {
+            const cat = normalizeCategory(log.category);
+            if (!knownIds.has(cat) && !extraCats.some(c => c.id === cat)) {
+                extraCats.push({
+                    id: cat,
+                    label: cat,
+                    icon: "📌",
+                    badgeStyle: "bg-slate-600/20 text-slate-300 border-slate-600/30",
+                    activeStyle: "bg-slate-600/30 text-white border-slate-500 font-bold"
+                });
+            }
+        }
+        return [...LOG_CATEGORIES, ...extraCats];
+    }, [logs]);
+
     // Calculate dynamic category counts
     const categoryCounts = useMemo(() => {
         const counts: Record<string, number> = { ALL: logs.length };
         for (const l of logs) {
-            const cat = l.category === "PLEX_HUB" ? "PLEX" : l.category;
+            const cat = normalizeCategory(l.category);
             counts[cat] = (counts[cat] || 0) + 1;
         }
         return counts;
@@ -248,7 +297,7 @@ export default function SystemLogsViewer() {
 
     const filteredLogs = useMemo(() => {
         return logs.filter(log => {
-            const cat = log.category === "PLEX_HUB" ? "PLEX" : log.category;
+            const cat = normalizeCategory(log.category);
             if (levelFilter !== "ALL" && log.level !== levelFilter) return false;
             if (categoryFilter !== "ALL" && cat !== categoryFilter) return false;
             if (searchQuery) {
@@ -256,6 +305,7 @@ export default function SystemLogsViewer() {
                 return (
                     log.message.toLowerCase().includes(q) ||
                     cat.toLowerCase().includes(q) ||
+                    log.level.toLowerCase().includes(q) ||
                     (log.details && log.details.toLowerCase().includes(q))
                 );
             }
@@ -277,8 +327,8 @@ export default function SystemLogsViewer() {
     };
 
     const getCategoryBadge = (category: string) => {
-        const cat = category === "PLEX_HUB" ? "PLEX" : category;
-        const meta = LOG_CATEGORIES.find(c => c.id === cat) || {
+        const cat = normalizeCategory(category);
+        const meta = activeCategories.find(c => c.id === cat) || {
             id: cat,
             label: cat,
             icon: "⚙️",
@@ -461,7 +511,7 @@ export default function SystemLogsViewer() {
 
                     {/* Dedicated Category Buttons with Uniform Circle Counts & Icons */}
                     <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800 text-xs">
-                        {LOG_CATEGORIES.map(cat => {
+                        {activeCategories.map(cat => {
                             const isSelected = categoryFilter === cat.id;
                             const count = categoryCounts[cat.id] || 0;
                             return (
@@ -509,8 +559,8 @@ export default function SystemLogsViewer() {
                         filteredLogs.map(log => (
                             <div key={log.id} className="pt-2 first:pt-0 flex flex-wrap items-start justify-between gap-2 hover:bg-slate-900/40 p-2 rounded-lg transition-colors">
                                 <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                                    <span className="text-slate-500 text-[11px] select-none whitespace-nowrap pt-0.5">
-                                        {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                    <span className="text-slate-500 text-[11px] select-none whitespace-nowrap pt-0.5" title={new Date(log.timestamp).toLocaleString()}>
+                                        {formatLogTimestamp(log.timestamp)}
                                     </span>
                                     {getCategoryBadge(log.category)}
                                     {getLevelBadge(log.level)}

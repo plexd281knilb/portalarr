@@ -199,9 +199,13 @@ class SystemLogger {
             this.loadRecentLogsFromDisk();
         }
 
-        // Normalize legacy categories
+        // Normalize legacy and alias categories
         let finalCategory: LogCategory = category;
         if (category === "PLEX_HUB") finalCategory = "PLEX";
+        if (category === "BOOK_ENGINE") finalCategory = "SCANNER";
+        if (category === "AUTO_GRAB") finalCategory = "DOWNLOAD";
+        if (category === "TAGGING" || category === "AGREGARR" || category === "MAINTAINERR" || category === "KOMETA") finalCategory = "CURATION";
+        if (category === "SETTINGS") finalCategory = "SYSTEM";
 
         const entry: SystemLogEntry = {
             id: `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -247,7 +251,7 @@ class SystemLogger {
         }
     }
 
-    public getLogs(limit = 1000, sinceId?: string): SystemLogEntry[] {
+    public getLogs(limit = 5000, sinceId?: string): SystemLogEntry[] {
         if (!this.diskLoaded) {
             this.loadRecentLogsFromDisk();
         }
@@ -330,6 +334,10 @@ if (!globalLogger.consoleIntercepted) {
         if (rawFirstArg.includes("[GET-MEDIA-APPS-ERROR]") || rawFirstArg === "Error: Unauthorized") return;
         if (args.length > 1 && (String(args[1]).includes("Error: Unauthorized") || String(args[1]) === "Unauthorized")) return;
 
+        // Filter out expected _prisma_migrations table check errors if any
+        if (rawFirstArg.includes("no such table: _prisma_migrations")) return;
+        if (args.length > 1 && String(args[1]).includes("no such table: _prisma_migrations")) return;
+
         // 1. Strip timestamp prefixes (e.g. from prisma.ts or node console: "[2026-09-09 10:48:50]", "[10:48:50]", etc.)
         let cleanMsg = rawFirstArg
             .replace(/^\[\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\]\s*/i, "")
@@ -358,8 +366,55 @@ if (!globalLogger.consoleIntercepted) {
         const hasTagToken = (...tokens: string[]) => tokens.some(t => tagTokens.includes(t.toUpperCase()));
         const hasTagSub = (...subs: string[]) => subs.some(s => tag.includes(s.toUpperCase()));
 
-        // 1. TAUTULLI
-        if (hasTagSub("TAUTULLI") || searchPool.includes("tautulli")) {
+        // 1. APPROVAL GATES (Admin Action Approval Queue & Governance)
+        if (
+            hasTagSub("APPROVAL", "APPROVALS", "GATE", "GATES") ||
+            hasTagToken("APPROVAL", "GATE") ||
+            searchPool.includes("queued for admin approval") ||
+            searchPool.includes("staged in admin approval") ||
+            searchPool.includes("approval queue") ||
+            searchPool.includes("requireapproval") ||
+            searchPool.includes("pending admin review")
+        ) {
+            category = "APPROVAL";
+        }
+        // 2. SECURITY / ACCESS CONTROL / CLOUDFLARE
+        else if (
+            hasTagSub("SECURITY", "FIREWALL", "BAN", "RATE-LIMIT", "RATELIMIT", "POLICY") ||
+            hasTagToken("SECURITY") ||
+            searchPool.includes("cloudflare access") ||
+            searchPool.includes("edge policy") ||
+            searchPool.includes("brute force") ||
+            searchPool.includes("rate limit") ||
+            searchPool.includes("security alert")
+        ) {
+            category = "SECURITY";
+        }
+        // 3. MONITORING / GLANCES / SERVER HEALTH
+        else if (
+            hasTagSub("MONITORING", "GLANCES", "HEALTH", "HEARTBEAT", "TELEMETRY", "METRICS") ||
+            hasTagToken("MONITORING", "METRICS") ||
+            searchPool.includes("glances") ||
+            searchPool.includes("server health") ||
+            searchPool.includes("heartbeat") ||
+            searchPool.includes("host hardware") ||
+            searchPool.includes("hardware telemetry")
+        ) {
+            category = "MONITORING";
+        }
+        // 4. SEERR / OVERSEERR / JELLYSEERR
+        else if (
+            hasTagSub("SEERR", "OVERSEERR", "JELLYSEERR") ||
+            hasTagToken("SEERR") ||
+            searchPool.includes("overseerr") ||
+            searchPool.includes("jellyseerr") ||
+            searchPool.includes("seerr quota") ||
+            searchPool.includes("seerr request")
+        ) {
+            category = "SEERR";
+        }
+        // 5. TAUTULLI
+        else if (hasTagSub("TAUTULLI") || searchPool.includes("tautulli")) {
             category = "TAUTULLI";
         }
         // 2. KINDLE (Includes Mobi-Bounce format sanitization)
@@ -444,16 +499,13 @@ if (!globalLogger.consoleIntercepted) {
         ) {
             category = "EMAIL";
         }
-        // 8. MEDIA APPS (Radarr, Sonarr, Readarr, Glances, Overseerr, etc.)
+        // 8. MEDIA APPS (Radarr, Sonarr, Readarr, Bazarr, Ombi, etc.)
         else if (
-            hasTagSub("RADARR", "SONARR", "READARR", "GLANCES", "OVERSEERR", "JELLYSEERR", "BAZARR", "OMBI", "MAINTAINERR", "MEDIA-APP") ||
+            hasTagSub("RADARR", "SONARR", "READARR", "BAZARR", "OMBI", "MAINTAINERR", "MEDIA-APP") ||
             hasTagToken("APP", "APPS") ||
             searchPool.includes("radarr") ||
             searchPool.includes("sonarr") ||
             searchPool.includes("readarr") ||
-            searchPool.includes("glances") ||
-            searchPool.includes("overseerr") ||
-            searchPool.includes("jellyseerr") ||
             searchPool.includes("bazarr") ||
             searchPool.includes("getpublicmediaapps")
         ) {
@@ -490,11 +542,13 @@ if (!globalLogger.consoleIntercepted) {
         ) {
             category = "AUTH";
         }
-        // 11. SCANNER / LIBRARY ORGANIZER / AUDIOBOOK / EPUB / COMICS
+        // 11. SCANNER / BOOK ENGINE / LIBRARY ORGANIZER / AUDIOBOOK / EPUB / COMICS
         else if (
-            hasTagSub("SCANNER", "EPUB", "AUDIOBOOK", "SERIES-MONITOR", "SERIES-EXPANSION", "CHAPTER", "CHAPTERS", "RENAME", "CLEANUP", "PURGE", "PATH") ||
+            hasTagSub("SCANNER", "BOOK_ENGINE", "BOOK-ENGINE", "EPUB", "AUDIOBOOK", "SERIES-MONITOR", "SERIES-EXPANSION", "CHAPTER", "CHAPTERS", "RENAME", "CLEANUP", "PURGE", "PATH") ||
             searchPool.includes("scanning library") ||
             searchPool.includes("scan library") ||
+            searchPool.includes("book_engine") ||
+            searchPool.includes("book engine") ||
             searchPool.includes("library") ||
             searchPool.includes("audiobook") ||
             searchPool.includes("chapter") ||

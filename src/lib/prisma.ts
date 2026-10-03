@@ -175,12 +175,17 @@ export async function ensureSchemaColumns(): Promise<void> {
 
             // Auto-recover any failed/incomplete migrations in _prisma_migrations so Prisma never gets stuck in P3009/P3018
             try {
-                await prisma.$executeRawUnsafe(`
-                    UPDATE "_prisma_migrations" 
-                    SET "finished_at" = COALESCE("finished_at", CURRENT_TIMESTAMP), 
-                        "applied_steps_count" = CASE WHEN "applied_steps_count" = 0 THEN 1 ELSE "applied_steps_count" END
-                    WHERE "finished_at" IS NULL AND "rolled_back_at" IS NULL;
-                `);
+                const tableCheck = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT name FROM sqlite_master WHERE type='table' AND name='_prisma_migrations';`
+                ).catch(() => []);
+                if (tableCheck && tableCheck.length > 0) {
+                    await prisma.$executeRawUnsafe(`
+                        UPDATE "_prisma_migrations" 
+                        SET "finished_at" = COALESCE("finished_at", CURRENT_TIMESTAMP), 
+                            "applied_steps_count" = CASE WHEN "applied_steps_count" = 0 THEN 1 ELSE "applied_steps_count" END
+                        WHERE "finished_at" IS NULL AND "rolled_back_at" IS NULL;
+                    `);
+                }
             } catch (migErr) {
                 // Ignore if table does not exist
             }

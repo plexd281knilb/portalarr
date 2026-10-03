@@ -535,6 +535,20 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - `<ImpersonationBanner />` includes a compact inline `<Select>` dropdown on every page, allowing admins to switch accounts directly from `/library`, `/discover`, `/requests`, etc., without returning to admin first.
   - Returning to admin cleanly clears `portalarr_impersonator_token` and reloads the current page (or `/` if on `/pending`) without redirecting to `/settings/access`.
 
+### 30. Live System & Diagnostic Activity Stream (`SystemLogsViewer` & `SystemLogger`)
+- **Full Ring Buffer Capacity (5,000 Entries)**:
+  - System logs capture up to 5,000 in-memory entries with append-only JSONL disk persistence (`data/system_logs.jsonl`).
+  - Both `/api/system/logs` and `getSystemLogsAction` default to returning 5,000 entries so no logs are truncated or omitted on initial load or manual refresh.
+- **Dynamic Category Detection & Category Normalization (`normalizeCategory`)**:
+  - Predefined categories include `ALL`, `PLEX` (📺), `TAUTULLI` (📊), `SEERR` (🍿), `SCANNER` (📚), `DOWNLOAD` (📥), `AI_AGENT` (🤖), `COVER` (🖼️), `AUTH` (🔐), `SECURITY` (🔒), `APPROVAL` (🛡️), `KINDLE` (📖), `EMAIL` (✉️), `APPS` (⚡), `DATABASE` (💾), `API` (🌐), `MONITORING` (📡), `CURATION` (🎨), and `SYSTEM` (⚙️).
+  - Micro-categories and internal alias tags normalize cleanly: `BOOK_ENGINE` -> `SCANNER`, `AUTO_GRAB` -> `DOWNLOAD`, `TAGGING`/`AGREGARR`/`MAINTAINERR`/`KOMETA` -> `CURATION`, `SETTINGS` -> `SYSTEM`, and `PLEX_HUB` -> `PLEX`.
+  - Dynamic category fallback (`activeCategories`) scans active logs and dynamically renders any unlisted category with its own pill, icon, badge, and live count, guaranteeing zero log omission.
+- **Clean Boot & Migration Guard Rails**:
+  - `ensureSchemaColumns()` in `src/lib/prisma.ts` inspects `sqlite_master` before executing `_prisma_migrations` recovery queries, eliminating repetitive SQLite Code 1 raw query errors on startup and build.
+- **Multi-Field Filtering & Smart Timestamping**:
+  - Search filter matches concurrently across `log.message`, `log.category`, `log.details`, and `log.level` (e.g. typing "ERROR" or "WARN").
+  - Timestamps format dynamically as `HH:mm:ss` for events logged today and `MMM D HH:mm:ss` for historical entries, paired with full locale date tooltips on hover.
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.
