@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-// 1. Add deleteSupportTicket to your imports
 import { getSupportTickets, updateTicketStatus, deleteSupportTicket } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,13 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Mail, LifeBuoy, Send, Trash2, Loader2, UserCog, Film, Tv, BookOpen } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Mail, LifeBuoy, Send, Trash2, Loader2, UserCog, Film, Tv, BookOpen, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 
 export default function AdminTicketsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [ticketToDelete, setTicketToDelete] = useState<any | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const loadTickets = async () => {
         setLoading(true);
@@ -36,16 +39,21 @@ export default function AdminTicketsPage() {
         await updateTicketStatus(id, newStatus, comment);
     };
 
-    // 3. Add the delete handler
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to permanently delete this ticket?")) return;
+    const confirmDelete = async () => {
+        if (!ticketToDelete) return;
+        const id = ticketToDelete.id;
+        setDeleteLoading(true);
+        setErrorMessage(null);
         
         // Optimistic UI update
         setTickets(prev => prev.filter(t => t.id !== id));
         const result = await deleteSupportTicket(id);
         
+        setDeleteLoading(false);
+        setTicketToDelete(null);
+
         if (result.error) {
-            alert(result.error);
+            setErrorMessage(result.error);
             loadTickets(); // Refresh if delete fails
         }
     };
@@ -77,6 +85,18 @@ export default function AdminTicketsPage() {
                     Refresh Tickets
                 </Button>
             </div>
+            
+            {errorMessage && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                        <span>{errorMessage}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setErrorMessage(null)} className="h-6 text-[10px] text-rose-400 hover:text-rose-200 cursor-pointer">
+                        Dismiss
+                    </Button>
+                </div>
+            )}
 
             <div className="grid gap-6">
                 {tickets.length === 0 && !loading && (
@@ -111,8 +131,8 @@ export default function AdminTicketsPage() {
                                     <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95"
-                                        onClick={() => handleDelete(ticket.id)}
+                                        className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95 cursor-pointer"
+                                        onClick={() => setTicketToDelete(ticket)}
                                         title="Delete Ticket"
                                     >
                                         <Trash2 className="h-4 w-4" />
@@ -186,6 +206,41 @@ export default function AdminTicketsPage() {
                     </Card>
                 ))}
             </div>
+
+            {/* Permanent Delete Confirmation Dialog */}
+            <Dialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
+                <DialogContent className="sm:max-w-md bg-[#121218] border-border/60 text-foreground">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-rose-400">
+                            <Trash2 className="h-5 w-5" /> Permanently Delete Ticket?
+                        </DialogTitle>
+                        <DialogDescription className="text-muted-foreground text-xs leading-relaxed pt-1">
+                            Are you sure you want to permanently delete ticket <strong>#{ticketToDelete?.id}</strong> from <strong>{ticketToDelete?.name}</strong>? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setTicketToDelete(null)}
+                            disabled={deleteLoading}
+                            className="cursor-pointer"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={confirmDelete}
+                            disabled={deleteLoading}
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-semibold cursor-pointer gap-1.5"
+                        >
+                            {deleteLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            Delete Ticket
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

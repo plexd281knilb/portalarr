@@ -4052,6 +4052,143 @@ async function runTestSuite() {
         await prisma.user.delete({ where: { id: trialUser.id } });
     });
 
+    // 78. AI Server Assistant: Autonomy Levels, Privacy Boundaries, Release Scoring & Rate Limiting
+    await assertTest("Test 78: AI Assistant Tools, Guardrails, Autonomy & Safety", async () => {
+        const { 
+            validateUserCrossBoundaryQuery, 
+            checkAgentRateLimit, 
+            recordAgentGrabAction, 
+            validateMediaReleaseCandidate 
+        } = await import("../src/lib/ai-agent-guardrails");
+        const { askAiServerMaster } = await import("../src/lib/ai-server-assistant");
+
+        // 1. Privacy Boundary Guardrail
+        const testUser = { id: "test-user-id", username: "alice", email: "alice@example.com", role: "USER" };
+        const testAdmin = { id: "test-admin-id", username: "admin_user", email: "admin@example.com", role: "ADMIN" };
+        const linkedSubs = [
+            { id: "sub-1", username: "alice_kid", subAccountLabel: "Kids Tablet", accountType: "KID" },
+            { id: "sub-2", username: "alice_living", subAccountLabel: "Living Room TV", accountType: "LIVING_ROOM" }
+        ];
+
+        // 1a. Non-admin querying other users
+        const reconCheck = validateUserCrossBoundaryQuery("what other users are watching right now?", testUser, linkedSubs);
+        if (reconCheck.allowed || reconCheck.violationType !== "CROSS_USER_RECONNAISSANCE") {
+            throw new Error(`Expected CROSS_USER_RECONNAISSANCE violation, got: ${JSON.stringify(reconCheck)}`);
+        }
+
+        // 1b. Non-admin terminating another user's stream
+        const killOtherCheck = validateUserCrossBoundaryQuery("stop stream for bob", testUser, linkedSubs);
+        if (killOtherCheck.allowed || killOtherCheck.violationType !== "CROSS_USER_STREAM_TERMINATION") {
+            throw new Error(`Expected CROSS_USER_STREAM_TERMINATION violation, got: ${JSON.stringify(killOtherCheck)}`);
+        }
+
+        // 1c. Non-admin attempting to shut off another user's access
+        const accessCheck = validateUserCrossBoundaryQuery("shut off access for charlie", testUser, linkedSubs);
+        if (accessCheck.allowed || accessCheck.violationType !== "UNAUTHORIZED_ACCESS_MODIFICATION") {
+            throw new Error(`Expected UNAUTHORIZED_ACCESS_MODIFICATION violation, got: ${JSON.stringify(accessCheck)}`);
+        }
+
+        // 1d. Non-admin querying self or linked sub-account (must be ALLOWED)
+        const selfKillCheck = validateUserCrossBoundaryQuery("stop my stream", testUser, linkedSubs);
+        if (!selfKillCheck.allowed) {
+            throw new Error(`Expected self stream stop to be allowed, got: ${JSON.stringify(selfKillCheck)}`);
+        }
+
+        const livingRoomCheck = validateUserCrossBoundaryQuery("stop the living room stream", testUser, linkedSubs);
+        if (!livingRoomCheck.allowed) {
+            throw new Error(`Expected living room sub-account stop to be allowed, got: ${JSON.stringify(livingRoomCheck)}`);
+        }
+
+        const kidsCheck = validateUserCrossBoundaryQuery("is the kids tablet stream working?", testUser, linkedSubs);
+        if (!kidsCheck.allowed) {
+            throw new Error(`Expected kids sub-account query to be allowed, got: ${JSON.stringify(kidsCheck)}`);
+        }
+
+        // 1e. Admin querying cluster (must be ALLOWED across all users)
+        const adminReconCheck = validateUserCrossBoundaryQuery("show all active streams on the server", testAdmin, []);
+        if (!adminReconCheck.allowed) {
+            throw new Error(`Expected admin cluster query to be allowed, got: ${JSON.stringify(adminReconCheck)}`);
+        }
+
+        // 2. Automated Grab Rate Limiting
+        const testRateId = `test_rate_user_${Date.now()}`;
+        const limitCheck1 = checkAgentRateLimit(testRateId, 2);
+        if (!limitCheck1.allowed || limitCheck1.remaining !== 2) {
+            throw new Error(`Expected 2 remaining grabs, got: ${JSON.stringify(limitCheck1)}`);
+        }
+
+        // Record grab 1 and 2
+        recordAgentGrabAction(testRateId, "RADARR_TEST", "Sample Movie 1", 2);
+        recordAgentGrabAction(testRateId, "RADARR_TEST", "Sample Movie 2", 2);
+
+        // 3rd grab should be BLOCKED
+        const limitCheckBlocked = checkAgentRateLimit(testRateId, 2);
+        if (limitCheckBlocked.allowed || limitCheckBlocked.remaining !== 0 || !limitCheckBlocked.resetInMinutes) {
+            throw new Error(`Expected rate limit to block 3rd grab, got: ${JSON.stringify(limitCheckBlocked)}`);
+        }
+
+        // 3. Media Release Candidate Validation & Scoring
+        // 3a. Low-quality CAM rejection
+        const camRelease = { title: "Inception.2010.HDCAM.x264", size: 1.5 * 1024 * 1024 * 1024, protocol: "torrent", seeders: 50 };
+        const camVal = validateMediaReleaseCandidate(camRelease, "movie", "English");
+        if (camVal.ok || !camVal.reason?.includes("CAM")) {
+            throw new Error(`Expected CAM release to be rejected, got: ${JSON.stringify(camVal)}`);
+        }
+
+        // 3b. Foreign-only release rejection when English requested
+        const foreignRelease = { title: "Inception.2010.1080p.Spanish.Only.x264", size: 8 * 1024 * 1024 * 1024, protocol: "torrent", seeders: 30 };
+        const foreignVal = validateMediaReleaseCandidate(foreignRelease, "movie", "English");
+        if (foreignVal.ok) {
+            throw new Error(`Expected foreign-only release to be rejected, got: ${JSON.stringify(foreignVal)}`);
+        }
+
+        // 3c. Zero seeders rejection
+        const deadRelease = { title: "Inception.2010.1080p.BluRay.x264", size: 10 * 1024 * 1024 * 1024, protocol: "torrent", seeders: 0 };
+        const deadVal = validateMediaReleaseCandidate(deadRelease, "movie", "English");
+        if (deadVal.ok || !deadVal.reason?.includes("Zero seeders")) {
+            throw new Error(`Expected 0-seeders release to be rejected, got: ${JSON.stringify(deadVal)}`);
+        }
+
+        // 3d. File size bounds (Too small: 100MB for a movie)
+        const tinyRelease = { title: "Inception.2010.1080p.BluRay.x264", size: 100 * 1024 * 1024, protocol: "torrent", seeders: 20 };
+        const tinyVal = validateMediaReleaseCandidate(tinyRelease, "movie", "English");
+        if (tinyVal.ok || !tinyVal.reason?.includes("too small")) {
+            throw new Error(`Expected tiny release to be rejected, got: ${JSON.stringify(tinyVal)}`);
+        }
+
+        // 3e. High-quality verified release candidate
+        const goodRelease = { 
+            title: "Inception.2010.1080p.BluRay.DTS-HD.MA.5.1.x264-Portal", 
+            size: 14 * 1024 * 1024 * 1024, 
+            protocol: "torrent", 
+            seeders: 45,
+            languages: [{ name: "English", id: 1 }]
+        };
+        const goodVal = validateMediaReleaseCandidate(goodRelease, "movie", "English");
+        if (!goodVal.ok || goodVal.score < 140) {
+            throw new Error(`Expected good release to pass with high score, got score=${goodVal.score}, ok=${goodVal.ok}`);
+        }
+
+        // 4. Autonomy Level Enforcement in AI Server Master
+        // Save Settings to advisory level
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { aiAutonomyLevel: "advisory" },
+            create: { id: "global", aiAutonomyLevel: "advisory" }
+        });
+
+        const advisoryRes = await askAiServerMaster("stop my stream", [], testUser);
+        if (!advisoryRes.success || !advisoryRes.answer.includes("Level 1: Advisory Mode")) {
+            throw new Error(`Expected advisory response in Level 1 mode, got: ${advisoryRes.answer}`);
+        }
+
+        // Restore Settings to autonomous
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { aiAutonomyLevel: "autonomous" }
+        });
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

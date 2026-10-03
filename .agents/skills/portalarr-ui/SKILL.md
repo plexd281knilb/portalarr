@@ -569,7 +569,16 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Provide an inline "Active Add-ons & Profile Perks" manager in the user's Access & Timer dialog (`subModalUser`), allowing administrators to toggle available add-ons with immediate optimistic UI updates (`toggleUserAddonAdminAction`).
   - Active add-ons display on member cards with a yellow `Zap` icon badge, count, and multi-line hover tooltip detailing all active perks.
 
+### 32. Support Ticket & AI Diagnostic Controls (Radix Confirmation Dialogs & Alert Suppression)
+- **100% Elimination of Native `confirm()` and `alert()` in Ticket Management**:
+  - In `/admin/tickets` and ticket moderation workflows, never invoke native window `confirm()` or `alert()`.
+  - Ticket deletions are gated by a dedicated Radix UI `<Dialog>` (`deleteModalTicket`) providing explicit item context (ticket title, ID, user), a red confirmation button with loading spinner, and an inline dismissible error banner (`deleteError`) if the deletion fails.
+- **AI Diagnostics & Support Auto-Escalation**:
+  - Auto-generated diagnostic tickets created by the AI Assistant or client errors include comprehensive telemetry payloads (stream health, audio codecs, transcode metrics, user client info) and an `[AUTO-TICKET]` tag in the title.
+  - In-app status badges distinguish ticket priorities (`HIGH`, `MEDIUM`, `LOW`) and state transitions (`OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`) with semantic color accents and real-time refresh.
+
 ---
+
 
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
