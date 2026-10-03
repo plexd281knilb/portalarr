@@ -39,14 +39,14 @@ export async function testArrConfig(url: string, apiKey: string) {
         };
 
         // Try v3 first (Radarr, Sonarr), then v1 (Readarr, Lidarr)
-        let profilesRes = await fetch(`${base}/api/v3/qualityprofile?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+        let profilesRes = await fetch(`${base}/api/v3/qualityprofile?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store", signal: AbortSignal.timeout(10000) });
         if (profilesRes.status === 404) {
-            profilesRes = await fetch(`${base}/api/v1/qualityprofile?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+            profilesRes = await fetch(`${base}/api/v1/qualityprofile?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store", signal: AbortSignal.timeout(10000) });
         }
 
-        let foldersRes = await fetch(`${base}/api/v3/rootfolder?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+        let foldersRes = await fetch(`${base}/api/v3/rootfolder?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store", signal: AbortSignal.timeout(10000) });
         if (foldersRes.status === 404) {
-            foldersRes = await fetch(`${base}/api/v1/rootfolder?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store" });
+            foldersRes = await fetch(`${base}/api/v1/rootfolder?apikey=${encodeURIComponent(cleanKey)}`, { headers, cache: "no-store", signal: AbortSignal.timeout(10000) });
         }
         
         if (!profilesRes.ok) throw new Error(`Profiles API failed: HTTP ${profilesRes.status} ${profilesRes.statusText}`);
@@ -180,6 +180,35 @@ export async function getArrProfilesAndFolders(appId: string, type?: "radarr" | 
     }
 }
 
+export async function getArrAppById(appId: string, type: "radarr" | "sonarr") {
+    const session = await verifySuperUserOrAdmin();
+    if (!appId || appId === "none") {
+        throw new Error("Invalid instance ID");
+    }
+
+    const app = await prisma.mediaApp.findUnique({
+        where: { id: appId }
+    });
+
+    if (!app || app.type !== type) {
+        throw new Error(`${type === "radarr" ? "Radarr" : "Sonarr"} instance not found`);
+    }
+
+    if (session.role !== "ADMIN" && !app.enabledForUsers) {
+        throw new Error("Instance not permitted or disabled for users");
+    }
+
+    return {
+        id: app.id,
+        name: app.name,
+        url: app.url,
+        externalUrl: app.externalUrl,
+        allowedQualityProfileIds: app.allowedQualityProfileIds ? app.allowedQualityProfileIds.split(",").map(s => s.trim()).filter(Boolean) : [],
+        allowedRootFolderIds: app.allowedRootFolderIds ? app.allowedRootFolderIds.split(",").map(s => s.trim()).filter(Boolean) : [],
+        apiKey: decryptData(app.apiKey || "")
+    };
+}
+
 export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
     try {
         let session = null;
@@ -187,13 +216,17 @@ export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
             session = await getSession();
         } catch {}
 
+        let apps;
         if (session && session.role === "ADMIN") {
-            return await getEnabledArrInstancesInternal(type);
+            apps = await prisma.mediaApp.findMany({
+                where: { type }
+            });
+        } else {
+            apps = await prisma.mediaApp.findMany({
+                where: { type, enabledForUsers: true }
+            });
         }
 
-        const apps = await prisma.mediaApp.findMany({
-            where: { type, enabledForUsers: true }
-        });
         return {
             success: true,
             data: apps.map(app => ({
@@ -201,9 +234,8 @@ export async function getEnabledArrInstances(type: "radarr" | "sonarr") {
                 name: app.name,
                 url: app.url,
                 externalUrl: app.externalUrl,
-                allowedQualityProfileIds: app.allowedQualityProfileIds ? app.allowedQualityProfileIds.split(",").map(s => s.trim()) : [],
-                allowedRootFolderIds: app.allowedRootFolderIds ? app.allowedRootFolderIds.split(",").map(s => s.trim()) : [],
-                apiKey: decryptData(app.apiKey || "")
+                allowedQualityProfileIds: app.allowedQualityProfileIds ? app.allowedQualityProfileIds.split(",").map(s => s.trim()).filter(Boolean) : [],
+                allowedRootFolderIds: app.allowedRootFolderIds ? app.allowedRootFolderIds.split(",").map(s => s.trim()).filter(Boolean) : []
             }))
         };
     } catch (e: any) {
@@ -219,6 +251,7 @@ export async function arrApiGet(app: any, endpoint: string) {
                 "X-Api-Key": app.apiKey,
                 "Accept": "application/json"
             },
+            signal: AbortSignal.timeout(15000),
             cache: "no-store"
         });
         const text = await res.text();
@@ -254,6 +287,7 @@ export async function arrApiPost(app: any, endpoint: string, body: any) {
                 "Accept": "application/json"
             },
             body: JSON.stringify(body),
+            signal: AbortSignal.timeout(15000),
             cache: "no-store"
         });
         const text = await res.text();
@@ -289,6 +323,7 @@ export async function arrApiPut(app: any, endpoint: string, body: any) {
                 "Accept": "application/json"
             },
             body: JSON.stringify(body),
+            signal: AbortSignal.timeout(15000),
             cache: "no-store"
         });
         const text = await res.text();
@@ -322,6 +357,7 @@ export async function arrApiDelete(app: any, endpoint: string) {
                 "X-Api-Key": app.apiKey,
                 "Accept": "application/json"
             },
+            signal: AbortSignal.timeout(15000),
             cache: "no-store"
         });
         if (!res.ok && res.status !== 204) {
@@ -339,12 +375,7 @@ export async function arrApiDelete(app: any, endpoint: string) {
 
 export async function searchRadarrMovies(appId: string, term: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "radarr");
         return await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(term)}`);
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -353,11 +384,7 @@ export async function searchRadarrMovies(appId: string, term: string) {
 
 export async function addRadarrMovie(appId: string, movieData: any, qualityProfileId: number, rootFolderPath: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
+        const app = await getArrAppById(appId, "radarr");
 
         if (app.allowedQualityProfileIds.length > 0 && !app.allowedQualityProfileIds.includes(qualityProfileId.toString())) {
             throw new Error("Quality profile not allowed for this instance");
@@ -384,12 +411,7 @@ export async function addRadarrMovie(appId: string, movieData: any, qualityProfi
 
 export async function getRadarrLibrary(appId: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "radarr");
         return await arrApiGet(app, "/api/v3/movie");
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -398,13 +420,22 @@ export async function getRadarrLibrary(appId: string) {
 
 export async function updateRadarrMovie(appId: string, movie: any) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "radarr");
         return await arrApiPut(app, `/api/v3/movie/${movie.id}`, movie);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteRadarrMovie(
+    appId: string,
+    movieId: number,
+    deleteFiles: boolean = false,
+    addImportExclusion: boolean = false
+) {
+    try {
+        const app = await getArrAppById(appId, "radarr");
+        return await arrApiDelete(app, `/api/v3/movie/${movieId}?deleteFiles=${deleteFiles}&addImportExclusion=${addImportExclusion}`);
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -412,12 +443,7 @@ export async function updateRadarrMovie(appId: string, movie: any) {
 
 export async function triggerRadarrSearch(appId: string, movieId: number) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "radarr");
         return await arrApiPost(app, "/api/v3/command", { name: "MoviesSearch", movieIds: [movieId] });
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -426,12 +452,7 @@ export async function triggerRadarrSearch(appId: string, movieId: number) {
 
 export async function getRadarrReleases(appId: string, movieId: number) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "radarr");
         return await arrApiGet(app, `/api/v3/release?movieId=${movieId}`);
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -440,12 +461,7 @@ export async function getRadarrReleases(appId: string, movieId: number) {
 
 export async function downloadRadarrRelease(appId: string, guid: string, indexerId: number) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "radarr");
         return await arrApiPost(app, "/api/v3/release", { guid, indexerId });
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -454,13 +470,22 @@ export async function downloadRadarrRelease(appId: string, guid: string, indexer
 
 export async function getRadarrQueue(appId: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "radarr");
         return await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000&sortKey=timeLeft&sortDirection=ascending");
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteRadarrQueueItem(
+    appId: string,
+    queueId: number,
+    removeFromClient: boolean = true,
+    blocklist: boolean = false
+) {
+    try {
+        const app = await getArrAppById(appId, "radarr");
+        return await arrApiDelete(app, `/api/v3/queue/${queueId}?removeFromClient=${removeFromClient}&blocklist=${blocklist}`);
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -468,11 +493,7 @@ export async function getRadarrQueue(appId: string) {
 
 export async function forceImportRadarrQueueItem(appId: string, downloadId: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("radarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Radarr instance not found or disabled");
+        const app = await getArrAppById(appId, "radarr");
 
         // Retrieve the queue to find the correct movieId for this download
         const queueRes = await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000");
@@ -522,12 +543,7 @@ export async function forceImportRadarrQueueItem(appId: string, downloadId: stri
 
 export async function searchSonarrSeries(appId: string, term: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(term)}`);
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -536,11 +552,7 @@ export async function searchSonarrSeries(appId: string, term: string) {
 
 export async function addSonarrSeries(appId: string, seriesData: any, qualityProfileId: number, rootFolderPath: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
+        const app = await getArrAppById(appId, "sonarr");
 
         if (app.allowedQualityProfileIds.length > 0 && !app.allowedQualityProfileIds.includes(qualityProfileId.toString())) {
             throw new Error("Quality profile not allowed for this instance");
@@ -574,12 +586,7 @@ export async function addSonarrSeries(appId: string, seriesData: any, qualityPro
 
 export async function getSonarrLibrary(appId: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiGet(app, "/api/v3/series");
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -588,12 +595,7 @@ export async function getSonarrLibrary(appId: string) {
 
 export async function updateSonarrSeries(appId: string, series: any) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiPut(app, `/api/v3/series/${series.id}`, series);
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -602,12 +604,7 @@ export async function updateSonarrSeries(appId: string, series: any) {
 
 export async function triggerSonarrSearch(appId: string, seriesId: number) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiPost(app, "/api/v3/command", { name: "SeriesSearch", seriesId });
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -616,12 +613,7 @@ export async function triggerSonarrSearch(appId: string, seriesId: number) {
 
 export async function getSonarrEpisodes(appId: string, seriesId: number, seasonNumber: number) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiGet(app, `/api/v3/episode?seriesId=${seriesId}&seasonNumber=${seasonNumber}`);
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -630,12 +622,7 @@ export async function getSonarrEpisodes(appId: string, seriesId: number, seasonN
 
 export async function updateSonarrEpisodeMonitor(appId: string, episodeIds: number[], monitored: boolean) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiPut(app, `/api/v3/episode/monitor`, { episodeIds, monitored });
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -644,12 +631,7 @@ export async function updateSonarrEpisodeMonitor(appId: string, episodeIds: numb
 
 export async function getSonarrReleases(appId: string, seriesId: number, seasonNumber?: number, episodeId?: number) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         let url = `/api/v3/release?seriesId=${seriesId}`;
         if (episodeId !== undefined) {
             url = `/api/v3/release?episodeId=${episodeId}`;
@@ -664,12 +646,7 @@ export async function getSonarrReleases(appId: string, seriesId: number, seasonN
 
 export async function downloadSonarrRelease(appId: string, guid: string, indexerId: number) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiPost(app, "/api/v3/release", { guid, indexerId });
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -678,12 +655,7 @@ export async function downloadSonarrRelease(appId: string, guid: string, indexer
 
 export async function getSonarrQueue(appId: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
-        
+        const app = await getArrAppById(appId, "sonarr");
         return await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000&sortKey=timeLeft&sortDirection=ascending");
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -692,11 +664,7 @@ export async function getSonarrQueue(appId: string) {
 
 export async function forceImportSonarrQueueItem(appId: string, downloadId: string) {
     try {
-        await verifySuperUserOrAdmin();
-        const appsRes = await getEnabledArrInstances("sonarr");
-        if (!appsRes.success || !appsRes.data) throw new Error(appsRes.error || "Failed to load instances");
-        const app = appsRes.data.find((a: any) => a.id === appId);
-        if (!app) throw new Error("Sonarr instance not found or disabled");
+        const app = await getArrAppById(appId, "sonarr");
 
         // Retrieve the queue to find the correct seriesId for this download
         const queueRes = await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000");

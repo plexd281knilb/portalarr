@@ -7,9 +7,11 @@ import {
   searchRadarrMovies,
   addRadarrMovie,
   getRadarrQueue,
+  deleteRadarrQueueItem,
   forceImportRadarrQueueItem,
   getRadarrLibrary,
   updateRadarrMovie,
+  deleteRadarrMovie,
   triggerRadarrSearch,
   getRadarrReleases,
   downloadRadarrRelease,
@@ -49,6 +51,12 @@ import {
   RefreshCw,
   XCircle,
   CheckCircle2,
+  Trash2,
+  Sparkles,
+  Film,
+  Clock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import ErrorTicketModal from "@/components/error-ticket-modal";
@@ -66,6 +74,23 @@ export default function RadarrPage() {
   const [instances, setInstances] = useState<any[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("search");
+
+  // Floating Toast Notification
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
+
+  const showToast = (
+    message: string,
+    type: "success" | "error" | "info" = "success"
+  ) => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
 
   // Error Ticket Modal State
   const [errorModal, setErrorModal] = useState<{
@@ -102,6 +127,7 @@ export default function RadarrPage() {
   const [queueLoading, setQueueLoading] = useState(true);
   const [queueSearch, setQueueSearch] = useState("");
   const [importingId, setImportingId] = useState<string | null>(null);
+  const [deletingQueueId, setDeletingQueueId] = useState<number | null>(null);
 
   // Library state
   const [library, setLibrary] = useState<any[]>([]);
@@ -114,6 +140,20 @@ export default function RadarrPage() {
   const [libFilterStatus, setLibFilterStatus] = useState<
     "all" | "monitored" | "unmonitored" | "missing" | "downloaded"
   >("all");
+
+  // Movie Delete Dialog state
+  const [deleteMovieDialog, setDeleteMovieDialog] = useState<{
+    open: boolean;
+    movie: any | null;
+    deleteFiles: boolean;
+    loading: boolean;
+  }>({
+    open: false,
+    movie: null,
+    deleteFiles: false,
+    loading: false,
+  });
+
   // Interactive Release Modal
   const [releasesModalOpen, setReleasesModalOpen] = useState(false);
   const [releasesLoading, setReleasesLoading] = useState(false);
@@ -133,10 +173,9 @@ export default function RadarrPage() {
     try {
       const res = await getRadarrReleases(selectedAppId, movie.id);
       if (res.success && res.data) {
-        // Sort by weight/quality descending, or standard sort
         setReleases(
           res.data.sort(
-            (a: any, b: any) => b.customFormatScore - a.customFormatScore,
+            (a: any, b: any) => (b.customFormatScore || 0) - (a.customFormatScore || 0),
           ),
         );
       } else {
@@ -161,9 +200,9 @@ export default function RadarrPage() {
         release.indexerId,
       );
       if (res.success) {
-        alert("Download started!");
+        showToast(`Download started for "${activeMovie?.title || release.title}"!`);
         setReleasesModalOpen(false);
-        setTimeout(fetchQueue, 2000);
+        setTimeout(() => fetchQueue(true), 1500);
       } else {
         showErrorModal(res.error || "Failed to send release to download client.", "Download Client Error", activeMovie.title);
       }
@@ -188,6 +227,22 @@ export default function RadarrPage() {
       console.error("Library fetch error", e);
     }
     setLibraryLoading(false);
+  };
+
+  const fetchQueue = async (silent = false) => {
+    if (!selectedAppId) return;
+    if (!silent) setQueueLoading(true);
+    try {
+      const res = await getRadarrQueue(selectedAppId);
+      if (res.success && res.data) {
+        setQueue(res.data.records || []);
+      } else {
+        console.error(res.error);
+      }
+    } catch (e) {
+      console.error("Queue fetch error", e);
+    }
+    if (!silent) setQueueLoading(false);
   };
 
   useEffect(() => {
@@ -231,21 +286,16 @@ export default function RadarrPage() {
     }
   }, [selectedAppId]);
 
-  const fetchQueue = async () => {
-    if (!selectedAppId) return;
-    setQueueLoading(true);
-    try {
-      const res = await getRadarrQueue(selectedAppId);
-      if (res.success && res.data) {
-        setQueue(res.data.records || []);
-      } else {
-        console.error(res.error);
-      }
-    } catch (e) {
-      console.error("Queue fetch error", e);
+  // Auto-poll queue every 5 seconds when queue tab is open
+  useEffect(() => {
+    if (activeTab === "queue" && selectedAppId) {
+      fetchQueue(true);
+      const timer = setInterval(() => {
+        fetchQueue(true);
+      }, 5000);
+      return () => clearInterval(timer);
     }
-    setQueueLoading(false);
-  };
+  }, [activeTab, selectedAppId]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,7 +317,18 @@ export default function RadarrPage() {
   };
 
   const handleAdd = async (movie: any) => {
-    if (!selectedAppId || !selectedProfileId || !selectedFolderId) return;
+    if (!selectedAppId) {
+      showErrorModal("Please select a Radarr instance above.", "Missing Instance");
+      return;
+    }
+    if (!selectedProfileId) {
+      showErrorModal("Please select a Quality Profile above before adding movies.", "Missing Profile");
+      return;
+    }
+    if (!selectedFolderId) {
+      showErrorModal("Please select a Root Folder above before adding movies.", "Missing Root Folder");
+      return;
+    }
 
     setAddingMovieId(movie.tmdbId);
     try {
@@ -278,7 +339,15 @@ export default function RadarrPage() {
         selectedFolderId,
       );
       if (res.success) {
-        alert("Movie added and download started!");
+        showToast(`Added "${movie.title}" and started search!`);
+        // Immediately reflect added state on this search card
+        setSearchResults((prev) =>
+          prev.map((m) =>
+            m.tmdbId === movie.tmdbId
+              ? { ...m, id: res.data?.id || 1, monitored: true }
+              : m
+          )
+        );
         fetchLibrary();
       } else {
         showErrorModal(res.error || "Failed to add movie to Radarr", "Add Movie Error", movie.title);
@@ -303,6 +372,11 @@ export default function RadarrPage() {
         setSearchResults((prev) =>
           prev.map((m) => (m.id === movie.id ? res.data : m)),
         );
+        showToast(
+          updatedMovie.monitored
+            ? `Now monitoring "${movie.title}"`
+            : `Unmonitored "${movie.title}"`
+        );
       } else {
         showErrorModal(res.error || "Failed to update monitored state", "Monitor Error", movie.title);
       }
@@ -319,7 +393,7 @@ export default function RadarrPage() {
     try {
       const res = await triggerRadarrSearch(selectedAppId, movie.id);
       if (res.success) {
-        alert(`Search command sent for: ${movie.title}`);
+        showToast(`Automatic search command sent for "${movie.title}"`);
       } else {
         showErrorModal(res.error || "Failed to trigger movie search", "Search Trigger Error", movie.title);
       }
@@ -336,8 +410,8 @@ export default function RadarrPage() {
     try {
       const res = await forceImportRadarrQueueItem(selectedAppId, downloadId);
       if (res.success) {
-        alert("Import command sent!");
-        setTimeout(fetchQueue, 2000);
+        showToast("Import command sent to Radarr!");
+        setTimeout(() => fetchQueue(true), 2000);
       } else {
         showErrorModal(res.error || "Failed to force import queue item", "Import Error", `Queue ID: ${downloadId}`);
       }
@@ -346,6 +420,77 @@ export default function RadarrPage() {
       showErrorModal(e.message || "Failed to force import queue item.", "Import Error", `Queue ID: ${downloadId}`);
     }
     setImportingId(null);
+  };
+
+  const handleDeleteQueueItem = async (item: any) => {
+    if (!selectedAppId) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to cancel and remove "${item.movie?.title || item.title}" from the queue?`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingQueueId(item.id);
+    try {
+      const res = await deleteRadarrQueueItem(selectedAppId, item.id, true, false);
+      if (res.success) {
+        showToast(`Removed "${item.movie?.title || item.title}" from queue`);
+        setQueue((prev) => prev.filter((q) => q.id !== item.id));
+      } else {
+        showErrorModal(res.error || "Failed to remove download from queue", "Queue Error", item.title);
+      }
+    } catch (e: any) {
+      console.error(e);
+      showErrorModal(e.message || "Failed to remove download from queue.", "Queue Error", item.title);
+    }
+    setDeletingQueueId(null);
+  };
+
+  const openDeleteMovieDialog = (movie: any) => {
+    setDeleteMovieDialog({
+      open: true,
+      movie,
+      deleteFiles: false,
+      loading: false,
+    });
+  };
+
+  const handleConfirmDeleteMovie = async () => {
+    if (!selectedAppId || !deleteMovieDialog.movie) return;
+    setDeleteMovieDialog((prev) => ({ ...prev, loading: true }));
+    try {
+      const movie = deleteMovieDialog.movie;
+      const res = await deleteRadarrMovie(
+        selectedAppId,
+        movie.id,
+        deleteMovieDialog.deleteFiles,
+        false
+      );
+      if (res.success) {
+        showToast(`Deleted "${movie.title}" from Radarr`);
+        setLibrary((prev) => prev.filter((m) => m.id !== movie.id));
+        setSearchResults((prev) =>
+          prev.map((m) =>
+            m.id === movie.id ? { ...m, id: undefined, monitored: false } : m
+          )
+        );
+        setDeleteMovieDialog({
+          open: false,
+          movie: null,
+          deleteFiles: false,
+          loading: false,
+        });
+      } else {
+        showErrorModal(res.error || "Failed to delete movie", "Delete Movie Error", movie.title);
+        setDeleteMovieDialog((prev) => ({ ...prev, loading: false }));
+      }
+    } catch (e: any) {
+      console.error(e);
+      showErrorModal(e.message || "Failed to delete movie.", "Delete Movie Error", deleteMovieDialog.movie?.title);
+      setDeleteMovieDialog((prev) => ({ ...prev, loading: false }));
+    }
   };
 
   if (loading)
@@ -409,13 +554,18 @@ export default function RadarrPage() {
     return 0;
   });
 
+  const downloadedCount = library.filter((m) => m.hasFile).length;
+  const missingCount = library.filter((m) => m.monitored && !m.hasFile).length;
+  const monitoredCount = library.filter((m) => m.monitored).length;
+  const unmonitoredCount = library.filter((m) => !m.monitored).length;
+
   return (
     <div className="space-y-4 sm:space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto pb-12 w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-2xl font-bold text-blue-400">Radarr (Movies)</h3>
           <p className="text-sm text-muted-foreground">
-            Self-serve movie downloads and library management.
+            Self-serve movie downloads, library management, and active queue telemetry.
           </p>
         </div>
         {instances.length > 1 && (
@@ -437,18 +587,19 @@ export default function RadarrPage() {
         )}
       </div>
 
-      <Tabs defaultValue="search" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-1 sm:grid-cols-3 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger value="search" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
             <Search className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
             <span className="truncate">Search TMDB</span>
           </TabsTrigger>
           <TabsTrigger value="library" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
+            <Film className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
             <span className="truncate">Library ({libraryLoading ? "..." : library.length})</span>
           </TabsTrigger>
           <TabsTrigger value="queue" className="group py-2 sm:py-2.5 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-500/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 min-w-0">
             <Download className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-            <span className="truncate">Activity / Queue</span>
+            <span className="truncate">Activity / Queue {queue.length > 0 ? `(${queue.length})` : ""}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -458,7 +609,7 @@ export default function RadarrPage() {
             <CardHeader>
               <CardTitle className="text-xl font-bold">Search New Movies</CardTitle>
               <CardDescription>
-                Search TMDB and add movies to your requested quality profile.
+                Search TMDB and add movies to your requested quality profile and folder.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -517,7 +668,7 @@ export default function RadarrPage() {
                     <SelectContent>
                       {folders.map((f) => (
                         <SelectItem key={f.id} value={f.path}>
-                          {f.path}
+                          {f.path} {f.freeSpaceFormatted ? `(${f.freeSpaceFormatted})` : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -643,7 +794,7 @@ export default function RadarrPage() {
             <CardHeader>
               <CardTitle className="text-xl font-bold">Library Management</CardTitle>
               <CardDescription>
-                View, monitor, and search for new copies of existing movies.
+                View, monitor, auto-search, inspect releases, and manage existing movies.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -669,17 +820,15 @@ export default function RadarrPage() {
                         value={libFilterStatus}
                         onValueChange={(val: any) => setLibFilterStatus(val)}
                       >
-                        <SelectTrigger className="flex-1 sm:w-[140px] min-w-[120px] bg-background/80">
+                        <SelectTrigger className="flex-1 sm:w-[160px] min-w-[130px] bg-background/80">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="downloaded">Downloaded</SelectItem>
-                          <SelectItem value="missing">Missing</SelectItem>
-                          <SelectItem value="monitored">Monitored</SelectItem>
-                          <SelectItem value="unmonitored">
-                            Unmonitored
-                          </SelectItem>
+                          <SelectItem value="all">All Status ({library.length})</SelectItem>
+                          <SelectItem value="downloaded">Downloaded ({downloadedCount})</SelectItem>
+                          <SelectItem value="missing">Missing ({missingCount})</SelectItem>
+                          <SelectItem value="monitored">Monitored ({monitoredCount})</SelectItem>
+                          <SelectItem value="unmonitored">Unmonitored ({unmonitoredCount})</SelectItem>
                         </SelectContent>
                       </Select>
                       <Select
@@ -741,7 +890,7 @@ export default function RadarrPage() {
                             )}
                           </div>
                           <div className="flex flex-col flex-1 min-w-0 py-0.5">
-                            <h4 className="font-semibold text-sm truncate pr-6">
+                            <h4 className="font-semibold text-sm truncate pr-6" title={`${movie.title} (${movie.year})`}>
                               {movie.title} ({movie.year})
                             </h4>
                             {(movie.inCinemas ||
@@ -796,49 +945,81 @@ export default function RadarrPage() {
                                   : "Unknown Profile"}
                               </Badge>
                             </div>
-                            <div className="mt-auto flex items-center gap-2 pt-2">
+                            <div className="mt-auto flex items-center gap-1.5 pt-2 flex-wrap sm:flex-nowrap">
                               <Button
                                 size="sm"
                                 variant={
-                                  movie.monitored ? "destructive" : "secondary"
+                                  movie.monitored ? "secondary" : "default"
                                 }
-                                className="h-7 text-xs flex-1 transition-all duration-200 hover:ring-2 hover:ring-red-500/30 active:scale-95"
+                                className={`h-7 px-2 text-xs flex-1 transition-all duration-200 active:scale-95 ${
+                                  !movie.monitored
+                                    ? "bg-blue-600 hover:bg-blue-500 text-white"
+                                    : "hover:bg-muted/80"
+                                }`}
                                 disabled={modifyingId === movie.id}
                                 onClick={() => {
                                   if (movie.monitored) {
                                     if (
                                       !window.confirm(
-                                        "Are you sure you want to unmonitor this movie?\n\nRadarr will no longer automatically search for or download new releases, upgrades, or missing files for this title.",
+                                        `Are you sure you want to unmonitor "${movie.title}"?\n\nRadarr will no longer automatically search for or download new releases, upgrades, or missing files for this title.`,
                                       )
                                     )
                                       return;
                                   }
                                   handleToggleMonitor(movie);
                                 }}
+                                title={movie.monitored ? "Click to unmonitor" : "Click to monitor"}
                               >
                                 {modifyingId === movie.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : movie.monitored ? (
-                                  "Unmonitor"
+                                  <>
+                                    <EyeOff className="h-3 w-3 mr-1 shrink-0" /> Unmonitor
+                                  </>
                                 ) : (
-                                  "Monitor"
+                                  <>
+                                    <Eye className="h-3 w-3 mr-1 shrink-0" /> Monitor
+                                  </>
                                 )}
                               </Button>
+
                               <Button
                                 size="sm"
-                                variant="default"
-                                className="h-7 text-xs flex-1 bg-blue-600 hover:bg-blue-500 text-white transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold"
+                                variant="outline"
+                                className="h-7 px-2 text-xs transition-all duration-200 hover:ring-2 hover:ring-blue-500/40 active:scale-95 border-border/60"
                                 disabled={modifyingId === movie.id}
-                                onClick={() => handleSearchRelease(movie)}
-                                title="Search for a new release interactively"
+                                onClick={() => handleTriggerSearch(movie)}
+                                title={`Trigger automatic search in Radarr for "${movie.title}"`}
                               >
                                 {modifyingId === movie.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
                                   <>
-                                    <Search className="h-3 w-3 mr-1" /> Search Release
+                                    <Sparkles className="h-3 w-3 sm:mr-1 shrink-0 text-amber-400" />
+                                    <span className="hidden sm:inline">Auto</span>
                                   </>
                                 )}
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 px-2 text-xs flex-1 bg-blue-600 hover:bg-blue-500 text-white transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold"
+                                disabled={modifyingId === movie.id}
+                                onClick={() => handleSearchRelease(movie)}
+                                title="Search for a new release interactively"
+                              >
+                                <Search className="h-3 w-3 mr-1 shrink-0" /> Releases
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 shrink-0 transition-all duration-200"
+                                onClick={() => openDeleteMovieDialog(movie)}
+                                title={`Delete "${movie.title}" from Radarr`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>
@@ -874,13 +1055,13 @@ export default function RadarrPage() {
               <div className="space-y-1">
                 <CardTitle className="text-xl font-bold">Activity / Queue</CardTitle>
                 <CardDescription>
-                  Monitor active movie downloads and force imports.
+                  Live movie downloads with automatic 5-second telemetry polling and progress tracking.
                 </CardDescription>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={fetchQueue}
+                onClick={() => fetchQueue(false)}
                 disabled={queueLoading}
                 className="transition-all duration-200 hover:ring-2 hover:ring-blue-500/40"
               >
@@ -911,101 +1092,129 @@ export default function RadarrPage() {
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {filteredQueue.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/30 transition-all duration-200"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="font-medium text-sm truncate text-foreground"
-                          title={item.movie?.title || item.title}
-                        >
-                          {item.movie?.title || item.title}
-                        </div>
-                        {item.movie?.title && (
+                  {filteredQueue.map((item: any) => {
+                    const percent =
+                      item.size > 0 && item.sizeleft !== undefined
+                        ? Math.max(0, Math.min(100, Math.round((1 - item.sizeleft / item.size) * 100)))
+                        : 0;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 border border-border/40 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/30 transition-all duration-200"
+                      >
+                        <div className="flex-1 min-w-0">
                           <div
-                            className="text-xs text-muted-foreground truncate mt-0.5"
-                            title={item.title}
+                            className="font-medium text-sm truncate text-foreground"
+                            title={item.movie?.title || item.title}
                           >
-                            {item.title}
+                            {item.movie?.title || item.title}
                           </div>
-                        )}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                          <span className="text-blue-400 font-medium">{item.status}</span>
-                          {item.sizeleft > 0 && item.size > 0 && (
-                            <span>
-                              {Math.round(
-                                (1 - item.sizeleft / item.size) * 100,
-                              )}
-                              %
-                            </span>
-                          )}
-                          {item.timeleft && <span>ETA: {item.timeleft}</span>}
-                        </div>
-                        {item.errorMessage && (
-                          <div
-                            className="text-[10px] text-amber-500 mt-1 line-clamp-1"
-                            title={item.errorMessage}
-                          >
-                            ⚠️ {item.errorMessage}
-                          </div>
-                        )}
-                        {item.statusMessages &&
-                          item.statusMessages.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {item.statusMessages.map(
-                                (msg: any, i: number) => (
-                                  <div
-                                    key={i}
-                                    className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded-lg border border-amber-500/20"
-                                  >
-                                    {msg.title && msg.title !== item.title && (
-                                      <span className="font-semibold flex items-center gap-1">
-                                        <AlertCircle className="h-3 w-3" />{" "}
-                                        {msg.title}
-                                      </span>
-                                    )}
-                                    {msg.messages &&
-                                      msg.messages.map(
-                                        (m: string, j: number) => (
-                                          <span
-                                            key={j}
-                                            className="text-[10px] text-amber-500/80 ml-4 flex items-center gap-1"
-                                          >
-                                            {(!msg.title ||
-                                              msg.title === item.title) &&
-                                              j === 0 && (
-                                                <AlertCircle className="h-3 w-3 shrink-0" />
-                                              )}{" "}
-                                            {m}
-                                          </span>
-                                        ),
-                                      )}
-                                  </div>
-                                ),
-                              )}
+                          {item.movie?.title && (
+                            <div
+                              className="text-xs text-muted-foreground truncate mt-0.5"
+                              title={item.title}
+                            >
+                              {item.title}
                             </div>
                           )}
-                      </div>
-                      <div className="shrink-0 flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-blue-500/40 active:scale-95"
-                          onClick={() => handleForceImport(item.downloadId)}
-                          disabled={importingId === item.downloadId}
-                        >
-                          {importingId === item.downloadId ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : (
-                            <Download className="h-3 w-3 mr-1" />
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                            <span className="text-blue-400 font-medium">{item.status}</span>
+                            {item.size > 0 && (
+                              <span>
+                                {formatBytes(item.size - (item.sizeleft || 0))} of {formatBytes(item.size)} ({percent}%)
+                              </span>
+                            )}
+                            {item.timeleft && <span>ETA: {item.timeleft}</span>}
+                          </div>
+
+                          {/* Visual Progress Bar */}
+                          {item.size > 0 && (
+                            <div className="w-full bg-muted/40 h-1.5 rounded-full overflow-hidden mt-2 border border-border/30">
+                              <div
+                                className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
                           )}
-                          Force Import
-                        </Button>
+
+                          {item.errorMessage && (
+                            <div
+                              className="text-[10px] text-amber-500 mt-1 line-clamp-1"
+                              title={item.errorMessage}
+                            >
+                              ⚠️ {item.errorMessage}
+                            </div>
+                          )}
+                          {item.statusMessages &&
+                            item.statusMessages.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {item.statusMessages.map(
+                                  (msg: any, i: number) => (
+                                    <div
+                                      key={i}
+                                      className="text-xs text-amber-500 flex flex-col bg-amber-500/10 p-2 rounded-lg border border-amber-500/20"
+                                    >
+                                      {msg.title && msg.title !== item.title && (
+                                        <span className="font-semibold flex items-center gap-1">
+                                          <AlertCircle className="h-3 w-3" />{" "}
+                                          {msg.title}
+                                        </span>
+                                      )}
+                                      {msg.messages &&
+                                        msg.messages.map(
+                                          (m: string, j: number) => (
+                                            <span
+                                              key={j}
+                                              className="text-[10px] text-amber-500/80 ml-4 flex items-center gap-1"
+                                            >
+                                              {(!msg.title ||
+                                                msg.title === item.title) &&
+                                                j === 0 && (
+                                                  <AlertCircle className="h-3 w-3 shrink-0" />
+                                                )}{" "}
+                                              {m}
+                                            </span>
+                                          ),
+                                        )}
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            )}
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-blue-500/40 active:scale-95"
+                            onClick={() => handleForceImport(item.downloadId)}
+                            disabled={importingId === item.downloadId}
+                          >
+                            {importingId === item.downloadId ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : (
+                              <Download className="h-3 w-3 mr-1" />
+                            )}
+                            Force Import
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 shrink-0 transition-all duration-200"
+                            onClick={() => handleDeleteQueueItem(item)}
+                            disabled={deletingQueueId === item.id}
+                            title="Cancel and remove from queue"
+                          >
+                            {deletingQueueId === item.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -1015,7 +1224,7 @@ export default function RadarrPage() {
 
       {/* INTERACTIVE RELEASE MODAL */}
       <Dialog open={releasesModalOpen} onOpenChange={setReleasesModalOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60">
+        <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[85vh] flex flex-col p-0 bg-[#121218] border-border/60 overflow-hidden">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
             <DialogTitle className="text-lg font-bold text-blue-400">Interactive Search</DialogTitle>
             <DialogDescription>
@@ -1023,7 +1232,7 @@ export default function RadarrPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto min-h-[50vh] p-6">
+          <div className="flex-1 overflow-y-auto min-h-[50vh] p-4 sm:p-6">
             {releasesLoading ? (
               <div className="h-full flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin mb-4 text-blue-400" />
@@ -1075,6 +1284,23 @@ export default function RadarrPage() {
                               <Badge variant="outline" className="text-[10px] border-border/60">
                                 {release.quality?.quality?.name || "Unknown"}
                               </Badge>
+
+                              {/* Custom Format Score Badge */}
+                              {release.customFormatScore !== undefined && (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] font-mono border-border/60 ${
+                                    release.customFormatScore > 0
+                                      ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10 font-bold"
+                                      : release.customFormatScore < 0
+                                        ? "text-rose-400 border-rose-500/40 bg-rose-500/10"
+                                        : "text-muted-foreground"
+                                  }`}
+                                >
+                                  CF: {release.customFormatScore > 0 ? `+${release.customFormatScore}` : release.customFormatScore}
+                                </Badge>
+                              )}
+
                               <span className="flex items-center">
                                 <Download className="h-3 w-3 mr-1" />{" "}
                                 {formatBytes(release.size)}
@@ -1091,14 +1317,28 @@ export default function RadarrPage() {
                               <span className="text-red-400 font-medium">
                                 {release.leechers} L
                               </span>
+
+                              {/* Release Age Indicator */}
+                              {release.age !== undefined && (
+                                <span className="flex items-center text-muted-foreground text-[11px]">
+                                  <Clock className="h-3 w-3 mr-1 shrink-0" />
+                                  {release.age === 0 ? "Today" : `${release.age}d ago`}
+                                </span>
+                              )}
                             </div>
+
+                            {/* Active Rejections */}
                             {release.rejected &&
                               release.rejections?.length > 0 && (
                                 <div
-                                  className={`mt-2 text-xs flex items-start gap-1 ${rejected ? "text-red-400" : "text-amber-500"}`}
+                                  className={`mt-2 text-xs flex flex-col gap-1 ${rejected ? "text-red-400" : "text-amber-500"}`}
                                 >
-                                  <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                                  <span>{release.rejections[0]}</span>
+                                  {release.rejections.map((rej: string, rIdx: number) => (
+                                    <div key={rIdx} className="flex items-start gap-1">
+                                      <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                      <span>{rej}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                           </div>
@@ -1132,6 +1372,102 @@ export default function RadarrPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* DELETE MOVIE CONFIRMATION DIALOG */}
+      <Dialog
+        open={deleteMovieDialog.open}
+        onOpenChange={(open) =>
+          !deleteMovieDialog.loading &&
+          setDeleteMovieDialog((prev) => ({ ...prev, open }))
+        }
+      >
+        <DialogContent className="max-w-md bg-[#121218] border-border/60 text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-red-400 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Delete Movie from Radarr
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              Are you sure you want to remove{" "}
+              <strong className="text-foreground">
+                {deleteMovieDialog.movie?.title} ({deleteMovieDialog.movie?.year})
+              </strong>{" "}
+              from Radarr?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-3 space-y-3">
+            <label className="flex items-center gap-2.5 p-3 rounded-lg border border-red-500/20 bg-red-500/5 cursor-pointer hover:bg-red-500/10 transition-colors">
+              <input
+                type="checkbox"
+                checked={deleteMovieDialog.deleteFiles}
+                onChange={(e) =>
+                  setDeleteMovieDialog((prev) => ({
+                    ...prev,
+                    deleteFiles: e.target.checked,
+                  }))
+                }
+                className="rounded border-border text-red-500 focus:ring-red-500/40 h-4 w-4"
+              />
+              <div className="text-xs">
+                <p className="font-semibold text-foreground">
+                  Delete Movie Files From Disk
+                </p>
+                <p className="text-muted-foreground text-[11px]">
+                  Also permanently delete the video and audio files from your media storage folder.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deleteMovieDialog.loading}
+              onClick={() =>
+                setDeleteMovieDialog({
+                  open: false,
+                  movie: null,
+                  deleteFiles: false,
+                  loading: false,
+                })
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={deleteMovieDialog.loading}
+              onClick={handleConfirmDeleteMovie}
+              className="bg-red-600 hover:bg-red-500 text-white font-semibold"
+            >
+              {deleteMovieDialog.loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-1.5" />
+              )}
+              Delete Movie
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl bg-[#121218]/95 border-border/80 text-foreground animate-in fade-in slide-in-from-bottom-5 duration-200">
+          {toast.type === "success" && (
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          )}
+          {toast.type === "error" && (
+            <XCircle className="h-4 w-4 text-rose-400 shrink-0" />
+          )}
+          {toast.type === "info" && (
+            <AlertCircle className="h-4 w-4 text-blue-400 shrink-0" />
+          )}
+          <span className="text-xs font-semibold">{toast.message}</span>
+        </div>
+      )}
 
       {/* AUTOMATED ERROR TICKET MODAL */}
       <ErrorTicketModal

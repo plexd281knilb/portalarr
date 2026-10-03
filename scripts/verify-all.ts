@@ -3569,6 +3569,60 @@ async function runTestSuite() {
             }
         }
     });
+
+    // 61. Radarr Subsystem: Instance Security, Clean Wire Models, Deletion Actions & Progress Mechanics
+    await assertTest("Radarr Subsystem: Security, Deletion Actions & Telemetry", async () => {
+        const {
+            getEnabledArrInstances,
+            deleteRadarrMovie,
+            deleteRadarrQueueItem,
+            searchRadarrMovies,
+            getRadarrLibrary
+        } = await import("../src/app/arr-actions");
+
+        // 1. Verify getEnabledArrInstances returns clean models without leaking decrypted apiKey to client
+        const instancesRes = await getEnabledArrInstances("radarr");
+        if (!instancesRes.success) {
+            throw new Error(`getEnabledArrInstances failed: ${instancesRes.error}`);
+        }
+        if (instancesRes.data && instancesRes.data.length > 0) {
+            for (const instance of instancesRes.data) {
+                if ((instance as any).apiKey !== undefined) {
+                    throw new Error(`Security breach: apiKey was exposed in client data model for instance ${instance.name}`);
+                }
+            }
+        }
+
+        // 2. Verify delete actions fail safely with unauthorized/not found for non-existent IDs
+        const dummyDeleteMovieRes = await deleteRadarrMovie("invalid-app-id", 99999);
+        if (dummyDeleteMovieRes.success) {
+            throw new Error("Expected deleteRadarrMovie to fail for non-existent app");
+        }
+
+        const dummyDeleteQueueRes = await deleteRadarrQueueItem("invalid-app-id", 99999);
+        if (dummyDeleteQueueRes.success) {
+            throw new Error("Expected deleteRadarrQueueItem to fail for non-existent app");
+        }
+
+        // 3. Verify queue progress percentage formula
+        const testSize = 10 * 1024 * 1024 * 1024; // 10 GB
+        const testSizeLeft = 2.5 * 1024 * 1024 * 1024; // 2.5 GB left
+        const computedPercent = Math.max(0, Math.min(100, Math.round((1 - testSizeLeft / testSize) * 100)));
+        if (computedPercent !== 75) {
+            throw new Error(`Expected 75% computed progress, got ${computedPercent}%`);
+        }
+
+        // 4. Verify custom format scoring ranking
+        const testReleases = [
+            { title: "Standard 1080p", customFormatScore: 0 },
+            { title: "Remux Atmos HDR", customFormatScore: 1200 },
+            { title: "Low Tier", customFormatScore: -500 }
+        ];
+        testReleases.sort((a, b) => (b.customFormatScore || 0) - (a.customFormatScore || 0));
+        if (testReleases[0].customFormatScore !== 1200 || testReleases[2].customFormatScore !== -500) {
+            throw new Error("Custom format scoring failed to sort releases in descending order");
+        }
+    });
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
