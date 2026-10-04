@@ -13,6 +13,7 @@ import {
     fetchGlancesHardwareStats,
     checkMediaAppReachability,
     getAdminDetailedStreamsAction,
+    getAdminInfrastructureStatusAction,
     updateCurrentUserKindleEmail
 } from "../src/app/actions";
 import http from "http";
@@ -4274,6 +4275,59 @@ async function runTestSuite() {
             where: { id: "global" },
             data: { aiAutonomyLevel: "autonomous" }
         });
+    });
+
+    // Admin Infrastructure Status Cockpit & Real Monitored Plex Server Filtering
+    await assertTest("Admin: Infrastructure Status Cockpit & Monitored Filter", async () => {
+        // Create test paused Plex server and test active Plex server
+        const pausedPlex = await prisma.plexServer.create({
+            data: {
+                name: "Test Paused Server Mock",
+                url: "http://127.0.0.1:32499",
+                monitored: false
+            }
+        });
+
+        const activePlex = await prisma.plexServer.create({
+            data: {
+                name: "Test Active Server Mock",
+                url: "http://127.0.0.1:32498",
+                monitored: true
+            }
+        });
+
+        try {
+            const statusRes = await getAdminInfrastructureStatusAction(true);
+            if (!statusRes.success) {
+                throw new Error(`getAdminInfrastructureStatusAction failed: ${statusRes.error}`);
+            }
+
+            if (!statusRes.summary) {
+                throw new Error("Missing summary in getAdminInfrastructureStatusAction result");
+            }
+
+            const pausedItem = statusRes.services.find(s => s.name === "Test Paused Server Mock");
+            if (!pausedItem) {
+                throw new Error("Could not find Test Paused Server Mock in infrastructure status services");
+            }
+
+            if (pausedItem.status !== "PAUSED" || pausedItem.monitored !== false) {
+                throw new Error(`Expected paused server status to be PAUSED and monitored false, got status=${pausedItem.status}, monitored=${pausedItem.monitored}`);
+            }
+
+            const activeItem = statusRes.services.find(s => s.name === "Test Active Server Mock");
+            if (!activeItem) {
+                throw new Error("Could not find Test Active Server Mock in infrastructure status services");
+            }
+
+            if (activeItem.monitored !== true) {
+                throw new Error(`Expected active server monitored to be true, got ${activeItem.monitored}`);
+            }
+        } finally {
+            await prisma.plexServer.deleteMany({
+                where: { id: { in: [pausedPlex.id, activePlex.id] } }
+            }).catch(() => {});
+        }
     });
 
     console.log("\n==========================================================");

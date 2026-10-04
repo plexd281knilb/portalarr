@@ -115,7 +115,8 @@ export default function MyPlexHub() {
                             {safeData.user?.username}
                         </Badge>
                         {safeData.serversCount > 0 && (() => {
-                            const allServers = safeData.servers || [];
+                            const allServers = (safeData.servers || []).filter((s: any) => s.monitored !== false);
+                            if (allServers.length === 0) return null;
                             const onlineServers = allServers.filter((s: any) => s.online !== false);
                             const allOnline = allServers.length > 0 && onlineServers.length === allServers.length;
                             return (
@@ -127,7 +128,7 @@ export default function MyPlexHub() {
                                     title="Click to view connected servers"
                                 >
                                     <span className={`w-1.5 h-1.5 rounded-full ${allOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
-                                    {allOnline ? `${safeData.serversCount} ${safeData.serversCount === 1 ? "Server" : "Servers"} Connected` : `${onlineServers.length}/${allServers.length} Servers Online`}
+                                    {allOnline ? `${allServers.length} ${allServers.length === 1 ? "Server" : "Servers"} Connected` : `${onlineServers.length}/${allServers.length} Servers Online`}
                                     <ChevronDown className="h-3 w-3 opacity-60" />
                                 </Button>
                             );
@@ -614,52 +615,47 @@ export default function MyPlexHub() {
                     </DialogHeader>
 
                     <div className="py-2 space-y-2.5 max-h-[55vh] overflow-y-auto">
-                        {safeData.servers && safeData.servers.length > 0 ? (
-                            safeData.servers.map((srv: any, idx: number) => (
-                                <div 
-                                    key={srv.id || idx}
-                                    className="p-3 rounded-xl bg-white/[0.02] border border-border/50 hover:border-border transition-all space-y-1.5"
-                                >
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                            <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-                                                <Server className="h-4 w-4" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="text-xs sm:text-sm font-bold text-foreground truncate" title={srv.name}>
-                                                    {srv.name}
+                        {(() => {
+                            const displayServers = (safeData.servers || []).filter((s: any) => s.monitored !== false);
+                            return displayServers.length > 0 ? (
+                                displayServers.map((srv: any, idx: number) => (
+                                    <div 
+                                        key={srv.id || idx}
+                                        className="p-3 rounded-xl bg-white/[0.02] border border-border/50 hover:border-border transition-all space-y-1.5"
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                                                    <Server className="h-4 w-4" />
                                                 </div>
-                                                <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${srv.online ? "bg-emerald-400" : srv.monitored === false ? "bg-slate-500" : "bg-rose-500 animate-pulse"}`} />
-                                                    {srv.online ? (
-                                                        <span className="text-emerald-400 font-medium">Online & Active</span>
-                                                    ) : srv.monitored === false ? (
-                                                        <span className="text-muted-foreground font-medium">Monitoring Paused</span>
-                                                    ) : (
-                                                        <span className="text-rose-400 font-semibold">Offline / Unreachable</span>
-                                                    )}
+                                                <div className="min-w-0">
+                                                    <div className="text-xs sm:text-sm font-bold text-foreground truncate" title={srv.name}>
+                                                        {srv.name}
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${srv.online ? "bg-emerald-400" : "bg-rose-500 animate-pulse"}`} />
+                                                        {srv.online ? (
+                                                            <span className="text-emerald-400 font-medium">Online & Active</span>
+                                                        ) : (
+                                                            <span className="text-rose-400 font-semibold">Offline / Unreachable</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <div className="flex items-center gap-1 shrink-0">
-                                            {srv.monitored === false && (
-                                                <Badge variant="outline" className="text-[9px] font-semibold bg-slate-500/10 text-slate-400 border-slate-500/30">
-                                                    Paused
-                                                </Badge>
-                                            )}
-                                            {srv.directPms && (
-                                                <Badge variant="outline" className="text-[9px] font-semibold bg-primary/10 text-primary border-primary/30">
-                                                    Direct PMS
-                                                </Badge>
-                                            )}
-                                            {srv.tautulli && (
-                                                <Badge variant="outline" className="text-[9px] font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
-                                                    Tautulli
-                                                </Badge>
-                                            )}
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {srv.directPms && (
+                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-primary/10 text-primary border-primary/30">
+                                                        Direct PMS
+                                                    </Badge>
+                                                )}
+                                                {srv.tautulli && (
+                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
+                                                        Tautulli
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
 
                                     <p className="text-[11px] text-muted-foreground/80 leading-normal pl-9">
                                         {srv.directPms && srv.tautulli 
@@ -675,7 +671,8 @@ export default function MyPlexHub() {
                             <div className="py-6 text-center text-xs text-muted-foreground">
                                 No connected servers detected.
                             </div>
-                        )}
+                        );
+                    })()}
                     </div>
 
                     <DialogFooter className="border-t border-border/40 pt-3">

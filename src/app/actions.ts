@@ -15191,6 +15191,274 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
     }
 }
 
+export type InfrastructureServiceItem = {
+    id: string;
+    name: string;
+    type: string;
+    category: "plex" | "glances" | "tautulli" | "apps" | "downloaders";
+    url: string;
+    status: "ONLINE" | "OFFLINE" | "PAUSED";
+    monitored: boolean;
+    latencyMs?: number;
+    details?: string;
+    metrics?: {
+        cpu?: number;
+        ram?: number;
+        streamCount?: number;
+    };
+};
+
+/**
+ * Real-time Admin Infrastructure Status Cockpit Action
+ * Queries all configured Plex servers, Glances hosts, Tautulli monitors, and Media Apps
+ * with parallel reachability probing, latency measurement, and strict opt-in monitoring.
+ */
+export async function getAdminInfrastructureStatusAction(skipAuth: boolean = false): Promise<{
+    success: boolean;
+    error?: string;
+    summary: {
+        totalConfigured: number;
+        totalMonitored: number;
+        onlineCount: number;
+        offlineCount: number;
+        pausedCount: number;
+    };
+    services: InfrastructureServiceItem[];
+}> {
+    try {
+        if (!skipAuth) {
+            await verifyAdmin();
+        }
+
+        const [plexServers, glances, tautulli, mediaApps, settings] = await Promise.all([
+            prisma.plexServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.tautulliInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.mediaApp.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null)
+        ]);
+
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            try {
+                adminToken = decryptData(settings.mainPlexToken);
+            } catch (e) {}
+        }
+
+        // 1. Plex Media Servers
+        const plexPromises = plexServers.map(async (ps): Promise<InfrastructureServiceItem> => {
+            const isMonitored = ps.monitored !== false;
+            const clean = cleanUrl(ps.url?.trim() || "");
+            const baseItem: InfrastructureServiceItem = {
+                id: ps.id,
+                name: ps.name,
+                type: "Plex Media Server",
+                category: "plex",
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                let targetUrl = clean;
+                if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+                    targetUrl = `http://${targetUrl}`;
+                }
+                targetUrl = targetUrl.replace(/\/+$/, "");
+                const controller = new AbortController();
+                const tid = setTimeout(() => controller.abort(), 4500);
+                const sToken = ps.token ? decryptData(ps.token) : adminToken;
+                const testUrl = `${targetUrl}/identity?X-Plex-Token=${encodeURIComponent(sToken || adminToken || "")}`;
+                const res = await fetch(testUrl, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": sToken || adminToken || "" },
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(tid);
+                const elapsed = Date.now() - startTime;
+                if (res.ok || res.status === 401 || res.status === 403 || (res.status >= 200 && res.status < 500)) {
+                    baseItem.status = "ONLINE";
+                    baseItem.latencyMs = elapsed;
+                    baseItem.details = `PMS reachable (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.latencyMs = elapsed;
+                    baseItem.details = `HTTP ${res.status}`;
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
+            }
+            return baseItem;
+        });
+
+        // 2. Glances Physical Hosts
+        const glancesPromises = glances.map(async (g): Promise<InfrastructureServiceItem> => {
+            const isMonitored = g.monitored !== false;
+            const clean = cleanUrl(g.url?.trim() || "");
+            const baseItem: InfrastructureServiceItem = {
+                id: g.id,
+                name: g.name,
+                type: "Host Server (Glances)",
+                category: "glances",
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                const stats = await fetchGlancesHardwareStats(g.url, 4500);
+                const elapsed = Date.now() - startTime;
+                baseItem.latencyMs = elapsed;
+                if (stats.online) {
+                    baseItem.status = "ONLINE";
+                    baseItem.metrics = { cpu: stats.cpu, ram: stats.ram };
+                    baseItem.details = `CPU: ${stats.cpu}% | RAM: ${stats.ram}% (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.details = "Host offline or Glances port 61208 closed";
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = "Unreachable";
+            }
+            return baseItem;
+        });
+
+        // 3. Tautulli Stream Monitors
+        const tautulliPromises = tautulli.map(async (t): Promise<InfrastructureServiceItem> => {
+            const isMonitored = t.monitored !== false;
+            const clean = cleanUrl(t.url?.trim() || "");
+            const baseItem: InfrastructureServiceItem = {
+                id: t.id,
+                name: t.name,
+                type: "Stream Monitor (Tautulli)",
+                category: "tautulli",
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                const cleanBase = clean.replace(/\/api\/v2\/?$/, "");
+                const apiKey = decryptData(t.apiKey);
+                const fullUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+                const controller = new AbortController();
+                const tid = setTimeout(() => controller.abort(), 4500);
+                const actResult = await fetchTautulliApiJson(fullUrl, controller.signal, { revalidate: 0 });
+                clearTimeout(tid);
+                const elapsed = Date.now() - startTime;
+                baseItem.latencyMs = elapsed;
+                if (actResult.ok && actResult.data) {
+                    baseItem.status = "ONLINE";
+                    const streamCount = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
+                    baseItem.metrics = { streamCount };
+                    baseItem.details = `${streamCount} active stream${streamCount === 1 ? "" : "s"} (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.details = actResult.error || "Tautulli API unreachable";
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
+            }
+            return baseItem;
+        });
+
+        // 4. Media Stack Apps & Download Clients
+        const appPromises = mediaApps.map(async (app): Promise<InfrastructureServiceItem> => {
+            const isMonitored = app.monitored !== false;
+            const clean = cleanUrl(app.url?.trim() || "");
+            const tLower = (app.type || "").toLowerCase();
+            const nLower = (app.name || "").toLowerCase();
+            const isDownloader = ["sabnzb", "qbit", "nzbget"].some(d => tLower.includes(d) || nLower.includes(d));
+            const category: "downloaders" | "apps" = isDownloader ? "downloaders" : "apps";
+
+            const baseItem: InfrastructureServiceItem = {
+                id: app.id,
+                name: app.name,
+                type: app.type ? app.type.toUpperCase() : "MEDIA APP",
+                category,
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                const isOnline = await checkMediaAppReachability(app);
+                const elapsed = Date.now() - startTime;
+                baseItem.latencyMs = elapsed;
+                if (isOnline) {
+                    baseItem.status = "ONLINE";
+                    baseItem.details = `Responsive (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.details = "Port closed or service unresponsive";
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = "Unreachable";
+            }
+            return baseItem;
+        });
+
+        const [plexResults, glancesResults, tautulliResults, appResults] = await Promise.all([
+            Promise.all(plexPromises),
+            Promise.all(glancesPromises),
+            Promise.all(tautulliPromises),
+            Promise.all(appPromises)
+        ]);
+
+        const services: InfrastructureServiceItem[] = [
+            ...plexResults,
+            ...glancesResults,
+            ...tautulliResults,
+            ...appResults
+        ];
+
+        const summary = {
+            totalConfigured: services.length,
+            totalMonitored: services.filter(s => s.monitored).length,
+            onlineCount: services.filter(s => s.status === "ONLINE").length,
+            offlineCount: services.filter(s => s.status === "OFFLINE").length,
+            pausedCount: services.filter(s => s.status === "PAUSED").length
+        };
+
+        return {
+            success: true,
+            summary,
+            services
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed fetching infrastructure status",
+            summary: { totalConfigured: 0, totalMonitored: 0, onlineCount: 0, offlineCount: 0, pausedCount: 0 },
+            services: []
+        };
+    }
+}
+
 export async function submitLibraryAccessRequest(email: string, kindleEmail: string) {
     try {
         const session = await verifyUser();
@@ -17848,8 +18116,9 @@ export async function getUserPlexHubData() {
         monitored?: boolean;
     }>();
 
-    // Populate serverMap with explicitly configured Plex servers first
+    // Populate serverMap with explicitly configured Plex servers first (strictly monitored servers only)
     for (const ps of dbPlexServers) {
+        if (ps.monitored === false) continue;
         const normKey = ps.name.toLowerCase().replace(/[^a-z0-9]/g, "");
         serverMap.set(normKey, {
             id: ps.id,
@@ -17858,7 +18127,7 @@ export async function getUserPlexHubData() {
             directPms: true,
             tautulli: false,
             online: false,
-            monitored: ps.monitored !== false
+            monitored: true
         });
     }
 
@@ -17870,6 +18139,16 @@ export async function getUserPlexHubData() {
             for (const srv of directPlexResults) {
                 const srvId = `plex::${srv.serverId}::${srv.serverUrl}`;
                 const normKey = srv.serverName.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+                // Skip if Plex server is configured as unmonitored (monitored: false) in settings
+                const matchedDb = dbPlexServers.find(ps => {
+                    const psNorm = ps.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return psNorm === normKey || (psNorm.length > 2 && normKey.includes(psNorm)) || (normKey.length > 2 && psNorm.includes(normKey));
+                });
+                if (matchedDb && matchedDb.monitored === false) {
+                    continue;
+                }
+
                 const existing = serverMap.get(normKey);
                 if (existing) {
                     existing.online = true;
@@ -17964,8 +18243,9 @@ export async function getUserPlexHubData() {
 
     const rawWatchHistory: any[] = [];
 
-    // --- 2. TAUTULLI INSTANCES MONITORING (Query all Tautulli servers concurrently) ---
-    await Promise.allSettled(tautulli.map(async (t) => {
+    // --- 2. TAUTULLI INSTANCES MONITORING (Query only monitored Tautulli servers concurrently) ---
+    const monitoredTautulli = tautulli.filter(t => t.monitored !== false);
+    await Promise.allSettled(monitoredTautulli.map(async (t) => {
         const normTName = t.name.toLowerCase().replace(/^tautulli\s*[-_:]*\s*/i, "").replace(/[^a-z0-9]/g, "");
         const existingKey = normTName ? Array.from(serverMap.keys()).find(k => k === normTName || (k.length > 2 && normTName.includes(k)) || (normTName.length > 2 && k.includes(normTName))) : null;
         
@@ -18363,7 +18643,7 @@ export async function getUserPlexHubData() {
     watchHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     watchHistory = watchHistory.slice(0, 20);
 
-    const serversList = Array.from(serverMap.values());
+    const serversList = Array.from(serverMap.values()).filter(srv => srv.monitored !== false);
 
     return {
         success: true,

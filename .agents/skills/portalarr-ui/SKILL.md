@@ -230,7 +230,26 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
-### 12. Scrollable TabsList & Device Selector Patterns (Negative Coordinate Overflow Protection)
+### 13. Admin Infrastructure Health & Monitoring Cockpit (`admin-system-health-grid.tsx`)
+- **Comprehensive Single-Pane Monitoring**:
+  - Positioned at the very top of Admin Mission Control (`/`), aggregating all configured infrastructure services across 5 distinct categories:
+    1. **Plex Media Servers** (Direct PMS status, API identity ping, latency)
+    2. **Host Hardware (Glances)** (Physical machines, CPU & RAM utilization, port 61208 status)
+    3. **Stream Monitors (Tautulli)** (Active playback count, API reachability, port 8181/18181)
+    4. **Servarr & Request Apps** (Radarr, Sonarr, Seerr, Ombi, Prowlarr, Bazarr, Maintainerr)
+    5. **Download Clients** (SABnzbd, qBittorrent, NZBGet)
+- **Visual Status Hierarchy & Pulse States**:
+  - 🟢 **ONLINE**: Emerald indicator with pulse, verified reachable response, and round-trip ping latency badge (e.g. `14ms`).
+  - 🔴 **OFFLINE / UNREACHABLE**: Crimson rose badge and animated beacon, surfaced prominently with promoted filter badge (`Down (X)`).
+  - ⚪ **PAUSED**: Slate neutral badge indicating intentional opt-out (`monitored === false`) configured in Settings > Monitoring. No unnecessary network probing or false alarms.
+- **Interactive Multi-Axis Filtering & Instant Search**:
+  - Status filter pills (`All`, `Down`, `Online`, `Paused`) paired with category dropdown selector (`All Categories`, `Plex Media Servers`, `Host Hardware`, `Stream Monitors`, `Servarr & Request Apps`, `Download Clients`) and client-side instant search input.
+- **My Plex Hub Real Monitored Server Isolation (`my-plex-hub.tsx`)**:
+  - In user-facing `MyPlexHub` connected servers dialogs and status counters, dummy, paused, or unmonitored Plex servers (`monitored === false`) are strictly filtered out so that only genuine, monitored Plex instances (`KidsPlexServer`, `MainPlexServerBackup`, `MainPlexServer`) are visible to members.
+
+---
+
+### 14. Scrollable TabsList & Device Selector Patterns (Negative Coordinate Overflow Protection)
 - **Radix UI `TabsList` Default Justification**:
   - `TabsList` in `src/components/ui/tabs.tsx` defaults to `justify-center`.
   - When placing multiple tabs (e.g. 7+ device guides, indexers, or categories totaling >800px) inside a horizontal scroll container (`overflow-x-auto`), **never rely on default justification or `w-full` with `justify-center`**.

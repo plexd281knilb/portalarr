@@ -26,6 +26,7 @@ import PlexInviteBanner from "@/components/plex-invite-banner";
 import WhatsNewModal from "@/components/whats-new-modal";
 import AdminUserSwitcher from "@/components/admin-user-switcher";
 import AdminDetailedStreams from "@/components/admin-detailed-streams";
+import AdminSystemHealthGrid from "@/components/admin-system-health-grid";
 import TrialDashboardView from "@/components/trial-dashboard-view";
 import SuperUserCard from "@/components/super-user-card";
 import SupportTicketModal from "@/components/support-ticket-modal";
@@ -477,6 +478,9 @@ export default async function UserLandingPage() {
                 {/* ========================================================================= */}
                 {isAdmin ? (
                     <div className="space-y-6">
+                        {/* COMPREHENSIVE INFRASTRUCTURE HEALTH & MONITORING COCKPIT */}
+                        <AdminSystemHealthGrid />
+
                         {/* INTRICATE ADMIN SYSTEM STATUS & STREAM TELEMETRY TABLE */}
                         <AdminDetailedStreams />
 
