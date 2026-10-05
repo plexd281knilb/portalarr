@@ -102,11 +102,11 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 className={cn(
                   "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
                   pathname.startsWith("/discover") || pathname.startsWith("/requests")
-                    ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                    ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/40 font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-rose-500/40"
                 )}
               >
-                <Compass className="mr-2 h-4 w-4 text-primary" />
+                <Compass className="mr-2 h-4 w-4 text-rose-400" />
                 Media Requests
               </Button>
             </Link>
@@ -414,11 +414,11 @@ export function MobileSidebar() {
                       className={cn(
                         "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
                         pathname.startsWith("/discover") || pathname.startsWith("/requests")
-                          ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                          ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/40 font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-rose-500/40"
                       )}
                     >
-                      <Compass className="mr-2 h-4 w-4 text-primary" /> Media Requests
+                      <Compass className="mr-2 h-4 w-4 text-rose-400" /> Media Requests
                     </Button>
                   </Link>
 

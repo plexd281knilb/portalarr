@@ -221,7 +221,7 @@ export default async function UserLandingPage() {
                         <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground">
-                                    <Compass className="h-5 w-5 text-primary" /> Media Requests
+                                    <Compass className="h-5 w-5 text-rose-400" /> Media Requests
                                 </CardTitle>
                                 <CardDescription className="text-xs">
                                     Browse trending releases, watch high-definition trailers, and request movies & TV shows.
@@ -487,8 +487,8 @@ export default async function UserLandingPage() {
                         {/* QUICK ACCESS ADMIN TOOL MATRIX */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                             <Link href="/discover" className="block group">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-primary/50 text-center space-y-1.5 transition-all">
-                                    <Compass className="h-5 w-5 mx-auto text-primary" />
+                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
+                                    <Compass className="h-5 w-5 mx-auto text-rose-400" />
                                     <span className="text-xs font-bold block text-foreground">Requests</span>
                                 </div>
                             </Link>
