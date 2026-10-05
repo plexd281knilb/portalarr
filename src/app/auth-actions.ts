@@ -761,7 +761,12 @@ const IMPERSONATOR_COOKIE_NAME = "portalarr_impersonator_token";
  * Excludes heavy relations, payment logs, and expiration routines.
  */
 export async function getImpersonationUserListAction() {
-  const cookieStore = await cookies();
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return [];
+  }
   const sessionToken = cookieStore.get("session")?.value;
   const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
 
@@ -799,7 +804,12 @@ export async function getImpersonationUserListAction() {
 }
 
 export async function impersonateUserAction(targetUserId: string) {
-  const cookieStore = await cookies();
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return { error: "Unauthorized. Admin privileges required to view site as another user." };
+  }
   const sessionToken = cookieStore.get("session")?.value;
   const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
 
@@ -897,7 +907,12 @@ export async function impersonateUserAction(targetUserId: string) {
 }
 
 export async function stopImpersonationAction() {
-  const cookieStore = await cookies();
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return { error: "No active impersonation session found." };
+  }
   const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
 
   if (!impersonatorToken) {
@@ -947,7 +962,12 @@ export async function stopImpersonationAction() {
 }
 
 export async function getImpersonationStatusAction() {
-  const cookieStore = await cookies();
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return { isImpersonating: false };
+  }
   const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
   const sessionToken = cookieStore.get("session")?.value;
 
