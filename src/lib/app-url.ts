@@ -1,0 +1,48 @@
+import { headers } from "next/headers";
+
+export async function getAppUrl(): Promise<string> {
+    try {
+        const { prisma } = await import("@/lib/prisma");
+        const settings = await prisma.settings.findUnique({
+            where: { id: "global" },
+            select: { appUrl: true }
+        });
+        if (settings?.appUrl && settings.appUrl.trim()) {
+            let url = settings.appUrl.trim();
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = `https://${url}`;
+            }
+            return url.replace(/\/+$/, "");
+        }
+    } catch (e) {
+        // Fall back if database is not available yet or query fails
+    }
+
+    if (process.env.APP_URL && process.env.APP_URL.trim()) {
+        let url = process.env.APP_URL.trim();
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            url = `https://${url}`;
+        }
+        return url.replace(/\/+$/, "");
+    }
+
+    try {
+        const headerList = await headers();
+        const host = headerList.get("x-forwarded-host") || headerList.get("host");
+        const proto = headerList.get("x-forwarded-proto") || "http";
+        if (host && !host.includes("localhost") && !host.includes("127.0.0.1")) {
+            return `${proto}://${host}`;
+        }
+    } catch (e) {}
+
+    if (process.env.ALLOWED_ORIGINS) {
+        const origins = process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean);
+        const external = origins.find(o => !o.includes("localhost") && !o.includes("127.0.0.1") && o !== "*");
+        if (external) {
+            const proto = external.includes("443") || external.includes("https") ? "https" : "http";
+            return external.startsWith("http") ? external : `${proto}://${external}`;
+        }
+    }
+
+    return "http://localhost:3000";
+}

@@ -14,6 +14,7 @@ import {
 import { getUserPlexHubData, killUserStream, StreamDiagnosis } from "@/app/actions";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
+import FeatureGuideModal from "@/components/feature-guide-modal";
 
 export default function MyPlexHub() {
     const [data, setData] = useState<any>(null);
@@ -23,6 +24,7 @@ export default function MyPlexHub() {
     const [streamToKill, setStreamToKill] = useState<any>(null);
     const [killingStream, setKillingStream] = useState(false);
     const [killMessage, setKillMessage] = useState<string | null>(null);
+    const [showActiveStreams, setShowActiveStreams] = useState(false);
     const [serversModalOpen, setServersModalOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
 
@@ -90,7 +92,7 @@ export default function MyPlexHub() {
         servers: [],
         activeStreams: [],
         watchHistory: [],
-        watchStats: { totalWatchTimeHours: 0, moviesWatched: 0, episodesWatched: 0, musicTracksPlayed: 0 },
+        watchStats: { totalWatchTimeHours: 0, totalWatchTimeDays: 0, remainingWatchTimeHours: 0, moviesWatched: 0, episodesWatched: 0, musicTracksPlayed: 0 },
         readingStats: { totalBooksAvailable: 0, totalRequests: 0, completedRequests: 0, kindleDeliveries: 0 }
     };
 
@@ -112,19 +114,25 @@ export default function MyPlexHub() {
                         <Badge variant="outline" className="text-[10px] font-semibold bg-primary/10 text-primary border-primary/30">
                             {safeData.user?.username}
                         </Badge>
-                        {safeData.serversCount > 0 && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setServersModalOpen(true)}
-                                className="h-5 px-2 text-[10px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] border-border/60 text-muted-foreground hover:text-foreground gap-1.5 transition-all rounded-full cursor-pointer shadow-xs"
-                                title="Click to view connected servers"
-                            >
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                {safeData.serversCount} {safeData.serversCount === 1 ? "Server" : "Servers"} Connected
-                                <ChevronDown className="h-3 w-3 opacity-60" />
-                            </Button>
-                        )}
+                        {safeData.serversCount > 0 && (() => {
+                            const allServers = (safeData.servers || []).filter((s: any) => s.monitored !== false);
+                            if (allServers.length === 0) return null;
+                            const onlineServers = allServers.filter((s: any) => s.online !== false);
+                            const allOnline = allServers.length > 0 && onlineServers.length === allServers.length;
+                            return (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setServersModalOpen(true)}
+                                    className={`h-5 px-2 text-[10px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] ${allOnline ? "border-border/60 text-muted-foreground" : "border-amber-500/40 text-amber-400"} hover:text-foreground gap-1.5 transition-all rounded-full cursor-pointer shadow-xs`}
+                                    title="Click to view connected servers"
+                                >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${allOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
+                                    {allOnline ? `${allServers.length} ${allServers.length === 1 ? "Server" : "Servers"} Connected` : `${onlineServers.length}/${allServers.length} Servers Online`}
+                                    <ChevronDown className="h-3 w-3 opacity-60" />
+                                </Button>
+                            );
+                        })()}
                     </div>
                     <p className="text-xs text-muted-foreground">
                         Your personalized stream monitor, playback diagnostics, and watch history.
@@ -132,6 +140,7 @@ export default function MyPlexHub() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                    <FeatureGuideModal guideId="stream-diagnostics" triggerText="Diagnostics Guide" />
                     <ServerSpeedTest />
                     <PlexSetupGuides />
                     <Button 
@@ -150,7 +159,31 @@ export default function MyPlexHub() {
             {/* --- ACTIVE STREAMS & TRANSCODE DOCTOR --- */}
             {activeStreams.length > 0 ? (
                 <div className="space-y-3">
-                    {activeStreams.map((stream: any, idx: number) => {
+                    <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-emerald-950/30 via-[#14141c] to-[#101017] border border-emerald-500/30 rounded-xl">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                            </span>
+                            <span className="text-xs sm:text-sm font-semibold text-foreground">
+                                {activeStreams.length} Active Stream{activeStreams.length > 1 ? "s" : ""} in Progress
+                            </span>
+                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                Live Now
+                            </Badge>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowActiveStreams(!showActiveStreams)}
+                            className="text-xs h-7 gap-1.5 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                        >
+                            {showActiveStreams ? "Hide Streams" : `View Active Streams (${activeStreams.length})`}
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showActiveStreams ? "rotate-180" : ""}`} />
+                        </Button>
+                    </div>
+
+                    {showActiveStreams && activeStreams.map((stream: any, idx: number) => {
                         const diagnosis: StreamDiagnosis = stream.diagnosis;
                         const isTranscoding = stream.videoDecision === "transcode";
                         const isAudioOnly = stream.audioDecision === "transcode" && !isTranscoding;
@@ -286,10 +319,40 @@ export default function MyPlexHub() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3.5 rounded-xl bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                        <Clock className="h-3.5 w-3.5 text-primary" /> Hours Streamed
+                        <Clock className="h-3.5 w-3.5 text-primary" /> Time Streamed
                     </div>
-                    <div className="text-xl font-bold tracking-tight text-foreground">
-                        {stats.totalWatchTimeHours || 0} <span className="text-xs font-normal text-muted-foreground">hrs</span>
+                    <div className="text-xl font-bold tracking-tight text-foreground flex items-baseline gap-1 flex-wrap">
+                        {(() => {
+                            const totalHours = Number(stats.totalWatchTimeHours || 0);
+                            const days = stats.totalWatchTimeDays !== undefined 
+                                ? Number(stats.totalWatchTimeDays) 
+                                : Math.floor(totalHours / 24);
+                            const remHours = stats.remainingWatchTimeHours !== undefined 
+                                ? Number(stats.remainingWatchTimeHours) 
+                                : (totalHours % 24);
+
+                            if (days > 0) {
+                                return (
+                                    <>
+                                        <span>{days}</span>
+                                        <span className="text-xs font-normal text-muted-foreground mr-1">{days === 1 ? "day" : "days"}</span>
+                                        {remHours > 0 && (
+                                            <>
+                                                <span>{remHours}</span>
+                                                <span className="text-xs font-normal text-muted-foreground">{remHours === 1 ? "hr" : "hrs"}</span>
+                                            </>
+                                        )}
+                                    </>
+                                );
+                            }
+
+                            return (
+                                <>
+                                    <span>{totalHours}</span>
+                                    <span className="text-xs font-normal text-muted-foreground">{totalHours === 1 ? "hr" : "hrs"}</span>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
 
@@ -330,7 +393,7 @@ export default function MyPlexHub() {
                         </h3>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-3.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-3.5 lg:gap-4">
                         {watchHistory.map((item: any) => (
                             <div 
                                 key={item.id} 
@@ -381,10 +444,10 @@ export default function MyPlexHub() {
             {/* --- TRANSCODE DOCTOR MODAL --- */}
             {selectedStreamForDiagnosis && (
                 <Dialog open={!!selectedStreamForDiagnosis} onOpenChange={(open) => !open && setSelectedStreamForDiagnosis(null)}>
-                    <DialogContent className="max-w-xl bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl">
-                        <DialogHeader className="pb-3 border-b border-border/40">
-                            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                                <Stethoscope className="h-5 w-5 text-primary" />
+                    <DialogContent className="w-[95vw] sm:max-w-xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 overflow-hidden">
+                        <DialogHeader className="pb-3 border-b border-border/40 shrink-0">
+                            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
+                                <Stethoscope className="h-5 w-5 text-primary shrink-0" />
                                 Stream Health & Transcode Doctor
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground">
@@ -392,7 +455,7 @@ export default function MyPlexHub() {
                             </DialogDescription>
                         </DialogHeader>
 
-                        <div className="space-y-4 py-2">
+                        <div className="space-y-4 py-2 flex-1 overflow-y-auto pr-1">
                             {/* Diagnosis Status Card */}
                             <div className={`p-4 rounded-xl border ${
                                 selectedStreamForDiagnosis.diagnosis.badgeColor === "emerald" ? "bg-emerald-500/10 border-emerald-500/30" :
@@ -453,10 +516,12 @@ export default function MyPlexHub() {
                                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
                                     <div className="text-[10px] text-muted-foreground uppercase font-semibold">Hardware Accel</div>
                                     <div className="font-bold text-foreground">
-                                        {selectedStreamForDiagnosis.transcodeHwEncoding ? "Active (NVENC)" : "None"}
+                                        {selectedStreamForDiagnosis.videoDecision === "transcode"
+                                            ? (selectedStreamForDiagnosis.transcodeHwEncoding ? "Active (NVENC)" : "None (Software)")
+                                            : "None (Direct Play)"}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground">
-                                        Speed: {selectedStreamForDiagnosis.transcodeSpeed}x
+                                        Speed: {selectedStreamForDiagnosis.videoDecision === "transcode" ? `${selectedStreamForDiagnosis.transcodeSpeed}x` : "1.0x (Raw)"}
                                     </div>
                                 </div>
                             </div>
@@ -488,10 +553,10 @@ export default function MyPlexHub() {
             {/* --- KILL STREAM CONFIRMATION MODAL --- */}
             {streamToKill && (
                 <Dialog open={!!streamToKill} onOpenChange={(open) => !open && setStreamToKill(null)}>
-                    <DialogContent className="max-w-md bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl">
+                    <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                         <DialogHeader className="pb-3 border-b border-border/40">
-                            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-rose-400">
-                                <ShieldAlert className="h-5 w-5 text-rose-500" />
+                            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-rose-400">
+                                <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0" />
                                 Terminate Stuck Playback Session?
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground">
@@ -538,10 +603,10 @@ export default function MyPlexHub() {
 
             {/* --- CONNECTED SERVERS MODAL --- */}
             <Dialog open={serversModalOpen} onOpenChange={setServersModalOpen}>
-                <DialogContent className="max-w-md bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl">
+                <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                     <DialogHeader className="pb-3 border-b border-border/40">
-                        <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                            <Server className="h-5 w-5 text-primary" />
+                        <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
+                            <Server className="h-5 w-5 text-primary shrink-0" />
                             Connected Media Servers
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
@@ -549,42 +614,48 @@ export default function MyPlexHub() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="py-2 space-y-2.5 max-h-[60vh] overflow-y-auto">
-                        {safeData.servers && safeData.servers.length > 0 ? (
-                            safeData.servers.map((srv: any, idx: number) => (
-                                <div 
-                                    key={srv.id || idx}
-                                    className="p-3 rounded-xl bg-white/[0.02] border border-border/50 hover:border-border transition-all space-y-1.5"
-                                >
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                            <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-                                                <Server className="h-4 w-4" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="text-xs sm:text-sm font-bold text-foreground truncate" title={srv.name}>
-                                                    {srv.name}
+                    <div className="py-2 space-y-2.5 max-h-[55vh] overflow-y-auto">
+                        {(() => {
+                            const displayServers = (safeData.servers || []).filter((s: any) => s.monitored !== false);
+                            return displayServers.length > 0 ? (
+                                displayServers.map((srv: any, idx: number) => (
+                                    <div 
+                                        key={srv.id || idx}
+                                        className="p-3 rounded-xl bg-white/[0.02] border border-border/50 hover:border-border transition-all space-y-1.5"
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                                                    <Server className="h-4 w-4" />
                                                 </div>
-                                                <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                                    Online & Active
+                                                <div className="min-w-0">
+                                                    <div className="text-xs sm:text-sm font-bold text-foreground truncate" title={srv.name}>
+                                                        {srv.name}
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${srv.online ? "bg-emerald-400" : "bg-rose-500 animate-pulse"}`} />
+                                                        {srv.online ? (
+                                                            <span className="text-emerald-400 font-medium">Online & Active</span>
+                                                        ) : (
+                                                            <span className="text-rose-400 font-semibold">Offline / Unreachable</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <div className="flex items-center gap-1 shrink-0">
-                                            {srv.directPms && (
-                                                <Badge variant="outline" className="text-[9px] font-semibold bg-primary/10 text-primary border-primary/30">
-                                                    Direct PMS
-                                                </Badge>
-                                            )}
-                                            {srv.tautulli && (
-                                                <Badge variant="outline" className="text-[9px] font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
-                                                    Tautulli
-                                                </Badge>
-                                            )}
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {srv.directPms && (
+                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-primary/10 text-primary border-primary/30">
+                                                        Direct PMS
+                                                    </Badge>
+                                                )}
+                                                {srv.tautulli && (
+                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
+                                                        Tautulli
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
 
                                     <p className="text-[11px] text-muted-foreground/80 leading-normal pl-9">
                                         {srv.directPms && srv.tautulli 
@@ -600,7 +671,8 @@ export default function MyPlexHub() {
                             <div className="py-6 text-center text-xs text-muted-foreground">
                                 No connected servers detected.
                             </div>
-                        )}
+                        );
+                    })()}
                     </div>
 
                     <DialogFooter className="border-t border-border/40 pt-3">

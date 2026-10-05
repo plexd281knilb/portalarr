@@ -1,0 +1,1530 @@
+import prisma from "@/lib/prisma";
+import { decryptData } from "@/lib/encryption";
+import { logger } from "@/lib/logger";
+import { getPlexServers, getPlexCloudServersMap, resolveWorkingPlexServerConnection } from "@/lib/plex";
+import { getPlexLibraryMediaItems, getPlexLibraryLabels, getPlexLibraryCollections, deletePlexCollection, expandCandidateUrls, PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { normalizeGeminiModel, getGeminiCandidateModels } from "@/lib/ai-agent";
+
+export * from "./parental-guide-types";
+import {
+    ParentalCategoryKey,
+    ParentalSeverity,
+    ImdbParentalAdvisory,
+    ParentalTaggingOptions,
+    PARENTAL_CATEGORY_INFO,
+    SEVERITY_LEVELS,
+    meetsSeverityThreshold,
+    formatParentalTag,
+    isParentalTag,
+    GuardRailPresetKey,
+    ServerGuardRailConfig,
+    KID_SAFE_GUARD_RAIL_PRESET,
+    FAMILY_GUARD_RAIL_PRESET,
+    TEEN_GUARD_RAIL_PRESET,
+    UNRESTRICTED_GUARD_RAIL_PRESET,
+    normalizeContentRating,
+    getContentRatingRank,
+    isRatingAllowedByGuardRail,
+    isMediaAllowedByServerGuardRail,
+    CustomTagRule
+} from "./parental-guide-types";
+
+/**
+ * Retrieves the full map of Server Guard Rail configurations from SQLite.
+ */
+export async function getServerGuardRailsMap(): Promise<Record<string, ServerGuardRailConfig>> {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.serverGuardRails) {
+            const parsed = JSON.parse(settings.serverGuardRails);
+            if (typeof parsed === "object" && parsed !== null) {
+                return parsed;
+            }
+        }
+    } catch (e) {}
+    return {};
+}
+
+/**
+ * Retrieves the Server Guard Rail configuration for a specific Plex Server.
+ * Automatically defaults Kids-themed servers (e.g. 'KidsPlexServer', 'Kids') to Kid-Safe preset if unconfigured.
+ */
+export async function getServerGuardRailConfig(serverId: string, fallbackServerName?: string): Promise<ServerGuardRailConfig> {
+    const map = await getServerGuardRailsMap();
+    if (map[serverId]) {
+        return map[serverId];
+    }
+
+    const srvNameLower = (fallbackServerName || "").toLowerCase();
+    const isKidsServer = serverId.toLowerCase().includes("kid") || srvNameLower.includes("kid");
+
+    if (isKidsServer) {
+        return {
+            ...KID_SAFE_GUARD_RAIL_PRESET,
+            serverId,
+            serverName: fallbackServerName || "Kids Plex Server"
+        };
+    }
+
+    return {
+        ...UNRESTRICTED_GUARD_RAIL_PRESET,
+        serverId,
+        serverName: fallbackServerName || "Plex Server"
+    };
+}
+
+/**
+ * Persists a Server Guard Rail configuration for a specific Plex Server.
+ */
+export async function saveServerGuardRailConfig(config: ServerGuardRailConfig): Promise<{ success: boolean; error?: string }> {
+    try {
+        const map = await getServerGuardRailsMap();
+        map[config.serverId] = config;
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { serverGuardRails: JSON.stringify(map) },
+            create: { id: "global", serverGuardRails: JSON.stringify(map) }
+        });
+
+        logger.addLog("INFO", "CURATION", `Updated Server Guard Rails for "${config.serverName || config.serverId}": ${config.enabled ? `ENABLED (${config.maxRating})` : 'DISABLED'}`);
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Persists multiple Server Guard Rail configurations at once.
+ */
+export async function saveAllServerGuardRails(configs: Record<string, ServerGuardRailConfig>): Promise<{ success: boolean; error?: string }> {
+    try {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { serverGuardRails: JSON.stringify(configs) },
+            create: { id: "global", serverGuardRails: JSON.stringify(configs) }
+        });
+
+        logger.addLog("INFO", "CURATION", `Saved Server Guard Rails configurations across ${Object.keys(configs).length} server(s).`);
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Retrieve cached parental advisory from SQLite database.
+ */
+export async function getStoredParentalAdvisory(ratingKey: string, serverId?: string): Promise<ImdbParentalAdvisory | null> {
+    try {
+        const stored = await prisma.mediaContentAdvisory.findFirst({
+            where: {
+                ratingKey,
+                ...(serverId ? { serverId } : {})
+            }
+        });
+
+        if (stored && (stored.nudityLevel || stored.violenceLevel || stored.profanityLevel || stored.alcoholLevel || stored.frighteningLevel)) {
+            return {
+                nudity: (stored.nudityLevel as ParentalSeverity) || "None",
+                violence: (stored.violenceLevel as ParentalSeverity) || "None",
+                profanity: (stored.profanityLevel as ParentalSeverity) || "None",
+                alcohol: (stored.alcoholLevel as ParentalSeverity) || "None",
+                frightening: (stored.frighteningLevel as ParentalSeverity) || "None",
+                certificate: stored.mpaaRating || undefined,
+                summary: stored.leavingReason || undefined,
+                source: "cache"
+            };
+        }
+    } catch (e) {}
+    return null;
+}
+
+/**
+ * Save resolved parental advisory to SQLite database.
+ */
+export async function saveParentalAdvisory(
+    ratingKey: string,
+    serverId: string,
+    title: string,
+    advisory: ImdbParentalAdvisory,
+    meta?: { imdbId?: string; tmdbId?: string; mpaaRating?: string }
+): Promise<void> {
+    try {
+        await prisma.mediaContentAdvisory.upsert({
+            where: {
+                ratingKey_serverId: {
+                    ratingKey,
+                    serverId
+                }
+            },
+            update: {
+                title,
+                imdbId: meta?.imdbId,
+                tmdbId: meta?.tmdbId,
+                mpaaRating: advisory.certificate || meta?.mpaaRating,
+                nudityLevel: advisory.nudity,
+                violenceLevel: advisory.violence,
+                profanityLevel: advisory.profanity,
+                alcoholLevel: advisory.alcohol,
+                frighteningLevel: advisory.frightening,
+                leavingReason: advisory.summary
+            },
+            create: {
+                ratingKey,
+                serverId,
+                title,
+                imdbId: meta?.imdbId,
+                tmdbId: meta?.tmdbId,
+                mpaaRating: advisory.certificate || meta?.mpaaRating,
+                nudityLevel: advisory.nudity,
+                violenceLevel: advisory.violence,
+                profanityLevel: advisory.profanity,
+                alcoholLevel: advisory.alcohol,
+                frighteningLevel: advisory.frightening,
+                leavingReason: advisory.summary
+            }
+        });
+    } catch (e: any) {
+        console.warn(`[PARENTAL-GUIDE] Failed to save advisory for "${title}":`, e.message);
+    }
+}
+
+/**
+ * Heuristic fallback resolver based on MPAA / TV certificate rating and title genre keywords.
+ */
+export function resolveParentalAdvisoryFallback(metadata: {
+    title: string;
+    year?: number;
+    contentRating?: string;
+    type?: string;
+    genres?: string[] | string;
+    genre?: string[] | string;
+}): ImdbParentalAdvisory {
+    const rawRating = (metadata.contentRating || "").trim().toUpperCase();
+    const rating = rawRating.replace(/^(US|GB|DE|CA|AU|FR|ES|IT)[:\/]/i, "").trim();
+    const titleLower = (metadata.title || "").toLowerCase();
+
+    // Check if well-known family-safe / clean franchise with NO nudity consensus on IMDb
+    const isCleanFranchise = Boolean(
+        titleLower.includes("lord of the rings") ||
+        titleLower.includes("fellowship of the ring") ||
+        titleLower.includes("two towers") ||
+        titleLower.includes("return of the king") ||
+        titleLower.includes("hobbit") ||
+        titleLower.includes("star wars") ||
+        titleLower.includes("harry potter") ||
+        titleLower.includes("avengers") ||
+        titleLower.includes("marvel") ||
+        titleLower.includes("spider-man") ||
+        titleLower.includes("spiderman") ||
+        titleLower.includes("batman") ||
+        titleLower.includes("dark knight") ||
+        titleLower.includes("jurassic") ||
+        titleLower.includes("pirates of the caribbean") ||
+        titleLower.includes("transformers") ||
+        titleLower.includes("indiana jones") ||
+        titleLower.includes("avatar") ||
+        titleLower.includes("hunger games") ||
+        titleLower.includes("chronicles of narnia") ||
+        titleLower.includes("narnia") ||
+        titleLower.includes("pixar") ||
+        titleLower.includes("disney") ||
+        titleLower.includes("dreamworks")
+    );
+
+    let nudity: ParentalSeverity = "None";
+    let violence: ParentalSeverity = "None";
+    let profanity: ParentalSeverity = "None";
+    let alcohol: ParentalSeverity = "None";
+    let frightening: ParentalSeverity = "None";
+
+    if (rating === "R" || rating === "TV-MA" || rating === "NC-17" || rating === "18" || rating === "X") {
+        nudity = "Mild";
+        violence = "Severe";
+        profanity = "Severe";
+        alcohol = "Moderate";
+        frightening = "Moderate";
+    } else if (rating === "PG-13" || rating === "TV-14" || rating === "15" || rating === "12A" || rating === "12") {
+        nudity = "None"; // Standard PG-13 action/adventure/fantasy consensus on IMDb is None
+        violence = "Moderate";
+        profanity = isCleanFranchise ? "None" : "Mild";
+        alcohol = "Mild";
+        frightening = "Moderate";
+    } else if (rating === "PG" || rating === "TV-PG" || rating === "FSK 6" || rating === "6") {
+        nudity = "None";
+        violence = "Mild";
+        profanity = "None";
+        alcohol = "None";
+        frightening = "Mild";
+    } else if (rating === "G" || rating === "TV-G" || rating === "TV-Y" || rating === "TV-Y7" || rating === "U" || rating === "FSK 0") {
+        nudity = "None";
+        violence = "None";
+        profanity = "None";
+        alcohol = "None";
+        frightening = "None";
+    } else {
+        // Unknown rating - default baseline
+        nudity = "None";
+        violence = "Mild";
+        profanity = "None";
+        alcohol = "None";
+        frightening = "None";
+    }
+
+    if (isCleanFranchise) {
+        nudity = "None";
+    }
+
+    return {
+        nudity,
+        violence,
+        profanity,
+        alcohol,
+        frightening,
+        certificate: rating || undefined,
+        source: "tmdb"
+    };
+}
+
+/**
+ * Resolves IMDb ID from title and release year using IMDb's suggestion search service.
+ */
+export async function searchImdbIdByTitle(title: string, year?: number): Promise<string | null> {
+    if (!title || typeof title !== "string") return null;
+    try {
+        const rawClean = title.replace(/[^\w\s]/gi, " ").trim();
+        if (!rawClean) return null;
+        const clean = encodeURIComponent(rawClean);
+        const firstChar = rawClean[0]?.toLowerCase() || "x";
+        const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/${firstChar}/${clean}.json`, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data?.d || !Array.isArray(data.d) || data.d.length === 0) return null;
+
+        // Try exact year match first
+        if (year) {
+            const yearMatch = data.d.find((m: any) => m.y === year || Math.abs((m.y || 0) - year) <= 1);
+            if (yearMatch?.id) return yearMatch.id;
+        }
+
+        // Fall back to first feature or series
+        const featureMatch = data.d.find((m: any) => m.q === "feature" || m.q === "TV series" || m.q === "TV mini-series");
+        return featureMatch?.id || data.d[0]?.id || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Directly queries the official IMDb GraphQL API for authoritative Parents Guide category severities.
+ */
+export async function fetchImdbParentalGuideDirect(imdbId?: string): Promise<ImdbParentalAdvisory | null> {
+    if (!imdbId || !imdbId.startsWith("tt")) return null;
+
+    const query = `
+    query TitleParentsGuide($id: ID!) {
+      title(id: $id) {
+        id
+        titleText { text }
+        parentsGuide {
+          categories {
+            category { id text }
+            severity { id text }
+          }
+        }
+        certificate {
+          rating
+          ratingReason
+        }
+      }
+    }`;
+
+    try {
+        const res = await fetch("https://graphql.imdb.com", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "User-Agent": "IMDb/3.9.1 (iPhone; iOS 16.5; Scale/3.00)",
+                "x-imdb-client-name": "imdb-ios-app"
+            },
+            body: JSON.stringify({ query, variables: { id: imdbId } })
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const cats = data.data?.title?.parentsGuide?.categories || [];
+        if (!cats || cats.length === 0) return null;
+
+        const map: ImdbParentalAdvisory = {
+            nudity: "None",
+            violence: "None",
+            profanity: "None",
+            alcohol: "None",
+            frightening: "None",
+            certificate: data.data?.title?.certificate?.rating || undefined,
+            summary: data.data?.title?.certificate?.ratingReason || undefined,
+            source: "imdb_direct"
+        };
+
+        for (const c of cats) {
+            const catId = c.category?.id;
+            const sevText = (c.severity?.text as ParentalSeverity) || "None";
+            if (catId === "NUDITY") map.nudity = sevText;
+            else if (catId === "VIOLENCE") map.violence = sevText;
+            else if (catId === "PROFANITY") map.profanity = sevText;
+            else if (catId === "ALCOHOL") map.alcohol = sevText;
+            else if (catId === "FRIGHTENING") map.frightening = sevText;
+        }
+
+        return map;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * AI-powered batch resolver for IMDb Parental Guide ratings.
+ * Resolves up to 30 titles in a single LLM prompt.
+ */
+export async function resolveParentalAdvisoryBatchAI(
+    items: {
+        ratingKey: string;
+        title: string;
+        year?: number;
+        type: string;
+        imdbId?: string;
+        mpaaRating?: string;
+    }[]
+): Promise<Record<string, ImdbParentalAdvisory>> {
+    if (items.length === 0) return {};
+
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+    const provider = settings?.aiProvider || "default";
+    const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
+    const modelName = normalizeGeminiModel(settings?.aiModel);
+
+    // If no AI key configured, use heuristic fallbacks
+    if (!rawKey && (provider === "gemini" || provider === "google" || provider === "openai" || provider === "anthropic")) {
+        const fallbacks: Record<string, ImdbParentalAdvisory> = {};
+        for (const it of items) {
+            fallbacks[it.ratingKey] = resolveParentalAdvisoryFallback(it);
+        }
+        return fallbacks;
+    }
+
+    const payload = items.map(it => ({
+        id: it.ratingKey,
+        title: it.title,
+        year: it.year,
+        type: it.type,
+        imdbId: it.imdbId,
+        mpaaRating: it.mpaaRating
+    }));
+
+    const systemPrompt = `You are an expert film database metadata AI agent specializing in official IMDb Parents Guide (Parental Advisory) consensus data.
+For each movie or TV show provided in the list, provide the official consensus IMDb Parents Guide severity ratings for the 5 standard categories:
+1. "nudity": ("None" | "Mild" | "Moderate" | "Severe")
+2. "violence": ("None" | "Mild" | "Moderate" | "Severe")
+3. "profanity": ("None" | "Mild" | "Moderate" | "Severe")
+4. "alcohol": ("None" | "Mild" | "Moderate" | "Severe")
+5. "frightening": ("None" | "Mild" | "Moderate" | "Severe")
+
+CRITICAL ACCURACY RULES:
+- For "nudity" (Sex & Nudity): If a movie or TV show has no sexual scenes or nudity (for example: The Lord of the Rings trilogy, The Hobbit, Star Wars, Marvel/Avengers, Harry Potter, Jurassic Park, Spider-Man, The Dark Knight, Inception, Interstellar), you MUST return "None". Do NOT assign "Mild" to PG-13 or action/fantasy films that are completely free of nudity/sexual content on IMDb.
+- Return "None" whenever IMDb lists "None" for a category.
+- Adhere strictly to the official IMDb Parents Guide community consensus.
+
+Return ONLY a valid, raw JSON object mapping each item's "id" to its advisory ratings object.
+
+Example output:
+{
+  "12345": {
+    "nudity": "None",
+    "violence": "Moderate",
+    "profanity": "Mild",
+    "alcohol": "Mild",
+    "frightening": "Moderate",
+    "certificate": "PG-13",
+    "summary": "Rated PG-13 for epic battle sequences and frightening images"
+  }
+}`;
+
+    try {
+        let rawText = "";
+
+        if (provider === "gemini" || provider === "google" || (!provider || provider === "default")) {
+            const keyToUse = rawKey || process.env.GEMINI_API_KEY || "";
+            if (keyToUse) {
+                const candidateModels = getGeminiCandidateModels(modelName);
+                for (const activeModel of candidateModels) {
+                    try {
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(keyToUse)}`;
+                        let res = await fetch(url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                system_instruction: { parts: [{ text: systemPrompt }] },
+                                contents: [{ parts: [{ text: JSON.stringify(payload) }] }],
+                                generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                            })
+                        });
+                        // If 503 (model overloaded), retry once with exponential backoff and jitter
+                        if (res.status === 503) {
+                            const jitter = Math.floor(Math.random() * 500) + 1200;
+                            await new Promise(r => setTimeout(r, jitter));
+                            res = await fetch(url, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    system_instruction: { parts: [{ text: systemPrompt }] },
+                                    contents: [{ parts: [{ text: JSON.stringify(payload) }] }],
+                                    generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                                })
+                            });
+                        }
+                        if (res.ok) {
+                            const data = await res.json();
+                            rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                            if (rawText) break;
+                        }
+                    } catch (e) {}
+                }
+            }
+        } else if (provider === "openai" && rawKey) {
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${rawKey}`
+                },
+                body: JSON.stringify({
+                    model: modelName || "gpt-4o-mini",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: JSON.stringify(payload) }
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.1
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                rawText = data.choices?.[0]?.message?.content || "";
+            }
+        }
+
+        if (rawText) {
+            const cleanJson = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+            const parsed = JSON.parse(cleanJson);
+            const results: Record<string, ImdbParentalAdvisory> = {};
+
+            for (const it of items) {
+                const adv = parsed[it.ratingKey];
+                const tLower = (it.title || "").toLowerCase();
+                const isCleanFranchise = tLower.includes("lord of the rings") || tLower.includes("fellowship") || tLower.includes("hobbit") || tLower.includes("star wars") || tLower.includes("harry potter");
+
+                if (adv && (adv.violence || adv.nudity || adv.profanity)) {
+                    results[it.ratingKey] = {
+                        nudity: isCleanFranchise ? "None" : normalizeSeverity(adv.nudity),
+                        violence: normalizeSeverity(adv.violence),
+                        profanity: normalizeSeverity(adv.profanity),
+                        alcohol: normalizeSeverity(adv.alcohol),
+                        frightening: normalizeSeverity(adv.frightening),
+                        certificate: adv.certificate || it.mpaaRating,
+                        summary: adv.summary,
+                        source: "ai"
+                    };
+                } else {
+                    results[it.ratingKey] = resolveParentalAdvisoryFallback(it);
+                }
+            }
+            return results;
+        }
+    } catch (e: any) {
+        logger.addLog("WARN", "CURATION", `AI Parental Guide batch resolution failed: ${e.message}. Using fallback heuristics.`);
+    }
+
+    // Fallback for all
+    const fallbacks: Record<string, ImdbParentalAdvisory> = {};
+    for (const it of items) {
+        fallbacks[it.ratingKey] = resolveParentalAdvisoryFallback(it);
+    }
+    return fallbacks;
+}
+
+/**
+ * Unified batch resolver prioritizing Direct IMDb GraphQL, then AI, then Heuristic Fallbacks.
+ */
+export async function resolveParentalAdvisoryBatch(
+    items: {
+        ratingKey: string;
+        title: string;
+        year?: number;
+        type: string;
+        imdbId?: string;
+        mpaaRating?: string;
+    }[]
+): Promise<Record<string, ImdbParentalAdvisory>> {
+    if (items.length === 0) return {};
+
+    const results: Record<string, ImdbParentalAdvisory> = {};
+    const unresolved: typeof items = [];
+
+    // Tier 1: Direct IMDb GraphQL queries in parallel
+    await Promise.all(items.map(async (it) => {
+        try {
+            let imdbId = it.imdbId;
+            if (!imdbId) {
+                imdbId = (await searchImdbIdByTitle(it.title, it.year)) || undefined;
+            }
+            if (imdbId) {
+                const direct = await fetchImdbParentalGuideDirect(imdbId);
+                if (direct) {
+                    results[it.ratingKey] = direct;
+                    return;
+                }
+            }
+        } catch (e) {}
+        unresolved.push(it);
+    }));
+
+    // Tier 2 & 3: AI batch resolution + Heuristics for remaining unresolved items
+    if (unresolved.length > 0) {
+        const aiResults = await resolveParentalAdvisoryBatchAI(unresolved);
+        for (const it of unresolved) {
+            results[it.ratingKey] = aiResults[it.ratingKey] || resolveParentalAdvisoryFallback(it);
+        }
+    }
+
+    return results;
+}
+
+function normalizeSeverity(val: any): ParentalSeverity {
+    if (!val) return "None";
+    const s = String(val).trim().toLowerCase();
+    if (s.includes("severe") || s === "high") return "Severe";
+    if (s.includes("moderate") || s === "medium") return "Moderate";
+    if (s.includes("mild") || s === "low") return "Mild";
+    return "None";
+}
+
+/**
+ * Resolves parental advisory for a single media item (Cache -> Direct IMDb -> AI -> Fallback).
+ */
+export async function resolveParentalAdvisory(
+    item: {
+        ratingKey: string;
+        title: string;
+        year?: number;
+        type?: string;
+        imdbId?: string;
+        contentRating?: string;
+    },
+    serverId: string = "main"
+): Promise<ImdbParentalAdvisory> {
+    // 1. Check SQLite Cache
+    const cached = await getStoredParentalAdvisory(item.ratingKey, serverId);
+    if (cached) return cached;
+
+    // 2. Query Direct Official IMDb GraphQL API
+    let imdbId = item.imdbId;
+    if (!imdbId) {
+        imdbId = (await searchImdbIdByTitle(item.title, item.year)) || undefined;
+    }
+    if (imdbId) {
+        const direct = await fetchImdbParentalGuideDirect(imdbId);
+        if (direct) {
+            await saveParentalAdvisory(item.ratingKey, serverId, item.title, direct, {
+                imdbId,
+                mpaaRating: item.contentRating
+            });
+            return direct;
+        }
+    }
+
+    // 3. Fall back to AI Batch
+    const resolvedMap = await resolveParentalAdvisoryBatchAI([{
+        ratingKey: item.ratingKey,
+        title: item.title,
+        year: item.year,
+        type: item.type || "movie",
+        imdbId: item.imdbId,
+        mpaaRating: item.contentRating
+    }]);
+
+    const advisory = resolvedMap[item.ratingKey] || resolveParentalAdvisoryFallback(item);
+
+    // 4. Persist to DB cache
+    await saveParentalAdvisory(item.ratingKey, serverId, item.title, advisory, {
+        imdbId: item.imdbId,
+        mpaaRating: item.contentRating
+    });
+
+    return advisory;
+}
+
+/**
+ * Apply formatted parental tags to a specific Plex media item.
+ */
+export async function applyParentalTagsToPlexItem(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    sectionKey: string | number,
+    item: {
+        ratingKey: string;
+        title: string;
+        type?: string;
+    },
+    advisory: ImdbParentalAdvisory,
+    options: ParentalTaggingOptions
+): Promise<{ success: boolean; appliedTags: string[]; error?: string }> {
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    const mediaType = item.type === "show" ? "show" : "movie";
+    const typeId = mediaType === "show" ? 2 : 1;
+
+    const minSeverity = options.minSeverity || "Mild";
+    const format = options.format || "prefix_category_severity";
+    const prefix = options.prefix || "IMDb";
+    const target = options.target || "labels";
+    const enabledCategories = options.categories || (["nudity", "violence", "profanity", "alcohol", "frightening"] as ParentalCategoryKey[]);
+
+    // 1. Compute which tags to apply
+    const tagsToApply: string[] = [];
+    const categoryKeys: ParentalCategoryKey[] = ["nudity", "violence", "profanity", "alcohol", "frightening"];
+
+    for (const cat of categoryKeys) {
+        if (!enabledCategories.includes(cat)) continue;
+        const sev = advisory[cat];
+        if (meetsSeverityThreshold(sev, minSeverity)) {
+            const formatted = formatParentalTag(cat, sev, format, prefix);
+            tagsToApply.push(formatted);
+        }
+    }
+
+    if (options.dryRun) {
+        return { success: true, appliedTags: tagsToApply };
+    }
+
+    let lastError: any = null;
+
+    for (const cleanBase of urlsToTry) {
+        try {
+            // 2. Query current item metadata to preserve non-parental labels/genres
+            const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&includeAdvanced=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token }
+            });
+
+            let existingLabels: string[] = [];
+            let existingGenres: string[] = [];
+            let oldParentalLabels: string[] = [];
+            let oldParentalGenres: string[] = [];
+
+            if (metaRes.ok) {
+                const metaData = await metaRes.json();
+                const meta = metaData.MediaContainer?.Metadata?.[0];
+                const allLabels = (meta?.Label || []).map((l: any) => typeof l === "string" ? l : l?.tag).filter(Boolean);
+                const allGenres = (meta?.Genre || []).map((g: any) => typeof g === "string" ? g : g?.tag).filter(Boolean);
+
+                existingLabels = allLabels.filter((t: string) => !isParentalTag(t, prefix));
+                oldParentalLabels = allLabels.filter((t: string) => isParentalTag(t, prefix));
+
+                existingGenres = allGenres.filter((t: string) => !isParentalTag(t, prefix));
+                oldParentalGenres = allGenres.filter((t: string) => isParentalTag(t, prefix));
+            }
+
+            // 3. Formulate update parameters
+            const metaParams = new URLSearchParams();
+
+            if (target === "labels" || target === "both") {
+                // Subtract old parental tags not in tagsToApply
+                const toRemove = oldParentalLabels.filter(t => !tagsToApply.includes(t));
+                toRemove.forEach((lbl, idx) => {
+                    metaParams.append(`label[${idx}].tag.tag-`, lbl);
+                    metaParams.append(`label[].tag.tag-`, lbl);
+                });
+
+                const mergedLabels = Array.from(new Set([...existingLabels, ...tagsToApply]));
+                mergedLabels.forEach((lbl, idx) => {
+                    metaParams.set(`label[${idx}].tag.tag`, lbl);
+                });
+                metaParams.set("label.locked", "1");
+            }
+
+            if (target === "genres" || target === "both") {
+                // Subtract old parental genres not in tagsToApply
+                const toRemove = oldParentalGenres.filter(t => !tagsToApply.includes(t));
+                toRemove.forEach((g, idx) => {
+                    metaParams.append(`genre[${idx}].tag.tag-`, g);
+                    metaParams.append(`genre[].tag.tag-`, g);
+                });
+
+                const mergedGenres = Array.from(new Set([...existingGenres, ...tagsToApply]));
+                mergedGenres.forEach((g, idx) => {
+                    metaParams.set(`genre[${idx}].tag.tag`, g);
+                });
+                metaParams.set("genre.locked", "1");
+            }
+
+            const secParams = new URLSearchParams(metaParams.toString());
+            secParams.set("type", String(typeId));
+            secParams.set("id", String(item.ratingKey));
+
+            // 4. Send PUT request to Plex metadata endpoint
+            const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${metaParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
+            await fetch(metaUrl, {
+                method: "PUT",
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            });
+
+            // Send PUT request to Plex sections endpoint
+            const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${secParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
+            await fetch(secUrl, {
+                method: "PUT",
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            });
+
+            return { success: true, appliedTags: tagsToApply };
+        } catch (e: any) {
+            lastError = e;
+        }
+    }
+
+    return { success: false, appliedTags: [], error: lastError?.message || "Failed to apply parental tags" };
+}
+
+/**
+ * Strips all parental rating tags from a Plex media item.
+ */
+export async function clearParentalTagsFromPlexItem(
+    serverUrlOrCandidates: string | string[],
+    token: string,
+    sectionKey: string | number,
+    item: {
+        ratingKey: string;
+        type?: string;
+        labels?: string[];
+        genres?: string[];
+        genre?: string[];
+    },
+    prefix = "IMDb"
+): Promise<{ success: boolean; clearedCount?: number; error?: string }> {
+    // Fast pre-filter: If both labels and genres are known and neither has any parental tags, skip HTTP fetch
+    const knownLabels = item.labels;
+    const knownGenres = item.genres || item.genre;
+    if (Array.isArray(knownLabels) && Array.isArray(knownGenres)) {
+        const hasParental = knownLabels.some(l => isParentalTag(l, prefix)) || knownGenres.some(g => isParentalTag(g, prefix));
+        if (!hasParental) {
+            return { success: true, clearedCount: 0 };
+        }
+    }
+
+    const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    const mediaType = item.type === "show" ? "show" : "movie";
+    const typeId = mediaType === "show" ? 2 : 1;
+
+    let lastError: any = null;
+
+    for (const cleanBase of urlsToTry) {
+        try {
+            const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&includeAdvanced=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token }
+            });
+
+            if (!metaRes.ok) {
+                lastError = new Error(`HTTP ${metaRes.status}`);
+                continue;
+            }
+            const metaData = await metaRes.json();
+            const meta = metaData.MediaContainer?.Metadata?.[0];
+
+            const allLabels = (meta?.Label || []).map((l: any) => typeof l === "string" ? l : l?.tag).filter(Boolean);
+            const allGenres = (meta?.Genre || []).map((g: any) => typeof g === "string" ? g : g?.tag).filter(Boolean);
+
+            const removedLabels: string[] = allLabels.filter((t: string) => isParentalTag(t, prefix));
+            const remainingLabels: string[] = allLabels.filter((t: string) => !isParentalTag(t, prefix));
+
+            const removedGenres: string[] = allGenres.filter((t: string) => isParentalTag(t, prefix));
+            const remainingGenres: string[] = allGenres.filter((t: string) => !isParentalTag(t, prefix));
+
+            if (removedLabels.length === 0 && removedGenres.length === 0) {
+                return { success: true, clearedCount: 0 };
+            }
+
+            const metaParams = new URLSearchParams();
+
+            // Clear labels
+            removedLabels.forEach((lbl, idx) => {
+                metaParams.append(`label[${idx}].tag.tag-`, lbl);
+                metaParams.append(`label[].tag.tag-`, lbl);
+            });
+            if (remainingLabels.length > 0) {
+                remainingLabels.forEach((lbl, idx) => metaParams.set(`label[${idx}].tag.tag`, lbl));
+            } else {
+                metaParams.set("label.locked", "0");
+            }
+
+            // Clear genres
+            removedGenres.forEach((g, idx) => {
+                metaParams.append(`genre[${idx}].tag.tag-`, g);
+                metaParams.append(`genre[].tag.tag-`, g);
+            });
+            if (remainingGenres.length > 0) {
+                remainingGenres.forEach((g, idx) => metaParams.set(`genre[${idx}].tag.tag`, g));
+            } else {
+                metaParams.set("genre.locked", "0");
+            }
+
+            const secParams = new URLSearchParams(metaParams.toString());
+            secParams.set("type", String(typeId));
+            secParams.set("id", String(item.ratingKey));
+
+            // 1. PUT to metadata
+            const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${metaParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
+            await fetch(metaUrl, {
+                method: "PUT",
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            });
+
+            // 2. PUT to sections/all
+            const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${secParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
+            await fetch(secUrl, {
+                method: "PUT",
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+            });
+
+            return { success: true, clearedCount: removedLabels.length + removedGenres.length };
+        } catch (e: any) {
+            lastError = e;
+        }
+    }
+
+    return { success: false, error: lastError?.message || "Failed to clear parental tags" };
+}
+
+/**
+ * Scans an entire Plex Library Section and applies parental tags to all movies or TV shows.
+ */
+export async function applyParentalTagsToLibrary(
+    serverId: string,
+    sectionKey: string | number,
+    options: ParentalTaggingOptions = {}
+): Promise<{
+    success: boolean;
+    totalEvaluated: number;
+    taggedCount: number;
+    skippedCount: number;
+    appliedTagsSummary: Record<string, number>;
+    error?: string;
+}> {
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {}, error: "Plex server unreachable or token not configured." };
+    }
+
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
+
+    logger.addLog("INFO", "CURATION", `Starting IMDb Parental Rating Tagging for library section ${sectionKey} on "${serverName}"...`);
+
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+    if (items.length === 0) {
+        return { success: true, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {} };
+    }
+
+    const appliedTagsSummary: Record<string, number> = {};
+    let taggedCount = 0;
+    let skippedCount = 0;
+
+    // Process in batches of 25 items for fast AI resolution
+    const BATCH_SIZE = 25;
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        const batch = items.slice(i, i + BATCH_SIZE);
+
+        // 1. Identify which items need resolution vs cached
+        const needsResolution: any[] = [];
+        const batchAdvisories: Record<string, ImdbParentalAdvisory> = {};
+
+        for (const it of batch) {
+            const cached = await getStoredParentalAdvisory(it.ratingKey, resolved.serverId);
+            if (cached) {
+                batchAdvisories[it.ratingKey] = cached;
+            } else {
+                needsResolution.push({
+                    ratingKey: it.ratingKey,
+                    title: it.title,
+                    year: it.year,
+                    type: it.type || "movie",
+                    imdbId: it.guids?.imdb,
+                    mpaaRating: it.contentRating
+                });
+            }
+        }
+
+        // 2. Resolve batch using Direct IMDb GraphQL with AI/Fallback
+        if (needsResolution.length > 0) {
+            const resolvedMap = await resolveParentalAdvisoryBatch(needsResolution);
+            for (const it of needsResolution) {
+                const adv = resolvedMap[it.ratingKey] || resolveParentalAdvisoryFallback(it);
+                batchAdvisories[it.ratingKey] = adv;
+                // Save to DB cache
+                await saveParentalAdvisory(it.ratingKey, resolved.serverId, it.title, adv, {
+                    imdbId: it.imdbId,
+                    mpaaRating: it.mpaaRating
+                });
+            }
+        }
+
+        // 3. Apply tags to Plex items
+        for (const it of batch) {
+            const adv = batchAdvisories[it.ratingKey];
+            if (!adv) {
+                skippedCount++;
+                continue;
+            }
+
+            const res = await applyParentalTagsToPlexItem(urlsToTry, serverToken, sectionKey, it, adv, options);
+            if (res.success && res.appliedTags.length > 0) {
+                taggedCount++;
+                for (const t of res.appliedTags) {
+                    appliedTagsSummary[t] = (appliedTagsSummary[t] || 0) + 1;
+                }
+            } else {
+                skippedCount++;
+            }
+        }
+    }
+
+    logger.addLog("SUCCESS", "CURATION", `Completed IMDb Parental Tagging for "${serverName}": Tagged ${taggedCount} items (${skippedCount} skipped/none).`);
+
+    return {
+        success: true,
+        totalEvaluated: items.length,
+        taggedCount,
+        skippedCount,
+        appliedTagsSummary
+    };
+}
+
+/**
+ * Clears all parental tags from an entire Plex library section.
+ */
+export async function clearParentalTagsFromLibrary(
+    serverId: string,
+    sectionKey: string | number,
+    prefix = "IMDb"
+): Promise<{ success: boolean; clearedCount: number; error?: string }> {
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, clearedCount: 0, error: "Plex server unreachable or token not configured." };
+    }
+
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
+
+    logger.addLog("INFO", "CURATION", `Clearing all IMDb Parental Tags from library section ${sectionKey} on "${serverName}"...`);
+
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+    let clearedCount = 0;
+
+    const ratingKeys = items.map(it => it.ratingKey);
+
+    for (const it of items) {
+        const res = await clearParentalTagsFromPlexItem(urlsToTry, serverToken, sectionKey, it, prefix);
+        if (res.success && (res.clearedCount || 0) > 0) {
+            clearedCount++;
+        }
+    }
+
+    // Also purge stored cached advisories for this section so the studio UI resets completely clean
+    try {
+        const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
+        await prisma.mediaContentAdvisory.deleteMany({
+            where: {
+                ratingKey: { in: ratingKeys },
+                serverId: { in: serverIdCandidates }
+            }
+        });
+    } catch (e) {}
+
+    logger.addLog("SUCCESS", "CURATION", `Cleared parental tags from ${clearedCount} items on "${serverName}".`);
+
+    return { success: true, clearedCount };
+}
+
+/**
+ * Retrieves cached parental advisories for all items in a library section.
+ */
+export async function getStoredParentalAdvisoriesForLibrary(
+    serverId: string,
+    sectionKey: string | number
+): Promise<{
+    items: Array<{
+        ratingKey: string;
+        title: string;
+        year?: number;
+        contentRating?: string;
+        advisory: ImdbParentalAdvisory | null;
+        appliedTags?: string[];
+    }>;
+}> {
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { items: [] };
+
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const mediaItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000, undefined, false);
+
+        const ratingKeys = mediaItems.map(m => m.ratingKey);
+        const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
+        const advisories = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                ratingKey: { in: ratingKeys },
+                serverId: { in: serverIdCandidates }
+            }
+        });
+
+        const advMap = new Map<string, ImdbParentalAdvisory>();
+        for (const adv of advisories) {
+            advMap.set(adv.ratingKey, {
+                nudity: (adv.nudityLevel as ParentalSeverity) || "None",
+                violence: (adv.violenceLevel as ParentalSeverity) || "None",
+                profanity: (adv.profanityLevel as ParentalSeverity) || "None",
+                alcohol: (adv.alcoholLevel as ParentalSeverity) || "None",
+                frightening: (adv.frighteningLevel as ParentalSeverity) || "None",
+                certificate: adv.mpaaRating || undefined,
+                summary: adv.leavingReason || undefined,
+                source: "cache"
+            });
+        }
+
+        return {
+            items: mediaItems.map(m => ({
+                ratingKey: m.ratingKey,
+                title: m.title,
+                year: m.year,
+                contentRating: m.contentRating,
+                advisory: advMap.get(m.ratingKey) || null
+            }))
+        };
+    } catch (e) {
+        return { items: [] };
+    }
+}
+
+/**
+ * Applies a custom tag (Label, Genre, or Collection) to media matching a rule.
+ */
+export async function applyCustomTagRuleToLibrary(
+    serverId: string,
+    sectionKey: string | number,
+    rule: CustomTagRule
+): Promise<{
+    success: boolean;
+    totalEvaluated: number;
+    taggedCount: number;
+    skippedCount: number;
+    error?: string;
+}> {
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, error: "Plex server unreachable or token not configured." };
+    }
+
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+
+    logger.addLog("INFO", "CURATION", `Applying custom tag "${rule.tagName}" (${rule.field}) on section ${sectionKey} on "${serverName}"...`);
+
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+    let taggedCount = 0;
+    let skippedCount = 0;
+
+    for (const item of items) {
+        let matches = false;
+
+        const itemRes = (item.detectedBadges?.resolution || item.media?.[0]?.videoResolution || "").toLowerCase();
+        const itemHdr = (item.detectedBadges?.hdr || item.media?.[0]?.hdrFormat || "").toLowerCase();
+        const itemAudio = (item.detectedBadges?.audio || item.media?.[0]?.audioCodec || "").toLowerCase();
+
+        switch (rule.filterType) {
+            case "all":
+                matches = true;
+                break;
+            case "resolution": {
+                const targetRes = (rule.filterValue || "").toLowerCase().trim();
+                const is4k = targetRes === "4k" || targetRes === "2160" || targetRes === "uhd";
+                const is1080 = targetRes === "1080" || targetRes === "1080p" || targetRes === "fhd";
+                const is720 = targetRes === "720" || targetRes === "720p" || targetRes === "hd";
+
+                if (is4k) {
+                    matches = Boolean(itemRes && (itemRes.includes("4k") || itemRes.includes("2160") || itemRes.includes("uhd")));
+                } else if (is1080) {
+                    matches = Boolean(itemRes && (itemRes.includes("1080") || itemRes.includes("fhd")));
+                } else if (is720) {
+                    matches = Boolean(itemRes && (itemRes.includes("720") || itemRes.includes("hd")));
+                } else {
+                    matches = Boolean(itemRes && itemRes.includes(targetRes));
+                }
+                break;
+            }
+            case "hdr": {
+                const targetHdr = (rule.filterValue || "").toLowerCase().trim();
+                if (targetHdr.includes("dv") || targetHdr.includes("dolby") || targetHdr.includes("vision")) {
+                    matches = Boolean(itemHdr && (itemHdr.includes("dv") || itemHdr.includes("dolby") || itemHdr.includes("vision") || itemHdr.includes("dovi")));
+                } else if (targetHdr.includes("hdr10+") || targetHdr.includes("hdr10plus")) {
+                    matches = Boolean(itemHdr && (itemHdr.includes("hdr10+") || itemHdr.includes("hdr10plus")));
+                } else if (targetHdr.includes("hdr")) {
+                    matches = Boolean(itemHdr && (itemHdr.includes("hdr") || itemHdr.includes("dv")));
+                } else {
+                    matches = Boolean(itemHdr && itemHdr.includes(targetHdr));
+                }
+                break;
+            }
+            case "audio":
+                matches = Boolean(itemAudio && itemAudio.includes((rule.filterValue || "").toLowerCase().trim()));
+                break;
+            case "studio":
+                matches = Boolean(item.studio && item.studio.toLowerCase().includes((rule.filterValue || "").toLowerCase().trim()));
+                break;
+            case "decade": {
+                const digits = (rule.filterValue || "").replace(/\D/g, "");
+                if (item.year && digits) {
+                    let startYear = parseInt(digits, 10);
+                    if (startYear < 100) {
+                        startYear = startYear >= 20 ? 1900 + startYear : 2000 + startYear;
+                    }
+                    matches = item.year >= startYear && item.year < startYear + 10;
+                }
+                break;
+            }
+            case "contentRating": {
+                const normItemRating = normalizeContentRating(item.contentRating || (item.detectedBadges as any)?.contentRating);
+                const normTargetRating = normalizeContentRating(rule.filterValue);
+                matches = Boolean(normItemRating && normTargetRating && normItemRating === normTargetRating);
+                break;
+            }
+            case "rating_above": {
+                let effRating = item.rating ?? item.audienceRating;
+                if (effRating !== undefined && effRating !== null) {
+                    let targetVal = parseFloat(rule.filterValue || "7.0");
+                    if (effRating > 10 && targetVal <= 10) effRating = effRating / 10;
+                    matches = effRating >= targetVal;
+                }
+                break;
+            }
+            case "rating_below": {
+                let effRating = item.rating ?? item.audienceRating;
+                if (effRating !== undefined && effRating !== null) {
+                    let targetVal = parseFloat(rule.filterValue || "5.0");
+                    if (effRating > 10 && targetVal <= 10) effRating = effRating / 10;
+                    matches = effRating < targetVal;
+                }
+                break;
+            }
+            default:
+                matches = true;
+        }
+
+        if (!matches) {
+            skippedCount++;
+            continue;
+        }
+
+        // Fast pre-check: If item already has tag in known fields, count and skip network PUT
+        if (rule.field === "label" && item.labels && item.labels.includes(rule.tagName)) {
+            taggedCount++;
+            continue;
+        } else if (rule.field === "genre" && (item.genres || item.genre) && (item.genres || item.genre || []).includes(rule.tagName)) {
+            taggedCount++;
+            continue;
+        } else if (rule.field === "collection" && item.collections && item.collections.includes(rule.tagName)) {
+            taggedCount++;
+            continue;
+        }
+
+        // Apply tag to Plex Item
+        const mediaType = item.type === "show" ? "show" : "movie";
+        const typeId = mediaType === "show" ? 2 : 1;
+
+        for (const cleanBase of urlsToTry) {
+            try {
+                const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken }
+                });
+
+                let existingTags: string[] = [];
+                if (metaRes.ok) {
+                    const metaData = await metaRes.json();
+                    const meta = metaData.MediaContainer?.Metadata?.[0];
+                    if (rule.field === "label" && meta?.Label) {
+                        existingTags = meta.Label.map((l: any) => typeof l === "string" ? l : l?.tag).filter(Boolean);
+                    } else if (rule.field === "genre" && meta?.Genre) {
+                        existingTags = meta.Genre.map((g: any) => typeof g === "string" ? g : g?.tag).filter(Boolean);
+                    } else if (rule.field === "collection" && meta?.Collection) {
+                        existingTags = meta.Collection.map((c: any) => typeof c === "string" ? c : c?.tag).filter(Boolean);
+                    }
+                }
+
+                if (existingTags.includes(rule.tagName)) {
+                    // Already has tag
+                    taggedCount++;
+                    break;
+                }
+
+                const merged = Array.from(new Set([...existingTags, rule.tagName]));
+                const params = new URLSearchParams();
+                params.set("type", String(typeId));
+                params.set("id", String(item.ratingKey));
+
+                merged.forEach((t, idx) => {
+                    params.set(`${rule.field}[${idx}].tag.tag`, t);
+                });
+                params.set(`${rule.field}.locked`, "1");
+
+                // 1. Send PUT to metadata endpoint
+                const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
+                await fetch(metaUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                // 2. Send PUT to sections endpoint
+                const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
+                const putRes = await fetch(secUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                if (putRes.ok) {
+                    taggedCount++;
+                    break;
+                }
+            } catch (e) {}
+        }
+    }
+
+    logger.addLog("SUCCESS", "CURATION", `Applied custom tag "${rule.tagName}" to ${taggedCount} items (${skippedCount} skipped) on Plex server "${serverName}".`);
+
+    return {
+        success: true,
+        totalEvaluated: items.length,
+        taggedCount,
+        skippedCount
+    };
+}
+
+/**
+ * Removes a specific custom tag from all items in a library section.
+ */
+export async function clearCustomTagFromLibrary(
+    serverId: string,
+    sectionKey: string | number,
+    tagName: string,
+    field: "label" | "genre" | "collection" = "label"
+): Promise<{ success: boolean; clearedCount: number; error?: string }> {
+    const resolved = await resolveWorkingPlexServerConnection(serverId);
+    if (!resolved || !resolved.serverUrl) {
+        return { success: false, clearedCount: 0, error: "Plex server unreachable or token not configured." };
+    }
+
+    const serverToken = resolved.token;
+    const serverUrl = resolved.serverUrl;
+    const serverName = resolved.serverName;
+    const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+
+    logger.addLog("INFO", "CURATION", `Removing custom tag "${tagName}" (${field}) from section ${sectionKey} on "${serverName}"...`);
+
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+    let clearedCount = 0;
+
+    for (const item of items) {
+        // Fast pre-filter: Skip items that definitely do not possess this tag to prevent redundant network calls
+        if (field === "genre") {
+            const genres = item.genres || item.genre || [];
+            if (genres.length > 0 && !genres.includes(tagName)) continue;
+        } else if (field === "collection") {
+            const collections = item.collections || [];
+            if (collections.length > 0 && !collections.includes(tagName)) continue;
+        } else if (field === "label") {
+            const labels = item.labels || [];
+            if (labels.length > 0 && !labels.includes(tagName)) continue;
+        }
+
+        const mediaType = item.type === "show" ? "show" : "movie";
+        const typeId = mediaType === "show" ? 2 : 1;
+
+        for (const cleanBase of urlsToTry) {
+            try {
+                const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": serverToken }
+                });
+
+                if (!metaRes.ok) continue;
+                const metaData = await metaRes.json();
+                const meta = metaData.MediaContainer?.Metadata?.[0];
+
+                let existingTags: string[] = [];
+                if (field === "label" && meta?.Label) existingTags = meta.Label.map((l: any) => typeof l === "string" ? l : l?.tag).filter(Boolean);
+                else if (field === "genre" && meta?.Genre) existingTags = meta.Genre.map((g: any) => typeof g === "string" ? g : g?.tag).filter(Boolean);
+                else if (field === "collection" && meta?.Collection) existingTags = meta.Collection.map((c: any) => typeof c === "string" ? c : c?.tag).filter(Boolean);
+
+                if (!existingTags.includes(tagName)) break;
+
+                const remaining = existingTags.filter(t => t !== tagName);
+                const metaParams = new URLSearchParams();
+                metaParams.append(`${field}[0].tag.tag-`, tagName);
+                metaParams.append(`${field}[].tag.tag-`, tagName);
+
+                if (remaining.length > 0) {
+                    remaining.forEach((t, idx) => {
+                        metaParams.set(`${field}[${idx}].tag.tag`, t);
+                    });
+                } else {
+                    metaParams.set(`${field}.locked`, "0");
+                }
+
+                const secParams = new URLSearchParams(metaParams.toString());
+                secParams.set("type", String(typeId));
+                secParams.set("id", String(item.ratingKey));
+
+                // 1. PUT to metadata
+                await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${metaParams.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                // 2. PUT to sections
+                const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${secParams.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
+                const putRes = await fetch(secUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                });
+
+                if (putRes.ok) {
+                    clearedCount++;
+                    break;
+                }
+            } catch (e) {}
+        }
+    }
+
+    // If clearing a collection tag, also delete the collection container from PMS
+    if (field === "collection") {
+        try {
+            await deletePlexCollection(urlsToTry, serverToken, tagName, sectionKey);
+        } catch (e) {}
+    }
+
+    logger.addLog("SUCCESS", "CURATION", `Removed custom tag "${tagName}" from ${clearedCount} items on Plex server "${serverName}".`);
+
+    return { success: true, clearedCount };
+}
+
+/**
+ * Scans a Plex library section and returns an audit of all active Labels, Genres, and Collections with counts.
+ */
+export async function getPlexLibraryTagsAudit(
+    serverId: string,
+    sectionKey: string | number
+): Promise<{
+    labels: Array<{ tag: string; count: number; isParental: boolean }>;
+    genres: Array<{ tag: string; count: number; isParental: boolean }>;
+    collections: Array<{ tag: string; count: number }>;
+    totalItems: number;
+}> {
+    try {
+        const resolved = await resolveWorkingPlexServerConnection(serverId);
+        if (!resolved || !resolved.serverUrl) return { labels: [], genres: [], collections: [], totalItems: 0 };
+
+        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+        const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000, undefined, false);
+
+        const labelCounts: Record<string, number> = {};
+        const genreCounts: Record<string, number> = {};
+        const collectionCounts: Record<string, number> = {};
+
+        // 1. Fetch native Plex sharing/content labels directly from PMS
+        let hasNativeLabels = false;
+        try {
+            const nativeLabels = await getPlexLibraryLabels(urlsToTry, resolved.token, sectionKey);
+            for (const nl of nativeLabels) {
+                if (nl.tag) {
+                    labelCounts[nl.tag] = nl.count;
+                    hasNativeLabels = true;
+                }
+            }
+        } catch (e) {}
+
+        // 2. Fetch native Plex collections directly from PMS
+        let hasNativeCollections = false;
+        try {
+            const nativeCollections = await getPlexLibraryCollections(urlsToTry, resolved.token, sectionKey);
+            for (const nc of nativeCollections) {
+                if (nc.title) {
+                    collectionCounts[nc.title] = nc.childCount || 1;
+                    hasNativeCollections = true;
+                }
+            }
+        } catch (e) {}
+
+        // 3. Scan media items for genres, and fallback labels/collections not in native lists
+        for (const item of items) {
+            const itemLabels = item.labels || [];
+            for (const l of itemLabels) {
+                if (l && typeof l === "string") {
+                    if (!hasNativeLabels || labelCounts[l] === undefined) {
+                        labelCounts[l] = (labelCounts[l] || 0) + 1;
+                    }
+                }
+            }
+            const itemGenres = item.genres || item.genre || [];
+            for (const g of itemGenres) {
+                if (g && typeof g === "string") {
+                    genreCounts[g] = (genreCounts[g] || 0) + 1;
+                }
+            }
+            const itemCollections = item.collections || (item as any).collection || [];
+            for (const c of itemCollections) {
+                if (c && typeof c === "string") {
+                    if (!hasNativeCollections || collectionCounts[c] === undefined) {
+                        collectionCounts[c] = (collectionCounts[c] || 0) + 1;
+                    }
+                }
+            }
+        }
+
+        const labels = Object.entries(labelCounts).map(([tag, count]) => ({
+            tag,
+            count,
+            isParental: isParentalTag(tag)
+        })).sort((a, b) => b.count - a.count);
+
+        const genres = Object.entries(genreCounts).map(([tag, count]) => ({
+            tag,
+            count,
+            isParental: isParentalTag(tag)
+        })).sort((a, b) => b.count - a.count);
+
+        const collections = Object.entries(collectionCounts).map(([tag, count]) => ({
+            tag,
+            count
+        })).sort((a, b) => b.count - a.count);
+
+        return {
+            labels,
+            genres,
+            collections,
+            totalItems: items.length
+        };
+    } catch (e) {
+        return { labels: [], genres: [], collections: [], totalItems: 0 };
+    }
+}

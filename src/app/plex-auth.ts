@@ -1,8 +1,8 @@
 "use server";
 
 // A random UUID to identify your app to Plex. 
-const CLIENT_ID = "portalarr-custom-dashboard-app"; 
-const CLIENT_NAME = "Portalarr";
+const CLIENT_ID = "domshomelab-dashboard-app"; 
+const CLIENT_NAME = "DomsHomeLab";
 
 /**
  * Step 1: Request a new PIN from Plex

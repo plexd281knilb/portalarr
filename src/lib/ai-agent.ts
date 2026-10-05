@@ -12,6 +12,70 @@ export interface AIResolvedMetadata {
     providerUsed: string;
 }
 
+export function isLegacyGeminiModel(name?: string | null): boolean {
+    if (!name) return false;
+    const lower = name.toLowerCase().trim();
+    return (
+        lower.includes("gemini-2.5-pro") ||
+        lower.includes("gemini-2.5-flash") ||
+        lower.includes("gemini-2.0") ||
+        lower.includes("gemini-1.5")
+    );
+}
+
+export function isTextGenerationModel(name?: string | null): boolean {
+    if (!name) return false;
+    const lower = name.toLowerCase().trim();
+    if (lower.includes("tts")) return false;
+    if (lower.includes("transcribe")) return false;
+    if (lower.includes("lyria")) return false;
+    if (lower.includes("veo")) return false;
+    if (lower.includes("imagen") || lower.includes("image") || lower.includes("banana")) return false;
+    if (lower.includes("embedding")) return false;
+    if (lower.includes("robotics")) return false;
+    if (lower.includes("dialog") || lower.includes("live")) return false;
+    return true;
+}
+
+export function normalizeGeminiModel(model?: string | null): string {
+    if (!model) return "gemini-3.5-flash-lite";
+    const m = model.trim().toLowerCase();
+    if (m === "default" || !m) return "gemini-3.5-flash-lite";
+    if (m === "gemini-2.5-pro" || m === "gemini-1.5-pro" || m === "gemini-3.1-pro" || m === "gemini-3.1-pro-preview") {
+        return "gemini-3.5-flash-lite"; // Pro models have 0 RPD quota on free tier; auto-route to high-quota 500 RPD Lite!
+    }
+    if (m === "gemini-2.5-flash" || m === "gemini-2.0-flash" || m === "gemini-1.5-flash" || m === "gemini-1.5-flash-8b") {
+        return "gemini-3.5-flash-lite";
+    }
+    if (isLegacyGeminiModel(m) || !isTextGenerationModel(m)) {
+        return "gemini-3.5-flash-lite";
+    }
+    return model.trim();
+}
+
+export function getGeminiCandidateModels(primaryModel?: string | null, dynamicModels: string[] = []): string[] {
+    const normalized = normalizeGeminiModel(primaryModel);
+    
+    // Core high-quota text chat models:
+    // 1. High Quota Lite (500 RPD, 15 RPM): gemini-3.5-flash-lite
+    // 2. High Quota Sibling (500 RPD, 15 RPM): gemini-3.1-flash-lite
+    // 3. Flagship Flash (20 RPD, 5 RPM): gemini-3.8-flash
+    const cleanDynamic = dynamicModels
+        .filter(m => Boolean(m) && isTextGenerationModel(m) && !isLegacyGeminiModel(m));
+
+    const baseList = [
+        normalized,
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        ...cleanDynamic
+    ];
+
+    return Array.from(new Set(baseList))
+        .filter(m => Boolean(m) && isTextGenerationModel(m) && !isLegacyGeminiModel(m))
+        .slice(0, 3); // Strictly limit to top 3 text models to prevent thundering herd cascade
+}
+
 export async function assignVolumeNumbersWithAI(
     seriesName: string,
     author: string,
@@ -21,7 +85,7 @@ export async function assignVolumeNumbersWithAI(
     
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-1.5-flash";
+    const modelName = normalizeGeminiModel(settings?.aiModel);
 
     if ((provider === "gemini" || provider === "google") && rawKey) {
         await new Promise(r => setTimeout(r, 4000));
@@ -38,10 +102,7 @@ async function callGeminiAIBulkVolumes(
     model: string
 ): Promise<Record<string, string | null>> {
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
-    const candidateModels = Array.from(new Set([
-        ...(model ? [model] : []),
-        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash"])
-    ])).slice(0, 3);
+    const candidateModels = getGeminiCandidateModels(model, dynamicModels).slice(0, 5);
 
     const systemPrompt = `You are an expert media server librarian AI agent.
 I have a list of book titles from the series "${seriesName}" by "${author}". Some of these titles do not contain volume numbers.
@@ -61,6 +122,8 @@ Example output:
     const prompt = JSON.stringify(bookTitles);
 
     for (const m of candidateModels) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
             const response = await fetch(url, {
@@ -70,7 +133,8 @@ Example output:
                     system_instruction: { parts: [{ text: systemPrompt }] },
                     contents: [{ parts: [{ text: prompt }] }],
                     generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                })
+                }),
+                signal: controller.signal
             });
 
             if (!response.ok) {
@@ -86,6 +150,8 @@ Example output:
             }
         } catch (e) {
             continue;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
     return {};
@@ -103,7 +169,7 @@ export async function resolveMetadataWithAI(
     
     const provider = overrideProvider || settings?.aiProvider || "default";
     const rawKey = overrideKey !== undefined ? overrideKey : (settings?.aiApiKey ? decryptData(settings.aiApiKey) : "");
-    const modelName = overrideModel || settings?.aiModel || "gemini-1.5-flash";
+    const modelName = normalizeGeminiModel(overrideModel || settings?.aiModel);
 
     console.log(`[AI-AGENT] 🤖 Querying AI Metadata Engine for "${rawFilename}" (Type: ${mediaType}, Engine: ${provider})...`);
 
@@ -155,14 +221,22 @@ export async function getAvailableGeminiModels(apiKey: string): Promise<string[]
     for (const ver of versions) {
         try {
             const url = `https://generativelanguage.googleapis.com/${ver}/models?key=${encodeURIComponent(apiKey)}`;
-            const res = await fetch(url);
+            const res = await fetch(url, { cache: "no-store" });
             if (res.ok) {
                 const data = await res.json();
                 if (data && Array.isArray(data.models)) {
                     const valid = data.models
                         .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
                         .map((m: any) => String(m.name || "").replace(/^models\//, ""))
-                        .filter(Boolean);
+                        .filter((name: string) => isTextGenerationModel(name) && !isLegacyGeminiModel(name));
+                    
+                    // Sort so flash models come first, then pro
+                    valid.sort((a: string, b: string) => {
+                        const aFlash = a.includes("3.5-flash-lite") ? 0 : a.includes("3.1-flash-lite") ? 1 : a.includes("3.8") ? 2 : a.includes("flash") ? 3 : 4;
+                        const bFlash = b.includes("3.5-flash-lite") ? 0 : b.includes("3.1-flash-lite") ? 1 : b.includes("3.8") ? 2 : b.includes("flash") ? 3 : 4;
+                        return aFlash - bFlash;
+                    });
+
                     if (valid.length > 0) return valid;
                 }
             }
@@ -176,9 +250,11 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
     let lastError = "";
 
     for (const ver of versions) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
         try {
             const endpoint = `https://generativelanguage.googleapis.com/${ver}/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-            const res = await fetch(endpoint, {
+            let res = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -186,25 +262,48 @@ async function fetchGeminiContent(apiKey: string, modelName: string, systemPromp
                         parts: [{ text: systemPrompt }]
                     }],
                     generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-                })
+                }),
+                signal: controller.signal
             });
+
+            // If 503 (model overloaded), retry once after a 1.2s - 1.7s backoff with jitter
+            if (res.status === 503) {
+                clearTimeout(timeoutId);
+                const retryController = new AbortController();
+                const retryTimeoutId = setTimeout(() => retryController.abort(), 35000);
+                try {
+                    const jitter = Math.floor(Math.random() * 500) + 1200;
+                    await new Promise(r => setTimeout(r, jitter));
+                    res = await fetch(endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{ text: systemPrompt }]
+                            }],
+                            generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                        }),
+                        signal: retryController.signal
+                    });
+                } finally {
+                    clearTimeout(retryTimeoutId);
+                }
+            }
 
             if (res.ok) {
                 const data = await res.json();
                 const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (rawText) return rawText;
             } else {
-                const errText = await res.text();
-                if (res.status === 429) {
-                    throw new Error(`Google Gemini API Rate Limit Exceeded (HTTP 429). Free Tier daily quota reached.`);
-                }
+                const errText = await res.text().catch(() => "");
                 lastError = `Gemini (${ver}/${modelName}) HTTP ${res.status}: ${errText}`;
+                console.warn(`[AI-AGENT] WARN Gemini model ${modelName} HTTP ${res.status}: ${errText}`);
             }
         } catch (e: any) {
             lastError = e.message;
-            if (e.message && e.message.includes("429")) {
-                throw e;
-            }
+            console.warn(`[AI-AGENT] WARN Gemini model ${modelName} exception: ${e.message}`);
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
@@ -218,10 +317,7 @@ async function callGeminiAI(
     model: string
 ): Promise<AIResolvedMetadata | null> {
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
-    const candidateModels = Array.from(new Set([
-        ...(model ? [model] : []),
-        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash", "gemini-1.5-pro"])
-    ])).slice(0, 3);
+    const candidateModels = getGeminiCandidateModels(model, dynamicModels).slice(0, 5);
 
     const systemPrompt = `You are an expert media server librarian AI agent specializing in book, audiobook, and series metadata normalization.
 Analyze this raw release filename, directory path, or request search query: "${rawFilename}" (${mediaType}).
@@ -331,7 +427,7 @@ export async function analyzeAudiobookChaptersWithAI(
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
-    const modelName = settings?.aiModel || "gemini-1.5-flash";
+    const modelName = normalizeGeminiModel(settings?.aiModel);
 
     if ((provider === "gemini" || provider === "google") && rawKey) {
         try {
@@ -363,10 +459,7 @@ async function callGeminiAIForChapters(
     model: string
 ): Promise<AIChapterResult[] | null> {
     const dynamicModels = await getAvailableGeminiModels(apiKey).catch(() => []);
-    const candidateModels = Array.from(new Set([
-        ...(model ? [model] : []),
-        ...(dynamicModels.length > 0 ? dynamicModels : ["gemini-1.5-flash", "gemini-1.5-pro"])
-    ])).slice(0, 3);
+    const candidateModels = getGeminiCandidateModels(model, dynamicModels).slice(0, 5);
 
     const systemPrompt = `You are an expert audiobook librarian AI agent specializing in audiobook track and chapter resolution.
 Book Title: "${bookTitle}"

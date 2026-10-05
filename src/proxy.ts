@@ -17,13 +17,24 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Allow access to the login page & pending status page without redirect loops
+  // 2. Allow access to public routes: /join, /login & pending status page without redirect loops
+  if (pathname === "/join" || pathname.startsWith("/join/")) {
+    return NextResponse.next();
+  }
+
   if (pathname === "/login") {
     if (session) {
       try {
         const { payload } = await jwtVerify(session, getJwtSecret());
-        const status = (payload.status as string) || "APPROVED";
-        if (status === "PENDING" || status === "REJECTED") {
+        let status = (payload.status as string) || "APPROVED";
+        const now = Date.now();
+        if (status === "TRIAL" && payload.trialEndsAt && new Date(payload.trialEndsAt as string).getTime() < now) {
+          status = "EXPIRED";
+        }
+        if (status === "APPROVED" && payload.subscriptionEndsAt && new Date(payload.subscriptionEndsAt as string).getTime() < now) {
+          status = "EXPIRED";
+        }
+        if (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED") {
           return NextResponse.redirect(new URL("/pending", req.url));
         }
         return NextResponse.redirect(new URL("/", req.url));
@@ -44,46 +55,86 @@ export async function proxy(req: NextRequest) {
 
   try {
     const { payload } = await jwtVerify(session, getJwtSecret());
-    const userStatus = (payload.status as string) || "APPROVED";
+    let userStatus = (payload.status as string) || "APPROVED";
 
-    // 4. Pending or Rejected user protection
-    if (userStatus === "PENDING" || userStatus === "REJECTED") {
+    // Auto-detect expired trials or subscriptions directly in proxy from JWT timestamps
+    const now = Date.now();
+    if (userStatus === "TRIAL" && payload.trialEndsAt && new Date(payload.trialEndsAt as string).getTime() < now) {
+      userStatus = "EXPIRED";
+    }
+    if (userStatus === "APPROVED" && payload.subscriptionEndsAt && new Date(payload.subscriptionEndsAt as string).getTime() < now) {
+      userStatus = "EXPIRED";
+    }
+
+    // 4. Pending, Rejected, Suspended, or Expired user protection
+    if (userStatus === "PENDING" || userStatus === "REJECTED" || userStatus === "SUSPENDED" || userStatus === "EXPIRED") {
       if (pathname === "/pending") {
         return NextResponse.next();
       }
       if (pathname.startsWith("/api")) {
-        return NextResponse.json({ error: "Account Pending Approval" }, { status: 403 });
+        return NextResponse.json({ error: `Account status: ${userStatus}` }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/pending", req.url));
     }
 
-    // If an approved user visits /pending, send them home
+    // If an approved or trial user visits /pending, send them home
     if (pathname === "/pending") {
       return NextResponse.redirect(new URL("/", req.url));
     }
 
     // 5. Role-based protection for Admin routes
-    if ((pathname.startsWith("/admin") || pathname.startsWith("/api/debug")) && payload.role !== "ADMIN") {
+    if (
+      (pathname.startsWith("/admin") ||
+       pathname.startsWith("/curation") ||
+       pathname.startsWith("/api/curation") ||
+       pathname.startsWith("/api/users") ||
+       pathname.startsWith("/api/debug") ||
+       pathname.startsWith("/api/system") ||
+       pathname === "/api/books/upload" ||
+       pathname.startsWith("/api/books/upload/")) &&
+      payload.role !== "ADMIN"
+    ) {
       if (pathname.startsWith("/api")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/", req.url));
     }
 
-    if (pathname.startsWith("/settings") && pathname !== "/settings/profile" && payload.role !== "ADMIN") {
+    if (pathname.startsWith("/settings") && payload.role !== "ADMIN") {
       if (pathname.startsWith("/api")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
       }
-      // Direct non-admin users to their Account Settings / Password Change screen
-      return NextResponse.redirect(new URL("/settings/profile", req.url));
+      // Direct non-admin users to their Account Settings / Password Change screen (/profile)
+      return NextResponse.redirect(new URL("/profile", req.url));
     }
 
     // 6. Role-based protection for Radarr/Sonarr routes
     if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
       if (pathname.startsWith("/api")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return NextResponse.json({ error: "Forbidden: Admin or Super User access required" }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    // 7. Strict route protection for TRIAL accounts
+    // Trial accounts have access to: /, /discover, /requests, /guides, /profile.
+    // They are strictly forbidden from /library (Book Library), /radarr, /sonarr, /beta, /curation, /admin.
+    const isTrialUser = (userStatus === "TRIAL" || payload.role === "TRIAL" || (payload as any).isTrial === true) && userStatus !== "APPROVED" && payload.role !== "ADMIN";
+    if (isTrialUser) {
+      if (
+        pathname.startsWith("/library") || 
+        pathname.startsWith("/radarr") || 
+        pathname.startsWith("/sonarr") || 
+        pathname.startsWith("/beta") ||
+        pathname.startsWith("/curation") ||
+        pathname.startsWith("/admin") ||
+        (pathname.startsWith("/api/books") && !pathname.includes("/stream"))
+      ) {
+        if (pathname.startsWith("/api")) {
+          return NextResponse.json({ error: "Trial accounts cannot access this service. Please upgrade to a full account." }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL("/", req.url));
+      }
     }
 
     return NextResponse.next();

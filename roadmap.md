@@ -1,30 +1,21 @@
-### ✨ Recently Released
+### ✨ What's New
 
-- **🎬 My Plex Hub & Stream Diagnostics:** Live playback telemetry (codecs, bitrates, bandwidth), **Transcode Doctor** stream health fixes, self-service stuck stream termination, and client setup guides for Apple TV, Roku, Fire TV, and Smart TVs.
-
-- **⚡ Server Bandwidth & Connected Nodes:** In-browser download/latency speed tester and unified multi-server inspector for linked Plex Media Server instances.
-
-- **📚 Unified Book & Audio Ecosystem:** Dedicated Ebook & Audiobook shelves with built-in Kindle/Comic reader, floating audio player with chapter reordering, Send-to-Kindle delivery, and 600x900 HD posters.
-
-- **🔍 Smart Media Requests & AI Agent:** Instant book/series discovery with autocomplete, 1-click auto-grab for missing installments, multi-tier indexer fallback search, and LLM metadata enrichment.
-
-
----
-
-
-### 🚧 In Development & Upcoming
-
-- **🎯 Agregarr & Kometa Replacement:** Native built-in collection generator, dynamic smart playlists, automated poster badges (4K HDR, Dolby Atmos), and trending hubs (Trakt/IMDb)—no extra containers needed.
-
-- **🏷️ Interactive User Movie & TV Tagging:** Personal user tag management to customize and filter genres, collections, and content ratings you do and don't want to see on your shelves.
-
+- **🍿 Instant 1-Click Media Requests:** Search and request movies, TV shows, ebooks, and audiobooks with real-time status tracking and automated library additions.
+- **📖 In-Browser Kindle Reader:** Built-in Kindle Paperwhite reading experience with Bookerly typography, customizable margins, color themes, instant reopening, and persistent reading progress.
+- **📱 1-Click Send-to-Kindle:** Dispatch any book directly to your Amazon Kindle devices and apps in seconds with zero manual configuration.
+- **🎧 Built-in Audiobook Player:** Floating HTML5 player with interactive chapter selection, disk track ordering, continuous background autoplay, and speed controls.
+- **⚡ Live Stream Diagnostics & Transcode Doctor:** Real-time playback telemetry, in-browser server speed test, and tailored device fix recommendations via Transcode Doctor to resolve buffering instantly.
+- **📺 Device Setup Guides (`/guides`):** Step-by-step setup guides to optimize Plex video quality and direct play on Apple TV, Roku, Fire TV, Samsung/LG Smart TVs, Android TV, iOS, and Web.
+- **🎨 4K HDR Badges & Custom Posters:** High-definition 4K HDR badges, Dolby Vision/Atmos ribbons, and IMDb ratings overlaid directly on movie and TV posters in Plex.
+- **⏳ "Leaving Soon" Collections & Badges:** Browse curated "Leaving Soon" collections and visual countdown ribbons in Plex so you never miss media rotating out of the library.
+- **🛡️ Dedicated Kids & Family Profiles:** Sub-profiles with customizable age ratings (Kids / YA / Adult), child-safe library filtering, and secure PIN protection for living room TVs.
+- **🎁 Member Referral Rewards:** Share your personal invite link or username with friends to invite them to the server and earn free membership rewards.
 
 ---
 
+### 🚀 Coming Soon
 
-### 💡 Have an Idea or Need Help?
-
-Got a feature suggestion or noticed an issue? Vote on community suggestions below or submit a support ticket anytime!
-
-
-
+- **🤖 Autonomous AI Support Assistant:** In-app conversational helper with live playback diagnostics, stream health fixes, and 1-click ticket escalation right from your stream card.
+- **💬 1-Click Subtitle Search & Auto-Sync:** Search, download, and auto-align missing subtitles directly from your stream viewer in My Plex Hub.
+- **📊 Personal Year-in-Review & Watch Stats:** Deep dive into your personal streaming history, favorite genres, binge stats, and top-watched movies and shows.
+- **📡 Real-Time Server Status & Outage Alerts:** Live server status indicators on your dashboard and instant notifications if scheduled maintenance or an outage occurs.

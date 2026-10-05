@@ -1,0 +1,94 @@
+---
+name: plex-api-expert
+description: Expert architectural and API specification guide for Plex Media Server (PMS REST API, token authentication, library sections, metadata schemas, tag/label manipulation, custom collection hubs, photo transcoding, and stream session diagnostics). Activate when integrating with Plex, calling Plex endpoints, diagnosing playback sessions, managing collections and labels, or referencing openapi.json.
+---
+
+# Plex Media Server (PMS) API Expert Guide
+
+Plex Media Server (PMS) provides an extensive HTTP REST API for media cataloging, metadata extraction, user management, library scanning, stream transcoding, home screen hub recommendations, and playback session telemetry.
+
+Primary Reference Files & OpenAPI:
+- OpenAPI 3.1 Specification: [openapi.json](file:///C:/Users/Dom/Documents/GitHub/Other_Repos/openapi.json)
+- Portalarr Plex Engine: [src/app/actions.ts](file:///C:/Users/Dom/Documents/GitHub/portalarr/src/app/actions.ts)
+- Portalarr Curation Actions: [src/app/curation-actions.ts](file:///C:/Users/Dom/Documents/GitHub/portalarr/src/app/curation-actions.ts)
+
+---
+
+## API Architecture & Key Concepts
+
+- **Authentication**: Token-based via `X-Plex-Token` HTTP header or `?X-Plex-Token=` query parameter.
+- **Client Identification**: Mandatory `X-Plex-Client-Identifier` and `X-Plex-Product` headers.
+- **Data Formats**: PMS defaults to XML; clients should explicitly supply `Accept: application/json` for JSON payloads.
+- **Relative Path Resolution**: PMS API responses return relative `key` attributes that resolve against `/library/sections/` or root endpoints.
+- **Multi-Server Candidate URLs Resolution**: To maintain 100% reliable connectivity across LAN, remote direct, and Plex Relay, clients should resolve all candidate URLs via `https://plex.tv/api/v2/resources` and test reachability with fastest-path failover.
+- **Type Identifiers**:
+  - `1`: `movie`
+  - `2`: `show`
+  - `3`: `season`
+  - `4`: `episode`
+  - `8`: `artist`
+  - `9`: `album`
+  - `10`: `track`
+  - `15`: `playlist`
+  - `18`: `collection`
+
+---
+
+## Core Capabilities & Runbooks
+
+### 1. Server Endpoints & Telemetry
+- **Identity & Capabilities**: `GET /identity`, `GET /myplex/account`.
+- **Sections & Items**: `GET /library/sections`, `GET /library/sections/{id}/all`.
+- **Stream Telemetry**: `GET /status/sessions`, `DELETE /status/sessions/{id}?reason=...`.
+- **Image Transcoder**: `GET /photo/:/transcode?width=600&height=900&url=...`.
+
+See detailed runbook: [pms-endpoints-reference.md](./references/pms-endpoints-reference.md).
+
+### 2. Tags, Collections & Home Screen Hubs
+- **Tag / Label Updates**: `PUT /library/metadata/{ratingKey}?label[0].tag.tag=...`.
+- **Clear Labels**: `PUT /library/metadata/{ratingKey}?label[0].tag.tag-=`.
+- **Collections**: `POST /library/collections`, batch add via `POST /library/collections/{id}/items?uri=server://...`.
+- **Smart Collections**: `POST /library/collections?type={type}&title={title}&smart=1&uri={filterUri}`.
+- **Personalized Recommendations**: `PUT /library/metadata/{ratingKey}/prefs?collectionFilterBasedOnUser=1`.
+- **Hub Visibility**: Initialize via `POST /hubs/sections/{id}/manage?metadataItemId={id}`, then toggle `promotedToOwnHome`, `promotedToSharedHome`, `promotedToRecommended`.
+
+See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collections-and-hubs.md).
+
+---
+
+## Common Gotchas & Best Practices
+
+1. **Tag Clearing Syntax**:
+   - Omitting `label[0].tag.tag-=` when clearing all labels will leave existing tags intact in PMS. Always send `label[0].tag.tag-=` when emptying tag arrays.
+2. **Locking Custom Metadata**:
+   - Any manual edit made via `PUT /library/metadata/{ratingKey}` should include `<fieldName>.locked=1` (e.g. `title.locked=1`, `titleSort.locked=1`). Otherwise, the next automated library metadata refresh will overwrite the modification with agent data.
+3. **Smart vs Static Collections**:
+   - Never call `/move` or item manipulation endpoints on a collection created with `smart=1`. Smart collections are dynamically populated by Plex search filters.
+4. **Portrait Poster Dimensions**:
+   - Always request 2:3 vertical poster proportions (`width=600&height=900`) on `/photo/:/transcode` to prevent PMS from cropping portrait artwork to landscape dimensions.
+5. **Session Stream Termination Fallback**:
+   - When terminating active playback streams, verify user alias permissions and fall back from Tautulli to Direct PMS `DELETE /status/sessions/{sessionId}` if Tautulli is unavailable.
+6. **Fast Collection Deletion via PMS Cascade**:
+   - Deleting a collection via `DELETE /library/metadata/{ratingKey}` automatically unlinks all media items in Plex in ~10ms. Avoid pre-fetching and untagging items individually, as this triggers severe latency and Server Action timeouts.
+7. **Hub Reordering & Visibility Timeouts**:
+   - Use `PUT /hubs/sections/{sectionKey}/manage/{hubId}/move?after={afterHubId}` combined with locked `titleSort` prefixes to reorder hubs. Dispatch hub visibility updates concurrently (`Promise.all`) using 4s timeout guards (`AbortSignal.timeout(4000)`) to ensure Server Action resilience.
+8. **Large Section Responses & Next.js Data Cache Limit**:
+   - Large library endpoints (`/library/sections/{id}/all?includeGuids=1`) frequently exceed Next.js 2MB data cache limit (`WARN: items over 2MB can not be cached`). Direct server calls must bypass Next.js automatic fetch caching by supplying `{ cache: 'no-store' }`.
+9. **Identifying Trailer Placeholders vs Real Media**:
+   - Agregarr trailer placeholders share identical `Guid` (TMDb / IMDb) values with real movies. Distinguish them by checking `editionTitle === "Trailer"` or searching `metadata.Label` for `trailer-placeholder`. Availability indexes must exclude placeholders so upcoming movies are not falsely marked as "In Library".
+10. **Strict Friend & Share Matching Integrity**:
+    - When mapping local users to Plex friends/shares via `/api/users` or `https://plex.tv/api/v2/friends`, NEVER use partial substring containment (e.g. `ta.includes(sa)` or `sa.startsWith(ta)`). Partial substring matching causes disastrous cross-user share collisions (e.g. `dominicjuliano` falsely matching `juliano` or `mjuliano7`). Strictly compare exact numeric Plex user IDs, exact emails, exact usernames, normalized alphanumeric characters (`username.replace(/[^a-z0-9]/gi, '')`), or exact email prefix identifiers (`email.split('@')[0]`).
+11. **Connection Reachability & Byte-Range Playback Probing**:
+    - When searching items or probing media across multiple PMS servers/candidate URLs, avoid sequential hanging on unresponsive URLs. Probe connection responsiveness with a fast 1,500ms `/identity` check first.
+    - To verify disk read health without downloading complete multi-gigabyte media parts, execute an active HTTP Range probe (`Range: bytes=0-65535`) against the part URL (`part.key`). A 206 Partial Content or 200 OK confirms physical storage availability and responsive disk I/O.
+12. **Tagging Studio & Content Advisory Labels**:
+    - **Label Destination vs Genre Destination**: Plex labels applied via `PUT /library/metadata/{ratingKey}?label[0].tag.tag=...&label.locked=1` integrate directly into Plex Home user sharing restrictions, allowing administrators to restrict Kids and Teen profiles from sensitive content (e.g. `IMDb: Nudity [Severe]`).
+    - **Dual Endpoint Updating**: Always dispatch tag updates to both `PUT /library/metadata/{ratingKey}` and `PUT /library/sections/{sectionKey}/all?type={typeId}&id={ratingKey}` to maintain 100% compatibility across legacy and modern PMS versions.
+    - **Pre-Filtering to Avoid Excessive HTTP Calls**: When clearing tags or applying custom rules across thousands of media items, inspect known stream/section tags (`item.labels`, `item.genres`, `item.collections`) before initiating individual `GET /library/metadata/{ratingKey}` requests. Items that already lack the tag should be skipped immediately to maintain sub-second execution speeds.
+    - **Collection Untagging and Container Deletion**: When clearing custom collection tags from a library, untagging the items should be accompanied by `deletePlexCollection` to cleanly remove the collection container entity from PMS.
+13. **Unraid Daily 5:00 AM – 5:30 AM Plex Container Maintenance Blackout**:
+    - **Blackout Protocol (`isPlexMaintenanceWindow`)**: Unraid executes scheduled database integrity checks and restarts Plex containers daily from 5:00 AM to 5:30 AM. No background runner, automated scheduled task, or direct PMS polling (`getPlexActiveSessions`, `getPlexServerLibrarySections`, `runOverlayIncrementalSyncInternal`, `runOverlayRecheckSyncInternal`, `runAgregarrSyncInternal`, `runMaintainerrSyncInternal`, `runParentalTagsSyncInternal`, `syncPlexFriendsInternal`, `syncMediaRequestsQueueAndAvailabilityInternal`, `getPlexLibraryGuidIndex`) is permitted to hit Plex Media Server during 5:00:00 AM – 5:29:59 AM.
+    - All schedules due at or during 5:00 AM automatically defer to 5:30:00 AM once the container restart concludes. Maintainerr's recommended default is `daily_6am`.
+
+
+

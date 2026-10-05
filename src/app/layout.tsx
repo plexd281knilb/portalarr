@@ -7,8 +7,8 @@ import LayoutWrapper from "@/components/layout-wrapper";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Portalarr",
-  description: "Mission Control for Home Lab",
+  title: "DomsHomeLab | d281knilb Media Server",
+  description: "DomsHomeLab (d281knilb) Media Server & Dashboard",
 };
 
 export const viewport: Viewport = {

@@ -1,0 +1,4328 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+    Trash2,
+    HardDrive,
+    AlertTriangle,
+    Shield,
+    ShieldAlert,
+    ShieldCheck,
+    Clock,
+    Clock3,
+    Calendar,
+    Zap,
+    Play,
+    Check,
+    CheckCheck,
+    X,
+    FolderOpen,
+    Loader2,
+    CheckCircle2,
+    XCircle,
+    RotateCcw,
+    Film,
+    Tv,
+    Layers,
+    Save,
+    RefreshCw,
+    Sliders,
+    Search,
+    ChevronUp,
+    ChevronDown,
+    Filter,
+    FolderCheck,
+    Archive,
+    Power,
+    Flame,
+    ImageIcon,
+    Sparkles,
+    Eye,
+    Tag,
+    Plus
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CurationNavHeader } from "./curation-nav-header";
+import { PlexPosterPickerModal } from "./plex-poster-picker-modal";
+import { CurationLibraryGuardModal } from "./curation-library-guard-modal";
+import { PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import {
+    getPlexServersAndSectionsAction,
+    getPlexServerSectionsAction,
+    getCurationSettingsAction,
+    saveCurationSettingsAction,
+    toggleCurationLibrarySectionAction,
+    toggleAllCurationServerSectionsAction,
+    runFullCurationSyncAction,
+    runMaintainerrSyncAction,
+    getLeavingSoonItemsAction,
+    markItemLeavingSoonAction,
+    unmarkItemLeavingSoonAction,
+    clearAllLeavingSoonFlagsAction,
+    syncLeavingSoonCollectionHubAction,
+    runPruneSimulationAction,
+    executePruneAction,
+    saveServerStorageConfigAction,
+    validateDirectoryPathAction,
+    getArtBackupAndBadgeStatsAction,
+    getPlaceholderPreviewDataUrlAction,
+    getGlancesDisksAction,
+    saveSelectedGlancesDiskAction,
+    recheckLeavingSoonWatchActivityAction
+} from "@/app/curation-actions";
+import {
+    SCHEDULE_OPTIONS,
+    formatScheduleLabel,
+    calculateNextRunTime,
+    formatLastRunDisplay
+} from "@/lib/curation/schedule-helper";
+
+export interface MaintainerrRulePreset {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    minAgeDays: number;
+    unwatchedMinAgeDays?: number;
+    watchedMinAgeDays?: number;
+    gracePeriodDays: number;
+    unwatchedOnly: boolean;
+    sortStrategy: "combined_oldest" | "oldest_added" | "oldest_watched" | "oldest_modified" | "largest_size" | "least_plays";
+    oldestLimit: number;
+    bannerType: string;
+    isCustom?: boolean;
+}
+
+export const MAINTAINERR_RULE_PRESETS: MaintainerrRulePreset[] = [
+    {
+        id: "standard_90d_unwatched",
+        name: "Standard Dual-Lane Cascade",
+        description: "Priority: Never watched 90d+ dead weight first, then oldest watched 180d+ cold storage",
+        icon: "📦",
+        minAgeDays: 90,
+        unwatchedMinAgeDays: 90,
+        watchedMinAgeDays: 180,
+        gracePeriodDays: 14,
+        unwatchedOnly: false,
+        sortStrategy: "combined_oldest",
+        oldestLimit: 50,
+        bannerType: "leaving_soon"
+    },
+    {
+        id: "strict_unwatched_only",
+        name: "Strict Unwatched Only",
+        description: "Flags strictly unwatched media older than 90 days with 14-day notice",
+        icon: "🚫",
+        minAgeDays: 90,
+        unwatchedMinAgeDays: 90,
+        watchedMinAgeDays: 180,
+        gracePeriodDays: 14,
+        unwatchedOnly: true,
+        sortStrategy: "combined_oldest",
+        oldestLimit: 50,
+        bannerType: "leaving_soon"
+    },
+    {
+        id: "extended_180d_grace",
+        name: "Extended 180d/365d Grace",
+        description: "Gentle retention: 180d+ unwatched or 365d+ watched with 30-day notice period",
+        icon: "⏳",
+        minAgeDays: 180,
+        unwatchedMinAgeDays: 180,
+        watchedMinAgeDays: 365,
+        gracePeriodDays: 30,
+        unwatchedOnly: false,
+        sortStrategy: "oldest_watched",
+        oldestLimit: 50,
+        bannerType: "leaving_soon"
+    },
+    {
+        id: "emergency_low_disk",
+        name: "Emergency Low Disk",
+        description: "Target large 4K/Remux files over 30 days old with 7-day notice",
+        icon: "🚨",
+        minAgeDays: 30,
+        unwatchedMinAgeDays: 30,
+        watchedMinAgeDays: 90,
+        gracePeriodDays: 7,
+        unwatchedOnly: false,
+        sortStrategy: "largest_size",
+        oldestLimit: 25,
+        bannerType: "leaving_soon"
+    },
+    {
+        id: "one_play_abandoned",
+        name: "One-Play Abandoned",
+        description: "Media added 1+ year ago with low lifetime plays",
+        icon: "📉",
+        minAgeDays: 365,
+        unwatchedMinAgeDays: 365,
+        watchedMinAgeDays: 365,
+        gracePeriodDays: 21,
+        unwatchedOnly: false,
+        sortStrategy: "least_plays",
+        oldestLimit: 50,
+        bannerType: "leaving_soon"
+    },
+    {
+        id: "dormant_clean",
+        name: "Dormant Deep Clean",
+        description: "Oldest unmodified files sitting idle on disk for 180+ days",
+        icon: "🧹",
+        minAgeDays: 180,
+        unwatchedMinAgeDays: 180,
+        watchedMinAgeDays: 180,
+        gracePeriodDays: 14,
+        unwatchedOnly: true,
+        sortStrategy: "oldest_modified",
+        oldestLimit: 50,
+        bannerType: "leaving_soon"
+    },
+    {
+        id: "aggressive_45d_prune",
+        name: "Aggressive 45d Prune",
+        description: "Fast storage reclamation targeting large files with 7-day notice",
+        icon: "⚡",
+        minAgeDays: 45,
+        unwatchedMinAgeDays: 45,
+        watchedMinAgeDays: 90,
+        gracePeriodDays: 7,
+        unwatchedOnly: false,
+        sortStrategy: "largest_size",
+        oldestLimit: 100,
+        bannerType: "leaving_soon"
+    }
+];
+
+export const PRUNE_BANNER_PRESETS = [
+    { id: "leaving_soon", label: "⚠️ Leaving Soon", defaultText: "LEAVING SOON", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
+    { id: "leaving_date", label: "⚠️ Leaving on {date}", defaultText: "LEAVING ON {date}", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
+    { id: "leaving_days", label: "⏳ Leaving in {days} Days", defaultText: "LEAVING IN {days} DAYS", theme: "crimson-red", pos: "bottom" as const, fontSize: 44 },
+    { id: "middle_banner", label: "⚠️ Leaving Soon & Days Left", defaultText: "LEAVING SOON • {days} DAYS LEFT", theme: "crimson-red", pos: "middle" as const, fontSize: 44 },
+    { id: "upper_third", label: "⏳ Prune Warning", defaultText: "UNWATCHED • LEAVING SOON", theme: "amber-gold", pos: "upper_third" as const, fontSize: 44 },
+    { id: "top_banner", label: "📦 Storage Cleanup", defaultText: "STORAGE CLEANUP: {reason}", theme: "indigo-purple", pos: "top" as const, fontSize: 44 },
+    { id: "unwatched_warning", label: "👀 Unwatched Grace Period", defaultText: "UNWATCHED • {days} DAYS LEFT", theme: "amber-gold", pos: "bottom" as const, fontSize: 44 },
+    { id: "custom", label: "⚙️ Custom Template", defaultText: "{title} • {status}", theme: "cyber-neon", pos: "bottom" as const, fontSize: 44 }
+];
+
+interface PlexServerItem {
+    serverId: string;
+    serverName: string;
+    sections: Array<{ key: string | number; title: string; type: string }>;
+}
+
+export function PruneStudio() {
+    const [subTab, setSubTab] = useState<"leaving_soon" | "simulation" | "execution" | "storage">("leaving_soon");
+    const [loading, setLoading] = useState(true);
+
+    // Server & Section Navigation
+    const [servers, setServers] = useState<PlexServerItem[]>([]);
+    const [selectedServerId, setSelectedServerId] = useState<string>("");
+    const [selectedSectionKey, setSelectedSectionKey] = useState<string>("");
+    const [serverSectionsLoading, setServerSectionsLoading] = useState(false);
+
+    // Global Settings
+    const [settings, setSettings] = useState<any>({});
+    const [savingSettings, setSavingSettings] = useState(false);
+    const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
+
+    // Automated Schedule & Enabled Library States
+    const [curationSyncPruning, setCurationSyncPruning] = useState<boolean>(true);
+    const [curationSyncSchedule, setCurationSyncSchedule] = useState<string>("daily_6am");
+    const [pruneDryRun, setPruneDryRun] = useState<boolean>(true);
+    const [enableAutoPruneDeletion, setEnableAutoPruneDeletion] = useState<boolean>(false);
+    const [curationLastRunAt, setCurationLastRunAt] = useState<string | null>(null);
+    const [curationLastRunStatus, setCurationLastRunStatus] = useState<any | null>(null);
+    const [enabledServersForPruning, setEnabledServersForPruning] = useState<string[]>([]);
+    const [savingSchedule, setSavingSchedule] = useState(false);
+    const [scheduleSavedMsg, setScheduleSavedMsg] = useState(false);
+    const [runningPruneSync, setRunningPruneSync] = useState(false);
+    const [pruneSyncResult, setPruneSyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
+
+    // Global Prune & Storage Free Space Threshold States
+    const [leavingSoonDiskThreshold, setLeavingSoonDiskThreshold] = useState<number>(15);
+    const [pruneWarningThresholdPercent, setPruneWarningThresholdPercent] = useState<number>(85);
+    const [pruneDangerThresholdPercent, setPruneDangerThresholdPercent] = useState<number>(95);
+    const [pruneTargetHeadroomGb, setPruneTargetHeadroomGb] = useState<number>(100);
+    const [pruneEvaluateSeasonsSetting, setPruneEvaluateSeasonsSetting] = useState<boolean>(true);
+    const [pruneDeleteFromArrSetting, setPruneDeleteFromArrSetting] = useState<boolean>(false);
+    const [pruneMinAgeDaysSetting, setPruneMinAgeDaysSetting] = useState<number>(90);
+    const [pruneUnwatchedMinAgeDaysSetting, setPruneUnwatchedMinAgeDaysSetting] = useState<number>(90);
+    const [pruneWatchedMinAgeDaysSetting, setPruneWatchedMinAgeDaysSetting] = useState<number>(180);
+    const [pruneDaysNoticeSetting, setPruneDaysNoticeSetting] = useState<number>(14);
+    const [pruneUnwatchedOnlySetting, setPruneUnwatchedOnlySetting] = useState<boolean>(true);
+    const [savingThresholds, setSavingThresholds] = useState<boolean>(false);
+    const [thresholdsSavedMsg, setThresholdsSavedMsg] = useState<boolean>(false);
+    const [manageLibrariesModalOpen, setManageLibrariesModalOpen] = useState<boolean>(false);
+
+    // Save global pruning & storage thresholds
+    const handleSaveThresholds = async () => {
+        setSavingThresholds(true);
+        setThresholdsSavedMsg(false);
+        try {
+            const res = await saveCurationSettingsAction({
+                leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
+                pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
+                pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
+            });
+            if (res.success) {
+                setSettings((prev: any) => ({
+                    ...prev,
+                    leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                    pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                    pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                    pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                    pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                    pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
+                    pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                    pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                    pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
+                    pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                    pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
+                }));
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                    pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                    pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                    pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                    pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                    pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
+                    pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                    pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                    pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
+                    pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                    pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting)
+                } : null);
+                setThresholdsSavedMsg(true);
+                setTimeout(() => setThresholdsSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving pruning thresholds:", e);
+        } finally {
+            setSavingThresholds(false);
+        }
+    };
+
+    // Check if a section is enabled for pruning
+    const isSectionEnabled = (srvId: string, secKey: string): boolean => {
+        if (!enabledServersForPruning || enabledServersForPruning.length === 0) return true;
+        if (enabledServersForPruning.includes(`disabled:${srvId}`) || enabledServersForPruning.includes(`${srvId}:none`)) return false;
+        if (enabledServersForPruning.includes(`disabled:${srvId}:${secKey}`)) return false;
+        const compoundKey = `${srvId}:${secKey}`;
+        if (enabledServersForPruning.includes(compoundKey)) return true;
+        const hasServerEntries = enabledServersForPruning.some(k => k === srvId || k.startsWith(`${srvId}:`) || k.startsWith(`disabled:${srvId}`));
+        if (hasServerEntries) {
+            if (enabledServersForPruning.includes(srvId) && !enabledServersForPruning.some(k => k.startsWith(`${srvId}:`))) return true;
+            return false;
+        }
+        return true;
+    };
+
+    // Toggle a section enabled/disabled for pruning on selected server
+    const handleToggleSection = async (secKey: string) => {
+        return handleToggleSpecificSection(selectedServerId, secKey);
+    };
+
+    // Toggle a specific section enabled/disabled on any server
+    const handleToggleSpecificSection = async (srvId: string, secKey: string) => {
+        const currentlyEnabled = isSectionEnabled(srvId, secKey);
+        const nextEnabled = !currentlyEnabled;
+        const currentSections = servers.find(s => s.serverId === srvId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+
+        try {
+            const res = await toggleCurationLibrarySectionAction("prune", srvId, secKey, nextEnabled, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForPruning(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed toggling section prune state:", e);
+        }
+    };
+
+    // Toggle ALL sections on a specific server for Prune (Enable All / Disable All)
+    const handleToggleAllSectionsForSpecificServer = async (srvId: string, enableAll: boolean) => {
+        const currentSections = servers.find(s => s.serverId === srvId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleAllCurationServerSectionsAction("prune", srvId, enableAll, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForPruning(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed toggling all server sections for pruning:", e);
+        }
+    };
+
+    // Toggle ALL sections on the selected server for Prune (Enable All / Disable All)
+    const handleToggleAllSectionsOnServer = async (enableAll: boolean) => {
+        return handleToggleAllSectionsForSpecificServer(selectedServerId, enableAll);
+    };
+
+    // Protective Guard Modal State (for un-enabled libraries)
+    const [guardModalOpen, setGuardModalOpen] = useState(false);
+    const [guardContext, setGuardContext] = useState<{
+        serverId: string;
+        sectionKey: string;
+        serverName: string;
+        libraryName: string;
+        actionName: string;
+        execute: () => Promise<void> | void;
+    } | null>(null);
+
+    const executeWithLibraryGuard = (
+        srvId: string,
+        secKey: string,
+        actionName: string,
+        fn: () => Promise<void> | void
+    ) => {
+        if (!srvId || !secKey) {
+            fn();
+            return;
+        }
+        const isEnabled = isSectionEnabled(srvId, secKey);
+        if (isEnabled) {
+            fn();
+            return;
+        }
+        const srv = servers.find(s => s.serverId === srvId);
+        const sec = srv?.sections?.find(s => String(s.key) === String(secKey));
+        setGuardContext({
+            serverId: srvId,
+            sectionKey: secKey,
+            serverName: srv?.serverName || srvId,
+            libraryName: sec?.title || `Library #${secKey}`,
+            actionName,
+            execute: fn
+        });
+        setGuardModalOpen(true);
+    };
+
+    const handleGuardEnableAndRun = async () => {
+        if (!guardContext) return;
+        const { serverId, sectionKey, execute } = guardContext;
+        const currentSections = servers.find(s => s.serverId === serverId)?.sections || [];
+        const allSecKeys = currentSections.map(s => String(s.key));
+        try {
+            const res = await toggleCurationLibrarySectionAction("prune", serverId, sectionKey, true, allSecKeys);
+            if (res.success && res.enabledList) {
+                setEnabledServersForPruning(res.enabledList);
+            }
+        } catch (e) {
+            console.error("Failed enabling section prune state:", e);
+        }
+        await execute();
+    };
+
+    const handleGuardForceRun = async () => {
+        if (!guardContext) return;
+        await guardContext.execute();
+    };
+
+    // Save schedule settings
+    const handleSaveSchedule = async () => {
+        setSavingSchedule(true);
+        setScheduleSavedMsg(false);
+        try {
+            const res = await saveCurationSettingsAction({
+                curationSyncPruning,
+                curationSyncSchedule,
+                pruneSyncEnabled: curationSyncPruning,
+                pruneSyncSchedule: curationSyncSchedule,
+                pruneDryRun,
+                enableAutoPruneDeletion
+            });
+            if (res.success) {
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    curationSyncPruning,
+                    curationSyncSchedule,
+                    pruneDryRun,
+                    enableAutoPruneDeletion
+                } : null);
+                setScheduleSavedMsg(true);
+                setTimeout(() => setScheduleSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving schedule:", e);
+        } finally {
+            setSavingSchedule(false);
+        }
+    };
+
+    // Discard all unsaved changes across all cards back to baseline
+    const handleDiscardAllDirty = () => {
+        if (!baselineSettings) return;
+        setCurationSyncPruning(baselineSettings.curationSyncPruning);
+        setCurationSyncSchedule(baselineSettings.curationSyncSchedule);
+        setPruneDryRun(baselineSettings.pruneDryRun);
+        setEnableAutoPruneDeletion(baselineSettings.enableAutoPruneDeletion);
+
+        setLeavingSoonDiskThreshold(baselineSettings.leavingSoonDiskThreshold);
+        setPruneWarningThresholdPercent(baselineSettings.pruneWarningThresholdPercent);
+        setPruneDangerThresholdPercent(baselineSettings.pruneDangerThresholdPercent);
+        setPruneTargetHeadroomGb(baselineSettings.pruneTargetHeadroomGb);
+        setPruneEvaluateSeasonsSetting(baselineSettings.pruneEvaluateSeasons);
+        setPruneDeleteFromArrSetting(baselineSettings.pruneDeleteFromArr);
+        setPruneMinAgeDaysSetting(baselineSettings.pruneMinAgeDays);
+        setPruneUnwatchedMinAgeDaysSetting(baselineSettings.pruneUnwatchedMinAgeDays);
+        setPruneWatchedMinAgeDaysSetting(baselineSettings.pruneWatchedMinAgeDays);
+        setPruneDaysNoticeSetting(baselineSettings.pruneDaysNotice);
+        setPruneUnwatchedOnlySetting(baselineSettings.pruneUnwatchedOnly);
+
+        setSimBannerType(baselineSettings.simBannerType);
+        setSimBannerText(baselineSettings.simBannerText);
+        setSimBannerTheme(baselineSettings.simBannerTheme);
+        setSimBannerPosition(baselineSettings.simBannerPosition as any);
+        setSimBannerFontSize(baselineSettings.simBannerFontSize);
+        setBannerTemplates(baselineSettings.bannerTemplates);
+
+        if (baselineSettings.selectedGlancesDiskId) {
+            setSelectedGlancesDiskId(baselineSettings.selectedGlancesDiskId);
+        }
+    };
+
+    // Save all unsaved changes across all cards in a single batch
+    const handleSaveAllDirty = async () => {
+        if (!hasUnsavedChanges) return;
+        setIsSavingAll(true);
+        try {
+            const payload: any = {};
+            if (isScheduleDirty) {
+                payload.curationSyncPruning = curationSyncPruning;
+                payload.curationSyncSchedule = curationSyncSchedule;
+                payload.pruneSyncEnabled = curationSyncPruning;
+                payload.pruneSyncSchedule = curationSyncSchedule;
+                payload.pruneDryRun = pruneDryRun;
+                payload.enableAutoPruneDeletion = enableAutoPruneDeletion;
+            }
+            if (isThresholdsDirty) {
+                payload.leavingSoonDiskThreshold = Number(leavingSoonDiskThreshold);
+                payload.pruneWarningThresholdPercent = Number(pruneWarningThresholdPercent);
+                payload.pruneDangerThresholdPercent = Number(pruneDangerThresholdPercent);
+                payload.pruneTargetHeadroomGb = Number(pruneTargetHeadroomGb);
+                payload.pruneEvaluateSeasons = Boolean(pruneEvaluateSeasonsSetting);
+                payload.pruneDeleteFromArr = Boolean(pruneDeleteFromArrSetting);
+                payload.pruneMinAgeDays = Number(pruneMinAgeDaysSetting);
+                payload.pruneUnwatchedMinAgeDays = Number(pruneUnwatchedMinAgeDaysSetting);
+                payload.pruneWatchedMinAgeDays = Number(pruneWatchedMinAgeDaysSetting);
+                payload.pruneDaysNotice = Number(pruneDaysNoticeSetting);
+                payload.pruneUnwatchedOnly = Boolean(pruneUnwatchedOnlySetting);
+            }
+            if (isBannersDirty) {
+                payload.pruneBannerType = simBannerType;
+                payload.pruneBannerPosition = simBannerPosition;
+                payload.pruneBannerTheme = simBannerTheme;
+                payload.pruneBannerText = simBannerText;
+                payload.pruneBannerFontSize = simBannerFontSize;
+                payload.pruneBannerTemplates = JSON.stringify(bannerTemplates);
+            }
+            if (Object.keys(payload).length > 0) {
+                await saveCurationSettingsAction(payload);
+            }
+            if (isGlancesDiskDirty && selectedGlancesDiskId) {
+                await saveSelectedGlancesDiskAction(selectedGlancesDiskId);
+            }
+            setBaselineSettings({
+                curationSyncPruning,
+                curationSyncSchedule,
+                pruneDryRun,
+                enableAutoPruneDeletion,
+                leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
+                pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
+                pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
+                pruneTargetHeadroomGb: Number(pruneTargetHeadroomGb),
+                pruneEvaluateSeasons: Boolean(pruneEvaluateSeasonsSetting),
+                pruneDeleteFromArr: Boolean(pruneDeleteFromArrSetting),
+                pruneMinAgeDays: Number(pruneMinAgeDaysSetting),
+                pruneUnwatchedMinAgeDays: Number(pruneUnwatchedMinAgeDaysSetting),
+                pruneWatchedMinAgeDays: Number(pruneWatchedMinAgeDaysSetting),
+                pruneDaysNotice: Number(pruneDaysNoticeSetting),
+                pruneUnwatchedOnly: Boolean(pruneUnwatchedOnlySetting),
+                simBannerType,
+                simBannerText,
+                simBannerTheme,
+                simBannerPosition,
+                simBannerFontSize,
+                bannerTemplates,
+                selectedGlancesDiskId
+            });
+            setScheduleSavedMsg(true);
+            setThresholdsSavedMsg(true);
+            setTimeout(() => {
+                setScheduleSavedMsg(false);
+                setThresholdsSavedMsg(false);
+            }, 3000);
+        } catch (e) {
+            console.error("Failed saving all unsaved prune changes:", e);
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
+    // Run prune evaluation job now
+    const handleRunPruneSync = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Prune Sync", () => executeRunPruneSync());
+            return;
+        }
+        await executeRunPruneSync();
+    };
+
+    const executeRunPruneSync = async () => {
+        setRunningPruneSync(true);
+        setPruneSyncResult(null);
+        try {
+            const res = await runMaintainerrSyncAction(selectedServerId, selectedSectionKey);
+            if (res.success) {
+                setPruneSyncResult({
+                    success: true,
+                    text: `Maintainerr Prune Sync Completed: ${res.totalEvaluated ?? 0} items evaluated across enabled libraries.`,
+                    details: res.details
+                });
+                setCurationLastRunAt(new Date().toISOString());
+                loadLeavingSoonItems();
+            } else {
+                setPruneSyncResult({
+                    success: false,
+                    text: res.error || "Failed running prune evaluation."
+                });
+            }
+        } catch (e: any) {
+            setPruneSyncResult({
+                success: false,
+                text: e.message || "An error occurred during prune sync."
+            });
+        } finally {
+            setRunningPruneSync(false);
+        }
+    };
+
+    // Server / Section Switch
+    const handleSelectServer = async (srvId: string) => {
+        setSelectedServerId(srvId);
+        loadLeavingSoonItems(srvId);
+        const srv = servers.find(s => s.serverId === srvId);
+        let srvSections = srv?.sections || [];
+
+        if (srvSections.length === 0) {
+            setServerSectionsLoading(true);
+            try {
+                const secRes = await getPlexServerSectionsAction(srvId);
+                if (secRes?.success && Array.isArray(secRes.sections) && secRes.sections.length > 0) {
+                    srvSections = secRes.sections as any;
+                    setServers(prev => prev.map(s => s.serverId === srvId ? { ...s, sections: (secRes.sections as any) || [] } : s));
+                }
+            } catch (e) {
+                console.error("Failed loading server sections:", e);
+            } finally {
+                setServerSectionsLoading(false);
+            }
+        }
+
+        if (srvSections.length > 0) {
+            const hasExisting = srvSections.some((sec: any) => String(sec.key) === selectedSectionKey);
+            const nextSecKey = hasExisting ? selectedSectionKey : String(srvSections[0].key);
+            setSelectedSectionKey(nextSecKey);
+        } else {
+            setSelectedSectionKey("");
+        }
+    };
+
+    const handleSelectSection = (secKey: string) => {
+        setSelectedSectionKey(secKey);
+    };
+
+    // Leaving Soon Hub States
+    const [leavingSoonItems, setLeavingSoonItems] = useState<any[]>([]);
+    const [leavingSoonLoading, setLeavingSoonLoading] = useState(false);
+    const [syncingLeavingSoonHub, setSyncingLeavingSoonHub] = useState(false);
+    const [leavingSoonHubMsg, setLeavingSoonHubMsg] = useState<{ success: boolean; text: string } | null>(null);
+    const [clearingFlags, setClearingFlags] = useState(false);
+    const [clearFlagsMsg, setClearFlagsMsg] = useState<string | null>(null);
+
+    // Recheck Watch Activity State
+    const [recheckingWatchActivity, setRecheckingWatchActivity] = useState(false);
+    const [recheckWatchResult, setRecheckWatchResult] = useState<{
+        success: boolean;
+        message: string;
+        checkedCount?: number;
+        unflaggedCount?: number;
+        unflaggedItems?: Array<{ ratingKey: string; title: string; reason: string }>;
+    } | null>(null);
+
+    // Glances Storage Disks & Live Capacity
+    const [glancesDisks, setGlancesDisks] = useState<Array<{
+        id: string;
+        instanceId: string;
+        instanceName: string;
+        mntPoint: string;
+        deviceName: string;
+        fsType: string;
+        sizeBytes: number;
+        usedBytes: number;
+        freeBytes: number;
+        totalGb: number;
+        usedGb: number;
+        freeGb: number;
+        percent: number;
+        isOnline: boolean;
+    }>>([]);
+    const [selectedGlancesDiskId, setSelectedGlancesDiskId] = useState<string>("");
+    const [glancesLoading, setGlancesLoading] = useState<boolean>(false);
+    const [savingGlancesDisk, setSavingGlancesDisk] = useState<boolean>(false);
+    const [glancesDiskSavedMsg, setGlancesDiskSavedMsg] = useState<boolean>(false);
+
+    // Manual Leaving Soon Modal
+    const [manualFlagModalOpen, setManualFlagModalOpen] = useState(false);
+    const [manualRatingKey, setManualRatingKey] = useState("");
+    const [manualTitle, setManualTitle] = useState("");
+    const [manualDaysRemaining, setManualDaysRemaining] = useState(14);
+    const [manualReason, setManualReason] = useState("Storage capacity threshold optimization");
+    const [flaggingItem, setFlaggingItem] = useState(false);
+
+    // Simulation & Oldest Files Explorer States
+    const [simSortBy, setSimSortBy] = useState<"combined_oldest" | "oldest_added" | "oldest_watched" | "oldest_modified" | "largest_size" | "least_plays">("combined_oldest");
+    const [simOldestLimit, setSimOldestLimit] = useState<number>(50);
+    const [simBatchFlagAmount, setSimBatchFlagAmount] = useState<number>(10);
+    const [simGracePeriodDays, setSimGracePeriodDays] = useState<number>(14);
+    const [simFilterSearch, setSimFilterSearch] = useState<string>("");
+    const [simMinAgeDays, setSimMinAgeDays] = useState(90);
+    const [simUnwatchedMinAgeDays, setSimUnwatchedMinAgeDays] = useState<number>(90);
+    const [simWatchedMinAgeDays, setSimWatchedMinAgeDays] = useState<number>(180);
+    const [simUnwatchedOnly, setSimUnwatchedOnly] = useState(false);
+    const [simEvaluateSeasons, setSimEvaluateSeasons] = useState(true);
+    const [simulatingPrune, setSimulatingPrune] = useState(false);
+    const [selectedRulePresetId, setSelectedRulePresetId] = useState<string>("standard_90d_unwatched");
+    const [customRulePresets, setCustomRulePresets] = useState<MaintainerrRulePreset[]>([]);
+    const [savingRuleDefault, setSavingRuleDefault] = useState<boolean>(false);
+    const [ruleDefaultSavedMsg, setRuleDefaultSavedMsg] = useState<string | null>(null);
+    const [saveCustomPresetModalOpen, setSaveCustomPresetModalOpen] = useState<boolean>(false);
+    const [newCustomPresetName, setNewCustomPresetName] = useState<string>("");
+    const [pruneSimResults, setPruneSimResults] = useState<{
+        candidates: any[];
+        totalRecoverableGb: number;
+        evaluatedCount: number;
+        serversEvaluated: any[];
+    } | null>(null);
+
+    // Execution States
+    const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<string[]>([]);
+    const [executingPrune, setExecutingPrune] = useState(false);
+    const [pruneExecMessage, setPruneExecMessage] = useState<{ success: boolean; text: string; details?: any[] } | null>(null);
+
+    // Storage Mount Config & Stats
+    const [serverStorageConfig, setServerStorageConfig] = useState<Record<string, string>>({});
+    const [savingStorageConfig, setSavingStorageConfig] = useState(false);
+    const [storageConfigSavedMsg, setStorageConfigSavedMsg] = useState(false);
+    const [pathCheckResults, setPathCheckResults] = useState<Record<string, { checking: boolean; success?: boolean; msg?: string }>>({});
+    const [vaultStats, setVaultStats] = useState<{ backupCount: number; backupBytes: number; badgeCount: number; badgeBytes: number; backupDir: string; badgeDir: string } | null>(null);
+
+    // Live Leaving Soon Banner Simulator States
+    const [posterPickerModalOpen, setPosterPickerModalOpen] = useState(false);
+    const [simSelectedRealItem, setSimSelectedRealItem] = useState<PlexMediaStreamInfo | null>(null);
+    const [simPosterUrl, setSimPosterUrl] = useState<string>("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+    const [simBannerType, setSimBannerType] = useState<string>("leaving_soon");
+    const [simBannerText, setSimBannerText] = useState<string>("LEAVING SOON");
+    const [simBannerTheme, setSimBannerTheme] = useState<string>("crimson-red");
+    const [simBannerPosition, setSimBannerPosition] = useState<"bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner">("bottom");
+    const [simBannerFontSize, setSimBannerFontSize] = useState<number>(44);
+    const [simTemplateDate, setSimTemplateDate] = useState<string>("10/31/2026");
+    const [simTemplateDays, setSimTemplateDays] = useState<number>(14);
+    const [simTemplateReason, setSimTemplateReason] = useState<string>("Unwatched for 90+ Days");
+    const [simTemplateStatus, setSimTemplateStatus] = useState<string>("Leaving Soon");
+    const [bannerTemplates, setBannerTemplates] = useState<Record<string, { text?: string; theme?: string; pos?: "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner"; fontSize?: number }>>({});
+    const [simPreviewDataUrl, setSimPreviewDataUrl] = useState<string | null>(null);
+    const [simPreviewLoading, setSimPreviewLoading] = useState<boolean>(false);
+    const [savingBannerConfig, setSavingBannerConfig] = useState<boolean>(false);
+    const [bannerConfigSavedMsg, setBannerConfigSavedMsg] = useState<string | null>(null);
+
+    // Baseline Snapshot for Tracking Unsaved Changes
+    const [baselineSettings, setBaselineSettings] = useState<{
+        curationSyncPruning: boolean;
+        curationSyncSchedule: string;
+        pruneDryRun: boolean;
+        enableAutoPruneDeletion: boolean;
+        leavingSoonDiskThreshold: number;
+        pruneWarningThresholdPercent: number;
+        pruneDangerThresholdPercent: number;
+        pruneTargetHeadroomGb: number;
+        pruneEvaluateSeasons: boolean;
+        pruneDeleteFromArr: boolean;
+        pruneMinAgeDays: number;
+        pruneUnwatchedMinAgeDays: number;
+        pruneWatchedMinAgeDays: number;
+        pruneDaysNotice: number;
+        pruneUnwatchedOnly: boolean;
+        simBannerType: string;
+        simBannerText: string;
+        simBannerTheme: string;
+        simBannerPosition: string;
+        simBannerFontSize: number;
+        bannerTemplates: Record<string, any>;
+        selectedGlancesDiskId: string;
+    } | null>(null);
+    const [isSavingAll, setIsSavingAll] = useState(false);
+
+    const isScheduleDirty = Boolean(
+        baselineSettings && (
+            curationSyncPruning !== baselineSettings.curationSyncPruning ||
+            curationSyncSchedule !== baselineSettings.curationSyncSchedule ||
+            pruneDryRun !== baselineSettings.pruneDryRun ||
+            enableAutoPruneDeletion !== baselineSettings.enableAutoPruneDeletion
+        )
+    );
+
+    const isThresholdsDirty = Boolean(
+        baselineSettings && (
+            Number(leavingSoonDiskThreshold) !== baselineSettings.leavingSoonDiskThreshold ||
+            Number(pruneWarningThresholdPercent) !== baselineSettings.pruneWarningThresholdPercent ||
+            Number(pruneDangerThresholdPercent) !== baselineSettings.pruneDangerThresholdPercent ||
+            Number(pruneTargetHeadroomGb) !== baselineSettings.pruneTargetHeadroomGb ||
+            Boolean(pruneEvaluateSeasonsSetting) !== baselineSettings.pruneEvaluateSeasons ||
+            Boolean(pruneDeleteFromArrSetting) !== baselineSettings.pruneDeleteFromArr ||
+            Number(pruneMinAgeDaysSetting) !== baselineSettings.pruneMinAgeDays ||
+            Number(pruneUnwatchedMinAgeDaysSetting) !== baselineSettings.pruneUnwatchedMinAgeDays ||
+            Number(pruneWatchedMinAgeDaysSetting) !== baselineSettings.pruneWatchedMinAgeDays ||
+            Number(pruneDaysNoticeSetting) !== baselineSettings.pruneDaysNotice ||
+            Boolean(pruneUnwatchedOnlySetting) !== baselineSettings.pruneUnwatchedOnly
+        )
+    );
+
+    const isBannersDirty = Boolean(
+        baselineSettings && (
+            simBannerType !== baselineSettings.simBannerType ||
+            simBannerText !== baselineSettings.simBannerText ||
+            simBannerTheme !== baselineSettings.simBannerTheme ||
+            simBannerPosition !== baselineSettings.simBannerPosition ||
+            simBannerFontSize !== baselineSettings.simBannerFontSize ||
+            JSON.stringify(bannerTemplates) !== JSON.stringify(baselineSettings.bannerTemplates)
+        )
+    );
+
+    const isGlancesDiskDirty = Boolean(
+        baselineSettings && selectedGlancesDiskId &&
+        selectedGlancesDiskId !== baselineSettings.selectedGlancesDiskId
+    );
+
+    const unsavedSections: string[] = [];
+    if (isScheduleDirty) unsavedSections.push("Automated Pruning Schedule");
+    if (isThresholdsDirty) unsavedSections.push("Headroom & Retention Thresholds");
+    if (isBannersDirty) unsavedSections.push("Leaving Soon Banner Template");
+    if (isGlancesDiskDirty) unsavedSections.push("Glances Storage Disk");
+    const hasUnsavedChanges = unsavedSections.length > 0;
+
+    // Effective Banner Config Resolver for any Preset ID
+    const getEffectivePruneBannerConfig = (presetId: string, customTemplates = bannerTemplates) => {
+        const preset = PRUNE_BANNER_PRESETS.find(p => p.id === presetId);
+        const custom = customTemplates[presetId] || {};
+        return {
+            text: custom.text !== undefined ? custom.text : (preset?.defaultText || "LEAVING SOON"),
+            theme: custom.theme || preset?.theme || "crimson-red",
+            pos: (custom.pos || preset?.pos || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner",
+            fontSize: custom.fontSize || (preset as any)?.fontSize || 44
+        };
+    };
+
+    // Preset Selection Handler
+    const handleSelectPruneBannerPreset = (val: string) => {
+        setSimBannerType(val);
+        const config = getEffectivePruneBannerConfig(val);
+        setSimBannerText(config.text);
+        setSimBannerTheme(config.theme);
+        setSimBannerPosition(config.pos);
+        setSimBannerFontSize(config.fontSize);
+
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            val,
+            config.text,
+            config.theme,
+            config.pos,
+            config.fontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Text Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerTextChange = (text: string) => {
+        setSimBannerText(text);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text,
+                theme: simBannerTheme,
+                pos: simBannerPosition,
+                fontSize: simBannerFontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            text,
+            simBannerTheme,
+            simBannerPosition,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Theme Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerThemeChange = (theme: string) => {
+        setSimBannerTheme(theme);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text: simBannerText,
+                theme,
+                pos: simBannerPosition,
+                fontSize: simBannerFontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            simBannerText,
+            theme,
+            simBannerPosition,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Position Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerPositionChange = (pos: "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner") => {
+        setSimBannerPosition(pos);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text: simBannerText,
+                theme: simBannerTheme,
+                pos,
+                fontSize: simBannerFontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            pos,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Font Size Change Handler (updates active preset in bannerTemplates)
+    const handlePruneBannerFontSizeChange = (fontSize: number) => {
+        setSimBannerFontSize(fontSize);
+        setBannerTemplates(prev => ({
+            ...prev,
+            [simBannerType]: {
+                ...(prev[simBannerType] || {}),
+                text: simBannerText,
+                theme: simBannerTheme,
+                pos: simBannerPosition,
+                fontSize
+            }
+        }));
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            simBannerPosition,
+            fontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    // Apply a Maintainerr Rule Preset
+    const handleApplyRulePreset = (preset: MaintainerrRulePreset) => {
+        setSelectedRulePresetId(preset.id);
+        const unwatchedDays = preset.unwatchedMinAgeDays ?? preset.minAgeDays;
+        const watchedDays = preset.watchedMinAgeDays ?? 180;
+        setSimMinAgeDays(preset.minAgeDays);
+        setSimUnwatchedMinAgeDays(unwatchedDays);
+        setSimWatchedMinAgeDays(watchedDays);
+        setSimGracePeriodDays(preset.gracePeriodDays);
+        setSimUnwatchedOnly(preset.unwatchedOnly);
+        setSimSortBy(preset.sortStrategy);
+        setSimOldestLimit(preset.oldestLimit);
+
+        // Also sync to storage settings tab state
+        setPruneMinAgeDaysSetting(preset.minAgeDays);
+        setPruneUnwatchedMinAgeDaysSetting(unwatchedDays);
+        setPruneWatchedMinAgeDaysSetting(watchedDays);
+        setPruneDaysNoticeSetting(preset.gracePeriodDays);
+        setPruneUnwatchedOnlySetting(preset.unwatchedOnly);
+
+        if (preset.bannerType) {
+            handleSelectPruneBannerPreset(preset.bannerType);
+        }
+    };
+
+    // Save Current Sandbox Criteria as Global Default Pruning Rule
+    const handleSaveCurrentSandboxAsDefaultRule = async () => {
+        setSavingRuleDefault(true);
+        setRuleDefaultSavedMsg(null);
+        try {
+            const res = await saveCurationSettingsAction({
+                pruneMinAgeDays: Number(simMinAgeDays),
+                pruneUnwatchedMinAgeDays: Number(simUnwatchedMinAgeDays),
+                pruneWatchedMinAgeDays: Number(simWatchedMinAgeDays),
+                pruneDaysNotice: Number(simGracePeriodDays),
+                pruneUnwatchedOnly: Boolean(simUnwatchedOnly),
+                pruneSortStrategy: simSortBy,
+                pruneOldestLimit: Number(simOldestLimit),
+                pruneBannerType: simBannerType,
+                pruneBannerPosition: simBannerPosition,
+                pruneBannerTheme: simBannerTheme,
+                pruneBannerText: simBannerText,
+                pruneBannerFontSize: simBannerFontSize
+            });
+            if (res.success) {
+                setPruneMinAgeDaysSetting(simMinAgeDays);
+                setPruneUnwatchedMinAgeDaysSetting(simUnwatchedMinAgeDays);
+                setPruneWatchedMinAgeDaysSetting(simWatchedMinAgeDays);
+                setPruneDaysNoticeSetting(simGracePeriodDays);
+                setPruneUnwatchedOnlySetting(simUnwatchedOnly);
+                setRuleDefaultSavedMsg("✓ Saved as Global Default Pruning Rule!");
+                setTimeout(() => setRuleDefaultSavedMsg(null), 3500);
+            }
+        } catch (e) {
+            console.error("Failed saving default pruning rule:", e);
+        } finally {
+            setSavingRuleDefault(false);
+        }
+    };
+
+    // Save a New Custom Rule Preset
+    const handleSaveCustomRulePreset = async () => {
+        if (!newCustomPresetName.trim()) return;
+        const newPreset: MaintainerrRulePreset = {
+            id: `custom_${Date.now()}`,
+            name: newCustomPresetName.trim(),
+            description: `Custom ${simMinAgeDays}d age, ${simGracePeriodDays}d notice, ${simUnwatchedOnly ? "unwatched only" : "all media"}`,
+            icon: "⚙️",
+            minAgeDays: simMinAgeDays,
+            gracePeriodDays: simGracePeriodDays,
+            unwatchedOnly: simUnwatchedOnly,
+            sortStrategy: simSortBy,
+            oldestLimit: simOldestLimit,
+            bannerType: simBannerType,
+            isCustom: true
+        };
+        const updated = [...customRulePresets, newPreset];
+        setCustomRulePresets(updated);
+        setNewCustomPresetName("");
+        setSaveCustomPresetModalOpen(false);
+        setSelectedRulePresetId(newPreset.id);
+
+        try {
+            await saveCurationSettingsAction({
+                pruneRulePresets: updated
+            });
+            setRuleDefaultSavedMsg(`✓ Saved Custom Preset "${newPreset.name}"!`);
+            setTimeout(() => setRuleDefaultSavedMsg(null), 3500);
+        } catch (e) {
+            console.error("Failed saving custom rule presets:", e);
+        }
+    };
+
+    // Delete a Custom Rule Preset
+    const handleDeleteCustomRulePreset = async (presetId: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        const updated = customRulePresets.filter(p => p.id !== presetId);
+        setCustomRulePresets(updated);
+        if (selectedRulePresetId === presetId) setSelectedRulePresetId("standard_90d_unwatched");
+        try {
+            await saveCurationSettingsAction({
+                pruneRulePresets: updated
+            });
+        } catch (e) {
+            console.error("Failed deleting custom rule preset:", e);
+        }
+    };
+
+    // Save Current Banner Template Preset
+    const handleSaveDefaultPruneBannerTemplate = async () => {
+        setSavingBannerConfig(true);
+        setBannerConfigSavedMsg(null);
+        try {
+            const updatedTemplates = {
+                ...bannerTemplates,
+                [simBannerType]: {
+                    text: simBannerText,
+                    theme: simBannerTheme,
+                    pos: simBannerPosition,
+                    fontSize: simBannerFontSize
+                }
+            };
+            setBannerTemplates(updatedTemplates);
+
+            const res = await saveCurationSettingsAction({
+                pruneBannerType: simBannerType,
+                pruneBannerPosition: simBannerPosition,
+                pruneBannerTheme: simBannerTheme,
+                pruneBannerText: simBannerText,
+                pruneBannerFontSize: simBannerFontSize,
+                pruneBannerTemplates: JSON.stringify(updatedTemplates)
+            });
+            if (res.success) {
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    simBannerType,
+                    simBannerText,
+                    simBannerTheme,
+                    simBannerPosition,
+                    simBannerFontSize,
+                    bannerTemplates: updatedTemplates
+                } : null);
+                const currentPreset = PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType);
+                setBannerConfigSavedMsg(`✓ Saved Template for "${currentPreset?.label || simBannerType}"!`);
+                setTimeout(() => setBannerConfigSavedMsg(null), 3500);
+            }
+        } catch (e) {
+            console.error("Failed saving default prune banner template:", e);
+        } finally {
+            setSavingBannerConfig(false);
+        }
+    };
+
+    // Reset Active Preset to Default
+    const handleResetCurrentPruneBannerTemplate = async () => {
+        const preset = PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType);
+        const defaultText = preset?.defaultText || "LEAVING SOON";
+        const defaultTheme = preset?.theme || "crimson-red";
+        const defaultPos = (preset?.pos || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner";
+        const defaultFontSize = (preset as any)?.fontSize || 44;
+
+        const updatedTemplates = { ...bannerTemplates };
+        delete updatedTemplates[simBannerType];
+        setBannerTemplates(updatedTemplates);
+
+        setSimBannerText(defaultText);
+        setSimBannerTheme(defaultTheme);
+        setSimBannerPosition(defaultPos);
+        setSimBannerFontSize(defaultFontSize);
+
+        try {
+            await saveCurationSettingsAction({
+                pruneBannerType: simBannerType,
+                pruneBannerPosition: defaultPos,
+                pruneBannerTheme: defaultTheme,
+                pruneBannerText: defaultText,
+                pruneBannerFontSize: defaultFontSize,
+                pruneBannerTemplates: JSON.stringify(updatedTemplates)
+            });
+            setBannerConfigSavedMsg(`✓ Reset "${preset?.label || simBannerType}" to preset default!`);
+            setTimeout(() => setBannerConfigSavedMsg(null), 3500);
+        } catch (e) {
+            console.error("Failed resetting template:", e);
+        }
+
+        generatePrunePreview(
+            simSelectedRealItem ? simPosterUrl : null,
+            simSelectedRealItem?.title || "Sample Media",
+            simBannerType,
+            defaultText,
+            defaultTheme,
+            defaultPos,
+            defaultFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    const handleSaveBannerConfig = handleSaveDefaultPruneBannerTemplate;
+
+    const getInterpolatedSimText = (template: string) => {
+        if (!template) return "";
+        return template
+            .replace(/{date}/gi, simTemplateDate || "10/31/2026")
+            .replace(/{days}/gi, String(simTemplateDays ?? 14))
+            .replace(/{reason}/gi, simTemplateReason || "Unwatched for 180+ Days")
+            .replace(/{status}/gi, simTemplateStatus || "Leaving Soon")
+            .replace(/{title}/gi, simSelectedRealItem?.title || "Sample Media")
+            .replace(/{quality}/gi, simSelectedRealItem?.detectedBadges?.resolution || "4K UHD")
+            .replace(/{source}/gi, "Plex Library");
+    };
+
+    const generatePrunePreview = async (
+        posterUrl: string | null = simSelectedRealItem ? simPosterUrl : null,
+        title: string = simSelectedRealItem?.title || "Sample Media",
+        type = simBannerType,
+        text = simBannerText,
+        theme = simBannerTheme,
+        position = simBannerPosition,
+        fontSize = simBannerFontSize,
+        date = simTemplateDate,
+        days = simTemplateDays,
+        reason = simTemplateReason,
+        status = simTemplateStatus
+    ) => {
+        setSimPreviewLoading(true);
+        try {
+            const res = await getPlaceholderPreviewDataUrlAction(posterUrl, title, {
+                bannerType: type,
+                bannerText: text,
+                bannerTheme: theme,
+                bannerPosition: position,
+                bannerFontSize: fontSize,
+                fontSize,
+                date: date || "10/31/2026",
+                formattedDate: date || "10/31/2026",
+                daysRemaining: days ?? 14,
+                reason: reason || "Unwatched for 180+ Days",
+                status: status || "Leaving Soon"
+            });
+            if (res.success && res.dataUrl) {
+                setSimPreviewDataUrl(res.dataUrl);
+            }
+        } catch (e) {
+            console.error("Failed generating prune preview:", e);
+        } finally {
+            setSimPreviewLoading(false);
+        }
+    };
+
+    const handleSelectRealPoster = (item: PlexMediaStreamInfo, posterUrl: string) => {
+        setSimSelectedRealItem(item);
+        setSimPosterUrl(posterUrl);
+        generatePrunePreview(
+            posterUrl,
+            item.title,
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            simBannerPosition,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+    };
+
+    const handleInsertToken = (token: string) => {
+        const next = simBannerText ? `${simBannerText} ${token}` : token;
+        handlePruneBannerTextChange(next);
+    };
+
+    // Initial Data Fetch
+    useEffect(() => {
+        // Immediately kick off initial preview render so simulator never stalls
+        generatePrunePreview(
+            null,
+            "Sample Media",
+            simBannerType,
+            simBannerText,
+            simBannerTheme,
+            simBannerPosition,
+            simBannerFontSize,
+            simTemplateDate,
+            simTemplateDays,
+            simTemplateReason,
+            simTemplateStatus
+        );
+
+        const loadInitialData = async () => {
+            setLoading(true);
+            try {
+                const srvRes = await getPlexServersAndSectionsAction();
+                if (srvRes.success && srvRes.servers && srvRes.servers.length > 0) {
+                    setServers(srvRes.servers);
+                    const firstServer = srvRes.servers[0];
+                    setSelectedServerId(firstServer.serverId);
+                    if (firstServer.sections && firstServer.sections.length > 0) {
+                        setSelectedSectionKey(String(firstServer.sections[0].key));
+                    }
+                }
+
+                const settingsRes = await getCurationSettingsAction();
+                let savedDiskId = "";
+                if (settingsRes.success) {
+                    setSettings(settingsRes);
+                    if (settingsRes.serverStorageConfig) setServerStorageConfig(settingsRes.serverStorageConfig);
+                    savedDiskId = settingsRes.selectedGlancesDiskId || (settingsRes.serverStorageConfig as any)?.selectedGlancesDiskId || "";
+                    if (savedDiskId) {
+                        setSelectedGlancesDiskId(savedDiskId);
+                    }
+                    setCurationSyncPruning(settingsRes.pruneSyncEnabled ?? settingsRes.curationSyncPruning ?? true);
+                    setCurationSyncSchedule(settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_6am");
+                    setPruneDryRun(settingsRes.pruneDryRun ?? true);
+                    setEnableAutoPruneDeletion(settingsRes.enableAutoPruneDeletion ?? false);
+                    setCurationLastRunAt(settingsRes.pruneLastRunAt || settingsRes.curationLastRunAt || null);
+                    setCurationLastRunStatus(settingsRes.pruneLastRunStatus || settingsRes.curationLastRunStatus || null);
+                    if (settingsRes.enabledServersForPruning) {
+                        setEnabledServersForPruning(settingsRes.enabledServersForPruning);
+                    }
+                    if (settingsRes.leavingSoonDiskThreshold !== undefined) setLeavingSoonDiskThreshold(settingsRes.leavingSoonDiskThreshold);
+                    if (settingsRes.pruneWarningThresholdPercent !== undefined) setPruneWarningThresholdPercent(settingsRes.pruneWarningThresholdPercent);
+                    if (settingsRes.pruneDangerThresholdPercent !== undefined) setPruneDangerThresholdPercent(settingsRes.pruneDangerThresholdPercent);
+                    if (settingsRes.pruneTargetHeadroomGb !== undefined) setPruneTargetHeadroomGb(settingsRes.pruneTargetHeadroomGb);
+                    if (settingsRes.pruneEvaluateSeasons !== undefined) {
+                        setPruneEvaluateSeasonsSetting(settingsRes.pruneEvaluateSeasons);
+                        setSimEvaluateSeasons(settingsRes.pruneEvaluateSeasons);
+                    }
+                    if (settingsRes.pruneDeleteFromArr !== undefined) {
+                        setPruneDeleteFromArrSetting(settingsRes.pruneDeleteFromArr);
+                    }
+                    if (settingsRes.pruneMinAgeDays !== undefined) {
+                        setPruneMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
+                        setSimMinAgeDays(settingsRes.pruneMinAgeDays);
+                    }
+                    if (settingsRes.pruneUnwatchedMinAgeDays !== undefined) {
+                        setPruneUnwatchedMinAgeDaysSetting(settingsRes.pruneUnwatchedMinAgeDays);
+                        setSimUnwatchedMinAgeDays(settingsRes.pruneUnwatchedMinAgeDays);
+                    } else if (settingsRes.pruneMinAgeDays !== undefined) {
+                        setPruneUnwatchedMinAgeDaysSetting(settingsRes.pruneMinAgeDays);
+                        setSimUnwatchedMinAgeDays(settingsRes.pruneMinAgeDays);
+                    }
+                    if (settingsRes.pruneWatchedMinAgeDays !== undefined) {
+                        setPruneWatchedMinAgeDaysSetting(settingsRes.pruneWatchedMinAgeDays);
+                        setSimWatchedMinAgeDays(settingsRes.pruneWatchedMinAgeDays);
+                    }
+                    if (settingsRes.pruneDaysNotice !== undefined) {
+                        setPruneDaysNoticeSetting(settingsRes.pruneDaysNotice);
+                        setSimGracePeriodDays(settingsRes.pruneDaysNotice);
+                        setSimTemplateDays(settingsRes.pruneDaysNotice);
+                    }
+                    if (settingsRes.pruneUnwatchedOnly !== undefined) {
+                        setPruneUnwatchedOnlySetting(settingsRes.pruneUnwatchedOnly);
+                        setSimUnwatchedOnly(settingsRes.pruneUnwatchedOnly);
+                    }
+                    if (settingsRes.pruneSortStrategy) {
+                        setSimSortBy(settingsRes.pruneSortStrategy as any);
+                    }
+                    if (settingsRes.pruneOldestLimit !== undefined) {
+                        setSimOldestLimit(settingsRes.pruneOldestLimit);
+                    }
+                    if (settingsRes.pruneRulePresets) {
+                        try {
+                            const parsedPresets = typeof settingsRes.pruneRulePresets === "string"
+                                ? JSON.parse(settingsRes.pruneRulePresets)
+                                : settingsRes.pruneRulePresets;
+                            if (Array.isArray(parsedPresets)) {
+                                setCustomRulePresets(parsedPresets);
+                            }
+                        } catch (e) {
+                            console.warn("Failed parsing custom prune rule presets:", e);
+                        }
+                    }
+
+                    let activeBannerType = settingsRes.pruneBannerType || "leaving_soon";
+                    let initPos = (settingsRes.pruneBannerPosition || "bottom") as "bottom" | "lower_third" | "middle" | "upper_third" | "top" | "corner";
+                    let initTheme = settingsRes.pruneBannerTheme || "crimson-red";
+                    let initText = settingsRes.pruneBannerText || "LEAVING SOON";
+                    let initFontSize = settingsRes.pruneBannerFontSize || 44;
+
+                    if (settingsRes.pruneBannerTemplates) {
+                        try {
+                            const parsed = typeof settingsRes.pruneBannerTemplates === "string"
+                                ? JSON.parse(settingsRes.pruneBannerTemplates)
+                                : settingsRes.pruneBannerTemplates;
+                            if (parsed && typeof parsed === "object") {
+                                setBannerTemplates(parsed);
+                                const currentTpl = parsed[activeBannerType];
+                                if (currentTpl) {
+                                    if (currentTpl.text !== undefined) initText = currentTpl.text;
+                                    if (currentTpl.theme) initTheme = currentTpl.theme;
+                                    if (currentTpl.pos) initPos = currentTpl.pos;
+                                    if (currentTpl.fontSize) initFontSize = currentTpl.fontSize;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn("Failed parsing prune banner templates:", e);
+                        }
+                    }
+
+                    setSimBannerType(activeBannerType);
+                    setSimBannerPosition(initPos);
+                    setSimBannerTheme(initTheme);
+                    setSimBannerText(initText);
+                    setSimBannerFontSize(initFontSize);
+
+                    generatePrunePreview(
+                        null,
+                        "Sample Media",
+                        activeBannerType,
+                        initText,
+                        initTheme,
+                        initPos,
+                        initFontSize,
+                        simTemplateDate,
+                        settingsRes.pruneDaysNotice ?? 14,
+                        simTemplateReason,
+                        simTemplateStatus
+                    );
+
+                    let parsedTemplates: any = {};
+                    if (settingsRes.pruneBannerTemplates) {
+                        try {
+                            parsedTemplates = typeof settingsRes.pruneBannerTemplates === "string"
+                                ? JSON.parse(settingsRes.pruneBannerTemplates)
+                                : settingsRes.pruneBannerTemplates;
+                        } catch {}
+                    }
+                    setBaselineSettings({
+                        curationSyncPruning: settingsRes.curationSyncPruning ?? true,
+                        curationSyncSchedule: settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_6am",
+                        pruneDryRun: settingsRes.pruneDryRun ?? true,
+                        enableAutoPruneDeletion: settingsRes.enableAutoPruneDeletion ?? false,
+                        leavingSoonDiskThreshold: settingsRes.leavingSoonDiskThreshold ?? 15,
+                        pruneWarningThresholdPercent: settingsRes.pruneWarningThresholdPercent ?? 85,
+                        pruneDangerThresholdPercent: settingsRes.pruneDangerThresholdPercent ?? 95,
+                        pruneTargetHeadroomGb: settingsRes.pruneTargetHeadroomGb ?? 100,
+                        pruneEvaluateSeasons: settingsRes.pruneEvaluateSeasons ?? true,
+                        pruneDeleteFromArr: settingsRes.pruneDeleteFromArr ?? false,
+                        pruneMinAgeDays: settingsRes.pruneMinAgeDays ?? 90,
+                        pruneUnwatchedMinAgeDays: settingsRes.pruneUnwatchedMinAgeDays ?? settingsRes.pruneMinAgeDays ?? 90,
+                        pruneWatchedMinAgeDays: settingsRes.pruneWatchedMinAgeDays ?? 180,
+                        pruneDaysNotice: settingsRes.pruneDaysNotice ?? 14,
+                        pruneUnwatchedOnly: settingsRes.pruneUnwatchedOnly ?? true,
+                        simBannerType: activeBannerType,
+                        simBannerText: initText,
+                        simBannerTheme: initTheme,
+                        simBannerPosition: initPos,
+                        simBannerFontSize: initFontSize,
+                        bannerTemplates: parsedTemplates || {},
+                        selectedGlancesDiskId: savedDiskId || ""
+                    });
+                }
+
+                const vaultRes = await getArtBackupAndBadgeStatsAction();
+                if (vaultRes.success) {
+                    setVaultStats(vaultRes as any);
+                }
+
+                await Promise.all([
+                    loadLeavingSoonItems(),
+                    loadGlancesDisks(savedDiskId)
+                ]);
+            } catch (err) {
+                console.error("Failed loading Maintainerr Prune studio data:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadInitialData();
+    }, []);
+
+    const loadGlancesDisks = async (savedDiskIdParam?: string) => {
+        setGlancesLoading(true);
+        try {
+            const res = await getGlancesDisksAction();
+            if (res.success && Array.isArray(res.disks)) {
+                setGlancesDisks(res.disks);
+                const targetId = savedDiskIdParam || selectedGlancesDiskId;
+                if (targetId && res.disks.some(d => d.id === targetId)) {
+                    setSelectedGlancesDiskId(targetId);
+                } else if (!selectedGlancesDiskId && !savedDiskIdParam && res.disks.length > 0) {
+                    setSelectedGlancesDiskId(res.disks[0].id);
+                }
+            }
+        } catch (e) {
+            console.error("Failed loading Glances disks:", e);
+        } finally {
+            setGlancesLoading(false);
+        }
+    };
+
+    const handleSaveGlancesDisk = async () => {
+        if (!selectedGlancesDiskId) return;
+        setSavingGlancesDisk(true);
+        setGlancesDiskSavedMsg(false);
+        try {
+            const res = await saveSelectedGlancesDiskAction(selectedGlancesDiskId);
+            if (res.success) {
+                setBaselineSettings(prev => prev ? {
+                    ...prev,
+                    selectedGlancesDiskId
+                } : null);
+                setGlancesDiskSavedMsg(true);
+                setTimeout(() => setGlancesDiskSavedMsg(false), 3000);
+            }
+        } catch (e) {
+            console.error("Failed saving Glances disk selection:", e);
+        } finally {
+            setSavingGlancesDisk(false);
+        }
+    };
+
+    const loadLeavingSoonItems = async (srvId = selectedServerId) => {
+        setLeavingSoonLoading(true);
+        try {
+            const res = await getLeavingSoonItemsAction(srvId || undefined);
+            if (res.success && res.items) {
+                setLeavingSoonItems(res.items);
+            }
+        } catch (e) {
+            console.error("Failed loading leaving soon items:", e);
+        } finally {
+            setLeavingSoonLoading(false);
+        }
+    };
+
+    // Recheck watch activity across flagged Leaving Soon items
+    const handleRecheckWatchActivity = async () => {
+        setRecheckingWatchActivity(true);
+        setRecheckWatchResult(null);
+        try {
+            const res = await recheckLeavingSoonWatchActivityAction(selectedServerId || undefined);
+            if (res.success) {
+                setRecheckWatchResult({
+                    success: true,
+                    message: res.message || "Watch activity recheck completed.",
+                    checkedCount: res.checkedCount,
+                    unflaggedCount: res.unflaggedCount,
+                    unflaggedItems: res.unflaggedItems
+                });
+                if ((res.unflaggedCount ?? 0) > 0) {
+                    await loadLeavingSoonItems();
+                }
+            } else {
+                setRecheckWatchResult({
+                    success: false,
+                    message: res.error || "Failed rechecking watch activity."
+                });
+            }
+        } catch (e: any) {
+            setRecheckWatchResult({
+                success: false,
+                message: e.message || "An error occurred during watch activity recheck."
+            });
+        } finally {
+            setRecheckingWatchActivity(false);
+        }
+    };
+
+    // Sync Leaving Soon Collection Hub
+    const handleSyncLeavingSoonHub = async () => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Sync Leaving Soon Hub", () => executeSyncLeavingSoonHub());
+            return;
+        }
+        await executeSyncLeavingSoonHub();
+    };
+
+    const executeSyncLeavingSoonHub = async () => {
+        setSyncingLeavingSoonHub(true);
+        setLeavingSoonHubMsg(null);
+        try {
+            const res = await syncLeavingSoonCollectionHubAction(selectedServerId);
+            if (res.success) {
+                setLeavingSoonHubMsg({ success: true, text: res.message || "Synced Leaving Soon hub to Plex!" });
+                loadLeavingSoonItems();
+                setTimeout(() => setLeavingSoonHubMsg(null), 4000);
+            } else {
+                setLeavingSoonHubMsg({ success: false, text: res.error || "Failed syncing Leaving Soon hub." });
+            }
+        } catch (e: any) {
+            setLeavingSoonHubMsg({ success: false, text: e.message || "Failed syncing hub." });
+        } finally {
+            setSyncingLeavingSoonHub(false);
+        }
+    };
+
+    // Clear All Flags
+    const handleClearAllFlags = async () => {
+        if (!confirm("Are you sure you want to remove ALL Leaving Soon flags and restore original artwork?")) return;
+        setClearingFlags(true);
+        setClearFlagsMsg(null);
+        try {
+            const res = await clearAllLeavingSoonFlagsAction(selectedServerId);
+            if (res.success) {
+                setClearFlagsMsg(res.message || "Cleared all flags!");
+                loadLeavingSoonItems();
+                setTimeout(() => setClearFlagsMsg(null), 4000);
+            }
+        } catch (e: any) {
+            console.error("Failed clearing flags:", e);
+        } finally {
+            setClearingFlags(false);
+        }
+    };
+
+    // Helper: Select first N candidate items
+    const handleSelectFirstNCandidates = (count: number) => {
+        if (!pruneSimResults?.candidates) return;
+        const targetList = pruneSimResults.candidates;
+        const toSelect = count === 0 ? targetList : targetList.slice(0, count);
+        setSelectedCandidateKeys(toSelect.map((c: any) => c.ratingKey));
+    };
+
+    // Run Prune Simulation Sandbox
+    const handleRunSimulation = async () => {
+        setSimulatingPrune(true);
+        setPruneSimResults(null);
+        setSelectedCandidateKeys([]);
+        try {
+            const res = await runPruneSimulationAction(selectedServerId, {
+                minAgeDays: simMinAgeDays,
+                unwatchedMinAgeDays: simUnwatchedMinAgeDays,
+                watchedMinAgeDays: simWatchedMinAgeDays,
+                unwatchedOnly: simUnwatchedOnly,
+                maxCandidates: simOldestLimit === 0 ? 500 : simOldestLimit,
+                evaluateSeasons: simEvaluateSeasons,
+                sortBy: simSortBy
+            }, selectedSectionKey || undefined);
+
+            if (res.success) {
+                setPruneSimResults(res as any);
+                if (res.candidates && res.candidates.length > 0) {
+                    const defaultBatch = simBatchFlagAmount === 0 ? res.candidates.length : Math.min(simBatchFlagAmount, res.candidates.length);
+                    setSelectedCandidateKeys(res.candidates.slice(0, defaultBatch).map((c: any) => c.ratingKey));
+                }
+            }
+        } catch (e) {
+            console.error("Simulation failed:", e);
+        } finally {
+            setSimulatingPrune(false);
+        }
+    };
+
+    // Execute Safe Prune / Stage Action
+    const handleExecutePrune = async (forceLiveDelete = false) => {
+        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, forceLiveDelete ? "Permanent Prune" : "Stage Leaving Soon", () => executeExecutePrune(forceLiveDelete));
+            return;
+        }
+        await executeExecutePrune(forceLiveDelete);
+    };
+
+    const executeExecutePrune = async (forceLiveDelete = false) => {
+        if (!pruneSimResults || selectedCandidateKeys.length === 0) return;
+
+        const targetItems = pruneSimResults.candidates
+            .filter((c: any) => selectedCandidateKeys.includes(c.ratingKey))
+            .map((c: any) => ({
+                ratingKey: c.ratingKey,
+                serverId: c.serverId || selectedServerId,
+                sectionKey: c.sectionKey,
+                title: c.title
+            }));
+
+        const isMasterEnabled = settings.enableAutoPruneDeletion ?? false;
+        if (forceLiveDelete && isMasterEnabled) {
+            if (!confirm(`⚠️ PERMANENT DELETION WARNING:\n\nYou are about to PERMANENTLY DELETE ${targetItems.length} media files from disk.\n\nThis cannot be undone. Proceed?`)) {
+                return;
+            }
+        }
+
+        setExecutingPrune(true);
+        setPruneExecMessage(null);
+        try {
+            const res = await executePruneAction(targetItems, {
+                forceLiveDelete,
+                applyOverlay: true,
+                tagCollection: true,
+                daysNotice: simGracePeriodDays || settings.pruneDaysNotice || 14,
+                bannerText: simBannerText,
+                bannerTheme: simBannerTheme,
+                bannerPosition: simBannerPosition
+            });
+
+            if (res.success) {
+                setPruneExecMessage({
+                    success: true,
+                    text: forceLiveDelete && isMasterEnabled
+                        ? `Permanently deleted ${res.processedCount} media files from disk & Plex.`
+                        : `Staged ${res.processedCount} items with ${simGracePeriodDays || settings.pruneDaysNotice || 14}-day Leaving Soon warning & overlays.`,
+                    details: res.results
+                });
+                loadLeavingSoonItems();
+            } else {
+                setPruneExecMessage({ success: false, text: res.error || "Failed executing prune pipeline." });
+            }
+        } catch (e: any) {
+            setPruneExecMessage({ success: false, text: e.message || "Failed executing prune." });
+        } finally {
+            setExecutingPrune(false);
+        }
+    };
+
+    // Manual Flag Submit
+    const handleManualFlag = async () => {
+        if (!manualRatingKey.trim() || !manualTitle.trim()) return;
+        setFlaggingItem(true);
+        try {
+            const res = await markItemLeavingSoonAction({
+                ratingKey: manualRatingKey.trim(),
+                serverId: selectedServerId,
+                title: manualTitle.trim(),
+                daysRemaining: manualDaysRemaining,
+                reason: manualReason
+            });
+
+            if (res.success) {
+                setManualFlagModalOpen(false);
+                setManualRatingKey("");
+                setManualTitle("");
+                loadLeavingSoonItems();
+            }
+        } catch (e) {
+            console.error("Failed manual flag:", e);
+        } finally {
+            setFlaggingItem(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
+                <p className="text-sm font-medium">Loading Maintainerr Storage &amp; Prune Studio...</p>
+            </div>
+        );
+    }
+
+    const currentServer = servers.find(s => s.serverId === selectedServerId) || servers[0];
+    const currentSections = currentServer?.sections || [];
+
+    const allServerSectionsList = servers.flatMap(srv => 
+        (srv.sections || []).map(sec => ({
+            serverId: srv.serverId,
+            serverName: srv.serverName,
+            sectionKey: String(sec.key),
+            title: sec.title,
+            type: sec.type,
+            isEnabled: isSectionEnabled(srv.serverId, String(sec.key))
+        }))
+    );
+
+    const activeEnabledSections = allServerSectionsList.filter(s => s.isEnabled);
+    const excludedSections = allServerSectionsList.filter(s => !s.isEnabled);
+
+    return (
+        <div className="space-y-6">
+            <CurationNavHeader 
+                serversCount={servers.length}
+                title="Maintainerr Storage & Auto-Prune Studio"
+                description="Storage mount thresholds, rule-based media pruning (unwatched, low rating, ended series), pinned 'Leaving Soon' Plex collection, and safe file cleanup."
+                servers={servers}
+                selectedServerId={selectedServerId}
+            />
+
+            {/* Static Server & Library Section Navigator */}
+            {servers.length > 0 && (
+                <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                    <div className="p-4 space-y-3.5">
+                        {/* Plex Servers Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <HardDrive className="h-4 w-4 text-rose-400" />
+                                <span>Plex Server:</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {servers.map(s => {
+                                    const isSelected = s.serverId === selectedServerId;
+                                    const secCount = s.sections?.length || 0;
+                                    return (
+                                        <button
+                                            key={s.serverId}
+                                            type="button"
+                                            onClick={() => handleSelectServer(s.serverId)}
+                                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/60 border border-rose-400/50 ring-1 ring-rose-400/40 font-black'
+                                                    : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
+                                            }`}
+                                        >
+                                            <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white shadow-sm' : 'bg-emerald-400'}`} />
+                                            <span>{s.serverName || "Plex Server"}</span>
+                                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${isSelected ? 'border-rose-300 text-rose-100 bg-rose-700/60' : 'border-slate-700 text-slate-400'}`}>
+                                                {secCount} {secCount === 1 ? 'lib' : 'libs'}
+                                            </Badge>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Library Sections Static Tabs */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-300 shrink-0">
+                                <Film className="h-4 w-4 text-sky-400" />
+                                <span>Library Sections:</span>
+                                {serverSectionsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                {serverSectionsLoading ? (
+                                    <div className="flex items-center gap-2 text-xs text-sky-400 py-1 font-medium">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
+                                    </div>
+                                ) : currentSections.length === 0 ? (
+                                    <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
+                                ) : (
+                                    currentSections.map((sec: any) => {
+                                        const isSelected = String(sec.key) === selectedSectionKey;
+                                        const isMovie = sec.type === "movie" || sec.title?.toLowerCase().includes("movie");
+                                        const isShow = sec.type === "show" || sec.title?.toLowerCase().includes("show") || sec.title?.toLowerCase().includes("tv");
+                                        const isSecEnabled = isSectionEnabled(selectedServerId, String(sec.key));
+
+                                        return (
+                                            <div
+                                                key={sec.key}
+                                                className={`flex items-center rounded-xl transition-all border shadow-sm ${
+                                                    isSelected
+                                                        ? 'bg-sky-600/20 border-sky-400/60 ring-1 ring-sky-400/40'
+                                                        : 'bg-slate-800/80 border-slate-700/70 hover:border-slate-600'
+                                                }`}
+                                            >
+                                                {/* Library Tab Selector Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSelectSection(String(sec.key))}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-l-xl transition-all cursor-pointer ${
+                                                        isSelected
+                                                            ? 'text-sky-200'
+                                                            : 'text-slate-300 hover:text-white'
+                                                    }`}
+                                                >
+                                                    {isMovie && <Film className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
+                                                    {isShow && <Tv className="h-3.5 w-3.5 text-cyan-300 shrink-0" />}
+                                                    {!isMovie && !isShow && <Layers className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                                                    <span>{sec.title}</span>
+                                                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${isSelected ? 'bg-sky-500/30 text-sky-100' : 'bg-slate-900 text-slate-400'}`}>
+                                                        #{sec.key}
+                                                    </span>
+                                                </button>
+
+                                                {/* Independent ON / OFF Toggle Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleSection(String(sec.key));
+                                                    }}
+                                                    title={isSecEnabled ? `Prune evaluation ACTIVE on "${sec.title}" (Click to exclude)` : `Prune evaluation EXCLUDED on "${sec.title}" (Click to enable)`}
+                                                    className={`px-2 py-1 text-[10px] font-extrabold transition-all border-l flex items-center gap-1 rounded-r-xl cursor-pointer ${
+                                                        isSecEnabled 
+                                                            ? isSelected
+                                                                ? 'bg-emerald-500/30 text-emerald-200 border-sky-400/40 hover:bg-emerald-500/40'
+                                                                : 'bg-emerald-500/20 text-emerald-300 border-slate-700 hover:bg-emerald-500/30'
+                                                            : 'bg-slate-900/90 text-slate-500 border-slate-700 hover:text-slate-300 hover:bg-slate-800'
+                                                    }`}
+                                                >
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${isSecEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                                                    <span>{isSecEnabled ? 'ON' : 'OFF'}</span>
+                                                </button>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Active Library Control Bar */}
+                        {currentSections.length > 0 && selectedSectionKey && (
+                            <div className="mt-3 pt-4 border-t border-slate-800/80 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-slate-950/70 p-4 sm:p-5 rounded-2xl border border-slate-800/90 min-w-0">
+                                <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+                                    <div className={`p-2.5 rounded-xl border shrink-0 ${
+                                        isSectionEnabled(selectedServerId, selectedSectionKey)
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-950/30'
+                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                    }`}>
+                                        {isSectionEnabled(selectedServerId, selectedSectionKey) ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
+                                    </div>
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                                            <span className="text-xs sm:text-sm font-black text-white tracking-tight break-words">
+                                                {currentServer?.serverName} &rarr; {currentSections.find(s => String(s.key) === selectedSectionKey)?.title || `Library #${selectedSectionKey}`}
+                                            </span>
+                                            <Badge className={`text-[10px] font-bold px-2 py-0.5 shrink-0 ${
+                                                isSectionEnabled(selectedServerId, selectedSectionKey)
+                                                    ? 'bg-emerald-600 text-white'
+                                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                            }`}>
+                                                {isSectionEnabled(selectedServerId, selectedSectionKey) ? '🟢 PRUNING ACTIVE' : '⚪ EXCLUDED / DISABLED'}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey)
+                                                ? 'This library section will be evaluated for aging and unwatched media pruning.'
+                                                : 'This library section is excluded and will be protected from all pruning evaluations.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end min-w-0">
+                                    {/* Primary Switch */}
+                                    <div className="flex items-center gap-2.5 bg-slate-900 px-3.5 py-1.5 rounded-xl border border-slate-800 shadow-sm shrink-0">
+                                        <Label htmlFor="sec-master-toggle-prune" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                                            {isSectionEnabled(selectedServerId, selectedSectionKey) ? (
+                                                <span className="text-emerald-400 font-extrabold flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                    Enabled
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-400 font-semibold">Disabled</span>
+                                            )}
+                                        </Label>
+                                        <Switch
+                                            id="sec-master-toggle-prune"
+                                            checked={isSectionEnabled(selectedServerId, selectedSectionKey)}
+                                            onCheckedChange={() => handleToggleSection(selectedSectionKey)}
+                                        />
+                                    </div>
+
+                                    {/* Batch Server Controls */}
+                                    <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-sm shrink-0">
+                                        <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider select-none hidden sm:inline-block">
+                                            Server:
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleToggleAllSectionsOnServer(true)}
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-300 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all"
+                                            title="Enable pruning evaluation for all library sections on this server"
+                                        >
+                                            <CheckCheck className="h-3 w-3 mr-1 text-emerald-400" />
+                                            Enable All
+                                        </Button>
+                                        <div className="w-[1px] h-4 bg-slate-800 my-auto" />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleToggleAllSectionsOnServer(false)}
+                                            className="h-7 px-2.5 text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all"
+                                            title="Disable pruning evaluation for all library sections on this server"
+                                        >
+                                            <XCircle className="h-3 w-3 mr-1 text-rose-400" />
+                                            Disable All
+                                        </Button>
+                                    </div>
+
+                                    {/* Scoped Runner for Selected Library */}
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={runningPruneSync}
+                                        onClick={handleRunPruneSync}
+                                        className="h-9 px-3.5 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-md shadow-rose-950/40 cursor-pointer shrink-0 transition-all hover:ring-2 hover:ring-rose-400/40 active:scale-95"
+                                    >
+                                        {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Zap className="h-3.5 w-3.5 mr-1.5 text-white" />}
+                                        <span>Evaluate Library #{selectedSectionKey}</span>
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            )}
+
+            {/* Automated Prune & Leaving Soon Schedule & Automation Card */}
+            {(() => {
+                const nextRunInfo = calculateNextRunTime(curationSyncSchedule, curationLastRunAt);
+                return (
+                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                        isScheduleDirty 
+                            ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                            : "border-slate-800"
+                    }`}>
+                        <CardHeader className="p-5 pb-3 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <Clock className="h-5 w-5 text-rose-400" />
+                                        <CardTitle className="text-base sm:text-lg font-bold text-white">Media Pruning &amp; Retention Automation Schedule</CardTitle>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-400 bg-slate-800/40'}`}>
+                                            {curationSyncPruning ? `Active (${formatScheduleLabel(curationSyncSchedule)})` : 'Paused'}
+                                        </Badge>
+                                        {curationSyncPruning && (
+                                            <Badge className={`text-[10px] font-semibold px-2 py-0.5 ${nextRunInfo.isDue ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                                                ⏱️ Next: {nextRunInfo.relativeText}
+                                            </Badge>
+                                        )}
+                                        {pruneDryRun ? (
+                                            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                                🛡️ Dry-Run Safe (Simulate Only)
+                                            </Badge>
+                                        ) : (
+                                            <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold px-2 py-0.5">
+                                                ⚠️ Live Deletion Enabled
+                                            </Badge>
+                                        )}
+                                        {isScheduleDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Automated recurring evaluation of storage headroom, media watch history, and retention policies across enabled Plex libraries to stage Leaving Soon notices and reclaim disk capacity.
+                                    </CardDescription>
+                                </div>
+                                <Button 
+                                    size="sm"
+                                    onClick={handleSaveSchedule}
+                                    disabled={savingSchedule}
+                                    className={`font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0 transition-all ${
+                                        isScheduleDirty 
+                                            ? "bg-amber-500 hover:bg-amber-400 text-black font-bold animate-pulse shadow-amber-500/20" 
+                                            : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40"
+                                    }`}
+                                >
+                                    {savingSchedule ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                                    {scheduleSavedMsg ? "Saved Schedule!" : isScheduleDirty ? "Save Schedule *" : "Save Schedule"}
+                                </Button>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {/* Stage 1: Retention & Leaving Soon Staging */}
+                                <div className="bg-slate-950/60 border border-rose-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                                                <span className="font-bold text-slate-100 text-sm">⚠️ Stage 1: Leaving Soon Staging</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
+                                                    {curationSyncPruning ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
+                                                </Badge>
+                                                <Switch 
+                                                    checked={curationSyncPruning}
+                                                    onCheckedChange={checked => setCurationSyncPruning(checked)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">
+                                            Scans storage usage, identifies unwatched media meeting prune criteria, adds items to the '⚠️ Leaving Soon' collection, and overlays countdown banners.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-medium text-slate-400">Evaluation Schedule</label>
+                                            <Select 
+                                                value={curationSyncSchedule} 
+                                                onValueChange={val => setCurationSyncSchedule(val)}
+                                                disabled={!curationSyncPruning}
+                                            >
+                                                <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 text-xs h-8 text-slate-200 truncate">
+                                                    <SelectValue placeholder="Select Frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs max-w-sm">
+                                                    {SCHEDULE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                                                    <Layers className="h-3 w-3 text-rose-400" />
+                                                    <span>Target Libraries ({activeEnabledSections.length} of {allServerSectionsList.length || 0} Active):</span>
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setManageLibrariesModalOpen(true)}
+                                                    className="text-[10px] text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
+                                                >
+                                                    Manage All &rarr;
+                                                </button>
+                                            </div>
+                                            <div className="min-h-[32px] p-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center gap-1 flex-wrap">
+                                                {activeEnabledSections.length > 0 ? (
+                                                    activeEnabledSections.map(sec => (
+                                                        <Badge 
+                                                            key={`${sec.serverId}-${sec.sectionKey}`}
+                                                            className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-emerald-900/80 transition-colors shadow-sm"
+                                                            onClick={() => handleToggleSpecificSection(sec.serverId, sec.sectionKey)}
+                                                            title={`Click to disable/exclude "${sec.title}" from pruning`}
+                                                        >
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                                            {sec.type === "movie" ? <Film className="h-2.5 w-2.5 opacity-70" /> : <Tv className="h-2.5 w-2.5 opacity-70" />}
+                                                            <span>{sec.title}</span>
+                                                            {servers.length > 1 && <span className="text-[9px] text-slate-400 font-normal">({sec.serverName})</span>}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Pruning paused)</span>
+                                                )}
+                                                {excludedSections.length > 0 && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        onClick={() => setManageLibrariesModalOpen(true)}
+                                                        className="border-slate-700/80 bg-slate-950/80 text-slate-400 hover:text-slate-200 text-[9px] font-mono px-1.5 py-0 cursor-pointer hover:border-slate-600"
+                                                    >
+                                                        +{excludedSections.length} excluded
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                            <Clock3 className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                                            <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
+                                        </div>
+                                        <Button 
+                                            size="sm"
+                                            onClick={handleRunPruneSync}
+                                            disabled={runningPruneSync}
+                                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
+                                        >
+                                            {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                            <span>Run Prune Evaluation Now</span>
+                                        </Button>
+                                    </div>
+                                </div>
+
+                        {/* Stage 2: Storage Reclamation & Safety Safeguards */}
+                        <div className="bg-slate-950/60 border border-amber-500/20 rounded-xl p-4 flex flex-col justify-between space-y-3.5">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <span className="font-bold text-slate-100 text-sm">🛡️ Stage 2: Reclamation &amp; Safety</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold text-slate-300">Dry-Run Safe:</span>
+                                        <Switch 
+                                            checked={pruneDryRun}
+                                            onCheckedChange={checked => setPruneDryRun(checked)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                    Enforces the 14-day advance notice window before purging. When Dry-Run is active, deletion actions are simulated with zero disk impact.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Headroom Threshold</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-amber-300 font-semibold truncate">
+                                        Warning: {pruneWarningThresholdPercent}% • Danger: {pruneDangerThresholdPercent}%
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-slate-400">Advance Notice Window</label>
+                                    <div className="h-8 px-2.5 bg-slate-900/90 border border-slate-700/80 rounded-lg flex items-center text-xs text-emerald-300 font-semibold truncate">
+                                        {pruneDaysNoticeSetting} Days Grace Period
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                                    <span>{pruneDryRun ? 'Simulation Safeguard Active' : '⚠️ Live Deletion Mode Active'}</span>
+                                </div>
+                                <div className="text-[11px] font-semibold text-slate-400">
+                                    Arr Integration: <span className={pruneDeleteFromArrSetting ? 'text-rose-400' : 'text-slate-400'}>{pruneDeleteFromArrSetting ? 'Active' : 'Disabled'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+
+                {pruneSyncResult && (
+                    <div className={`p-3.5 text-xs border-t ${pruneSyncResult.success ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-rose-950/60 border-rose-800 text-rose-300'} flex items-start gap-2.5`}>
+                        {pruneSyncResult.success ? <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" /> : <XCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />}
+                        <div className="space-y-0.5">
+                            <span className="font-bold">{pruneSyncResult.text}</span>
+                            {pruneSyncResult.details && pruneSyncResult.details.length > 0 && (
+                                <p className="text-[11px] opacity-80">{pruneSyncResult.details.join(" • ")}</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Card>
+        );
+    })()}
+
+            {/* Sub-Navigation Tabs */}
+            <div className="grid grid-cols-2 md:flex md:items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
+                <button
+                    type="button"
+                    onClick={() => setSubTab("leaving_soon")}
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "leaving_soon"
+                            ? "bg-rose-600 text-white shadow-md font-black"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                >
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Leaving Soon</span>
+                    <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] px-1.5 py-0 shrink-0 ${subTab === "leaving_soon" ? "border-rose-300 text-rose-100 bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
+                        {leavingSoonItems.length}
+                    </Badge>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setSubTab("simulation")}
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "simulation"
+                            ? "bg-rose-600 text-white shadow-md font-black"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                >
+                    <Play className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Prune Sandbox</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setSubTab("execution")}
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "execution"
+                            ? "bg-rose-600 text-white shadow-md font-black"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                >
+                    <Trash2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Safe Deletion</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setSubTab("storage")}
+                    className={`w-full md:flex-1 md:min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        subTab === "storage"
+                            ? "bg-rose-600 text-white shadow-md font-black"
+                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    }`}
+                >
+                    <HardDrive className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Mounts &amp; Vault</span>
+                </button>
+            </div>
+
+            {/* TAB 1: LEAVING SOON HUB & GRACE PERIOD */}
+            {subTab === "leaving_soon" && (
+                <div className="space-y-6">
+                    {/* Header Bar */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl">
+                        <div className="space-y-0.5">
+                            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-rose-400" />
+                                <span>Pinned "Leaving Soon" Plex Collection Hub</span>
+                            </h2>
+                            <p className="text-xs text-slate-400">
+                                Give household members a grace period warning before media files are pruned. Automatically unflags items if someone watches them!
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={recheckingWatchActivity}
+                                onClick={handleRecheckWatchActivity}
+                                title="Recheck all Leaving Soon items in Plex to see if anyone has watched them, and restore their original artwork"
+                                className="border-emerald-500/40 hover:bg-emerald-950/40 text-emerald-300 hover:text-emerald-200 text-xs h-8 px-3 gap-1.5 font-bold"
+                            >
+                                {recheckingWatchActivity ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <Eye className="h-3.5 w-3.5 text-emerald-400" />}
+                                <span>Recheck Watch Activity</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setManualFlagModalOpen(true)}
+                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5"
+                            >
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                                <span>Manual Flag Item</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={clearingFlags}
+                                onClick={handleClearAllFlags}
+                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5"
+                            >
+                                {clearingFlags ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                                <span>Clear All Flags</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={syncingLeavingSoonHub}
+                                onClick={handleSyncLeavingSoonHub}
+                                className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
+                            >
+                                {syncingLeavingSoonHub ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                <span>Sync Leaving Soon Hub</span>
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Glances Live Storage Array & Capacity Display */}
+                    {glancesDisks.length > 0 && (
+                        <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl space-y-3 backdrop-blur-md">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                    <HardDrive className="h-4 w-4 text-cyan-400" />
+                                    <span className="text-xs font-bold text-white">Glances Storage Array &amp; Live Capacity:</span>
+                                    {glancesLoading && <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />}
+                                </div>
+                                <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                                    <Select
+                                        value={selectedGlancesDiskId || (glancesDisks[0]?.id || "")}
+                                        onValueChange={setSelectedGlancesDiskId}
+                                    >
+                                        <SelectTrigger className="bg-slate-950 border-slate-700 text-xs h-8 min-w-[260px] text-slate-200">
+                                            <SelectValue placeholder="Select Glances Storage Array..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {glancesDisks.map(d => (
+                                                <SelectItem key={d.id} value={d.id}>
+                                                    <span className="font-bold text-white">{d.instanceName}:</span> <span className="font-mono text-cyan-300">{d.mntPoint}</span> ({d.freeGb >= 1000 ? `${(d.freeGb / 1024).toFixed(1)} TB` : `${d.freeGb} GB`} free, {d.percent}% used)
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={handleSaveGlancesDisk}
+                                        disabled={savingGlancesDisk || !selectedGlancesDiskId}
+                                        title="Save this storage array as the default monitor array"
+                                        className="h-8 px-3 gap-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow cursor-pointer"
+                                    >
+                                        {savingGlancesDisk ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : glancesDiskSavedMsg ? (
+                                            <Check className="h-3.5 w-3.5 text-emerald-300" />
+                                        ) : (
+                                            <Save className="h-3.5 w-3.5" />
+                                        )}
+                                        <span>{glancesDiskSavedMsg ? "Saved Array!" : "Save Array"}</span>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => loadGlancesDisks(selectedGlancesDiskId)}
+                                        disabled={glancesLoading}
+                                        title="Refresh Glances Storage Telemetry"
+                                        className="h-8 w-8 p-0 border-slate-700 text-slate-300 hover:text-white"
+                                    >
+                                        <RefreshCw className={`h-3.5 w-3.5 ${glancesLoading ? 'animate-spin' : ''}`} />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {(() => {
+                                const selectedDisk = glancesDisks.find(d => d.id === selectedGlancesDiskId) || glancesDisks[0];
+                                if (!selectedDisk) return null;
+                                return (
+                                    <div className="space-y-2 pt-1 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-slate-400 font-mono text-[11px]">
+                                                    Mount: <strong className="text-white">{selectedDisk.mntPoint}</strong> ({selectedDisk.deviceName || selectedDisk.fsType})
+                                                </span>
+                                                <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-300">
+                                                    {selectedDisk.instanceName}
+                                                </Badge>
+                                            </div>
+                                            <div className="font-mono font-bold text-xs flex items-center gap-2">
+                                                <span className={selectedDisk.percent >= 90 ? 'text-rose-400' : selectedDisk.percent >= 75 ? 'text-amber-400' : 'text-emerald-400'}>
+                                                    {selectedDisk.percent}% Capacity Used
+                                                </span>
+                                                <span className="text-slate-400 font-normal text-[11px]">
+                                                    • {selectedDisk.freeGb >= 1000 ? `${(selectedDisk.freeGb / 1024).toFixed(2)} TB` : `${selectedDisk.freeGb} GB`} Free of {selectedDisk.totalGb >= 1000 ? `${(selectedDisk.totalGb / 1024).toFixed(2)} TB` : `${selectedDisk.totalGb} GB`}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                            <div 
+                                                className={`h-full transition-all rounded-full ${
+                                                    selectedDisk.percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-600' :
+                                                    selectedDisk.percent >= 75 ? 'bg-gradient-to-r from-emerald-500 to-amber-500' :
+                                                    'bg-gradient-to-r from-cyan-500 to-emerald-500'
+                                                }`}
+                                                style={{ width: `${Math.min(100, Math.max(0, selectedDisk.percent))}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
+
+                    {/* Recheck Watch Results Banner */}
+                    {recheckWatchResult && (
+                        <div className={`p-4 rounded-xl border text-xs space-y-1.5 animate-in fade-in-50 ${
+                            recheckWatchResult.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                        }`}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 font-bold">
+                                    {recheckWatchResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                                    <span>{recheckWatchResult.message}</span>
+                                </div>
+                                <button type="button" onClick={() => setRecheckWatchResult(null)} className="text-slate-400 hover:text-white">
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                            {recheckWatchResult.unflaggedItems && recheckWatchResult.unflaggedItems.length > 0 && (
+                                <div className="pt-1 pl-6 space-y-1 text-[11px] text-emerald-200/90 font-mono">
+                                    {recheckWatchResult.unflaggedItems.map(item => (
+                                        <div key={item.ratingKey} className="flex items-center gap-2">
+                                            <span>✨ {item.title}:</span>
+                                            <span className="text-emerald-400">{item.reason}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {leavingSoonHubMsg && (
+                        <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
+                            leavingSoonHubMsg.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                        }`}>
+                            {leavingSoonHubMsg.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> : <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                            <span>{leavingSoonHubMsg.text}</span>
+                        </div>
+                    )}
+
+                    {clearFlagsMsg && (
+                        <div className="p-3 rounded-xl bg-sky-950/80 border border-sky-800 text-xs text-sky-300 flex items-center gap-2 animate-in fade-in-50">
+                            <RotateCcw className="h-4 w-4 text-sky-400 shrink-0" />
+                            <span>{clearFlagsMsg}</span>
+                        </div>
+                    )}
+
+                    {/* Active Items Card */}
+                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                        <CardHeader className="p-4 border-b border-slate-800/80">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                    <Clock className="h-4 w-4 text-rose-400" />
+                                    <span>Active Staged Media Items ({leavingSoonItems.length})</span>
+                                </CardTitle>
+                                <span className="text-xs text-slate-400">Scheduled for pruning after grace period</span>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-2.5">
+                            {leavingSoonItems.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500 space-y-2">
+                                    <Shield className="h-10 w-10 mx-auto text-emerald-500/50" />
+                                    <p className="text-xs font-semibold text-slate-300">All Plex libraries healthy — No media currently marked for removal.</p>
+                                    <p className="text-[11px] text-slate-500">Run the Prune Sandbox simulator to identify unwatched or low-rated candidates.</p>
+                                </div>
+                            ) : (
+                                leavingSoonItems.map(item => {
+                                    const leaveDate = item.leavingSoonDate ? new Date(item.leavingSoonDate) : null;
+                                    const daysRemaining = leaveDate ? Math.max(0, Math.ceil((leaveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
+
+                                    return (
+                                        <div
+                                            key={item.id || item.ratingKey}
+                                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors"
+                                        >
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-white text-xs">{item.title}</span>
+                                                    <Badge className="bg-rose-950 text-rose-300 border-rose-500/40 text-[9px] font-mono">
+                                                        {daysRemaining} DAYS LEFT
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-[11px] text-slate-400">
+                                                    Reason: {item.leavingReason || "Storage threshold optimization"}
+                                                </p>
+                                            </div>
+
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={async () => {
+                                                    await unmarkItemLeavingSoonAction(item.ratingKey, item.serverId || selectedServerId);
+                                                    loadLeavingSoonItems();
+                                                }}
+                                                className="text-[11px] h-7 px-2.5 border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white"
+                                            >
+                                                Cancel Removal
+                                            </Button>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Leaving Soon Banner & Poster Live Simulator */}
+                    <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${
+                        isBannersDirty 
+                            ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                            : "border-slate-800"
+                    }`}>
+                        <CardHeader className="p-4 border-b border-slate-800/80">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <div className="space-y-0.5">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                            <Sparkles className="h-4 w-4 text-rose-400" />
+                                            <span>Leaving Soon Banner &amp; Poster Live Simulator</span>
+                                        </CardTitle>
+                                        {isBannersDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <CardDescription className="text-xs text-slate-400">
+                                        Customize overlay ribbons and banners applied to items in the Leaving Soon collection, test dynamic template variables, or test on real media from your Plex libraries.
+                                    </CardDescription>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setPosterPickerModalOpen(true)}
+                                    className="h-7 text-[11px] gap-1.5 border-rose-500/40 hover:bg-rose-950/40 text-rose-200 hover:text-rose-100 shrink-0"
+                                >
+                                    <ImageIcon className="h-3.5 w-3.5 text-rose-400" /> Pull Poster from Plex
+                                </Button>
+                            </div>
+
+                            {/* Real Item Telemetry Banner if selected */}
+                            {simSelectedRealItem && (
+                                <div className="mt-3 p-2.5 bg-rose-950/30 border border-rose-800/50 rounded-xl text-xs flex items-center justify-between gap-2">
+                                    <div className="space-y-0.5 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-white truncate">{simSelectedRealItem.title}</span>
+                                            {simSelectedRealItem.year && (
+                                                <span className="text-[10px] text-rose-300 font-mono">({simSelectedRealItem.year})</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-rose-200/80">
+                                            {(simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution) && (
+                                                <span className="px-1.5 py-0.2 bg-rose-900/40 rounded text-rose-300 font-mono">
+                                                    {simSelectedRealItem.detectedBadges?.resolution || simSelectedRealItem.media?.[0]?.videoResolution}
+                                                </span>
+                                            )}
+                                            {(simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec) && (
+                                                <span className="px-1.5 py-0.2 bg-slate-800 rounded text-slate-300 uppercase">
+                                                    {simSelectedRealItem.detectedBadges?.audio || simSelectedRealItem.media?.[0]?.audioCodec}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setSimSelectedRealItem(null);
+                                            setSimPosterUrl("https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80");
+                                            generatePrunePreview(
+                                                "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
+                                                "Sample Media",
+                                                simBannerType,
+                                                simBannerText,
+                                                simBannerTheme,
+                                                simBannerPosition
+                                            );
+                                        }}
+                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white shrink-0"
+                                    >
+                                        Reset Sample
+                                    </Button>
+                                </div>
+                            )}
+                        </CardHeader>
+
+                        <CardContent className="p-5">
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                                {/* Left: Composite Poster Preview */}
+                                <div className="lg:col-span-5 flex flex-col items-center space-y-2">
+                                    <div className="relative aspect-[2/3] w-full max-w-[220px] rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-700/80 shadow-2xl">
+                                        {simPreviewDataUrl ? (
+                                            <img src={simPreviewDataUrl} alt="Leaving Soon Preview" className="w-full h-full object-cover" />
+                                        ) : (
+                                            /* Instant Client-side Visual Fallback while generating */
+                                            <div className="relative w-full h-full flex flex-col justify-between p-3 bg-gradient-to-b from-slate-900 via-slate-950 to-black text-slate-100 select-none">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-2xl">🎬</span>
+                                                    {simPreviewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-400" />}
+                                                </div>
+                                                <div className="text-center space-y-1">
+                                                    <p className="text-xs font-black truncate text-white">{simSelectedRealItem?.title || "Sample Media"}</p>
+                                                    <p className="text-[10px] text-slate-400">Leaving Soon Advisory</p>
+                                                </div>
+                                                <div className={`py-1.5 px-2 rounded-lg text-[10px] font-black text-center tracking-wider text-white shadow-lg ${
+                                                    simBannerTheme.includes("emerald") ? "bg-emerald-600" :
+                                                    simBannerTheme.includes("gold") ? "bg-amber-500 text-slate-950" :
+                                                    simBannerTheme.includes("purple") ? "bg-purple-600" :
+                                                    simBannerTheme.includes("blue") ? "bg-sky-600" : "bg-red-600"
+                                                }`}>
+                                                    {getInterpolatedSimText(simBannerText)}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {simPreviewLoading && simPreviewDataUrl && (
+                                            <div className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-950/80 border border-slate-800 backdrop-blur-md shadow-md">
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-400" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 font-mono">Live Composite Preview</span>
+                                </div>
+
+                                {/* Right: Banner Controls & Variable Chips */}
+                                <div className="lg:col-span-7 space-y-3.5 text-xs">
+                                    {/* Template Presets Selector */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[11px] text-slate-300 font-semibold">Banner Style Preset:</Label>
+                                        <Select
+                                            value={simBannerType}
+                                            onValueChange={handleSelectPruneBannerPreset}
+                                        >
+                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-8">
+                                                <SelectValue placeholder="Select Preset" />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-64">
+                                                {PRUNE_BANNER_PRESETS.map(p => {
+                                                    const isCustomized = Boolean(bannerTemplates[p.id]);
+                                                    return (
+                                                        <SelectItem key={p.id} value={p.id}>
+                                                            <div className="flex items-center justify-between gap-2 w-full">
+                                                                <span>{p.label}</span>
+                                                                {isCustomized && (
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-500/40 text-rose-400 bg-rose-950/40 font-normal">
+                                                                        Custom
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </SelectItem>
+                                                    );
+                                                })}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Banner Text Template with Variable Insertion Chips */}
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[11px] text-slate-300 font-semibold">Banner Text Template:</Label>
+                                            <span className="text-[10px] text-rose-400 font-mono">Click chips to insert:</span>
+                                        </div>
+                                        <Input
+                                            value={simBannerText}
+                                            onChange={(e) => handlePruneBannerTextChange(e.target.value)}
+                                            className="h-8 text-xs bg-slate-950 border-slate-800 font-mono text-white"
+                                            placeholder="e.g. LEAVING ON {date}"
+                                        />
+
+                                        {/* Variable Insertion Chips */}
+                                        <div className="flex flex-wrap gap-1 pt-1">
+                                            {[
+                                                { token: "{date}", label: "+ {date}" },
+                                                { token: "{days}", label: "+ {days}" },
+                                                { token: "{title}", label: "+ {title}" },
+                                                { token: "{reason}", label: "+ {reason}" },
+                                                { token: "{status}", label: "+ {status}" },
+                                                { token: "{quality}", label: "+ {quality}" }
+                                            ].map(chip => (
+                                                <button
+                                                    key={chip.token}
+                                                    type="button"
+                                                    onClick={() => handleInsertToken(chip.token)}
+                                                    className="px-2 py-0.5 rounded-md bg-rose-500/20 hover:bg-rose-500 hover:text-white text-rose-300 border border-rose-500/30 text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                                >
+                                                    {chip.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Color Theme & Position Controls */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] text-slate-400">Color Theme:</Label>
+                                            <Select
+                                                value={simBannerTheme}
+                                                onValueChange={handlePruneBannerThemeChange}
+                                            >
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                    <SelectValue placeholder="Select Theme" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="crimson-red">🔴 Crimson Red</SelectItem>
+                                                    <SelectItem value="amber-gold">💛 Amber Gold</SelectItem>
+                                                    <SelectItem value="indigo-purple">🟣 Indigo Purple</SelectItem>
+                                                    <SelectItem value="emerald-green">🟢 Emerald Green</SelectItem>
+                                                    <SelectItem value="cinematic-blue">🔵 Cinematic Blue</SelectItem>
+                                                    <SelectItem value="cyber-neon">⚡ Cyber Neon</SelectItem>
+                                                    <SelectItem value="glass">✨ Obsidian Glass</SelectItem>
+                                                    <SelectItem value="slate-frosted">🛡️ Slate Frosted</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] text-slate-400">Position:</Label>
+                                            <Select
+                                                value={simBannerPosition}
+                                                onValueChange={(val: any) => handlePruneBannerPositionChange(val)}
+                                            >
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-xs h-7">
+                                                    <SelectValue placeholder="Select Position" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="bottom">Bottom Overlay</SelectItem>
+                                                    <SelectItem value="lower_third">Lower 3rd (Above Title)</SelectItem>
+                                                    <SelectItem value="middle">Middle / Center 3rd</SelectItem>
+                                                    <SelectItem value="upper_third">Upper 3rd (Below Header)</SelectItem>
+                                                    <SelectItem value="top">Top Overlay</SelectItem>
+                                                    <SelectItem value="corner">45° Corner Ribbon</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* Font Size Slider & Presets */}
+                                    <div className="space-y-1.5 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-[10px] text-slate-300 font-semibold">Banner Font Size:</Label>
+                                            <span className="text-[10px] font-mono font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                                {simBannerFontSize}px
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] text-slate-500 font-mono">18px</span>
+                                            <input
+                                                type="range"
+                                                min="18"
+                                                max="72"
+                                                step="2"
+                                                value={simBannerFontSize}
+                                                onChange={(e) => handlePruneBannerFontSizeChange(parseInt(e.target.value, 10))}
+                                                className="w-full accent-rose-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
+                                            />
+                                            <span className="text-[9px] text-slate-500 font-mono">72px</span>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-1 gap-1">
+                                            {[
+                                                { label: "Compact 28px", size: 28 },
+                                                { label: "Standard 44px", size: 44 },
+                                                { label: "Bold 54px", size: 54 },
+                                                { label: "Max 68px", size: 68 }
+                                            ].map((preset) => (
+                                                <button
+                                                    key={preset.size}
+                                                    type="button"
+                                                    onClick={() => handlePruneBannerFontSizeChange(preset.size)}
+                                                    className={`flex-1 py-0.5 text-[9px] font-mono rounded border transition-all ${
+                                                        simBannerFontSize === preset.size
+                                                            ? "bg-rose-600 text-white border-rose-500 font-bold"
+                                                            : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800"
+                                                    }`}
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Live Variable Test Values */}
+                                    <div className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                            Live Test Variables:
+                                        </span>
+                                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Date {'{date}'}:</Label>
+                                                <Input
+                                                    value={simTemplateDate}
+                                                    onChange={(e) => {
+                                                        setSimTemplateDate(e.target.value);
+                                                        generatePrunePreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simBannerType,
+                                                            simBannerText,
+                                                            simBannerTheme,
+                                                            simBannerPosition,
+                                                            simBannerFontSize,
+                                                            e.target.value,
+                                                            simTemplateDays,
+                                                            simTemplateReason,
+                                                            simTemplateStatus
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-[9px] text-slate-500">Days {'{days}'}:</Label>
+                                                <Input
+                                                    type="number"
+                                                    value={simTemplateDays}
+                                                    onChange={(e) => {
+                                                        const num = parseInt(e.target.value, 10) || 0;
+                                                        setSimTemplateDays(num);
+                                                        generatePrunePreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simBannerType,
+                                                            simBannerText,
+                                                            simBannerTheme,
+                                                            simBannerPosition,
+                                                            simBannerFontSize,
+                                                            simTemplateDate,
+                                                            num,
+                                                            simTemplateReason,
+                                                            simTemplateStatus
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <Label className="text-[9px] text-slate-500">Reason {'{reason}'}:</Label>
+                                                <Input
+                                                    value={simTemplateReason}
+                                                    onChange={(e) => {
+                                                        setSimTemplateReason(e.target.value);
+                                                        generatePrunePreview(
+                                                            simSelectedRealItem ? simPosterUrl : null,
+                                                            simSelectedRealItem?.title || "Sample Media",
+                                                            simBannerType,
+                                                            simBannerText,
+                                                            simBannerTheme,
+                                                            simBannerPosition,
+                                                            simBannerFontSize,
+                                                            simTemplateDate,
+                                                            simTemplateDays,
+                                                            e.target.value,
+                                                            simTemplateStatus
+                                                        );
+                                                    }}
+                                                    className="h-6 text-[10px] bg-slate-900 border-slate-800 font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Save Banner Style Button & Reset */}
+                                    <div className="pt-2 flex items-center justify-between border-t border-slate-800 gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            {bannerConfigSavedMsg && (
+                                                <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                    <span>{bannerConfigSavedMsg}</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {bannerTemplates[simBannerType] && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleResetCurrentPruneBannerTemplate}
+                                                    className="h-8 text-xs border-slate-700 hover:bg-slate-800 text-slate-300 gap-1.5 cursor-pointer"
+                                                >
+                                                    <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
+                                                    <span>Reset to Preset Default</span>
+                                                </Button>
+                                            )}
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                disabled={savingBannerConfig}
+                                                onClick={handleSaveDefaultPruneBannerTemplate}
+                                                className={`h-8 text-xs font-bold gap-1.5 shadow-md cursor-pointer transition-all ${
+                                                    isBannersDirty
+                                                        ? "bg-amber-500 hover:bg-amber-400 text-black animate-pulse shadow-amber-500/20"
+                                                        : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/50"
+                                                }`}
+                                            >
+                                                {savingBannerConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                                <span>{isBannersDirty ? "Save Banner Template *" : "Save Banner Template"}</span>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* TAB 2: PRUNE SANDBOX & OLDEST FILES EXPLORER */}
+            {subTab === "simulation" && (
+                <div className="space-y-6">
+                    {/* Sandbox & Discovery Criteria Controls */}
+                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                            <div className="space-y-0.5">
+                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                    <Sliders className="h-5 w-5 text-rose-400" />
+                                    <span>Oldest Files Discovery &amp; Maintainerr Rule Sandbox</span>
+                                </CardTitle>
+                                <CardDescription className="text-xs text-slate-400">
+                                    Scan libraries to discover the oldest, least watched, or largest media items. Verify full telemetry (last watched, modified date, codec, disk path) before staging.
+                                </CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                        setNewCustomPresetName("");
+                                        setSaveCustomPresetModalOpen(true);
+                                    }}
+                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-9 px-3 gap-1.5 cursor-pointer"
+                                >
+                                    <Plus className="h-4 w-4 text-rose-400" />
+                                    <span>Save Custom Preset</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={simulatingPrune}
+                                    onClick={handleRunSimulation}
+                                    className="bg-rose-600 hover:bg-rose-500 text-white font-black text-xs h-9 px-4 gap-2 shadow-lg cursor-pointer shrink-0"
+                                >
+                                    {simulatingPrune ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                                    <span>Discover Oldest Candidates</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Quick Rule Presets Selector */}
+                        <div className="space-y-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-rose-400" />
+                                    <span>Maintainerr Rule Presets &amp; Retention Policies:</span>
+                                </Label>
+                                <span className="text-[11px] text-slate-400">1-Click load rule configurations</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                {MAINTAINERR_RULE_PRESETS.map((preset) => (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        title={preset.description}
+                                        onClick={() => handleApplyRulePreset(preset)}
+                                        className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 transition-all cursor-pointer ${
+                                            selectedRulePresetId === preset.id
+                                                ? "bg-rose-600 text-white border-rose-500 font-bold shadow-md shadow-rose-950/50"
+                                                : "bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:text-white"
+                                        }`}
+                                    >
+                                        <span>{preset.icon}</span>
+                                        <span>{preset.name}</span>
+                                    </button>
+                                ))}
+                                {customRulePresets.map((preset) => (
+                                    <div
+                                        key={preset.id}
+                                        onClick={() => handleApplyRulePreset(preset)}
+                                        title={preset.description}
+                                        className={`px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 transition-all cursor-pointer group ${
+                                            selectedRulePresetId === preset.id
+                                                ? "bg-rose-600 text-white border-rose-500 font-bold shadow-md shadow-rose-950/50"
+                                                : "bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:text-white"
+                                        }`}
+                                    >
+                                        <span>{preset.icon || "⚙️"}</span>
+                                        <span>{preset.name}</span>
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-rose-400/40 text-rose-300 bg-rose-950/40 font-normal">
+                                            Custom
+                                        </Badge>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => handleDeleteCustomRulePreset(preset.id, e)}
+                                            className="opacity-60 hover:opacity-100 hover:text-rose-300 text-slate-400 ml-1 transition-opacity"
+                                            title="Delete Custom Preset"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
+                            {/* Sort / Discovery Mode */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Clock className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                                    <span className="truncate">Sort Strategy:</span>
+                                </Label>
+                                <Select
+                                    value={simSortBy}
+                                    onValueChange={(val: any) => setSimSortBy(val)}
+                                >
+                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 h-8 text-xs text-slate-200 truncate [&>span]:truncate [&>span]:block">
+                                        <SelectValue placeholder="Select Sort Strategy" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="combined_oldest">⚡ Dual-Lane Cascade (Never Watched → Oldest Watched)</SelectItem>
+                                        <SelectItem value="oldest_added">📅 Oldest Added to Library</SelectItem>
+                                        <SelectItem value="oldest_watched">👁️ Oldest Last Watched</SelectItem>
+                                        <SelectItem value="oldest_modified">📝 Oldest Modified on Disk</SelectItem>
+                                        <SelectItem value="largest_size">📦 Largest File Size First</SelectItem>
+                                        <SelectItem value="least_plays">📉 Least Plays / Unwatched</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                                    💡 <em>Plex "Date Added" often reflects original release file timestamps. Use <strong>"Oldest Modified on Disk"</strong> to sort by the date files were touched on this server.</em>
+                                </p>
+                            </div>
+
+                            {/* Show Oldest Limit */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Filter className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                    <span className="truncate">Candidate Limit:</span>
+                                </Label>
+                                <Select
+                                    value={String(simOldestLimit)}
+                                    onValueChange={(val) => setSimOldestLimit(parseInt(val, 10))}
+                                >
+                                    <SelectTrigger className="w-full min-w-0 bg-slate-900 border-slate-700 h-8 text-xs font-mono text-slate-200 truncate [&>span]:truncate [&>span]:block">
+                                        <SelectValue placeholder="Limit" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">Show 10 Files</SelectItem>
+                                        <SelectItem value="25">Show 25 Files</SelectItem>
+                                        <SelectItem value="50">Show 50 Files</SelectItem>
+                                        <SelectItem value="100">Show 100 Files</SelectItem>
+                                        <SelectItem value="200">Show 200 Files</SelectItem>
+                                        <SelectItem value="0">All Matches</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Lane 2: Never Watched Min Age */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Calendar className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                                    <span className="truncate">Lane 2: Unwatched:</span>
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        max="3650"
+                                        value={simUnwatchedMinAgeDays}
+                                        onChange={(e) => {
+                                            const v = parseInt(e.target.value, 10) || 0;
+                                            setSimUnwatchedMinAgeDays(v);
+                                            setSimMinAgeDays(v);
+                                        }}
+                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-full min-w-0"
+                                    />
+                                    <span className="text-slate-400 text-xs shrink-0">days</span>
+                                </div>
+                            </div>
+
+                            {/* Lane 1: Oldest Watched Min Age */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-w-0">
+                                <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                    <Eye className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                    <span className="truncate">Lane 1: Watched:</span>
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        max="3650"
+                                        value={simWatchedMinAgeDays}
+                                        onChange={(e) => setSimWatchedMinAgeDays(parseInt(e.target.value, 10) || 0)}
+                                        className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-full min-w-0"
+                                    />
+                                    <span className="text-slate-400 text-xs shrink-0">days</span>
+                                </div>
+                            </div>
+
+                            {/* Season-Level TV Pruning Toggle */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                    <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
+                                        <Tv className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                        <span className="truncate">TV Seasons:</span>
+                                    </Label>
+                                    <Switch checked={simEvaluateSeasons} onCheckedChange={setSimEvaluateSeasons} className="shrink-0" />
+                                </div>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                    {simEvaluateSeasons ? "Evaluate individual seasons" : "Evaluate whole series"}
+                                </p>
+                            </div>
+
+                            {/* Unwatched Only Toggle */}
+                            <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                    <Label className="text-xs text-slate-300 font-semibold min-w-0 truncate">Unwatched Only:</Label>
+                                    <Switch checked={simUnwatchedOnly} onCheckedChange={setSimUnwatchedOnly} className="shrink-0" />
+                                </div>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                    {simUnwatchedOnly ? "Skip Lane 1 watched media" : "Cascade Lane 2 → Lane 1"}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Save Rule as Global Default Action Bar */}
+                        <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                {ruleDefaultSavedMsg ? (
+                                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 animate-in fade-in-50">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        <span>{ruleDefaultSavedMsg}</span>
+                                    </span>
+                                ) : (
+                                    <p className="text-[11px] text-slate-400">
+                                        Save these criteria and active banner style as the default pruning rule across automated sync runs.
+                                    </p>
+                                )}
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={savingRuleDefault}
+                                onClick={handleSaveCurrentSandboxAsDefaultRule}
+                                className="h-8 text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold gap-1.5 shadow cursor-pointer"
+                            >
+                                {savingRuleDefault ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5 text-rose-400" />}
+                                <span>Save Rule as Global Default</span>
+                            </Button>
+                        </div>
+                    </Card>
+
+                    {/* Simulation Results Card */}
+                    {pruneSimResults && (
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                            <CardHeader className="p-4 border-b border-slate-800/80 bg-slate-950/40">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div className="space-y-0.5">
+                                        <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                            <Archive className="h-4 w-4 text-emerald-400" />
+                                            <span>Oldest Candidates Identified: {pruneSimResults.candidates.length} Files</span>
+                                        </CardTitle>
+                                        <p className="text-xs text-slate-400">
+                                            Evaluated {pruneSimResults.evaluatedCount} media items across enabled library sections
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge className="bg-emerald-950 text-emerald-300 border-emerald-500/40 text-xs font-mono font-bold px-3 py-1">
+                                            Recoverable Space: {pruneSimResults.totalRecoverableGb} GB
+                                        </Badge>
+                                    </div>
+                                </div>
+
+                                {/* Batch Flagging, Grace Period & Filter Bar */}
+                                {pruneSimResults.candidates.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                                        {/* Left: Quick Batch Selectors */}
+                                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                            <span className="text-[11px] font-bold text-slate-400 mr-1">Flag Candidates:</span>
+                                            {[5, 10, 25, 50].map(n => (
+                                                <button
+                                                    key={n}
+                                                    type="button"
+                                                    onClick={() => handleSelectFirstNCandidates(n)}
+                                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                                                        selectedCandidateKeys.length === n
+                                                            ? "bg-rose-600 text-white border-rose-500"
+                                                            : "bg-slate-800/80 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700"
+                                                    }`}
+                                                >
+                                                    Top {n}
+                                                </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectFirstNCandidates(0)}
+                                                className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                                                    selectedCandidateKeys.length === pruneSimResults.candidates.length
+                                                        ? "bg-rose-600 text-white border-rose-500"
+                                                        : "bg-slate-800/80 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700"
+                                                }`}
+                                            >
+                                                Select All ({pruneSimResults.candidates.length})
+                                            </button>
+                                            {selectedCandidateKeys.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedCandidateKeys([])}
+                                                    className="px-2 py-1 text-xs text-slate-400 hover:text-rose-300 hover:underline ml-1"
+                                                >
+                                                    Clear ({selectedCandidateKeys.length})
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Right: Grace Period & Stage Button */}
+                                        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-end">
+                                            {/* Grace Period Dropdown */}
+                                            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800">
+                                                <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                <span className="text-[11px] font-bold text-slate-300">Grace Period:</span>
+                                                <Select
+                                                    value={String(simGracePeriodDays)}
+                                                    onValueChange={(val) => setSimGracePeriodDays(parseInt(val, 10))}
+                                                >
+                                                    <SelectTrigger className="bg-transparent border-0 h-6 text-xs font-mono font-bold text-amber-300 p-0 focus:ring-0 w-[80px]">
+                                                        <SelectValue placeholder="Grace Period" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="7">7 Days</SelectItem>
+                                                        <SelectItem value="14">14 Days</SelectItem>
+                                                        <SelectItem value="21">21 Days</SelectItem>
+                                                        <SelectItem value="30">30 Days</SelectItem>
+                                                        <SelectItem value="60">60 Days</SelectItem>
+                                                        <SelectItem value="90">90 Days</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {/* Search Filter Input */}
+                                            <div className="relative">
+                                                <Search className="h-3 w-3 absolute left-2.5 top-2.5 text-slate-500" />
+                                                <Input
+                                                    placeholder="Filter candidates..."
+                                                    value={simFilterSearch}
+                                                    onChange={(e) => setSimFilterSearch(e.target.value)}
+                                                    className="h-8 text-xs pl-7 bg-slate-950 border-slate-800 w-[150px] sm:w-[180px]"
+                                                />
+                                            </div>
+
+                                            {/* Stage Selected Button */}
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                disabled={executingPrune || selectedCandidateKeys.length === 0}
+                                                onClick={() => handleExecutePrune(false)}
+                                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer shrink-0"
+                                            >
+                                                <AlertTriangle className="h-3.5 w-3.5" />
+                                                <span>Stage {selectedCandidateKeys.length} Items ({simGracePeriodDays}d Notice)</span>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardHeader>
+
+                            <CardContent className="p-4 space-y-3">
+                                {pruneSimResults.candidates.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-500 space-y-2">
+                                        <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/50" />
+                                        <p className="text-xs font-semibold text-slate-300">No media items met the prune criteria.</p>
+                                        <p className="text-[11px] text-slate-500">Try lowering the minimum age or changing the sort strategy.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2.5">
+                                        {pruneSimResults.candidates
+                                            .filter((c: any) => {
+                                                if (!simFilterSearch.trim()) return true;
+                                                const q = simFilterSearch.toLowerCase();
+                                                return (
+                                                    c.title?.toLowerCase().includes(q) ||
+                                                    c.filePath?.toLowerCase().includes(q) ||
+                                                    c.resolution?.toLowerCase().includes(q) ||
+                                                    c.reason?.toLowerCase().includes(q)
+                                                );
+                                            })
+                                            .map((c: any) => {
+                                                const isSelected = selectedCandidateKeys.includes(c.ratingKey);
+                                                const toSafeMs = (ts?: number | null) => {
+                                                    if (!ts || isNaN(ts) || ts <= 0) return null;
+                                                    return ts < 1e11 ? ts * 1000 : ts;
+                                                };
+                                                const addedMs = toSafeMs(c.addedAt);
+                                                const addedDateStr = addedMs ? new Date(addedMs).toLocaleDateString() : "Unknown";
+                                                const updatedMs = toSafeMs(c.updatedAt);
+                                                const updatedDateStr = updatedMs ? new Date(updatedMs).toLocaleDateString() : null;
+                                                const lastWatchedMs = toSafeMs(c.lastViewedAt);
+                                                const lastWatchedDateStr = lastWatchedMs ? new Date(lastWatchedMs).toLocaleDateString() : null;
+                                                const daysSinceViewed = lastWatchedMs ? Math.max(0, Math.floor((Date.now() - lastWatchedMs) / (1000 * 60 * 60 * 24))) : null;
+
+                                                return (
+                                                    <div
+                                                        key={c.ratingKey}
+                                                        onClick={() => {
+                                                            setSelectedCandidateKeys(prev =>
+                                                                isSelected ? prev.filter(k => k !== c.ratingKey) : [...prev, c.ratingKey]
+                                                            );
+                                                        }}
+                                                        className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
+                                                            isSelected
+                                                                ? "bg-rose-950/30 border-rose-500/60 shadow-lg shadow-rose-950/20"
+                                                                : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                                        }`}
+                                                    >
+                                                        {/* Top Row: Checkbox, Title, Badges, Size */}
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => {}}
+                                                                    className="h-4 w-4 rounded border-slate-700 accent-rose-500 shrink-0 cursor-pointer"
+                                                                />
+                                                                <div className="min-w-0">
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <span className="font-bold text-white text-xs sm:text-sm truncate">
+                                                                            {c.parentTitle || c.title}
+                                                                        </span>
+                                                                        {c.lane === "unwatched" ? (
+                                                                            <Badge className="bg-cyan-950 text-cyan-300 border-cyan-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                                📦 Lane 2: Never Watched
+                                                                            </Badge>
+                                                                        ) : c.lane === "watched" ? (
+                                                                            <Badge className="bg-amber-950 text-amber-300 border-amber-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                                👁️ Lane 1: Oldest Watched
+                                                                            </Badge>
+                                                                        ) : null}
+                                                                        {c.seasonNumber !== undefined && (
+                                                                            <Badge className="bg-indigo-950 text-indigo-300 border-indigo-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                                Season {c.seasonNumber}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.episodeCount !== undefined && (
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-indigo-700/50 text-indigo-300 bg-indigo-950/20">
+                                                                                {c.episodeCount} eps
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.year && (
+                                                                            <span className="text-xs text-slate-400 font-mono">
+                                                                                ({c.year})
+                                                                            </span>
+                                                                        )}
+                                                                        {c.serverSources && c.serverSources.length > 1 ? (
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-purple-500/50 text-purple-300 bg-purple-950/40 font-bold" title={c.serverSources.map((s: any) => `${s.serverName}: ${s.viewCount} plays`).join(' • ')}>
+                                                                                🔗 {c.serverSources.length} servers linked
+                                                                            </Badge>
+                                                                        ) : c.serverName ? (
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-slate-700 text-slate-400">
+                                                                                {c.serverName}
+                                                                            </Badge>
+                                                                        ) : null}
+                                                                        {c.resolution && (
+                                                                            <Badge className="bg-sky-950 text-sky-300 border-sky-600/40 text-[10px] font-mono py-0 px-1.5">
+                                                                                {c.resolution}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.hdr && (
+                                                                            <Badge className="bg-amber-950 text-amber-300 border-amber-600/40 text-[10px] font-mono py-0 px-1.5">
+                                                                                {c.hdr}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {c.audio && (
+                                                                            <Badge className="bg-slate-900 text-slate-300 border-slate-700 text-[10px] font-mono py-0 px-1.5 uppercase">
+                                                                                {c.audio}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                                                <Badge variant="outline" className="text-xs font-mono font-bold border-emerald-500/40 text-emerald-300 bg-emerald-950/40 px-2 py-0.5">
+                                                                    {c.fileSizeGb ? `${c.fileSizeGb} GB` : "Size N/A"}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Verification Telemetry Grid: Added, Last Watched, Play Count & Status */}
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono">
+                                                            {/* Added to Library */}
+                                                            <div className="flex items-center gap-1.5 text-slate-300">
+                                                                <Calendar className="h-3 w-3 text-sky-400 shrink-0" />
+                                                                <span>
+                                                                    Added: <strong className="text-white">{addedDateStr}</strong> ({c.daysOld ?? c.ageDays}d ago)
+                                                                    {updatedDateStr && updatedDateStr !== addedDateStr && (
+                                                                        <span className="text-[10px] text-slate-400 ml-1 font-normal" title="Date item or file was last touched/refreshed on this server">
+                                                                            • Mod: {updatedDateStr}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Last Watched Date */}
+                                                            <div className="flex items-center gap-1.5 text-slate-300">
+                                                                <Eye className="h-3 w-3 text-amber-400 shrink-0" />
+                                                                {c.viewCount > 0 && lastWatchedDateStr ? (
+                                                                    <span>
+                                                                        Watched: <strong className="text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)
+                                                                        {c.watchedOnServerName ? <span className="text-purple-300 text-[10px] ml-1">[{c.watchedOnServerName}]</span> : null}
+                                                                    </span>
+                                                                ) : (
+                                                                    <Badge className="bg-cyan-950/80 text-cyan-300 border-cyan-600/40 text-[10px] py-0 px-1.5">
+                                                                        Never Watched (0 plays)
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Total Plays & Lane Classification */}
+                                                            <div className="flex items-center gap-1.5 text-slate-300">
+                                                                <Clock className="h-3 w-3 text-rose-400 shrink-0" />
+                                                                <span>Plays: <strong className="text-white">{c.viewCount || 0}</strong> • <strong className={c.lane === "unwatched" ? "text-cyan-300" : "text-amber-300"}>{c.lane === "unwatched" ? "Lane 2 Dead Weight" : "Lane 1 Cold Storage"}</strong></span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Disk Path & Prune Reason */}
+                                                        <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-400 border-t border-slate-900/80">
+                                                            {c.filePath ? (
+                                                                <span className="font-mono truncate text-slate-400">
+                                                                    📁 <span className="text-slate-300">{c.filePath}</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="italic text-slate-600">Disk path not provided</span>
+                                                            )}
+                                                            <span className="font-bold text-rose-400 shrink-0">
+                                                                ⚠️ {c.reason || "Oldest candidate match"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+            )}
+
+            {/* TAB 3: SAFE DELETION EXECUTION ENGINE */}
+            {subTab === "execution" && (
+                <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-6">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="space-y-0.5">
+                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <ShieldAlert className="h-5 w-5 text-rose-400" />
+                                <span>Maintainerr Safe Deletion Execution Engine</span>
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-400">
+                                Multi-layered safety guards preventing accidental data loss during media prunes.
+                            </CardDescription>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                        {/* Master Deletion Switch */}
+                        <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-white text-xs flex items-center gap-2">
+                                    <Power className="h-4 w-4 text-rose-400" /> Master Deletion Switch
+                                </span>
+                                <Switch
+                                    checked={settings.enableAutoPruneDeletion ?? false}
+                                    onCheckedChange={async (checked) => {
+                                        setSettings((prev: any) => ({ ...prev, enableAutoPruneDeletion: checked }));
+                                        await saveCurationSettingsAction({ enableAutoPruneDeletion: checked });
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                When disabled, all prunes are strictly dry-run simulations or stage items into the Leaving Soon hub.
+                            </p>
+                        </div>
+
+                        {/* Dry Run Mode */}
+                        <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-white text-xs flex items-center gap-2">
+                                    <Shield className="h-4 w-4 text-emerald-400" /> Dry Run Safety Mode
+                                </span>
+                                <Switch
+                                    checked={settings.pruneDryRun ?? true}
+                                    onCheckedChange={async (checked) => {
+                                        setSettings((prev: any) => ({ ...prev, pruneDryRun: checked }));
+                                        await saveCurationSettingsAction({ pruneDryRun: checked });
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                Dry run mode simulates file cleanup without physically touching media on disk.
+                            </p>
+                        </div>
+
+                        {/* Servarr Synchronized Deletion & Queue Cleanup */}
+                        <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-white text-xs flex items-center gap-2">
+                                    <Trash2 className="h-4 w-4 text-amber-400" /> Servarr Arr Cleanup
+                                </span>
+                                <Switch
+                                    checked={settings.pruneDeleteFromArr ?? false}
+                                    onCheckedChange={async (checked) => {
+                                        setSettings((prev: any) => ({ ...prev, pruneDeleteFromArr: checked }));
+                                        setPruneDeleteFromArrSetting(checked);
+                                        await saveCurationSettingsAction({ pruneDeleteFromArr: checked });
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                When enabled, live media deletions unmonitor and remove files from Radarr and Sonarr.
+                            </p>
+                        </div>
+                    </div>
+
+                    {pruneExecMessage && (
+                        <div className={`p-4 rounded-xl border text-xs space-y-2 ${
+                            pruneExecMessage.success ? "bg-emerald-950/80 border-emerald-800 text-emerald-300" : "bg-rose-950/80 border-rose-800 text-rose-300"
+                        }`}>
+                            <div className="flex items-center gap-2 font-bold">
+                                {pruneExecMessage.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <XCircle className="h-4 w-4 text-rose-400" />}
+                                <span>{pruneExecMessage.text}</span>
+                            </div>
+                        </div>
+                    )}
+                </Card>
+            )}
+
+            {/* TAB 4: MOUNTS, GLANCES STORAGE & BACKUP VAULT */}
+            {subTab === "storage" && (
+                <div className="space-y-6">
+                    {/* Glances Real-Time Disk Arrays Card */}
+                    {glancesDisks.length > 0 && (
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4 backdrop-blur-md">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                                <div className="space-y-0.5">
+                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                        <HardDrive className="h-5 w-5 text-cyan-400" />
+                                        <span>Glances Storage Arrays &amp; Real-Time Capacity</span>
+                                    </CardTitle>
+                                    <p className="text-xs text-slate-400">
+                                        Live disk arrays, used space, and free capacity telemetry polled directly from your connected Glances instances.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={glancesLoading}
+                                    onClick={() => loadGlancesDisks(selectedGlancesDiskId)}
+                                    className="border-slate-700 text-xs h-8 gap-1.5 text-slate-300 hover:text-white"
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${glancesLoading ? 'animate-spin' : ''}`} />
+                                    <span>Refresh Glances</span>
+                                </Button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {glancesDisks.map(disk => (
+                                    <div
+                                        key={disk.id}
+                                        onClick={() => setSelectedGlancesDiskId(disk.id)}
+                                        className={`p-4 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
+                                            selectedGlancesDiskId === disk.id
+                                                ? "bg-cyan-950/30 border-cyan-500/50 shadow-md ring-1 ring-cyan-500/30"
+                                                : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <HardDrive className="h-4 w-4 text-cyan-400" />
+                                                <span className="font-bold text-white text-xs">{disk.instanceName}</span>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] font-mono border-slate-700 text-slate-400">
+                                                {disk.fsType}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="font-mono text-cyan-300 font-bold text-[11px] truncate max-w-[180px]">
+                                                    {disk.mntPoint}
+                                                </span>
+                                                <span className={`font-mono font-bold text-[11px] ${
+                                                    disk.percent >= 90 ? 'text-rose-400' : disk.percent >= 75 ? 'text-amber-400' : 'text-emerald-400'
+                                                }`}>
+                                                    {disk.percent}% Used
+                                                </span>
+                                            </div>
+
+                                            <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                                <div 
+                                                    className={`h-full transition-all rounded-full ${
+                                                        disk.percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-600' :
+                                                        disk.percent >= 75 ? 'bg-gradient-to-r from-emerald-500 to-amber-500' :
+                                                        'bg-gradient-to-r from-cyan-500 to-emerald-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(100, Math.max(0, disk.percent))}%` }}
+                                                />
+                                            </div>
+
+                                            <div className="flex justify-between text-[10px] text-slate-400 pt-0.5 font-mono">
+                                                <span>Free: <strong className="text-white">{disk.freeGb >= 1000 ? `${(disk.freeGb / 1024).toFixed(1)} TB` : `${disk.freeGb} GB`}</strong></span>
+                                                <span>Total: {disk.totalGb >= 1000 ? `${(disk.totalGb / 1024).toFixed(1)} TB` : `${disk.totalGb} GB`}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </Card>
+                    )}
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Storage Thresholds & Pruning Policy */}
+                        <Card className={`bg-slate-900/90 shadow-xl p-6 space-y-4 transition-all duration-300 ${
+                            isThresholdsDirty 
+                                ? "border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/30" 
+                                : "border-slate-800"
+                        }`}>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                    <Sliders className="h-5 w-5 text-rose-400" />
+                                    <span>Storage &amp; Auto-Pruning Thresholds</span>
+                                </CardTitle>
+                                {isThresholdsDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
+                            <p className="text-xs text-slate-400">
+                                Configure two-tier capacity thresholds (Warning vs Danger), target reclamation headroom, and automated pruning retention policies.
+                            </p>
+
+                            <div className="space-y-3.5 text-xs">
+                                {/* Warning / Staging Threshold (% Used) */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
+                                            <span>Warning / Staging Threshold (% Used):</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-amber-400">
+                                            {pruneWarningThresholdPercent}% Used ({100 - pruneWarningThresholdPercent}% Free)
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="50"
+                                            max="99"
+                                            value={pruneWarningThresholdPercent}
+                                            onChange={(e) => setPruneWarningThresholdPercent(parseInt(e.target.value, 10) || 85)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Auto-stages candidate items to Leaving Soon when array reaches <strong className="text-white">{pruneWarningThresholdPercent}% used</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Danger / Active Reclamation Threshold (% Used) */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>Danger / Active Reclamation (% Used):</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-black text-rose-400">
+                                            {pruneDangerThresholdPercent}% Used
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="70"
+                                            max="100"
+                                            value={pruneDangerThresholdPercent}
+                                            onChange={(e) => setPruneDangerThresholdPercent(parseInt(e.target.value, 10) || 95)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Triggers live deletion of expired Leaving Soon items when disk hits <strong className="text-white">{pruneDangerThresholdPercent}% used</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Target Headroom Capacity (GB) */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Archive className="h-3.5 w-3.5 text-emerald-400" />
+                                            <span>Target Reclamation Headroom:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-emerald-300">
+                                            {pruneTargetHeadroomGb} GB
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="10"
+                                            max="10000"
+                                            value={pruneTargetHeadroomGb}
+                                            onChange={(e) => setPruneTargetHeadroomGb(parseInt(e.target.value, 10) || 100)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-24"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Target storage volume to reclaim and maintain as free buffer headroom.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Season-Level TV Pruning Policy */}
+                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
+                                            <Tv className="h-3.5 w-3.5 text-indigo-400" /> Season-Level TV Pruning
+                                        </span>
+                                        <p className="text-[10px] text-slate-400">
+                                            {pruneEvaluateSeasonsSetting ? "Evaluates and stages individual inactive TV seasons instead of wiping whole series." : "Evaluates TV series at the whole show level."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={pruneEvaluateSeasonsSetting}
+                                        onCheckedChange={setPruneEvaluateSeasonsSetting}
+                                    />
+                                </div>
+
+                                {/* Servarr Synchronized Deletion */}
+                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
+                                            <Trash2 className="h-3.5 w-3.5 text-amber-400" /> Servarr Arr Cleanup
+                                        </span>
+                                        <p className="text-[10px] text-slate-400">
+                                            {pruneDeleteFromArrSetting ? "Unmonitors and removes files from Radarr and Sonarr during live prune deletions." : "Deletes files strictly from Plex disk storage without modifying Arr instances."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={pruneDeleteFromArrSetting}
+                                        onCheckedChange={setPruneDeleteFromArrSetting}
+                                    />
+                                </div>
+
+                                {/* Dual-Lane Ingestion Pipeline & Priority Cascade Callout */}
+                                <div className="p-3 bg-gradient-to-br from-cyan-950/30 via-slate-950 to-amber-950/20 rounded-xl border border-cyan-800/40 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Layers className="h-4 w-4 text-cyan-400" />
+                                            <span className="text-xs font-bold text-slate-100">Dual-Lane Ingestion Pipeline</span>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] bg-cyan-950/60 text-cyan-300 border-cyan-700/50 font-mono">
+                                            Option A Cascade
+                                        </Badge>
+                                    </div>
+                                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                                        Target reclamation headroom (<strong className="text-emerald-300">{pruneTargetHeadroomGb} GB</strong>) is filled from <strong className="text-cyan-300">Lane 2 (Never Watched)</strong> first. If additional headroom is needed, items are drawn from <strong className="text-amber-300">Lane 1 (Oldest Watched)</strong>.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                        <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-800/40">
+                                            <span className="text-[10px] font-bold text-cyan-300 block uppercase tracking-wider">Priority 1 • Lane 2</span>
+                                            <span className="text-[11px] text-slate-300">Never Watched Dead Weight</span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-800/40">
+                                            <span className="text-[10px] font-bold text-amber-300 block uppercase tracking-wider">Priority 2 • Lane 1</span>
+                                            <span className="text-[11px] text-slate-300">Oldest Watched Cold Storage</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Lane 2: Never Watched Media Age Threshold */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <FolderOpen className="h-3.5 w-3.5 text-cyan-400" />
+                                            <span>Lane 2: Never Watched Minimum Age:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-cyan-300">
+                                            {pruneUnwatchedMinAgeDaysSetting} Days
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="3650"
+                                            value={pruneUnwatchedMinAgeDaysSetting}
+                                            onChange={(e) => setPruneUnwatchedMinAgeDaysSetting(parseInt(e.target.value, 10) || 90)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Media with <strong className="text-cyan-300">0 plays</strong> must be at least <strong className="text-white">{pruneUnwatchedMinAgeDaysSetting} days old</strong> to qualify.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Lane 1: Oldest Watched Media Stale Threshold */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                            <span>Lane 1: Oldest Watched Inactivity Threshold:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-amber-300">
+                                            {pruneWatchedMinAgeDaysSetting} Days
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="3650"
+                                            value={pruneWatchedMinAgeDaysSetting}
+                                            onChange={(e) => setPruneWatchedMinAgeDaysSetting(parseInt(e.target.value, 10) || 180)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Watched media must not have been played for at least <strong className="text-white">{pruneWatchedMinAgeDaysSetting} days</strong> to qualify.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Advance Notice Grace Period */}
+                                <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Clock className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>Advance Notice Grace Period:</span>
+                                        </Label>
+                                        <span className="font-mono text-xs font-bold text-rose-300">
+                                            {pruneDaysNoticeSetting} Days
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-1">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="90"
+                                            value={pruneDaysNoticeSetting}
+                                            onChange={(e) => setPruneDaysNoticeSetting(parseInt(e.target.value, 10) || 14)}
+                                            className="bg-slate-900 border-slate-700 h-8 text-xs font-mono w-20"
+                                        />
+                                        <p className="text-[11px] text-slate-400">
+                                            Staged in Leaving Soon for <strong className="text-white">{pruneDaysNoticeSetting} days</strong> before deletion.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Unwatched Only Policy */}
+                                <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-200 block">Unwatched Only Policy</span>
+                                        <p className="text-[10px] text-slate-400">
+                                            {pruneUnwatchedOnlySetting ? "Strict Mode: Only media with 0 total plays (Lane 2) will ever be staged." : "Dual-Lane Mode: Lane 2 is prioritized first, then Lane 1 is staged if headroom remains."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={pruneUnwatchedOnlySetting}
+                                        onCheckedChange={setPruneUnwatchedOnlySetting}
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={savingThresholds}
+                                        onClick={handleSaveThresholds}
+                                        className={`font-bold text-xs gap-1.5 shadow-md cursor-pointer transition-all ${
+                                            isThresholdsDirty
+                                                ? "bg-amber-500 hover:bg-amber-400 text-black animate-pulse shadow-amber-500/20"
+                                                : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/30"
+                                        }`}
+                                    >
+                                        {savingThresholds ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                        <span>{isThresholdsDirty ? "Save Thresholds *" : "Save Thresholds"}</span>
+                                    </Button>
+                                    {thresholdsSavedMsg && <span className="text-xs text-emerald-400 font-bold">✓ Saved!</span>}
+                                </div>
+                            </div>
+                        </Card>
+
+                        {/* Storage Mounts Configuration */}
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
+                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <HardDrive className="h-5 w-5 text-cyan-400" />
+                                <span>Storage Mounts Configuration</span>
+                            </CardTitle>
+                            <p className="text-xs text-slate-400">
+                                Configure physical disk mount paths for storage capacity monitoring and free space warning calculations.
+                            </p>
+
+                            <div className="space-y-3">
+                                {servers.map(srv => {
+                                    const currentPath = serverStorageConfig[srv.serverId] || "";
+                                    const checkStatus = pathCheckResults[srv.serverId];
+
+                                    return (
+                                        <div key={srv.serverId} className="space-y-1.5">
+                                            <Label className="text-xs text-slate-300 font-semibold">{srv.serverName} Mount Path:</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    placeholder="/mnt/user/data/media"
+                                                    value={currentPath}
+                                                    onChange={(e) => {
+                                                        const updated = { ...serverStorageConfig, [srv.serverId]: e.target.value };
+                                                        setServerStorageConfig(updated);
+                                                    }}
+                                                    className="text-xs bg-slate-950 border-slate-800 font-mono"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={async () => {
+                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: true } }));
+                                                        const res = await validateDirectoryPathAction(currentPath);
+                                                        setPathCheckResults(prev => ({ ...prev, [srv.serverId]: { checking: false, success: res.success, msg: res.message || res.error } }));
+                                                    }}
+                                                    className="border-slate-700 text-xs shrink-0"
+                                                >
+                                                    Validate
+                                                </Button>
+                                            </div>
+                                            {checkStatus && !checkStatus.checking && (
+                                                <p className={`text-[10px] ${checkStatus.success ? "text-emerald-400" : "text-rose-400"}`}>
+                                                    {checkStatus.msg}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={savingStorageConfig}
+                                    onClick={async () => {
+                                        setSavingStorageConfig(true);
+                                        await saveServerStorageConfigAction(serverStorageConfig);
+                                        setSavingStorageConfig(false);
+                                        setStorageConfigSavedMsg(true);
+                                        setTimeout(() => setStorageConfigSavedMsg(false), 3000);
+                                    }}
+                                    className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs gap-1.5"
+                                >
+                                    <Save className="h-3.5 w-3.5" />
+                                    <span>Save Storage Config</span>
+                                </Button>
+                                {storageConfigSavedMsg && <span className="text-xs text-emerald-400 font-bold ml-2">✓ Saved!</span>}
+                            </div>
+                        </Card>
+
+                        {/* Artwork Backup Vault Stats */}
+                        <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
+                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                <Archive className="h-5 w-5 text-purple-400" />
+                                <span>Artwork Backup Vault Health</span>
+                            </CardTitle>
+                            <p className="text-xs text-slate-400">
+                                DomsHomeLab automatically archives pristine original poster artworks before applying overlays, allowing 0-loss rollback anytime.
+                            </p>
+
+                            <div className="space-y-3 font-mono text-xs">
+                                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-400">Original Posters Backed Up:</span>
+                                        <strong className="text-purple-300">{vaultStats?.backupCount || 0} files</strong>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-400">Vault Disk Usage:</span>
+                                        <strong className="text-purple-300">
+                                            {vaultStats?.backupBytes ? `${(vaultStats.backupBytes / (1024 * 1024)).toFixed(1)} MB` : "0 MB"}
+                                        </strong>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-400">Custom Badges Vault:</span>
+                                        <strong className="text-purple-300">{vaultStats?.badgeCount || 0} badges</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+                </div>
+            )}
+
+            {/* Manual Flag Modal */}
+            <Dialog open={manualFlagModalOpen} onOpenChange={setManualFlagModalOpen}>
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-400" />
+                            <span>Manually Flag Media as Leaving Soon</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Add an item directly to the Leaving Soon collection hub with a custom notice period.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3 py-3 text-xs flex-1 overflow-y-auto min-h-0">
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300">Item Title:</Label>
+                            <Input
+                                placeholder="e.g. Inception (2010)"
+                                value={manualTitle}
+                                onChange={(e) => setManualTitle(e.target.value)}
+                                className="h-8 text-xs bg-slate-950 border-slate-800"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300">Plex Rating Key:</Label>
+                            <Input
+                                placeholder="e.g. 12345"
+                                value={manualRatingKey}
+                                onChange={(e) => setManualRatingKey(e.target.value)}
+                                className="h-8 text-xs bg-slate-950 border-slate-800 font-mono"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300">Days Notice Remaining:</Label>
+                            <Input
+                                type="number"
+                                min="1"
+                                max="90"
+                                value={manualDaysRemaining}
+                                onChange={(e) => setManualDaysRemaining(parseInt(e.target.value, 10) || 14)}
+                                className="h-8 text-xs bg-slate-950 border-slate-800 font-mono"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300">Reason:</Label>
+                            <Input
+                                value={manualReason}
+                                onChange={(e) => setManualReason(e.target.value)}
+                                className="h-8 text-xs bg-slate-950 border-slate-800"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setManualFlagModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={flaggingItem || !manualTitle.trim() || !manualRatingKey.trim()}
+                            onClick={handleManualFlag}
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5"
+                        >
+                            {flaggingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                            <span>Stage Item</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Plex Real Media Poster Picker Modal */}
+            <PlexPosterPickerModal
+                open={posterPickerModalOpen}
+                onOpenChange={setPosterPickerModalOpen}
+                serverId={selectedServerId}
+                sectionKey={selectedSectionKey}
+                serverName={currentServer?.serverName}
+                servers={servers}
+                onSelect={handleSelectRealPoster}
+            />
+
+            {/* Save Custom Rule Preset Modal */}
+            <Dialog open={saveCustomPresetModalOpen} onOpenChange={setSaveCustomPresetModalOpen}>
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-rose-400" />
+                            <span>Save Custom Maintainerr Rule Preset</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Save your current criteria as a named rule preset to quickly reload anytime.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3 py-3 text-xs flex-1 overflow-y-auto min-h-0">
+                        <div className="space-y-1">
+                            <Label className="text-xs text-slate-300 font-semibold">Preset Name:</Label>
+                            <Input
+                                placeholder="e.g. 4K HDR 60-Day Prune"
+                                value={newCustomPresetName}
+                                onChange={(e) => setNewCustomPresetName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && newCustomPresetName.trim()) {
+                                        handleSaveCustomRulePreset();
+                                    }
+                                }}
+                                className="h-8 text-xs bg-slate-950 border-slate-800"
+                                autoFocus
+                            />
+                        </div>
+
+                        {/* Summary of Configuration to be Saved */}
+                        <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1.5 font-mono text-[11px]">
+                            <span className="text-slate-400 font-bold block text-[10px] uppercase">Included Rule Configuration:</span>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Minimum Age:</span>
+                                <span>{simMinAgeDays} days</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Grace Notice:</span>
+                                <span>{simGracePeriodDays} days</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Filter Mode:</span>
+                                <span>{simUnwatchedOnly ? "Unwatched Only (0 plays)" : "All Media"}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Sort Strategy:</span>
+                                <span className="capitalize">{simSortBy.replace(/_/g, " ")}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Oldest Limit:</span>
+                                <span>{simOldestLimit === 0 ? "All files" : `${simOldestLimit} files`}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span className="text-slate-500">Banner Template:</span>
+                                <span>{PRUNE_BANNER_PRESETS.find(p => p.id === simBannerType)?.label || simBannerType}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setSaveCustomPresetModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={!newCustomPresetName.trim()}
+                            onClick={handleSaveCustomRulePreset}
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5 cursor-pointer"
+                        >
+                            <Save className="h-3.5 w-3.5" />
+                            <span>Save Preset</span>
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Protective Curation Library Automation Guard Modal */}
+            <CurationLibraryGuardModal
+                open={guardModalOpen}
+                onOpenChange={setGuardModalOpen}
+                featureName="Prune Engine"
+                serverName={guardContext?.serverName || selectedServerId}
+                libraryName={guardContext?.libraryName || `Library #${selectedSectionKey}`}
+                sectionKey={guardContext?.sectionKey || selectedSectionKey}
+                actionName={guardContext?.actionName || "Prune Action"}
+                onEnableAndRun={handleGuardEnableAndRun}
+                onForceRun={handleGuardForceRun}
+                onCancel={() => setGuardModalOpen(false)}
+            />
+
+            {/* Manage Target Library Sections Modal */}
+            <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
+                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogHeader className="pb-2 border-b border-slate-800 shrink-0">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-rose-400" />
+                            <span>Configure Target Pruning Libraries</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-400">
+                            Select which Plex library sections should be evaluated for aging media pruning. Excluded sections are completely protected and will never be touched.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 flex-1 overflow-y-auto min-h-0 pr-1 py-2">
+                        {servers.map(srv => {
+                            const srvSections = srv.sections || [];
+                            return (
+                                <div key={srv.serverId} className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                        <div className="flex items-center gap-2">
+                                            <HardDrive className="h-4 w-4 text-cyan-400" />
+                                            <span className="text-xs font-bold text-white">{srv.serverName}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, true)}
+                                                className="h-6 text-[10px] px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"
+                                            >
+                                                Enable All
+                                            </Button>
+                                            <span className="text-slate-600">•</span>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleToggleAllSectionsForSpecificServer(srv.serverId, false)}
+                                                className="h-6 text-[10px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                                            >
+                                                Disable All
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {srvSections.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {srvSections.map(sec => {
+                                                const enabled = isSectionEnabled(srv.serverId, String(sec.key));
+                                                return (
+                                                    <div
+                                                        key={String(sec.key)}
+                                                        className={`p-2.5 rounded-lg border flex items-center justify-between transition-all ${
+                                                            enabled
+                                                                ? "bg-emerald-950/20 border-emerald-600/40 text-emerald-200"
+                                                                : "bg-slate-900/60 border-slate-800 text-slate-400"
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            {sec.type === "movie" ? (
+                                                                <Film className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                            ) : (
+                                                                <Tv className={`h-4 w-4 shrink-0 ${enabled ? "text-emerald-400" : "text-slate-500"}`} />
+                                                            )}
+                                                            <div className="min-w-0">
+                                                                <span className="text-xs font-bold text-white block truncate">{sec.title}</span>
+                                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                                    Section #{sec.key} • {sec.type === "movie" ? "Movies" : "TV Shows"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <Badge className={`text-[10px] font-bold ${
+                                                                enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                            }`}>
+                                                                {enabled ? "🟢 ACTIVE" : "⚪ EXCLUDED"}
+                                                            </Badge>
+                                                            <Switch
+                                                                checked={enabled}
+                                                                onCheckedChange={() => handleToggleSpecificSection(srv.serverId, String(sec.key))}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-500 italic py-1">No library sections loaded for this server.</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <DialogFooter className="pt-2 border-t border-slate-800">
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => setManageLibrariesModalOpen(false)}
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs"
+                        >
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* FLOATING UNSAVED CHANGES BAR */}
+            {hasUnsavedChanges && (
+                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <div className="text-xs">
+                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
+                                    {unsavedSections.join(", ")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleDiscardAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 cursor-pointer"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save All Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default PruneStudio;

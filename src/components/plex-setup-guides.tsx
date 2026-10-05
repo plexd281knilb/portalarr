@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle } from "lucide-react";
+import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle, ExternalLink } from "lucide-react";
 import { getPlexSetupGuides } from "@/app/actions";
+import Link from "next/link";
 
 export default function PlexSetupGuides() {
     const [isOpen, setIsOpen] = useState(false);
@@ -49,7 +50,7 @@ export default function PlexSetupGuides() {
                     Setup Guides
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
+            <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 border-b border-border/40">
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                         <Sparkles className="h-5 w-5 text-primary" />
@@ -74,7 +75,7 @@ export default function PlexSetupGuides() {
 
                     {guides.length > 0 && (
                         <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-                            <TabsList className="flex flex-wrap items-center gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-xl w-full h-auto">
+                            <TabsList className="flex flex-wrap items-center justify-start gap-1.5 p-1.5 bg-muted/20 border border-border/40 rounded-xl w-full h-auto">
                                 {guides.map(guide => (
                                     <TabsTrigger 
                                         key={guide.id} 
@@ -122,7 +123,13 @@ export default function PlexSetupGuides() {
                     )}
                 </div>
 
-                <div className="p-4 border-t border-border/40 bg-muted/10 flex justify-end">
+                <div className="p-4 border-t border-border/40 bg-muted/10 flex items-center justify-between">
+                    <Button asChild variant="ghost" size="sm" className="text-xs text-sky-400 hover:text-sky-300 gap-1.5" onClick={() => setIsOpen(false)}>
+                        <Link href="/guides">
+                            <span>Open Full Guides Page</span>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                    </Button>
                     <Button onClick={() => setIsOpen(false)} size="sm" className="font-semibold text-xs px-5">
                         Got It
                     </Button>

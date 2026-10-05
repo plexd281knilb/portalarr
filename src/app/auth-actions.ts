@@ -1,15 +1,16 @@
 "use server";
 
 import { compare, hash } from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
-import nodemailer from "nodemailer";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getPlexServerFriends } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
-import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
+import { getJwtSecret } from "@/lib/auth-secret";
+import { getAppUrl } from "@/lib/app-url";
+import { renderEmailTemplate } from "@/lib/email-templates";
 
 // --- 1. SETUP CHECK ---
 export async function checkSystemInitialized() {
@@ -39,7 +40,7 @@ export async function setupFirstAdmin(formData: FormData) {
       data: { username, email, password: hashedPassword, role: "ADMIN", status: "APPROVED" }
     });
 
-    await createSession(user.id, user.username, user.role, user.status);
+    await createSession(user.id, user.username, user.role, user.status, null, null, "STANDARD");
     return { success: true };
   } catch (e: any) {
     console.error("Setup Error:", e);
@@ -78,7 +79,25 @@ export async function login(formData: FormData) {
     return { error: "Invalid credentials" };
   }
 
-  await createSession(user.id, user.username, user.role, user.status);
+  // Check if trial or subscription elapsed before creating session
+  const now = new Date();
+  let currentStatus = user.status;
+  if (currentStatus === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
+    currentStatus = "EXPIRED";
+    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
+  } else if (currentStatus === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
+    currentStatus = "EXPIRED";
+    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
+  }
+
+  // Auto-heal membership tier for approved members or admins whose tier is still marked as TRIAL
+  let currentTier = user.membershipTier;
+  if ((currentStatus === "APPROVED" || user.role === "ADMIN") && currentTier === "TRIAL") {
+    currentTier = "STANDARD";
+    await prisma.user.update({ where: { id: user.id }, data: { membershipTier: "STANDARD", trialEndsAt: null } }).catch(() => {});
+  }
+
+  await createSession(user.id, user.username, user.role, currentStatus, user.trialEndsAt, user.subscriptionEndsAt, currentTier);
   return { success: true };
 }
 
@@ -117,44 +136,101 @@ export async function requestAccount(formData: FormData) {
   await sendAdminNewAccountRequestEmail({ id: user.id, username: user.username, email: user.email });
 
   // Log user into pending session state
-  await createSession(user.id, user.username, user.role, user.status);
+  await createSession(user.id, user.username, user.role, user.status, null, null, user.membershipTier);
   return { success: true };
 }
 
 // --- 5. LOGOUT ---
 export async function logout() {
-  (await cookies()).delete("session");
+  const cookieStore = await cookies();
+  cookieStore.set("session", "", { path: "/", maxAge: 0 });
+  cookieStore.delete("session");
+  cookieStore.set("portalarr_impersonator_token", "", { path: "/", maxAge: 0 });
+  cookieStore.delete("portalarr_impersonator_token");
   redirect("/login");
 }
 
+// --- HELPER: GET ADAPTIVE COOKIE OPTIONS ---
+export async function getAuthCookieOptions(customMaxAge?: number) {
+  let isSecure = process.env.NODE_ENV === "production";
+  try {
+    const h = await headers();
+    const proto = h.get("x-forwarded-proto");
+    const referer = h.get("referer");
+    const host = h.get("host") || "";
+
+    // If requested over plain unencrypted HTTP, or accessing local LAN IP directly without https, do NOT set secure flag
+    // otherwise Chrome, Edge, Safari, and Firefox silently discard the cookie and prevent view switching!
+    if (proto === "http" || referer?.startsWith("http://")) {
+      isSecure = false;
+    } else if (proto === "https" || referer?.startsWith("https://")) {
+      isSecure = true;
+    } else if (/^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(host)) {
+      if (proto !== "https" && !referer?.startsWith("https://")) {
+        isSecure = false;
+      }
+    }
+  } catch {
+    // In contexts where headers() cannot be read, fallback safely
+  }
+
+  return {
+    httpOnly: true,
+    secure: isSecure,
+    path: "/",
+    sameSite: "lax" as const,
+    ...(customMaxAge !== undefined ? { maxAge: customMaxAge } : {})
+  };
+}
+
 // --- HELPER: CREATE SESSION ---
-export async function createSession(userId: string, username: string, role: string, status: string = "APPROVED") {
+export async function createSession(
+  userId: string, 
+  username: string, 
+  role: string, 
+  status: string = "APPROVED",
+  trialEndsAt?: Date | string | null,
+  subscriptionEndsAt?: Date | string | null,
+  membershipTier?: string | null,
+  skipLastLoginUpdate: boolean = false
+) {
   const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30; // 30 Days persistent login
   const expiresAt = new Date(Date.now() + THIRTY_DAYS_SEC * 1000);
 
-  try {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { lastLogin: new Date() }
-    });
-  } catch (e) {
-    console.error("[AUTH] Failed to update lastLogin for user:", e);
+  if (!skipLastLoginUpdate) {
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { lastLogin: new Date() }
+      });
+    } catch (e) {
+      console.error("[AUTH] Failed to update lastLogin for user:", e);
+    }
   }
 
-  const token = await new SignJWT({ userId, username, role, status })
+  const token = await new SignJWT({ 
+    userId, 
+    username, 
+    role, 
+    status,
+    membershipTier: membershipTier || (status === "TRIAL" ? "TRIAL" : "STANDARD"),
+    trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
+    subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt).toISOString() : null
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
     .sign(getJwtSecret());
 
-  (await cookies()).set("session", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    maxAge: THIRTY_DAYS_SEC, 
-    path: "/",
-    sameSite: "lax",
-    expires: expiresAt
-  });
+  try {
+    const cookieOpts = await getAuthCookieOptions(THIRTY_DAYS_SEC);
+    (await cookies()).set("session", token, {
+      ...cookieOpts,
+      expires: expiresAt
+    });
+  } catch (cookieErr) {
+    // In Server Components render context, Next.js does not allow setting cookies on the response.
+  }
 }
 
 // --- HELPER: GET SESSION ---
@@ -172,64 +248,75 @@ export async function getSession() {
 
 // --- 6. PLEX CALLBACK (AUTO-PROVISION & SYNC) ---
 export async function handlePlexCallback(authToken: string, rawUsername: string, rawEmail: string, isSetupMode: boolean = false) {
-  rawEmail = (rawEmail || "").trim().toLowerCase();
-  rawUsername = (rawUsername || (rawEmail ? rawEmail.split('@')[0] : "")).trim();
+  let plexEmail = (rawEmail || "").trim().toLowerCase();
+  let plexUsername = (rawUsername || "").trim();
+  let plexUserId = "";
 
-  console.log(`[AUTH] Processing Plex login for: username="${rawUsername}", email="${rawEmail}"`);
+  console.log(`[AUTH] Processing Plex login for: username="${plexUsername}", email="${plexEmail}"`);
 
-  if (!rawEmail && !rawUsername) {
-    return { error: "Plex account profile is missing email and username details." };
-  }
-
-  // Check if user already exists in Portalarr
-  const allUsers = await prisma.user.findMany();
-  let user = allUsers.find(
-    (u) =>
-      (rawEmail && u.email.toLowerCase() === rawEmail) ||
-      (rawUsername && u.username.toLowerCase() === rawUsername.toLowerCase())
-  );
-
-  // Load global settings for admin Plex token
-  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-  let adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-  if (!adminToken && authToken) {
-    adminToken = authToken;
-  }
-
-  if (!adminToken) {
-      return { error: "The Server Admin must configure their Plex Token in Settings before new users can sign in with Plex." };
-  }
-
-  // Verify access to the Plex Server (Check if Owner or Friend)
-  let isAdminOwner = false;
+  // 1. Fetch authenticated user profile directly from Plex using the fresh authToken
   try {
-    const adminRes = await fetch("https://plex.tv/api/v2/user", {
+    const userRes = await fetch("https://plex.tv/api/v2/user", {
       headers: {
         "Accept": "application/json",
-        "X-Plex-Token": adminToken,
+        "X-Plex-Token": authToken,
         "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
       }
     });
-    if (adminRes.ok) {
-      const adminProfile = await adminRes.json();
-      const adminUserObj = adminProfile.user || adminProfile;
-      const adminEmail = (adminUserObj.email || "").toLowerCase().trim();
-      const adminUsername = (adminUserObj.username || adminUserObj.title || "").toLowerCase().trim();
-
-      if (
-        (adminEmail && rawEmail && adminEmail === rawEmail) ||
-        (adminUsername && rawUsername && adminUsername === rawUsername.toLowerCase())
-      ) {
-        isAdminOwner = true;
-        console.log(`[AUTH] User identified as Plex Server Owner.`);
-      }
+    if (userRes.ok) {
+      const userProfile = await userRes.json();
+      const uObj = userProfile.user || userProfile;
+      if (uObj.email) plexEmail = uObj.email.trim().toLowerCase();
+      if (uObj.username || uObj.title) plexUsername = (uObj.username || uObj.title).trim();
+      if (uObj.id) plexUserId = String(uObj.id);
     }
   } catch (err) {
-    console.warn("[AUTH] Failed to fetch admin Plex profile for owner verification:", err);
+    console.warn("[AUTH] Failed to fetch Plex profile with authToken:", err);
   }
 
-  // If owner logged in and Plex token is not saved yet, save token automatically
-  if (isAdminOwner && authToken && (!settings?.mainPlexToken)) {
+  if (!plexEmail && !plexUsername) {
+    return { error: "Plex account profile is missing email and username details." };
+  }
+
+  // 2. Discover if logging-in account owns a Plex Media Server
+  let ownsPlexServer = false;
+  try {
+    const resRes = await fetch("https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1", {
+      headers: {
+        "Accept": "application/json",
+        "X-Plex-Token": authToken,
+        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+      }
+    });
+    if (resRes.ok) {
+      const resources = await resRes.json();
+      if (Array.isArray(resources)) {
+        ownsPlexServer = resources.some((r: any) => 
+          r.provides && r.provides.includes("server") && (r.owned === true || r.owned === "1" || r.isOwner === true)
+        );
+      }
+    }
+  } catch (rErr) {
+    console.warn("[AUTH] Failed to fetch Plex resources for owner check:", rErr);
+  }
+
+  // 3. Find existing user in database
+  const allUsers = await prisma.user.findMany();
+  let user = allUsers.find(
+    (u) =>
+      (plexEmail && u.email.toLowerCase() === plexEmail) ||
+      (plexUsername && u.username.toLowerCase() === plexUsername.toLowerCase()) ||
+      (plexEmail && u.plexEmail && u.plexEmail.toLowerCase() === plexEmail) ||
+      (plexUsername && u.plexUsername && u.plexUsername.toLowerCase() === plexUsername.toLowerCase())
+  );
+
+  const totalDbAdmins = allUsers.filter(u => u.role === "ADMIN").length;
+  const isExistingAdmin = user?.role === "ADMIN";
+  const isFirstUserSetup = allUsers.length === 0 || totalDbAdmins === 0 || isSetupMode;
+  const isAdminOwner = ownsPlexServer || isExistingAdmin || isFirstUserSetup;
+
+  // 4. If Admin/Server Owner logs in, automatically save and refresh Admin Plex Token in settings!
+  if (isAdminOwner && authToken) {
     try {
       const encryptedToken = encryptData(authToken);
       await prisma.settings.upsert({
@@ -237,64 +324,84 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
         update: { mainPlexToken: encryptedToken },
         create: { id: "global", mainPlexToken: encryptedToken }
       });
-      console.log("[AUTH] Automatically saved Admin Plex Token to global settings.");
+      console.log(`[AUTH] Automatically saved/refreshed Admin Plex Token in settings for ${plexUsername || plexEmail}.`);
     } catch (saveErr) {
       console.error("[AUTH] Failed to auto-save Admin Plex Token:", saveErr);
     }
   }
 
-  // Check if logging-in user is a verified Plex Friend across all endpoints
-  let isFriend = false;
-  if (!isAdminOwner) {
-    const serverFriends = await getPlexServerFriends(adminToken);
-    isFriend = serverFriends.some((f) => 
-        (rawEmail && f.email.toLowerCase() === rawEmail) ||
-        (rawUsername && f.username.toLowerCase() === rawUsername.toLowerCase())
-    );
+  // Load effective admin token for friend verification
+  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+  let adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+  if (!adminToken && authToken && isAdminOwner) {
+    adminToken = authToken;
   }
 
-  // If user already exists in DB:
+  // Check if logging-in user is a verified Plex Friend across all endpoints
+  let isFriend = false;
+  if (!isAdminOwner && adminToken) {
+    try {
+      const serverFriends = await getPlexServerFriends(adminToken);
+      isFriend = serverFriends.some((f) => 
+        (plexEmail && f.email && f.email.toLowerCase() === plexEmail) ||
+        (plexUsername && f.username && f.username.toLowerCase() === plexUsername.toLowerCase())
+      );
+    } catch (fErr) {
+      console.warn("[AUTH] Error checking Plex friends list:", fErr);
+    }
+  }
+
+  // 5. If user already exists in DB:
   if (user) {
-    console.log(`[AUTH] Existing user matched: ${user.username} (${user.id}) status=${user.status}`);
-    
-    // If status is REJECTED, but they ARE verified as Owner or Plex Friend, auto-reapprove!
-    if (user.status === "REJECTED") {
-      if (isAdminOwner || isFriend) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { status: "APPROVED" }
-        });
-        console.log(`[AUTH] Verified Plex friend/owner auto-reapproved: ${user.username}`);
-      } else {
-        return { error: "Your account request was declined by the administrator." };
-      }
+    console.log(`[AUTH] Existing user matched: ${user.username} (${user.id}) status=${user.status} role=${user.role}`);
+
+    const updateData: any = {};
+    if (plexEmail && user.plexEmail !== plexEmail) updateData.plexEmail = plexEmail;
+    if (plexUsername && user.plexUsername !== plexUsername) updateData.plexUsername = plexUsername;
+
+    if (isAdminOwner) {
+      updateData.role = "ADMIN";
+      updateData.status = "APPROVED";
+    } else if (isFriend && (user.status === "PENDING" || user.status === "REJECTED")) {
+      updateData.status = "APPROVED";
     }
 
-    // If admin logs in with Plex, refresh mainPlexToken in global settings
-    if (user.role === "ADMIN" && authToken) {
-      try {
-        const encryptedToken = encryptData(authToken);
-        await prisma.settings.upsert({
-          where: { id: "global" },
-          update: { mainPlexToken: encryptedToken },
-          create: { id: "global", mainPlexToken: encryptedToken }
-        });
-        console.log(`[AUTH] Refreshed Admin Plex Token in settings for ${user.username}.`);
-      } catch (e) {
-        console.warn("[AUTH] Failed to refresh Admin Plex Token:", e);
-      }
+    if (Object.keys(updateData).length > 0) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: updateData
+      });
     }
-    await createSession(user.id, user.username, user.role, user.status);
+
+    // Check account status
+    if (user.status === "REJECTED" && !isAdminOwner && !isFriend) {
+      return { error: "Your account request was declined by the administrator." };
+    }
+    if (user.status === "PENDING" && !isAdminOwner && !isFriend) {
+      return { error: "Your account is currently pending administrator approval." };
+    }
+    if (user.status === "SUSPENDED" || user.status === "EXPIRED") {
+      // Allow them into the portal so proxy/client displays access renewal or suspended state
+    }
+
+    if (isAdminOwner) {
+      import("./actions").then(({ syncPlexFriendsInternal }) => {
+        syncPlexFriendsInternal().catch(e => console.error("[AUTH] Post-login Plex sync error:", e));
+      });
+    }
+
+    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
     return { success: true };
   }
 
+  // 6. New User: Must be Plex Server Owner or verified Friend to auto-provision
   if (!isAdminOwner && !isFriend) {
-    console.warn(`[AUTH] BLOCKED: ${rawUsername || rawEmail} is not on the shared Plex friends list.`);
-    return { error: "Access Denied. You do not have access to this Plex Server." };
+    console.warn(`[AUTH] BLOCKED: ${plexUsername || plexEmail} is not on the shared Plex friends list.`);
+    return { error: "Access Denied. You are not on the shared Plex friends list. If you are requesting access to ebooks & audiobooks, please create an account on the Register tab." };
   }
 
   // Generate safe, collision-free username
-  let baseUsername = rawUsername || (rawEmail ? rawEmail.split('@')[0] : "plex_user");
+  let baseUsername = plexUsername || (plexEmail ? plexEmail.split('@')[0] : "plex_user");
   baseUsername = baseUsername.replace(/[^a-zA-Z0-9_\-]/g, "_");
   if (!baseUsername) baseUsername = "plex_user";
 
@@ -306,7 +413,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
   }
 
   // Generate safe, collision-free email
-  let safeEmail = rawEmail;
+  let safeEmail = plexEmail;
   if (!safeEmail || allUsers.some((u) => u.email.toLowerCase() === safeEmail.toLowerCase())) {
     safeEmail = `${safeUsername.toLowerCase()}@plex.local`;
   }
@@ -314,7 +421,6 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
   const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
   const hashedPassword = await hash(randomPassword, 10);
 
-  // If server owner, assign ADMIN + APPROVED, otherwise USER + APPROVED (since friend list verified)
   const role = isAdminOwner ? "ADMIN" : "USER";
   const status = "APPROVED";
 
@@ -324,7 +430,9 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
       email: safeEmail,
       password: hashedPassword,
       role,
-      status
+      status,
+      plexEmail: plexEmail || null,
+      plexUsername: plexUsername || null
     }
   });
 
@@ -337,7 +445,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     });
   }
 
-  await createSession(user.id, user.username, user.role, user.status);
+  await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
   return { success: true };
 }
 
@@ -350,57 +458,36 @@ async function sendAdminNewAccountRequestEmail(user: { id: string; username: str
       return;
     }
 
+    if (settings.emailNotificationsEnabled === false || settings.notifyAdminNewUserRequest === false) {
+      console.log("[AUTH] Admin new user request email notification is disabled in settings. Skipping.");
+      return;
+    }
+
     const admins = await prisma.user.findMany({
       where: { role: "ADMIN" }
     });
 
-    const adminEmails = admins.map(a => a.email).filter(Boolean);
-    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort || 587,
-      secure: settings.smtpPort === 465,
-      auth: {
-        user: settings.smtpUser,
-        pass: decryptData(settings.smtpPass)
-      }
+    const adminEmails = admins.map(a => a.email).filter(Boolean) as string[];
+    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser as string];
+    const appUrl = await getAppUrl();
+    const { subject, html } = await renderEmailTemplate("admin_new_user", {
+      username: user.username,
+      email: user.email,
+      status: "PENDING APPROVAL",
+      appUrl,
+      accessUrl: `${appUrl}/settings/access`
     });
 
-    const mailOptions = {
-      from: senderEmail,
-      to: recipientEmails.join(", "),
-      subject: `👤 New Account Request: ${user.username}`,
-      html: `
-        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">New Account Request</h2>
-          <p style="font-size: 15px; color: #475569;">A new user has registered a temporary account and is awaiting your approval to access Portalarr.</p>
-          
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-              <tr>
-                <td style="padding: 6px 0; font-weight: bold; width: 120px; color: #64748b;">Username:</td>
-                <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${user.username}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Email:</td>
-                <td style="padding: 6px 0; color: #0f172a;">${user.email}</td>
-              </tr>
-              <tr>
-                <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Status:</td>
-                <td style="padding: 6px 0; color: #d97706; font-weight: bold;">PENDING APPROVAL</td>
-              </tr>
-            </table>
-          </div>
-
-          <p style="font-size: 14px; color: #475569;">You can review and approve this user in your Portalarr Dashboard under <strong>Settings &gt; Access Control</strong>.</p>
-        </div>
-      `
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`[AUTH] Account request notification email sent to admins for ${user.username}`);
+    const { sendOrQueueEmail } = await import("./actions");
+    await sendOrQueueEmail({
+      to: recipientEmails as string[],
+      subject,
+      html,
+      templateId: "admin_new_user",
+      targetUser: user.username,
+      userId: user.id
+    });
+    console.log(`[AUTH] Account request notification email sent or queued for admins for ${user.username}`);
   } catch (err) {
     console.error("[AUTH] Error sending account request email:", err);
   }
@@ -414,33 +501,26 @@ export async function sendUserApprovalEmail(userEmail: string, username: string)
       return;
     }
 
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort || 587,
-      secure: settings.smtpPort === 465,
-      auth: {
-        user: settings.smtpUser,
-        pass: decryptData(settings.smtpPass)
-      }
-    });
+    if (settings.emailNotificationsEnabled === false || settings.notifyUserApproval === false) {
+      console.log(`[AUTH] User approval email notification is disabled in settings. Skipping email for ${username}.`);
+      return;
+    }
 
     const appUrl = await getAppUrl();
-    await transporter.sendMail({
-      from: senderEmail,
+    const { subject, html } = await renderEmailTemplate("user_approval", {
+      username,
+      email: userEmail,
+      appUrl,
+      loginUrl: `${appUrl}/login`
+    });
+
+    const { sendOrQueueEmail } = await import("./actions");
+    await sendOrQueueEmail({
       to: userEmail,
-      subject: `🎉 Your Portalarr Account has been Approved!`,
-      html: `
-        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
-          <h2 style="color: #0f172a; margin-top: 0;">Account Approved!</h2>
-          <p>Hi <strong>${username}</strong>,</p>
-          <p>Great news! Your account request for Portalarr has been approved by the administrator.</p>
-          <p>You can now sign in and access media requests and services.</p>
-          <div style="margin-top: 20px; text-align: center;">
-            <a href="${appUrl}/login" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Log in to Portalarr</a>
-          </div>
-        </div>
-      `
+      subject,
+      html,
+      templateId: "user_approval",
+      targetUser: username
     });
   } catch (err) {
     console.error("[AUTH] Failed to send approval email to user:", err);
@@ -452,17 +532,122 @@ export async function getCurrentUser() {
   const payload = await getSession();
   if (!payload || !payload.userId) return null;
   
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { id: payload.userId as string },
-    select: { id: true, username: true, email: true, kindleEmail: true, role: true, status: true }
+    select: { 
+      id: true, 
+      username: true, 
+      email: true, 
+      kindleEmail: true, 
+      role: true, 
+      status: true,
+      membershipTier: true,
+      subscriptionCadence: true,
+      lastRenewalReminderSentAt: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+      referralCode: true,
+      plexEmail: true,
+      plexUsername: true
+    }
   });
 
   if (!user) return null;
+
+  // Auto-expire trials that have elapsed
+  const now = new Date();
+  if (user.status === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
+    console.log(`[AUTH] Trial expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: "EXPIRED", plexLibrarySectionIds: "" },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        kindleEmail: true,
+        role: true,
+        status: true,
+        membershipTier: true,
+        subscriptionCadence: true,
+        lastRenewalReminderSentAt: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+        referralCode: true,
+        plexEmail: true,
+        plexUsername: true
+      }
+    });
+
+    try {
+      const { revokePlexAccessForUserInternal } = await import("./actions");
+      await revokePlexAccessForUserInternal(user, "Your trial period has expired.");
+    } catch (revokeErr) {
+      console.warn("[AUTH-TRIAL-REVOKE-WARNING]:", revokeErr);
+    }
+  }
+
+  // Auto-expire timed subscriptions that have elapsed
+  if (user.status === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
+    console.log(`[AUTH] Subscription expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: "EXPIRED", plexLibrarySectionIds: "" },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        kindleEmail: true,
+        role: true,
+        status: true,
+        membershipTier: true,
+        subscriptionCadence: true,
+        lastRenewalReminderSentAt: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+        referralCode: true,
+        plexEmail: true,
+        plexUsername: true
+      }
+    });
+
+    try {
+      const { revokePlexAccessForUserInternal } = await import("./actions");
+      await revokePlexAccessForUserInternal(user, "Your subscription period has expired.");
+    } catch (revokeErr) {
+      console.warn("[AUTH-SUB-REVOKE-WARNING]:", revokeErr);
+    }
+  }
   
-  // Prevent login loops: If user status or role in DB changed, re-issue updated session cookie immediately
-  if (user.status !== payload.status || user.role !== payload.role) {
-    console.log(`[AUTH] User status/role updated for ${user.username} (Status: ${payload.status} -> ${user.status}). Updating session cookie.`);
-    await createSession(user.id, user.username, user.role, user.status);
+  // Auto-heal membership tier for approved members or admins whose tier is still marked as TRIAL
+  if ((user.status === "APPROVED" || user.role === "ADMIN") && user.membershipTier === "TRIAL") {
+    console.log(`[AUTH] Healing membership tier for approved user ${user.username} (TRIAL -> STANDARD)`);
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { membershipTier: "STANDARD", trialEndsAt: null },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        kindleEmail: true,
+        role: true,
+        status: true,
+        membershipTier: true,
+        subscriptionCadence: true,
+        lastRenewalReminderSentAt: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+        referralCode: true,
+        plexEmail: true,
+        plexUsername: true
+      }
+    });
+  }
+  
+  // Prevent login loops: If user status, role, or tier in DB changed, re-issue updated session cookie immediately
+  if (user.status !== payload.status || user.role !== payload.role || (payload as any).membershipTier !== user.membershipTier) {
+    console.log(`[AUTH] User status/role/tier updated for ${user.username} (Status: ${payload.status} -> ${user.status}, Tier: ${(payload as any).membershipTier} -> ${user.membershipTier}). Updating session cookie.`);
+    await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
   }
 
   return user;
@@ -495,7 +680,11 @@ export async function requestForgotPassword(formData: FormData) {
     return { error: "SMTP email is not configured on this server. Please contact your administrator to reset your password." };
   }
 
-  const tempPassword = "Portalarr-" + Math.random().toString(36).slice(-6) + "!";
+  if (settings.emailNotificationsEnabled === false || settings.notifyPasswordReset === false) {
+    return { error: "Password reset emails are currently disabled by the administrator. Please contact your admin directly for assistance." };
+  }
+
+  const tempPassword = "DomsHomeLab-" + Math.random().toString(36).slice(-6) + "!";
   const hashedPassword = await hash(tempPassword, 10);
 
   await prisma.user.update({
@@ -504,36 +693,25 @@ export async function requestForgotPassword(formData: FormData) {
   });
 
   try {
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort || 587,
-      secure: settings.smtpPort === 465,
-      auth: {
-        user: settings.smtpUser,
-        pass: decryptData(settings.smtpPass)
-      }
+    const appUrl = await getAppUrl();
+    const { subject, html } = await renderEmailTemplate("password_reset", {
+      username: user.username,
+      email: user.email,
+      tempPassword,
+      appUrl,
+      loginUrl: `${appUrl}/login`
     });
 
-    await transporter.sendMail({
-      from: senderEmail,
+    const { sendOrQueueEmail } = await import("./actions");
+    await sendOrQueueEmail({
       to: user.email,
-      subject: `🔑 Temporary Password for Portalarr`,
-      html: `
-        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">Temporary Password Request</h2>
-          <p style="font-size: 15px; color: #475569;">Hi <strong>${user.username}</strong>,</p>
-          <p style="font-size: 15px; color: #475569;">We received a password reset request for your Portalarr account. Here is your temporary password:</p>
-          
-          <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 20px; font-weight: bold; text-align: center; letter-spacing: 2px; color: #0f172a; margin: 20px 0;">
-            ${tempPassword}
-          </div>
-
-          <p style="font-size: 14px; color: #475569;">Please log in with this temporary password and update your password in your settings or profile.</p>
-        </div>
-      `
+      subject,
+      html,
+      templateId: "password_reset",
+      targetUser: user.username,
+      userId: user.id
     });
-    console.log(`[AUTH] Sent temporary password email to ${user.email} (${user.username})`);
+    console.log(`[AUTH] Sent or queued temporary password email to ${user.email} (${user.username})`);
   } catch (err: any) {
     console.error("[AUTH] Error sending temporary password email:", err);
     return { error: "Failed to send email. Please verify SMTP settings with your administrator." };
@@ -571,4 +749,256 @@ export async function changeUserPassword(formData: FormData) {
   });
 
   return { success: true, message: "Your password has been successfully updated!" };
+}
+
+// ============================================================================
+// --- 9. IMPERSONATION (VIEW SITE AS USER) ---
+// ============================================================================
+const IMPERSONATOR_COOKIE_NAME = "portalarr_impersonator_token";
+
+/**
+ * Blazing fast candidate user list for impersonation switcher (under 2ms).
+ * Excludes heavy relations, payment logs, and expiration routines.
+ */
+export async function getImpersonationUserListAction() {
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return [];
+  }
+  const sessionToken = cookieStore.get("session")?.value;
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+
+  let callerIsAdmin = false;
+  if (sessionToken) {
+    try {
+      const { payload } = await jwtVerify(sessionToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) callerIsAdmin = true;
+    } catch {}
+  }
+  if (!callerIsAdmin && impersonatorToken) {
+    try {
+      const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) {
+        const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
+        if (dbAdmin && dbAdmin.role === "ADMIN") callerIsAdmin = true;
+      }
+    } catch {}
+  }
+
+  if (!callerIsAdmin) {
+    return [];
+  }
+
+  return await prisma.user.findMany({
+    select: {
+      id: true,
+      username: true,
+      role: true,
+      status: true,
+      membershipTier: true
+    },
+    orderBy: { username: "asc" }
+  });
+}
+
+export async function impersonateUserAction(targetUserId: string) {
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return { error: "Unauthorized. Admin privileges required to view site as another user." };
+  }
+  const sessionToken = cookieStore.get("session")?.value;
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+
+  // 1. Verify caller is an Admin (either current active session or original impersonator token is Admin)
+  let callerIsAdmin = false;
+  let adminUserId = "";
+
+  if (sessionToken) {
+    try {
+      const { payload } = await jwtVerify(sessionToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) {
+        callerIsAdmin = true;
+        adminUserId = payload.userId as string;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!callerIsAdmin && impersonatorToken) {
+    try {
+      const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+      if (payload.role === "ADMIN" && payload.userId) {
+        const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
+        if (dbAdmin && dbAdmin.role === "ADMIN") {
+          callerIsAdmin = true;
+          adminUserId = dbAdmin.id;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!callerIsAdmin) {
+    return { error: "Unauthorized. Admin privileges required to view site as another user." };
+  }
+
+  // 2. Fetch target user
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, username: true, role: true, status: true, membershipTier: true, trialEndsAt: true, subscriptionEndsAt: true }
+  });
+
+  if (!targetUser) {
+    return { error: "Target user not found." };
+  }
+
+  // 3. If target user is an Admin (or the original admin user themselves), restore Admin mode cleanly!
+  if (targetUser.role === "ADMIN" || targetUser.id === adminUserId) {
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+    cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+    await createSession(
+      targetUser.id, 
+      targetUser.username, 
+      targetUser.role, 
+      targetUser.status, 
+      targetUser.trialEndsAt, 
+      targetUser.subscriptionEndsAt, 
+      targetUser.membershipTier,
+      true
+    );
+    return {
+      success: true,
+      isRestoredAdmin: true,
+      targetUsername: targetUser.username,
+      targetRole: targetUser.role
+    };
+  }
+
+  // 4. Preserve original Admin session token if not already impersonating
+  if (!impersonatorToken && sessionToken) {
+    const cookieOpts = await getAuthCookieOptions(60 * 60 * 24 * 7); // 7 days
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, sessionToken, cookieOpts);
+  }
+
+  // 5. Create fresh session cookie for the target user (skip lastLogin DB write for preview)
+  await createSession(
+    targetUser.id, 
+    targetUser.username, 
+    targetUser.role, 
+    targetUser.status, 
+    targetUser.trialEndsAt, 
+    targetUser.subscriptionEndsAt, 
+    targetUser.membershipTier,
+    true
+  );
+
+  return {
+    success: true,
+    isRestoredAdmin: false,
+    targetUsername: targetUser.username,
+    targetRole: targetUser.role
+  };
+}
+
+export async function stopImpersonationAction() {
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return { error: "No active impersonation session found." };
+  }
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+
+  if (!impersonatorToken) {
+    return { error: "No active impersonation session found." };
+  }
+
+  try {
+    const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+    if (!payload.userId) {
+      cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+      cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+      return { error: "Invalid impersonator session token." };
+    }
+
+    const adminUser = await prisma.user.findUnique({
+      where: { id: payload.userId as string },
+      select: { id: true, username: true, role: true, status: true, membershipTier: true, trialEndsAt: true, subscriptionEndsAt: true }
+    });
+
+    if (!adminUser || adminUser.role !== "ADMIN") {
+      cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+      cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+      return { error: "Original admin user not found or no longer has admin privileges." };
+    }
+
+    // Restore original Admin session (skip lastLogin write)
+    await createSession(
+      adminUser.id, 
+      adminUser.username, 
+      adminUser.role, 
+      adminUser.status, 
+      adminUser.trialEndsAt, 
+      adminUser.subscriptionEndsAt, 
+      adminUser.membershipTier,
+      true
+    );
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+    cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+
+    return { success: true, adminUsername: adminUser.username };
+  } catch (err: any) {
+    console.error("[AUTH] Failed to stop impersonation:", err);
+    cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+    cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+    return { error: "Failed to restore admin session." };
+  }
+}
+
+export async function getImpersonationStatusAction() {
+  let cookieStore: any;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    return { isImpersonating: false };
+  }
+  const impersonatorToken = cookieStore.get(IMPERSONATOR_COOKIE_NAME)?.value;
+  const sessionToken = cookieStore.get("session")?.value;
+
+  if (!impersonatorToken || !sessionToken) {
+    return { isImpersonating: false };
+  }
+
+  try {
+    const { payload: adminPayload } = await jwtVerify(impersonatorToken, getJwtSecret());
+    const { payload: currentPayload } = await jwtVerify(sessionToken, getJwtSecret());
+
+    if (!adminPayload.userId || adminPayload.role !== "ADMIN") {
+      return { isImpersonating: false };
+    }
+
+    // If current session is already the admin, clean up stale impersonator token
+    if (currentPayload.userId === adminPayload.userId && currentPayload.role === "ADMIN") {
+      cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
+      cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
+      return { isImpersonating: false };
+    }
+
+    return {
+      isImpersonating: true,
+      adminUserId: adminPayload.userId as string,
+      adminUsername: (adminPayload.username as string) || "Admin",
+      currentUserId: currentPayload.userId as string,
+      currentUsername: (currentPayload.username as string) || "User",
+      currentRole: (currentPayload.role as string) || "USER"
+    };
+  } catch {
+    return { isImpersonating: false };
+  }
 }

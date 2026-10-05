@@ -6,19 +6,33 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 ## 🚀 Features
 
-- **Personalized "My Plex Hub":** A dedicated stream and playback hub for every user with real-time active stream telemetry (video/audio codecs, transcode decisions, hardware NVENC acceleration, bitrate), **Transcode Doctor** stream diagnostics with tailored device fixes, self-service stream termination, personal watch time analytics (hours streamed, movies finished, episodes watched), in-browser **Server Speed Test**, and **Plex Device Optimization Guides** (Apple TV, Roku, Fire TV, Smart TVs, Android TV, iOS, Web).
+- **Native Seerr Media Request Engine (Overseerr / Jellyseerr Replacement):** Full-featured media discovery, request management, and library automation built right into Portalarr (`/discover` and `/requests`):
+  - **TMDb Discovery & Trending Carousels:** Browse trending movies, popular TV shows, upcoming releases, and personalized recommendations with instant search autocomplete.
+  - **Radarr & Sonarr Dispatch:** 1-click media requests with quota enforcement, automatic approval workflows, and instant root folder and quality profile routing.
+  - **Granular Season & Episode Request Guides:** Drill down into any TV series to inspect episode thumbnails, titles, air dates, and individual episode monitoring switches. Requests for new episodes dynamically update Sonarr via `PUT /api/v3/episode/monitor` and trigger automated `EpisodeSearch` commands.
+  - **Quality-Aware 4K UHD vs 1080p Multi-Instance Routing:** Configure separate 4K and 1080p Radarr/Sonarr instances with granular permission gates and intelligent UI toggle adaptation.
+  - **Live Discord Webhook Cards & Email Notifications:** Real-time embed cards dispatched to Discord channels with poster artwork, status colors (🟡 Pending, 🟢 Approved/Available, 🔴 Declined/Failed), and 4K tags, paired with rich HTML email notifications.
+- **Plex & Server Master AI Assistant:** Interactive AI assistant trained on media server troubleshooting, stream telemetry, and device playback bugs. Delivers step-by-step fixes for issues like Roku Auto-Adjust Quality bandwidth rejection, transcode stuttering, audio transcoding, and subtitle burn-in, with 1-click ticket escalation pre-populated with diagnostic telemetry.
+- **View Site As User (Admin Impersonation):** Administrators can switch into any user's exact perspective with 1 click from the User Directory (`/settings/access`). Enforces user-specific library shelves, watch time, active streams, and non-admin restrictions, with a persistent global warning banner and 1-click return to admin.
+- **Curation Studio Suite (Beta):** Native built-in tools replacing external containers:
+  - **Kometa Overlays Studio:** High-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, and custom overlay canvas previews.
+  - **Agregarr Hubs:** Dynamic trending collections and discovery rows driven by Trakt, TMDb, and IMDb charts.
+  - **Maintainerr Prune:** Automated storage cleanup rules based on watch history, disk thresholds, and user requests.
+  - **Tagging Studio:** Plex media tagging for parental guide filtering and personalized shelf visibility.
+- **Personalized "My Plex Hub":** A dedicated stream and playback hub for every user with real-time active stream telemetry (video/audio codecs, transcode decisions, hardware NVENC acceleration, bitrate), **Transcode Doctor** stream diagnostics with tailored device fixes, self-service stream termination, personal watch time analytics (formatted in days and hours, movies finished, episodes watched), in-browser **Server Speed Test**, and **Plex Device Optimization Guides** (Apple TV, Roku, Fire TV, Smart TVs, Android TV, iOS, Web).
 - **Connected Servers Integration:** Unified multi-server management that deduplicates Direct Plex Media Servers and Tautulli monitors into a single clean connected servers view.
 - **Unified Dashboard:** Aggregate status from Plex, Tautulli, Glances, and your "Arr" stack.
 - **AI Metadata Agent & Smart Series Detection:** Multi-provider LLM support (Gemini, Claude, OpenAI, Groq, Ollama, DeepSeek, OpenRouter) for intelligent book metadata extraction, series identification, and automatic volume number assignment (`assignVolumeNumbersWithAI`).
-- **"Missing Books" Series Discovery & Missing Stubs:** Discovers unacquired installments in series ("Show Missing Books") using iTunes, OpenLibrary, and Google Books with 1-click Auto-Grab and Radarr/Sonarr-style missing stubs.
+- **Volume-Ordered "Missing Books" Series Discovery & Missing Stubs:** Discovers unacquired installments in series ("Show Missing Books") sorted strictly by volume (`Vol 1`, `Vol 2`, `Vol 3`...) using iTunes, OpenLibrary, and Google Books with 1-click Auto-Grab, summary/knockoff publisher filtering, and Radarr/Sonarr-style missing stubs. Discovered missing books automatically surface in *Seerr discovery ("Missing from Your Series").
 - **Multi-Tier Torznab Search Fallback Engine:** 4+ tier fallback queries (Literal → Cleaned Punctuation → UK/Alternate Title → Category-less → Format/Audiobook suffix) to maximize indexer match rates.
-- **Deduplicated Active Downloads:** Real-time progress and queue tracking for SABnzbd, NZBGet, and qBittorrent.
+- **Deduplicated Active Downloads & Library Category Routing:** Real-time progress and queue tracking for SABnzbd, NZBGet, and qBittorrent with library-specific download categories (`books`, `audiobooks`, `kids-books`) and protected folder sweeper safeguarding requested book folders.
 - **Audiobook & Ebook Library:** Dedicated tabs for Ebooks and Audiobooks, strict `mediaType` database isolation, auto-syncing format badges (`MP3` vs `EPUB`), built-in HTML5 audio player with interactive Chapter Selector Modal, user chapter reordering & disk track renaming (`reorderAudiobookChapters`), HTTP Range streaming (`/api/books/[id]/stream`), continuous autoplay next chapter, multi-track/multi-disc folder consolidation (`Disc 01/`, `Disc 02/`), Send-to-Kindle integration, and Prowlarr category routing.
 - **3-Tier Cover Artwork & Poster Engine:** Automated 600x900 HD poster resolution (Direct PMS → Tautulli → iTunes → Open Library → Google Books) with standard 2:3 vertical poster proportions and 1-click artwork fetch buttons (`🖼️`).
 - **Interactive Release Selection & 1-Click Ingestion:** Interactive release chooser modal for indexers, manual release selection, retry search, and **`📥 Import Download`** action button for instant manual download folder ingestion.
 - **Live Auto-Refreshing Requests & Auto-Approval:** All book requests are automatically approved and instantly trigger downloads. Real-time 5-second polling updates request statuses (`Pending` / `Approved` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs completed downloads to your library shelf with reverse auto-sync validation. A background job also periodically retries any requests that stall.
 - **Responsive Radarr & Sonarr Views:** Mobile-optimized, flexible wrap layouts for Movie and TV libraries featuring prominent release date labeling ("Air Date") and seamless dropdowns.
-- **Robust Settings & Diagnostic Tools:**
+- **Robust Settings, Unsaved Changes Guard & Diagnostic Tools:**
+  - **Unsaved Settings Protection:** Reusable `<UnsavedChangesPrompt />` component with docked floating bar, dirty state tracking against baseline snapshots, glowing amber borders, and browser navigation guards preventing accidental data loss across System Settings, Access Control, and Profile pages.
   - **Live App Connection Testing & Management:** Test connectivity, inline edit setups, and auto-prefill default ports for Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Bazarr, etc., directly from settings.
   - **Access Control Overhaul:** Admin/User role toggles, Send-to-Kindle email manager, admin password reset modal (`🔑`), live user search, and 1-click bulk approvals (`CheckCheck`).
   - **Folder Path Validator & API Keys:** Inspect permissions and item counts for completed download directories, with dedicated Google Books and AI Metadata Agent configuration.
@@ -28,7 +42,14 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 - **Support & Password Recovery:** Direct support ticket submission with SMTP notifications, format-specific request email badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`), plus built-in temporary password email recovery.
 - **Secure Encryption:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
 - **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
-- **🚧 Upcoming — Agregarr & Kometa Replacement:** Built-in dynamic collection manager, smart playlist generator, custom poster overlays (4K UHD, Dolby Vision/Atmos), and personalized user-level movie/TV tag management (allowing users to directly customize and toggle tags, genres, and collections they do and do not want to see).
+- **Wizarr Rebuilt & Automated Membership Subscriptions:** Frictionless `/join` onboarding portal, private server invite gating requiring an active member's referral code or name/username, zero payment up front for trial passes, full membership upgrade perks (dedicated child-safe kids & living room profiles, digital book library with Kindle delivery), automated Plex server friend invites, default library access pre-assignment, Discord community server auto-join, and guided client setup wizards (Apple TV, Roku, Fire TV, Smart TV, Google TV, Mobile, Web). Native P2P payment routing (PayPal, Venmo, Cash App, Zelle), pure-TS SVG QR code generator (`PaymentQrModal`), transparent prorated rest-of-year annual billing ($15/mo base rate, $180/yr), pre-filled reconciliation memo tags (`#PORTALARR-USER-DATE`), automated IMAP payment scraping, customizable grace periods (`subscriptionGracePeriodDays`), automated access suspension upon non-payment, referral rewards ("Earn 1 Free Month per converted friend"), granular membership tiers (`STANDARD`, `PREMIUM_4K`, `VIP_ALL_ACCESS`, `FAMILY`), and self-service notification & email preference controls.
+- **Upcoming Roadmap:**
+  - **Step 1 — Autonomous AI Support Agent & Deep Server Diagnostics:** In-app first-response conversational support bot with autonomous diagnostic tools, 1-click ticket escalation with telemetry, and deep Plex/Tautulli/Arr server log ingestion.
+  - **Step 2 — Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement):** Multi-protocol heartbeat polling (HTTP/HTTPS, TCP/UDP, SSL cert expiry), instant outage alerting (SMTP email, Discord rich embeds, Web Push), and public/admin uptime dashboards.
+  - **Step 3 — Smart Bandwidth Shaper & Transcode Governor:** Dynamic download throttling when remote streams spike, GPU load balancing, and Direct Play client coaching.
+  - **Step 4 — Native IPTV & Live TV Stream Manager (xTeVe / Threadfin Replacement):** M3U/XMLTV bouquet manager, stream failover routing, and virtual HDHomeRun tuner emulation for Plex Live TV.
+  - **Step 5 — Automated Audio/Video Cleaner & Custom Format Upgrader (TRaSH Guides Engine):** Community profile scoring, audio normalizer & compatibility injector, and non-native audio/sub stream cleanup.
+  - **Step 6 — Native Subtitle Engine & Auto-Sync (Bazarr Replacement):** Multi-provider subtitle hunting, AI audio-sync waveform alignment, and user self-service "Fix Subtitles".
 
 ## 🛠️ Quick Start
 
@@ -38,6 +59,9 @@ Portalarr is a modern, self-hosted dashboard for managing your media server ecos
 
 ### 2. Local Setup
 ```bash
+# Keep codebase synchronized across development computers
+git pull origin main
+
 # Install dependencies
 npm install
 

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getActiveDownloads } from "@/app/actions";
 
-export const revalidate = 5; 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
     try {
@@ -20,8 +21,19 @@ export async function GET() {
             })) || []
         })) || [];
 
-        return NextResponse.json(safeDownloads);
+        return NextResponse.json(safeDownloads, {
+            headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        });
     } catch (error) {
-        return NextResponse.json({ error: "Service unavailable" }, { status: 500 });
+        return NextResponse.json({ error: "Service unavailable" }, { 
+            status: 500,
+            headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+            }
+        });
     }
 }

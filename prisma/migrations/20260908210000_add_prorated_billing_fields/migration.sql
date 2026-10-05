@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "Settings" ADD COLUMN "paymentCashApp" TEXT;
+ALTER TABLE "Settings" ADD COLUMN "paymentZelle" TEXT;
+ALTER TABLE "Settings" ADD COLUMN "yearlyPrice" REAL DEFAULT 180;
+ALTER TABLE "Settings" ADD COLUMN "monthlyPrice" REAL DEFAULT 15;
+ALTER TABLE "Settings" ADD COLUMN "renewalMonth" INTEGER DEFAULT 1;
+ALTER TABLE "Settings" ADD COLUMN "renewalDay" INTEGER DEFAULT 1;
+ALTER TABLE "Settings" ADD COLUMN "billingType" TEXT DEFAULT 'YEARLY_PRORATED';

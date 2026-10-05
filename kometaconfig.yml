@@ -1,0 +1,173 @@
+libraries:
+  Movies:
+    remove_overlays: false
+    reapply_overlays: true
+    overlay_files:
+    - default: resolution
+      filters:
+        filepath.not: Placeholders_movies/
+      template_variables:
+        use_resolution: true
+        use_edition: false
+    - default: ribbon
+      filters:
+        filepath.not: Placeholders_movies/
+      template_variables:
+        style: yellow
+        weight_imdb: 300
+        weight_rottenverified: 198
+        weight_rotten: 197
+        weight_metacritic: 196
+        use_common: false
+        use_cesar: false
+        use_spirit: false
+        use_letterboxd: false
+        use_sundance: false
+        use_venice: false
+        use_berlinale: false
+    - default: content_rating_us_movie
+      filters:
+        filepath.not: Placeholders_movies/
+      template_variables:
+        horizontal_position: left
+        vertical_position: bottom
+        horizontal_offset: 10
+        vertical_offset: 10
+    run_order:
+    - operations
+    - metadata
+    - overlays
+    settings:
+      report_path: config/missing
+      asset_directory:
+      - config/assets/
+      - config/assets/movies
+      - config/assets/awards
+      - config/assets/collections
+      - config/assets/genres
+      - config/assets/holidays
+      - config/assets/studios
+      - config/assets/movie_suggestions
+    operations:
+      assets_for_all: false
+
+  TV Shows:
+    remove_overlays: false
+    reapply_overlays: true
+    overlay_files:
+    - default: network
+      filters:
+        filepath.not: Placeholders_tv/
+    - default: ribbon
+      filters:
+        filepath.not: Placeholders_tv/
+      template_variables:
+        style: yellow
+        weight_imdb: 300
+        weight_rottenverified: 198
+        weight_rotten: 197
+        weight_metacritic: 196
+        use_common: false
+        use_cesar: false
+        use_spirit: false
+        use_letterboxd: false
+        use_sundance: false
+        use_venice: false
+        use_berlinale: false
+    - default: content_rating_us_tv
+      filters:
+        filepath.not: Placeholders_tv/
+      template_variables:
+        horizontal_position: left
+        vertical_position: bottom
+        horizontal_offset: 10
+        vertical_offset: 10
+    run_order:
+    - operations
+    - metadata
+    - overlays
+    settings:
+      report_path: config/missing
+      asset_directory:
+      - config/assets/
+      - config/assets/tv
+      - config/assets/awards
+      - config/assets/collections
+      - config/assets/genres
+      - config/assets/holidays
+      - config/assets/studios
+      - config/assets/tv_suggestions
+    operations:
+      assets_for_all: false
+
+settings:
+  run_order:
+  - operations
+  - metadata
+  - collections
+  - overlays
+  cache: true
+  cache_expiration: 60
+  asset_directory: config/kometa/assets
+  asset_folders: true
+  asset_depth: 0
+  create_asset_folders: false
+  prioritize_assets: false
+  dimensional_asset_check: false
+  download_url_assets: false
+  show_missing_season_assets: false
+  sync_mode: append
+  minimum_items: 1
+  default_collection_order:
+  delete_below_minimum: false
+  delete_not_scheduled: false
+  run_again_delay: 2
+  missing_only_released: false
+  only_filter_missing: false
+  show_unfiltered: false
+  show_filtered: false
+  show_missing: false
+  show_missing_assets: false
+  show_ there: false
+  save_report: false
+  report_path: config/reports
+  clean_dead_overlays: true
+  pg_ Blur: false
+  run_scheduled_only: false
+  playlist_sync_to_user: all
+  playlist_exclude_users:
+  playlist_report: false
+  verify_ssl: true
+  check_nightly: false
+  overlay_artwork_filetype: jpg
+  overlay_artwork_quality: 75
+  custom_repo:
+  dimensional_asset_rename: false
+
+# CONNECTIONS
+  show_missing_episode_assets: false
+  show_asset_not_needed: true
+  item_refresh_delay: 0
+  show_unmanaged: true
+  show_unconfigured: true
+  show_options: false
+  tvdb_language: default
+  ignore_ids:
+  ignore_imdb_ids:
+  auto_sort_hubs:
+plex:
+  url: http://172.17.0.1:32400
+  token: G9wLxo_Spq3d1bFmw1BE
+  timeout: 60
+  db_cache:
+  clean_bundles: false
+  empty_trash: false
+  optimize: false
+  verify_ssl:
+
+tmdb:
+  apikey: bf7b51f4af723de62f332e6ce7a3e1b3
+  language: en
+  cache_expiration: 60
+  region:
+

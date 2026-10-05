@@ -83,8 +83,8 @@ export default function ErrorTicketModal({
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <Card className="w-full max-w-lg border-red-500/40 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden relative rounded-2xl">
-                <CardHeader className="border-b border-red-900/40 bg-red-950/30 pb-3">
+            <Card className="w-full max-w-lg max-h-[85vh] flex flex-col border-red-500/40 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden relative rounded-2xl">
+                <CardHeader className="border-b border-red-900/40 bg-red-950/30 pb-3 shrink-0">
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-base font-bold text-red-400 flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
@@ -101,7 +101,7 @@ export default function ErrorTicketModal({
                     </div>
                 </CardHeader>
 
-                <CardContent className="p-4 space-y-3">
+                <CardContent className="p-4 space-y-3 flex-1 overflow-y-auto min-h-0">
                     <p className="text-xs text-slate-300">
                         An error occurred while processing your request. You can copy the error details below or submit an instant support ticket to the administrator.
                     </p>

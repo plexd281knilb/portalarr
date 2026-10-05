@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect, useTransition, Suspense } from "react";
+import { useState, useEffect, useTransition, Suspense, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
-    getSettings, saveSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction,
-    getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance,
-    getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance,
-    getMediaApps, addMediaApp, updateMediaApp, removeMediaApp,
+    getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
+    getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
+    togglePlexServerMonitoringAction, getDiscoveredPlexServersAction, importDiscoveredPlexServerAction,
+    getEmailNotificationSettings, saveEmailNotificationSettingsAction,
+    getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance, toggleTautulliMonitoringAction,
+    getGlancesInstances, addGlancesInstance, removeGlancesInstance, updateGlancesInstance, toggleGlancesMonitoringAction,
+    getMediaApps, addMediaApp, updateMediaApp, removeMediaApp, toggleMediaAppMonitoringAction,
     getBetaDashboardText, updateBetaDashboardText,
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
     getRoadmapText, updateRoadmapText,
@@ -16,6 +19,7 @@ import {
     testTautulliConfigAction, testGlancesConfigAction, testMediaAppConfigAction,
     getAiAgentSettings, saveAiAgentSettings, testAiAgentConnection, resolveBookWithAI, runAiBatchMetadataScanner, testFolderPermissions, fetchAvailableAiModels
 } from "@/app/actions";
+import { getPlexPin, checkPlexPin } from "@/app/plex-auth";
 import { testArrConfig } from "@/app/arr-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,12 +33,24 @@ import {
     Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
-    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap
+    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass
 } from "lucide-react";
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogDescription, 
+    DialogFooter 
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
+import EmailManagement from "@/components/email-management";
+import { SeerrSettingsPanel } from "@/components/seerr/seerr-settings-panel";
+import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -108,6 +124,8 @@ function SettingsPageContent() {
     // Alert States
     const [alertBanner, setAlertBanner] = useState<{enabled: boolean, text: string}>({enabled: false, text: ""});
     const [bannerEnabled, setBannerEnabled] = useState(false);
+    const [isSeerrDirty, setIsSeerrDirty] = useState(false);
+    const [seerrDirtySections, setSeerrDirtySections] = useState<string[]>([]);
 
     // Edit Mode States
     const [editingApp, setEditingApp] = useState<any>(null);
@@ -142,10 +160,235 @@ function SettingsPageContent() {
     const [testingAppForm, setTestingAppForm] = useState(false);
     const [appFormTestResult, setAppFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
 
-    // Path Validation State
+    // Plex Server States
+    const [plexServers, setPlexServers] = useState<any[]>([]);
+    const [editingPlexServer, setEditingPlexServer] = useState<any>(null);
+    const [testingPlexServerId, setTestingPlexServerId] = useState<string | null>(null);
+    const [plexServerTestResults, setPlexServerTestResults] = useState<{ [id: string]: { success?: boolean, msg?: string, err?: string } }>({});
+    const [testingPlexServerForm, setTestingPlexServerForm] = useState(false);
+    const [plexServerFormTestResult, setPlexServerFormTestResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
+    const [showPlexServerFormToken, setShowPlexServerFormToken] = useState(false);
+    const [plexServerActionMsg, setPlexServerActionMsg] = useState("");
+    const [plexServerFormName, setPlexServerFormName] = useState("");
+    const [plexServerFormUrl, setPlexServerFormUrl] = useState("");
+    const [plexServerFormToken, setPlexServerFormToken] = useState("");
+    const [plexServerFormIsDefault, setPlexServerFormIsDefault] = useState(false);
+    const [plexServerFormMonitored, setPlexServerFormMonitored] = useState(true);
+    const [togglingPlexServerId, setTogglingPlexServerId] = useState<string | null>(null);
+    const [togglingTautulliId, setTogglingTautulliId] = useState<string | null>(null);
+    const [togglingGlancesId, setTogglingGlancesId] = useState<string | null>(null);
+    const [togglingMediaAppId, setTogglingMediaAppId] = useState<string | null>(null);
+    const [discoveredPlexServers, setDiscoveredPlexServers] = useState<any[]>([]);
+    const [loadingDiscoveredPlexServers, setLoadingDiscoveredPlexServers] = useState(false);
+    const [importingDiscoveredServerKey, setImportingDiscoveredServerKey] = useState<string | null>(null);
+    const [discoveredPlexServersMsg, setDiscoveredPlexServersMsg] = useState("");
+
+    // Curation & Metadata API Key States
+    const [tmdbKey, setTmdbKey] = useState("");
+    const [traktKey, setTraktKey] = useState("");
+    const [mdblistKey, setMdblistKey] = useState("");
+    const [showTmdbKey, setShowTmdbKey] = useState(false);
+    const [showTraktKey, setShowTraktKey] = useState(false);
+    const [showMdblistKey, setShowMdblistKey] = useState(false);
+    const [curationTestResult, setCurationTestResult] = useState<any>(null);
+    const [testingCurationKeys, setTestingCurationKeys] = useState(false);
+    const [curationSavedMsg, setCurationSavedMsg] = useState("");
+
+    // Controlled Form State Variables for Unsaved Tracking
+    const [alertBannerText, setAlertBannerText] = useState("");
+    const [appUrlInput, setAppUrlInput] = useState("");
+    const [saveAppUrlMsg, setSaveAppUrlMsg] = useState("");
+    const [saveAppUrlErr, setSaveAppUrlErr] = useState("");
+    const [savingAppUrl, setSavingAppUrl] = useState(false);
+    const [smtpHostInput, setSmtpHostInput] = useState("");
+    const [smtpPortInput, setSmtpPortInput] = useState("");
+    const [smtpUserInput, setSmtpUserInput] = useState("");
+    const [smtpPassInput, setSmtpPassInput] = useState("");
+    const [smtpFromInput, setSmtpFromInput] = useState("");
+    const [mainPlexTokenInput, setMainPlexTokenInput] = useState("");
+    const [mainPlexUrlInput, setMainPlexUrlInput] = useState("");
+    const [autoSyncIntervalInput, setAutoSyncIntervalInput] = useState<number | string>(5);
+    const [inputDownloadsPath, setInputDownloadsPath] = useState("/downloads");
     const [validatingPath, setValidatingPath] = useState(false);
     const [pathResult, setPathResult] = useState<{ success?: boolean, msg?: string, err?: string } | null>(null);
-    const [inputDownloadsPath, setInputDownloadsPath] = useState("");
+    const [googleBooksKey, setGoogleBooksKey] = useState<string>("");
+    const [aiSettings, setAiSettings] = useState<any>({
+        aiProvider: "default",
+        aiApiKey: "",
+        aiModel: "gemini-3.5-flash-lite",
+        aiAutoResolve: true,
+        aiAutonomyLevel: "autonomous",
+        aiMaxDailyGrabs: 3
+    });
+    const [aiProviderSelect, setAiProviderSelect] = useState("default");
+    const [aiModelInput, setAiModelInput] = useState("gemini-3.5-flash-lite");
+    const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
+    const [aiAutonomyLevel, setAiAutonomyLevel] = useState<"advisory" | "assisted" | "autonomous">("autonomous");
+    const [aiMaxDailyGrabs, setAiMaxDailyGrabs] = useState<number>(3);
+    const [aiApiKeyInput, setAiApiKeyInput] = useState("");
+    const [showAiKey, setShowAiKey] = useState(false);
+    const [showPlexKey, setShowPlexKey] = useState(false);
+    const [showSmtpKey, setShowSmtpKey] = useState(false);
+    const [showGoogleBooksKey, setShowGoogleBooksKey] = useState(false);
+    const [showTautulliKey, setShowTautulliKey] = useState(false);
+    const [showMediaAppKey, setShowMediaAppKey] = useState(false);
+    const [testAiLoading, setTestAiLoading] = useState(false);
+    const [testAiResult, setTestAiResult] = useState<any>(null);
+    const [testAiErr, setTestAiErr] = useState("");
+    const [saveAiMsg, setSaveAiMsg] = useState("");
+    const [saveSmtpMsg, setSaveSmtpMsg] = useState("");
+    const [savePlexMsg, setSavePlexMsg] = useState("");
+    const [saveAutomationMsg, setSaveAutomationMsg] = useState("");
+    const [saveGoogleBooksMsg, setSaveGoogleBooksMsg] = useState("");
+    const [syncingPlexFriends, setSyncingPlexFriends] = useState(false);
+    const [syncPlexFriendsMsg, setSyncPlexFriendsMsg] = useState("");
+    const [syncPlexFriendsErr, setSyncPlexFriendsErr] = useState("");
+
+    // Baseline snapshot for tracking unsaved changes
+    const initialDataRef = useRef<{
+        alertBannerEnabled: boolean;
+        alertBannerText: string;
+        appUrl: string;
+        smtpHost: string;
+        smtpPort: string;
+        smtpUser: string;
+        smtpPass: string;
+        smtpFrom: string;
+        mainPlexToken: string;
+        mainPlexUrl: string;
+        autoSyncInterval: number | string;
+        downloadsPath: string;
+        googleBooksKey: string;
+        tmdbKey: string;
+        traktKey: string;
+        mdblistKey: string;
+        aiProvider: string;
+        aiModel: string;
+        aiAutoResolve: boolean;
+        aiAutonomyLevel: string;
+        aiMaxDailyGrabs: number;
+        aiApiKey: string;
+        roadmapText: string;
+        betaText: string;
+    } | null>(null);
+
+    const [isSavingAll, setIsSavingAll] = useState(false);
+    const [saveAllSuccessMsg, setSaveAllSuccessMsg] = useState("");
+    const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+    const [pendingNavigation, setPendingNavigation] = useState<{ type: 'tab' | 'url'; target: string } | null>(null);
+
+    // Compute dirty state for each card/section
+    const isAlertBannerDirty = initialDataRef.current ? (
+        bannerEnabled !== initialDataRef.current.alertBannerEnabled ||
+        alertBannerText !== initialDataRef.current.alertBannerText
+    ) : false;
+
+    const isAppUrlDirty = initialDataRef.current ? (
+        appUrlInput !== initialDataRef.current.appUrl
+    ) : false;
+
+    const isSmtpDirty = initialDataRef.current ? (
+        smtpHostInput !== initialDataRef.current.smtpHost ||
+        String(smtpPortInput) !== String(initialDataRef.current.smtpPort) ||
+        smtpUserInput !== initialDataRef.current.smtpUser ||
+        smtpPassInput !== initialDataRef.current.smtpPass ||
+        smtpFromInput !== initialDataRef.current.smtpFrom
+    ) : false;
+
+    const isPlexDirty = initialDataRef.current ? (
+        mainPlexTokenInput !== initialDataRef.current.mainPlexToken
+    ) : false;
+
+    const isAutomationDirty = initialDataRef.current ? (
+        String(autoSyncIntervalInput) !== String(initialDataRef.current.autoSyncInterval) ||
+        inputDownloadsPath !== initialDataRef.current.downloadsPath
+    ) : false;
+
+    const isGoogleBooksDirty = initialDataRef.current ? (
+        googleBooksKey !== initialDataRef.current.googleBooksKey
+    ) : false;
+
+    const isCurationDirty = initialDataRef.current ? (
+        tmdbKey !== initialDataRef.current.tmdbKey ||
+        traktKey !== initialDataRef.current.traktKey ||
+        mdblistKey !== initialDataRef.current.mdblistKey
+    ) : false;
+
+    const isAiDirty = initialDataRef.current ? (
+        aiProviderSelect !== initialDataRef.current.aiProvider ||
+        aiModelInput !== initialDataRef.current.aiModel ||
+        aiAutoResolveSwitch !== initialDataRef.current.aiAutoResolve ||
+        aiAutonomyLevel !== initialDataRef.current.aiAutonomyLevel ||
+        aiMaxDailyGrabs !== initialDataRef.current.aiMaxDailyGrabs ||
+        aiApiKeyInput !== initialDataRef.current.aiApiKey
+    ) : false;
+
+    const isRoadmapDirty = initialDataRef.current ? (
+        roadmapText !== initialDataRef.current.roadmapText
+    ) : false;
+
+    const isBetaDirty = initialDataRef.current ? (
+        betaText !== initialDataRef.current.betaText
+    ) : false;
+
+    const unsavedSections: string[] = [];
+    if (isAlertBannerDirty) unsavedSections.push("System Alert Banner");
+    if (isAppUrlDirty) unsavedSections.push("Public Web Address (Base URL)");
+    if (isSmtpDirty) unsavedSections.push("Global SMTP Settings");
+    if (isPlexDirty) unsavedSections.push("Plex Server & Admin Token");
+    if (isAutomationDirty) unsavedSections.push("Automation & Directory Paths");
+    if (isGoogleBooksDirty) unsavedSections.push("Google Books API Key");
+    if (isCurationDirty) unsavedSections.push("Curation & Discovery API Keys");
+    if (isAiDirty) unsavedSections.push("AI Metadata Agent");
+    if (isRoadmapDirty) unsavedSections.push("Roadmap Text");
+    if (isBetaDirty) unsavedSections.push("Beta Dashboard Intro");
+    if (isSeerrDirty) {
+        seerrDirtySections.forEach(s => unsavedSections.push(`Seerr: ${s}`));
+    }
+
+    const hasUnsavedChanges = unsavedSections.length > 0;
+    const isGeneralTabDirty = isAlertBannerDirty || isAppUrlDirty || isSmtpDirty || isPlexDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
+    const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
+
+    // Browser-level reload/close protection
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = "";
+                return "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
+    // In-app navigation protection for link clicks
+    useEffect(() => {
+        const handleLinkClick = (e: MouseEvent) => {
+            if (!hasUnsavedChanges) return;
+
+            const target = e.target as HTMLElement;
+            const anchor = target.closest("a");
+            if (!anchor) return;
+
+            const href = anchor.getAttribute("href");
+            if (!href || href.startsWith("#") || href.startsWith("javascript:") || anchor.target === "_blank") {
+                return;
+            }
+
+            const currentUrl = window.location.pathname + window.location.search;
+            if (href === currentUrl) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            setPendingNavigation({ type: "url", target: href });
+            setLeaveModalOpen(true);
+        };
+
+        document.addEventListener("click", handleLinkClick, true);
+        return () => document.removeEventListener("click", handleLinkClick, true);
+    }, [hasUnsavedChanges]);
 
     const handleTestSmtp = async () => {
         setTestEmailLoading(true);
@@ -162,7 +405,7 @@ function SettingsPageContent() {
 
     const handleTestApp = async (id: string) => {
         setTestingAppId(id);
-        const res = await testAppConnectionAction(id);
+        const res: any = await testAppConnectionAction(id);
         setTestingAppId(null);
         setAppTestResults(prev => ({
             ...prev,
@@ -172,7 +415,7 @@ function SettingsPageContent() {
 
     const handleTestTautulli = async (id: string) => {
         setTestingTautulliId(id);
-        const res = await testTautulliConnectionAction(id);
+        const res: any = await testTautulliConnectionAction(id);
         setTestingTautulliId(null);
         setTautulliTestResults(prev => ({
             ...prev,
@@ -182,7 +425,7 @@ function SettingsPageContent() {
 
     const handleTestGlances = async (id: string) => {
         setTestingGlancesId(id);
-        const res = await testGlancesConnectionAction(id);
+        const res: any = await testGlancesConnectionAction(id);
         setTestingGlancesId(null);
         setGlancesTestResults(prev => ({
             ...prev,
@@ -256,12 +499,159 @@ function SettingsPageContent() {
         }
     };
 
+    const handleTestPlexServer = async (id: string) => {
+        setTestingPlexServerId(id);
+        const res: any = await testPlexServerConnectionAction(id);
+        setTestingPlexServerId(null);
+        setPlexServerTestResults(prev => ({
+            ...prev,
+            [id]: res.success ? { success: true, msg: res.message } : { success: false, err: res.error }
+        }));
+    };
+
+    const handleTestPlexServerForm = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const form = e.currentTarget.closest('form');
+        if (!form) return;
+        const url = (form.elements.namedItem("url") as HTMLInputElement)?.value || plexServerFormUrl;
+        const token = (form.elements.namedItem("token") as HTMLInputElement)?.value || plexServerFormToken;
+        if (!url) {
+            setPlexServerFormTestResult({ success: false, err: "Please enter a server URL to test." });
+            return;
+        }
+        setTestingPlexServerForm(true);
+        setPlexServerFormTestResult(null);
+        try {
+            const res = await testPlexServerConfigAction(url, token || undefined);
+            setPlexServerFormTestResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+        } catch (err: any) {
+            setPlexServerFormTestResult({ success: false, err: err.message || "Failed to test connection" });
+        } finally {
+            setTestingPlexServerForm(false);
+        }
+    };
+
+    const handleTogglePlexServerMonitoring = async (id: string, current: boolean) => {
+        setTogglingPlexServerId(id);
+        const next = !current;
+        setPlexServers(prev => prev.map(s => s.id === id ? { ...s, monitored: next } : s));
+        try {
+            await togglePlexServerMonitoringAction(id, next);
+        } catch {
+            setPlexServers(prev => prev.map(s => s.id === id ? { ...s, monitored: current } : s));
+        } finally {
+            setTogglingPlexServerId(null);
+        }
+    };
+
+    const handleToggleTautulliMonitoring = async (id: string, current: boolean) => {
+        setTogglingTautulliId(id);
+        const next = !current;
+        setTautulli(prev => prev.map(t => t.id === id ? { ...t, monitored: next } : t));
+        try {
+            await toggleTautulliMonitoringAction(id, next);
+        } catch {
+            setTautulli(prev => prev.map(t => t.id === id ? { ...t, monitored: current } : t));
+        } finally {
+            setTogglingTautulliId(null);
+        }
+    };
+
+    const handleToggleGlancesMonitoring = async (id: string, current: boolean) => {
+        setTogglingGlancesId(id);
+        const next = !current;
+        setGlances(prev => prev.map(g => g.id === id ? { ...g, monitored: next } : g));
+        try {
+            await toggleGlancesMonitoringAction(id, next);
+        } catch {
+            setGlances(prev => prev.map(g => g.id === id ? { ...g, monitored: current } : g));
+        } finally {
+            setTogglingGlancesId(null);
+        }
+    };
+
+    const handleToggleMediaAppMonitoring = async (id: string, current: boolean) => {
+        setTogglingMediaAppId(id);
+        const next = !current;
+        setMediaApps(prev => prev.map(a => a.id === id ? { ...a, monitored: next } : a));
+        try {
+            await toggleMediaAppMonitoringAction(id, next);
+        } catch {
+            setMediaApps(prev => prev.map(a => a.id === id ? { ...a, monitored: current } : a));
+        } finally {
+            setTogglingMediaAppId(null);
+        }
+    };
+
+    const handleFetchDiscoveredPlexServers = async () => {
+        setLoadingDiscoveredPlexServers(true);
+        setDiscoveredPlexServersMsg("");
+        try {
+            const res = await getDiscoveredPlexServersAction();
+            if (res.success && res.discovered) {
+                setDiscoveredPlexServers(res.discovered);
+            } else {
+                setDiscoveredPlexServersMsg(res.error || "No servers discovered.");
+            }
+        } catch (e: any) {
+            setDiscoveredPlexServersMsg(e.message || "Failed to query Plex.tv for servers.");
+        } finally {
+            setLoadingDiscoveredPlexServers(false);
+        }
+    };
+
+    const handleImportDiscoveredPlexServer = async (srv: any, monitored: boolean) => {
+        const key = srv.clientIdentifier || srv.name;
+        setImportingDiscoveredServerKey(key);
+        try {
+            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+            const url = conn ? conn.uri : "";
+            if (!url) {
+                alert(`No valid connection URI found for "${srv.name}".`);
+                return;
+            }
+            const res = await importDiscoveredPlexServerAction({
+                name: srv.name,
+                url,
+                clientIdentifier: srv.clientIdentifier,
+                token: srv.accessToken,
+                monitored
+            });
+            if (res.success) {
+                setPlexServerActionMsg(res.message || "Plex server imported successfully.");
+                setTimeout(() => setPlexServerActionMsg(""), 4000);
+                await loadAllData();
+                await handleFetchDiscoveredPlexServers();
+            } else {
+                alert(res.error || "Failed to import server.");
+            }
+        } catch (e: any) {
+            alert(e.message || "Import error");
+        } finally {
+            setImportingDiscoveredServerKey(null);
+        }
+    };
+
     const handleValidatePath = async (pathStr: string) => {
         setValidatingPath(true);
         setPathResult(null);
         const res = await validateDownloadsPathAction(pathStr);
         setValidatingPath(false);
         setPathResult(res.success ? { success: true, msg: res.message } : { success: false, err: res.error });
+    };
+
+    const handleTestCurationKeys = async () => {
+        setTestingCurationKeys(true);
+        setCurationTestResult(null);
+        try {
+            const { testCurationApiKeysAction } = await import("@/app/curation-actions");
+            const res = await testCurationApiKeysAction(tmdbKey, traktKey, mdblistKey);
+            setCurationTestResult(res.results);
+        } catch (e: any) {
+            setCurationTestResult({ errors: [e.message] });
+        } finally {
+            setTestingCurationKeys(false);
+        }
     };
 
     const [arrMeta, setArrMeta] = useState<any>(null);
@@ -303,28 +693,101 @@ function SettingsPageContent() {
         }
     };
 
-    // AI Agent States
-    const [googleBooksKey, setGoogleBooksKey] = useState<string>("");
-    const [aiSettings, setAiSettings] = useState<any>({
-        aiProvider: "default",
-        aiApiKey: "",
-        aiModel: "gemini-1.5-flash",
-        aiAutoResolve: true
-    });
-    const [aiProviderSelect, setAiProviderSelect] = useState("default");
-    const [aiModelInput, setAiModelInput] = useState("gemini-1.5-flash");
-    const [aiAutoResolveSwitch, setAiAutoResolveSwitch] = useState(true);
-    const [showAiKey, setShowAiKey] = useState(false);
-    const [showPlexKey, setShowPlexKey] = useState(false);
-    const [showSmtpKey, setShowSmtpKey] = useState(false);
-    const [showGoogleBooksKey, setShowGoogleBooksKey] = useState(false);
-    const [showTautulliKey, setShowTautulliKey] = useState(false);
-    const [showMediaAppKey, setShowMediaAppKey] = useState(false);
-    const [testAiLoading, setTestAiLoading] = useState(false);
-    const [testAiResult, setTestAiResult] = useState<any>(null);
-    const [testAiErr, setTestAiErr] = useState("");
-    const [saveAiMsg, setSaveAiMsg] = useState("");
+    // Plex Admin Token Linking States
+    const [isLinkingPlex, setIsLinkingPlex] = useState(false);
+    const [plexLinkMsg, setPlexLinkMsg] = useState<string | null>(null);
+    const [plexLinkErr, setPlexLinkErr] = useState<string | null>(null);
 
+    const handleAutoLinkPlexToken = async () => {
+        setIsLinkingPlex(true);
+        setPlexLinkMsg(null);
+        setPlexLinkErr(null);
+
+        const popup = window.open("about:blank", "PlexAuth", "width=600,height=700");
+        if (!popup) {
+            setPlexLinkErr("Popup blocked. Please allow popups for this site in your browser.");
+            setIsLinkingPlex(false);
+            return;
+        }
+
+        try {
+            setPlexLinkMsg("Requesting authorization PIN from Plex...");
+            const pin = await getPlexPin();
+            const authUrl = `https://app.plex.tv/auth/#!?clientID=domshomelab-dashboard-app&code=${pin.code}&context[device][product]=DomsHomeLab`;
+            popup.location.href = authUrl;
+            setPlexLinkMsg("Waiting for sign-in in popup...");
+
+            let isProcessing = false;
+            let elapsedTime = 0;
+
+            const pollInterval = setInterval(async () => {
+                if (isProcessing) return;
+                elapsedTime += 2;
+
+                if (elapsedTime > 180) {
+                    clearInterval(pollInterval);
+                    try { if (!popup.closed) popup.close(); } catch (e) {}
+                    setPlexLinkErr("Plex sign-in timed out. Please try again.");
+                    setPlexLinkMsg(null);
+                    setIsLinkingPlex(false);
+                    return;
+                }
+
+                try {
+                    const token = await checkPlexPin(pin.id);
+                    if (token && !isProcessing) {
+                        isProcessing = true;
+                        clearInterval(pollInterval);
+                        try { if (!popup.closed) popup.close(); } catch (e) {}
+
+                        setPlexLinkMsg("Saving Admin Plex Token...");
+                        const res = await autoLinkAdminPlexTokenAction(token);
+                        setIsLinkingPlex(false);
+
+                        if (res.success) {
+                            setPlexLinkMsg(res.message || "Admin Plex Token linked successfully!");
+                            setPlexLinkErr(null);
+                            const tokenInput = document.getElementById("mainPlexToken") as HTMLInputElement;
+                            if (tokenInput) tokenInput.value = token;
+                            loadAllData();
+                        } else {
+                            setPlexLinkErr(res.error || "Failed to link Plex Token.");
+                            setPlexLinkMsg(null);
+                        }
+                    }
+                } catch (pollErr: any) {
+                    // Ignore transient network errors during poll
+                }
+            }, 2000);
+        } catch (err: any) {
+            try { if (!popup.closed) popup.close(); } catch (e) {}
+            setPlexLinkErr(err.message || "Failed to initiate Plex sign-in.");
+            setPlexLinkMsg(null);
+            setIsLinkingPlex(false);
+        }
+    };
+
+    const handleSyncPlexFriends = async () => {
+        setSyncingPlexFriends(true);
+        setSyncPlexFriendsMsg("");
+        setSyncPlexFriendsErr("");
+        try {
+            const res: any = await syncPlexFriendsAction();
+            if (res.success) {
+                setSyncPlexFriendsMsg(res.message || `Plex friends synced successfully!`);
+                setTimeout(() => setSyncPlexFriendsMsg(""), 5000);
+                loadAllData();
+            } else {
+                setSyncPlexFriendsErr(res.error || "Failed to sync Plex friends.");
+                setTimeout(() => setSyncPlexFriendsErr(""), 6000);
+            }
+        } catch (e: any) {
+            setSyncPlexFriendsErr(e.message || "Failed to sync Plex friends.");
+            setTimeout(() => setSyncPlexFriendsErr(""), 6000);
+        } finally {
+            setSyncingPlexFriends(false);
+        }
+    };
 
     const [dynamicModels, setDynamicModels] = useState<string[]>([]);
     const [loadingModels, setLoadingModels] = useState(false);
@@ -398,38 +861,119 @@ function SettingsPageContent() {
         }, 2500);
 
         try {
-            const [u, s, t, g, m, bt, bc, rt, ab, ai] = await Promise.all([
-                getAppUsers(),
-                getSettings(),
-                getTautulliInstances(),
-                getGlancesInstances(),
-                getMediaApps(),
-                getBetaDashboardText(), 
-                getBetaCards(),
-                getRoadmapText(),
-                getAlertBanner(),
-                getAiAgentSettings().catch(() => null)
+            const [u, s, t, g, m, bt, bc, rt, ab, ai, ps] = await Promise.all([
+                getAppUsers().catch(err => { console.error("getAppUsers error:", err); return []; }),
+                getSettings().catch(err => { console.error("getSettings error:", err); return {}; }),
+                getTautulliInstances().catch(err => { console.error("getTautulliInstances error:", err); return []; }),
+                getGlancesInstances().catch(err => { console.error("getGlancesInstances error:", err); return []; }),
+                getMediaApps().catch(err => { console.error("getMediaApps error:", err); return []; }),
+                getBetaDashboardText().catch(() => ""), 
+                getBetaCards().catch(() => []),
+                getRoadmapText().catch(() => ""),
+                getAlertBanner().catch(() => ({ enabled: false, text: "" })),
+                getAiAgentSettings().catch(() => null),
+                getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; })
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
-            setInputDownloadsPath(s?.downloadsPath || "/downloads");
-            setGoogleBooksKey(s?.googleBooksApiKey || "");
+            setPlexServers(ps || []);
+            
+            const bannerTextVal = ab?.text || "";
+            const bannerEnabledVal = ab?.enabled || false;
+            setAlertBanner(ab || { enabled: false, text: "" });
+            setBannerEnabled(bannerEnabledVal);
+            setAlertBannerText(bannerTextVal);
+
+            const appUrlVal = s?.appUrl || "";
+            const smtpHostVal = s?.smtpHost || "";
+            const smtpPortVal = s?.smtpPort ? String(s.smtpPort) : "";
+            const smtpUserVal = s?.smtpUser || "";
+            const smtpPassVal = s?.smtpPass || "";
+            const smtpFromVal = s?.smtpFrom || "";
+            const mainPlexTokenVal = s?.mainPlexToken || "";
+            const mainPlexUrlVal = s?.mainPlexUrl || "";
+            const autoSyncIntervalVal = s?.autoSyncInterval ?? 5;
+            const downloadsPathVal = s?.downloadsPath || "/downloads";
+            const googleBooksKeyVal = s?.googleBooksApiKey || "";
+            const tmdbKeyVal = s?.tmdbApiKey || "";
+            const traktKeyVal = s?.traktClientId || "";
+            const mdblistKeyVal = s?.mdblistApiKey || "";
+
+            setAppUrlInput(appUrlVal);
+            setSmtpHostInput(smtpHostVal);
+            setSmtpPortInput(smtpPortVal);
+            setSmtpUserInput(smtpUserVal);
+            setSmtpPassInput(smtpPassVal);
+            setSmtpFromInput(smtpFromVal);
+            setMainPlexTokenInput(mainPlexTokenVal);
+            setMainPlexUrlInput(mainPlexUrlVal);
+            setAutoSyncIntervalInput(autoSyncIntervalVal);
+            setInputDownloadsPath(downloadsPathVal);
+            setGoogleBooksKey(googleBooksKeyVal);
+            setTmdbKey(tmdbKeyVal);
+            setTraktKey(traktKeyVal);
+            setMdblistKey(mdblistKeyVal);
+
             setTautulli(t || []);
             setGlances(g || []);
             setMediaApps(m || []);
-            setBetaText(bt || "");
+
+            const roadmapTextVal = rt || "";
+            const betaTextVal = bt || "";
+            setBetaText(betaTextVal);
             setBetaCards(bc || []);
-            setRoadmapText(rt || "");
-            
-            setAlertBanner(ab || {enabled: false, text: ""});
-            setBannerEnabled(ab?.enabled || false);
+            setRoadmapText(roadmapTextVal);
+
+            const aiProviderVal = ai?.aiProvider || "default";
+            const aiModelVal = ai?.aiModel || "gemini-3.5-flash-lite";
+            const aiAutoResolveVal = ai?.aiAutoResolve ?? true;
+            const aiAutonomyVal = (ai?.aiAutonomyLevel as "advisory" | "assisted" | "autonomous") || "autonomous";
+            const aiMaxGrabsVal = ai?.aiMaxDailyGrabs ?? 3;
+            const aiApiKeyVal = ai?.aiApiKey || "";
 
             if (ai) {
                 setAiSettings(ai);
-                setAiProviderSelect(ai.aiProvider || "default");
-                setAiModelInput(ai.aiModel || "gemini-2.5-flash");
-                setAiAutoResolveSwitch(ai.aiAutoResolve ?? true);
+                setAiProviderSelect(aiProviderVal);
+                setAiModelInput(aiModelVal);
+                setAiAutoResolveSwitch(aiAutoResolveVal);
+                setAiAutonomyLevel(aiAutonomyVal);
+                setAiMaxDailyGrabs(aiMaxGrabsVal);
+                setAiApiKeyInput(aiApiKeyVal);
+            } else {
+                setAiProviderSelect("default");
+                setAiModelInput("gemini-3.5-flash-lite");
+                setAiAutoResolveSwitch(true);
+                setAiAutonomyLevel("autonomous");
+                setAiMaxDailyGrabs(3);
+                setAiApiKeyInput("");
             }
+
+            initialDataRef.current = {
+                alertBannerEnabled: bannerEnabledVal,
+                alertBannerText: bannerTextVal,
+                appUrl: appUrlVal,
+                smtpHost: smtpHostVal,
+                smtpPort: smtpPortVal,
+                smtpUser: smtpUserVal,
+                smtpPass: smtpPassVal,
+                smtpFrom: smtpFromVal,
+                mainPlexToken: mainPlexTokenVal,
+                mainPlexUrl: mainPlexUrlVal,
+                autoSyncInterval: autoSyncIntervalVal,
+                downloadsPath: downloadsPathVal,
+                googleBooksKey: googleBooksKeyVal,
+                tmdbKey: tmdbKeyVal,
+                traktKey: traktKeyVal,
+                mdblistKey: mdblistKeyVal,
+                aiProvider: aiProviderVal,
+                aiModel: aiModelVal,
+                aiAutoResolve: aiAutoResolveVal,
+                aiAutonomyLevel: aiAutonomyVal,
+                aiMaxDailyGrabs: aiMaxGrabsVal,
+                aiApiKey: aiApiKeyVal,
+                roadmapText: roadmapTextVal,
+                betaText: betaTextVal,
+            };
         } catch (error) {
             console.error("Failed to load settings data:", error);
         } finally {
@@ -440,7 +984,18 @@ function SettingsPageContent() {
 
     useEffect(() => { loadAllData(); }, []);
 
+    useEffect(() => {
+        if (activeTab === "monitoring" && discoveredPlexServers.length === 0 && !loadingDiscoveredPlexServers) {
+            handleFetchDiscoveredPlexServers();
+        }
+    }, [activeTab]);
+
     const handleTabChange = (value: string) => {
+        if (hasUnsavedChanges && value !== activeTab) {
+            setPendingNavigation({ type: "tab", target: value });
+            setLeaveModalOpen(true);
+            return;
+        }
         setActiveTab(value);
         localStorage.setItem("settings-active-tab", value);
         startTransition(() => {
@@ -448,6 +1003,170 @@ function SettingsPageContent() {
             params.set("tab", value);
             router.push(`${pathname}?${params.toString()}`);
         });
+    };
+
+    const handleSaveAllDirty = async () => {
+        setIsSavingAll(true);
+        setSaveAllSuccessMsg("");
+        try {
+            const promises: Promise<any>[] = [];
+
+            if (isAlertBannerDirty) {
+                const formData = new FormData();
+                formData.append("enabled", bannerEnabled ? "on" : "off");
+                formData.append("text", alertBannerText);
+                promises.push(updateAlertBanner(formData));
+            }
+
+            if (isAppUrlDirty) {
+                const formData = new FormData();
+                formData.append("appUrl", appUrlInput);
+                promises.push(saveAppUrlAction(formData));
+            }
+
+            if (isSmtpDirty) {
+                const formData = new FormData();
+                formData.append("smtpHost", smtpHostInput);
+                formData.append("smtpPort", String(smtpPortInput));
+                formData.append("smtpUser", smtpUserInput);
+                formData.append("smtpPass", smtpPassInput);
+                formData.append("smtpFrom", smtpFromInput);
+                promises.push(saveSettings(formData));
+            }
+
+            if (isPlexDirty) {
+                const formData = new FormData();
+                formData.append("mainPlexToken", mainPlexTokenInput);
+                formData.append("mainPlexUrl", mainPlexUrlInput);
+                promises.push(savePlexSettingsAction(formData));
+            }
+
+            if (isAutomationDirty) {
+                const formData = new FormData();
+                formData.append("autoSyncInterval", String(autoSyncIntervalInput));
+                formData.append("downloadsPath", inputDownloadsPath);
+                promises.push(saveJobSettings(formData));
+            }
+
+            if (isGoogleBooksDirty) {
+                const formData = new FormData();
+                formData.append("googleBooksApiKey", googleBooksKey);
+                promises.push(saveJobSettings(formData));
+            }
+
+            if (isCurationDirty) {
+                const { saveCurationSettingsAction } = await import("@/app/curation-actions");
+                promises.push(saveCurationSettingsAction({
+                    tmdbApiKey: tmdbKey,
+                    traktClientId: traktKey,
+                    mdblistApiKey: mdblistKey
+                }));
+            }
+
+            if (isAiDirty) {
+                const formData = new FormData();
+                formData.append("aiProvider", aiProviderSelect);
+                formData.append("aiModel", aiModelInput);
+                formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                formData.append("aiAutonomyLevel", aiAutonomyLevel);
+                formData.append("aiMaxDailyGrabs", String(aiMaxDailyGrabs));
+                formData.append("aiApiKey", aiApiKeyInput);
+                promises.push(saveAiAgentSettings(formData));
+            }
+
+            if (isRoadmapDirty) {
+                const formData = new FormData();
+                formData.append("text", roadmapText);
+                promises.push(updateRoadmapText(formData));
+            }
+
+            if (isBetaDirty) {
+                const formData = new FormData();
+                formData.append("text", betaText);
+                promises.push(updateBetaDashboardText(formData));
+            }
+
+            await Promise.all(promises);
+            setSaveAllSuccessMsg("All changes saved successfully!");
+            setTimeout(() => setSaveAllSuccessMsg(""), 4000);
+            await loadAllData();
+            return true;
+        } catch (e: any) {
+            console.error("Failed to save all settings:", e);
+            alert("Failed to save some settings: " + (e.message || "Unknown error"));
+            return false;
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
+    const handleDiscardAllDirty = () => {
+        if (!initialDataRef.current) return;
+        const init = initialDataRef.current;
+        setBannerEnabled(init.alertBannerEnabled);
+        setAlertBannerText(init.alertBannerText);
+        setAppUrlInput(init.appUrl);
+        setSmtpHostInput(init.smtpHost);
+        setSmtpPortInput(init.smtpPort);
+        setSmtpUserInput(init.smtpUser);
+        setSmtpPassInput(init.smtpPass);
+        setSmtpFromInput(init.smtpFrom);
+        setMainPlexTokenInput(init.mainPlexToken);
+        setMainPlexUrlInput(init.mainPlexUrl);
+        setAutoSyncIntervalInput(init.autoSyncInterval);
+        setInputDownloadsPath(init.downloadsPath);
+        setGoogleBooksKey(init.googleBooksKey);
+        setTmdbKey(init.tmdbKey);
+        setTraktKey(init.traktKey);
+        setMdblistKey(init.mdblistKey);
+        setAiProviderSelect(init.aiProvider);
+        setAiModelInput(init.aiModel);
+        setAiAutoResolveSwitch(init.aiAutoResolve);
+        setAiAutonomyLevel((init.aiAutonomyLevel as any) || "autonomous");
+        setAiMaxDailyGrabs(init.aiMaxDailyGrabs ?? 3);
+        setAiApiKeyInput(init.aiApiKey);
+        setRoadmapText(init.roadmapText);
+        setBetaText(init.betaText);
+    };
+
+    const handleConfirmDiscardAndLeave = () => {
+        handleDiscardAllDirty();
+        setLeaveModalOpen(false);
+        if (pendingNavigation) {
+            if (pendingNavigation.type === "tab") {
+                setActiveTab(pendingNavigation.target);
+                localStorage.setItem("settings-active-tab", pendingNavigation.target);
+                startTransition(() => {
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("tab", pendingNavigation.target);
+                    router.push(`${pathname}?${params.toString()}`);
+                });
+            } else if (pendingNavigation.type === "url") {
+                router.push(pendingNavigation.target);
+            }
+            setPendingNavigation(null);
+        }
+    };
+
+    const handleConfirmSaveAndLeave = async () => {
+        const success = await handleSaveAllDirty();
+        if (success) {
+            setLeaveModalOpen(false);
+            if (pendingNavigation) {
+                if (pendingNavigation.type === "tab") {
+                    setActiveTab(pendingNavigation.target);
+                    localStorage.setItem("settings-active-tab", pendingNavigation.target);
+                    startTransition(() => {
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set("tab", pendingNavigation.target);
+                        router.push(`${pathname}?${params.toString()}`);
+                    });
+                } else if (pendingNavigation.type === "url") {
+                    router.push(pendingNavigation.target);
+                }
+                setPendingNavigation(null);
+            }
+        }
     };
 
     const handleForm = async (e: React.FormEvent, action: Function) => {
@@ -502,33 +1221,59 @@ function SettingsPageContent() {
     }
 
     return (
-        <div className={`space-y-6 p-4 sm:p-8 max-w-6xl mx-auto transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
+        <div className={`space-y-6 p-3 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">System Settings</h2>
-                <p className="text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">System Settings</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="flex flex-wrap items-center w-full max-w-5xl h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
-                    <TabsTrigger value="general" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                    <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80 min-w-0">
                         <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>General & Email</span>
+                        <span className="truncate">General & Setup</span>
+                        {isGeneralTabDirty && (
+                            <span className="ml-1 flex h-2 w-2 relative shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                        )}
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="access" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Access Control</span>
+                        <span className="truncate">Access Control</span>
                     </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="requests" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
+                        <Compass className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                        <span className="truncate">Media Requests</span>
+                        {isSeerrDirty && (
+                            <span className="ml-1 flex h-2 w-2 relative shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="emails" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80 min-w-0">
+                        <Mail className="h-4 w-4 text-amber-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                        <span className="truncate">Broadcast & Emails</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="monitoring" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80 min-w-0">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Monitoring & Apps</span>
+                        <span className="truncate">Monitoring & Apps</span>
                     </TabsTrigger>
-                    <TabsTrigger value="beta" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="beta" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80 min-w-0">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Beta & Announcements</span>
+                        <span className="truncate">Beta & Announcements</span>
+                        {isBetaTabDirty && (
+                            <span className="ml-1 flex h-2 w-2 relative shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                        )}
                     </TabsTrigger>
-                    <TabsTrigger value="logs" className="group py-2.5 px-3 flex-1 min-w-[140px] sm:min-w-[160px] flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80">
+                    <TabsTrigger value="logs" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
                         <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span>Live System Logs</span>
+                        <span className="truncate">Live System Logs</span>
                     </TabsTrigger>
                 </TabsList>
                 
@@ -542,12 +1287,25 @@ function SettingsPageContent() {
                 <TabsContent value="general" className="space-y-6">
                     
                     {/* ALERT BANNER CARD */}
-                    <Card className="border-orange-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-orange-950/20">
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                        isAlertBannerDirty 
+                            ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                            : "border-orange-500/40 shadow-orange-950/20"
+                    }`}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-orange-500">
-                                <AlertTriangle className="h-5 w-5"/> System Alert Banner
-                            </CardTitle>
-                            <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-orange-500">
+                                        <AlertTriangle className="h-5 w-5"/> System Alert Banner
+                                    </CardTitle>
+                                    <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
+                                </div>
+                                {isAlertBannerDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateAlertBanner)} className="space-y-4">
@@ -563,7 +1321,8 @@ function SettingsPageContent() {
                                 <div className="space-y-2">
                                     <Input 
                                         name="text" 
-                                        defaultValue={alertBanner.text} 
+                                        value={alertBannerText}
+                                        onChange={(e) => setAlertBannerText(e.target.value)}
                                         placeholder="⚠️ **Maintenance Notice:** Server maintenance scheduled for 2:00 AM EST..." 
                                     />
                                 </div>
@@ -574,68 +1333,476 @@ function SettingsPageContent() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-6 md:grid-cols-2">
-                        {/* SMTP & EMAIL INTEGRATION */}
-                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Mail className="h-5 w-5 text-primary" /> Global SMTP & Kindle Sender
-                                        </CardTitle>
-                                        <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
+                    {/* PUBLIC WEB ADDRESS (CANONICAL BASE URL) CARD */}
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                        isAppUrlDirty 
+                            ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                            : "border-primary/40 shadow-primary/10"
+                    }`}>
+                        <CardHeader>
+                            <div className="flex justify-between items-start gap-2">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-primary">
+                                        <Globe className="h-5 w-5 text-primary"/> Public Web Address (Base URL)
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Set the canonical public URL for DomsHomeLab. This base address is used for invite friends referral links, user account approvals, email buttons, and notification links so you don't have to rely on automatic host header detection.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                    {isAppUrlDirty && (
+                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            ● Unsaved Changes
+                                        </Badge>
+                                    )}
+                                    {systemSettings?.appUrl ? (
+                                        <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                            <CheckCircle2 className="h-3 w-3" /> Configured
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">
+                                            Auto-Detecting
+                                        </Badge>
+                                    )}
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <form 
+                                onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    setSavingAppUrl(true);
+                                    setSaveAppUrlMsg("");
+                                    setSaveAppUrlErr("");
+                                    try {
+                                        const formData = new FormData();
+                                        formData.append("appUrl", appUrlInput);
+                                        const res = await saveAppUrlAction(formData);
+                                        if (res.success) {
+                                            setSaveAppUrlMsg(res.message || "Public Web Address saved successfully!");
+                                            setTimeout(() => setSaveAppUrlMsg(""), 4000);
+                                            loadAllData();
+                                        } else {
+                                            setSaveAppUrlErr(res.error || "Failed to save web address.");
+                                        }
+                                    } catch (err: any) {
+                                        setSaveAppUrlErr(err.message || "Error saving web address");
+                                    } finally {
+                                        setSavingAppUrl(false);
+                                    }
+                                }} 
+                                className="space-y-4"
+                                autoComplete="off"
+                            >
+                                {saveAppUrlMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        <span>{saveAppUrlMsg}</span>
                                     </div>
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                        {systemSettings?.smtpHost ? (
-                                            <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
-                                                <CheckCircle2 className="h-3 w-3" /> SMTP Configured
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
-                                                SMTP Inactive
-                                            </Badge>
-                                        )}
+                                )}
+                                {saveAppUrlErr && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <XCircle className="h-4 w-4 shrink-0" />
+                                        <span>{saveAppUrlErr}</span>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="appUrlInput" className="text-xs font-semibold">Canonical Web Address</Label>
+                                        <div className="flex gap-1.5">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 px-2 text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                onClick={() => {
+                                                    if (typeof window !== "undefined") {
+                                                        setAppUrlInput(window.location.origin);
+                                                    }
+                                                }}
+                                                title="Set to current browser origin"
+                                            >
+                                                Use Current Browser URL
+                                            </Button>
+                                            {appUrlInput && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => setAppUrlInput("")}
+                                                    title="Clear to use automatic detection"
+                                                >
+                                                    Clear
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <Input 
+                                            id="appUrlInput"
+                                            name="appUrl" 
+                                            value={appUrlInput} 
+                                            onChange={(e) => setAppUrlInput(e.target.value)} 
+                                            placeholder="https://portal.yourdomain.com or http://192.168.1.50:3000" 
+                                            className="font-mono text-xs sm:text-sm h-10 pr-10"
+                                            autoComplete="off" 
+                                            data-1p-ignore="true" 
+                                            data-lpignore="true"
+                                        />
+                                        <Globe className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Example: <code className="text-primary font-mono">https://home.domshomelab.com</code> or <code className="text-primary font-mono">http://192.168.1.50:3000</code>. If not specified, DomsHomeLab attempts to auto-detect the domain from incoming request headers.
+                                    </p>
+                                </div>
+
+                                {/* LIVE URL LINK PREVIEW PILLS */}
+                                <div className="p-3.5 rounded-xl bg-background/50 border border-border/50 space-y-2 text-xs">
+                                    <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-primary" /> Generated Links Preview
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+                                        <div className="p-2 rounded-lg bg-black/40 border border-purple-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-purple-400 block tracking-wider font-sans">🎁 Invite Friends</span>
+                                            <span className="text-muted-foreground truncate block">
+                                                {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/join?ref=invite` : "http://localhost:3000/join?ref=invite"}
+                                            </span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-black/40 border border-blue-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-blue-400 block tracking-wider font-sans">📧 Email Login Link</span>
+                                            <span className="text-muted-foreground truncate block">
+                                                {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/login` : "http://localhost:3000/login"}
+                                            </span>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-black/40 border border-emerald-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-emerald-400 block tracking-wider font-sans">🛡️ Admin Approvals</span>
+                                            <span className="text-muted-foreground truncate block">
+                                                {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/settings/access` : "http://localhost:3000/settings/access"}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            </CardHeader>
-                            <CardContent>
-                                <form 
-                                    key={`smtp-form-${systemSettings?.smtpHost || "new"}-${systemSettings?.smtpUser || ""}`} 
-                                    onSubmit={(e) => handleForm(e, saveSettings)} 
-                                    className="space-y-4"
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                >
-                                    {testEmailMsg && (
-                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
-                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                            <span>{testEmailMsg}</span>
-                                        </div>
-                                    )}
-                                    {testEmailErr && (
-                                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
-                                            <XCircle className="h-4 w-4 shrink-0" />
-                                            <span>{testEmailErr}</span>
-                                        </div>
-                                    )}
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2"><Label>SMTP Host</Label><Input name="smtpHost" defaultValue={systemSettings.smtpHost || ""} placeholder="smtp.gmail.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/></div>
-                                        <div className="space-y-2"><Label>Port</Label><Input name="smtpPort" defaultValue={systemSettings.smtpPort || ""} placeholder="587" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/></div>
+                                <div className="flex gap-2 pt-1">
+                                    <Button 
+                                        type="submit" 
+                                        disabled={savingAppUrl}
+                                        className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md text-xs sm:text-sm h-9"
+                                    >
+                                        {savingAppUrl ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving Web Address...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Globe className="h-4 w-4 mr-2" /> Save Web Address
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+
+                    {/* CLOUDFLARE ACCESS & EDGE SECURITY POLICY PATHS */}
+                    <CloudflarePolicyCard />
+
+                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                        <div className="space-y-6">
+                            {/* SMTP & EMAIL INTEGRATION */}
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Mail className="h-5 w-5 text-primary" /> Global SMTP & Kindle Sender
+                                            </CardTitle>
+                                            <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {isSmtpDirty && (
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                    ● Unsaved Changes
+                                                </Badge>
+                                            )}
+                                            {systemSettings?.smtpHost ? (
+                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                    <CheckCircle2 className="h-3 w-3" /> SMTP Configured
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                    SMTP Inactive
+                                                </Badge>
+                                            )}
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleTabChange("emails")}
+                                                className="text-xs h-6 px-2 gap-1 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer ml-1"
+                                            >
+                                                <Bell className="h-3 w-3" /> Broadcast & Templates &rarr;
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>User / Email</Label>
-                                            <Input name="smtpUser" defaultValue={systemSettings.smtpUser || ""} placeholder="user@gmail.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        key={`smtp-form-${systemSettings?.smtpHost || "new"}-${systemSettings?.smtpUser || ""}`} 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData();
+                                            formData.append("smtpHost", smtpHostInput);
+                                            formData.append("smtpPort", String(smtpPortInput));
+                                            formData.append("smtpUser", smtpUserInput);
+                                            formData.append("smtpPass", smtpPassInput);
+                                            formData.append("smtpFrom", smtpFromInput);
+                                            const res = await saveSettings(formData);
+                                            if (res.success) {
+                                                setSaveSmtpMsg("SMTP settings saved successfully!");
+                                                setTimeout(() => setSaveSmtpMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
+                                        {saveSmtpMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveSmtpMsg}</span>
+                                            </div>
+                                        )}
+                                        {testEmailMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{testEmailMsg}</span>
+                                            </div>
+                                        )}
+                                        {testEmailErr && (
+                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                                <span>{testEmailErr}</span>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>SMTP Host</Label>
+                                                <Input 
+                                                    name="smtpHost" 
+                                                    value={smtpHostInput} 
+                                                    onChange={(e) => setSmtpHostInput(e.target.value)} 
+                                                    placeholder="smtp.gmail.com" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Port</Label>
+                                                <Input 
+                                                    name="smtpPort" 
+                                                    value={smtpPortInput} 
+                                                    onChange={(e) => setSmtpPortInput(e.target.value)} 
+                                                    placeholder="587" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>User / Email</Label>
+                                                <Input 
+                                                    name="smtpUser" 
+                                                    value={smtpUserInput} 
+                                                    onChange={(e) => setSmtpUserInput(e.target.value)} 
+                                                    placeholder="user@gmail.com" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Password</Label>
+                                                <div className="relative">
+                                                    <Input 
+                                                        name="smtpPass" 
+                                                        type={showSmtpKey ? "text" : "password"} 
+                                                        value={smtpPassInput} 
+                                                        onChange={(e) => setSmtpPassInput(e.target.value)} 
+                                                        className="pr-8"
+                                                        autoComplete="new-password"
+                                                        data-1p-ignore="true"
+                                                        data-lpignore="true"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                    >
+                                                        {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground leading-tight">
+                                                    For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
+                                                </p>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label>Password</Label>
+                                            <Label>Sender Email Address (From)</Label>
+                                            <Input 
+                                                name="smtpFrom" 
+                                                value={smtpFromInput} 
+                                                onChange={(e) => setSmtpFromInput(e.target.value)} 
+                                                placeholder="dom@domshomelab.com" 
+                                                autoComplete="off" 
+                                                data-1p-ignore="true" 
+                                                data-lpignore="true"
+                                            />
+                                            <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
+                                                <div className="font-semibold text-foreground flex items-center gap-1">
+                                                    <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
+                                                </div>
+                                                <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
+                                                <Mail className="h-4 w-4 mr-2"/> 
+                                                Save SMTP Settings
+                                            </Button>
+
+                                            <Button 
+                                                type="button" 
+                                                variant="outline"
+                                                className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all"
+                                                onClick={handleTestSmtp}
+                                                disabled={testEmailLoading || !systemSettings?.smtpHost}
+                                                title="Send a test email to your SMTP account"
+                                            >
+                                                {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
+                                                Test Connection
+                                            </Button>
+                                            
+                                            {systemSettings?.smtpHost && (
+                                                <Button 
+                                                    type="button" 
+                                                    variant="destructive" 
+                                                    className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
+                                                    onClick={async () => {
+                                                        if(confirm("Are you sure you want to wipe SMTP settings?")) {
+                                                            await clearSmtpSettings();
+                                                            loadAllData();
+                                                        }
+                                                    }}
+                                                    title="Clear Credentials"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* PLEX SERVER & ADMIN TOKEN INTEGRATION */}
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isPlexDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Tv className="h-5 w-5 text-amber-500" /> Plex Media Server & Admin Connection
+                                            </CardTitle>
+                                            <CardDescription>Link server owner credentials to auto-sync user libraries, friend shares, and direct connection URLs.</CardDescription>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {isPlexDirty && (
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                    ● Unsaved Changes
+                                                </Badge>
+                                            )}
+                                            {systemSettings?.mainPlexToken ? (
+                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                    <CheckCircle2 className="h-3 w-3" /> Token Linked
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                    Token Inactive
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        key={`plex-form-${systemSettings?.mainPlexToken ? "linked" : "empty"}`} 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData();
+                                            formData.append("mainPlexToken", mainPlexTokenInput);
+                                            const res = await savePlexSettingsAction(formData);
+                                            if (res.success) {
+                                                setSavePlexMsg(res.message || "Plex settings saved successfully!");
+                                                setTimeout(() => setSavePlexMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
+                                        {savePlexMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{savePlexMsg}</span>
+                                            </div>
+                                        )}
+                                        {syncPlexFriendsMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{syncPlexFriendsMsg}</span>
+                                            </div>
+                                        )}
+                                        {syncPlexFriendsErr && (
+                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                                <span>{syncPlexFriendsErr}</span>
+                                            </div>
+                                        )}
+
+                                        {/* PLEX TOKEN FIELD */}
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="mainPlexToken" className="text-xs font-semibold">Admin Plex Token (Auto-Syncs Friends List)</Label>
+                                                {systemSettings?.mainPlexToken && (
+                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <Input 
-                                                    name="smtpPass" 
-                                                    type={showSmtpKey ? "text" : "password"} 
-                                                    defaultValue={systemSettings.smtpPass || ""} 
+                                                    id="mainPlexToken" 
+                                                    name="mainPlexToken" 
+                                                    type={showPlexKey ? "text" : "password"} 
+                                                    value={mainPlexTokenInput} 
+                                                    onChange={(e) => setMainPlexTokenInput(e.target.value)} 
+                                                    placeholder="xxxxxxxxxxxxxxxxxxxx" 
                                                     className="pr-8"
                                                     autoComplete="new-password"
                                                     data-1p-ignore="true"
@@ -646,117 +1813,495 @@ function SettingsPageContent() {
                                                     variant="ghost"
                                                     size="icon"
                                                     className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                    onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                    onClick={() => setShowPlexKey(!showPlexKey)}
                                                 >
-                                                    {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    {showPlexKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                 </Button>
                                             </div>
-                                            <p className="text-[10px] text-muted-foreground leading-tight">
-                                                For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
+                                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleAutoLinkPlexToken}
+                                                    disabled={isLinkingPlex}
+                                                    className="text-xs gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 hover:border-amber-500 font-semibold transition-all duration-200"
+                                                >
+                                                    {isLinkingPlex ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tv className="h-3.5 w-3.5" />}
+                                                    {isLinkingPlex ? "Connecting to Plex..." : "Sign in with Plex to Auto-Link Token"}
+                                                </Button>
+                                                {plexLinkMsg && (
+                                                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3.5 w-3.5" /> {plexLinkMsg}
+                                                    </span>
+                                                )}
+                                                {plexLinkErr && (
+                                                    <span className="text-xs text-destructive font-medium flex items-center gap-1">
+                                                        <XCircle className="h-3.5 w-3.5" /> {plexLinkErr}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground mt-1">
+                                                Click the button above to sign in with Plex and automatically link your server owner token, or paste your <code>X-Plex-Token</code> manually. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
                                             </p>
                                         </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Sender Email Address (From)</Label>
-                                        <Input name="smtpFrom" defaultValue={systemSettings.smtpFrom || ""} placeholder="portalarr@domain.com" autoComplete="off" data-1p-ignore="true" data-lpignore="true"/>
-                                        <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
-                                            <div className="font-semibold text-foreground flex items-center gap-1">
-                                                <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
-                                            </div>
-                                            <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* PLEX TOKEN SECTION */}
-                                    <div className="space-y-2 border-t border-muted/40 pt-4 mt-4">
-                                        <div className="flex items-center justify-between">
-                                            <Label htmlFor="mainPlexToken" className="text-xs font-semibold">Admin Plex Token (Auto-Syncs Friends List)</Label>
+
+                                        {/* PLEX ACTION BUTTONS */}
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            <Button type="submit" className="flex-1 font-bold bg-amber-600 hover:bg-amber-500 text-white hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all shadow-md">
+                                                <Tv className="h-4 w-4 mr-2"/> 
+                                                Save Plex Token
+                                            </Button>
+
+                                            <Button 
+                                                type="button" 
+                                                variant="outline"
+                                                className="text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                onClick={handleSyncPlexFriends}
+                                                disabled={syncingPlexFriends || !systemSettings?.mainPlexToken}
+                                                title="Sync friend list and access shares from Plex.tv"
+                                            >
+                                                {syncingPlexFriends ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                                Sync Friends Now
+                                            </Button>
+                                            
                                             {systemSettings?.mainPlexToken && (
-                                                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                                                    <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
-                                                </span>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="destructive" 
+                                                    className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
+                                                    onClick={async () => {
+                                                        if(confirm("Are you sure you want to wipe Plex token?")) {
+                                                            await clearPlexSettings();
+                                                            loadAllData();
+                                                        }
+                                                    }}
+                                                    title="Clear Plex Token"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
                                             )}
                                         </div>
-                                        <div className="relative">
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* MULTI-PLEX SERVERS MANAGEMENT */}
+                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2 text-amber-400">
+                                                <Tv className="h-5 w-5 text-amber-500" /> {editingPlexServer ? `Edit Plex Server: ${editingPlexServer.name}` : "Plex Media Servers"}
+                                            </CardTitle>
+                                            <CardDescription>
+                                                {editingPlexServer ? "Update server connection URL or token." : "Configure multiple direct Plex servers. Test connection latency and select your default server."}
+                                            </CardDescription>
+                                        </div>
+                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                                            {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"} Configured
+                                        </Badge>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {plexServerActionMsg && (
+                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            <span>{plexServerActionMsg}</span>
+                                        </div>
+                                    )}
+
+                                    {/* LIST OF CONFIGURED SERVERS */}
+                                    {!editingPlexServer && (
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                            {plexServers.length === 0 ? (
+                                                <div className="text-xs text-muted-foreground p-3 rounded-lg border border-dashed border-muted/50 text-center italic">
+                                                    No manual Plex servers configured yet. Add your first server below!
+                                                </div>
+                                            ) : (
+                                                plexServers.map((server) => (
+                                                    <div key={server.id} className="space-y-2 border border-border/40 p-3 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                        <div className="flex justify-between items-start gap-2">
+                                                            <div className="truncate space-y-0.5">
+                                                                <div className="font-bold flex items-center gap-2">
+                                                                    <span className="truncate">{server.name}</span>
+                                                                    {server.isDefault && (
+                                                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-1 px-1.5 py-0">
+                                                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" /> Default
+                                                                        </Badge>
+                                                                    )}
+                                                                    {server.token ? (
+                                                                        <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/30 text-[9px] px-1.5 py-0">
+                                                                            Custom Token
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0">
+                                                                            Admin Token
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-xs font-mono text-muted-foreground truncate flex items-center gap-1.5">
+                                                                    <code>{server.url}</code>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-1.5 shrink-0 items-center">
+                                                                <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                                    <Switch 
+                                                                        id={`monitored-plex-gen-${server.id}`}
+                                                                        checked={server.monitored !== false}
+                                                                        disabled={togglingPlexServerId === server.id}
+                                                                        onCheckedChange={() => handleTogglePlexServerMonitoring(server.id, server.monitored !== false)}
+                                                                    />
+                                                                    <Label htmlFor={`monitored-plex-gen-${server.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                        {server.monitored !== false ? (
+                                                                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-muted-foreground flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                            </span>
+                                                                        )}
+                                                                    </Label>
+                                                                </div>
+
+                                                                <Button 
+                                                                    type="button"
+                                                                    size="sm" 
+                                                                    variant="outline" 
+                                                                    className="h-7 text-[11px] px-2.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold gap-1 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                                    disabled={testingPlexServerId === server.id}
+                                                                    onClick={() => handleTestPlexServer(server.id)}
+                                                                    title="Test connection to this Plex server"
+                                                                >
+                                                                    {testingPlexServerId === server.id ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <Zap className="h-3 w-3 text-amber-400" />}
+                                                                    Test
+                                                                </Button>
+
+                                                                {!server.isDefault && (
+                                                                    <Button 
+                                                                        type="button"
+                                                                        size="icon" 
+                                                                        variant="ghost" 
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                                        onClick={async () => {
+                                                                            await setDefaultPlexServerAction(server.id);
+                                                                            setPlexServerActionMsg(`"${server.name}" set as default Plex server.`);
+                                                                            setTimeout(() => setPlexServerActionMsg(""), 3000);
+                                                                            loadAllData();
+                                                                        }}
+                                                                        title="Set as Default Plex Server"
+                                                                    >
+                                                                        <Star className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                )}
+
+                                                                <Button 
+                                                                    type="button"
+                                                                    size="icon" 
+                                                                    variant="ghost" 
+                                                                    className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all"
+                                                                    onClick={() => {
+                                                                        setEditingPlexServer(server);
+                                                                        setPlexServerFormName(server.name);
+                                                                        setPlexServerFormUrl(server.url);
+                                                                        setPlexServerFormToken(server.token || "");
+                                                                        setPlexServerFormIsDefault(server.isDefault);
+                                                                        setPlexServerFormMonitored(server.monitored !== false);
+                                                                        setPlexServerFormTestResult(null);
+                                                                    }}
+                                                                    title="Edit Server"
+                                                                >
+                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                </Button>
+
+                                                                <Button 
+                                                                    type="button"
+                                                                    size="icon" 
+                                                                    variant="ghost" 
+                                                                    className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all"
+                                                                    onClick={async () => {
+                                                                        if (confirm(`Remove Plex server "${server.name}"?`)) {
+                                                                            await removePlexServerAction(server.id);
+                                                                            setPlexServerActionMsg(`Plex server "${server.name}" removed.`);
+                                                                            setTimeout(() => setPlexServerActionMsg(""), 3000);
+                                                                            loadAllData();
+                                                                        }
+                                                                    }}
+                                                                    title="Remove Server"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Live Test Diagnostic Result */}
+                                                        {plexServerTestResults[server.id] && (
+                                                            <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${
+                                                                plexServerTestResults[server.id].success 
+                                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                            }`}>
+                                                                {plexServerTestResults[server.id].success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                                                <span className="leading-tight">{plexServerTestResults[server.id].msg || plexServerTestResults[server.id].err}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ADD / EDIT SERVER FORM */}
+                                    <form 
+                                        id="plex-server-form"
+                                        key={editingPlexServer ? `edit-plex-srv-${editingPlexServer.id}` : "new-plex-srv"}
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData(e.currentTarget);
+                                            formData.set("monitored", plexServerFormMonitored ? "true" : "false");
+                                            if (editingPlexServer) {
+                                                formData.append("id", editingPlexServer.id);
+                                            }
+                                            const res = editingPlexServer 
+                                                ? await updatePlexServerAction(formData)
+                                                : await addPlexServerAction(formData);
+
+                                            if (res.success) {
+                                                setPlexServerActionMsg(res.message || "Plex server saved successfully!");
+                                                setTimeout(() => setPlexServerActionMsg(""), 4000);
+                                                setEditingPlexServer(null);
+                                                setPlexServerFormName("");
+                                                setPlexServerFormUrl("");
+                                                setPlexServerFormToken("");
+                                                setPlexServerFormIsDefault(false);
+                                                setPlexServerFormMonitored(true);
+                                                setPlexServerFormTestResult(null);
+                                                loadAllData();
+                                            } else {
+                                                alert(res.error || "Failed to save Plex server.");
+                                            }
+                                        }}
+                                        className={`space-y-3 ${!editingPlexServer && "border-t border-muted/30 pt-4 mt-2"}`}
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
+                                        <div className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
+                                            {editingPlexServer ? `Edit Server Details` : `Add New Server`}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-semibold">Server Display Name</Label>
                                             <Input 
-                                                id="mainPlexToken" 
-                                                name="mainPlexToken" 
-                                                type={showPlexKey ? "text" : "password"} 
-                                                defaultValue={systemSettings.mainPlexToken || ""} 
-                                                placeholder="xxxxxxxxxxxxxxxxxxxx" 
-                                                className="pr-8"
-                                                autoComplete="new-password"
+                                                name="name" 
+                                                placeholder="e.g. Local PMS, 4K Server, Remote Plex" 
+                                                required 
+                                                value={plexServerFormName}
+                                                onChange={(e) => setPlexServerFormName(e.target.value)}
+                                                className="text-xs" 
+                                                autoComplete="off"
                                                 data-1p-ignore="true"
                                                 data-lpignore="true"
                                             />
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                onClick={() => setShowPlexKey(!showPlexKey)}
-                                            >
-                                                {showPlexKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                            </Button>
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground mt-1">
-                                            Sign in to Plex Web, open the XML for any media item, and copy the <code>X-Plex-Token</code> from the URL. <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" className="text-primary hover:underline">Read the official guide</a>.
-                                        </p>
-                                    </div>
 
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                        <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
-                                            <Send className="h-4 w-4 mr-2"/> 
-                                            Save SMTP Settings
-                                        </Button>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-xs font-semibold">Server Connection URL</Label>
+                                                <div className="flex gap-1">
+                                                    {["http://192.168.1.50:32400", "http://localhost:32400", "http://plex:32400"].map((preset) => (
+                                                        <Button
+                                                            key={preset}
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-5 px-1.5 text-[9px] font-mono text-muted-foreground hover:text-amber-400"
+                                                            onClick={() => setPlexServerFormUrl(preset)}
+                                                        >
+                                                            {preset.replace("http://", "")}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <Input 
+                                                name="url" 
+                                                placeholder="http://192.168.1.50:32400 or http://172.22.0.87:32400" 
+                                                required 
+                                                value={plexServerFormUrl}
+                                                onChange={(e) => setPlexServerFormUrl(e.target.value)}
+                                                className="text-xs font-mono" 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
 
-                                        <Button 
-                                            type="button" 
-                                            variant="outline"
-                                            className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all"
-                                            onClick={handleTestSmtp}
-                                            disabled={testEmailLoading || !systemSettings?.smtpHost}
-                                            title="Send a test email to your SMTP account"
-                                        >
-                                            {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
-                                            Test Connection
-                                        </Button>
-                                        
-                                        {(systemSettings?.smtpHost || systemSettings?.mainPlexToken) && (
+                                        <div className="space-y-1">
+                                            <Label className="text-xs font-semibold">Server-Specific Plex Token (Optional)</Label>
+                                            <div className="relative">
+                                                <Input 
+                                                    name="token" 
+                                                    type={showPlexServerFormToken ? "text" : "password"} 
+                                                    placeholder="Leave blank to use Admin Plex Token" 
+                                                    value={plexServerFormToken}
+                                                    onChange={(e) => setPlexServerFormToken(e.target.value)}
+                                                    className="text-xs font-mono pr-8" 
+                                                    autoComplete="new-password"
+                                                    data-1p-ignore="true"
+                                                    data-lpignore="true"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setShowPlexServerFormToken(!showPlexServerFormToken)}
+                                                >
+                                                    {showPlexServerFormToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                If this server uses a different Plex account or token, paste its <code>X-Plex-Token</code> here. Otherwise, the dashboard will use your Global Admin Plex Token.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center space-x-2 pt-1">
+                                            <input 
+                                                type="checkbox" 
+                                                id="plex-server-default" 
+                                                name="isDefault" 
+                                                checked={plexServerFormIsDefault}
+                                                onChange={(e) => setPlexServerFormIsDefault(e.target.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400" 
+                                            />
+                                            <Label htmlFor="plex-server-default" className="text-xs font-medium cursor-pointer">
+                                                Set as Default Plex Server for library scans & curation
+                                            </Label>
+                                        </div>
+
+                                        <div className="flex items-center space-x-2 pt-1">
+                                            <input 
+                                                type="checkbox" 
+                                                id="plex-server-monitored" 
+                                                name="monitored" 
+                                                value="true" 
+                                                checked={plexServerFormMonitored}
+                                                onChange={(e) => setPlexServerFormMonitored(e.target.checked)}
+                                                className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                            />
+                                            <Label htmlFor="plex-server-monitored" className="text-xs font-medium cursor-pointer">
+                                                Monitor server reachability & active stream sessions
+                                            </Label>
+                                        </div>
+
+                                        {/* Test Connection Banner */}
+                                        {plexServerFormTestResult && (
+                                            <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-2 ${
+                                                plexServerFormTestResult.success 
+                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                            }`}>
+                                                {plexServerFormTestResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                                                <span className="leading-tight">{plexServerFormTestResult.msg || plexServerFormTestResult.err}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Form Buttons */}
+                                        <div className="flex gap-2 pt-2">
                                             <Button 
                                                 type="button" 
-                                                variant="destructive" 
-                                                className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
-                                                onClick={async () => {
-                                                    if(confirm("Are you sure you want to wipe SMTP settings?")) {
-                                                        await clearSmtpSettings();
-                                                        loadAllData();
-                                                    }
-                                                }}
-                                                title="Clear Credentials"
+                                                size="sm" 
+                                                variant="outline" 
+                                                className="text-xs font-semibold gap-1.5 border-amber-500/40 hover:border-amber-500 hover:bg-amber-500/10 text-amber-400 active:scale-95 transition-all"
+                                                disabled={testingPlexServerForm || !plexServerFormUrl}
+                                                onClick={handleTestPlexServerForm}
                                             >
-                                                <Trash2 className="h-4 w-4" />
+                                                {testingPlexServerForm ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <Zap className="h-3 w-3 text-amber-400" />}
+                                                Test Connection
                                             </Button>
-                                        )}
-                                    </div>
-                                </form>
-                            </CardContent>
-                        </Card>
+
+                                            <Button 
+                                                type="submit" 
+                                                size="sm" 
+                                                className="flex-1 font-bold bg-amber-600 hover:bg-amber-500 text-white hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all shadow-md"
+                                            >
+                                                {editingPlexServer ? "Save Server Changes" : "Add Plex Server"}
+                                            </Button>
+
+                                            {editingPlexServer && (
+                                                <Button 
+                                                    type="button" 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    className="hover:ring-1 hover:ring-border active:scale-95 transition-all text-xs" 
+                                                    onClick={() => { 
+                                                        setEditingPlexServer(null); 
+                                                        setPlexServerFormName("");
+                                                        setPlexServerFormUrl("");
+                                                        setPlexServerFormToken("");
+                                                        setPlexServerFormIsDefault(false);
+                                                        setPlexServerFormMonitored(true);
+                                                        setPlexServerFormTestResult(null); 
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+                        </div>
 
                         {/* AUTOMATION & DOWNLOAD DIRECTORY VALIDATOR */}
                         <div className="space-y-6">
-                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isAutomationDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
                                 <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
-                                    </CardTitle>
-                                    <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
+                                            </CardTitle>
+                                            <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
+                                        </div>
+                                        {isAutomationDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <form onSubmit={(e) => handleForm(e, saveJobSettings)} className="space-y-4">
+                                    <form 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData(e.currentTarget);
+                                            const res = await saveJobSettings(formData);
+                                            if (res.success) {
+                                                setSaveAutomationMsg("Automation settings saved successfully!");
+                                                setTimeout(() => setSaveAutomationMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                    >
+                                        {saveAutomationMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveAutomationMsg}</span>
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <Label>Library Auto-Scan Interval (Minutes)</Label>
-                                            <Input name="autoSyncInterval" type="number" defaultValue={systemSettings.autoSyncInterval || 5} />
+                                            <Input 
+                                                name="autoSyncInterval" 
+                                                type="number" 
+                                                value={autoSyncIntervalInput} 
+                                                onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
+                                            />
                                         </div>
                                         <div className="space-y-3">
                                             <div className="flex justify-between items-center">
@@ -895,10 +2440,21 @@ function SettingsPageContent() {
                                 </CardContent>
                             </Card>
 
-                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isGoogleBooksDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
                                 <CardHeader>
-                                    <CardTitle>Google Books API</CardTitle>
-                                    <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle>Google Books API</CardTitle>
+                                            <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
+                                        </div>
+                                        {isGoogleBooksDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <form 
@@ -907,14 +2463,23 @@ function SettingsPageContent() {
                                             e.preventDefault();
                                             const formData = new FormData(e.currentTarget);
                                             const res = await saveJobSettings(formData);
-                                            setSaveAiMsg("Google Books settings saved successfully!");
-                                            setTimeout(() => setSaveAiMsg(""), 4000);
+                                            if (res.success) {
+                                                setSaveGoogleBooksMsg("Google Books settings saved successfully!");
+                                                setTimeout(() => setSaveGoogleBooksMsg(""), 4000);
+                                                loadAllData();
+                                            }
                                         }} 
                                         className="space-y-4"
                                         autoComplete="off"
                                         data-1p-ignore="true"
                                         data-lpignore="true"
                                     >
+                                        {saveGoogleBooksMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveGoogleBooksMsg}</span>
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-center">
                                                 <Label>API Key</Label>
@@ -952,26 +2517,217 @@ function SettingsPageContent() {
                                                 Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.
                                             </p>
                                         </div>
-                                        <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Settings</Button>
+                                        <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Google Books Settings</Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* CURATION, KOMETA & AGREGARR API KEYS CARD */}
+                            <Card className={`border-indigo-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                                isCurationDirty 
+                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                                    : "shadow-indigo-950/20"
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2 text-indigo-400">
+                                                <Sparkles className="h-5 w-5 text-indigo-400"/> Curation & Discovery API Keys
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Configure TMDb, Trakt.tv, and IMDb / Community Ratings (MDBList) API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
+                                            </CardDescription>
+                                        </div>
+                                        {isCurationDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const { saveCurationSettingsAction } = await import("@/app/curation-actions");
+                                            const res = await saveCurationSettingsAction({
+                                                tmdbApiKey: tmdbKey,
+                                                traktClientId: traktKey,
+                                                mdblistApiKey: mdblistKey
+                                            });
+                                            if (res.success) {
+                                                setCurationSavedMsg("Curation API keys saved successfully!");
+                                                setTimeout(() => setCurationSavedMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }}
+                                        className="space-y-4"
+                                    >
+                                        {curationSavedMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-1.5">
+                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                                <span>{curationSavedMsg}</span>
+                                            </div>
+                                        )}
+
+                                        {curationTestResult && (
+                                            <div className={`text-xs p-3 rounded-lg border space-y-1 ${curationTestResult.errors?.length === 0 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800' : 'bg-rose-950/50 text-rose-300 border-rose-800'}`}>
+                                                <div className="font-bold flex items-center gap-1.5">
+                                                    {curationTestResult.errors?.length === 0 ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                    <span>API Verification Results:</span>
+                                                </div>
+                                                <div className="text-[11px] space-y-0.5 pl-5">
+                                                    {tmdbKey && <div>• TMDb: {curationTestResult.tmdb ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {traktKey && <div>• Trakt: {curationTestResult.trakt ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {mdblistKey && <div>• IMDb / Ratings (MDBList): {curationTestResult.mdblist ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {curationTestResult.errors?.map((err: string, i: number) => (
+                                                        <div key={i} className="text-rose-400">• {err}</div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-3">
+                                            {/* TMDb API Key */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">The Movie Database (TMDb) API Key</Label>
+                                                    <a href="https://www.themoviedb.org/settings/api" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Get Free Key ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showTmdbKey ? "text" : "password"}
+                                                        value={tmdbKey}
+                                                        onChange={e => setTmdbKey(e.target.value)}
+                                                        placeholder="e.g. 3a1f8c..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowTmdbKey(!showTmdbKey)}
+                                                    >
+                                                        {showTmdbKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers franchise collections (MCU, Star Wars, Pixar, HBO, Netflix) and theatrical vs digital release countdowns.
+                                                </p>
+                                            </div>
+
+                                            {/* Trakt Client ID */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">Trakt.tv API Client ID</Label>
+                                                    <a href="https://trakt.tv/oauth/applications" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Create Trakt App ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showTraktKey ? "text" : "password"}
+                                                        value={traktKey}
+                                                        onChange={e => setTraktKey(e.target.value)}
+                                                        placeholder="e.g. 9b7c6..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowTraktKey(!showTraktKey)}
+                                                    >
+                                                        {showTraktKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers dynamic Trending This Week, Anticipated Movies, and custom public Trakt lists.
+                                                </p>
+                                            </div>
+
+                                            {/* MDBList API Key */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">IMDb & Community Ratings (MDBList API Key)</Label>
+                                                    <a href="https://mdblist.com/preferences/" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Get MDBList Key ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showMdblistKey ? "text" : "password"}
+                                                        value={mdblistKey}
+                                                        onChange={e => setMdblistKey(e.target.value)}
+                                                        placeholder="e.g. key_..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowMdblistKey(!showMdblistKey)}
+                                                    >
+                                                        {showMdblistKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers IMDb Top 250, Oscar Best Picture Winners, and composite IMDb/Rotten Tomatoes/Metacritic ratings badges.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 pt-1">
+                                            <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8">
+                                                Save Curation Keys
+                                            </Button>
+                                            <Button 
+                                                type="button" 
+                                                variant="outline" 
+                                                size="sm" 
+                                                disabled={testingCurationKeys || (!tmdbKey && !traktKey && !mdblistKey)}
+                                                onClick={handleTestCurationKeys}
+                                                className="text-xs h-8 border-slate-700 font-semibold gap-1.5"
+                                            >
+                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-indigo-400" />}
+                                                Test API Keys
+                                            </Button>
+                                        </div>
                                     </form>
                                 </CardContent>
                             </Card>
 
                             {/* AI METADATA AGENT CARD */}
-                            <Card className="border-purple-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg shadow-purple-950/20">
+                            <Card className={`border-purple-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                                isAiDirty 
+                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                                    : "shadow-purple-950/20"
+                            }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <CardTitle className="flex items-center gap-2 text-purple-400">
-                                                <Bot className="h-5 w-5 text-purple-400"/> AI Metadata Agent
+                                                <Bot className="h-5 w-5 text-purple-400"/> AI Metadata Agent & Support Assistant
                                             </CardTitle>
                                             <CardDescription>
-                                                Automated AI agent to analyze messy release folder names and extract official book titles, authors, and cover art queries.
+                                                Configure the AI engine for media metadata extraction and set the autonomy level for the AI Support Bot.
                                             </CardDescription>
                                         </div>
-                                        <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">
-                                            {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
-                                        </Badge>
+                                        <div className="flex items-center gap-1.5">
+                                            {isAiDirty && (
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                    ● Unsaved Changes
+                                                </Badge>
+                                            )}
+                                            <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">
+                                                {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
+                                            </Badge>
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
@@ -983,10 +2739,14 @@ function SettingsPageContent() {
                                             formData.append("aiProvider", aiProviderSelect);
                                             formData.append("aiModel", aiModelInput);
                                             formData.append("aiAutoResolve", aiAutoResolveSwitch ? "true" : "false");
+                                            formData.append("aiAutonomyLevel", aiAutonomyLevel);
+                                            formData.append("aiMaxDailyGrabs", String(aiMaxDailyGrabs));
+                                            formData.append("aiApiKey", aiApiKeyInput);
                                             const res = await saveAiAgentSettings(formData);
                                             if (res.success) {
                                                 setSaveAiMsg("AI Agent settings saved successfully!");
                                                 setTimeout(() => setSaveAiMsg(""), 4000);
+                                                loadAllData();
                                             }
                                         }} 
                                         className="space-y-4"
@@ -1008,7 +2768,7 @@ function SettingsPageContent() {
                                                 onValueChange={(val) => {
                                                     setAiProviderSelect(val);
                                                     if (val === "gemini" && (!aiModelInput || aiModelInput.startsWith("gpt"))) {
-                                                        setAiModelInput("gemini-2.5-flash");
+                                                        setAiModelInput("gemini-3.5-flash-lite");
                                                     } else if (val === "openai" && (!aiModelInput || aiModelInput.startsWith("gemini"))) {
                                                         setAiModelInput("gpt-4o-mini");
                                                     }
@@ -1019,7 +2779,7 @@ function SettingsPageContent() {
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="default">Default Built-In (Free Heuristic & Search)</SelectItem>
-                                                    <SelectItem value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</SelectItem>
+                                                    <SelectItem value="gemini">Google Gemini (Gemini 3.5 Flash Lite / 3.8 Flash)</SelectItem>
                                                     <SelectItem value="openai">OpenAI (GPT-4o / GPT-4o-mini)</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -1050,7 +2810,8 @@ function SettingsPageContent() {
                                                     <Input 
                                                         name="aiApiKey" 
                                                         type={showAiKey ? "text" : "password"}
-                                                        defaultValue={aiSettings.aiApiKey || ""}
+                                                        value={aiApiKeyInput}
+                                                        onChange={(e) => setAiApiKeyInput(e.target.value)}
                                                         placeholder={aiProviderSelect === "gemini" ? "AIzaSy..." : "sk-..."}
                                                         autoComplete="new-password"
                                                         data-1p-ignore="true"
@@ -1082,7 +2843,7 @@ function SettingsPageContent() {
                                                     <Select 
                                                         value={
                                                             dynamicModels.includes(aiModelInput) ||
-                                                            (aiProviderSelect === "gemini" && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
+                                                            (aiProviderSelect === "gemini" && ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"].includes(aiModelInput)) ||
                                                             (aiProviderSelect === "openai" && ["gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"].includes(aiModelInput))
                                                                 ? aiModelInput
                                                                 : "custom"
@@ -1108,12 +2869,12 @@ function SettingsPageContent() {
                                                                 </>
                                                             ) : aiProviderSelect === "gemini" ? (
                                                                 <>
-                                                                    <SelectItem value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</SelectItem>
-                                                                    <SelectItem value="gemini-2.5-pro">gemini-2.5-pro (High Performance)</SelectItem>
-                                                                    <SelectItem value="gemini-2.0-flash">gemini-2.0-flash</SelectItem>
-                                                                    <SelectItem value="gemini-1.5-flash">gemini-1.5-flash</SelectItem>
-                                                                    <SelectItem value="gemini-1.5-pro">gemini-1.5-pro</SelectItem>
-                                                                    <SelectItem value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</SelectItem>
+                                                                    <SelectItem value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (High Quota 500 RPD - Recommended)</SelectItem>
+                                                                    <SelectItem value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (High Quota 500 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.8-flash">gemini-3.8-flash (Flagship Flash - 20 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.7-flash">gemini-3.7-flash (Flash 3.7 - 20 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.5-flash">gemini-3.5-flash (Standard Flash - 20 RPD)</SelectItem>
+                                                                    <SelectItem value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Deep Reasoning Pro - Paid Tier Only)</SelectItem>
                                                                     <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
                                                                 </>
                                                             ) : (
@@ -1129,7 +2890,7 @@ function SettingsPageContent() {
                                                     </Select>
 
                                                     {(!dynamicModels.includes(aiModelInput) && ![
-                                                        "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b",
+                                                        "gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b",
                                                         "gpt-4o-mini", "gpt-4o", "gpt-4.5-preview", "gpt-3.5-turbo"
                                                     ].includes(aiModelInput)) && (
                                                         <Input 
@@ -1152,6 +2913,218 @@ function SettingsPageContent() {
                                             <Label htmlFor="ai-auto-resolve" className="cursor-pointer text-xs font-medium">
                                                 Auto-run AI Resolution during library scans
                                             </Label>
+                                        </div>
+
+                                        {/* AI SUPPORT BOT AUTONOMY & CAPABILITY SLIDER */}
+                                        <div className="pt-4 border-t border-purple-500/20 space-y-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                <div>
+                                                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-purple-300">
+                                                        <Sliders className="h-4 w-4 text-purple-400" /> AI Support Bot Autonomy Level
+                                                    </Label>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                                        Controls what troubleshooting, playback probes, and self-healing actions the AI Support Bot is permitted to execute.
+                                                    </p>
+                                                </div>
+                                                <Badge className={`text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto border ${
+                                                    aiAutonomyLevel === "advisory"
+                                                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                                                        : aiAutonomyLevel === "assisted"
+                                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                                                }`}>
+                                                    {aiAutonomyLevel === "advisory" && "🔍 Level 1: Advisory (Passive)"}
+                                                    {aiAutonomyLevel === "assisted" && "🛡️ Level 2: Assisted (Guided)"}
+                                                    {aiAutonomyLevel === "autonomous" && "⚡ Level 3: Full Autonomous"}
+                                                </Badge>
+                                            </div>
+
+                                            {/* Interactive Range Track Slider */}
+                                            <div className="space-y-2 px-1">
+                                                <div className="relative flex items-center select-none">
+                                                    <input 
+                                                        type="range" 
+                                                        min={1} 
+                                                        max={3} 
+                                                        step={1}
+                                                        value={aiAutonomyLevel === "advisory" ? 1 : aiAutonomyLevel === "assisted" ? 2 : 3}
+                                                        onChange={(e) => {
+                                                            const val = Number(e.target.value);
+                                                            if (val === 1) setAiAutonomyLevel("advisory");
+                                                            else if (val === 2) setAiAutonomyLevel("assisted");
+                                                            else setAiAutonomyLevel("autonomous");
+                                                        }}
+                                                        className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                                                    />
+                                                </div>
+                                                {/* Stepper Labels */}
+                                                <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setAiAutonomyLevel("advisory")}
+                                                        className={`transition-colors font-medium text-left ${aiAutonomyLevel === "advisory" ? "text-sky-400 font-bold" : "hover:text-foreground"}`}
+                                                    >
+                                                        1. Advisory
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setAiAutonomyLevel("assisted")}
+                                                        className={`transition-colors font-medium text-center ${aiAutonomyLevel === "assisted" ? "text-amber-400 font-bold" : "hover:text-foreground"}`}
+                                                    >
+                                                        2. Assisted
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setAiAutonomyLevel("autonomous")}
+                                                        className={`transition-colors font-medium text-right ${aiAutonomyLevel === "autonomous" ? "text-emerald-400 font-bold" : "hover:text-foreground"}`}
+                                                    >
+                                                        3. Full Autonomous
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Clickable Level Cards Grid */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                                                {/* Tier 1 */}
+                                                <div 
+                                                    onClick={() => setAiAutonomyLevel("advisory")}
+                                                    className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
+                                                        aiAutonomyLevel === "advisory"
+                                                            ? "border-sky-500/80 bg-sky-950/30 text-sky-100 ring-1 ring-sky-500/50 shadow-sm"
+                                                            : "border-white/10 bg-black/20 hover:border-sky-500/30 text-muted-foreground"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between font-semibold">
+                                                        <span className="flex items-center gap-1.5 text-sky-300">
+                                                            <Eye className="h-3.5 w-3.5" /> Level 1: Advisory
+                                                        </span>
+                                                        {aiAutonomyLevel === "advisory" && <Check className="h-3.5 w-3.5 text-sky-400" />}
+                                                    </div>
+                                                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                                        Passive diagnostics and device coaching only. Explains transcode telemetry & client buffer issues.
+                                                    </p>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
+                                                        <div className="text-emerald-400/90">✓ Stream telemetry & setup guides</div>
+                                                        <div className="text-neutral-500">✗ No stream kills or file grabs</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Tier 2 */}
+                                                <div 
+                                                    onClick={() => setAiAutonomyLevel("assisted")}
+                                                    className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
+                                                        aiAutonomyLevel === "assisted"
+                                                            ? "border-amber-500/80 bg-amber-950/30 text-amber-100 ring-1 ring-amber-500/50 shadow-sm"
+                                                            : "border-white/10 bg-black/20 hover:border-amber-500/30 text-muted-foreground"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between font-semibold">
+                                                        <span className="flex items-center gap-1.5 text-amber-300">
+                                                            <Shield className="h-3.5 w-3.5" /> Level 2: Assisted
+                                                        </span>
+                                                        {aiAutonomyLevel === "assisted" && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                                                    </div>
+                                                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                                        Proactive container inspections & synthetic probes. Stops user streams on command; requests confirmation before downloads.
+                                                    </p>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
+                                                        <div className="text-emerald-400/90">✓ Probes & user stream kills</div>
+                                                        <div className="text-amber-400/90">⚠️ Prompts confirmation for grabs</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Tier 3 */}
+                                                <div 
+                                                    onClick={() => setAiAutonomyLevel("autonomous")}
+                                                    className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
+                                                        aiAutonomyLevel === "autonomous"
+                                                            ? "border-emerald-500/80 bg-emerald-950/30 text-emerald-100 ring-1 ring-emerald-500/50 shadow-sm"
+                                                            : "border-white/10 bg-black/20 hover:border-emerald-500/30 text-muted-foreground"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between font-semibold">
+                                                        <span className="flex items-center gap-1.5 text-emerald-300">
+                                                            <Zap className="h-3.5 w-3.5" /> Level 3: Autonomous
+                                                        </span>
+                                                        {aiAutonomyLevel === "autonomous" && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                                                    </div>
+                                                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                                        Full auto-pilot self-healing. Auto-terminates stuck playback, grabs replacement English media in Radarr/Sonarr, and auto-escalates tickets.
+                                                    </p>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
+                                                        <div className="text-emerald-400/90">✓ Auto Radarr/Sonarr grabs</div>
+                                                        <div className="text-emerald-400/90">✓ Auto ticket escalation + probes</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* MAX RADARR & SONARR INTERACTIONS SLIDER */}
+                                            <div className="pt-3 border-t border-purple-500/20 space-y-3">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                    <div>
+                                                        <Label className="text-sm font-semibold flex items-center gap-1.5 text-purple-300">
+                                                            <Activity className="h-4 w-4 text-purple-400" /> Max Daily Radarr / Sonarr Interactions
+                                                        </Label>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                                            Safety rate limit on automated replacement searches & downloads the AI can dispatch to Radarr & Sonarr per user within a 24-hour window.
+                                                        </p>
+                                                    </div>
+                                                    <Badge className="text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                                        {aiMaxDailyGrabs} grabs / user / 24h
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="space-y-2 px-1">
+                                                    <div className="relative flex items-center select-none">
+                                                        <input 
+                                                            type="range" 
+                                                            min={1} 
+                                                            max={10} 
+                                                            step={1}
+                                                            value={aiMaxDailyGrabs}
+                                                            onChange={(e) => setAiMaxDailyGrabs(Number(e.target.value))}
+                                                            className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                                                        />
+                                                    </div>
+                                                    <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(1)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 1 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            1 (Conservative)
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(3)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 3 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            3 (Default)
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(5)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 5 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            5 (Moderate)
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setAiMaxDailyGrabs(10)}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 10 ? "text-purple-400 font-bold" : ""}`}
+                                                        >
+                                                            10 (Max)
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-2.5 rounded-lg bg-neutral-900/40 border border-neutral-800/60 text-[11px] text-muted-foreground flex items-center gap-2">
+                                                <Shield className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                <span>
+                                                    <strong>Security Boundary:</strong> Regardless of autonomy level, strict user isolation is always enforced: non-admin users can never view or terminate streams belonging to other users.
+                                                </span>
+                                            </div>
                                         </div>
 
                                         {testAiResult && (
@@ -1206,6 +3179,7 @@ function SettingsPageContent() {
                             </Card>
                         </div>
                     </div>
+
                 </TabsContent>
 
                 {/* --- TAB 2: ACCESS CONTROL --- */}
@@ -1213,9 +3187,231 @@ function SettingsPageContent() {
                     <AccessSettingsPage />
                 </TabsContent>
 
-                {/* --- TAB 3: MONITORING & APPS --- */}
+                {/* --- TAB 3: BROADCAST & EMAIL TEMPLATES --- */}
+                <TabsContent value="emails" className="space-y-4">
+                    <EmailManagement />
+                </TabsContent>
+
+                {/* --- TAB 4: MONITORING & APPS --- */}
                 <TabsContent value="monitoring" className="space-y-6">
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                        {/* PLEX MEDIA SERVERS & AUTO-DISCOVERY */}
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Tv className="h-5 w-5 text-amber-500"/> Plex Media Servers
+                                        </CardTitle>
+                                        <CardDescription>Direct Plex servers and Plex.tv account auto-discovery with per-server monitoring controls.</CardDescription>
+                                    </div>
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                                        {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"}
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
+                                {plexServerActionMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                        <span>{plexServerActionMsg}</span>
+                                    </div>
+                                )}
+
+                                {/* LIST OF CONFIGURED SERVERS */}
+                                <div>
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between">
+                                        <span>Configured Plex Servers ({plexServers.length})</span>
+                                        <span className="text-[10px] text-muted-foreground font-normal">Toggle switch to pause/resume monitoring</span>
+                                    </div>
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {plexServers.length === 0 && (
+                                            <p className="text-xs text-muted-foreground italic">No Plex servers configured. Import from discovered servers below or add one in General & Setup.</p>
+                                        )}
+                                        {plexServers.map(s => (
+                                            <div key={s.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                <div className="flex justify-between items-center gap-2">
+                                                    <div className="truncate space-y-0.5">
+                                                        <div className="font-semibold flex items-center gap-1.5 truncate">
+                                                            <span className="truncate">{s.name}</span>
+                                                            {s.isDefault && (
+                                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-0.5 px-1 py-0">
+                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-400" /> Default
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[11px] font-mono text-muted-foreground truncate">
+                                                            <code>{s.url}</code>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-plex-tab-${s.id}`}
+                                                                checked={s.monitored !== false}
+                                                                disabled={togglingPlexServerId === s.id}
+                                                                onCheckedChange={() => handleTogglePlexServerMonitoring(s.id, s.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-plex-tab-${s.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {s.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                            disabled={testingPlexServerId === s.id}
+                                                            onClick={() => handleTestPlexServer(s.id)}
+                                                        >
+                                                            {testingPlexServerId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="ghost" 
+                                                            className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" 
+                                                            onClick={async () => {
+                                                                if (confirm(`Remove Plex server "${s.name}"?`)) {
+                                                                    await removePlexServerAction(s.id);
+                                                                    setPlexServerActionMsg(`Plex server "${s.name}" removed.`);
+                                                                    setTimeout(() => setPlexServerActionMsg(""), 3000);
+                                                                    await loadAllData();
+                                                                    await handleFetchDiscoveredPlexServers();
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                {plexServerTestResults[s.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${plexServerTestResults[s.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {plexServerTestResults[s.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{plexServerTestResults[s.id].msg || plexServerTestResults[s.id].err}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* PLEX.TV AUTO-DISCOVERY SECTION */}
+                                <div className="border-t border-border/40 pt-3 space-y-2 mt-auto">
+                                    <div className="flex justify-between items-center">
+                                        <div className="space-y-0.5">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                <Radio className="h-3 w-3 text-amber-500 animate-pulse" />
+                                                <span>Plex.tv Discovered Servers</span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">Passive inventory on linked account. Unadded servers are never probed or marked down.</p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-[10px] px-2.5 font-semibold gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95 transition-all"
+                                            disabled={loadingDiscoveredPlexServers}
+                                            onClick={handleFetchDiscoveredPlexServers}
+                                        >
+                                            {loadingDiscoveredPlexServers ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                                            {loadingDiscoveredPlexServers ? "Scanning..." : "Scan Plex.tv"}
+                                        </Button>
+                                    </div>
+
+                                    {discoveredPlexServersMsg && (
+                                        <p className="text-xs text-muted-foreground italic bg-muted/20 p-2 rounded-md border border-border/30">
+                                            {discoveredPlexServersMsg}
+                                        </p>
+                                    )}
+
+                                    {discoveredPlexServers.length > 0 && (
+                                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                                            {discoveredPlexServers.map((srv, idx) => {
+                                                const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+                                                const connUri = conn ? conn.uri : "No connection URI";
+                                                const isImporting = importingDiscoveredServerKey === (srv.clientIdentifier || srv.name);
+
+                                                return (
+                                                    <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/60 border border-border/30 text-xs">
+                                                        <div className="truncate space-y-0.5 max-w-[55%]">
+                                                            <div className="font-medium truncate flex items-center gap-1.5">
+                                                                <span className="truncate">{srv.name}</span>
+                                                                {srv.isConfigured ? (
+                                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                        Configured
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                        Discovered
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[10px] font-mono text-muted-foreground truncate">
+                                                                {connUri}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            {srv.isConfigured && srv.configuredId ? (
+                                                                <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                                    <Switch 
+                                                                        id={`disc-monitored-${srv.configuredId}`}
+                                                                        checked={srv.monitored !== false}
+                                                                        disabled={togglingPlexServerId === srv.configuredId}
+                                                                        onCheckedChange={() => handleTogglePlexServerMonitoring(srv.configuredId, srv.monitored !== false)}
+                                                                    />
+                                                                    <Label htmlFor={`disc-monitored-${srv.configuredId}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                        {srv.monitored !== false ? (
+                                                                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-muted-foreground flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                            </span>
+                                                                        )}
+                                                                    </Label>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1">
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-6 text-[10px] px-2 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                                                                        disabled={isImporting}
+                                                                        onClick={() => handleImportDiscoveredPlexServer(srv, true)}
+                                                                    >
+                                                                        {isImporting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "+ Add & Monitor"}
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
+                                                                        disabled={isImporting}
+                                                                        onClick={() => handleImportDiscoveredPlexServer(srv, false)}
+                                                                    >
+                                                                        + Add (Paused)
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* TAUTULLI INSTANCES */}
                         <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
@@ -1232,7 +3428,26 @@ function SettingsPageContent() {
                                             <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{t.name}</span>
-                                                    <div className="flex items-center gap-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-tautulli-${t.id}`}
+                                                                checked={t.monitored !== false}
+                                                                disabled={togglingTautulliId === t.id}
+                                                                onCheckedChange={() => handleToggleTautulliMonitoring(t.id, t.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-tautulli-${t.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {t.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
@@ -1320,6 +3535,20 @@ function SettingsPageContent() {
                                             <p className="text-[10px] text-muted-foreground mt-1">Found in Tautulli Settings → Web Interface → API.</p>
                                         </div>
                                     </div>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="tautulli-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingTautulli ? editingTautulli.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                        />
+                                        <Label htmlFor="tautulli-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor active streams and reachability
+                                        </Label>
+                                    </div>
                                     {tautulliFormTestResult && (
                                         <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${tautulliFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
                                             {tautulliFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
@@ -1367,7 +3596,26 @@ function SettingsPageContent() {
                                             <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{g.name}</span>
-                                                    <div className="flex items-center gap-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-glances-${g.id}`}
+                                                                checked={g.monitored !== false}
+                                                                disabled={togglingGlancesId === g.id}
+                                                                onCheckedChange={() => handleToggleGlancesMonitoring(g.id, g.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-glances-${g.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {g.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
@@ -1430,6 +3678,20 @@ function SettingsPageContent() {
                                             data-lpignore="true"
                                         />
                                     </div>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="glances-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingGlances ? editingGlances.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-sky-500 focus:ring-sky-400" 
+                                        />
+                                        <Label htmlFor="glances-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor CPU/RAM metrics and host reachability
+                                        </Label>
+                                    </div>
                                     {glancesFormTestResult && (
                                         <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
                                             {glancesFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
@@ -1480,7 +3742,26 @@ function SettingsPageContent() {
                                                         <div className="font-semibold">{app.name}</div>
                                                         <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{app.type}</div>
                                                     </div>
-                                                    <div className="flex gap-1 shrink-0">
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-app-${app.id}`}
+                                                                checked={app.monitored !== false}
+                                                                disabled={togglingMediaAppId === app.id}
+                                                                onCheckedChange={() => handleToggleMediaAppMonitoring(app.id, app.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-app-${app.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {app.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
@@ -1694,6 +3975,21 @@ function SettingsPageContent() {
                                         )}
                                     </div>
 
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="app-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingApp ? editingApp.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                        />
+                                        <Label htmlFor="app-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor service reachability on dashboard
+                                        </Label>
+                                    </div>
+
                                     {appFormTestResult && (
                                         <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${appFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
                                             {appFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
@@ -1731,10 +4027,21 @@ function SettingsPageContent() {
                 {/* --- TAB 4: BETA TESTING & ROADMAP --- */}
                 <TabsContent value="beta" className="space-y-6">
                     {/* ROADMAP CARD EDITOR */}
-                    <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                        isRoadmapDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                    }`}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
-                            <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
+                                    <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
+                                </div>
+                                {isRoadmapDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
@@ -1763,12 +4070,23 @@ function SettingsPageContent() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                         {/* BETA DASHBOARD INTRO EDITOR */}
-                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                            isBetaDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                        }`}>
                             <CardHeader>
-                                <CardTitle>Beta Dashboard Intro</CardTitle>
-                                <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle>Beta Dashboard Intro</CardTitle>
+                                        <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
+                                    </div>
+                                    {isBetaDirty && (
+                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            ● Unsaved Changes
+                                        </Badge>
+                                    )}
+                                </div>
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
@@ -1903,10 +4221,119 @@ function SettingsPageContent() {
                     </div>
                 </TabsContent>
 
+                <TabsContent value="requests">
+                    <SeerrSettingsPanel 
+                        onNavigateTab={handleTabChange} 
+                        onDirtyChange={(dirty, sections) => {
+                            setIsSeerrDirty(dirty);
+                            setSeerrDirtySections(sections);
+                        }}
+                    />
+                </TabsContent>
+
                 <TabsContent value="logs">
                     <SystemLogsViewer />
                 </TabsContent>
             </Tabs>
+
+            {/* FLOATING DOCKED SAVE BAR */}
+            {hasUnsavedChanges && (
+                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <div className="text-xs">
+                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
+                                    {unsavedSections.join(", ")}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={handleDiscardAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
+                            </Button>
+                            <Button 
+                                type="button" 
+                                size="sm" 
+                                onClick={handleSaveAllDirty}
+                                disabled={isSavingAll}
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                            >
+                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save All Changes
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* UNSAVED CHANGES MODAL */}
+            <Dialog open={leaveModalOpen} onOpenChange={(open) => { if (!open) { setLeaveModalOpen(false); setPendingNavigation(null); } }}>
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
+                    <DialogHeader className="shrink-0">
+                        <div className="flex items-center gap-2 text-amber-500 mb-1">
+                            <AlertTriangle className="h-5 w-5" />
+                            <DialogTitle className="text-lg font-bold">Unsaved Changes</DialogTitle>
+                        </div>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            You have unsaved changes in your system settings. If you leave now without saving, your edits will be lost.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2 py-2 flex-1 overflow-y-auto min-h-0">
+                        <div className="text-xs font-semibold text-slate-300">Modified Sections:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {unsavedSections.map((sec) => (
+                                <Badge key={sec} variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[11px] font-medium">
+                                    ● {sec}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setLeaveModalOpen(false); setPendingNavigation(null); }}
+                            className="text-xs"
+                        >
+                            Stay on Page
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleConfirmDiscardAndLeave}
+                            className="text-xs bg-red-600 hover:bg-red-500"
+                        >
+                            Discard & Leave
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleConfirmSaveAndLeave}
+                            disabled={isSavingAll}
+                            className="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black gap-1"
+                        >
+                            {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            Save & Continue
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

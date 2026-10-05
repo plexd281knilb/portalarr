@@ -10,6 +10,7 @@ datasource db {
 
 model Settings {
   id               String    @id @default("global")
+  appUrl           String?   // Canonical public web address (e.g. https://portal.example.com)
   mainPlexUrl      String?
   mainPlexToken    String?
   smtpHost         String?
@@ -28,9 +29,253 @@ model Settings {
   downloadsPath      String?   @default("/downloads")
   aiProvider         String?   @default("default")
   aiApiKey           String?
-  aiModel            String?   @default("gemini-2.5-flash")
+  aiModel            String?   @default("gemini-3.5-flash-lite")
   aiAutoResolve      Boolean   @default(true)
+  aiAutonomyLevel    String?   @default("autonomous")
+  aiMaxDailyGrabs    Int?      @default(3)
   googleBooksApiKey  String?
+  defaultTrialDays   Int       @default(14)
+  defaultPlexLibraries String?
+  defaultTrialPlexLibraries String? // Default shared Plex libraries for Trial accounts
+  defaultKidsPlexLibraries String? // Default shared Plex libraries for Kids accounts
+  paymentPaypal      String?
+  paymentVenmo       String?
+  paymentCashApp     String?
+  paymentZelle       String?
+  paymentInstructions String?
+  subscriptionPrice  String?
+  yearlyPrice        Float?    @default(180)
+  monthlyPrice       Float?    @default(15)
+  tier2YearlyPrice   Float?    @default(240) // Yearly pricing for Tier 2 (Needy / Managed Support)
+  tier2MonthlyPrice  Float?    @default(25)  // Monthly pricing for Tier 2 (Needy / Managed Support)
+  availableAddons    String?   // JSON list of configured add-ons with pricing and free flags
+  renewalMonth       Int?      @default(1)
+  renewalDay         Int?      @default(1)
+  billingType        String?   @default("YEARLY_PRORATED")
+  requireReferralForSignup Boolean @default(false)
+  discordInviteUrl   String?   // Discord server invite link for onboarding
+  subscriptionGracePeriodDays Int? @default(3) // Grace period days after subscription expires before suspension
+  membershipTiersEnabled Boolean @default(true)
+  autoSuspendExpiredAccounts Boolean @default(false) // Safety switch - OFF by default
+
+  // Admin Approval Gates (Requires admin manual approval before Plex changes or emails occur)
+  requireApprovalForPlexChanges Boolean @default(true) // Require manual admin review before Plex library access is granted/revoked
+  requireApprovalForEmails      Boolean @default(true) // Require manual admin review before outgoing emails are dispatched
+
+  // Email Notification Controls (All Automated Emails OFF by default until explicitly enabled)
+  emailNotificationsEnabled   Boolean   @default(false)
+  notifyUserApproval          Boolean   @default(false)
+  notifyAdminNewUserRequest   Boolean   @default(false)
+  notifyPasswordReset         Boolean   @default(true) // User-initiated password reset
+  notifyMediaRequests         Boolean   @default(false)
+  notifyTrialWelcome          Boolean   @default(false)
+  notifyTrialExpiring         Boolean   @default(false)
+  notifyTrialExpired          Boolean   @default(false)
+  notifySubscriptionActive    Boolean   @default(false)
+  notifySubscriptionRenewal   Boolean   @default(true)
+  notifyReferralReward        Boolean   @default(false)
+  notifySupportTickets        Boolean   @default(false)
+  notifySendToKindle          Boolean   @default(false)
+
+  // Curation, Agregarr & Kometa (PMM) Settings
+  tmdbApiKey                  String?
+  traktClientId               String?
+  mdblistApiKey               String?
+
+  // Seerr & Native Media Request Engine Settings
+  seerrAutoApproveAll          Boolean   @default(true) // Global fallback auto-approve
+  seerrDefaultMovieAppId       String?   // MediaApp ID for standard Radarr (1080p)
+  seerrDefaultMovieProfileId   Int?      // Quality Profile ID for standard Radarr (1080p)
+  seerrDefaultMovieRootFolder  String?   // Root Folder for standard Radarr (1080p)
+  seerrDefaultMovie4kAppId     String?   // MediaApp ID for 4K Radarr
+  seerrDefaultMovie4kProfileId Int?      // Quality Profile ID for 4K Radarr
+  seerrDefaultMovie4kRootFolder String?  // Root Folder for 4K Radarr
+  seerrDefaultTvAppId          String?   // MediaApp ID for standard Sonarr (1080p)
+  seerrDefaultTvProfileId      Int?      // Quality Profile ID for standard Sonarr (1080p)
+  seerrDefaultTvRootFolder     String?   // Root Folder for standard Sonarr (1080p)
+  seerrDefaultTv4kAppId        String?   // MediaApp ID for 4K Sonarr
+  seerrDefaultTv4kProfileId    Int?      // Quality Profile ID for 4K Sonarr
+  seerrDefaultTv4kRootFolder   String?   // Root Folder for 4K Sonarr
+  seerrQuotaMovies             Int?      @default(10) // Default weekly movie quota
+  seerrQuotaTv                 Int?      @default(10) // Default weekly TV show quota
+  seerrQuotaDays               Int?      @default(7)  // Quota sliding window in days
+  seerrNotificationOnAvailable Boolean   @default(true)
+
+  // Seerr Discord Webhook Notification Settings
+  seerrDiscordWebhookUrl          String?
+  seerrDiscordBotUsername         String?   @default("Portalarr")
+  seerrDiscordBotAvatarUrl        String?
+  seerrDiscordNotifyPending       Boolean   @default(true)
+  seerrDiscordNotifyAutoApproved  Boolean   @default(true)
+  seerrDiscordNotifyApproved      Boolean   @default(true)
+  seerrDiscordNotifyDeclined      Boolean   @default(true)
+  seerrDiscordNotifyAvailable     Boolean   @default(true)
+  seerrDiscordNotifyFailed        Boolean   @default(true)
+
+  // Seerr Email Notification Settings (Default OFF until enabled)
+  seerrEmailNotifyAdminNewRequest Boolean   @default(false)
+  seerrEmailNotifyUserAutoApproved Boolean  @default(false)
+  seerrEmailNotifyUserApproved    Boolean   @default(false)
+  seerrEmailNotifyUserDeclined    Boolean   @default(false)
+  seerrEmailNotifyUserAvailable   Boolean   @default(false)
+  seerrEmailNotifyUserFailed      Boolean   @default(false)
+
+  // Full vs Trial Accounts Request Controls
+  seerrFullAutoApprove         Boolean   @default(true) // Full accounts auto-approve in main arrs
+  seerrFullUnlimited           Boolean   @default(true) // Full accounts have no limits
+  seerrFullQuotaMovies         Int?      @default(0)    // 0 = unlimited
+  seerrFullQuotaTv             Int?      @default(0)    // 0 = unlimited
+  seerrFullQuotaDays           Int?      @default(7)
+  seerrTrialAutoApprove        Boolean   @default(false) // Trial accounts always need approval
+  seerrTrialQuotaMovies        Int?      @default(3)    // Default 3 movies limit for trial
+  seerrTrialQuotaTv            Int?      @default(3)    // Default 3 TV shows limit for trial
+  seerrTrialQuotaDays          Int?      @default(7)
+
+  // Kids Section & Kids Arrs Routing Controls
+  seerrKidsAutoApprovePg       Boolean   @default(true) // PG ratings and below auto-approve in kids section
+  seerrKidsRequireApprovalPg13 Boolean   @default(true) // PG-13 & Unrated require approval in kids section
+  seerrKidsMovieAppId          String?   // Target Radarr instance for Kids Movies (1080p)
+  seerrKidsMovieProfileId      Int?      // Quality Profile ID for Kids Movies (1080p)
+  seerrKidsMovieRootFolder     String?   // Root folder for kids movies (1080p)
+  seerrKidsMovie4kAppId        String?   // Target 4K Radarr instance for Kids Movies (4K)
+  seerrKidsMovie4kProfileId    Int?      // Quality Profile ID for Kids Movies (4K)
+  seerrKidsMovie4kRootFolder   String?   // Root folder for kids movies (4K)
+  seerrKidsTvAppId             String?   // Target Sonarr instance for Kids TV Shows (1080p)
+  seerrKidsTvProfileId         Int?      // Quality Profile ID for Kids TV Shows (1080p)
+  seerrKidsTvRootFolder        String?   // Root folder for kids TV (1080p)
+  seerrKidsTv4kAppId           String?   // Target 4K Sonarr instance for Kids TV Shows (4K)
+  seerrKidsTv4kProfileId       Int?      // Quality Profile ID for Kids TV Shows (4K)
+  seerrKidsTv4kRootFolder      String?   // Root folder for kids TV (4K)
+
+  // Dual 4K + 1080p Ingestion
+  seerrAutoDual1080pFor4k      Boolean   @default(true) // Auto-add to 1080p Arr when added to 4K Arr
+  autoOverlaySync             Boolean   @default(true)
+  autoCollectionSync          Boolean   @default(true)
+  leavingSoonDiskThreshold    Int?      @default(15) // % free space threshold to flag leaving soon
+  pruneWarningThresholdPercent Int?      @default(85) // % disk used threshold to begin staging leaving soon
+  pruneDangerThresholdPercent  Int?      @default(95) // % disk used threshold to trigger active reclamation
+  pruneTargetHeadroomGb        Int?      @default(100) // Target free space headroom in GB
+  pruneEvaluateSeasons         Boolean   @default(true) // Evaluate TV shows at individual season level
+  enableAutoPruneDeletion     Boolean   @default(false) // Safety master switch - OFF by default
+  pruneDryRun                 Boolean   @default(true) // Dry run simulation mode - ON by default
+  pruneTagCollection          Boolean   @default(true) // Tag '⚠️ Leaving Soon' Plex collection
+  pruneApplyOverlays          Boolean   @default(true) // Apply warning poster overlay
+  pruneDeleteFromArr          Boolean   @default(false) // Trigger deletion in Radarr/Sonarr
+  pruneDeleteFromDisk         Boolean   @default(false) // Trigger direct disk deletion
+  pruneDaysNotice             Int?      @default(14) // Days of advance notice before deletion
+  pruneMinAgeDays             Int?      @default(90) // Min days item must exist before pruning eligibility (legacy fallback)
+  pruneUnwatchedMinAgeDays    Int?      @default(90) // Lane 2: Min days since added for never watched media
+  pruneWatchedMinAgeDays      Int?      @default(180) // Lane 1: Min days since last watched for watched media
+  pruneUnwatchedOnly          Boolean   @default(true) // Only prune items with 0 plays or unwatched
+  enabledServersForOverlays   String?   // JSON array of server clientIdentifiers
+  enabledServersForCollections String?  // JSON array of server clientIdentifiers
+  enabledServersForPruning    String?   // JSON array of server clientIdentifiers
+  comingSoonShares            String?   // JSON map of serverId -> share path e.g. {"main":"/mnt/user/coming_soon_main"}
+  serverStorageConfig         String?   // JSON map of serverId -> { glancesUrl, shares, radarrId, sonarrId }
+  serverGuardRails            String?   // JSON map of serverId -> ServerGuardRailConfig
+
+  // Agregarr Placeholder Overlay & Timing Controls
+  placeholderDaysThreshold         Int?      @default(90) // Max future days window for generating placeholders (0 = unlimited)
+  placeholderTheatricalNoticeDays  Int?      @default(60) // Days before theatrical release to generate placeholder
+  placeholderDigitalCountdownDays  Int?      @default(30) // Switch to "Streaming in X Days" within 30 days
+  placeholderNowStreamingGraceDays Int?      @default(7)  // Keep "Now Streaming" for 7 days post-digital
+  placeholderAutoPruneDays         Int?      @default(14) // Auto-prune dummy stub 14 days after release or acquisition
+  placeholderBannerPosition        String?   @default("bottom") // "top", "bottom", "corner"
+  placeholderBannerTheme           String?   @default("indigo-purple") // "indigo-purple", "emerald-green", "crimson-red", "amber-gold", "glass"
+  placeholderBannerFontSize        Int?      @default(44) // Default font size in px
+  placeholderCustomText            String?   // Custom subtitle text
+  placeholderBannerTemplates       String?   // JSON map of banner preset ID -> { text, theme, pos, fontSize }
+  placeholderEnabled               Boolean   @default(true)
+  skipYoutubeTrailerDownloads      Boolean   @default(false)
+  
+  // Prune & Leaving Soon Banner Appearance Controls
+  pruneBannerPosition              String?   @default("bottom") // "bottom", "lower_third", "middle", "upper_third", "top", "corner"
+  pruneBannerTheme                 String?   @default("crimson-red")
+  pruneBannerText                  String?   @default("LEAVING SOON")
+  pruneBannerFontSize              Int?      @default(44) // Default font size in px
+  pruneBannerType                  String?   @default("leaving_soon")
+  pruneBannerTemplates             String?   // JSON map of banner preset ID -> { text, theme, pos, fontSize }
+  pruneSortStrategy                String?   @default("combined_oldest")
+  pruneOldestLimit                 Int?      @default(50)
+  pruneRulePresets                 String?   // JSON array of custom user-defined prune rule presets
+  
+  // Leaving Soon Home Hub & Schedule Controls
+  leavingSoonPromotedToHome        Boolean   @default(true)
+  leavingSoonPromotedToRecommended Boolean   @default(true)
+  leavingSoonPromotedToSharedHome  Boolean   @default(true)
+  leavingSoonHomeOrder             Int?      @default(0) // #1 Top Priority
+  leavingSoonAutoThresholdDays     Int?      @default(14) // Only show when items leaving within X days
+  leavingSoonAutoHideEmpty         Boolean   @default(true) // Auto-hide from Home when 0 items leaving
+
+  // Automated Master Curation & Studio Schedules
+  curationSyncEnabled              Boolean   @default(true) // Master timer job switch
+  curationSyncSchedule             String?   @default("every_6_hours")
+  curationSyncCron                 String?   // Custom cron expression
+  curationSyncOverlays             Boolean   @default(true) // Auto-scan new items and apply overlays
+  curationSyncCollections          Boolean   @default(true) // Auto-sync seasonal & scheduled collections
+  curationSyncReleases             Boolean   @default(true) // Auto-refresh upcoming digital releases & placeholders
+  curationSyncPruning              Boolean   @default(true) // Auto-evaluate Leaving Soon candidates
+  curationSyncParentalTags         Boolean   @default(true) // Auto-apply IMDb parental rating tags
+  curationLastRunAt                DateTime?
+  curationLastRunStatus            String?   // JSON telemetry summary of last execution
+
+  // Agregarr Dedicated Collection Sync Schedule
+  agregarrSyncEnabled              Boolean   @default(true)
+  agregarrSyncSchedule             String?   @default("every_6_hours") // "every_3_hours", "every_6_hours", "every_12_hours", "daily_4am"
+  agregarrLastRunAt                DateTime?
+  agregarrLastRunStatus            String?
+
+  // Maintainerr / Prune Dedicated Sync Schedule
+  pruneSyncEnabled                 Boolean   @default(true)
+  pruneSyncSchedule                String?   @default("daily_6am") // "daily_6am", "every_12_hours", "every_24_hours", "weekly_sun"
+  pruneLastRunAt                   DateTime?
+  pruneLastRunStatus               String?
+
+  // Poster Overlays Dual Automation Schedules (Incremental vs Deep Rechecks)
+  overlayIncrementalEnabled        Boolean   @default(true) // Fast incremental scan for new media & upgrades
+  overlayIncrementalSchedule       String?   @default("every_hour") // "every_hour", "every_3_hours", "every_6_hours", "every_12_hours"
+  overlayIncrementalBatchSize      Int?      @default(200) // Max items per incremental scan
+  overlayIncrementalLastRunAt      DateTime?
+  overlayRecheckEnabled            Boolean   @default(true) // Deep periodic recheck scan
+  overlayRecheckSchedule           String?   @default("daily_4am") // "daily_4am", "every_12_hours", "weekly_sun", "monthly_1st"
+  overlayRecheckScope              String?   @default("daily_recheck") // "daily_recheck" (>24h), "weekly_recheck" (>7d), "monthly_recheck" (>30d), "force_all"
+  overlayRecheckBatchSize          Int?      @default(200) // Max items per recheck scan
+  overlayRecheckLastRunAt          DateTime?
+
+  // IMDb Parental Advisory & Rating Tagging Controls & Dedicated Schedule
+  parentalTaggingEnabled           Boolean   @default(true)
+  taggingSyncEnabled               Boolean   @default(true)
+  taggingSyncSchedule              String?   @default("daily_3am") // "daily_3am", "daily_4am", "every_12_hours", "every_6_hours", "every_hour"
+  taggingLastRunAt                 DateTime?
+  taggingLastRunStatus             String?
+  parentalTagFormat                String?   @default("prefix_category_severity") // "prefix_category_severity", "severity_category", "category_severity_paren", "custom"
+  parentalTagPrefix                String?   @default("IMDb")
+  parentalTagTarget                String?   @default("labels") // "labels" (Plex Sharing Labels), "genres" (Plex Genres), "both"
+  parentalMinSeverity              String?   @default("Mild") // "Severe", "Moderate", "Mild", "None"
+  parentalCategories               String?   @default("[\"nudity\",\"violence\",\"profanity\",\"alcohol\",\"frightening\"]") // JSON array
+  enabledServersForTagging         String?   // JSON array of enabled server:section pairs for parental tagging
+
+  // Payment Email Scraper & Verification Controls
+  paymentEmailAutoScan             Boolean   @default(true)
+  paymentEmailScanInterval         Int?      @default(15) // Minutes interval between auto-scans
+  paymentEmailLookbackDays         Int?      @default(365) // Default lookback window in days
+  paymentLastScanAt                DateTime?
+  paymentLastScanResult            String?   // JSON telemetry summary
+
+  // Dismissed / Ignored Plex Hubs & Collections (Blacklist from Re-import)
+  dismissedHubs                    String?   // JSON array of { ratingKey, title, normalizedTitle, serverId, sectionKey, dismissedAt }
+}
+
+model PlexServer {
+  id               String   @id @default(cuid())
+  name             String
+  url              String
+  token            String?  // Optional server-specific token (encrypted), falls back to mainPlexToken
+  clientIdentifier String?  // Machine/client ID
+  isDefault        Boolean  @default(false)
+  monitored        Boolean  @default(true) // Health & Reachability Monitoring
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 }
 
 model TautulliInstance {
@@ -38,6 +283,7 @@ model TautulliInstance {
   name      String
   url       String
   apiKey    String
+  monitored Boolean  @default(true) // Stream Monitoring & Health
   createdAt DateTime @default(now())
 }
 
@@ -45,6 +291,7 @@ model GlancesInstance {
   id        String   @id @default(cuid())
   name      String
   url       String
+  monitored Boolean  @default(true) // Hardware Health & Metric Monitoring
   createdAt DateTime @default(now())
 }
 
@@ -63,6 +310,7 @@ model MediaApp {
   externalUrl String?  // External/Public Link
   apiKey      String?
   enabledForUsers Boolean @default(false)
+  monitored   Boolean  @default(true) // Health & Reachability Monitoring
   allowedQualityProfileIds String?
   allowedRootFolderIds String?
   createdAt   DateTime @default(now())
@@ -70,15 +318,53 @@ model MediaApp {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  username    String   @unique
-  email       String   @unique 
-  password    String   // Hashed
-  kindleEmail String   @default("") // Send-to-Kindle email address
-  role        String   @default("USER") // "ADMIN" or "USER"
-  status      String   @default("APPROVED") // "APPROVED", "PENDING", "REJECTED"
-  lastLogin   DateTime? // Last time the user logged in
-  createdAt   DateTime @default(now())
+  id                     String    @id @default(cuid())
+  name                   String?   // Real name or display name (e.g. "Jonathan Juliano")
+  username               String    @unique
+  email                  String    @unique 
+  password               String    // Hashed
+  kindleEmail            String    @default("") // Send-to-Kindle email address
+  role                   String    @default("USER") // "ADMIN", "SUPER_USER", "USER"
+  status                 String    @default("APPROVED") // "APPROVED", "PENDING", "REJECTED", "TRIAL", "SUSPENDED", "EXPIRED"
+  trialEndsAt            DateTime?
+  subscriptionEndsAt     DateTime?
+  plexUsername           String?
+  plexEmail              String?
+  plexLibrarySectionIds  String?   // Comma-separated list of Plex section IDs (e.g. "1,2,5")
+  referralCode           String?   @unique
+  referredByUserId       String?
+  referredBy             User?     @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referrals              User[]    @relation("UserReferrals")
+  referralBonusMonths    Int?      @default(0)
+  parentUserId           String?
+  parentUser             User?     @relation("UserSubAccounts", fields: [parentUserId], references: [id], onDelete: Cascade)
+  subAccounts            User[]    @relation("UserSubAccounts")
+  subAccountLabel        String?   // Label for sub-accounts e.g. "Living Room TV" or "Kids iPad"
+  accountType            String    @default("STANDARD") // "STANDARD", "KID", "LIVING_ROOM"
+  membershipTier         String    @default("STANDARD") // "STANDARD" (Tier 1), "TIER_2_VIP" (Secret Tier 2 - Managed), "TRIAL"
+  selectedPlexLibrarySectionIds String? // User-selected subset of Plex library section keys
+  enabledAddons          String?   // JSON array of active addon IDs e.g. ["iptv", "live_tv"]
+  contentPreference      UserContentPreference?
+  notificationPreference UserNotificationPreference?
+  convertedAt            DateTime? // When trial converted to paying subscriber
+  lastLogin              DateTime? // Last time the user logged in
+  subscriptionCadence    String?   @default("YEARLY") // "YEARLY" or "MONTHLY"
+  lastRenewalReminderSentAt DateTime?
+  renewalRemindersSent   String?   // JSON snapshot of sent milestones e.g. {"cycleTarget":"2027-01-01","milestones":["30d","14d"]}
+  
+  // Media Request Permissions & Quotas
+  canRequest             Boolean   @default(true)
+  canRequest4k           Boolean   @default(false)
+  autoApproveMovies      Boolean   @default(true)
+  autoApproveTv          Boolean   @default(true)
+  requestLimitMovies     Int?      @default(10) // null or 0 = unlimited, otherwise max per quota window
+  requestLimitTv         Int?      @default(10)
+  requestLimitDays       Int?      @default(7)  // sliding window in days
+  
+  createdAt              DateTime  @default(now())
+  paymentTransactions    PaymentTransaction[]
+  mediaRequests          MediaRequest[]
+  adminApprovals         AdminApproval[]
 }
 
 model SupportTicket {
@@ -117,38 +403,100 @@ model Library {
   updatedAt        DateTime @updatedAt
 }
 
+model Author {
+  id               String       @id @default(cuid())
+  name             String       @unique
+  cleanName        String?
+  foreignAuthorId  String?      // e.g. OpenLibrary author ID (e.g. OL23919A), Goodreads ID, Google Books
+  biography        String?
+  photoUrl         String?
+  birthDate        String?
+  deathDate        String?
+  monitored        Boolean      @default(false)
+  books            Book[]
+  series           BookSeries[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([cleanName])
+}
+
+model BookSeries {
+  id              String   @id @default(cuid())
+  title           String
+  cleanTitle      String?
+  authorId        String?
+  author          Author?  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorName      String?
+  foreignSeriesId String?  // e.g. OpenLibrary work/series ID
+  description     String?
+  coverUrl        String?
+  totalVolumes    Int?
+  monitored       Boolean  @default(false)
+  books           Book[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([title, authorName])
+  @@index([authorId])
+  @@index([cleanTitle])
+}
+
 model Book {
-  id          String   @id @default(cuid())
-  title       String
-  author      String?
-  series      String?  // Series name (e.g. "The Founders Trilogy", "Harry Potter")
-  volumeNumber String? // Volume or book number (e.g. "1", "01")
-  coverUrl    String?  // Optional cover image
-  filePath    String   // Local path on disk to the PDF/EPUB/M4B/MP3/etc.
-  fileSize    Float?   // Size in bytes (Float supports >2GB files up to 9 Petabytes)
-  fileType    String   // "epub", "pdf", "m4b", "mp3", etc.
-  mediaType   String   @default("ebook") // "ebook" or "audiobook"
-  libraryId   String
-  library     Library  @relation(fields: [libraryId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String      @id @default(cuid())
+  title        String
+  author       String?
+  series       String?     // Series name (e.g. "The Founders Trilogy", "Harry Potter")
+  volumeNumber String?     // Volume or book number (e.g. "1", "01")
+  coverUrl     String?     // Optional cover image
+  filePath     String      // Local path on disk to the PDF/EPUB/M4B/MP3/etc.
+  fileSize     Float?      // Size in bytes (Float supports >2GB files up to 9 Petabytes)
+  fileType     String      // "epub", "pdf", "m4b", "mp3", etc.
+  mediaType    String      @default("ebook") // "ebook" or "audiobook"
+  isbn         String?
+  asin         String?
+  narrator     String?
+  duration     Float?      // Duration in seconds for audiobooks
+  chapters     String?     // JSON chapter metadata
+  maturityRating String?   // "NOT_MATURE" or "MATURE"
+  ageRating    String?     // "Kids", "YA (12+)", "All Ages", "18+ Mature"
+  libraryId    String
+  library      Library     @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  authorId     String?
+  authorRef    Author?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  seriesId     String?
+  seriesRef    BookSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([authorId])
+  @@index([seriesId])
+  @@index([libraryId])
+  @@index([mediaType])
 }
 
 model BookRequest {
-  id           String   @id @default(cuid())
-  title        String
-  author       String?
-  series       String?  // Series name if requested as part of a series
-  volumeNumber String?  // Volume or book number
-  coverUrl     String?
-  publishYear  String?
-  requestedBy  String   // Username
-  type         String   @default("book") // "book" or "series"
-  mediaType    String   @default("ebook") // "ebook" or "audiobook"
-  status       String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected"
-  monitorSeries Boolean @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  title               String
+  author              String?
+  series              String?  // Series name if requested as part of a series
+  volumeNumber        String?  // Volume or book number
+  coverUrl            String?
+  publishYear         String?
+  maturityRating      String?  // "NOT_MATURE" or "MATURE"
+  ageRating           String?  // "Kids", "YA (12+)", "All Ages", "18+ Mature"
+  requestedBy         String   // Username
+  requestedByUserId   String?
+  userEmail           String?
+  kindleEmail         String?
+  sendToKindle        Boolean  @default(false)
+  type                String   @default("book") // "book" or "series"
+  mediaType           String   @default("ebook") // "ebook" or "audiobook"
+  status              String   @default("Pending") // "Pending", "Approved", "Downloaded", "Rejected", "Searching", "Downloading", "Failed"
+  monitorSeries       Boolean  @default(false)
+  libraryId           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model KindleDeliveryLog {
@@ -197,4 +545,326 @@ model FeatureVote {
   createdAt    DateTime          @default(now())
 
   @@unique([suggestionId, username])
+}
+
+model EmailTemplate {
+  id          String   @id // e.g. "user_approval", "password_reset", etc.
+  name        String
+  description String?
+  subject     String
+  body        String
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+model MediaCollection {
+  id                   String    @id @default(cuid())
+  title                String
+  summary              String?
+  sortTitle            String?
+  type                 String    @default("curated") // "curated", "smart", "schedule", "dynamic", "custom", "seasonal"
+  category             String?
+  serverId             String?
+  sectionKey           String?
+  sourceType           String?   // "tmdb", "trakt", "mdblist", "plex_query", "manual"
+  sourceQuery          String?
+  rules                String?
+  posterUrl            String?
+  ratingKey            String?
+  itemCount            Int       @default(0)
+  maxItems             Int?      @default(0) // 0 = unlimited / all items
+  excludedLabels       String?   @default("") // Comma-separated labels to exclude (e.g. "trailers, coming soon")
+  includePlaceholders  Boolean?  @default(false) // Generate coming soon placeholder stubs & trailers on disk
+  autoSync             Boolean   @default(true)
+  syncInterval         String    @default("daily")
+  lastSyncedAt         DateTime?
+  // Home Screen & Recommended Hub Ordering & Visibility
+  orderIndex           Int       @default(0)
+  promotedToHome       Boolean   @default(true)
+  promotedToRecommended Boolean  @default(true)
+  promotedToSharedHome Boolean   @default(true)
+  collectionMode       String?   @default("default") // "default", "hide", "hideItems", "showItems"
+  sortPrefix           String?   @default("!00_")
+  // Day & Time Scheduling Controls (Agregarr Day/Time Filters)
+  activeDays           String?   @default("all") // "all" or comma-separated "mon,tue,wed,thu,fri,sat,sun"
+  activeTimeRange      String?   @default("all_day") // "all_day", "evening", "late_night", "daytime", or "HH:mm-HH:mm"
+  // Seasonal Scheduling Controls
+  isSeasonal           Boolean   @default(false)
+  scheduleStartMonth   Int?      // 1-12 (e.g. 10 for October)
+  scheduleStartDay     Int?      // 1-31 (e.g. 1 for 1st)
+  scheduleEndMonth     Int?      // 1-12 (e.g. 11 for November)
+  scheduleEndDay       Int?      // 1-31 (e.g. 5 for 5th)
+  seasonalAction       String?   @default("promote_hide") // "promote_hide", "keep_demoted", "create_delete"
+  isIgnored            Boolean   @default(false) // If true, skipped during discovery & auto-sync
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+model MediaOverlayRule {
+  id                String    @id @default(cuid())
+  name              String
+  serverId          String?
+  sectionKey        String?
+  overlayType       String    @default("combined")
+  position          String    @default("top-right")
+  videoPosition     String?   @default("top-right")
+  audioPosition     String?   @default("top-left")
+  editionPosition   String?   @default("bottom-right")
+  ratingPosition    String?   @default("bottom-left")
+  resolutionPosition String?   @default("top-right")
+  hdrPosition       String?   @default("top-right")
+  codecPosition     String?   @default("top-right")
+  channelsPosition  String?   @default("top-left")
+  studioPosition    String?   @default("bottom-left")
+  contentRatingPosition String? @default("bottom-left")
+  ratingsPosition   String?   @default("bottom-left")
+  showRibbon        Boolean   @default(false)
+  ribbonPosition    String    @default("top-right") // "top-right", "top-left", "bottom-right", "bottom-left"
+  ribbonTheme       String    @default("purple")    // "crimson", "emerald", "purple", "gold", "cyan", "pink", "glass", "orange"
+  ribbonText        String?                         // e.g. "4K UHD", "IMAX", "NEW RELEASE"
+  ribbonType        String    @default("auto_quality") // "auto_quality", "auto_edition", "leaving_soon", "custom"
+  theme             String    @default("glass")
+  badgeStyle        String    @default("pill")
+  showResolution    Boolean   @default(true)
+  showHdr           Boolean   @default(true)
+  showAudio         Boolean   @default(true)
+  showRatings       Boolean   @default(false)
+  showLeavingSoon   Boolean   @default(true)
+  // Expanded Badge Toggles
+  showAudioChannels Boolean   @default(false)
+  showCodec         Boolean   @default(false)
+  showEdition       Boolean   @default(false)
+  showStudio        Boolean   @default(false)
+  showContentRating Boolean   @default(false)
+  badgeScale        Float?    @default(1.0)
+  categoryScales    String?   // JSON map of individual badge scales per category
+  badgeBackdrops    String?   // JSON map of boolean flags for individual badge black backgrounds per category e.g. {"resolution":true,"edition":true}
+  customBadgeIds    String?   // JSON array of CustomBadge IDs to apply
+  layerPriorityOrder String?  // JSON array of layer IDs ordered by priority
+  enabled           Boolean   @default(true)
+  itemCount         Int       @default(0)
+  lastAppliedAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model CustomBadge {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("custom") // "quality", "edition", "studio", "rating", "custom", "banner"
+  filePath    String   // Local path on disk to the uploaded badge image
+  fileType    String   @default("png") // "png", "svg", "webp", "jpg"
+  mimeType    String   @default("image/png")
+  position    String   @default("top-right") // "top-right", "top-left", "bottom-right", "bottom-left", "top-center", "bottom-center"
+  width       Int      @default(140)
+  height      Int      @default(46)
+  opacity     Float    @default(1.0)
+  enabled     Boolean  @default(true)
+  matchRule   String?  // JSON string or filter criteria e.g. {"resolution":"4K"} or {"genre":"Action"} or "all"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MediaArtBackup {
+  id             String    @id @default(cuid())
+  ratingKey      String
+  serverId       String?
+  title          String?
+  originalArtUrl String?
+  backupFilePath String
+  mediaHash      String?
+  appliedBadges  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([serverId, ratingKey])
+}
+
+model UserContentPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  excludedGenres   String?  // JSON array
+  excludedTags     String?  // JSON array
+  maxContentRating String?  // "ALL", "PG-13", "PG", "G"
+  hideLeavingSoon  Boolean  @default(false)
+  hideHorror       Boolean  @default(false)
+  hideNsfw         Boolean  @default(false)
+  hideGore         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model UserNotificationPreference {
+  id                         String   @id @default(cuid())
+  userId                     String   @unique
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailMediaReady            Boolean  @default(false)
+  emailNewContent            Boolean  @default(false)
+  emailAnnouncements         Boolean  @default(false)
+  emailSupportTickets        Boolean  @default(true)
+  emailSubscriptionReminders  Boolean  @default(true)
+  emailReferralRewards       Boolean  @default(true)
+  discordMediaReady          Boolean  @default(false)
+  discordAnnouncements       Boolean  @default(false)
+  discordWebhookUrl          String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model MediaContentAdvisory {
+  id                    String    @id @default(cuid())
+  ratingKey             String
+  serverId              String?
+  title                 String?
+  imdbId                String?
+  tmdbId                String?
+  mpaaRating            String?
+  nudityLevel           String?
+  violenceLevel         String?
+  profanityLevel        String?
+  alcoholLevel          String?
+  frighteningLevel      String?
+  digitalReleaseDate    DateTime?
+  theatricalReleaseDate DateTime?
+  inTheaters            Boolean   @default(false)
+  isLeavingSoon         Boolean   @default(false)
+  leavingSoonDate       DateTime?
+  leavingReason         String?
+  customTags            String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([ratingKey, serverId])
+}
+
+model PaymentEmailSource {
+  id            String               @id @default(cuid())
+  name          String               // e.g. "Primary Gmail (Venmo & Zelle)", "PayPal Dedicated"
+  host          String               // e.g. "imap.gmail.com"
+  port          Int                  @default(993)
+  secure        Boolean              @default(true) // TLS / SSL
+  user          String               // IMAP login email or username
+  pass          String               // Encrypted password or app-password
+  mailbox       String               @default("INBOX")
+  enabled       Boolean              @default(true)
+  lastScannedAt DateTime?
+  lastStatus    String?
+  lastUid       Int?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @default(now()) @updatedAt
+  transactions  PaymentTransaction[]
+}
+
+model PaymentTransaction {
+  id                        String              @id @default(cuid())
+  sourceId                  String?
+  source                    PaymentEmailSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  provider                  String              // "VENMO", "PAYPAL", "ZELLE", "CASHAPP", "OTHER"
+  externalTxId              String?             // Transaction ID / Reference number from email
+  senderName                String?             // Name of the payer (e.g. "John Smith")
+  senderEmail               String?             // Email of the payer (e.g. "john@gmail.com")
+  senderHandle              String?             // Venmo @handle or CashApp $cashtag
+  amount                    Float               // Payment amount (e.g. 180.00)
+  currency                  String              @default("USD")
+  note                      String?             // Payment memo / comment / note
+  emailSubject              String?             // Original email subject line
+  emailDate                 DateTime            // Timestamp of the payment email
+  emailUid                  String?             // IMAP message UID
+  matchedUserId             String?             // ID of the matched Portalarr user
+  matchedUser               User?               @relation(fields: [matchedUserId], references: [id], onDelete: SetNull)
+  status                    String              @default("PROCESSED") // "PROCESSED", "UNMATCHED", "MANUAL", "IGNORED"
+  appliedSubscription       Boolean             @default(false)       // Whether subscription was granted
+  subscriptionPeriodGranted String?             // Summary e.g. "1 Year (Valid to 2027-09-15)"
+  adminNotes                String?
+  rawPayload                String?             // JSON debug snapshot
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @default(now()) @updatedAt
+
+  @@unique([provider, externalTxId])
+  @@index([matchedUserId])
+  @@index([emailDate])
+}
+
+model MediaRequest {
+  id                  String    @id @default(cuid())
+  mediaType           String    // "movie", "tv", "book", "audiobook"
+  tmdbId              Int?      // Optional for books/audiobooks
+  tvdbId              Int?
+  imdbId              String?
+  title               String
+  releaseYear         String?
+  posterPath          String?
+  backdropPath        String?
+  overview            String?
+  status              String    @default("PENDING") // "PENDING", "APPROVED", "DECLINED", "PROCESSING", "PARTIALLY_AVAILABLE", "AVAILABLE", "FAILED", "SEARCHING", "DOWNLOADING"
+  status4k            String?   // Independent 4K state e.g. "PENDING", "AVAILABLE"
+  is4k                Boolean   @default(false)
+  isKids              Boolean   @default(false)
+  contentRating       String?   // e.g. "G", "PG", "PG-13", "TV-Y7", "R"
+  isDual1080pChild    Boolean   @default(false) // Companion standard 1080p copy spawned for a 4K request
+  parent4kRequestId   String?   // Reference to the parent 4K request if this is a dual copy
+  
+  // User Association
+  requestedByUserId   String?
+  requestedByUser     User?     @relation(fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  requestedByUsername String
+  userEmail           String?
+  kindleEmail         String?
+  
+  // TV Show Specifics
+  seasons             String?   // JSON array e.g. "[1,2,3]" or "all"
+  
+  // Book & Audiobook Specifics
+  bookAuthor          String?
+  bookSeries          String?
+  bookVolume          String?
+  bookLibraryId       String?
+  sendToKindle        Boolean   @default(false)
+  format              String?   // "epub", "pdf", "m4b", "mp3"
+  openLibraryId       String?
+  googleBooksId       String?
+  asin                String?
+
+  // Servarr (Radarr / Sonarr) Dispatch Details
+  servarrAppId        String?   // MediaApp id (target Radarr or Sonarr instance)
+  qualityProfileId    Int?
+  rootFolderPath      String?
+  servarrId           Int?      // Radarr movieId or Sonarr seriesId
+  
+  // Diagnostics & Status
+  errorMessage        String?
+  downloadProgress    Float?    // 0 to 100 percentage
+  availableAt         DateTime? // When it became available in Plex
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([tmdbId, mediaType])
+  @@index([status])
+  @@index([requestedByUsername])
+  @@index([requestedByUserId])
+  @@index([mediaType])
+}
+
+model AdminApproval {
+  id              String    @id @default(cuid())
+  type            String    // "EMAIL", "PLEX_ACCESS_GRANT", "PLEX_ACCESS_REVOKE", "ACCOUNT_SUSPEND", "ROLE_CHANGE"
+  status          String    @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  title           String
+  description     String?
+  targetUser      String?
+  targetEmail     String?
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payload         String    // JSON encoded
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([userId])
+  @@index([createdAt])
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { logout, getSession } from "@/app/auth-actions" 
@@ -17,28 +17,53 @@ import {
   User,
   Terminal,
   Film,
-  Tv
+  Tv,
+  Sparkles,
+  Trash2,
+  Tag,
+  Compass,
+  Inbox,
+  HelpCircle
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const currentTab = searchParams?.get("tab")
+  const isLogsActive = pathname === "/settings" && currentTab === "logs"
+  const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperUser, setIsSuperUser] = useState(false)
+  const [isTrial, setIsTrial] = useState(false)
   const [role, setRole] = useState("")
 
   useEffect(() => {
     getSession().then((session) => {
       if (session) {
-        setRole((session.role as string) || "");
-        if (session.role === "ADMIN") {
-          setIsAdmin(true);
-        }
+        const userRole = (session.role as string) || "";
+        const userStatus = (session.status as string) || "";
+        const trial = (userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true) && userStatus !== "APPROVED" && userRole !== "ADMIN";
+        setRole(userRole);
+        setIsAdmin(userRole === "ADMIN");
+        setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
+        setIsTrial(trial);
+      } else {
+        setIsAdmin(false);
+        setIsSuperUser(false);
+        setIsTrial(false);
+        setRole("");
       }
+    }).catch(() => {
+      setIsAdmin(false);
+      setIsSuperUser(false);
+      setIsTrial(false);
+      setRole("");
     });
-  }, []);
+  }, [pathname]);
 
   return (
-    <div className={cn("pb-12 h-screen border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none", className)}>
-      <div className="space-y-4 py-4">
+    <div className={cn("h-full border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none min-h-0", className)}>
+      <div className="flex-1 overflow-y-auto space-y-4 py-4">
         <div className="px-3 py-2">
           <div className="flex items-center gap-2.5 px-3 mb-6">
             <div className="h-8 w-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(52,211,153,0.3)]">
@@ -46,12 +71,12 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
             </div>
             <div>
               <h2 className="text-base font-extrabold tracking-tight text-foreground flex items-center gap-1.5">
-                Portalarr
-                <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-primary/20 text-primary border border-primary/30">
-                  v2.0
+                DomsHomeLab
+                <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  v3.0-beta
                 </span>
               </h2>
-              <p className="text-[10px] text-muted-foreground font-medium">Media Ecosystem Portal</p>
+              <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
             </div>
           </div>
 
@@ -71,57 +96,76 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            <Link href="/library">
+            <Link href="/discover">
               <Button
-                variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
+                variant={pathname.startsWith("/discover") || pathname.startsWith("/requests") ? "secondary" : "ghost"}
                 className={cn(
                   "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/library")
+                  pathname.startsWith("/discover") || pathname.startsWith("/requests")
                     ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
                 )}
               >
-                <BookOpen className="mr-2 h-4 w-4 text-emerald-400" />
-                Book Library
+                <Compass className="mr-2 h-4 w-4 text-primary" />
+                Media Requests
               </Button>
             </Link>
 
-            <Link href="/beta">
+            {!isTrial && (
+              <Link href="/library">
+                <Button
+                  variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                    pathname.startsWith("/library")
+                      ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                  )}
+                >
+                  <BookOpen className="mr-2 h-4 w-4 text-emerald-400" />
+                  Book Library
+                </Button>
+              </Link>
+            )}
+
+            <Link href="/guides">
               <Button
-                variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
+                variant={pathname.startsWith("/guides") ? "secondary" : "ghost"}
                 className={cn(
                   "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/beta")
-                    ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
+                  pathname.startsWith("/guides")
+                    ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(56,189,248,0.2)] ring-1 ring-sky-500/40 font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
                 )}
               >
-                <Terminal className="mr-2 h-4 w-4 text-purple-400" />
-                Beta Portal
+                <HelpCircle className="mr-2 h-4 w-4 text-sky-400" />
+                Setup Guides
               </Button>
             </Link>
 
-            <Link href="/admin/tickets">
-              <Button
-                variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/admin/tickets")
-                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                )}
-              >
-                <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
-                Support Tickets
-              </Button>
-            </Link>
+            {isAdmin && (
+              <Link href="/admin/tickets">
+                <Button
+                  variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                    pathname.startsWith("/admin/tickets")
+                      ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                  )}
+                >
+                  <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
+                  Support Tickets
+                </Button>
+              </Link>
+            )}
 
-            <Link href="/settings/profile">
+            <Link href="/profile">
               <Button
-                variant={pathname === "/settings/profile" ? "secondary" : "ghost"}
+                variant={pathname === "/profile" || pathname === "/settings/profile" ? "secondary" : "ghost"}
                 className={cn(
                   "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname === "/settings/profile"
+                  pathname === "/profile" || pathname === "/settings/profile"
                     ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-blue-500/40 font-bold"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-blue-500/40"
                 )}
@@ -131,7 +175,7 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            {(isAdmin || role === "SUPER_USER") && (
+            {(isAdmin || isSuperUser) && (
               <>
                 <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Media Apps
@@ -172,12 +216,72 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Administration
                 </div>
-                <Link href="/settings">
+                <Link href="/curation/kometa">
                   <Button
-                    variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"}
+                    variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
                     className={cn(
                       "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/settings") && pathname !== "/settings/profile"
+                      pathname === "/curation" || pathname.startsWith("/curation/kometa")
+                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
+                        : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+                    )}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4 text-purple-400" />
+                    Kometa Overlays
+                  </Button>
+                </Link>
+
+                <Link href="/curation/agregarr">
+                  <Button
+                    variant={pathname.startsWith("/curation/agregarr") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/curation/agregarr")
+                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40 font-bold"
+                        : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/30 hover:ring-1 hover:ring-amber-500/40"
+                    )}
+                  >
+                    <Film className="mr-2 h-4 w-4 text-amber-400" />
+                    Agregarr Hubs
+                  </Button>
+                </Link>
+
+                <Link href="/curation/prune">
+                  <Button
+                    variant={pathname.startsWith("/curation/prune") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/curation/prune")
+                        ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.25)] ring-1 ring-rose-500/40 font-bold"
+                        : "text-rose-400/80 hover:text-rose-300 hover:bg-rose-950/30 hover:ring-1 hover:ring-rose-500/40"
+                    )}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4 text-rose-400" />
+                    Maintainerr Prune
+                  </Button>
+                </Link>
+
+                <Link href="/curation/tagging">
+                  <Button
+                    variant={pathname.startsWith("/curation/tagging") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/curation/tagging")
+                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                    )}
+                  >
+                    <Tag className="mr-2 h-4 w-4 text-emerald-400" />
+                    Tagging Studio
+                  </Button>
+                </Link>
+
+                <Link href="/settings">
+                  <Button
+                    variant={isSettingsActive ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      isSettingsActive
                         ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
                     )}
@@ -189,10 +293,10 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
 
                 <Link href="/settings?tab=logs">
                   <Button
-                    variant={pathname.includes("tab=logs") ? "secondary" : "ghost"}
+                    variant={isLogsActive ? "secondary" : "ghost"}
                     className={cn(
                       "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.includes("tab=logs")
+                      isLogsActive
                         ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
                         : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
                     )}
@@ -223,19 +327,38 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
 export function MobileSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams?.get("tab");
+  const isLogsActive = pathname === "/settings" && currentTab === "logs";
+  const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive;
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperUser, setIsSuperUser] = useState(false);
+  const [isTrial, setIsTrial] = useState(false);
   const [role, setRole] = useState("");
 
   useEffect(() => {
     getSession().then((session) => {
       if (session) {
-        setRole((session.role as string) || "");
-        if (session.role === "ADMIN") {
-          setIsAdmin(true);
-        }
+        const userRole = (session.role as string) || "";
+        const userStatus = (session.status as string) || "";
+        const trial = (userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true) && userStatus !== "APPROVED" && userRole !== "ADMIN";
+        setRole(userRole);
+        setIsAdmin(userRole === "ADMIN");
+        setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
+        setIsTrial(trial);
+      } else {
+        setIsAdmin(false);
+        setIsSuperUser(false);
+        setIsTrial(false);
+        setRole("");
       }
+    }).catch(() => {
+      setIsAdmin(false);
+      setIsSuperUser(false);
+      setIsTrial(false);
+      setRole("");
     });
-  }, []);
+  }, [pathname]);
 
   return (
     <>
@@ -253,20 +376,20 @@ export function MobileSidebar() {
               </Button>
             </div>
 
-            <div className="flex-1 px-3 pb-4 flex flex-col justify-between">
-              <div>
+            <div className="flex-1 px-3 pb-4 flex flex-col justify-between min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto pr-1">
                 <div className="flex items-center gap-2.5 px-3 mb-6">
                   <div className="h-8 w-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(52,211,153,0.3)]">
                     <BookOpen className="h-4 w-4" />
                   </div>
                   <div>
                     <h2 className="text-base font-extrabold tracking-tight text-foreground flex items-center gap-1.5">
-                      Portalarr
-                      <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-primary/20 text-primary border border-primary/30">
-                        v2.0
+                      DomsHomeLab
+                      <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        v3.0-beta
                       </span>
                     </h2>
-                    <p className="text-[10px] text-muted-foreground font-medium">Media Ecosystem Portal</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
                   </div>
                 </div>
 
@@ -285,54 +408,72 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
 
-                  <Link href="/library" onClick={() => setIsOpen(false)}>
+                  <Link href="/discover" onClick={() => setIsOpen(false)}>
                     <Button
-                      variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
+                      variant={pathname.startsWith("/discover") || pathname.startsWith("/requests") ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/library")
+                        pathname.startsWith("/discover") || pathname.startsWith("/requests")
                           ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
                       )}
                     >
-                      <BookOpen className="mr-2 h-4 w-4 text-emerald-400" /> Book Library
+                      <Compass className="mr-2 h-4 w-4 text-primary" /> Media Requests
                     </Button>
                   </Link>
 
-                  <Link href="/beta" onClick={() => setIsOpen(false)}>
+                  {!isTrial && (
+                    <Link href="/library" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
+                        className={cn(
+                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                          pathname.startsWith("/library")
+                            ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
+                        )}
+                      >
+                        <BookOpen className="mr-2 h-4 w-4 text-emerald-400" /> Book Library
+                      </Button>
+                    </Link>
+                  )}
+
+                  <Link href="/guides" onClick={() => setIsOpen(false)}>
                     <Button
-                      variant={pathname.startsWith("/beta") ? "secondary" : "ghost"}
+                      variant={pathname.startsWith("/guides") ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/beta")
-                          ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)] ring-1 ring-purple-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-purple-500/40"
+                        pathname.startsWith("/guides")
+                          ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(56,189,248,0.2)] ring-1 ring-sky-500/40 font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
                       )}
                     >
-                      <Terminal className="mr-2 h-4 w-4 text-purple-400" /> Beta Portal
+                      <HelpCircle className="mr-2 h-4 w-4 text-sky-400" /> Setup Guides
                     </Button>
                   </Link>
                   
-                  <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/admin/tickets")
-                          ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                      )}
-                    >
-                      <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
-                    </Button>
-                  </Link>
+                  {isAdmin && (
+                    <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                        className={cn(
+                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                          pathname.startsWith("/admin/tickets")
+                            ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                        )}
+                      >
+                        <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
+                      </Button>
+                    </Link>
+                  )}
 
-                  <Link href="/settings/profile" onClick={() => setIsOpen(false)}>
+                  <Link href="/profile" onClick={() => setIsOpen(false)}>
                     <Button
-                      variant={pathname === "/settings/profile" ? "secondary" : "ghost"}
+                      variant={pathname === "/profile" || pathname === "/settings/profile" ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname === "/settings/profile"
+                        pathname === "/profile" || pathname === "/settings/profile"
                           ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-blue-500/40 font-bold"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-blue-500/40"
                       )}
@@ -341,7 +482,7 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
 
-                  {(isAdmin || role === "SUPER_USER") && (
+                  {(isAdmin || isSuperUser) && (
                     <>
                       <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                         Media Apps
@@ -380,12 +521,68 @@ export function MobileSidebar() {
                       <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                         Administration
                       </div>
-                      <Link href="/settings" onClick={() => setIsOpen(false)}>
+                      <Link href="/curation/kometa" onClick={() => setIsOpen(false)}>
                         <Button
-                          variant={pathname.startsWith("/settings") && pathname !== "/settings/profile" ? "secondary" : "ghost"}
+                          variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
                           className={cn(
                             "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/settings") && pathname !== "/settings/profile"
+                            pathname === "/curation" || pathname.startsWith("/curation/kometa")
+                              ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
+                              : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+                          )}
+                        >
+                          <Sparkles className="mr-2 h-4 w-4 text-purple-400" /> Kometa Overlays
+                        </Button>
+                      </Link>
+
+                      <Link href="/curation/agregarr" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/curation/agregarr") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/curation/agregarr")
+                              ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40 font-bold"
+                              : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/30 hover:ring-1 hover:ring-amber-500/40"
+                          )}
+                        >
+                          <Film className="mr-2 h-4 w-4 text-amber-400" /> Agregarr Hubs
+                        </Button>
+                      </Link>
+
+                      <Link href="/curation/prune" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/curation/prune") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/curation/prune")
+                              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.25)] ring-1 ring-rose-500/40 font-bold"
+                              : "text-rose-400/80 hover:text-rose-300 hover:bg-rose-950/30 hover:ring-1 hover:ring-rose-500/40"
+                          )}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4 text-rose-400" /> Maintainerr Prune
+                        </Button>
+                      </Link>
+
+                      <Link href="/curation/tagging" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/curation/tagging") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/curation/tagging")
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                          )}
+                        >
+                          <Tag className="mr-2 h-4 w-4 text-emerald-400" /> Tagging Studio
+                        </Button>
+                      </Link>
+
+                      <Link href="/settings" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={isSettingsActive ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            isSettingsActive
                               ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
                               : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
                           )}
@@ -396,10 +593,10 @@ export function MobileSidebar() {
 
                       <Link href="/settings?tab=logs" onClick={() => setIsOpen(false)}>
                         <Button
-                          variant={pathname.includes("tab=logs") ? "secondary" : "ghost"}
+                          variant={isLogsActive ? "secondary" : "ghost"}
                           className={cn(
                             "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.includes("tab=logs")
+                            isLogsActive
                               ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
                               : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
                           )}

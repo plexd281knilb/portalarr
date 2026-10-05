@@ -5,42 +5,76 @@ import { hash } from "bcryptjs";
 import nodemailer from "nodemailer"; 
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
-import { encryptData, decryptData } from "@/lib/encryption";
-import { getPlexServerFriends, getPlexServers, getPlexActiveSessions, getPlexOwnerUser, terminatePlexServerSession } from "@/lib/plex";
-import prisma from "@/lib/prisma";
+import { 
+    getPlexServerFriends, 
+    getPlexServers, 
+    getPlexActiveSessions, 
+    getPlexOwnerUser, 
+    terminatePlexServerSession,
+    getPlexServerLibrarySections,
+    getPlexSharedServersList,
+    getUserPlexSharedLibraries,
+    invitePlexFriendAndShare,
+    updatePlexUserShareSections,
+    removePlexUserShare,
+    matchesPlexUser,
+    findPlexUserFriend,
+    getPlexCloudServersMap
+} from "@/lib/plex";
+import prisma, { ensureSchemaColumns, isPlexMaintenanceWindow } from "@/lib/prisma";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
+import type { AiAssistantResponse, UserDiagnosticSnapshot } from "@/lib/ai-server-assistant-types";
 
-import { getJwtSecret, getAppUrl } from "@/lib/auth-secret";
-import { logger } from "@/lib/logger";
+import { getJwtSecret } from "@/lib/auth-secret";
+import { getAppUrl } from "@/lib/app-url";
+import { encryptData, decryptData } from "@/lib/encryption";
+import { calculateProratedBilling } from "@/lib/prorated-billing";
+import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
+import { logger, maskToken } from "@/lib/logger";
+import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout } from "@/lib/email-templates";
 import fs from "fs";
 import path from "path";
+import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
+import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
+import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
+
+if (typeof process !== "undefined" && process.env) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
 
 // ============================================================================
 // --- SECURITY LAYER ---
 // ============================================================================
 
-async function fetchWithRetry(url: string, options: any = {}, retries = 3) {
+async function fetchWithRetry(url: string, options: any = {}, retries = 3, timeoutMs = 7000): Promise<Response> {
     if (!options.headers) options.headers = {};
     if (!options.headers["User-Agent"]) {
-        options.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        options.headers["User-Agent"] = "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)";
     }
-    let lastErr;
+    let lastErr: any;
     for (let i = 0; i < retries; i++) {
         try {
-            const res = await fetch(url, options);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            const res = await fetch(url, { ...options, signal: options.signal || controller.signal });
+            clearTimeout(timeoutId);
             if (res.ok || res.status === 404 || res.status === 403) return res;
-        } catch (e) {
+        } catch (e: any) {
             lastErr = e;
         }
-        await new Promise(r => setTimeout(r, 1000));
+        if (i < retries - 1) {
+            await new Promise(r => setTimeout(r, 400 * (i + 1)));
+        }
     }
     if (lastErr) throw lastErr;
-    return fetch(url, options); // fallback throw
+    throw new Error(`Failed to fetch ${url} after ${retries} attempts`);
 }
 
 async function verifyAdmin() {
-    const user = await verifyUser();
-    if (user.role !== "ADMIN" || (user.status && user.status !== "APPROVED")) {
+    const user: any = await verifyUser();
+    const role = String(user?.role || "").toUpperCase();
+    const status = String(user?.status || "APPROVED").toUpperCase();
+    if (role !== "ADMIN" || (status !== "APPROVED" && status !== "TRIAL")) {
         throw new Error("Unauthorized");
     }
     return user;
@@ -49,6 +83,56 @@ async function verifyAdmin() {
 function cleanUrl(url: string): string {
     if (!url) return "";
     return url.replace(/\/$/, ""); 
+}
+
+async function fetchTautulliApiJson(url: string, signal?: AbortSignal, nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
+    try {
+        const fetchOpts: any = { signal };
+        if (nextOptions) {
+            fetchOpts.next = nextOptions;
+        } else {
+            fetchOpts.cache = "no-store";
+        }
+
+        const res = await fetch(url, fetchOpts);
+        if (!res.ok) {
+            return { ok: false, data: null, error: `HTTP ${res.status}: ${res.statusText || "Request failed"}` };
+        }
+
+        const contentType = res.headers.get("content-type") || "";
+        const text = await res.text();
+        const trimmed = (text || "").trim();
+
+        if (!trimmed) {
+            return { ok: false, data: null, error: "Empty response received from server" };
+        }
+
+        if (trimmed.startsWith("<") || contentType.includes("html") || contentType.includes("xml")) {
+            return { 
+                ok: false, 
+                data: null, 
+                error: "Server returned HTML/XML instead of JSON. Ensure URL points to Tautulli (port 8181 by default), not Plex (port 32400) or a WebGUI." 
+            };
+        }
+
+        let json: any;
+        try {
+            json = JSON.parse(trimmed);
+        } catch (parseErr: any) {
+            return { ok: false, data: null, error: `Malformed JSON received: ${parseErr.message}` };
+        }
+
+        if (json.response?.result === "error") {
+            return { ok: false, data: null, error: json.response.message || "Tautulli API error" };
+        }
+
+        return { ok: true, data: json.response?.data ?? json.response ?? json };
+    } catch (e: any) {
+        if (e.name === "AbortError") {
+            return { ok: false, data: null, error: "Connection timed out" };
+        }
+        return { ok: false, data: null, error: e.message || "Network error" };
+    }
 }
 
 function isForeignLanguage(title: string): boolean {
@@ -70,7 +154,13 @@ function isForeignLanguage(title: string): boolean {
 }
 
 function getNormTitle(rawTitle: string): string {
-    let norm = (rawTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+    let cleaned = (rawTitle || "")
+        .replace(/\[[^\]]+\]|\([^\)]+\)/g, " ")
+        .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
+        .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ")
+        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ");
+
+    let norm = cleaned.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
     if (norm.includes("harrypotter")) {
         norm = norm.replace("philosophersstone", "sorcerersstone");
         norm = norm.replace("philosopherstone", "sorcerersstone");
@@ -80,66 +170,93 @@ function getNormTitle(rawTitle: string): string {
     return norm;
 }
 
+function isAuthorMatch(authorA: string | null | undefined, authorB: string | null | undefined): boolean {
+    if (!authorA || !authorB) return true;
+    const aNorm = getNormTitle(authorA);
+    const bNorm = getNormTitle(authorB);
+    if (!aNorm || !bNorm || aNorm === "unknownauthor" || bNorm === "unknownauthor") return true;
+    if (aNorm === bNorm) return true;
+
+    // Inverted names check: "Silver, Elsie" -> "Elsie Silver"
+    const normalizeInverted = (raw: string) => {
+        if (raw.includes(",")) {
+            const parts = raw.split(",").map(p => p.trim()).filter(Boolean);
+            if (parts.length === 2) return getNormTitle(`${parts[1]} ${parts[0]}`);
+        }
+        return getNormTitle(raw);
+    };
+    const aInv = normalizeInverted(authorA);
+    const bInv = normalizeInverted(authorB);
+    if (aInv === bInv || aInv === bNorm || aNorm === bInv) return true;
+
+    // Token set match: ["elsie", "silver"] sorted
+    const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 1).sort().join("");
+    const aTok = tokenize(authorA);
+    const bTok = tokenize(authorB);
+    if (aTok && bTok && aTok === bTok) return true;
+
+    // Substring match for substantial author names (>= 5 chars)
+    if ((aNorm.length >= 5 && bNorm.length >= 5) && (aNorm.includes(bNorm) || bNorm.includes(aNorm))) return true;
+
+    return false;
+}
+
+function cleanTitleForMatch(rawTitle: string): string {
+    let clean = (rawTitle || "")
+        .replace(/\[[^\]]+\]|\([^\)]+\)/g, " ")
+        .replace(/[\(\[]\s*(?:18|19|20)\d\d\s*[\)\]]/gi, " ")
+        .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ")
+        .replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*#?\s*\d{1,3}(?:\.\d{1,2})?\s*[-:]\s*/i, " ")
+        .replace(/\b(?:audiobook|ebook|epub|retail|mobi|cbz|mp3|flac|aac|m4b|cbr|vbr|unabridged|abridged|audible|narrated|repack|decipher|web|p2p|readarr|uk|us|ca|au|eu|ind)\b/gi, " ");
+    return clean.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
+
+function isTitleMatch(titleA: string | null | undefined, titleB: string | null | undefined): boolean {
+    if (!titleA || !titleB) return false;
+    const normA = getNormTitle(titleA);
+    const normB = getNormTitle(titleB);
+    if (!normA || !normB) return false;
+    if (normA === normB) return true;
+
+    const cleanA = cleanTitleForMatch(titleA);
+    const cleanB = cleanTitleForMatch(titleB);
+    if (cleanA && cleanB && cleanA === cleanB) return true;
+
+    // Substring match for substantial titles (>= 6 characters)
+    if (cleanA.length >= 6 && cleanB.length >= 6) {
+        if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
+    }
+
+    return false;
+}
+
+function normalizePathForLookup(p: string | null | undefined): string {
+    return (p || "").replace(/\\/g, "/").toLowerCase().trim();
+}
+
 async function mobiBounceEpub(filePath: string): Promise<boolean> {
     try {
-        const fs = require("fs");
-        const path = require("path");
-        const { exec } = require("child_process");
-        const { promisify } = require("util");
-        const execAsync = promisify(exec);
-
-        // 1. Check if ebook-convert is available (cross-platform check)
-        try {
-            const checkCmd = process.platform === "win32" ? "where ebook-convert" : "which ebook-convert";
-            await execAsync(checkCmd);
-        } catch (e) {
-            console.log("[MOBI-BOUNCE] ebook-convert is not installed or not in PATH. Skipping Mobi-Bounce.");
-            return false;
+        const ext = path.extname(filePath).toLowerCase();
+        let targetPath = filePath;
+        if (ext !== ".epub") {
+            const convRes = await convertEbookToEpub(filePath);
+            if (!convRes.success || !convRes.epubPath) {
+                if (convRes.error && (convRes.error.includes("DRM") || convRes.error.includes("is DRM protected"))) {
+                    throw new Error("DRM_PROTECTED");
+                }
+                return false;
+            }
+            targetPath = convRes.epubPath;
         }
 
-        const ext = path.extname(filePath).toLowerCase();
-        if (ext !== ".epub") return false;
-
-        const dirname = path.dirname(filePath);
-        const basename = path.basename(filePath, ext);
-        const tempMobi = path.join(dirname, `${basename}.bounce.mobi`);
-        const tempOutput = path.join(dirname, `${basename}.rebuilding.epub`);
-
-        console.log(`[MOBI-BOUNCE] Starting conversion for: ${basename}`);
-        
-        // Step 1: EPUB to MOBI
-        try {
-            await execAsync(`ebook-convert "${filePath}" "${tempMobi}"`);
-        } catch (convErr: any) {
-            if (convErr.message && (convErr.message.includes("DRMError") || convErr.message.includes("is DRM protected"))) {
+        const valRes = await validateAndFixEpubForKindle(targetPath);
+        if (!valRes.valid) {
+            if (valRes.error && (valRes.error.includes("DRM") || valRes.error.includes("is DRM protected"))) {
                 throw new Error("DRM_PROTECTED");
             }
-            throw convErr;
+            return false;
         }
-        
-        // Step 2: MOBI to EPUB (forcing language to en)
-        await execAsync(`ebook-convert "${tempMobi}" "${tempOutput}" --language en`);
-        
-        // Step 3: Cleanup MOBI
-        if (fs.existsSync(tempMobi)) {
-            fs.unlinkSync(tempMobi);
-        }
-
-        // Step 4: Swap files
-        if (fs.existsSync(tempOutput)) {
-            fs.unlinkSync(filePath);
-            fs.renameSync(tempOutput, filePath);
-            
-            // Set Unraid permissions (chmod 666)
-            try {
-                fs.chmodSync(filePath, 0o666);
-            } catch (permErr) {}
-
-            console.log(`[MOBI-BOUNCE] Successfully sanitized and rebuilt EPUB for: ${basename}`);
-            return true;
-        }
-        
-        return false;
+        return true;
     } catch (err: any) {
         if (err.message === "DRM_PROTECTED") {
             throw err;
@@ -181,14 +298,13 @@ function cleanUpEmptyFolder(folderPath: string) {
     if (!folderPath || !fs.existsSync(folderPath)) return;
     try {
         const remaining = fs.readdirSync(folderPath);
+        if (remaining.includes('.portalarr-missing')) return;
+
         const onlyIgnored = remaining.every(f => 
             f === '.DS_Store' || 
             f === 'Thumbs.db' || 
             f === 'desktop.ini' || 
             f === '.nomedia' ||
-            f === '.portalarr-missing' ||
-            f.endsWith('.jpg') || // Often left behind covers
-            f.endsWith('.png') ||
             f.endsWith('.nfo') ||
             f.endsWith('.txt') ||
             f.endsWith('.cue') ||
@@ -205,24 +321,273 @@ function cleanUpEmptyFolder(folderPath: string) {
     } catch (e) {}
 }
 
-export async function findMissingBooksInSeries(seriesName: string, author: string) {
+function isSeriesAuthorMatch(candidateAuthor: string, targetAuthor: string): boolean {
+    if (!candidateAuthor || !targetAuthor) return true;
+    if (targetAuthor === "Unknown Author" || targetAuthor === "Unknown" || !targetAuthor.trim()) return true;
+
+    // Filter out common summary, study guide, and knockoff publishers
+    const junkAuthorPatterns = [
+        /\beasy reads?\b/i,
+        /\bsummary\b/i,
+        /\bstudy guide\b/i,
+        /\bbookrags\b/i,
+        /\bsparknotes\b/i,
+        /\bcliffs?notes\b/i,
+        /\binstaread\b/i,
+        /\bquickreads?\b/i,
+        /\btrivia\b/i,
+        /\bunofficial\b/i,
+        /\banalysis\b/i,
+        /\btest prep\b/i,
+        /\bworkbooks?\b/i
+    ];
+    if (junkAuthorPatterns.some(p => p.test(candidateAuthor))) {
+        return false;
+    }
+
+    const cleanCandidate = candidateAuthor.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+    const cleanTarget = targetAuthor.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+
+    if (cleanCandidate === cleanTarget) return true;
+    if (cleanCandidate.includes(cleanTarget) || cleanTarget.includes(cleanCandidate)) return true;
+
+    const candidateParts = cleanCandidate.split(" ").filter(p => p.length > 1);
+    const targetParts = cleanTarget.split(" ").filter(p => p.length > 1);
+
+    if (candidateParts.length > 0 && targetParts.length > 0) {
+        const candidateLastName = candidateParts[candidateParts.length - 1];
+        const targetLastName = targetParts[targetParts.length - 1];
+        if (candidateLastName === targetLastName) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function cleanSeriesBookTitle(title: string, author?: string): string {
+    let cleaned = (title || "")
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\s*\([^)]*\)/g, " ")
+        .replace(/\s*\[[^\]]*\]/g, " ")
+        .replace(/\s+-\s+(?:Part|Book|Volume)\s*\d+.*$/i, "")
+        .replace(/\s*:\s*A Novel.*$/i, "")
+        .replace(/\s*:\s*Book\s*\d+.*$/i, "")
+        .replace(/\s*\(Illustrated Edition\)/gi, "")
+        .replace(/\s*\(Unabridged\)/gi, "");
+
+    if (author && author !== "Unknown Author") {
+        const escapedAuthor = author.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        cleaned = cleaned.replace(new RegExp(`\\s+(?:by|- by|: by)\\s+${escapedAuthor}.*$`, 'i'), "");
+    }
+    cleaned = cleaned.replace(/\s+(?:by|- by|: by)\s+[A-Za-z0-9\.\s]+$/i, "");
+
+    return cleaned.replace(/\s+/g, " ").trim();
+}
+
+function getKnownSeriesVolume(seriesName: string, title: string): string | null {
+    const s = (seriesName || "").toLowerCase();
+    const t = (title || "").toLowerCase();
+
+    if (s.includes("harry potter")) {
+        if (t.includes("sorcerer") || t.includes("philosopher")) return "1";
+        if (t.includes("chamber of secrets")) return "2";
+        if (t.includes("prisoner of azkaban")) return "3";
+        if (t.includes("goblet of fire")) return "4";
+        if (t.includes("order of the phoenix")) return "5";
+        if (t.includes("half-blood prince") || t.includes("half blood prince")) return "6";
+        if (t.includes("deathly hallows")) return "7";
+        if (t.includes("cursed child")) return "8";
+    }
+    if (s.includes("lord of the rings")) {
+        if (t.includes("fellowship of the ring")) return "1";
+        if (t.includes("two towers")) return "2";
+        if (t.includes("return of the king")) return "3";
+    }
+    if (s.includes("percy jackson")) {
+        if (t.includes("lightning thief")) return "1";
+        if (t.includes("sea of monsters")) return "2";
+        if (t.includes("titan's curse") || t.includes("titans curse")) return "3";
+        if (t.includes("battle of the labyrinth")) return "4";
+        if (t.includes("last olympian")) return "5";
+    }
+    if (s.includes("hunger games")) {
+        if (t.includes("hunger games") && !t.includes("catching") && !t.includes("mockingjay") && !t.includes("ballad")) return "1";
+        if (t.includes("catching fire")) return "2";
+        if (t.includes("mockingjay")) return "3";
+        if (t.includes("ballad of songbirds")) return "0";
+    }
+    if (s.includes("chronicles of narnia") || s.includes("narnia")) {
+        if (t.includes("magician's nephew") || t.includes("magicians nephew")) return "1";
+        if (t.includes("lion, the witch") || t.includes("lion the witch")) return "2";
+        if (t.includes("horse and his boy")) return "3";
+        if (t.includes("prince caspian")) return "4";
+        if (t.includes("voyage of the dawn treader")) return "5";
+        if (t.includes("silver chair")) return "6";
+        if (t.includes("last battle")) return "7";
+    }
+    if (s.includes("twilight")) {
+        if (t.includes("twilight") && !t.includes("new moon") && !t.includes("eclipse") && !t.includes("breaking dawn") && !t.includes("midnight sun")) return "1";
+        if (t.includes("new moon")) return "2";
+        if (t.includes("eclipse")) return "3";
+        if (t.includes("breaking dawn")) return "4";
+        if (t.includes("midnight sun")) return "5";
+    }
+    if (s.includes("expanse")) {
+        if (t.includes("leviathan wakes")) return "1";
+        if (t.includes("caliban's war") || t.includes("calibans war")) return "2";
+        if (t.includes("abaddon's gate") || t.includes("abaddons gate")) return "3";
+        if (t.includes("cibola burn")) return "4";
+        if (t.includes("nemesis games")) return "5";
+        if (t.includes("babylon's ashes") || t.includes("babylons ashes")) return "6";
+        if (t.includes("persepolis rising")) return "7";
+        if (t.includes("tiamat's wrath") || t.includes("tiamats wrath")) return "8";
+        if (t.includes("leviathan falls")) return "9";
+    }
+    if (s.includes("dune")) {
+        if (t.includes("dune") && !t.includes("messiah") && !t.includes("children") && !t.includes("god emperor") && !t.includes("heretics") && !t.includes("chapterhouse")) return "1";
+        if (t.includes("dune messiah")) return "2";
+        if (t.includes("children of dune")) return "3";
+        if (t.includes("god emperor of dune")) return "4";
+        if (t.includes("heretics of dune")) return "5";
+        if (t.includes("chapterhouse dune")) return "6";
+    }
+    if (s.includes("wheel of time")) {
+        if (t.includes("eye of the world")) return "1";
+        if (t.includes("great hunt")) return "2";
+        if (t.includes("dragon reborn")) return "3";
+        if (t.includes("shadow rising")) return "4";
+        if (t.includes("fires of heaven")) return "5";
+        if (t.includes("lord of chaos")) return "6";
+        if (t.includes("crown of swords")) return "7";
+        if (t.includes("path of daggers")) return "8";
+        if (t.includes("winter's heart") || t.includes("winters heart")) return "9";
+        if (t.includes("crossroads of twilight")) return "10";
+        if (t.includes("knife of dreams")) return "11";
+        if (t.includes("gathering storm")) return "12";
+        if (t.includes("towers of midnight")) return "13";
+        if (t.includes("memory of light")) return "14";
+        if (t.includes("new spring")) return "0";
+    }
+
+    const match = title.match(/(?:Book|Vol|Volume|#)\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if (match) return match[1];
+
+    return null;
+}
+
+const CANONICAL_SERIES: Record<string, Array<{ volumeNumber: string; title: string; author: string }>> = {
+    "harry potter": [
+        { volumeNumber: "1", title: "Harry Potter and the Sorcerer's Stone", author: "J. K. Rowling" },
+        { volumeNumber: "2", title: "Harry Potter and the Chamber of Secrets", author: "J. K. Rowling" },
+        { volumeNumber: "3", title: "Harry Potter and the Prisoner of Azkaban", author: "J. K. Rowling" },
+        { volumeNumber: "4", title: "Harry Potter and the Goblet of Fire", author: "J. K. Rowling" },
+        { volumeNumber: "5", title: "Harry Potter and the Order of the Phoenix", author: "J. K. Rowling" },
+        { volumeNumber: "6", title: "Harry Potter and the Half-Blood Prince", author: "J. K. Rowling" },
+        { volumeNumber: "7", title: "Harry Potter and the Deathly Hallows", author: "J. K. Rowling" }
+    ],
+    "lord of the rings": [
+        { volumeNumber: "1", title: "The Fellowship of the Ring", author: "J. R. R. Tolkien" },
+        { volumeNumber: "2", title: "The Two Towers", author: "J. R. R. Tolkien" },
+        { volumeNumber: "3", title: "The Return of the King", author: "J. R. R. Tolkien" }
+    ],
+    "the lord of the rings": [
+        { volumeNumber: "1", title: "The Fellowship of the Ring", author: "J. R. R. Tolkien" },
+        { volumeNumber: "2", title: "The Two Towers", author: "J. R. R. Tolkien" },
+        { volumeNumber: "3", title: "The Return of the King", author: "J. R. R. Tolkien" }
+    ],
+    "percy jackson": [
+        { volumeNumber: "1", title: "The Lightning Thief", author: "Rick Riordan" },
+        { volumeNumber: "2", title: "The Sea of Monsters", author: "Rick Riordan" },
+        { volumeNumber: "3", title: "The Titan's Curse", author: "Rick Riordan" },
+        { volumeNumber: "4", title: "The Battle of the Labyrinth", author: "Rick Riordan" },
+        { volumeNumber: "5", title: "The Last Olympian", author: "Rick Riordan" }
+    ],
+    "the hunger games": [
+        { volumeNumber: "1", title: "The Hunger Games", author: "Suzanne Collins" },
+        { volumeNumber: "2", title: "Catching Fire", author: "Suzanne Collins" },
+        { volumeNumber: "3", title: "Mockingjay", author: "Suzanne Collins" }
+    ],
+    "hunger games": [
+        { volumeNumber: "1", title: "The Hunger Games", author: "Suzanne Collins" },
+        { volumeNumber: "2", title: "Catching Fire", author: "Suzanne Collins" },
+        { volumeNumber: "3", title: "Mockingjay", author: "Suzanne Collins" }
+    ],
+    "the chronicles of narnia": [
+        { volumeNumber: "1", title: "The Magician's Nephew", author: "C. S. Lewis" },
+        { volumeNumber: "2", title: "The Lion, the Witch and the Wardrobe", author: "C. S. Lewis" },
+        { volumeNumber: "3", title: "The Horse and His Boy", author: "C. S. Lewis" },
+        { volumeNumber: "4", title: "Prince Caspian", author: "C. S. Lewis" },
+        { volumeNumber: "5", title: "The Voyage of the Dawn Treader", author: "C. S. Lewis" },
+        { volumeNumber: "6", title: "The Silver Chair", author: "C. S. Lewis" },
+        { volumeNumber: "7", title: "The Last Battle", author: "C. S. Lewis" }
+    ],
+    "the expanse": [
+        { volumeNumber: "1", title: "Leviathan Wakes", author: "James S. A. Corey" },
+        { volumeNumber: "2", title: "Caliban's War", author: "James S. A. Corey" },
+        { volumeNumber: "3", title: "Abaddon's Gate", author: "James S. A. Corey" },
+        { volumeNumber: "4", title: "Cibola Burn", author: "James S. A. Corey" },
+        { volumeNumber: "5", title: "Nemesis Games", author: "James S. A. Corey" },
+        { volumeNumber: "6", title: "Babylon's Ashes", author: "James S. A. Corey" },
+        { volumeNumber: "7", title: "Persepolis Rising", author: "James S. A. Corey" },
+        { volumeNumber: "8", title: "Tiamat's Wrath", author: "James S. A. Corey" },
+        { volumeNumber: "9", title: "Leviathan Falls", author: "James S. A. Corey" }
+    ],
+    "dune": [
+        { volumeNumber: "1", title: "Dune", author: "Frank Herbert" },
+        { volumeNumber: "2", title: "Dune Messiah", author: "Frank Herbert" },
+        { volumeNumber: "3", title: "Children of Dune", author: "Frank Herbert" },
+        { volumeNumber: "4", title: "God Emperor of Dune", author: "Frank Herbert" },
+        { volumeNumber: "5", title: "Heretics of Dune", author: "Frank Herbert" },
+        { volumeNumber: "6", title: "Chapterhouse: Dune", author: "Frank Herbert" }
+    ]
+};
+
+interface MissingSeriesCacheEntry {
+    data: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[];
+    timestamp: number;
+}
+const missingSeriesCandidatesCache = new Map<string, MissingSeriesCacheEntry>();
+const MISSING_SERIES_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+export async function findMissingBooksInSeries(seriesName: string, author: string, libraryId?: string) {
     try {
-        const q = `${seriesName} ${author}`;
-        let books = [];
-        
-        // 1. Primary: iTunes API (Fastest and most reliable for commercial books)
+        const seriesCacheKey = `${seriesName.toLowerCase().trim()}:::${(author || "").toLowerCase().trim()}`;
+        const cachedSeries = missingSeriesCandidatesCache.get(seriesCacheKey);
+        let validCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+
+        if (cachedSeries && Date.now() - cachedSeries.timestamp < MISSING_SERIES_CACHE_TTL) {
+            validCandidates = cachedSeries.data;
+        } else {
+            const q = `${seriesName} ${author}`.trim();
+            const normSeries = seriesName.toLowerCase().trim();
+            let rawCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+
+            // Check if series matches a known canonical series
+            const canonicalMatchKey = Object.keys(CANONICAL_SERIES).find(k => normSeries.includes(k) || k.includes(normSeries));
+            if (canonicalMatchKey && CANONICAL_SERIES[canonicalMatchKey]) {
+                for (const cBook of CANONICAL_SERIES[canonicalMatchKey]) {
+                rawCandidates.push({
+                    title: cBook.title,
+                    author: cBook.author,
+                    volumeNumber: cBook.volumeNumber,
+                    coverUrl: null
+                });
+            }
+        }
+
+        // 1. Primary: iTunes API
         try {
-            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=15`;
+            let itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=ebook&lang=en_us&limit=35`;
             let iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
             let data = iRes && iRes.ok ? await iRes.json() : null;
-            
-            // If no ebook found, try audiobook
+
             if (!data || !data.results || data.results.length === 0) {
-                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=15`;
+                itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=audiobook&lang=en_us&limit=35`;
                 iRes = await fetchWithRetry(itunesUrl, { headers: { "Accept": "application/json" } });
                 data = iRes && iRes.ok ? await iRes.json() : null;
             }
-            
+
             if (data && data.results && data.results.length > 0) {
                 for (const item of data.results) {
                     const title = item.trackName || item.collectionName;
@@ -231,117 +596,306 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                     if (artwork) {
                         artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
                     }
-                    books.push({
+                    rawCandidates.push({
                         title: title,
                         author: item.artistName || author,
                         coverUrl: artwork
                     });
                 }
             }
-        } catch(e) {
-            console.warn("[API-FAILOVER] iTunes search failed for missing books:", e);
+        } catch(e: any) {
+            console.warn("[API-FAILOVER] iTunes search failed for missing books:", e?.message || String(e));
         }
 
-        // 2. Failover: OpenLibrary
-        if (books.length === 0) {
-            try {
-                const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=15`;
-                const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
-                
-                if (res && res.ok) {
-                    const data = await res.json();
-                    if (data.docs) {
-                        for (const item of data.docs) {
-                            const title = item.title || "";
-                            const bookAuthor = item.author_name?.[0] || author;
-                            const coverId = item.cover_i;
-                            const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
-                            
-                            if (!title) continue;
-                            
-                            books.push({
-                                title: title,
-                                author: bookAuthor,
-                                coverUrl: coverUrl
-                            });
-                        }
+        // 2. OpenLibrary Search
+        try {
+            const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&language=eng&limit=35&fields=key,title,author_name,cover_i,first_publish_year`;
+            const res = await fetchWithRetry(url, { headers: { "Accept": "application/json" } });
+
+            if (res && res.ok) {
+                const data = await res.json();
+                if (data.docs) {
+                    for (const item of data.docs) {
+                        const title = item.title || "";
+                        const bookAuthor = item.author_name?.[0] || author;
+                        const coverId = item.cover_i;
+                        const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
+
+                        if (!title) continue;
+
+                        rawCandidates.push({
+                            title: title,
+                            author: bookAuthor,
+                            coverUrl: coverUrl
+                        });
                     }
                 }
-            } catch (e) {
-                console.warn("[API-FAILOVER] OpenLibrary search failed for missing books:", e);
             }
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary search failed for missing books:", e?.message || String(e));
         }
-        
-        // 3. Failover: Google Books
-        if (books.length === 0) {
-            try {
-                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-                const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
-                const gbKey = activeKey ? `&key=${activeKey}` : "";
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=15${gbKey}`;
-                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
-                if (gRes && gRes.ok) {
-                    const data = await gRes.json();
-                    if (data.items) {
-                        for (const item of data.items) {
-                            const title = item.volumeInfo?.title || "";
-                            const bookAuthor = item.volumeInfo?.authors?.[0] || author;
-                            let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || null;
-                            if (coverUrl) {
-                                coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0");
-                            }
-                            if (!title) continue;
-                            books.push({
-                                title: title,
-                                author: bookAuthor,
-                                coverUrl: coverUrl
-                            });
+
+        // 3. Google Books Search
+        try {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+            const gbKey = activeKey ? `&key=${activeKey}` : "";
+            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=35${gbKey}`;
+            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+            if (gRes && gRes.ok) {
+                const data = await gRes.json();
+                if (data.items) {
+                    for (const item of data.items) {
+                        const title = item.volumeInfo?.title || "";
+                        const bookAuthor = item.volumeInfo?.authors?.[0] || author;
+                        let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || null;
+                        if (coverUrl) {
+                            coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0");
                         }
+                        if (!title) continue;
+                        rawCandidates.push({
+                            title: title,
+                            author: bookAuthor,
+                            coverUrl: coverUrl
+                        });
                     }
                 }
-            } catch(e) {
-                console.warn("[API-FAILOVER] Google Books search failed for missing books:", e);
+            }
+        } catch(e: any) {
+            console.warn("[API-FAILOVER] Google Books search failed for missing books:", e?.message || String(e));
+        }
+
+        if (rawCandidates.length === 0) {
+            return { success: false, error: "Failed to query metadata APIs (iTunes, OpenLibrary, Google Books)" };
+        }
+
+        // 4. Strict Filtering & Title Cleaning
+        const isCanonicalSeries = !!(canonicalMatchKey && CANONICAL_SERIES[canonicalMatchKey]);
+        const JUNK_OR_BUNDLE_REGEX = /\b(?:\d+\s*[-–—]\s*\d+|(?:box|boxed)\s*set|omnibus|collection|complete\s+collection|bundle|almanac|atlas|encyclopedia|handbook|companion|screenplay|playscript|sampler|preview|cliffsnotes|sparknotes|instaread|easy\s+reads|quickreads|unofficial|test\s+prep|discussion\s+prompts|coloring\s+book|activity\s+book|guide\s+to\s+the|series\s+\d+|movie\s+book|\d+-d\b)\b/i;
+
+        const validCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
+        const seenTitles = new Set<string>();
+
+        if (isCanonicalSeries && canonicalMatchKey) {
+            const canonicalList = CANONICAL_SERIES[canonicalMatchKey];
+            for (const cBook of canonicalList) {
+                // Find best artwork match from rawCandidates
+                let bestCover: string | null = null;
+                const cTitleNorm = cBook.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+                for (const raw of rawCandidates) {
+                    if (!raw.coverUrl) continue;
+                    const rTitleNorm = (raw.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const rVol = raw.volumeNumber || getKnownSeriesVolume(seriesName, raw.title);
+                    if (rVol === cBook.volumeNumber || rTitleNorm === cTitleNorm || rTitleNorm.includes(cTitleNorm)) {
+                        bestCover = raw.coverUrl;
+                        break;
+                    }
+                }
+
+                validCandidates.push({
+                    title: cBook.title,
+                    author: cBook.author,
+                    volumeNumber: cBook.volumeNumber,
+                    coverUrl: bestCover
+                });
+            }
+        } else {
+            for (const cand of rawCandidates) {
+                if (!cand.title) continue;
+                const candTitleLower = cand.title.toLowerCase();
+
+                // Check foreign language
+                if (isForeignLanguage(cand.title)) continue;
+                if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero|en de|és a|ja viisasten)\b/.test(candTitleLower)) continue;
+
+                // Check junk/bundle keywords in title
+                if (JUNK_OR_BUNDLE_REGEX.test(candTitleLower)) continue;
+
+                // Strict Author Matching (Eliminates knockoffs like "Easy Reads")
+                if (author && author !== "Unknown Author" && !isSeriesAuthorMatch(cand.author, author)) continue;
+
+                // Clean title of "By [Author]" and junk suffixes
+                const cleanedTitle = cleanSeriesBookTitle(cand.title, author);
+                if (!cleanedTitle || cleanedTitle.length < 2) continue;
+
+                // Determine volume number
+                const knownVol = cand.volumeNumber || getKnownSeriesVolume(seriesName, cleanedTitle);
+
+                // Spinoff / Standalone filter: If candidate has no volume number and its title doesn't match the series name, reject it
+                const cleanedTitleLower = cleanedTitle.toLowerCase();
+                const seriesWords = normSeries.split(/\s+/).filter(w => w.length > 2);
+                const matchesSeries = seriesWords.length > 0 && seriesWords.some(w => cleanedTitleLower.includes(w));
+                if (!knownVol && !matchesSeries) {
+                    continue;
+                }
+
+                const normKey = (knownVol ? `vol-${knownVol}:::` : "") + cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                if (seenTitles.has(normKey)) {
+                    const existing = validCandidates.find(c => {
+                        const cNorm = (c.volumeNumber ? `vol-${c.volumeNumber}:::` : "") + c.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        return cNorm === normKey;
+                    });
+                    if (existing && !existing.coverUrl && cand.coverUrl) {
+                        existing.coverUrl = cand.coverUrl;
+                    }
+                    continue;
+                }
+                seenTitles.add(normKey);
+
+                validCandidates.push({
+                    title: cleanedTitle,
+                    author: author && author !== "Unknown Author" ? author : cand.author,
+                    coverUrl: cand.coverUrl,
+                    volumeNumber: knownVol
+                });
+            }
+
+            // 5. Bulk AI Volume Assignment for unnumbered titles
+            const unassigned = validCandidates.filter(b => !b.volumeNumber);
+            if (unassigned.length > 0) {
+                try {
+                    const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
+                    const titles = unassigned.map(b => b.title);
+                    const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
+                    for (const b of validCandidates) {
+                        if (!b.volumeNumber && volMap[b.title]) {
+                            b.volumeNumber = String(volMap[b.title]);
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[AI-FAILOVER] Bulk AI Volume Assignment notice:", e);
+                }
             }
         }
-        
-        if (books.length === 0) {
-            return { success: false, error: "Failed to query all metadata APIs (iTunes, OpenLibrary, Google Books)" };
+
+        if (validCandidates.length > 0) {
+            missingSeriesCandidatesCache.set(seriesCacheKey, { data: validCandidates, timestamp: Date.now() });
         }
-        
-        const filteredBooks = books.filter(b => {
-            const t = b.title.toLowerCase();
-            if (isForeignLanguage(b.title)) return false;
-            // Filter omnibuses/boxsets
-            if (t.includes("collection") || t.includes("box set") || t.includes("boxed set") || t.includes("omnibus") || /\b\d+\s*-\s*\d+\b/.test(t) || /\b(?:vol|volumes|books)\s*\d+\s*(?:to|-|and)\s*\d+\b/.test(t)) return false;
-            // Filter non-series companions
-            if (t.includes("a history") || t.includes("the journey") || t.includes("the making of") || t.includes("official guide") || t.includes("playscript") || t.includes("script") || t.includes("companion")) return false;
-            // Foreign conjunctions common in translations
-            if (/\b(?:y la|y el|og|e a|e o|und der|und die|und das|et le|et la|il prigioniero|la piedra|la cámara|el prisionero)\b/.test(t)) return false;
-            return true;
-        }).map(b => {
-            return {
-                ...b,
-                title: b.title.replace(/\s*\([^)]+\)\s*/g, " ").replace(/\s*\[[^\]]+\]\s*/g, " ").split(/ - (?:Part|Book)s? /i)[0].trim()
-            };
+    }
+
+        // 6. Cross-check against existing books in SQLite (Filter out already-owned volumes and titles in this library)
+        const dbSeriesBooks = await prisma.book.findMany({
+            where: {
+                ...(libraryId ? { libraryId } : {}),
+                OR: [
+                    { series: { contains: seriesName } },
+                    { title: { contains: seriesName } }
+                ],
+                fileType: { not: "missing" }
+            },
+            select: { id: true, title: true, volumeNumber: true, series: true, filePath: true }
         });
 
-        const uniqueBooks = Array.from(new Map(filteredBooks.map(b => [b.title.toLowerCase(), b])).values());
-        
-        // 4. Try Bulk AI Volume Assignment
-        try {
-            const { assignVolumeNumbersWithAI } = await import("@/lib/ai-agent");
-            const titles = uniqueBooks.map(b => b.title);
-            const volMap = await assignVolumeNumbersWithAI(seriesName, author, titles);
-            for (const b of uniqueBooks) {
-                if (volMap[b.title]) {
-                    (b as any).volumeNumber = String(volMap[b.title]);
-                }
+        const ownedNormTitles = new Set<string>();
+        const ownedVolumes = new Set<string>();
+
+        for (const b of dbSeriesBooks) {
+            // Verify file actually exists if filePath is given
+            if (b.filePath && !fs.existsSync(b.filePath)) {
+                continue;
             }
-        } catch (e) {
-            console.warn("[AI-FAILOVER] Bulk AI Volume Assignment failed:", e);
+
+            ownedNormTitles.add(b.title.toLowerCase().replace(/[^a-z0-9]/g, ""));
+            // Also add UK/US canonical title equivalents
+            if (b.title.toLowerCase().includes("philosopher")) {
+                ownedNormTitles.add(b.title.toLowerCase().replace(/philosopher'?s stone/gi, "sorcerers stone").replace(/[^a-z0-9]/g, ""));
+            } else if (b.title.toLowerCase().includes("sorcerer")) {
+                ownedNormTitles.add(b.title.toLowerCase().replace(/sorcerer'?s stone/gi, "philosophers stone").replace(/[^a-z0-9]/g, ""));
+            }
+            if (b.volumeNumber) {
+                ownedVolumes.add(String(b.volumeNumber).replace(/^0+/, ""));
+            }
         }
-        
-        return { success: true, data: uniqueBooks };
+
+        const trulyMissingBooks = validCandidates.filter(b => {
+            const bNorm = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const bVol = b.volumeNumber ? String(b.volumeNumber).replace(/^0+/, "") : null;
+
+            // If owned by title
+            if (ownedNormTitles.has(bNorm)) return false;
+            // If owned by volume number in this series
+            if (bVol && ownedVolumes.has(bVol)) return false;
+
+            return true;
+        });
+
+        // 7. Resolve missing covers for canonical entries
+        for (const b of trulyMissingBooks) {
+            if (!b.coverUrl) {
+                try {
+                    b.coverUrl = await fetchAudibleCover(b.title, b.author);
+                } catch (e) {}
+            }
+        }
+
+        // 8. Sort strictly by Volume Number ascending
+        trulyMissingBooks.sort((a, b) => {
+            const volA = a.volumeNumber ? parseFloat(a.volumeNumber) : 9999;
+            const volB = b.volumeNumber ? parseFloat(b.volumeNumber) : 9999;
+            if (volA !== volB) return volA - volB;
+            return a.title.localeCompare(b.title);
+        });
+
+        // 9. Persist / Sync Series in SQLite Database
+        try {
+            const cleanSeries = seriesName.trim();
+            const cleanAuth = author && author !== "Unknown Author" ? author.trim() : null;
+
+            let seriesRecord = await prisma.bookSeries.findFirst({
+                where: {
+                    title: cleanSeries,
+                    ...(cleanAuth ? { authorName: cleanAuth } : {})
+                }
+            });
+
+            let authorRecord = cleanAuth ? await prisma.author.findFirst({ where: { name: cleanAuth } }) : null;
+            if (cleanAuth && !authorRecord) {
+                authorRecord = await prisma.author.create({
+                    data: {
+                        name: cleanAuth,
+                        cleanName: cleanAuth.toLowerCase().replace(/[^a-z0-9]/g, "")
+                    }
+                }).catch(() => null);
+            }
+
+            if (!seriesRecord) {
+                seriesRecord = await prisma.bookSeries.create({
+                    data: {
+                        title: cleanSeries,
+                        cleanTitle: cleanSeries.toLowerCase().replace(/[^a-z0-9]/g, ""),
+                        authorName: cleanAuth,
+                        authorId: authorRecord?.id || null,
+                        coverUrl: trulyMissingBooks[0]?.coverUrl || null,
+                        totalVolumes: trulyMissingBooks.length + dbSeriesBooks.length
+                    }
+                }).catch(() => null);
+            } else if (seriesRecord) {
+                await prisma.bookSeries.update({
+                    where: { id: seriesRecord.id },
+                    data: {
+                        totalVolumes: Math.max(seriesRecord.totalVolumes || 0, trulyMissingBooks.length + dbSeriesBooks.length),
+                        coverUrl: seriesRecord.coverUrl || trulyMissingBooks[0]?.coverUrl || null
+                    }
+                }).catch(() => {});
+            }
+
+            if (seriesRecord) {
+                await prisma.book.updateMany({
+                    where: {
+                        series: cleanSeries,
+                        seriesId: null
+                    },
+                    data: {
+                        seriesId: seriesRecord.id
+                    }
+                }).catch(() => {});
+            }
+        } catch (syncErr: any) {
+            console.warn("[SERIES-SYNC] DB sync note:", syncErr?.message || syncErr);
+        }
+
+        return { success: true, data: trulyMissingBooks };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -541,56 +1095,1045 @@ async function fetchBookCover(title: string, author: string, mediaType: string =
 // ============================================================================
 
 export async function getSettings() {
-    await verifyAdmin();
-    const settings = await prisma.settings.findFirst() || {} as any;
-    
-    if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
-    if (settings.mainPlexToken) settings.mainPlexToken = decryptData(settings.mainPlexToken);
-    
-    return settings;
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst() || {} as any;
+        
+        if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
+        if (settings.mainPlexToken) settings.mainPlexToken = decryptData(settings.mainPlexToken);
+        
+        return settings;
+    } catch (e: any) {
+        console.error("[GET-SETTINGS-ERROR]:", e);
+        return {} as any;
+    }
 }
 
 export async function saveSettings(formData: FormData) {
   await verifyAdmin();
-  const smtpHost = formData.get("smtpHost") as string;
-  const smtpPort = formData.get("smtpPort") as string;
-  const smtpUser = formData.get("smtpUser") as string;
-  const rawSmtpPass = formData.get("smtpPass") as string;
-  const rawPlexToken = formData.get("mainPlexToken") as string;
-  const smtpFrom = formData.get("smtpFrom") as string || "";
+  await ensureSchemaColumns();
+  const updateData: any = {};
 
-  const encryptedSmtpPass = encryptData(rawSmtpPass);
-  const encryptedPlexToken = encryptData(rawPlexToken);
-
-  await prisma.settings.upsert({
-    where: { id: "global" },
-    update: { 
-        smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
-        smtpFrom, mainPlexToken: encryptedPlexToken 
-    },
-    create: { 
-        id: "global", smtpHost, smtpPort: Number(smtpPort), smtpUser, smtpPass: encryptedSmtpPass, 
-        smtpFrom, mainPlexToken: encryptedPlexToken 
-    },
-  });
-  revalidatePath("/settings");
-}
-
-export async function saveJobSettings(formData: FormData) {
-  await verifyAdmin();
-  const autoSyncInterval = Number(formData.get("autoSyncInterval"));
-  const downloadsPath = formData.get("downloadsPath") as string || "/downloads";
-  const googleBooksApiKey = (formData.get("googleBooksApiKey") as string) || null;
-  
-  const updateData: any = { autoSyncInterval, downloadsPath };
-  if (googleBooksApiKey !== null) updateData.googleBooksApiKey = googleBooksApiKey;
+  if (formData.has("appUrl")) {
+    let rawUrl = (formData.get("appUrl") as string || "").trim();
+    if (rawUrl) {
+      if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+        rawUrl = `https://${rawUrl}`;
+      }
+      rawUrl = rawUrl.replace(/\/+$/, "");
+    }
+    updateData.appUrl = rawUrl;
+  }
+  if (formData.has("smtpHost")) {
+    updateData.smtpHost = formData.get("smtpHost") as string || "";
+  }
+  if (formData.has("smtpPort")) {
+    const rawPort = formData.get("smtpPort");
+    const p = Number(rawPort);
+    updateData.smtpPort = isNaN(p) ? 587 : p;
+  }
+  if (formData.has("smtpUser")) {
+    updateData.smtpUser = formData.get("smtpUser") as string || "";
+  }
+  if (formData.has("smtpPass")) {
+    const rawPass = formData.get("smtpPass") as string;
+    if (rawPass !== null) {
+      updateData.smtpPass = rawPass ? encryptData(rawPass) : "";
+    }
+  }
+  if (formData.has("smtpFrom")) {
+    updateData.smtpFrom = formData.get("smtpFrom") as string || "";
+  }
+  if (formData.has("mainPlexToken")) {
+    const rawToken = formData.get("mainPlexToken") as string;
+    if (rawToken !== null) {
+      updateData.mainPlexToken = rawToken ? encryptData(rawToken) : "";
+    }
+  }
+  if (formData.has("mainPlexUrl")) {
+    const rawUrl = formData.get("mainPlexUrl") as string;
+    if (rawUrl !== null) {
+      updateData.mainPlexUrl = rawUrl.trim();
+    }
+  }
+  if (formData.has("tmdbApiKey")) {
+    updateData.tmdbApiKey = formData.get("tmdbApiKey") as string;
+  }
+  if (formData.has("traktClientId")) {
+    updateData.traktClientId = formData.get("traktClientId") as string;
+  }
+  if (formData.has("mdblistApiKey")) {
+    updateData.mdblistApiKey = formData.get("mdblistApiKey") as string;
+  }
 
   await prisma.settings.upsert({
     where: { id: "global" },
     update: updateData,
-    create: { id: "global", autoSyncInterval, downloadsPath, googleBooksApiKey: googleBooksApiKey || "" },
+    create: { 
+        id: "global", ...updateData
+    },
   });
   revalidatePath("/settings");
+  revalidatePath("/");
+  return { success: true, message: "Settings saved successfully!" };
+}
+
+export async function saveAppUrlAction(formData: FormData): Promise<{ success: boolean; message?: string; appUrl?: string; error?: string }> {
+  try {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    let rawUrl = (formData.get("appUrl") as string || "").trim();
+    if (rawUrl) {
+      if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+        rawUrl = `https://${rawUrl}`;
+      }
+      rawUrl = rawUrl.replace(/\/+$/, "");
+    }
+
+    await prisma.settings.upsert({
+      where: { id: "global" },
+      update: { appUrl: rawUrl },
+      create: { id: "global", appUrl: rawUrl }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/");
+    return { success: true, message: "Public Web Address saved successfully!", appUrl: rawUrl };
+  } catch (err: any) {
+    console.error("Failed to save appUrl:", err);
+    return { success: false, error: err.message || "Failed to save web address." };
+  }
+}
+
+export async function savePlexSettingsAction(formData: FormData) {
+  await verifyAdmin();
+  await ensureSchemaColumns();
+  const rawPlexToken = formData.get("mainPlexToken") as string;
+  const rawPlexUrl = formData.get("mainPlexUrl") as string;
+
+  const updateData: any = {};
+  if (rawPlexToken !== null && rawPlexToken !== undefined) {
+    updateData.mainPlexToken = rawPlexToken.trim() ? encryptData(rawPlexToken.trim()) : "";
+  }
+  if (rawPlexUrl !== null && rawPlexUrl !== undefined) {
+    updateData.mainPlexUrl = rawPlexUrl.trim();
+  }
+
+  await prisma.settings.upsert({
+    where: { id: "global" },
+    update: updateData,
+    create: { id: "global", ...updateData },
+  });
+  revalidatePath("/settings");
+  return { success: true, message: "Plex settings saved successfully!" };
+}
+
+export async function clearPlexSettings() {
+  await verifyAdmin();
+  await prisma.settings.update({
+    where: { id: "global" },
+    data: { mainPlexToken: "", mainPlexUrl: "" },
+  });
+  revalidatePath("/settings");
+  return { success: true, message: "Plex credentials cleared." };
+}
+
+export async function getPlexServersAction() {
+    try {
+        await verifyAdmin();
+        const servers = await prisma.plexServer.findMany({
+            orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }]
+        });
+        return servers.map(s => ({
+            ...s,
+            token: s.token ? decryptData(s.token) : ""
+        }));
+    } catch (e: any) {
+        console.error("[GET-PLEX-SERVERS-ACTION-ERROR]:", e);
+        return [];
+    }
+}
+
+export async function testPlexServerConfigAction(rawUrl: string, rawToken?: string) {
+    await verifyAdmin();
+    if (!rawUrl || !rawUrl.trim()) {
+        return { success: false, error: "Server URL is required to test connection." };
+    }
+
+    let clean = cleanUrl(rawUrl.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    clean = clean.replace(/\/+$/, "");
+
+    let token = (rawToken || "").trim();
+    if (!token) {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.mainPlexToken) {
+            token = decryptData(settings.mainPlexToken);
+        }
+    }
+
+    if (!token) {
+        return { 
+            success: false, 
+            error: "Plex token is required. Enter a token or link your Admin Plex Token above." 
+        };
+    }
+
+    const startTime = Date.now();
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+        const testUrl = `${clean}/identity?X-Plex-Token=${encodeURIComponent(token)}`;
+        const res = await fetch(testUrl, {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": token,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            },
+            signal: controller.signal,
+            cache: "no-store"
+        });
+        clearTimeout(timeoutId);
+
+        const latency = Date.now() - startTime;
+
+        if (res.status === 401 || res.status === 403) {
+            return {
+                success: false,
+                error: `Authentication failed (HTTP ${res.status}). The provided Plex Token is invalid or does not have access to this server.`
+            };
+        }
+
+        if (!res.ok) {
+            return {
+                success: false,
+                error: `Server responded with HTTP ${res.status}: ${res.statusText || "Error"}`
+            };
+        }
+
+        let serverName = "Plex Media Server";
+        let version = "Unknown";
+        let machineIdentifier = "";
+        let sectionCount = 0;
+
+        try {
+            const rootController = new AbortController();
+            const rootTimeout = setTimeout(() => rootController.abort(), 5000);
+            const rootRes = await fetch(`${clean}/?X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token },
+                signal: rootController.signal,
+                cache: "no-store"
+            });
+            clearTimeout(rootTimeout);
+            if (rootRes.ok) {
+                const rootData = await rootRes.json().catch(() => null);
+                if (rootData?.MediaContainer) {
+                    serverName = rootData.MediaContainer.friendlyName || rootData.MediaContainer.myPlexUsername || serverName;
+                    version = rootData.MediaContainer.version || version;
+                    machineIdentifier = rootData.MediaContainer.machineIdentifier || machineIdentifier;
+                }
+            }
+        } catch (e) {}
+
+        try {
+            const secController = new AbortController();
+            const secTimeout = setTimeout(() => secController.abort(), 5000);
+            const secRes = await fetch(`${clean}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`, {
+                headers: { "Accept": "application/json", "X-Plex-Token": token },
+                signal: secController.signal,
+                cache: "no-store"
+            });
+            clearTimeout(secTimeout);
+            if (secRes.ok) {
+                const secData = await secRes.json().catch(() => null);
+                const dirs = secData?.MediaContainer?.Directory;
+                if (Array.isArray(dirs)) {
+                    sectionCount = dirs.length;
+                }
+            }
+        } catch (e) {}
+
+        const successMsg = `Connected to "${serverName}"! (Plex v${version}, ${sectionCount} ${sectionCount === 1 ? 'library' : 'libraries'}, ${latency}ms)`;
+        logger.addLog("SUCCESS", "PLEX", successMsg, `URL: ${clean} | Machine: ${machineIdentifier}`);
+
+        return {
+            success: true,
+            message: successMsg,
+            serverName,
+            version,
+            machineIdentifier,
+            sectionCount,
+            latency
+        };
+    } catch (e: any) {
+        const errMsg = e.name === "AbortError"
+            ? "Connection timed out after 7s. Please verify the IP address, port (32400), and firewall settings."
+            : (e.message || "Failed to connect to Plex server");
+        logger.addLog("ERROR", "PLEX", `Manual Plex server test failed: ${errMsg}`, `URL: ${clean}`);
+        return { success: false, error: errMsg };
+    }
+}
+
+export async function testPlexServerConnectionAction(id: string) {
+    await verifyAdmin();
+    const server = await prisma.plexServer.findUnique({ where: { id } });
+    if (!server) return { success: false, error: "Plex server not found." };
+
+    const token = server.token ? decryptData(server.token) : undefined;
+    return await testPlexServerConfigAction(server.url, token);
+}
+
+export async function addPlexServerAction(formData: FormData) {
+    await verifyAdmin();
+    const name = (formData.get("name") as string || "Plex Server").trim();
+    let url = (formData.get("url") as string || "").trim();
+    const rawToken = (formData.get("token") as string || "").trim();
+    let clientIdentifier = (formData.get("clientIdentifier") as string || "").trim();
+    const isDefault = formData.get("isDefault") === "true" || formData.get("isDefault") === "on";
+    const monitoredParam = formData.get("monitored");
+    const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
+
+    if (!url) return { success: false, error: "Server URL is required." };
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `http://${url}`;
+    }
+    url = url.replace(/\/+$/, "");
+
+    if (!clientIdentifier) {
+        try {
+            const testRes = await testPlexServerConfigAction(url, rawToken);
+            if (testRes.success && testRes.machineIdentifier) {
+                clientIdentifier = testRes.machineIdentifier;
+            }
+        } catch (e) {}
+    }
+
+    const count = await prisma.plexServer.count();
+    const shouldBeDefault = isDefault || count === 0;
+
+    if (shouldBeDefault && count > 0) {
+        await prisma.plexServer.updateMany({ data: { isDefault: false } });
+    }
+
+    const created = await prisma.plexServer.create({
+        data: {
+            name,
+            url,
+            token: rawToken ? encryptData(rawToken) : null,
+            clientIdentifier: clientIdentifier || null,
+            isDefault: shouldBeDefault,
+            monitored
+        }
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    revalidatePath("/");
+    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url}) [Monitored: ${monitored}]`);
+    return { success: true, message: `Plex server "${name}" added successfully!`, server: created };
+}
+
+export async function updatePlexServerAction(formData: FormData) {
+    await verifyAdmin();
+    const id = formData.get("id") as string;
+    if (!id) return { success: false, error: "Plex server ID is missing." };
+
+    const name = (formData.get("name") as string || "Plex Server").trim();
+    let url = (formData.get("url") as string || "").trim();
+    const rawToken = formData.get("token") as string;
+    let clientIdentifier = (formData.get("clientIdentifier") as string || "").trim();
+    const isDefault = formData.get("isDefault") === "true" || formData.get("isDefault") === "on";
+
+    if (!url) return { success: false, error: "Server URL is required." };
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `http://${url}`;
+    }
+    url = url.replace(/\/+$/, "");
+
+    const existing = await prisma.plexServer.findUnique({ where: { id } });
+    if (!existing) return { success: false, error: "Server not found." };
+
+    if (isDefault) {
+        await prisma.plexServer.updateMany({
+            where: { id: { not: id } },
+            data: { isDefault: false }
+        });
+    }
+
+    const updateData: any = {
+        name,
+        url,
+        isDefault
+    };
+
+    if (formData.has("monitored")) {
+        const monitoredParam = formData.get("monitored");
+        updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+    }
+
+    if (clientIdentifier) {
+        updateData.clientIdentifier = clientIdentifier;
+    }
+
+    if (rawToken !== null && rawToken !== undefined) {
+        const trimmed = rawToken.trim();
+        updateData.token = trimmed ? encryptData(trimmed) : null;
+    }
+
+    await prisma.plexServer.update({
+        where: { id },
+        data: updateData
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    revalidatePath("/");
+    logger.addLog("SUCCESS", "PLEX", `Updated Plex server: "${name}" (${url})`);
+    return { success: true, message: `Plex server "${name}" updated successfully!` };
+}
+
+export async function removePlexServerAction(id: string) {
+    await verifyAdmin();
+    const server = await prisma.plexServer.findUnique({ where: { id } });
+    await prisma.plexServer.delete({ where: { id } });
+    
+    const remaining = await prisma.plexServer.findFirst({ orderBy: { createdAt: 'asc' } });
+    if (remaining && server?.isDefault) {
+        await prisma.plexServer.update({
+            where: { id: remaining.id },
+            data: { isDefault: true }
+        });
+    }
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    revalidatePath("/");
+    logger.addLog("INFO", "PLEX", `Removed Plex server: "${server?.name || id}"`);
+    return { success: true, message: "Plex server removed." };
+}
+
+export async function setDefaultPlexServerAction(id: string) {
+    await verifyAdmin();
+    await prisma.plexServer.updateMany({ data: { isDefault: false } });
+    await prisma.plexServer.update({
+        where: { id },
+        data: { isDefault: true }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    return { success: true, message: "Default Plex server updated." };
+}
+
+export async function togglePlexServerMonitoringAction(id: string, monitored: boolean) {
+    await verifyAdmin();
+    const server = await prisma.plexServer.update({
+        where: { id },
+        data: { monitored }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/");
+    logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} health monitoring for Plex server "${server.name}"`);
+    return { success: true, monitored: server.monitored, message: `Plex server "${server.name}" monitoring ${monitored ? "enabled" : "paused"}.` };
+}
+
+export async function getDiscoveredPlexServersAction() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            return { success: false, error: "No Admin Plex token linked. Please link your Plex account in General & Setup." };
+        }
+        let adminToken = "";
+        try {
+            adminToken = decryptData(settings.mainPlexToken);
+        } catch {
+            return { success: false, error: "Failed to decrypt Plex admin token." };
+        }
+
+        const [rawDiscovered, dbServers] = await Promise.all([
+            getPlexServers(adminToken, true).catch(() => []),
+            prisma.plexServer.findMany().catch(() => [])
+        ]);
+
+        const dbServerByClientId = new Map<string, typeof dbServers[0]>();
+        const dbServerByName = new Map<string, typeof dbServers[0]>();
+        for (const s of dbServers) {
+            if (s.clientIdentifier) {
+                dbServerByClientId.set(s.clientIdentifier.toLowerCase().trim(), s);
+            }
+            dbServerByName.set(s.name.toLowerCase().trim(), s);
+        }
+
+        const discovered = rawDiscovered.map(s => {
+            const clientKey = (s.clientIdentifier || "").toLowerCase().trim();
+            const nameKey = (s.name || "").toLowerCase().trim();
+            const matchedDb = (clientKey && dbServerByClientId.get(clientKey)) || dbServerByName.get(nameKey);
+
+            return {
+                name: s.name,
+                clientIdentifier: s.clientIdentifier,
+                accessToken: s.accessToken,
+                connections: s.connections || [],
+                isConfigured: !!matchedDb,
+                configuredId: matchedDb?.id || null,
+                monitored: matchedDb ? matchedDb.monitored : undefined
+            };
+        });
+
+        return { success: true, discovered };
+    } catch (e: any) {
+        console.error("[GET-DISCOVERED-PLEX-SERVERS-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to discover Plex servers." };
+    }
+}
+
+export async function importDiscoveredPlexServerAction(params: {
+    name: string;
+    url: string;
+    clientIdentifier?: string;
+    token?: string;
+    monitored?: boolean;
+    isDefault?: boolean;
+}) {
+    await verifyAdmin();
+    const { name, url, clientIdentifier, token, monitored = true, isDefault = false } = params;
+    if (!url) return { success: false, error: "Server URL is required." };
+    if (!name) return { success: false, error: "Server name is required." };
+
+    let clean = cleanUrl(url.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    clean = clean.replace(/\/+$/, "");
+
+    let existing = null;
+    if (clientIdentifier) {
+        existing = await prisma.plexServer.findFirst({ where: { clientIdentifier } });
+    }
+    if (!existing) {
+        existing = await prisma.plexServer.findFirst({ where: { name } });
+    }
+
+    if (existing) {
+        await prisma.plexServer.update({
+            where: { id: existing.id },
+            data: {
+                url: clean,
+                monitored,
+                token: token ? encryptData(token) : existing.token
+            }
+        });
+        revalidatePath("/settings");
+        revalidatePath("/");
+        logger.addLog("SUCCESS", "PLEX", `Updated imported Plex server: "${name}" (${clean}) [Monitored: ${monitored}]`);
+        return { success: true, message: `Plex server "${name}" updated and set to ${monitored ? "Monitored" : "Paused"}.` };
+    } else {
+        const count = await prisma.plexServer.count();
+        const shouldBeDefault = isDefault || count === 0;
+
+        await prisma.plexServer.create({
+            data: {
+                name,
+                url,
+                clientIdentifier: clientIdentifier || null,
+                token: token ? encryptData(token) : null,
+                isDefault: shouldBeDefault,
+                monitored
+            }
+        });
+        revalidatePath("/settings");
+        revalidatePath("/");
+        logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${clean}) [Monitored: ${monitored}]`);
+        return { success: true, message: `Plex server "${name}" added successfully [Monitored: ${monitored ? "Enabled" : "Paused"}]!` };
+    }
+}
+
+export async function getEmailNotificationSettings() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
+    return {
+        success: true,
+        settings: {
+            emailNotificationsEnabled: settings.emailNotificationsEnabled ?? false,
+            notifyUserApproval: settings.notifyUserApproval ?? false,
+            notifyAdminNewUserRequest: settings.notifyAdminNewUserRequest ?? false,
+            notifyPasswordReset: settings.notifyPasswordReset ?? true,
+            notifyMediaRequests: settings.notifyMediaRequests ?? false,
+            notifyTrialWelcome: settings.notifyTrialWelcome ?? false,
+            notifyTrialExpiring: settings.notifyTrialExpiring ?? false,
+            notifyTrialExpired: settings.notifyTrialExpired ?? false,
+            notifySubscriptionActive: settings.notifySubscriptionActive ?? false,
+            notifySubscriptionRenewal: settings.notifySubscriptionRenewal ?? true,
+            notifyReferralReward: settings.notifyReferralReward ?? false,
+            notifySupportTickets: settings.notifySupportTickets ?? false,
+            notifySendToKindle: settings.notifySendToKindle ?? false,
+            autoSuspendExpiredAccounts: settings.autoSuspendExpiredAccounts ?? false
+        }
+    };
+}
+
+export async function saveEmailNotificationSettingsAction(data: {
+    emailNotificationsEnabled?: boolean;
+    notifyUserApproval?: boolean;
+    notifyAdminNewUserRequest?: boolean;
+    notifyPasswordReset?: boolean;
+    notifyMediaRequests?: boolean;
+    notifyTrialWelcome?: boolean;
+    notifyTrialExpiring?: boolean;
+    notifyTrialExpired?: boolean;
+    notifySubscriptionActive?: boolean;
+    notifySubscriptionRenewal?: boolean;
+    notifyReferralReward?: boolean;
+    notifySupportTickets?: boolean;
+    notifySendToKindle?: boolean;
+    autoSuspendExpiredAccounts?: boolean;
+}) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const updateData: any = {};
+        if (data.emailNotificationsEnabled !== undefined) updateData.emailNotificationsEnabled = data.emailNotificationsEnabled;
+        if (data.notifyUserApproval !== undefined) updateData.notifyUserApproval = data.notifyUserApproval;
+        if (data.notifyAdminNewUserRequest !== undefined) updateData.notifyAdminNewUserRequest = data.notifyAdminNewUserRequest;
+        if (data.notifyPasswordReset !== undefined) updateData.notifyPasswordReset = data.notifyPasswordReset;
+        if (data.notifyMediaRequests !== undefined) updateData.notifyMediaRequests = data.notifyMediaRequests;
+        if (data.notifyTrialWelcome !== undefined) updateData.notifyTrialWelcome = data.notifyTrialWelcome;
+        if (data.notifyTrialExpiring !== undefined) updateData.notifyTrialExpiring = data.notifyTrialExpiring;
+        if (data.notifyTrialExpired !== undefined) updateData.notifyTrialExpired = data.notifyTrialExpired;
+        if (data.notifySubscriptionActive !== undefined) updateData.notifySubscriptionActive = data.notifySubscriptionActive;
+        if (data.notifySubscriptionRenewal !== undefined) updateData.notifySubscriptionRenewal = data.notifySubscriptionRenewal;
+        if (data.notifyReferralReward !== undefined) updateData.notifyReferralReward = data.notifyReferralReward;
+        if (data.notifySupportTickets !== undefined) updateData.notifySupportTickets = data.notifySupportTickets;
+        if (data.notifySendToKindle !== undefined) updateData.notifySendToKindle = data.notifySendToKindle;
+        if (data.autoSuspendExpiredAccounts !== undefined) updateData.autoSuspendExpiredAccounts = data.autoSuspendExpiredAccounts;
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: updateData,
+            create: { id: "global", ...updateData }
+        });
+
+        logger.addLog("INFO", "EMAIL", `Updated email notification preferences`, JSON.stringify(updateData));
+        revalidatePath("/settings");
+        return { success: true, message: "Email notification preferences updated successfully!" };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Failed to save notification settings: ${e.message}`);
+        return { success: false, error: e.message || "Failed to update notification settings" };
+    }
+}
+
+// ============================================================================
+// --- EMAIL NOTIFICATION TEMPLATES & MASS BROADCAST ACTIONS ---
+// ============================================================================
+
+export async function getEmailTemplatesAction() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const customTemplates = await prisma.emailTemplate.findMany().catch(() => []);
+        const customMap = new Map(customTemplates.map(t => [t.id, t]));
+
+        const results = DEFAULT_EMAIL_TEMPLATES.map(def => {
+            const custom = customMap.get(def.id);
+            return {
+                id: def.id,
+                name: def.name,
+                description: def.description,
+                triggerEvent: def.triggerEvent,
+                category: def.category,
+                subject: custom?.subject || def.defaultSubject,
+                body: custom?.body || def.defaultBody,
+                defaultSubject: def.defaultSubject,
+                defaultBody: def.defaultBody,
+                isCustom: !!custom,
+                updatedAt: custom?.updatedAt?.toISOString() || null,
+                variables: def.variables
+            };
+        });
+
+        return { success: true, templates: results };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to load email templates", templates: [] };
+    }
+}
+
+export async function saveEmailTemplateAction(id: string, subject: string, body: string) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    if (!id || !subject?.trim() || !body?.trim()) {
+        return { success: false, error: "Template ID, subject, and body are required." };
+    }
+
+    const defaultDef = getDefaultEmailTemplate(id);
+    const name = defaultDef?.name || id;
+    const description = defaultDef?.description || "";
+
+    try {
+        await prisma.emailTemplate.upsert({
+            where: { id },
+            update: { subject: subject.trim(), body: body.trim(), updatedAt: new Date() },
+            create: { id, name, description, subject: subject.trim(), body: body.trim() }
+        });
+
+        logger.addLog("INFO", "EMAIL", `Saved customized email template "${name}" (${id})`);
+        revalidatePath("/settings");
+        return { success: true, message: `Template "${name}" saved successfully!` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Failed to save template ${id}: ${e.message}`);
+        return { success: false, error: e.message || "Failed to save template" };
+    }
+}
+
+export async function resetEmailTemplateAction(id: string) {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        await prisma.emailTemplate.delete({
+            where: { id }
+        }).catch(() => {});
+
+        const defaultDef = getDefaultEmailTemplate(id);
+        logger.addLog("INFO", "EMAIL", `Reset email template "${defaultDef?.name || id}" to default`);
+        revalidatePath("/settings");
+        return { 
+            success: true, 
+            message: `Template reset to default!`,
+            defaultSubject: defaultDef?.defaultSubject || "",
+            defaultBody: defaultDef?.defaultBody || ""
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to reset template" };
+    }
+}
+
+export async function sendTestEmailTemplateAction(id: string, customSubject?: string, customBody?: string) {
+    const session: any = await verifyAdmin();
+    await ensureSchemaColumns();
+    const adminUser = await prisma.user.findFirst({
+        where: { id: session.userId }
+    });
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+        return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
+    }
+
+    const recipientEmail = adminUser?.email || settings.smtpUser;
+    if (!recipientEmail) {
+        return { success: false, error: "No email address found for the current administrator." };
+    }
+
+    const defaultDef = getDefaultEmailTemplate(id);
+    if (!defaultDef) {
+        return { success: false, error: "Unknown template identifier" };
+    }
+
+    // Build mock variables map from sample values
+    const mockVars: Record<string, string> = {};
+    for (const v of defaultDef.variables) {
+        const cleanKey = v.key.replace(/^\{|\}$/g, "");
+        mockVars[cleanKey] = v.sampleValue;
+    }
+    mockVars.username = adminUser?.username || "admin_user";
+    mockVars.email = recipientEmail;
+
+    const appUrl = await getAppUrl();
+    mockVars.appUrl = appUrl;
+    mockVars.portalName = "DomsHomeLab";
+
+    let subject = customSubject || defaultDef.defaultSubject;
+    let body = customBody || defaultDef.defaultBody;
+
+    // If no custom provided, check database
+    if (!customSubject && !customBody) {
+        const saved = await prisma.emailTemplate.findUnique({ where: { id } }).catch(() => null);
+        if (saved) {
+            if (saved.subject) subject = saved.subject;
+            if (saved.body) body = saved.body;
+        }
+    }
+
+    for (const [k, val] of Object.entries(mockVars)) {
+        const reg = new RegExp(`\\{${k}\\}`, "g");
+        subject = subject.replace(reg, val);
+        body = body.replace(reg, val);
+    }
+
+    const isFullDoc = body.includes("<html") || body.includes("<!DOCTYPE");
+    const html = isFullDoc ? body : wrapInPortalarrEmailLayout({
+        title: subject,
+        contentHtml: body,
+        appUrl
+    });
+
+    try {
+        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
+        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: recipientEmail,
+            subject: `[PREVIEW TEST] ${subject}`,
+            html
+        });
+
+        logger.addLog("INFO", "EMAIL", `Sent template preview test email for "${defaultDef.name}" to ${recipientEmail}`);
+        return { success: true, message: `Preview test email successfully sent to ${recipientEmail}!` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Preview test email failed: ${e.message}`);
+        return { success: false, error: e.message || "Failed to send preview test email" };
+    }
+}
+
+export async function getBroadcastUsersAction() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+    try {
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                kindleEmail: true,
+                role: true,
+                status: true,
+                createdAt: true,
+                lastLogin: true
+            },
+            orderBy: { username: "asc" }
+        });
+        return { success: true, users };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to load users", users: [] };
+    }
+}
+
+export async function sendBroadcastEmailAction(payload: {
+    userIds: string[];
+    subject: string;
+    body: string;
+    isCustomHtml?: boolean;
+}) {
+    const session: any = await verifyAdmin();
+    await ensureSchemaColumns();
+
+    if (!payload.userIds || payload.userIds.length === 0) {
+        return { success: false, error: "Please select at least one recipient user." };
+    }
+    if (!payload.subject || !payload.subject.trim()) {
+        return { success: false, error: "Email subject cannot be blank." };
+    }
+    if (!payload.body || !payload.body.trim()) {
+        return { success: false, error: "Email body cannot be blank." };
+    }
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+        return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
+    }
+
+    const users = await prisma.user.findMany({
+        where: { id: { in: payload.userIds } }
+    });
+
+    if (users.length === 0) {
+        return { success: false, error: "No matching users found for the selected IDs." };
+    }
+
+    const appUrl = await getAppUrl();
+    const isFullDoc = payload.isCustomHtml && (payload.body.includes("<html") || payload.body.includes("<!DOCTYPE"));
+
+    let sentCount = 0;
+    let failCount = 0;
+    const failures: { username: string; email: string; error: string }[] = [];
+
+    // Dispatch each email INDIVIDUALLY to guarantee privacy & personalization
+    for (const user of users) {
+        if (!user.email || !user.email.includes("@")) {
+            failCount++;
+            failures.push({ username: user.username, email: user.email || "(no email)", error: "Missing or invalid email address" });
+            continue;
+        }
+
+        const userVars: Record<string, string> = {
+            username: user.username,
+            email: user.email,
+            kindleEmail: user.kindleEmail || "",
+            role: user.role || "USER",
+            status: user.status || "APPROVED",
+            appUrl,
+            loginUrl: `${appUrl}/login`,
+            portalName: "DomsHomeLab"
+        };
+
+        let personalizedSubject = payload.subject;
+        let personalizedBody = payload.body;
+
+        for (const [k, v] of Object.entries(userVars)) {
+            const reg = new RegExp(`\\{${k}\\}`, "g");
+            personalizedSubject = personalizedSubject.replace(reg, v);
+            personalizedBody = personalizedBody.replace(reg, v);
+        }
+
+        const personalizedHtml = isFullDoc ? personalizedBody : wrapInPortalarrEmailLayout({
+            title: personalizedSubject,
+            contentHtml: personalizedBody,
+            appUrl
+        });
+
+        const mailRes = await sendOrQueueEmail({
+            to: user.email,
+            subject: personalizedSubject,
+            html: personalizedHtml,
+            templateId: "broadcast",
+            targetUser: user.username,
+            userId: user.id
+        });
+
+        if (mailRes.success) {
+            sentCount++;
+        } else {
+            failCount++;
+            failures.push({
+                username: user.username,
+                email: user.email,
+                error: mailRes.error || "Failed to send or queue email"
+            });
+        }
+    }
+
+    logger.addLog(
+        failCount === 0 ? "SUCCESS" : "WARN",
+        "EMAIL",
+        `[MASS-BROADCAST] Broadcast dispatch finished: ${sentCount} sent, ${failCount} failed. Subject: "${payload.subject}" (by ${session?.username || "admin"})`
+    );
+
+    return {
+        success: true,
+        total: users.length,
+        sent: sentCount,
+        failed: failCount,
+        failures
+    };
+}
+
+export async function sendTestBroadcastEmailAction(payload: { subject: string; body: string; isCustomHtml?: boolean }) {
+    const session: any = await verifyAdmin();
+    await ensureSchemaColumns();
+    const adminUser = await prisma.user.findFirst({ where: { id: session.userId } });
+
+    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+        return { success: false, error: "SMTP settings not configured on this server." };
+    }
+
+    const recipientEmail = adminUser?.email || settings.smtpUser;
+    if (!recipientEmail) {
+        return { success: false, error: "No email address found for the current administrator." };
+    }
+
+    const appUrl = await getAppUrl();
+    const mockVars: Record<string, string> = {
+        username: adminUser?.username || "Admin (Preview)",
+        email: recipientEmail,
+        kindleEmail: adminUser?.kindleEmail || "admin_kindle@kindle.com",
+        role: adminUser?.role || "ADMIN",
+        status: adminUser?.status || "APPROVED",
+        appUrl,
+        loginUrl: `${appUrl}/login`,
+        portalName: "DomsHomeLab"
+    };
+
+    let personalizedSubject = payload.subject || "DomsHomeLab Broadcast Test";
+    let personalizedBody = payload.body || "<p>This is a test broadcast email message.</p>";
+
+    for (const [k, v] of Object.entries(mockVars)) {
+        const reg = new RegExp(`\\{${k}\\}`, "g");
+        personalizedSubject = personalizedSubject.replace(reg, v);
+        personalizedBody = personalizedBody.replace(reg, v);
+    }
+
+    const isFullDoc = payload.isCustomHtml && (personalizedBody.includes("<html") || personalizedBody.includes("<!DOCTYPE"));
+    const personalizedHtml = isFullDoc ? personalizedBody : wrapInPortalarrEmailLayout({
+        title: personalizedSubject,
+        contentHtml: personalizedBody,
+        appUrl
+    });
+
+    try {
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: recipientEmail,
+            subject: `[BROADCAST TEST] ${personalizedSubject}`,
+            html: personalizedHtml
+        });
+
+        logger.addLog("INFO", "EMAIL", `Sent broadcast test preview email to ${recipientEmail}`);
+        return { success: true, message: `Test email successfully delivered to ${recipientEmail}!` };
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Broadcast test failed: ${e.message}`);
+        return { success: false, error: e.message || "Failed to send test email" };
+    }
+}
+
+export async function saveJobSettings(formData: FormData) {
+  await verifyAdmin();
+  const updateData: any = {};
+  
+  if (formData.has("autoSyncInterval")) {
+    const rawVal = formData.get("autoSyncInterval");
+    if (rawVal !== null && rawVal !== "") {
+      const num = Number(rawVal);
+      if (!isNaN(num)) updateData.autoSyncInterval = num;
+    }
+  }
+  
+  if (formData.has("downloadsPath")) {
+    const p = formData.get("downloadsPath") as string;
+    if (p !== null) updateData.downloadsPath = p;
+  }
+  
+  if (formData.has("googleBooksApiKey")) {
+    const gb = formData.get("googleBooksApiKey") as string;
+    if (gb !== null) updateData.googleBooksApiKey = gb;
+  }
+
+  await prisma.settings.upsert({
+    where: { id: "global" },
+    update: updateData,
+    create: { 
+      id: "global", 
+      autoSyncInterval: updateData.autoSyncInterval ?? 5, 
+      downloadsPath: updateData.downloadsPath ?? "/downloads", 
+      googleBooksApiKey: updateData.googleBooksApiKey ?? "" 
+    },
+  });
+  revalidatePath("/settings");
+  return { success: true, message: "Settings saved successfully!" };
 }
 
 export async function clearSmtpSettings() {
@@ -624,22 +2167,23 @@ export async function sendTestEmailAction() {
         await transporter.sendMail({
             from: senderEmail,
             to: settings.smtpUser,
-            subject: "🧪 Portalarr SMTP Email Test",
+            subject: "🧪 DomsHomeLab (d281knilb) SMTP Email Test",
             html: `
                 <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
                     <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified</h2>
-                    <p style="font-size: 14px; color: #334155;">Your Portalarr SMTP server configuration is working properly.</p>
+                    <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (d281knilb) SMTP server configuration is working properly.</p>
                     <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
                         <strong>SMTP Host:</strong> ${settings.smtpHost}:${settings.smtpPort || 587}<br/>
                         <strong>Sender:</strong> ${senderEmail}
                     </div>
-                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from Portalarr System Settings.</p>
+                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from DomsHomeLab System Settings.</p>
                 </div>
             `
         });
+        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${settings.smtpUser}!`, `Host: ${settings.smtpHost}:${settings.smtpPort || 587} | Sender: ${senderEmail}`);
         return { success: true, message: `Test email successfully dispatched to ${settings.smtpUser}!` };
     } catch (e: any) {
-        console.error("Test email dispatch failed:", e);
+        logger.addLog("ERROR", "EMAIL", `Test email dispatch failed: ${e.message}`, e.stack || String(e));
         return { success: false, error: e.message || "Failed to dispatch test email." };
     }
 }
@@ -649,18 +2193,23 @@ export async function addTautulliInstance(formData: FormData) {
   const name = formData.get("name") as string;
   const url = formData.get("url") as string;
   const rawApiKey = formData.get("apiKey") as string;
+  const monitoredParam = formData.get("monitored");
+  const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
   
   // Encrypt before saving
   await prisma.tautulliInstance.create({ 
-      data: { name, url, apiKey: encryptData(rawApiKey) } 
+      data: { name, url, apiKey: encryptData(rawApiKey), monitored } 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `Added Tautulli instance "${name}" [Monitored: ${monitored}]`);
 }
 
 export async function removeTautulliInstance(id: string) {
   await verifyAdmin();
   await prisma.tautulliInstance.delete({ where: { id } });
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 export async function updateTautulliInstance(formData: FormData) {
@@ -672,34 +2221,63 @@ export async function updateTautulliInstance(formData: FormData) {
   
   if (!id) return { success: false, error: "ID missing" };
   
+  const updateData: any = { name, url, apiKey: encryptData(rawApiKey) };
+  if (formData.has("monitored")) {
+      const monitoredParam = formData.get("monitored");
+      updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+  }
+
   // Encrypt before saving
   await prisma.tautulliInstance.update({ 
       where: { id },
-      data: { name, url, apiKey: encryptData(rawApiKey) } 
+      data: updateData 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
   return { success: true };
 }
 
+export async function toggleTautulliMonitoringAction(id: string, monitored: boolean) {
+  await verifyAdmin();
+  const inst = await prisma.tautulliInstance.update({
+      where: { id },
+      data: { monitored }
+  });
+  revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} stream monitoring for Tautulli instance "${inst.name}"`);
+  return { success: true, monitored: inst.monitored, message: `Tautulli "${inst.name}" monitoring ${monitored ? "enabled" : "paused"}.` };
+}
+
 export async function getTautulliInstances() {
-    await verifyAdmin();
-    const instances = await prisma.tautulliInstance.findMany();
-    // Decrypt before sending to the UI
-    return instances.map(i => ({ ...i, apiKey: decryptData(i.apiKey) }));
+    try {
+        await verifyAdmin();
+        const instances = await prisma.tautulliInstance.findMany();
+        // Decrypt before sending to the UI
+        return instances.map(i => ({ ...i, apiKey: decryptData(i.apiKey) }));
+    } catch (e: any) {
+        console.error("[GET-TAUTULLI-INSTANCES-ERROR]:", e);
+        return [];
+    }
 }
 
 export async function addGlancesInstance(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;
   const url = formData.get("url") as string;
-  await prisma.glancesInstance.create({ data: { name, url } });
+  const monitoredParam = formData.get("monitored");
+  const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
+  await prisma.glancesInstance.create({ data: { name, url, monitored } });
   revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `Added Glances instance "${name}" [Monitored: ${monitored}]`);
 }
 
 export async function removeGlancesInstance(id: string) {
   await verifyAdmin();
   await prisma.glancesInstance.delete({ where: { id } });
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 export async function updateGlancesInstance(formData: FormData) {
@@ -710,24 +2288,55 @@ export async function updateGlancesInstance(formData: FormData) {
   
   if (!id) return { success: false, error: "ID missing" };
 
+  const updateData: any = { name, url };
+  if (formData.has("monitored")) {
+      const monitoredParam = formData.get("monitored");
+      updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+  }
+
   await prisma.glancesInstance.update({ 
       where: { id },
-      data: { name, url } 
+      data: updateData 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
   return { success: true };
 }
 
+export async function toggleGlancesMonitoringAction(id: string, monitored: boolean) {
+  await verifyAdmin();
+  const inst = await prisma.glancesInstance.update({
+      where: { id },
+      data: { monitored }
+  });
+  revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} hardware monitoring for Glances host "${inst.name}"`);
+  return { success: true, monitored: inst.monitored, message: `Glances "${inst.name}" monitoring ${monitored ? "enabled" : "paused"}.` };
+}
+
 export async function getGlancesInstances() {
-    await verifyAdmin();
-    return await prisma.glancesInstance.findMany();
+    try {
+        await verifyAdmin();
+        return await prisma.glancesInstance.findMany();
+    } catch (e: any) {
+        console.error("[GET-GLANCES-INSTANCES-ERROR]:", e);
+        return [];
+    }
 }
 
 export async function getMediaApps() {
-    await verifyAdmin();
-    const apps = await prisma.mediaApp.findMany();
-    // Decrypt before sending to the UI
-    return apps.map(app => ({ ...app, apiKey: decryptData(app.apiKey as string) }));
+    try {
+        await verifyAdmin();
+        const apps = await prisma.mediaApp.findMany();
+        // Decrypt before sending to the UI
+        return apps.map(app => ({ ...app, apiKey: decryptData(app.apiKey as string) }));
+    } catch (e: any) {
+        if (e?.message !== "Unauthorized") {
+            console.error("[GET-MEDIA-APPS-ERROR]:", e);
+        }
+        return [];
+    }
 }
 
 export async function addMediaApp(formData: FormData) {
@@ -740,12 +2349,16 @@ export async function addMediaApp(formData: FormData) {
   const enabledForUsers = formData.get("enabledForUsers") === "true";
   const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
   const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
+  const monitoredParam = formData.get("monitored");
+  const monitored = monitoredParam === null ? true : (monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1");
   
   // Encrypt before saving
   await prisma.mediaApp.create({ 
-      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds } 
+      data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds, monitored } 
   });
   revalidatePath("/settings");
+  revalidatePath("/");
+  logger.addLog("INFO", "MONITORING", `Added Media App "${name}" (${type}) [Monitored: ${monitored}]`);
 }
 
 export async function updateMediaApp(formData: FormData) {
@@ -760,35 +2373,56 @@ export async function updateMediaApp(formData: FormData) {
     const allowedQualityProfileIds = formData.get("allowedQualityProfileIds") as string;
     const allowedRootFolderIds = formData.get("allowedRootFolderIds") as string;
 
+    const updateData: any = { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds };
+    if (formData.has("monitored")) {
+        const monitoredParam = formData.get("monitored");
+        updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
+    }
+
     // Encrypt before saving
     await prisma.mediaApp.update({
         where: { id },
-        data: { type, name, url, externalUrl: externalUrl || null, apiKey: encryptData(rawApiKey), enabledForUsers, allowedQualityProfileIds, allowedRootFolderIds }
+        data: updateData
     });
     revalidatePath("/settings");
+    revalidatePath("/");
+    return { success: true };
+}
+
+export async function toggleMediaAppMonitoringAction(id: string, monitored: boolean) {
+    await verifyAdmin();
+    const app = await prisma.mediaApp.update({
+        where: { id },
+        data: { monitored }
+    });
+    revalidatePath("/settings");
+    revalidatePath("/");
+    logger.addLog("INFO", "MONITORING", `${monitored ? "Enabled" : "Paused"} reachability monitoring for ${app.name} (${app.type.toUpperCase()})`);
+    return { success: true, monitored: app.monitored, message: `${app.name} monitoring ${monitored ? "enabled" : "paused"}.` };
 }
 
 export async function removeMediaApp(id: string) {
   await verifyAdmin();
   await prisma.mediaApp.delete({ where: { id } });
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 export async function testMediaAppConfigAction(type: string, rawUrl: string, rawApiKey?: string) {
-    await verifyAdmin();
-    if (!rawUrl) return { success: false, error: "URL is required" };
-
-    let clean = cleanUrl(rawUrl.trim());
-    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-        clean = `http://${clean}`;
-    }
-
-    // Strip trailing /api, /api/v1, /api/v2, /api/v3 to get clean base URL
-    const cleanBase = clean.replace(/\/api(\/v?[123])?$/, "");
-    const apiKey = (rawApiKey || "").trim();
-    const appType = (type || "").toLowerCase();
-
     try {
+        await verifyAdmin();
+        if (!rawUrl) return { success: false, error: "URL is required" };
+
+        let clean = cleanUrl(rawUrl.trim());
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = `http://${clean}`;
+        }
+
+        // Strip trailing /api, /api/v1, /api/v2, /api/v3 to get clean base URL
+        const cleanBase = clean.replace(/\/api(\/v?[123])?$/, "");
+        const apiKey = (rawApiKey || "").trim();
+        const appType = (type || "").toLowerCase();
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 7000);
 
@@ -892,26 +2526,35 @@ export async function testMediaAppConfigAction(type: string, rawUrl: string, raw
                     cache: "no-store"
                 });
 
+                const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes(appType);
+                const cat: "DOWNLOAD" | "APPS" = isDownloadClient ? "DOWNLOAD" : "APPS";
+
                 if (res.ok) {
                     clearTimeout(timeoutId);
                     if (appType === "sabnzbd") {
                         const sabJson = await res.json().catch(() => null);
                         if (sabJson && sabJson.status === false && sabJson.error) {
+                            logger.addLog("ERROR", cat, `SABnzbd error: ${sabJson.error}`, `URL: ${cleanBase}`);
                             return { success: false, error: `SABnzbd: ${sabJson.error}` };
                         }
                     }
+                    logger.addLog("SUCCESS", cat, `Successfully connected to ${type || "App"}!`, `URL: ${cleanBase}`);
                     return { success: true, message: `Successfully connected to ${type || "App"}!` };
                 }
 
                 if (res.status === 401 || res.status === 403) {
                     clearTimeout(timeoutId);
                     if (appType === "qbittorrent") {
+                        const qbitErr = "Authentication required (HTTP 403). If WebUI authentication is enabled, enter username:password in the API Key field.";
+                        logger.addLog("ERROR", cat, `qBittorrent: ${qbitErr}`, `URL: ${cleanBase}`);
                         return { 
                             success: false, 
-                            error: "Authentication required (HTTP 403). If WebUI authentication is enabled, enter username:password in the API Key field." 
+                            error: qbitErr 
                         };
                     }
-                    return { success: false, error: `Authentication failed (HTTP ${res.status}): Invalid API Key / Credentials` };
+                    const authErr = `Authentication failed (HTTP ${res.status}): Invalid API Key / Credentials`;
+                    logger.addLog("ERROR", cat, authErr, `URL: ${cleanBase}`);
+                    return { success: false, error: authErr };
                 }
 
                 lastError = `HTTP ${res.status}: ${res.statusText || "Bad Request"}`;
@@ -924,186 +2567,927 @@ export async function testMediaAppConfigAction(type: string, rawUrl: string, raw
             }
         }
         clearTimeout(timeoutId);
+        const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes(appType);
+        const cat: "DOWNLOAD" | "APPS" = isDownloadClient ? "DOWNLOAD" : "APPS";
+        logger.addLog("ERROR", cat, `Failed connection test to ${type || "App"}: ${lastError}`, `URL: ${cleanBase}`);
         return { success: false, error: lastError };
     } catch (e: any) {
-        return { success: false, error: e.name === "AbortError" ? "Connection timed out after 7s" : (e.message || "Failed to connect") };
+        const isDownloadClient = ["prowlarr", "sabnzbd", "qbittorrent", "nzbget"].includes((type || "").toLowerCase());
+        const cat: "DOWNLOAD" | "APPS" = isDownloadClient ? "DOWNLOAD" : "APPS";
+        const errMsg = e.name === "AbortError" ? "Connection timed out after 7s" : (e.message || "Failed to connect");
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", cat, `Failed connection test to ${type || "App"}: ${errMsg}`, `URL: ${rawUrl}`);
+        }
+        return { success: false, error: errMsg };
     }
 }
 
 export async function testAppConnectionAction(id: string) {
-    await verifyAdmin();
-    const app = await prisma.mediaApp.findUnique({ where: { id } });
-    if (!app) return { success: false, error: "App not found" };
+    try {
+        await verifyAdmin();
+        const app = await prisma.mediaApp.findUnique({ where: { id } });
+        if (!app) return { success: false, error: "App not found" };
 
-    const apiKey = decryptData(app.apiKey as string);
-    const result = await testMediaAppConfigAction(app.type, app.url, apiKey);
-    if (result.success) {
-        return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+        const apiKey = decryptData(app.apiKey as string);
+        const result = await testMediaAppConfigAction(app.type, app.url, apiKey);
+        if (result.success) {
+            return { success: true, message: `Successfully connected to ${app.name} (${app.type})!` };
+        }
+        return result;
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to test app" };
     }
-    return result;
 }
 
 export async function testTautulliConfigAction(rawUrl: string, rawApiKey: string) {
-    await verifyAdmin();
-    if (!rawUrl || !rawApiKey) {
-        return { success: false, error: "URL and API Key are required to test connection." };
-    }
-
-    const cleanBase = cleanUrl(rawUrl).replace(/\/api\/v2\/?$/, "");
-    const apiKey = rawApiKey.trim();
-
     try {
+        await verifyAdmin();
+        if (!rawUrl || !rawApiKey) {
+            return { success: false, error: "URL and API Key are required to test connection." };
+        }
+
+        const cleanBase = cleanUrl(rawUrl).replace(/\/api\/v2\/?$/, "");
+        const apiKey = rawApiKey.trim();
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 7000);
 
         // Tautulli API v2 uses cmd=get_server_info, cmd=status, or cmd=get_activity
         const testUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_server_info`;
-        const res = await fetch(testUrl, { signal: controller.signal, cache: "no-store" });
+        const result = await fetchTautulliApiJson(testUrl, controller.signal);
         clearTimeout(timeoutId);
 
-        if (!res.ok) {
-            return { success: false, error: `HTTP ${res.status}: ${res.statusText || "Bad Request"}` };
+        if (!result.ok) {
+            const err = result.error || "Failed to connect to Tautulli";
+            logger.addLog("ERROR", "TAUTULLI", `Failed to connect to Tautulli: ${err}`, `URL: ${cleanBase} | Key: ${maskToken(apiKey)}`);
+            return { success: false, error: err };
         }
 
-        const data = await res.json().catch(() => null);
-        if (data && data.response) {
-            if (data.response.result === "error") {
-                return { success: false, error: data.response.message || "Invalid Tautulli API Key" };
-            }
-            if (data.response.result === "success") {
-                const serverName = data.response.data?.pms_name || data.response.data?.server_name;
-                return { 
-                    success: true, 
-                    message: serverName 
-                        ? `Connected to Tautulli! Connected server: "${serverName}"`
-                        : "Successfully connected to Tautulli!"
-                };
-            }
-        }
-
-        return { success: true, message: "Successfully connected to Tautulli!" };
+        const serverName = result.data?.pms_name || result.data?.server_name;
+        const msg = serverName 
+            ? `Connected to Tautulli! Connected server: "${serverName}"`
+            : "Successfully connected to Tautulli!";
+        logger.addLog("SUCCESS", "TAUTULLI", msg, `URL: ${cleanBase} | Key: ${maskToken(apiKey)}`);
+        return { 
+            success: true, 
+            message: msg
+        };
     } catch (e: any) {
-        if (e.name === "AbortError") {
-            return { success: false, error: "Connection timed out after 7s. Please check host, port, or firewall." };
+        const errMsg = e.name === "AbortError" 
+            ? "Connection timed out after 7s. Please check host, port, or firewall." 
+            : (e.message || "Failed to connect to Tautulli");
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", "TAUTULLI", `Failed to connect to Tautulli: ${errMsg}`, `URL: ${rawUrl}`);
         }
-        return { success: false, error: e.message || "Failed to connect to Tautulli" };
+        return { success: false, error: errMsg };
     }
 }
 
 export async function testTautulliConnectionAction(id: string) {
-    await verifyAdmin();
-    const inst = await prisma.tautulliInstance.findUnique({ where: { id } });
-    if (!inst) return { success: false, error: "Tautulli instance not found" };
+    try {
+        await verifyAdmin();
+        const inst = await prisma.tautulliInstance.findUnique({ where: { id } });
+        if (!inst) return { success: false, error: "Tautulli instance not found" };
 
-    const apiKey = decryptData(inst.apiKey);
-    const result = await testTautulliConfigAction(inst.url, apiKey);
-    if (result.success) {
-        return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+        const apiKey = decryptData(inst.apiKey);
+        const result = await testTautulliConfigAction(inst.url, apiKey);
+        if (result.success) {
+            return { success: true, message: `Successfully connected to Tautulli instance "${inst.name}"!` };
+        }
+        return result;
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to test Tautulli instance" };
     }
-    return result;
 }
 
-export async function testGlancesConfigAction(rawUrl: string) {
-    await verifyAdmin();
-    if (!rawUrl) return { success: false, error: "URL is required" };
+export async function fetchGlancesHardwareStats(rawUrl: string, timeoutMs = 4000): Promise<{ online: boolean; cpu: number; ram: number }> {
+    if (!rawUrl) return { online: false, cpu: 0, ram: 0 };
 
     let clean = cleanUrl(rawUrl.trim());
     if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
         clean = `http://${clean}`;
     }
+    const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "").replace(/\/+$/, "");
 
-    // Strip trailing /api, /api/4, /api/3, /api/2 if user entered a subpath
-    const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
+    let authHeaders: Record<string, string> = {};
+    try {
+        const parsed = new URL(clean);
+        if (parsed.username || parsed.password) {
+            const credentials = Buffer.from(`${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`).toString('base64');
+            authHeaders = { Authorization: `Basic ${credentials}` };
+        }
+    } catch {}
 
-    // Test Glances endpoints across supported versions (v4, v3, v2)
-    const testEndpoints = [
-        "/api/4/cpu",
-        "/api/3/cpu",
-        "/api/2/cpu",
-        "/api/4/system",
-        "/api/3/system",
-        "/api/4/version",
-        "/api/3/version",
+    const reqHeaders = {
+        "Accept": "application/json",
+        ...authHeaders
+    };
+
+    // 1. Try quicklook endpoints in parallel (prioritizing /api/3 as most common in homelabs)
+    const quicklookEndpoints = [
         "/api/3/quicklook",
         "/api/4/quicklook",
-        "/cpu",
+        "/quicklook",
+        "/api/2/quicklook"
+    ];
+
+    try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), timeoutMs);
+        const quicklookResults = await Promise.all(
+            quicklookEndpoints.map(async (ep) => {
+                try {
+                    const res = await fetch(`${baseGlances}${ep}`, {
+                        headers: reqHeaders,
+                        signal: controller.signal,
+                        cache: "no-store"
+                    });
+                    if (res && res.ok) {
+                        const data = await res.json().catch(() => null);
+                        return { ok: true, status: res.status, data };
+                    }
+                    return { ok: false, status: res?.status || 0, data: null };
+                } catch {
+                    return null;
+                }
+            })
+        );
+        clearTimeout(tid);
+
+        for (const item of quicklookResults) {
+            if (!item || !item.data) continue;
+            const data = item.data;
+            if (typeof data.cpu === 'number' || typeof data.cpu?.total === 'number' || typeof data.mem === 'number' || typeof data.mem?.percent === 'number') {
+                const cpuVal = typeof data.cpu === 'number' 
+                    ? data.cpu 
+                    : (typeof data.cpu?.total === 'number' ? data.cpu.total : (typeof data.cpu?.user === 'number' ? data.cpu.user + (data.cpu.system || 0) : 0));
+                const memVal = typeof data.mem === 'number' 
+                    ? data.mem 
+                    : (typeof data.mem?.percent === 'number' ? data.mem.percent : (data.mem?.total && data.mem?.used ? (data.mem.used / data.mem.total) * 100 : 0));
+                
+                return {
+                    online: true,
+                    cpu: Math.round(cpuVal),
+                    ram: Math.round(memVal)
+                };
+            }
+        }
+    } catch {}
+
+    // 2. Fallback: Query CPU and MEM separately across version prefixes in parallel
+    const versionPrefixes = ["/api/3", "/api/4", "/api/2", ""];
+    for (const v of versionPrefixes) {
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), timeoutMs);
+            const [resCpu, resMem] = await Promise.all([
+                fetch(`${baseGlances}${v}/cpu`, { headers: reqHeaders, signal: controller.signal, cache: "no-store" }).catch(() => null),
+                fetch(`${baseGlances}${v}/mem`, { headers: reqHeaders, signal: controller.signal, cache: "no-store" }).catch(() => null)
+            ]);
+            clearTimeout(tid);
+
+            if (resCpu && resCpu.ok && resMem && resMem.ok) {
+                const [cpuData, memData] = await Promise.all([
+                    resCpu.json().catch(() => null),
+                    resMem.json().catch(() => null)
+                ]);
+
+                if (cpuData && memData) {
+                    const cpuTotal = typeof cpuData?.total === 'number' 
+                        ? Math.round(cpuData.total) 
+                        : (typeof cpuData?.user === 'number' ? Math.round(cpuData.user + (cpuData.system || 0)) : (typeof cpuData === 'number' ? Math.round(cpuData) : 0));
+                        
+                    const ramPercent = typeof memData?.percent === 'number' 
+                        ? Math.round(memData.percent) 
+                        : (memData?.total && memData?.used ? Math.round((memData.used / memData.total) * 100) : (typeof memData === 'number' ? Math.round(memData) : 0));
+
+                    return {
+                        online: true,
+                        cpu: cpuTotal,
+                        ram: ramPercent
+                    };
+                }
+            }
+        } catch {}
+    }
+
+    // 3. Fallback: Reachability ping check across system/version endpoints
+    // If Glances is online but telemetry parsing didn't find cpu/mem, confirm the host server is reachable
+    const pingEndpoints = [
+        "/api/3/system",
+        "/api/4/system",
+        "/api/3/version",
+        "/api/4/version",
         "/version",
         ""
     ];
-
-    let lastError = "Connection failed";
-
-    for (const ep of testEndpoints) {
+    for (const ep of pingEndpoints) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-            const targetUrl = ep ? `${baseGlances}${ep}` : baseGlances;
-            const res = await fetch(targetUrl, { signal: controller.signal, cache: "no-store" });
-            clearTimeout(timeoutId);
+            const tid = setTimeout(() => controller.abort(), 3000);
+            const res = await fetch(ep ? `${baseGlances}${ep}` : baseGlances, {
+                headers: reqHeaders,
+                signal: controller.signal,
+                cache: "no-store"
+            }).catch(() => null);
+            clearTimeout(tid);
 
-            if (res.ok) {
-                return { success: true, message: "Successfully connected to Glances server!" };
+            if (res && ((res.status >= 200 && res.status < 500) || res.status === 401 || res.status === 403)) {
+                return {
+                    online: true,
+                    cpu: 0,
+                    ram: 0
+                };
             }
-            if (res.status === 401 || res.status === 403) {
-                return { success: false, error: `Authentication required (HTTP ${res.status}). Please check Glances credentials.` };
-            }
-            lastError = `HTTP ${res.status}: ${res.statusText || "Not Found"}`;
-        } catch (e: any) {
-            if (e.name === "AbortError") {
-                lastError = "Connection timed out after 4s";
-            } else {
-                lastError = e.message || "Connection failed";
-            }
-        }
+        } catch {}
     }
 
-    return { success: false, error: lastError };
+    return { online: false, cpu: 0, ram: 0 };
+}
+
+export async function testGlancesConfigAction(rawUrl: string) {
+    try {
+        await verifyAdmin();
+        if (!rawUrl) return { success: false, error: "URL is required" };
+
+        const stats = await fetchGlancesHardwareStats(rawUrl, 4000);
+        if (stats.online) {
+            logger.addLog("SUCCESS", "APPS", `Successfully connected to Glances server! (CPU: ${stats.cpu}%, RAM: ${stats.ram}%)`, `URL: ${rawUrl}`);
+            return { success: true, message: `Successfully connected to Glances server! (CPU: ${stats.cpu}%, RAM: ${stats.ram}%)` };
+        }
+
+        let clean = cleanUrl(rawUrl.trim());
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = `http://${clean}`;
+        }
+
+        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "").replace(/\/+$/, "");
+
+        let authHeaders: Record<string, string> = {};
+        try {
+            const parsed = new URL(clean);
+            if (parsed.username || parsed.password) {
+                const credentials = Buffer.from(`${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`).toString('base64');
+                authHeaders = { Authorization: `Basic ${credentials}` };
+            }
+        } catch {}
+
+        // Test Glances endpoints across supported versions (v4, v3, v2)
+        const testEndpoints = [
+            "/api/4/quicklook",
+            "/api/3/quicklook",
+            "/quicklook",
+            "/api/4/cpu",
+            "/api/3/cpu",
+            "/api/2/cpu",
+            "/api/4/system",
+            "/api/3/system",
+            "/api/4/version",
+            "/api/3/version",
+            "/cpu",
+            "/version",
+            ""
+        ];
+
+        let lastError = "Connection failed";
+
+        for (const ep of testEndpoints) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const targetUrl = ep ? `${baseGlances}${ep}` : baseGlances;
+                const res = await fetch(targetUrl, { 
+                    headers: { "Accept": "application/json", ...authHeaders },
+                    signal: controller.signal, 
+                    cache: "no-store" 
+                });
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    logger.addLog("SUCCESS", "APPS", "Successfully connected to Glances server!", `URL: ${baseGlances}`);
+                    return { success: true, message: "Successfully connected to Glances server!" };
+                }
+                if (res.status === 401 || res.status === 403) {
+                    const authErr = `Authentication required (HTTP ${res.status}). Please check Glances credentials.`;
+                    logger.addLog("ERROR", "APPS", `Glances: ${authErr}`, `URL: ${baseGlances}`);
+                    return { success: false, error: authErr };
+                }
+                lastError = `HTTP ${res.status}: ${res.statusText || "Not Found"}`;
+            } catch (e: any) {
+                if (e.name === "AbortError") {
+                    lastError = "Connection timed out after 4s";
+                } else {
+                    lastError = e.message || "Connection failed";
+                }
+            }
+        }
+
+        logger.addLog("ERROR", "APPS", `Failed to connect to Glances server: ${lastError}`, `URL: ${baseGlances}`);
+        return { success: false, error: lastError };
+    } catch (e: any) {
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", "APPS", `Failed to connect to Glances server: ${e.message}`, `URL: ${rawUrl}`);
+        }
+        return { success: false, error: e.message || "Failed to connect to Glances server" };
+    }
 }
 
 export async function testGlancesConnectionAction(id: string) {
-    await verifyAdmin();
-    const inst = await prisma.glancesInstance.findUnique({ where: { id } });
-    if (!inst) return { success: false, error: "Glances instance not found" };
+    try {
+        await verifyAdmin();
+        const inst = await prisma.glancesInstance.findUnique({ where: { id } });
+        if (!inst) return { success: false, error: "Glances instance not found" };
 
-    const result = await testGlancesConfigAction(inst.url);
-    if (result.success) {
-        return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
+        const result = await testGlancesConfigAction(inst.url);
+        if (result.success) {
+            return { success: true, message: `Successfully connected to Glances server "${inst.name}"!` };
+        }
+        return result;
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to test Glances instance" };
     }
-    return result;
 }
 
 export async function validateDownloadsPathAction(pathStr: string) {
-    await verifyAdmin();
-    if (!pathStr) return { success: false, error: "Path is empty" };
     try {
+        await verifyAdmin();
+        if (!pathStr) return { success: false, error: "Path is empty" };
         if (!fs.existsSync(pathStr)) {
+            logger.addLog("WARN", "DOWNLOAD", `Downloads directory does not exist: "${pathStr}"`);
             return { success: false, exists: false, error: `Directory "${pathStr}" does not exist on disk.` };
         }
         const entries = fs.readdirSync(pathStr);
+        logger.addLog("SUCCESS", "DOWNLOAD", `Downloads folder validated: "${pathStr}" (${entries.length} items found).`);
         return { success: true, exists: true, message: `Directory exists with ${entries.length} items.` };
     } catch (e: any) {
+        if (e.message !== "Unauthorized") {
+            logger.addLog("ERROR", "DOWNLOAD", `Failed to access downloads folder "${pathStr}": ${e.message || "Cannot access directory"}`);
+        }
         return { success: false, error: e.message || "Cannot access directory" };
     }
 }
 
-import { sendUserApprovalEmail } from "@/app/auth-actions";
+import { sendUserApprovalEmail, createSession } from "@/app/auth-actions";
+
+/**
+ * Revokes all Plex library shares and terminates active streaming sessions for a specific user.
+ */
+export async function revokePlexAccessForUserInternal(
+    user: { id?: string; email?: string | null; username?: string | null; plexEmail?: string | null; plexUsername?: string | null },
+    reason = "Account trial/access expired or revoked.",
+    options?: { bypassApproval?: boolean }
+) {
+    if (!user) return { success: false, error: "No user provided." };
+    try {
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const requireApproval = (settings?.requireApprovalForPlexChanges ?? true) && !options?.bypassApproval;
+        if (requireApproval && user.id) {
+            const existing = await prisma.adminApproval.findFirst({
+                where: {
+                    userId: user.id,
+                    type: "PLEX_ACCESS_REVOKE",
+                    status: "PENDING"
+                }
+            });
+            if (!existing) {
+                const approval = await prisma.adminApproval.create({
+                    data: {
+                        type: "PLEX_ACCESS_REVOKE",
+                        status: "PENDING",
+                        title: `Revoke Plex Access: ${user.username || 'User'}`,
+                        description: `Reason: ${reason}. Pending admin approval before revoking Plex library access.`,
+                        targetUser: user.username,
+                        targetEmail: user.email,
+                        userId: user.id,
+                        payload: JSON.stringify({
+                            userId: user.id,
+                            action: "EXPIRE_SUSPEND",
+                            reason
+                        })
+                    }
+                });
+                logger.addLog("INFO", "APPROVAL", `Plex access revocation for "${user.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                return { success: true, staged: true, approvalId: approval.id, message: "Plex access revocation staged for admin approval." };
+            }
+            return { success: true, staged: true, approvalId: existing.id, message: "Plex access revocation already staged for admin approval." };
+        }
+
+        if (!settings?.mainPlexToken) {
+            return { success: false, error: "Plex admin token not configured." };
+        }
+        const adminToken = decryptData(settings.mainPlexToken);
+        const targetEmail = (user.plexEmail || user.email || "").toLowerCase().trim();
+        const targetUser = (user.plexUsername || user.username || "").toLowerCase().trim();
+
+        let servers = await getPlexServers(adminToken);
+        if (servers.length === 0) {
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            servers = srvSections.map(s => ({
+                name: s.serverName,
+                clientIdentifier: s.serverId,
+                accessToken: adminToken,
+                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            }));
+        }
+
+        const friend = await findPlexUserFriend(adminToken, user);
+        const matchTarget = {
+            id: friend?.id,
+            email: friend?.email || targetEmail,
+            username: friend?.username || targetUser,
+            name: friend?.title || (user as any).name,
+            plexEmail: user.plexEmail,
+            plexUsername: user.plexUsername
+        };
+
+        const isAdmin = (user as any).role === "ADMIN";
+        if (isAdmin) {
+            console.log(`[REVOKE-PLEX-ACCESS] Skipped: User "${user.username}" is an Administrator.`);
+            return { success: true, message: "Plex administrator access retained." };
+        }
+
+        logger.addLog("INFO", "PLEX", `[REVOKE-PLEX-ACCESS] Revoking Plex library shares for user "${user.username}" across ${servers.length} servers...`);
+        const shares = await getPlexSharedServersList(adminToken);
+        const matchedShares = shares.filter(s => matchesPlexUser(matchTarget, s));
+
+        for (const share of matchedShares) {
+            const srvId = share.serverId || servers[0]?.clientIdentifier;
+            if (share.id) {
+                await removePlexUserShare(adminToken, share.id, srvId);
+            }
+        }
+
+        // Also check if user has canonical server XML shares across all servers
+        for (const srv of servers) {
+            if (!srv.clientIdentifier) continue;
+            try {
+                const srvRes = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srv.clientIdentifier)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                    headers: {
+                        "Accept": "application/xml, text/xml, */*",
+                        "X-Plex-Token": adminToken,
+                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                    }
+                });
+                if (srvRes.ok) {
+                    const xml = await srvRes.text();
+                    const matches = xml.matchAll(/<SharedServer\b([^>]*?)(?:\/>|>[\s\S]*?<\/SharedServer>)/gi);
+                    for (const m of matches) {
+                        const attrs = m[1] || "";
+                        const shareId = attrs.match(/\bid="([^"]*)"/i)?.[1];
+                        const email = attrs.match(/\bemail="([^"]*)"/i)?.[1] || attrs.match(/\binvitedEmail="([^"]*)"/i)?.[1];
+                        const username = attrs.match(/\busername="([^"]*)"/i)?.[1];
+                        const userId = attrs.match(/\buserID="([^"]*)"/i)?.[1];
+
+                        if (shareId && matchesPlexUser(matchTarget, { id: shareId, serverId: srv.clientIdentifier, librarySectionIds: [], user: { id: userId, email, username }, invitedEmail: email })) {
+                            await removePlexUserShare(adminToken, shareId, srv.clientIdentifier);
+                        }
+                    }
+                }
+            } catch (srvErr) {}
+        }
+
+        // Terminate any active sessions on Plex immediately
+        try {
+            const activeServers = await getPlexActiveSessions(adminToken);
+            for (const srv of activeServers) {
+                for (const sess of srv.sessions) {
+                    const sessUser = (sess.User?.title || sess.username || "").toLowerCase().trim();
+                    if (
+                        (targetUser && sessUser === targetUser) ||
+                        (targetEmail && sessUser === targetEmail) ||
+                        (user.plexUsername && sessUser === user.plexUsername.toLowerCase().trim()) ||
+                        (user.plexEmail && sessUser === user.plexEmail.toLowerCase().trim())
+                    ) {
+                        const sessionKey = sess.Session?.id || sess.sessionKey || sess.ratingKey;
+                        const sessionId = sess.Session?.id || sess.sessionKey;
+                        if (sessionKey) {
+                            await terminatePlexServerSession(srv.serverUrl, srv.token, sessionKey, sessionId, reason);
+                        }
+                    }
+                }
+            }
+        } catch (killErr) {
+            console.warn("[REVOKE-KILL-SESSIONS-WARNING]:", killErr);
+        }
+
+        if (user.id) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { plexLibrarySectionIds: "" }
+            }).catch(() => {});
+        }
+
+        return { success: true, message: `Revoked Plex access for ${user.username}.` };
+    } catch (e: any) {
+        console.error("[REVOKE-PLEX-ACCESS-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to revoke Plex access" };
+    }
+}
+
+/**
+ * Notifies the administrator(s) whenever any user loses roles or access (e.g. demotion, suspension, expiration, or revocation).
+ * Always records a high-visibility system audit log in logger.ts, and dispatches an admin alert email if SMTP is configured.
+ */
+export async function notifyAdminUserRoleOrAccessChange(params: {
+    username: string;
+    email?: string | null;
+    oldRole?: string;
+    newRole?: string;
+    oldStatus?: string;
+    newStatus?: string;
+    reason: string;
+    revokedLibrariesCount?: number;
+}) {
+    try {
+        const username = params.username || "Unknown User";
+        const email = params.email || "No Email";
+        const oldStatus = params.oldStatus || "UNKNOWN";
+        const newStatus = params.newStatus || "UNKNOWN";
+        const oldRole = params.oldRole || "USER";
+        const newRole = params.newRole || "USER";
+        const statusChange = `${oldStatus} -> ${newStatus}`;
+
+        // 1. Always record a high-priority system audit log entry
+        logger.addLog(
+            "WARN",
+            "AUTH",
+            `⚠️ [USER ACCESS/ROLE CHANGE] User "${username}" (${email}): Status [${statusChange}], Role [${oldRole} -> ${newRole}]. Reason: ${params.reason}`
+        );
+
+        // 2. Dispatch email notification to admins if SMTP is enabled
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            return { success: true, emailed: false, reason: "SMTP not configured" };
+        }
+        if (settings.emailNotificationsEnabled === false) {
+            return { success: true, emailed: false, reason: "Email notifications disabled" };
+        }
+
+        const admins = await prisma.user.findMany({
+            where: { role: "ADMIN" }
+        }).catch(() => []);
+
+        const adminEmails = admins.map(a => a.email).filter(Boolean);
+        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
+        const senderEmail = settings.smtpFrom || settings.smtpUser;
+
+        const { renderEmailTemplate } = await import("../lib/email-templates");
+        const appUrl = await getAppUrl();
+        const { subject, html } = await renderEmailTemplate("admin_user_access_revoked", {
+            username,
+            email,
+            statusChange,
+            oldStatus,
+            newStatus,
+            oldRole,
+            newRole,
+            reason: params.reason,
+            appUrl,
+            accessUrl: `${appUrl}/settings/access`
+        });
+        const res = await sendOrQueueEmail({
+            to: recipientEmails.length === 1 ? recipientEmails[0] : recipientEmails,
+            subject,
+            html,
+            templateId: "admin_user_access_revoked",
+            targetUser: username
+        });
+
+        if (res.queued) {
+            console.log(`[AUTH-AUDIT] Admin notification email for user access/role change on "${username}" queued for admin approval (ID: ${res.approvalId}).`);
+            return { success: true, emailed: false, queued: true };
+        }
+        console.log(`[AUTH-AUDIT] Admin notification email dispatched for user access/role change on "${username}".`);
+        return { success: true, emailed: true };
+    } catch (e: any) {
+        console.error("[AUTH-AUDIT] Error sending admin access/role change notification:", e.message || e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Scans the database for any expired trials or subscriptions and automatically revokes Plex access.
+ * Note: Admins (role === 'ADMIN') and users with manual Permanent Access (subscriptionEndsAt === null && trialEndsAt === null) are strictly preserved.
+ */
+export async function expireDueTrialsAndSubscriptionsInternal() {
+    try {
+        await ensureSchemaColumns();
+
+        // 0. Auto-recover any ADMIN whose status was set to EXPIRED or SUSPENDED
+        const admins = await prisma.user.findMany({
+            where: {
+                role: "ADMIN",
+                status: { in: ["EXPIRED", "SUSPENDED"] }
+            }
+        });
+        for (const a of admins) {
+            await prisma.user.update({
+                where: { id: a.id },
+                data: { status: "APPROVED", trialEndsAt: null, subscriptionEndsAt: null }
+            }).catch(() => {});
+        }
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (settings?.autoSuspendExpiredAccounts !== true) {
+            // Auto access suspension is disabled by administrator. Do not revoke Plex access or suspend accounts automatically.
+            return { success: true, expiredCount: 0, autoSuspensionDisabled: true };
+        }
+
+        const now = new Date();
+        const gracePeriodDays = settings?.subscriptionGracePeriodDays || 0;
+        const cutoffDate = new Date(now.getTime() - gracePeriodDays * 24 * 60 * 60 * 1000);
+
+        // 1. Find all users whose TRIAL has elapsed beyond grace period (strictly excluding ADMIN)
+        const expiredTrials = await prisma.user.findMany({
+            where: {
+                status: "TRIAL",
+                role: { not: "ADMIN" },
+                trialEndsAt: {
+                    not: null,
+                    lte: cutoffDate
+                }
+            }
+        });
+
+        // 2. Find all approved users whose subscription has elapsed beyond grace period (strictly excluding ADMIN).
+        // Users with manual Permanent Access have subscriptionEndsAt === null, so they are not evaluated.
+        const expiredSubs = await prisma.user.findMany({
+            where: {
+                status: "APPROVED",
+                role: { not: "ADMIN" },
+                subscriptionEndsAt: {
+                    not: null,
+                    lte: cutoffDate
+                }
+            }
+        });
+
+        const allExpired = [...expiredTrials, ...expiredSubs];
+        if (allExpired.length === 0) return { success: true, expiredCount: 0 };
+
+        console.log(`[TRIAL-EXPIRATION] Found ${allExpired.length} expired trial/subscription accounts to process: ${allExpired.map(u => u.username).join(", ")}`);
+
+        for (const u of allExpired) {
+            try {
+                console.log(`[TRIAL-EXPIRATION] Processing expiration for user "${u.username}" (Status: ${u.status}, TrialEnd: ${u.trialEndsAt?.toISOString() || 'N/A'}, SubEnd: ${u.subscriptionEndsAt?.toISOString() || 'N/A'})...`);
+                
+                // If Plex approval gate is active, stage the revocation in Admin Approval Queue instead of revoking immediately
+                if (settings?.requireApprovalForPlexChanges !== false) {
+                    const existing = await prisma.adminApproval.findFirst({
+                        where: {
+                            userId: u.id,
+                            type: "PLEX_ACCESS_REVOKE",
+                            status: "PENDING"
+                        }
+                    });
+                    if (!existing) {
+                        await prisma.adminApproval.create({
+                            data: {
+                                type: "PLEX_ACCESS_REVOKE",
+                                status: "PENDING",
+                                title: `Revoke Plex Access: Expired Account (${u.username})`,
+                                description: `Trial/Subscription expired. Current status: ${u.status}. Pending admin approval before revoking Plex library access.`,
+                                targetUser: u.username,
+                                targetEmail: u.email,
+                                userId: u.id,
+                                payload: JSON.stringify({
+                                    userId: u.id,
+                                    action: "EXPIRE_SUSPEND",
+                                    reason: `Trial or subscription period ended (Grace period: ${gracePeriodDays} days).`
+                                })
+                            }
+                        });
+                        logger.addLog("INFO", "APPROVAL", `Staged Plex access revocation for expired user "${u.username}" in Admin Approval Queue.`);
+                        await notifyAdminUserRoleOrAccessChange({
+                            username: u.username,
+                            email: u.email,
+                            oldStatus: u.status,
+                            newStatus: "PENDING_REVOCATION",
+                            oldRole: u.role,
+                            newRole: u.role,
+                            reason: `Trial or subscription period ended (Grace period: ${gracePeriodDays} days). Action staged in Admin Approval Queue for review.`
+                        }).catch(e => console.warn("[TRIAL-EXPIRATION] Admin notification warning:", e.message));
+                    }
+                    continue;
+                }
+
+                await prisma.user.update({
+                    where: { id: u.id },
+                    data: {
+                        status: "EXPIRED",
+                        plexLibrarySectionIds: ""
+                    }
+                });
+
+                await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on DomsHomeLab.");
+                logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
+
+                // Notify administrator of user expiration and access revocation
+                await notifyAdminUserRoleOrAccessChange({
+                    username: u.username,
+                    email: u.email,
+                    oldStatus: u.status,
+                    newStatus: "EXPIRED",
+                    oldRole: u.role,
+                    newRole: u.role,
+                    reason: `Trial or subscription period ended (Grace period: ${gracePeriodDays} days). Plex access automatically suspended.`
+                }).catch(e => console.warn("[TRIAL-EXPIRATION] Admin notification warning:", e.message));
+
+                // Cascade expiration to nested sub-accounts
+                const subAccounts = await prisma.user.findMany({ where: { parentUserId: u.id } });
+                for (const sub of subAccounts) {
+                    try {
+                        await prisma.user.update({
+                            where: { id: sub.id },
+                            data: {
+                                status: "EXPIRED",
+                                plexLibrarySectionIds: ""
+                            }
+                        });
+                        await revokePlexAccessForUserInternal(sub, "Parent account subscription has expired.");
+                        await notifyAdminUserRoleOrAccessChange({
+                            username: sub.username,
+                            email: sub.email,
+                            oldStatus: sub.status,
+                            newStatus: "EXPIRED",
+                            oldRole: sub.role,
+                            newRole: sub.role,
+                            reason: `Parent account "${u.username}" subscription expired. Sub-account access suspended.`
+                        }).catch(() => {});
+                    } catch (subErr: any) {
+                        console.warn(`[TRIAL-EXPIRATION] Failed to expire sub-account "${sub.username}":`, subErr.message);
+                    }
+                }
+            } catch (err: any) {
+                console.error(`[TRIAL-EXPIRATION] Error expiring user "${u.username}":`, err.message || err);
+                logger.addLog("ERROR", "PLEX", `[TRIAL-EXPIRATION] Failed to revoke access for "${u.username}": ${err.message}`);
+            }
+        }
+
+        return { success: true, expiredCount: allExpired.length };
+    } catch (e: any) {
+        console.error("[EXPIRE-DUE-TRIALS-ERROR]:", e.message || e);
+        return { success: false, error: e.message };
+    }
+}
 
 export async function getAppUsers() {
     try {
         await verifyAdmin();
+        await ensureSchemaColumns();
+        // Automatically evaluate and expire any elapsed trials or subscriptions
+        await expireDueTrialsAndSubscriptionsInternal().catch(() => {});
+
         return await prisma.user.findMany({
             orderBy: { createdAt: 'desc' },
-            select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true, lastLogin: true }
+            select: { 
+                id: true, 
+                username: true, 
+                name: true,
+                email: true, 
+                role: true, 
+                status: true, 
+                createdAt: true, 
+                kindleEmail: true, 
+                lastLogin: true,
+                trialEndsAt: true,
+                subscriptionEndsAt: true,
+                plexUsername: true,
+                plexEmail: true,
+                plexLibrarySectionIds: true,
+                selectedPlexLibrarySectionIds: true,
+                accountType: true,
+                membershipTier: true,
+                parentUserId: true,
+                subAccountLabel: true,
+                enabledAddons: true,
+                referralCode: true,
+                referredByUserId: true,
+                convertedAt: true,
+                subscriptionCadence: true,
+                lastRenewalReminderSentAt: true,
+                renewalRemindersSent: true,
+                paymentTransactions: {
+                    select: {
+                        id: true,
+                        amount: true,
+                        currency: true,
+                        provider: true,
+                        emailDate: true,
+                        status: true,
+                        subscriptionPeriodGranted: true,
+                        senderName: true,
+                        senderEmail: true,
+                        senderHandle: true
+                    },
+                    orderBy: { emailDate: 'desc' }
+                },
+                referredBy: {
+                    select: {
+                        id: true,
+                        username: true
+                    }
+                },
+                parentUser: {
+                    select: {
+                        id: true,
+                        username: true
+                    }
+                },
+                subAccounts: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        email: true,
+                        plexUsername: true,
+                        plexEmail: true,
+                        accountType: true,
+                        subAccountLabel: true,
+                        status: true,
+                        plexLibrarySectionIds: true
+                    }
+                },
+                referralBonusMonths: true,
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true,
+                        createdAt: true
+                    }
+                },
+                _count: {
+                    select: {
+                        referrals: true,
+                        subAccounts: true
+                    }
+                }
+            }
         });
-    } catch (e) {
-        const user = await verifyUser().catch(() => null);
-        if (user) {
+    } catch (e: any) {
+        console.error("[GET-APP-USERS-ERROR]:", e);
+        try {
             return await prisma.user.findMany({
                 orderBy: { createdAt: 'desc' },
-                select: { id: true, username: true, email: true, role: true, status: true, createdAt: true, kindleEmail: true, lastLogin: true }
+                select: { 
+                    id: true, 
+                    username: true, 
+                    name: true,
+                    email: true, 
+                    role: true, 
+                    status: true, 
+                    createdAt: true, 
+                    kindleEmail: true, 
+                    lastLogin: true,
+                    trialEndsAt: true,
+                    subscriptionEndsAt: true,
+                    plexUsername: true,
+                    plexEmail: true,
+                    plexLibrarySectionIds: true,
+                    selectedPlexLibrarySectionIds: true,
+                    accountType: true,
+                    membershipTier: true,
+                    parentUserId: true,
+                    subAccountLabel: true,
+                    enabledAddons: true,
+                    referralCode: true,
+                    referredByUserId: true,
+                    convertedAt: true,
+                    referralBonusMonths: true,
+                    referrals: {
+                        select: {
+                            id: true,
+                            username: true,
+                            name: true,
+                            status: true,
+                            convertedAt: true,
+                            createdAt: true
+                        }
+                    },
+                    paymentTransactions: {
+                        select: {
+                            id: true,
+                            amount: true,
+                            currency: true,
+                            provider: true,
+                            emailDate: true,
+                            status: true,
+                            subscriptionPeriodGranted: true,
+                            senderName: true,
+                            senderEmail: true,
+                            senderHandle: true
+                        },
+                        orderBy: { emailDate: 'desc' }
+                    }
+                }
             });
+        } catch (innerErr) {
+            console.error("[GET-APP-USERS-FALLBACK-ERROR]:", innerErr);
+            return [];
         }
-        return [];
     }
 }
 
@@ -1113,13 +3497,32 @@ export async function createAppUser(formData: FormData) {
     const email = (formData.get("email") as string)?.trim().toLowerCase();
     const password = formData.get("password") as string;
     const role = (formData.get("role") as string) || "USER";
+    const status = (formData.get("status") as string) || "APPROVED";
+    const plexUsername = (formData.get("plexUsername") as string)?.trim() || null;
+    const plexEmail = (formData.get("plexEmail") as string)?.trim() || null;
 
     if (!username || !password || !email) return { error: "Username, email, and password required" };
     const hashedPassword = await hash(password, 10);
 
+    const refSlug = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    let referralCode = refSlug;
+    const existingRef = await prisma.user.findUnique({ where: { referralCode } });
+    if (existingRef) {
+        referralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+
     try {
         await prisma.user.create({
-            data: { username, email, password: hashedPassword, role, status: "APPROVED" }
+            data: { 
+                username, 
+                email, 
+                password: hashedPassword, 
+                role, 
+                status,
+                plexUsername,
+                plexEmail,
+                referralCode
+            }
         });
         revalidatePath("/settings");
         revalidatePath("/settings/access");
@@ -1152,10 +3555,25 @@ export async function approveAppUser(id: string) {
 export async function rejectAppUser(id: string) {
     await verifyAdmin();
     try {
+        const user = await prisma.user.findUnique({ where: { id } });
         await prisma.user.update({
             where: { id },
             data: { status: "REJECTED" }
         });
+
+        if (user) {
+            await revokePlexAccessForUserInternal(user, "Account access rejected by administrator.");
+            await notifyAdminUserRoleOrAccessChange({
+                username: user.username,
+                email: user.email,
+                oldStatus: user.status,
+                newStatus: "REJECTED",
+                oldRole: user.role,
+                newRole: user.role,
+                reason: "Account access rejected by administrator."
+            }).catch(() => {});
+        }
+
         revalidatePath("/settings/access");
         revalidatePath("/settings");
         return { success: true };
@@ -1168,6 +3586,20 @@ export async function rejectAppUser(id: string) {
 export async function deleteAppUser(id: string) {
     await verifyAdmin();
     try {
+        const user = await prisma.user.findUnique({ where: { id } });
+        if (user) {
+            await revokePlexAccessForUserInternal(user, "Account deleted by administrator.", { bypassApproval: true });
+            await notifyAdminUserRoleOrAccessChange({
+                username: user.username,
+                email: user.email,
+                oldStatus: user.status,
+                newStatus: "DELETED",
+                oldRole: user.role,
+                newRole: "DELETED",
+                reason: "User account deleted by administrator."
+            }).catch(() => {});
+        }
+
         await prisma.user.delete({ where: { id } });
         revalidatePath("/settings/access");
         revalidatePath("/settings");
@@ -1181,10 +3613,24 @@ export async function deleteAppUser(id: string) {
 export async function updateAppUserRole(id: string, role: string) {
     await verifyAdmin();
     try {
+        const targetUser = await prisma.user.findUnique({ where: { id } });
         await prisma.user.update({
             where: { id },
             data: { role }
         });
+
+        if (targetUser && targetUser.role !== role) {
+            await notifyAdminUserRoleOrAccessChange({
+                username: targetUser.username,
+                email: targetUser.email,
+                oldStatus: targetUser.status,
+                newStatus: targetUser.status,
+                oldRole: targetUser.role,
+                newRole: role,
+                reason: `User role changed from ${targetUser.role} to ${role} by administrator.`
+            }).catch(() => {});
+        }
+
         revalidatePath("/settings/access");
         return { success: true };
     } catch (e: any) {
@@ -1204,6 +3650,22 @@ export async function updateAppUserKindleEmail(id: string, kindleEmail: string) 
         return { success: true };
     } catch (e: any) {
         return { error: e.message || "Failed to update Kindle email" };
+    }
+}
+
+export async function updateAppUserName(id: string, name: string) {
+    await verifyAdmin();
+    try {
+        await ensureSchemaColumns();
+        const cleanName = name.trim();
+        await prisma.user.update({
+            where: { id },
+            data: { name: cleanName || null }
+        });
+        revalidatePath("/settings/access");
+        return { success: true };
+    } catch (e: any) {
+        return { error: e.message || "Failed to update user name" };
     }
 }
 
@@ -1265,25 +3727,25 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
     if (status === "Acknowledged" || status === "Completed") {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
-        if (settings?.smtpHost && settings?.smtpUser) {
-            const transporter = nodemailer.createTransport({
-                host: settings.smtpHost,
-                port: settings.smtpPort,
-                secure: settings.smtpPort === 465, 
-                auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-            } as any);
+        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+            const appUrl = await getAppUrl();
+            const adminCommentBlock = adminComment ? `<div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 12px; margin: 16px 0;"><strong>Admin Reply:</strong><br/>${adminComment}</div>` : "";
+            const { subject, html } = await renderEmailTemplate("ticket_update", {
+                name: ticket.name,
+                email: ticket.email,
+                status,
+                issue: ticket.issue,
+                adminComment: adminComment || "",
+                adminCommentBlock,
+                appUrl
+            });
 
-            let emailText = `Hi ${ticket.name},\n\nYour support ticket status has been updated to: ${status}.\n\n`;
-            if (adminComment) {
-                emailText += `Admin Reply:\n${adminComment}\n\n`;
-            }
-            emailText += `--- Original Issue ---\n${ticket.issue}\n\nThanks,\nPortalarr Support`;
-
-            await transporter.sendMail({
-                from: `"Portalarr" <${settings.smtpUser}>`,
+            await sendOrQueueEmail({
                 to: ticket.email,
-                subject: `Support Ticket Update: ${status}`,
-                text: emailText
+                subject,
+                html,
+                templateId: "ticket_update",
+                targetUser: ticket.name
             });
         }
     }
@@ -1307,6 +3769,2439 @@ export async function deleteSupportTicket(id: string) {
     }
 }
 
+// ============================================================================
+// --- PLEX LIBRARY SHARING, TRIALS & REFERRALS ENGINE ---
+// ============================================================================
+
+export async function fetchPlexServerLibraries() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+        if (!adminToken) {
+            return { success: false, servers: [], error: "Admin Plex token not configured in settings." };
+        }
+        const servers = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+        return { success: true, servers };
+    } catch (e: any) {
+        console.error("[PLEX-LIBRARIES-ERROR]:", e?.message || e, e?.stack);
+        return { success: false, servers: [], error: e?.message || "Failed to fetch Plex libraries" };
+    }
+}
+
+export async function fetchUserPlexShares() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+        if (!adminToken) {
+            return { success: false, shares: [] };
+        }
+        const shares = await getPlexSharedServersList(adminToken);
+        return { success: true, shares };
+    } catch (e: any) {
+        return { success: false, shares: [], error: e.message };
+    }
+}
+
+export async function fetchUserPlexLibrariesAction(userId: string) {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
+
+        let adminToken = "";
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        if (!adminToken) {
+            return { success: true, selectedKeys: [], fromPlex: false, hasPlexShare: false };
+        }
+
+        const { selectedKeys, hasPlexShare } = await getUserPlexSharedLibraries(adminToken, user);
+
+        // If we found live keys on Plex, sync them to SQLite
+        if (hasPlexShare) {
+            const keysStr = selectedKeys.join(",");
+            if (user.plexLibrarySectionIds !== keysStr) {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { plexLibrarySectionIds: keysStr }
+                });
+            }
+            return { 
+                success: true, 
+                selectedKeys, 
+                fromPlex: true, 
+                hasPlexShare: true 
+            };
+        } else {
+            // User has 0 active shares on Plex: synchronize SQLite to empty string to prevent false counts
+            if (user.plexLibrarySectionIds) {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { plexLibrarySectionIds: "" }
+                });
+            }
+            return {
+                success: true,
+                selectedKeys: [],
+                fromPlex: true,
+                hasPlexShare: false
+            };
+        }
+    } catch (e: any) {
+        console.error("[FETCH-USER-PLEX-LIBRARIES-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to query Plex libraries" };
+    }
+}
+
+export async function executePlexLibraryAccessUpdateInternal(
+    userId: string, 
+    selectedKeys: (string | number)[],
+    activationType?: "APPROVED" | "PERMANENT" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "CUSTOM" | "KEEP_SUSPENDED",
+    customDateOrDays?: string | number
+) {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
+
+        const isCurrentlySuspendedOrExpired = user.status === "SUSPENDED" || user.status === "EXPIRED";
+
+        // Group selectedKeys by serverId
+        const serverSectionsMap = new Map<string, number[]>();
+        const stringKeys: string[] = [];
+
+        for (const rawKey of selectedKeys) {
+            const strKey = String(rawKey).trim();
+            if (!strKey) continue;
+            stringKeys.push(strKey);
+
+            if (strKey.includes(":")) {
+                const [srvId, secStr] = strKey.split(":");
+                const secId = parseInt(secStr, 10);
+                if (!isNaN(secId)) {
+                    const list = serverSectionsMap.get(srvId) || [];
+                    list.push(secId);
+                    serverSectionsMap.set(srvId, list);
+                }
+            } else {
+                // Legacy plain integer
+                const secId = parseInt(strKey, 10);
+                if (!isNaN(secId)) {
+                    const list = serverSectionsMap.get("__default__") || [];
+                    list.push(secId);
+                    serverSectionsMap.set("__default__", list);
+                }
+            }
+        }
+
+        // Save composite keys into user record in SQLite
+        const savedStr = Array.from(new Set(stringKeys)).join(",");
+        await prisma.user.update({
+            where: { id: userId },
+            data: { plexLibrarySectionIds: savedStr }
+        });
+
+        // If user is suspended/expired and admin chose KEEP_SUSPENDED (or no activation was provided):
+        // Save to DB only and DO NOT grant Plex access.
+        if (isCurrentlySuspendedOrExpired && (!activationType || activationType === "KEEP_SUSPENDED")) {
+            revalidatePath("/settings/access");
+            return { 
+                success: true, 
+                message: `Saved library preferences for ${user.username}. User remains suspended and Plex access was not granted.` 
+            };
+        }
+
+        // If an activation option was chosen, update status & expiration fields in SQLite
+        if (activationType) {
+            const now = new Date();
+            let newStatus = user.status;
+            let trialEndsAt: Date | null = user.trialEndsAt;
+            let subscriptionEndsAt: Date | null = user.subscriptionEndsAt;
+            let convertedAt = user.convertedAt;
+            let membershipTier = user.membershipTier;
+
+            if (activationType === "APPROVED" || activationType === "PERMANENT") {
+                newStatus = "APPROVED";
+                trialEndsAt = null;
+                subscriptionEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+            } else if (activationType === "TRIAL") {
+                newStatus = "TRIAL";
+                membershipTier = "TRIAL";
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (settings?.defaultTrialDays || 14);
+                trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "CUSTOM_TRIAL") {
+                newStatus = "TRIAL";
+                membershipTier = "TRIAL";
+                const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (parseInt(String(customDateOrDays), 10) || 7);
+                trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "7_DAYS_TRIAL") {
+                newStatus = "TRIAL";
+                membershipTier = "TRIAL";
+                trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "14_DAYS_TRIAL") {
+                newStatus = "TRIAL";
+                membershipTier = "TRIAL";
+                trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+                subscriptionEndsAt = null;
+            } else if (activationType === "30_DAYS") {
+                newStatus = "APPROVED";
+                subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+            } else if (activationType === "REST_OF_YEAR") {
+                newStatus = "APPROVED";
+                const currentYear = now.getFullYear();
+                subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+                trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+            } else if (activationType === "1_YEAR") {
+                newStatus = "APPROVED";
+                subscriptionEndsAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+                trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+            } else if (activationType === "CUSTOM" && customDateOrDays) {
+                newStatus = "APPROVED";
+                subscriptionEndsAt = typeof customDateOrDays === "number"
+                    ? new Date(now.getTime() + customDateOrDays * 24 * 60 * 60 * 1000)
+                    : new Date(customDateOrDays);
+                trialEndsAt = null;
+                if (!convertedAt) convertedAt = now;
+                if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+            }
+
+            await prisma.user.update({
+                where: { id: userId },
+                data: {
+                    status: newStatus,
+                    membershipTier,
+                    trialEndsAt,
+                    subscriptionEndsAt,
+                    convertedAt
+                }
+            });
+
+            user.status = newStatus;
+            user.membershipTier = membershipTier;
+            user.trialEndsAt = trialEndsAt;
+            user.subscriptionEndsAt = subscriptionEndsAt;
+            user.convertedAt = convertedAt;
+        }
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        if (!adminToken) {
+            return { success: false, error: "Admin Plex token not configured in settings." };
+        }
+
+        const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+        let servers = srvSections.map(s => ({
+            name: s.serverName,
+            clientIdentifier: s.serverId,
+            accessToken: adminToken,
+            connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+        }));
+        if (servers.length === 0) {
+            servers = await getPlexServers(adminToken);
+        }
+        const shares = await getPlexSharedServersList(adminToken);
+        const friend = await findPlexUserFriend(adminToken, user);
+
+        const targetEmail = (friend?.email || user.plexEmail || user.email || "").toLowerCase().trim();
+        const targetUser = (friend?.username || user.plexUsername || user.username || "").toLowerCase().trim();
+        const friendId = friend?.id;
+
+        // Assign any legacy plain integer sections to primary server
+        if (serverSectionsMap.has("__default__") && servers.length > 0) {
+            const primaryId = servers[0].clientIdentifier;
+            const existing = serverSectionsMap.get(primaryId) || [];
+            const defSecs = serverSectionsMap.get("__default__") || [];
+            serverSectionsMap.set(primaryId, [...existing, ...defSecs]);
+            serverSectionsMap.delete("__default__");
+        }
+
+        // Match target including friend ID
+        const matchTarget = {
+            id: friendId,
+            email: targetEmail,
+            username: targetUser,
+            name: friend?.title || user.name,
+            plexEmail: user.plexEmail,
+            plexUsername: user.plexUsername
+        };
+
+        // If KEEP_SUSPENDED was selected, do not grant access on Plex
+        if (activationType === "KEEP_SUSPENDED") {
+            for (const srv of servers) {
+                const srvId = srv.clientIdentifier;
+                const match = shares.find(s => 
+                    ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || servers.length === 1) &&
+                    matchesPlexUser(matchTarget, s)
+                );
+                if (match && match.id) {
+                    await removePlexUserShare(adminToken, match.id, srvId);
+                }
+            }
+            revalidatePath("/settings/access");
+            return { success: true, message: `Saved library preferences for ${user.username} (account remains suspended).` };
+        }
+
+        const shareErrors: string[] = [];
+        logger.addLog("INFO", "PLEX", `[ACTION] updateUserPlexLibrariesAction for "${user.username}" (Status: ${user.status}, Activation: ${activationType || 'NONE'})`, `Target Servers: ${servers.length} | Selected Keys: ${JSON.stringify(selectedKeys)}`);
+
+        // For each server, update share on Plex or invite
+        for (const srv of servers) {
+            const srvId = srv.clientIdentifier;
+            let targetSectionIds = serverSectionsMap.get(srvId) || [];
+
+            // If there is only 1 server and serverSectionsMap only has entries under another serverId or __default__
+            if (targetSectionIds.length === 0 && servers.length === 1 && serverSectionsMap.size > 0) {
+                targetSectionIds = Array.from(serverSectionsMap.values()).flat();
+            }
+
+            // Case-insensitive / partial machine identifier match
+            if (targetSectionIds.length === 0) {
+                for (const [mapKey, secList] of serverSectionsMap.entries()) {
+                    if (mapKey.toLowerCase() === srvId.toLowerCase() || 
+                        srvId.toLowerCase().includes(mapKey.toLowerCase()) || 
+                        mapKey.toLowerCase().includes(srvId.toLowerCase())) {
+                        targetSectionIds = secList;
+                        break;
+                    }
+                }
+            }
+
+            // Find matching share for this user on this server
+            const match = shares.find(s => 
+                ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || servers.length === 1) &&
+                matchesPlexUser(matchTarget, s)
+            );
+
+            if (targetSectionIds.length === 0) {
+                // If 0 sections selected for this server, revoke access / remove share
+                const userExplicitlySelectedZero = selectedKeys.length === 0 || serverSectionsMap.has(srvId);
+                if (userExplicitlySelectedZero && match && match.id) {
+                    const remRes = await removePlexUserShare(adminToken, match.id, srvId);
+                    if (!remRes.success) {
+                        shareErrors.push(`Revoke on "${srv.name}": ${remRes.error}`);
+                    }
+                }
+            } else {
+                // 1 or more sections selected
+                if (match && match.id) {
+                    const upRes = await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
+                    if (!upRes.success) {
+                        const invRes = await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
+                        if (!invRes.success) {
+                            const errLower = (invRes.error || upRes.error || "").toLowerCase();
+                            if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                                logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${targetEmail || targetUser}" is owner of "${srv.name}". Full access active.`);
+                            } else {
+                                shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                            }
+                        }
+                    }
+                } else if (targetEmail || targetUser || friendId) {
+                    const invRes = await invitePlexFriendAndShare(adminToken, srvId, targetEmail || targetUser, targetSectionIds, friendId);
+                    if (!invRes.success) {
+                        const errLower = (invRes.error || "").toLowerCase();
+                        if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                            logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${targetEmail || targetUser}" is owner of "${srv.name}". Full access active.`);
+                        } else {
+                            shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                        }
+                    }
+                }
+            }
+        }
+
+        revalidatePath("/settings/access");
+        if (shareErrors.length > 0) {
+            return {
+                success: false,
+                error: `Could not push library shares to Plex: ${shareErrors.join("; ")}. Check System Logs (Plex filter) for details.`
+            };
+        }
+        const activatedNote = activationType ? " and activated account" : "";
+        return { success: true, message: `Updated shared Plex libraries for ${user.username}${activatedNote}.` };
+    } catch (e: any) {
+        console.error("[UPDATE-USER-PLEX-LIBRARIES-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to update user libraries" };
+    }
+}
+
+export async function updateUserPlexLibraries(
+    userId: string, 
+    selectedKeys: (string | number)[],
+    activationType?: "APPROVED" | "PERMANENT" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "CUSTOM" | "KEEP_SUSPENDED",
+    customDateOrDays?: string | number,
+    bypassApproval?: boolean
+): Promise<{ success: boolean; message?: string; error?: string; staged?: boolean; approvalId?: string }> {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const requireApproval = (settings?.requireApprovalForPlexChanges ?? true) && !bypassApproval;
+
+        if (!requireApproval) {
+            return await executePlexLibraryAccessUpdateInternal(userId, selectedKeys, activationType, customDateOrDays);
+        }
+
+        // Calculate differences between existing Plex shares and proposed keys
+        const currentKeys = (user.plexLibrarySectionIds || "").split(",").map(k => k.trim()).filter(Boolean);
+        const proposedKeys = selectedKeys.map(k => String(k).trim()).filter(Boolean);
+
+        const addedKeys = proposedKeys.filter(k => !currentKeys.includes(k));
+        const removedKeys = currentKeys.filter(k => !proposedKeys.includes(k));
+
+        if (addedKeys.length === 0 && removedKeys.length === 0 && !activationType) {
+            return { success: true, message: "No Plex library changes detected." };
+        }
+
+        const type = removedKeys.length > 0 && addedKeys.length === 0 ? "PLEX_ACCESS_REVOKE" : "PLEX_ACCESS_GRANT";
+        const title = `Plex Access: ${user.username} (+${addedKeys.length}, -${removedKeys.length})${activationType ? ` [${activationType}]` : ''}`;
+        const description = `Proposed: ${proposedKeys.length} libraries. Added: ${addedKeys.length > 0 ? addedKeys.join(", ") : "none"}, Removed: ${removedKeys.length > 0 ? removedKeys.join(", ") : "none"}${activationType ? `, Activation: ${activationType}` : ""}`;
+
+        const approval = await prisma.adminApproval.create({
+            data: {
+                type,
+                status: "PENDING",
+                title,
+                description,
+                targetUser: user.username,
+                targetEmail: user.email,
+                userId: user.id,
+                payload: JSON.stringify({
+                    userId,
+                    selectedKeys: proposedKeys,
+                    activationType,
+                    customDateOrDays,
+                    addedKeys,
+                    removedKeys,
+                    previousKeys: currentKeys
+                })
+            }
+        });
+
+        logger.addLog("INFO", "APPROVAL", `Plex access change for "${user.username}" staged for admin approval (ID: ${approval.id}).`);
+        return { 
+            success: true, 
+            staged: true, 
+            approvalId: approval.id, 
+            message: `Plex library access changes for "${user.username}" staged in Admin Approval Queue for review.` 
+        };
+    } catch (e: any) {
+        console.error("[UPDATE-USER-PLEX-LIBRARIES-WRAPPER-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to update or stage user Plex libraries" };
+    }
+}
+
+export async function sendOrQueueEmail(options: {
+    to: string | string[];
+    subject: string;
+    html: string;
+    text?: string;
+    templateId?: string;
+    targetUser?: string;
+    userId?: string;
+    bypassApproval?: boolean;
+    attachments?: Array<{ filename: string; path: string; contentType?: string }>;
+}): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string }> {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        
+        // If email notifications globally disabled and not bypassing approval
+        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval) {
+            console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
+            return { success: true, sent: false, queued: false };
+        }
+
+        const requireApproval = (settings?.requireApprovalForEmails ?? true) && !options.bypassApproval;
+
+        if (requireApproval) {
+            const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
+            const attachmentNote = options.attachments && options.attachments.length > 0 ? ` [${options.attachments.length} attachment(s)]` : "";
+            const approval = await prisma.adminApproval.create({
+                data: {
+                    type: "EMAIL",
+                    status: "PENDING",
+                    title: `Email: ${options.subject}`,
+                    description: `To: ${recipientStr}${attachmentNote}`,
+                    targetUser: options.targetUser || null,
+                    targetEmail: Array.isArray(options.to) ? options.to[0] : options.to,
+                    userId: options.userId || null,
+                    payload: JSON.stringify({
+                        to: options.to,
+                        subject: options.subject,
+                        html: options.html,
+                        text: options.text,
+                        templateId: options.templateId,
+                        targetUser: options.targetUser,
+                        attachments: options.attachments
+                    })
+                }
+            });
+            logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${recipientStr} queued for admin approval (ID: ${approval.id}).`);
+            return { success: true, queued: true, approvalId: approval.id };
+        }
+
+        // Send email immediately via SMTP
+        if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+            return { success: false, error: "SMTP settings not configured" };
+        }
+
+        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
+        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: settings.smtpPort === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: decryptData(settings.smtpPass)
+            }
+        });
+
+        await transporter.sendMail({
+            from: senderEmail,
+            to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
+            subject: options.subject,
+            html: options.html,
+            text: options.text,
+            attachments: options.attachments
+        });
+
+        logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`);
+        return { success: true, sent: true };
+    } catch (e: any) {
+        console.error("[EMAIL-GATE-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to send or queue email" };
+    }
+}
+
+export async function getAdminApprovalsAction(params?: {
+    status?: string;
+    type?: string;
+    page?: number;
+    pageSize?: number;
+}) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const page = params?.page || 1;
+        const pageSize = params?.pageSize || 25;
+        const skip = (page - 1) * pageSize;
+
+        const where: any = {};
+        if (params?.status && params.status !== "ALL") {
+            where.status = params.status;
+        }
+        if (params?.type && params.type !== "ALL") {
+            where.type = params.type;
+        }
+
+        const [approvals, totalCount, pendingCount, approvedCount, rejectedCount] = await Promise.all([
+            prisma.adminApproval.findMany({
+                where,
+                orderBy: { createdAt: "desc" },
+                skip,
+                take: pageSize,
+                include: { user: { select: { id: true, username: true, email: true, status: true, role: true } } }
+            }),
+            prisma.adminApproval.count({ where }),
+            prisma.adminApproval.count({ where: { status: "PENDING" } }),
+            prisma.adminApproval.count({ where: { status: "APPROVED" } }),
+            prisma.adminApproval.count({ where: { status: "REJECTED" } })
+        ]);
+
+        return {
+            success: true,
+            approvals,
+            totalCount,
+            pendingCount,
+            approvedCount,
+            rejectedCount,
+            page,
+            pageSize,
+            totalPages: Math.ceil(totalCount / pageSize) || 1
+        };
+    } catch (e: any) {
+        console.error("[GET-ADMIN-APPROVALS-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to retrieve approvals" };
+    }
+}
+
+export async function getAdminApprovalCountsAction() {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const pendingCount = await prisma.adminApproval.count({ where: { status: "PENDING" } });
+        const totalCount = await prisma.adminApproval.count();
+        return { success: true, pendingCount, totalCount };
+    } catch (e: any) {
+        return { success: false, pendingCount: 0, totalCount: 0 };
+    }
+}
+
+export async function approveAdminApprovalAction(approvalId: string) {
+    try {
+        const session: any = await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const approval = await prisma.adminApproval.findUnique({
+            where: { id: approvalId },
+            include: { user: true }
+        });
+
+        if (!approval) return { success: false, error: "Approval request not found" };
+        if (approval.status !== "PENDING") {
+            return { success: false, error: `This item has already been ${approval.status.toLowerCase()}.` };
+        }
+
+        let payload: any = {};
+        try {
+            payload = JSON.parse(approval.payload);
+        } catch {
+            return { success: false, error: "Invalid approval payload format." };
+        }
+
+        // Execute action based on type
+        if (approval.type === "EMAIL") {
+            const sendRes = await sendOrQueueEmail({
+                to: payload.to,
+                subject: payload.subject,
+                html: payload.html,
+                text: payload.text,
+                templateId: payload.templateId,
+                targetUser: payload.targetUser,
+                attachments: payload.attachments,
+                bypassApproval: true
+            });
+            if (!sendRes.success) {
+                return { success: false, error: `Email dispatch failed: ${sendRes.error}` };
+            }
+        } else if (approval.type === "PLEX_ACCESS_GRANT" || approval.type === "PLEX_ACCESS_REVOKE") {
+            if (payload.action === "EXPIRE_SUSPEND") {
+                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                if (targetUser) {
+                    const targetStatus = (targetUser.status === "SUSPENDED" || targetUser.status === "REJECTED") ? targetUser.status : "EXPIRED";
+                    await prisma.user.update({
+                        where: { id: targetUser.id },
+                        data: { status: targetStatus, plexLibrarySectionIds: "" }
+                    });
+                    await revokePlexAccessForUserInternal(targetUser, payload.reason || "Subscription/trial ended.", { bypassApproval: true });
+                }
+            } else if (payload.action === "INVITE_TRIAL_PLEX") {
+                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (targetUser && settings?.mainPlexToken) {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const rawKeys: string[] = payload.selectedKeys || [];
+                    const cleanPlex = payload.cleanPlex || targetUser.plexEmail || targetUser.plexUsername || targetUser.email || targetUser.username;
+                    const servers = await getPlexServers(adminToken);
+                    const serverSectionsMap = new Map<string, number[]>();
+                    for (const key of rawKeys) {
+                        if (key.includes(":")) {
+                            const [srvId, secStr] = key.split(":");
+                            const secId = parseInt(secStr, 10);
+                            if (!isNaN(secId)) {
+                                const list = serverSectionsMap.get(srvId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(srvId, list);
+                            }
+                        } else {
+                            const secId = parseInt(key, 10);
+                            if (!isNaN(secId) && servers.length > 0) {
+                                const primaryId = servers[0].clientIdentifier;
+                                const list = serverSectionsMap.get(primaryId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(primaryId, list);
+                            }
+                        }
+                    }
+                    for (const server of servers) {
+                        const srvId = server.clientIdentifier;
+                        const sections = serverSectionsMap.get(srvId) || [];
+                        if (sections.length > 0) {
+                            await invitePlexFriendAndShare(adminToken, srvId, cleanPlex, sections);
+                        }
+                    }
+                }
+            } else if (payload.action === "SYNC_SHARE") {
+                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (targetUser && settings?.mainPlexToken) {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const rawKeys: string[] = payload.selectedKeys || [];
+                    await syncUserPlexShareInternal(adminToken, targetUser, rawKeys);
+                    if (rawKeys.length > 0) {
+                        await prisma.user.update({
+                            where: { id: targetUser.id },
+                            data: { plexLibrarySectionIds: rawKeys.join(",") }
+                        }).catch(() => {});
+                    }
+                }
+            } else {
+                const updateRes = await executePlexLibraryAccessUpdateInternal(
+                    payload.userId,
+                    payload.selectedKeys,
+                    payload.activationType,
+                    payload.customDateOrDays
+                );
+                if (!updateRes.success) {
+                    return { success: false, error: `Plex update failed: ${updateRes.error}` };
+                }
+            }
+        }
+
+        await prisma.adminApproval.update({
+            where: { id: approvalId },
+            data: {
+                status: "APPROVED",
+                approvedBy: session.username || "Admin",
+                approvedAt: new Date()
+            }
+        });
+
+        logger.addLog("INFO", "APPROVAL", `Administrator ${session.username || 'Admin'} approved "${approval.title}" (ID: ${approval.id}).`);
+        revalidatePath("/settings/access");
+        return { success: true, message: `Successfully approved and applied: ${approval.title}` };
+    } catch (e: any) {
+        console.error("[APPROVE-ADMIN-APPROVAL-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to approve action" };
+    }
+}
+
+export async function rejectAdminApprovalAction(approvalId: string, reason?: string) {
+    try {
+        const session: any = await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const approval = await prisma.adminApproval.findUnique({ where: { id: approvalId } });
+        if (!approval) return { success: false, error: "Approval request not found" };
+        if (approval.status !== "PENDING") {
+            return { success: false, error: `This item has already been ${approval.status.toLowerCase()}.` };
+        }
+
+        await prisma.adminApproval.update({
+            where: { id: approvalId },
+            data: {
+                status: "REJECTED",
+                approvedBy: session.username || "Admin",
+                rejectionReason: reason || "Rejected by administrator."
+            }
+        });
+
+        logger.addLog("WARN", "APPROVAL", `Administrator ${session.username || 'Admin'} rejected "${approval.title}" (Reason: ${reason || 'None'}).`);
+        revalidatePath("/settings/access");
+        return { success: true, message: `Rejected: ${approval.title}` };
+    } catch (e: any) {
+        console.error("[REJECT-ADMIN-APPROVAL-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to reject action" };
+    }
+}
+
+export async function bulkApproveAdminApprovalsAction(ids: string[]) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        let approved = 0;
+        let failed = 0;
+        const errors: string[] = [];
+
+        for (const id of ids) {
+            const res = await approveAdminApprovalAction(id);
+            if (res.success) {
+                approved++;
+            } else {
+                failed++;
+                errors.push(`${id}: ${res.error}`);
+            }
+        }
+
+        revalidatePath("/settings/access");
+        return { 
+            success: true, 
+            approvedCount: approved, 
+            failedCount: failed, 
+            errors: errors.slice(0, 5),
+            message: `Approved ${approved} item(s)${failed > 0 ? `, ${failed} failed` : ''}.` 
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Bulk approval failed" };
+    }
+}
+
+export async function bulkRejectAdminApprovalsAction(ids: string[], reason?: string) {
+    try {
+        const session: any = await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const res = await prisma.adminApproval.updateMany({
+            where: {
+                id: { in: ids },
+                status: "PENDING"
+            },
+            data: {
+                status: "REJECTED",
+                approvedBy: session.username || "Admin",
+                rejectionReason: reason || "Bulk rejected by administrator."
+            }
+        });
+
+        revalidatePath("/settings/access");
+        return { success: true, rejectedCount: res.count, message: `Rejected ${res.count} item(s).` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Bulk rejection failed" };
+    }
+}
+
+export async function getApprovalSettingsAction() {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        return {
+            success: true,
+            requireApprovalForPlexChanges: settings?.requireApprovalForPlexChanges ?? true,
+            requireApprovalForEmails: settings?.requireApprovalForEmails ?? true
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            requireApprovalForPlexChanges: true,
+            requireApprovalForEmails: true
+        };
+    }
+}
+
+export async function saveApprovalSettingsAction(data: {
+    requireApprovalForPlexChanges?: boolean;
+    requireApprovalForEmails?: boolean;
+}) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const updateData: any = {};
+        if (typeof data.requireApprovalForPlexChanges === "boolean") {
+            updateData.requireApprovalForPlexChanges = data.requireApprovalForPlexChanges;
+        }
+        if (typeof data.requireApprovalForEmails === "boolean") {
+            updateData.requireApprovalForEmails = data.requireApprovalForEmails;
+        }
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: updateData
+        });
+
+        revalidatePath("/settings/access");
+        return { success: true, message: "Approval workflow settings saved successfully!" };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update approval settings" };
+    }
+}
+
+export async function setUserTrialOrSubscription(
+    userId: string, 
+    type: "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
+    customDateOrDays?: string | number
+) {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found" };
+
+        let status = user.status;
+        let trialEndsAt: Date | null = user.trialEndsAt;
+        let subscriptionEndsAt: Date | null = user.subscriptionEndsAt;
+        let convertedAt = user.convertedAt;
+        let membershipTier = user.membershipTier;
+
+        const now = new Date();
+
+        if (type === "TRIAL") {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            const days = typeof customDateOrDays === "number" ? customDateOrDays : (settings?.defaultTrialDays || 14);
+            status = "TRIAL";
+            membershipTier = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "CUSTOM_TRIAL") {
+            const days = typeof customDateOrDays === "number" ? customDateOrDays : (parseInt(String(customDateOrDays), 10) || 7);
+            status = "TRIAL";
+            membershipTier = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "7_DAYS_TRIAL") {
+            status = "TRIAL";
+            membershipTier = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "14_DAYS_TRIAL") {
+            status = "TRIAL";
+            membershipTier = "TRIAL";
+            trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+            subscriptionEndsAt = null;
+        } else if (type === "REST_OF_YEAR") {
+            status = "APPROVED";
+            const currentYear = now.getFullYear();
+            subscriptionEndsAt = new Date(currentYear, 11, 31, 23, 59, 59, 999);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+        } else if (type === "30_DAYS") {
+            status = "APPROVED";
+            subscriptionEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+        } else if (type === "1_YEAR") {
+            status = "APPROVED";
+            subscriptionEndsAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+        } else if (type === "PERMANENT") {
+            status = "APPROVED";
+            subscriptionEndsAt = null;
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+        } else if (type === "SUSPENDED") {
+            status = "SUSPENDED";
+        } else if (type === "EXPIRED") {
+            status = "EXPIRED";
+        } else if (type === "CUSTOM" && customDateOrDays) {
+            status = "APPROVED";
+            subscriptionEndsAt = typeof customDateOrDays === "number"
+                ? new Date(now.getTime() + customDateOrDays * 24 * 60 * 60 * 1000)
+                : new Date(customDateOrDays);
+            trialEndsAt = null;
+            if (!convertedAt) convertedAt = now;
+            if (membershipTier === "TRIAL" || !membershipTier) membershipTier = "STANDARD";
+        }
+
+        let subscriptionCadence = user.subscriptionCadence;
+        if (type === "REST_OF_YEAR" || type === "1_YEAR") {
+            subscriptionCadence = "YEARLY";
+        } else if (type === "30_DAYS") {
+            subscriptionCadence = "MONTHLY";
+        }
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                status,
+                membershipTier,
+                subscriptionCadence,
+                trialEndsAt,
+                subscriptionEndsAt,
+                convertedAt
+            }
+        });
+
+        logger.addLog("INFO", "PLEX", `[ACTION] setUserTrialOrSubscription: Setting "${user.username}" to ${type} (New status: ${status})`);
+
+        // Dispatch Full Membership Activation Email if transitioning to APPROVED
+        if (status === "APPROVED" && (user.status === "TRIAL" || user.status === "EXPIRED" || user.status === "PENDING")) {
+            try {
+                const settingsForEmail = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (user.email && settingsForEmail?.emailNotificationsEnabled && settingsForEmail?.notifySubscriptionActive) {
+                    const validUntilFormatted = subscriptionEndsAt 
+                        ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(subscriptionEndsAt)
+                        : "Permanent VIP (Lifetime)";
+                    const planName = type === "REST_OF_YEAR" 
+                        ? "Rest-of-Year Annual Pass" 
+                        : type === "1_YEAR" 
+                        ? "Full 1-Year Pass" 
+                        : type === "30_DAYS" 
+                        ? "Monthly Pass" 
+                        : type === "PERMANENT" 
+                        ? "Permanent VIP All-Access" 
+                        : "Full Membership";
+
+                    const appUrl = await getAppUrl();
+                    const { subject, html } = await renderEmailTemplate("subscription_activated", {
+                        username: user.username,
+                        email: user.email,
+                        planName,
+                        validUntil: validUntilFormatted,
+                        appUrl
+                    });
+
+                    await sendOrQueueEmail({
+                        to: user.email,
+                        subject,
+                        html,
+                        templateId: "subscription_activated",
+                        targetUser: user.username,
+                        userId: user.id
+                    });
+                    logger.addLog("INFO", "EMAIL", `Dispatched full membership activation email to "${user.username}" (${user.email}) for ${planName}`);
+                }
+            } catch (notifErr: any) {
+                console.warn("[ACTION-SUBSCRIPTION-EMAIL-WARNING]:", notifErr.message || notifErr);
+            }
+        }
+
+        // Dispatch Trial Welcome Email if activating new trial
+        if (status === "TRIAL" && user.status !== "TRIAL") {
+            try {
+                const settingsForEmail = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (user.email && settingsForEmail?.emailNotificationsEnabled && settingsForEmail?.notifyTrialWelcome) {
+                    const trialDays = typeof customDateOrDays === "number" ? customDateOrDays : (settingsForEmail?.defaultTrialDays || 14);
+                    const expirationFormatted = trialEndsAt 
+                        ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(trialEndsAt)
+                        : "N/A";
+                    const appUrl = await getAppUrl();
+
+                    const { subject, html } = await renderEmailTemplate("trial_welcome", {
+                        username: user.username,
+                        email: user.email,
+                        trialDays,
+                        expirationDate: expirationFormatted,
+                        appUrl,
+                        loginUrl: `${appUrl}/login`
+                    });
+
+                    await sendOrQueueEmail({
+                        to: user.email,
+                        subject,
+                        html,
+                        templateId: "trial_welcome",
+                        targetUser: user.username,
+                        userId: user.id
+                    });
+                    logger.addLog("INFO", "EMAIL", `Dispatched free trial welcome email to "${user.username}" (${user.email})`);
+                }
+            } catch (trialErr: any) {
+                console.warn("[ACTION-TRIAL-EMAIL-WARNING]:", trialErr.message || trialErr);
+            }
+        }
+
+        // Cascade to nested sub-accounts
+        const childSubAccounts = await prisma.user.findMany({ where: { parentUserId: userId } });
+        for (const child of childSubAccounts) {
+            await prisma.user.update({
+                where: { id: child.id },
+                data: {
+                    status,
+                    trialEndsAt,
+                    subscriptionEndsAt,
+                    convertedAt
+                }
+            });
+        }
+
+        // Sync Plex sharing state: if suspended or expired, revoke Plex shares; if active, restore
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (settings?.mainPlexToken) {
+            try {
+                const adminToken = decryptData(settings.mainPlexToken);
+                let servers = await getPlexServers(adminToken);
+                if (servers.length === 0) {
+                    const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                    servers = srvSections.map(s => ({
+                        name: s.serverName,
+                        clientIdentifier: s.serverId,
+                        accessToken: adminToken,
+                        connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+                    }));
+                }
+                const shares = await getPlexSharedServersList(adminToken);
+
+                if (status === "SUSPENDED" || status === "EXPIRED") {
+                    await revokePlexAccessForUserInternal(user, `Account access ${status.toLowerCase()}.`);
+                    for (const child of childSubAccounts) {
+                        await revokePlexAccessForUserInternal(child, `Parent account access ${status.toLowerCase()}.`);
+                    }
+                } else if (status === "APPROVED" || status === "TRIAL") {
+                    // 1. If user has explicit custom selections, use them
+                    let rawKeys: string[] = [];
+                    if (user.selectedPlexLibrarySectionIds) {
+                        rawKeys = user.selectedPlexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                    } else {
+                        // 2. Query live Plex shares to preserve everything the user already has across ALL servers
+                        const livePlex = await getUserPlexSharedLibraries(adminToken, user).catch(() => ({ hasPlexShare: false, selectedKeys: [] as string[] }));
+                        if (livePlex.hasPlexShare && livePlex.selectedKeys.length > 0) {
+                            rawKeys = livePlex.selectedKeys;
+                        } else if (user.plexLibrarySectionIds && user.plexLibrarySectionIds.includes(":")) {
+                            rawKeys = user.plexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                        } else if (settings?.defaultPlexLibraries) {
+                            rawKeys = settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+                        }
+                    }
+
+                    // 3. Fallback: grant all discovered libraries across all servers
+                    if (rawKeys.length === 0) {
+                        const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                        rawKeys = srvSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
+                    }
+
+                    const requirePlexApproval = settings?.requireApprovalForPlexChanges ?? true;
+                    if (requirePlexApproval) {
+                        const existing = await prisma.adminApproval.findFirst({
+                            where: {
+                                userId: user.id,
+                                type: "PLEX_ACCESS_GRANT",
+                                status: "PENDING"
+                            }
+                        });
+                        if (!existing) {
+                            const approval = await prisma.adminApproval.create({
+                                data: {
+                                    type: "PLEX_ACCESS_GRANT",
+                                    status: "PENDING",
+                                    title: `Plex Access: ${user.username} [${status}]`,
+                                    description: `User status set to ${status} (${type}). Pending admin approval before syncing ${rawKeys.length} Plex libraries.`,
+                                    targetUser: user.username,
+                                    targetEmail: user.email,
+                                    userId: user.id,
+                                    payload: JSON.stringify({
+                                        userId: user.id,
+                                        action: "SYNC_SHARE",
+                                        selectedKeys: rawKeys
+                                    })
+                                }
+                            });
+                            logger.addLog("INFO", "APPROVAL", `Plex access sync for "${user.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                        }
+                    } else {
+                        await syncUserPlexShareInternal(adminToken, user, rawKeys, servers, shares);
+
+                        // Restore Plex shares for child sub-accounts
+                        for (const child of childSubAccounts) {
+                            const childRawKeys = child.accountType === "KID"
+                                ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
+                                : (child.selectedPlexLibrarySectionIds || child.plexLibrarySectionIds || rawKeys.join(",")).split(",").map(s => s.trim()).filter(Boolean);
+                            if (childRawKeys.length > 0) {
+                                await syncUserPlexShareInternal(adminToken, child, childRawKeys, servers, shares);
+                            }
+                        }
+                    }
+                }
+            } catch (plexSyncErr: any) {
+                logger.addLog("ERROR", "PLEX", `[SET-TRIAL-PLEX-SYNC] Failed to sync Plex access for "${user.username}": ${plexSyncErr.message}`);
+                console.warn("[SET-TRIAL-PLEX-SYNC-WARNING]:", plexSyncErr.message || plexSyncErr);
+            }
+        }
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings");
+        return { success: true, message: `Updated access status for ${user.username} to ${status}.` };
+    } catch (e: any) {
+        console.error("[SET-TRIAL-SUBSCRIPTION-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to update trial or subscription" };
+    }
+}
+
+/**
+ * Universal helper to sync Plex library sharing for any user or sub-account.
+ */
+export async function syncUserPlexShareInternal(
+    adminToken: string,
+    targetUser: { id?: string; username: string; email?: string | null; plexUsername?: string | null; plexEmail?: string | null },
+    rawKeys: string[],
+    knownServers?: any[],
+    knownShares?: any[]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        if (!adminToken) return { success: false, error: "No Plex token" };
+        let servers = knownServers;
+        if (!servers || servers.length === 0) {
+            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            servers = srvSections.map(s => ({
+                name: s.serverName,
+                clientIdentifier: s.serverId,
+                accessToken: adminToken,
+                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            }));
+            if (servers.length === 0) {
+                servers = await getPlexServers(adminToken);
+            }
+        }
+        let shares = knownShares;
+        if (!shares) {
+            shares = await getPlexSharedServersList(adminToken);
+        }
+
+        const serverSectionsMap = new Map<string, number[]>();
+        for (const key of rawKeys) {
+            const strKey = String(key).trim();
+            if (!strKey) continue;
+            if (strKey.includes(":")) {
+                const [srvId, secStr] = strKey.split(":");
+                const secId = parseInt(secStr, 10);
+                if (!isNaN(secId)) {
+                    const list = serverSectionsMap.get(srvId) || [];
+                    list.push(secId);
+                    serverSectionsMap.set(srvId, list);
+                }
+            } else {
+                const secId = parseInt(strKey, 10);
+                if (!isNaN(secId) && servers && servers.length > 0) {
+                    const primaryId = servers[0].clientIdentifier;
+                    const list = serverSectionsMap.get(primaryId) || [];
+                    list.push(secId);
+                    serverSectionsMap.set(primaryId, list);
+                }
+            }
+        }
+
+        const friend = await findPlexUserFriend(adminToken, targetUser);
+        const resolvedEmail = (friend?.email || targetUser.plexEmail || targetUser.email || "").toLowerCase().trim();
+        const resolvedUser = (friend?.username || targetUser.plexUsername || targetUser.username || "").toLowerCase().trim();
+        const friendId = friend?.id;
+
+        const matchTarget = {
+            id: friendId,
+            email: resolvedEmail,
+            username: resolvedUser,
+            name: friend?.title || (targetUser as any).name,
+            plexEmail: targetUser.plexEmail,
+            plexUsername: targetUser.plexUsername
+        };
+
+        const shareErrors: string[] = [];
+        let isTrialUser = false;
+        if (targetUser.id) {
+            const u = await prisma.user.findUnique({
+                where: { id: targetUser.id },
+                select: { status: true, role: true, membershipTier: true }
+            }).catch(() => null);
+            if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.status !== "APPROVED" && u.role !== "ADMIN") {
+                isTrialUser = true;
+            }
+        }
+
+        for (const srv of (servers || [])) {
+            const srvId = srv.clientIdentifier;
+            const srvName = (srv.name || "").toLowerCase();
+            let targetSectionIds = serverSectionsMap.get(srvId) || [];
+            if (targetSectionIds.length === 0) {
+                for (const [mapKey, secList] of serverSectionsMap.entries()) {
+                    if (mapKey.toLowerCase() === srvId.toLowerCase() || 
+                        srvId.toLowerCase().includes(mapKey.toLowerCase()) || 
+                        mapKey.toLowerCase().includes(srvId.toLowerCase()) ||
+                        (srv.name && mapKey.toLowerCase() === srv.name.toLowerCase())) {
+                        targetSectionIds = secList;
+                        break;
+                    }
+                }
+            }
+            if (targetSectionIds.length === 0 && servers && servers.length === 1 && serverSectionsMap.size > 0) {
+                targetSectionIds = Array.from(serverSectionsMap.values()).flat();
+            }
+
+            // TRIAL USER RESTRICTION: Never share kids servers or backup servers with trial users
+            if (isTrialUser && (srvName.includes("kid") || srvName.includes("backup"))) {
+                targetSectionIds = [];
+            }
+
+            const match = (shares || []).find((s: any) => 
+                ((s.serverId && srvId && s.serverId.toLowerCase() === srvId.toLowerCase()) || !s.serverId || (servers && servers.length === 1)) &&
+                matchesPlexUser(matchTarget, s)
+            );
+
+            if (targetSectionIds.length === 0) {
+                // Safety Guard: Only delete a share if the user status is explicitly SUSPENDED, EXPIRED, or REJECTED,
+                // or if the user is a trial user on an excluded server (kids/backup),
+                // or if the user/admin explicitly configured selectedPlexLibrarySectionIds and omitted this server.
+                let shouldRemove = false;
+                if (targetUser.id) {
+                    const u = await prisma.user.findUnique({ where: { id: targetUser.id }, select: { status: true, role: true, membershipTier: true, selectedPlexLibrarySectionIds: true } }).catch(() => null);
+                    if (u && (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED")) {
+                        shouldRemove = true;
+                    } else if (u && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.status !== "APPROVED" && u.role !== "ADMIN") {
+                        shouldRemove = true;
+                    } else if (u && u.selectedPlexLibrarySectionIds !== null && u.selectedPlexLibrarySectionIds !== undefined) {
+                        shouldRemove = true;
+                    }
+                }
+                if (shouldRemove) {
+                    if (match && match.id) {
+                        await removePlexUserShare(adminToken, match.id, srvId);
+                    }
+                } else if (match && match.id && match.librarySectionIds && match.librarySectionIds.length > 0) {
+                    logger.addLog("INFO", "PLEX", `[SYNC-PLEX-GUARD] Preserved active share on "${srv.name}" (${match.librarySectionIds.length} libraries) for "${targetUser.username}" because target sections were unspecified.`);
+                }
+            } else {
+                if (match && match.id) {
+                    const upRes = await updatePlexUserShareSections(adminToken, match.id, targetSectionIds, srvId);
+                    if (!upRes.success) {
+                        const invRes = await invitePlexFriendAndShare(adminToken, srvId, resolvedEmail || resolvedUser, targetSectionIds, friendId);
+                        if (!invRes.success) {
+                            const errLower = (invRes.error || upRes.error || "").toLowerCase();
+                            if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                                logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${resolvedEmail || resolvedUser}" is owner of "${srv.name}". Full access active.`);
+                            } else {
+                                shareErrors.push(`Update on "${srv.name}": ${invRes.error || upRes.error}`);
+                            }
+                        }
+                    }
+                } else if (resolvedEmail || resolvedUser || friendId) {
+                    const invRes = await invitePlexFriendAndShare(adminToken, srvId, resolvedEmail || resolvedUser, targetSectionIds, friendId);
+                    if (!invRes.success) {
+                        const errLower = (invRes.error || "").toLowerCase();
+                        if (errLower.includes("owner") || errLower.includes("cannot share with self") || errLower.includes("already owner") || errLower.includes("own server")) {
+                            logger.addLog("INFO", "PLEX", `[GRANT/SHARE] User "${resolvedEmail || resolvedUser}" is owner of "${srv.name}". Full access active.`);
+                        } else {
+                            shareErrors.push(`Share on "${srv.name}": ${invRes.error}`);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (shareErrors.length > 0) {
+            return { success: false, error: shareErrors.join("; ") };
+        }
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+}
+
+/**
+ * Bulk updates subscription or trial status for multiple users simultaneously.
+ * Ideal for setting multiple selected users to subscribed through the end of the year or custom date.
+ */
+export async function bulkSetUsersTrialOrSubscriptionAction(
+    userIds: string[], 
+    type: "REST_OF_YEAR" | "1_YEAR" | "30_DAYS" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL", 
+    customDateOrDays?: string | number
+) {
+    try {
+        await verifyAdmin();
+        if (!userIds || userIds.length === 0) {
+            return { success: false, error: "No users selected for bulk update." };
+        }
+
+        let updatedCount = 0;
+        let failedCount = 0;
+        const errors: string[] = [];
+
+        for (const userId of userIds) {
+            try {
+                const res = await setUserTrialOrSubscription(userId, type, customDateOrDays);
+                if (res.success) {
+                    updatedCount++;
+                } else {
+                    failedCount++;
+                    errors.push(`${userId}: ${res.error}`);
+                }
+            } catch (err: any) {
+                failedCount++;
+                errors.push(`${userId}: ${err.message}`);
+            }
+        }
+
+        revalidatePath("/settings/access");
+        return {
+            success: true,
+            updatedCount,
+            failedCount,
+            errors: errors.slice(0, 5),
+            message: `Successfully updated ${updatedCount} user(s)${failedCount > 0 ? `, ${failedCount} failed` : ""}.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed bulk updating users" };
+    }
+}
+
+/**
+ * Repairs and restores full library access across ALL Plex servers (Main + Backup)
+ * for all approved and active trial users.
+ */
+export async function restoreAllUsersPlexAccessAction() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+        if (!adminToken) {
+            return { success: false, error: "Plex admin token not configured in settings." };
+        }
+
+        const serversWithSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+        if (serversWithSections.length === 0) {
+            return { success: false, error: "No Plex servers discovered." };
+        }
+
+        // Build master list of all section keys across ALL servers (Main & Backup)
+        const allServersFullKeys = serversWithSections.flatMap(srv => (srv.sections || []).map(sec => `${srv.serverId}:${sec.id}`));
+        const kidsSectionsFullKeys = (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+        const defaultRawKeys = (settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+        // Master full keys encompasses all sections across all discovered Plex servers
+        const masterFullKeys = allServersFullKeys;
+
+        const users = await prisma.user.findMany({
+            where: {
+                status: { in: ["APPROVED", "TRIAL"] }
+            }
+        });
+
+        let servers = await getPlexServers(adminToken);
+        if (servers.length === 0) {
+            servers = serversWithSections.map(s => ({
+                name: s.serverName,
+                clientIdentifier: s.serverId,
+                accessToken: adminToken,
+                connections: s.serverUrl ? [{ uri: s.serverUrl, local: true, relay: false, address: "", port: 32400 }] : []
+            }));
+        }
+        const shares = await getPlexSharedServersList(adminToken);
+
+        let restoredCount = 0;
+        const errors: string[] = [];
+
+        for (const user of users) {
+            try {
+                let targetKeys: string[] = [];
+                if (user.accountType === "KID") {
+                    targetKeys = kidsSectionsFullKeys.length > 0 ? kidsSectionsFullKeys : allServersFullKeys;
+                } else if (user.selectedPlexLibrarySectionIds) {
+                    targetKeys = user.selectedPlexLibrarySectionIds.split(",").map(s => s.trim()).filter(Boolean);
+                } else {
+                    // Full access across all servers for approved/trial regular users
+                    targetKeys = allServersFullKeys;
+                }
+
+                if (targetKeys.length > 0) {
+                    const res = await syncUserPlexShareInternal(adminToken, user, targetKeys, servers, shares);
+                    if (res.success) {
+                        await prisma.user.update({
+                            where: { id: user.id },
+                            data: { plexLibrarySectionIds: targetKeys.join(",") }
+                        }).catch(() => {});
+                        restoredCount++;
+                    } else if (res.error) {
+                        errors.push(`${user.username}: ${res.error}`);
+                    }
+                }
+            } catch (uErr: any) {
+                errors.push(`${user.username}: ${uErr.message}`);
+            }
+        }
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+
+        logger.addLog("SUCCESS", "PLEX", `[RESTORE-ALL-ACCESS] Restored full Plex library access for ${restoredCount} users across ${serversWithSections.length} servers.`);
+        return {
+            success: true,
+            message: `Successfully restored Plex library access for ${restoredCount} users across ${serversWithSections.length} servers.`,
+            restoredCount,
+            totalUsers: users.length,
+            serversCount: serversWithSections.length,
+            errors: errors.slice(0, 5)
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to restore user library access" };
+    }
+}
+
+export async function markUserConverted(userId: string) {
+    try {
+        await verifyAdmin();
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { membershipTier: true } });
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                status: "APPROVED",
+                membershipTier: (user?.membershipTier === "TRIAL" || !user?.membershipTier) ? "STANDARD" : user.membershipTier,
+                trialEndsAt: null,
+                convertedAt: new Date()
+            }
+        });
+        revalidatePath("/settings/access");
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getReferralStats() {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                username: true,
+                status: true,
+                convertedAt: true,
+                trialEndsAt: true,
+                createdAt: true,
+                referredByUserId: true,
+                referralCode: true,
+                referredBy: {
+                    select: { id: true, username: true }
+                },
+                _count: {
+                    select: { referrals: true }
+                }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        // Compute leaderboard and statistics
+        const userMap = new Map<string, any>();
+        let totalTrials = 0;
+        let totalConverted = 0;
+
+        for (const u of users) {
+            if (u.status === "TRIAL") totalTrials++;
+            if (u.convertedAt || (u.status === "APPROVED" && u.referredByUserId)) totalConverted++;
+
+            const count = u._count?.referrals || 0;
+            if (count > 0) {
+                userMap.set(u.id, {
+                    id: u.id,
+                    username: u.username,
+                    referralCode: u.referralCode,
+                    totalReferred: count,
+                    convertedCount: users.filter(x => x.referredByUserId === u.id && (x.status === "APPROVED" || x.convertedAt)).length
+                });
+            }
+        }
+
+        const leaderboard = Array.from(userMap.values())
+            .sort((a, b) => b.totalReferred - a.totalReferred)
+            .slice(0, 10);
+
+        return {
+            success: true,
+            stats: {
+                totalUsers: users.length,
+                totalTrials,
+                totalConverted,
+                leaderboard
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Credit an existing member for a referral (manual link / credit).
+ * Links the newly joined user to the referrer, marks as converted, and applies referral reward credits.
+ * Optionally extends the referrer's active subscription expiry date by 1 month.
+ */
+export async function creditUserReferralAction(params: {
+    referrerUserId: string;
+    referredUserId: string;
+    extendSubscriptionExpiry?: boolean;
+    bonusMonths?: number;
+    adminNotes?: string;
+}) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const { referrerUserId, referredUserId, extendSubscriptionExpiry, bonusMonths, adminNotes } = params;
+
+        if (!referrerUserId || !referredUserId) {
+            return { success: false, error: "Both the referring member and the referred user must be selected." };
+        }
+
+        if (referrerUserId === referredUserId) {
+            return { success: false, error: "A user cannot refer themselves." };
+        }
+
+        const referrer = await prisma.user.findUnique({
+            where: { id: referrerUserId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!referrer) {
+            return { success: false, error: "Referring member not found in database." };
+        }
+
+        const referredUser = await prisma.user.findUnique({
+            where: { id: referredUserId }
+        });
+
+        if (!referredUser) {
+            return { success: false, error: "Referred user not found in database." };
+        }
+
+        const now = new Date();
+        const convertedAtDate = referredUser.convertedAt || now;
+
+        // 1. Link referred user to referrer and mark as converted
+        await prisma.user.update({
+            where: { id: referredUserId },
+            data: {
+                referredByUserId: referrerUserId,
+                convertedAt: convertedAtDate,
+                status: referredUser.status === "PENDING" ? "APPROVED" : referredUser.status
+            }
+        });
+
+        // 2. If bonus months requested, add them to referrer
+        if (bonusMonths && bonusMonths > 0) {
+            await prisma.user.update({
+                where: { id: referrerUserId },
+                data: {
+                    referralBonusMonths: {
+                        increment: bonusMonths
+                    }
+                }
+            });
+        }
+
+        // 3. If extendSubscriptionExpiry requested, extend the referrer's subscription by 1 month (or bonusMonths)
+        let extendedExpiryDateFormatted: string | null = null;
+        if (extendSubscriptionExpiry && referrer.subscriptionEndsAt) {
+            const monthsToAdd = (bonusMonths && bonusMonths > 0) ? bonusMonths : 1;
+            const currentExp = new Date(referrer.subscriptionEndsAt);
+            const newExp = new Date(currentExp);
+            newExp.setMonth(newExp.getMonth() + monthsToAdd);
+
+            await prisma.user.update({
+                where: { id: referrerUserId },
+                data: {
+                    subscriptionEndsAt: newExp
+                }
+            });
+
+            extendedExpiryDateFormatted = new Intl.DateTimeFormat("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric"
+            }).format(newExp);
+        }
+
+        // Fetch fresh referrer with updated referrals to compute rewards
+        const freshReferrer = await prisma.user.findUnique({
+            where: { id: referrerUserId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const rewardSummary = calculateUserRenewalSummary({
+            user: freshReferrer || referrer,
+            yearlyPrice,
+            monthlyPrice
+        });
+
+        logger.addLog(
+            "INFO",
+            "AUTH",
+            `[REFERRAL-CREDIT] Admin manually credited referral: user "${referredUser.username}" linked to referrer "${referrer.username}". Total converted referrals: ${rewardSummary.convertedReferralsCount}. Next renewal discounted to $${rewardSummary.discountedYearlyPrice.toFixed(2)}${extendedExpiryDateFormatted ? ` (Expiry extended to ${extendedExpiryDateFormatted})` : ""}.${adminNotes ? ` Note: ${adminNotes}` : ""}`
+        );
+
+        // 4. Optionally dispatch Referral Reward email to referrer
+        try {
+            if (referrer.email && settings?.emailNotificationsEnabled && settings?.notifyReferralReward) {
+                const appUrl = await getAppUrl();
+                const { subject, html } = await renderEmailTemplate("referral_reward_credited", {
+                    username: referrer.username,
+                    friendUsername: referredUser.username,
+                    totalReferralsCount: rewardSummary.convertedReferralsCount,
+                    renewalImpactText: `1 Month Off Next Statement ($${rewardSummary.rewardDiscountAmount.toFixed(2)} discount)`,
+                    annualDiscountText: `$${rewardSummary.discountedYearlyPrice.toFixed(2)} instead of $${yearlyPrice.toFixed(2)}`,
+                    delayedMonthDate: rewardSummary.delayedMonthlyStartDate || "Next Month",
+                    appUrl
+                });
+
+                await sendOrQueueEmail({
+                    to: referrer.email,
+                    subject,
+                    html,
+                    templateId: "referral_reward_credited",
+                    targetUser: referrer.username,
+                    userId: referrer.id
+                });
+                logger.addLog("INFO", "EMAIL", `Dispatched referral reward notification to "${referrer.username}" (${referrer.email}) for referring "${referredUser.username}"`);
+            }
+        } catch (emailErr: any) {
+            console.warn("[REFERRAL-CREDIT-EMAIL-WARNING]:", emailErr.message || emailErr);
+        }
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings");
+
+        return {
+            success: true,
+            message: `Successfully credited @${referrer.username} for referring @${referredUser.username}! 1 free month credit applied ($${rewardSummary.rewardDiscountAmount.toFixed(2)} value).${extendedExpiryDateFormatted ? ` Expiry extended to ${extendedExpiryDateFormatted}.` : ""}`,
+            rewardSummary
+        };
+    } catch (e: any) {
+        console.error("[CREDIT-USER-REFERRAL-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to credit referral." };
+    }
+}
+
+/**
+ * Unlink a user from their referring member.
+ */
+export async function unlinkUserReferralAction(referredUserId: string) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const user = await prisma.user.findUnique({
+            where: { id: referredUserId },
+            include: { referredBy: { select: { username: true } } }
+        });
+
+        if (!user) return { success: false, error: "User not found." };
+
+        const prevReferrer = user.referredBy?.username;
+
+        await prisma.user.update({
+            where: { id: referredUserId },
+            data: { referredByUserId: null }
+        });
+
+        logger.addLog("INFO", "AUTH", `[REFERRAL-UNLINK] Admin unlinked referral for "${user.username}" (previously referred by "${prevReferrer || 'N/A'}").`);
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings");
+
+        return { success: true, message: `Successfully unlinked referral for @${user.username}.` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to unlink referral." };
+    }
+}
+
+/**
+ * Get the renewal and referral summary for a specific user.
+ */
+export async function getUserRenewalSummaryAction(userId: string) {
+    try {
+        await ensureSchemaColumns();
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!user) return { success: false, error: "User not found." };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const summary = calculateUserRenewalSummary({
+            user,
+            yearlyPrice,
+            monthlyPrice
+        });
+
+        return { success: true, summary };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to get renewal summary." };
+    }
+}
+
+/**
+ * Send an advance subscription renewal & payment reminder notice to a user.
+ */
+export async function sendSubscriptionRenewalReminderAction(userId: string) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        status: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!user) return { success: false, error: "User not found." };
+        if (!user.email) return { success: false, error: `User @${user.username} has no email address configured.` };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const summary = calculateUserRenewalSummary({
+            user,
+            yearlyPrice,
+            monthlyPrice
+        });
+
+        const appUrl = await getAppUrl();
+        const renewalDateStr = summary.expirationDateFormatted || "Upcoming Renewal";
+        const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
+
+        const referralDiscountText = summary.convertedReferralsCount > 0
+            ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+            : "No active referral credits";
+
+        const monthlyAlternativeText = summary.delayedMonthlyStartDate
+            ? `$${monthlyPrice}/month starting ${summary.delayedMonthlyStartDate}`
+            : `$${monthlyPrice}/month starting ${renewalDateStr}`;
+
+        const { subject, html } = await renderEmailTemplate("subscription_renewal_reminder", {
+            username: user.username,
+            renewalDate: renewalDateStr,
+            basePrice: `$${yearlyPrice.toFixed(2)} / year`,
+            referralDiscountText,
+            amountDue: `$${summary.discountedYearlyPrice.toFixed(2)}`,
+            monthlyAlternativeText,
+            referralNoticeDetails: summary.reminderNoticeText,
+            appUrl
+        });
+
+        await sendOrQueueEmail({
+            to: user.email,
+            subject,
+            html,
+            templateId: "subscription_renewal_reminder",
+            targetUser: user.username,
+            userId: user.id
+        });
+
+        logger.addLog("INFO", "EMAIL", `Dispatched subscription renewal reminder to "${user.username}" (${user.email}). Amount due: $${summary.discountedYearlyPrice.toFixed(2)}`);
+
+        return {
+            success: true,
+            message: `Successfully dispatched renewal reminder notice to @${user.username} (${user.email})! Amount due: $${summary.discountedYearlyPrice.toFixed(2)}${summary.convertedReferralsCount > 0 ? ` ($${summary.rewardDiscountAmount.toFixed(2)} referral discount applied).` : "."}`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to send renewal reminder." };
+    }
+}
+
+export async function savePaymentAndTrialSettings(formData: FormData) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const defaultTrialDays = parseInt((formData.get("defaultTrialDays") as string) || "14", 10) || 14;
+        const defaultPlexLibraries = (formData.get("defaultPlexLibraries") as string)?.trim() || "";
+        const defaultTrialPlexLibraries = (formData.get("defaultTrialPlexLibraries") as string)?.trim() || "";
+        const defaultKidsPlexLibraries = (formData.get("defaultKidsPlexLibraries") as string)?.trim() || "";
+        const paymentPaypal = (formData.get("paymentPaypal") as string)?.trim() || "";
+        const paymentVenmo = (formData.get("paymentVenmo") as string)?.trim() || "";
+        const paymentCashApp = (formData.get("paymentCashApp") as string)?.trim() || "";
+        const paymentZelle = (formData.get("paymentZelle") as string)?.trim() || "";
+        const paymentInstructions = (formData.get("paymentInstructions") as string) || "";
+        const subscriptionPrice = (formData.get("subscriptionPrice") as string)?.trim() || "";
+        const yearlyPrice = parseFloat((formData.get("yearlyPrice") as string) || "180") || 180;
+        const monthlyPrice = parseFloat((formData.get("monthlyPrice") as string) || "15") || (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const tier2YearlyPrice = parseFloat((formData.get("tier2YearlyPrice") as string) || "240") || 240;
+        const tier2MonthlyPrice = parseFloat((formData.get("tier2MonthlyPrice") as string) || "25") || (tier2YearlyPrice > 0 ? Math.round((tier2YearlyPrice / 12) * 100) / 100 : 25);
+        const availableAddons = (formData.get("availableAddons") as string)?.trim() || null;
+        const renewalMonth = parseInt((formData.get("renewalMonth") as string) || "1", 10) || 1;
+        const renewalDay = parseInt((formData.get("renewalDay") as string) || "1", 10) || 1;
+        const billingType = (formData.get("billingType") as string)?.trim() || "YEARLY_PRORATED";
+        const requireReferralForSignup = formData.get("requireReferralForSignup") === "true";
+        const discordInviteUrl = (formData.get("discordInviteUrl") as string)?.trim() || null;
+        const rawGraceDays = formData.get("subscriptionGracePeriodDays");
+        const subscriptionGracePeriodDays = rawGraceDays ? parseInt(rawGraceDays as string, 10) : 3;
+        const membershipTiersEnabled = formData.get("membershipTiersEnabled") !== "false";
+        const autoSuspendExpiredAccounts = formData.get("autoSuspendExpiredAccounts") === "true";
+
+        const updateData: any = {
+            defaultTrialDays,
+            defaultPlexLibraries,
+            defaultTrialPlexLibraries,
+            defaultKidsPlexLibraries,
+            paymentPaypal,
+            paymentVenmo,
+            paymentCashApp,
+            paymentZelle,
+            paymentInstructions,
+            subscriptionPrice,
+            yearlyPrice,
+            monthlyPrice,
+            tier2YearlyPrice,
+            tier2MonthlyPrice,
+            renewalMonth,
+            renewalDay,
+            billingType,
+            requireReferralForSignup,
+            discordInviteUrl,
+            subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
+            membershipTiersEnabled,
+            autoSuspendExpiredAccounts
+        };
+        if (availableAddons !== null) {
+            updateData.availableAddons = availableAddons;
+        }
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: updateData,
+            create: {
+                id: "global",
+                ...updateData
+            }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return {
+            success: true,
+            message: "Payment & Trial settings saved successfully!",
+            settings: {
+                ...updateData,
+                discordInviteUrl: discordInviteUrl || ""
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to save settings" };
+    }
+}
+
+export async function getPaymentAndTrialSettings() {
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const defaultTrialDays = settings?.defaultTrialDays ?? 14;
+        const yearlyPrice = settings?.yearlyPrice ?? 180;
+        const monthlyPrice = settings?.monthlyPrice ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const tier2YearlyPrice = settings?.tier2YearlyPrice ?? 240;
+        const tier2MonthlyPrice = settings?.tier2MonthlyPrice ?? (tier2YearlyPrice > 0 ? Math.round((tier2YearlyPrice / 12) * 100) / 100 : 25);
+        const renewalMonth = settings?.renewalMonth ?? 1;
+        const renewalDay = settings?.renewalDay ?? 1;
+
+        const proratedPreview = calculateProratedBilling({
+            startDate: new Date(),
+            trialDays: defaultTrialDays,
+            yearlyPrice,
+            monthlyPrice,
+            renewalMonth,
+            renewalDay
+        });
+
+        return {
+            success: true,
+            settings: {
+                defaultTrialDays,
+                defaultPlexLibraries: settings?.defaultPlexLibraries ?? "",
+                defaultTrialPlexLibraries: settings?.defaultTrialPlexLibraries ?? "",
+                defaultKidsPlexLibraries: settings?.defaultKidsPlexLibraries ?? "",
+                paymentPaypal: settings?.paymentPaypal ?? "",
+                paymentVenmo: settings?.paymentVenmo ?? "",
+                paymentCashApp: settings?.paymentCashApp ?? "",
+                paymentZelle: settings?.paymentZelle ?? "",
+                paymentInstructions: settings?.paymentInstructions ?? "",
+                subscriptionPrice: settings?.subscriptionPrice ?? `$${yearlyPrice} / year`,
+                yearlyPrice,
+                monthlyPrice,
+                tier2YearlyPrice,
+                tier2MonthlyPrice,
+                availableAddons: settings?.availableAddons ?? null,
+                renewalMonth,
+                renewalDay,
+                billingType: settings?.billingType ?? "YEARLY_PRORATED",
+                requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
+                discordInviteUrl: settings?.discordInviteUrl ?? "",
+                subscriptionGracePeriodDays: settings?.subscriptionGracePeriodDays ?? 3,
+                membershipTiersEnabled: settings?.membershipTiersEnabled ?? true,
+                autoSuspendExpiredAccounts: settings?.autoSuspendExpiredAccounts ?? false
+            },
+            proratedPreview
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function getUserReferralInfo() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: {
+                id: true,
+                username: true,
+                status: true,
+                role: true,
+                membershipTier: true,
+                referralCode: true,
+                subscriptionEndsAt: true,
+                referralBonusMonths: true,
+                referrals: {
+                    select: {
+                        id: true,
+                        username: true,
+                        status: true,
+                        createdAt: true,
+                        convertedAt: true
+                    }
+                }
+            }
+        });
+
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        const isTrial = (dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.status !== "APPROVED" && dbUser.role !== "ADMIN";
+
+        let code = dbUser.referralCode;
+        if (!code && !isTrial) {
+            code = dbUser.username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+            await prisma.user.update({
+                where: { id: dbUser.id },
+                data: { referralCode: code }
+            }).catch(() => {});
+        }
+
+        const totalReferrals = dbUser.referrals.length;
+        const activeTrials = dbUser.referrals.filter(r => r.status === "TRIAL").length;
+        const conversions = dbUser.referrals.filter(r => r.convertedAt || r.status === "APPROVED").length;
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const yearlyPrice = settings?.yearlyPrice || 180;
+        const monthlyPrice = settings?.monthlyPrice || 15;
+
+        const renewalSummary = calculateUserRenewalSummary({
+            user: dbUser,
+            yearlyPrice,
+            monthlyPrice
+        });
+
+        const appUrl = await getAppUrl();
+        const inviteUrl = (isTrial || !code) ? null : `${appUrl}/join?ref=${encodeURIComponent(code)}`;
+
+        return {
+            success: true,
+            referralCode: isTrial ? null : code,
+            appUrl,
+            inviteUrl,
+            canRefer: !isTrial,
+            totalReferrals,
+            activeTrials,
+            conversions,
+            referrals: dbUser.referrals,
+            renewalSummary
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function registerTrialUserFromInvite(data: {
+    username: string;
+    email: string;
+    password: string;
+    plexEmailOrUser?: string;
+    referralCode?: string;
+}) {
+    try {
+        const cleanUser = data.username.trim();
+        const cleanEmail = data.email.trim().toLowerCase();
+        const cleanPlex = (data.plexEmailOrUser || cleanEmail).trim();
+        const refCode = (data.referralCode || "").trim();
+
+        if (!cleanUser || !cleanEmail || !data.password) {
+            return { success: false, error: "Username, email, and password are required." };
+        }
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!refCode) {
+            return { success: false, error: "A referral code or existing member reference (name or username) is required to join." };
+        }
+
+        const approvedUsers = await prisma.user.findMany({
+            where: {
+                OR: [
+                    { status: "APPROVED" },
+                    { role: "ADMIN" }
+                ]
+            },
+            select: { id: true, username: true, name: true, referralCode: true }
+        });
+
+        const lowerRef = refCode.toLowerCase();
+        const referrer = approvedUsers.find(u => 
+            (u.referralCode && u.referralCode.toLowerCase() === lowerRef) ||
+            (u.username && u.username.toLowerCase() === lowerRef) ||
+            (u.name && u.name.toLowerCase() === lowerRef)
+        );
+
+        if (!referrer) {
+            return { success: false, error: "Invalid referral code or member reference. You must be invited by an active member." };
+        }
+
+        // Check if username or email already taken
+        const existing = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { username: cleanUser },
+                    { email: cleanEmail }
+                ]
+            }
+        });
+        if (existing) {
+            return { success: false, error: "An account with that username or email already exists. Please log in." };
+        }
+
+        const hashedPassword = await hash(data.password, 10);
+        const trialDays = settings?.defaultTrialDays || 14;
+        const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+
+        const refSlug = cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        let userReferralCode = refSlug;
+        const existingRef = await prisma.user.findUnique({ where: { referralCode: userReferralCode } });
+        if (existingRef) {
+            userReferralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
+        }
+
+        const trialLibConfig = settings?.defaultTrialPlexLibraries || settings?.defaultPlexLibraries || "";
+        let rawDefaultKeys = trialLibConfig 
+            ? trialLibConfig.split(",").map((s: string) => s.trim()).filter(Boolean)
+            : [];
+
+        // Ensure trial users never receive access to kids or backup servers
+        if (settings?.mainPlexToken) {
+            try {
+                const adminToken = decryptData(settings.mainPlexToken);
+                if (adminToken) {
+                    const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                    const validKeys = new Set<string>();
+                    for (const s of srvSections) {
+                        const sName = (s.serverName || "").toLowerCase();
+                        if (!sName.includes("kid") && !sName.includes("backup")) {
+                            for (const sec of (s.sections || [])) {
+                                const secTitle = (sec.title || "").toLowerCase();
+                                if (!secTitle.includes("kid")) {
+                                    validKeys.add(`${s.serverId}:${sec.id}`);
+                                    validKeys.add(`${s.serverId}:${sec.key}`);
+                                    validKeys.add(String(sec.id));
+                                    validKeys.add(String(sec.key));
+                                }
+                            }
+                        }
+                    }
+                    if (rawDefaultKeys.length > 0 && validKeys.size > 0) {
+                        rawDefaultKeys = rawDefaultKeys.filter(k => 
+                            validKeys.has(k) || Array.from(validKeys).some(vk => vk.endsWith(`:${k}`) || k.endsWith(`:${vk}`))
+                        );
+                    }
+                }
+            } catch (_) {}
+        }
+
+        const newUser = await prisma.user.create({
+            data: {
+                username: cleanUser,
+                email: cleanEmail,
+                password: hashedPassword,
+                role: "USER",
+                status: "TRIAL",
+                trialEndsAt,
+                plexEmail: cleanPlex.includes("@") ? cleanPlex : null,
+                plexUsername: !cleanPlex.includes("@") ? cleanPlex : null,
+                plexLibrarySectionIds: rawDefaultKeys.join(","),
+                referralCode: userReferralCode,
+                referredByUserId: referrer?.id || null
+            }
+        });
+
+        // Automatically invite to Plex server with default libraries
+        if (settings?.mainPlexToken) {
+            try {
+                const requirePlexApproval = settings?.requireApprovalForPlexChanges !== false;
+                if (requirePlexApproval) {
+                    const approval = await prisma.adminApproval.create({
+                        data: {
+                            type: "PLEX_ACCESS_GRANT",
+                            status: "PENDING",
+                            title: `Plex Invite: New Trial (${newUser.username})`,
+                            description: `New member registered via invite. Pending admin approval before sending Plex invite and granting ${rawDefaultKeys.length} libraries.`,
+                            targetUser: newUser.username,
+                            targetEmail: newUser.email,
+                            userId: newUser.id,
+                            payload: JSON.stringify({
+                                userId: newUser.id,
+                                action: "INVITE_TRIAL_PLEX",
+                                selectedKeys: rawDefaultKeys,
+                                cleanPlex
+                            })
+                        }
+                    });
+                    logger.addLog("INFO", "APPROVAL", `New trial registration Plex invite for "${newUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                } else {
+                    const adminToken = decryptData(settings.mainPlexToken);
+                    const servers = await getPlexServers(adminToken);
+
+                    const serverSectionsMap = new Map<string, number[]>();
+                    for (const key of rawDefaultKeys) {
+                        if (key.includes(":")) {
+                            const [srvId, secStr] = key.split(":");
+                            const secId = parseInt(secStr, 10);
+                            if (!isNaN(secId)) {
+                                const list = serverSectionsMap.get(srvId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(srvId, list);
+                            }
+                        } else {
+                            const secId = parseInt(key, 10);
+                            if (!isNaN(secId) && servers.length > 0) {
+                                const primaryId = servers[0].clientIdentifier;
+                                const list = serverSectionsMap.get(primaryId) || [];
+                                list.push(secId);
+                                serverSectionsMap.set(primaryId, list);
+                            }
+                        }
+                    }
+
+                    for (const server of servers) {
+                        const srvId = server.clientIdentifier;
+                        const sections = serverSectionsMap.get(srvId) || [];
+                        if (sections.length > 0) {
+                            await invitePlexFriendAndShare(
+                                adminToken, 
+                                srvId, 
+                                cleanPlex, 
+                                sections
+                            );
+                        }
+                    }
+                }
+            } catch (plexErr: any) {
+                console.warn("[AUTO-PLEX-INVITE-WARNING]:", plexErr.message || plexErr);
+            }
+        }
+
+        // Automatically create session cookie so user is logged in
+        try {
+            await createSession(newUser.id, newUser.username, newUser.role, newUser.status, newUser.trialEndsAt, newUser.subscriptionEndsAt);
+        } catch (sessErr) {
+            console.warn("[AUTO-SESSION-CREATE-WARNING]:", sessErr);
+        }
+
+        return {
+            success: true,
+            userId: newUser.id,
+            username: newUser.username,
+            trialDays,
+            trialEndsAt: trialEndsAt.toISOString(),
+            message: `Account created! Your ${trialDays}-day free trial is now active.`
+        };
+    } catch (e: any) {
+        console.error("[REGISTER-TRIAL-USER-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to complete registration." };
+    }
+}
+
+export async function getPublicJoinConfig(refCode?: string) {
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        let referrerName: string | null = null;
+        let validReferral = false;
+
+        const cleanRef = (refCode || "").trim();
+        if (cleanRef) {
+            const approvedUsers = await prisma.user.findMany({
+                where: {
+                    OR: [
+                        { status: "APPROVED" },
+                        { role: "ADMIN" }
+                    ]
+                },
+                select: { id: true, username: true, name: true, referralCode: true }
+            }).catch(() => []);
+
+            const lowerRef = cleanRef.toLowerCase();
+            const referrer = approvedUsers.find(u => 
+                (u.referralCode && u.referralCode.toLowerCase() === lowerRef) ||
+                (u.username && u.username.toLowerCase() === lowerRef) ||
+                (u.name && u.name.toLowerCase() === lowerRef)
+            );
+
+            if (referrer) {
+                referrerName = referrer.name || referrer.username;
+                validReferral = true;
+            }
+        }
+
+        const defaultTrialDays = settings?.defaultTrialDays ?? 14;
+        const yearlyPrice = settings?.yearlyPrice ?? 180;
+        const monthlyPrice = settings?.monthlyPrice ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const renewalMonth = settings?.renewalMonth ?? 1;
+        const renewalDay = settings?.renewalDay ?? 1;
+
+        const proratedBilling = calculateProratedBilling({
+            startDate: new Date(),
+            trialDays: defaultTrialDays,
+            yearlyPrice,
+            monthlyPrice,
+            renewalMonth,
+            renewalDay
+        });
+
+        return {
+            success: true,
+            config: {
+                defaultTrialDays,
+                paymentPaypal: settings?.paymentPaypal ?? "",
+                paymentVenmo: settings?.paymentVenmo ?? "",
+                paymentCashApp: settings?.paymentCashApp ?? "",
+                paymentZelle: settings?.paymentZelle ?? "",
+                paymentInstructions: settings?.paymentInstructions ?? "",
+                subscriptionPrice: settings?.subscriptionPrice ?? `$${yearlyPrice} / year`,
+                yearlyPrice,
+                monthlyPrice,
+                tier2YearlyPrice: settings?.tier2YearlyPrice ?? 240,
+                tier2MonthlyPrice: settings?.tier2MonthlyPrice ?? 25,
+                renewalMonth,
+                renewalDay,
+                billingType: settings?.billingType ?? "YEARLY_PRORATED",
+                requireReferralForSignup: Boolean(settings?.requireReferralForSignup),
+                discordInviteUrl: settings?.discordInviteUrl ?? "",
+                membershipTiersEnabled: settings?.membershipTiersEnabled ?? true,
+                referrerName,
+                validReferral,
+                proratedBilling,
+                smtpFrom: settings?.smtpFrom || settings?.smtpUser || "",
+                appUrl: await getAppUrl()
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+export async function validateMemberReferenceAction(reference: string): Promise<{
+    success: boolean;
+    valid: boolean;
+    referrerName?: string;
+    referralCode?: string;
+    error?: string;
+}> {
+    try {
+        const clean = (reference || "").trim();
+        if (!clean) {
+            return { success: false, valid: false, error: "Please enter a referral code or existing member reference." };
+        }
+        const lower = clean.toLowerCase();
+        const approvedUsers = await prisma.user.findMany({
+            where: {
+                OR: [
+                    { status: "APPROVED" },
+                    { role: "ADMIN" }
+                ]
+            },
+            select: { id: true, username: true, name: true, referralCode: true }
+        });
+
+        const match = approvedUsers.find(u =>
+            (u.referralCode && u.referralCode.toLowerCase() === lower) ||
+            (u.username && u.username.toLowerCase() === lower) ||
+            (u.name && u.name.toLowerCase() === lower)
+        );
+
+        if (match) {
+            return {
+                success: true,
+                valid: true,
+                referrerName: match.name || match.username,
+                referralCode: match.referralCode || match.username
+            };
+        }
+
+        return {
+            success: true,
+            valid: false,
+            error: `We couldn't find an active member or invite matching "${clean}". Please check with the friend who invited you.`
+        };
+    } catch (e: any) {
+        return { success: false, valid: false, error: e.message || "Failed to validate invite reference." };
+    }
+}
+
 export async function sendManualEmail(formData: FormData) {
     await verifyAdmin();
     const to = formData.get("to") as string;
@@ -1316,30 +6211,1295 @@ export async function sendManualEmail(formData: FormData) {
     if (!to || !subject || !message) return { error: "All fields are required." };
 
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        
-        if (!settings?.smtpHost || !settings?.smtpUser) {
-            return { error: "SMTP settings not configured." };
-        }
-
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort,
-            secure: settings.smtpPort === 465, 
-            auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-        } as any);
-
-        await transporter.sendMail({
-            from: `"Portalarr" <${settings.smtpUser}>`,
-            to: to,
-            subject: subject,
-            html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${message}</div>` 
+        const mailRes = await sendOrQueueEmail({
+            to,
+            subject,
+            html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${message}</div>`,
+            text: message,
+            templateId: "manual_email",
+            targetUser: to
         });
 
-        return { success: true };
+        if (!mailRes.success) {
+            return { error: mailRes.error || "Failed to send email. Please check your SMTP settings in the General tab." };
+        }
+
+        return { success: true, queued: mailRes.queued, message: mailRes.queued ? "Email staged in Admin Approval Queue for review." : "Email sent successfully!" };
     } catch (e: any) {
         console.error("Email Failed:", e);
-        return { error: "Failed to send email. Please check your SMTP settings in the General tab." };
+        return { error: e.message || "Failed to send email. Please check your SMTP settings in the General tab." };
+    }
+}
+
+// ==========================================
+// USER NOTIFICATION & PREFERENCE ACTIONS
+// ==========================================
+
+export async function getUserNotificationPreferencesAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        let pref = await prisma.userNotificationPreference.findUnique({
+            where: { userId: user.id }
+        });
+
+        if (!pref) {
+            pref = await prisma.userNotificationPreference.create({
+                data: {
+                    userId: user.id,
+                    emailMediaReady: false,
+                    emailNewContent: false,
+                    emailAnnouncements: false,
+                    emailSupportTickets: true,
+                    emailSubscriptionReminders: true,
+                    emailReferralRewards: true,
+                    discordMediaReady: false,
+                    discordAnnouncements: false,
+                    discordWebhookUrl: null
+                }
+            });
+        }
+
+        return { success: true, preferences: pref };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to fetch notification preferences" };
+    }
+}
+
+export async function updateUserNotificationPreferencesAction(data: {
+    emailMediaReady?: boolean;
+    emailNewContent?: boolean;
+    emailAnnouncements?: boolean;
+    emailSupportTickets?: boolean;
+    emailSubscriptionReminders?: boolean;
+    emailReferralRewards?: boolean;
+    discordMediaReady?: boolean;
+    discordAnnouncements?: boolean;
+    discordWebhookUrl?: string | null;
+}) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+
+        const updated = await prisma.userNotificationPreference.upsert({
+            where: { userId: user.id },
+            update: {
+                emailMediaReady: data.emailMediaReady ?? false,
+                emailNewContent: data.emailNewContent ?? false,
+                emailAnnouncements: data.emailAnnouncements ?? false,
+                emailSupportTickets: data.emailSupportTickets ?? true,
+                emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
+                emailReferralRewards: data.emailReferralRewards ?? true,
+                discordMediaReady: Boolean(data.discordMediaReady),
+                discordAnnouncements: Boolean(data.discordAnnouncements),
+                discordWebhookUrl: data.discordWebhookUrl?.trim() || null
+            },
+            create: {
+                userId: user.id,
+                emailMediaReady: data.emailMediaReady ?? false,
+                emailNewContent: data.emailNewContent ?? false,
+                emailAnnouncements: data.emailAnnouncements ?? false,
+                emailSupportTickets: data.emailSupportTickets ?? true,
+                emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
+                emailReferralRewards: data.emailReferralRewards ?? true,
+                discordMediaReady: Boolean(data.discordMediaReady),
+                discordAnnouncements: Boolean(data.discordAnnouncements),
+                discordWebhookUrl: data.discordWebhookUrl?.trim() || null
+            }
+        });
+
+        return { success: true, message: "Notification preferences updated successfully!", preferences: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update notification preferences" };
+    }
+}
+
+export async function getUserContentPreferencesAction(targetUserId?: string) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        
+        let effectiveUserId = user.id;
+        if (targetUserId && targetUserId !== user.id) {
+            // Check if caller is admin or if targetUserId is a sub-account of user.id
+            const isSub = await prisma.user.findFirst({
+                where: { id: targetUserId, parentUserId: user.id }
+            });
+            if (!isSub && user.role !== "ADMIN" && user.role !== "SUPER_USER") {
+                return { success: false, error: "Unauthorized access to content preferences" };
+            }
+            effectiveUserId = targetUserId;
+        }
+
+        let pref = await prisma.userContentPreference.findUnique({
+            where: { userId: effectiveUserId }
+        });
+
+        if (!pref) {
+            const targetUser = await prisma.user.findUnique({ where: { id: effectiveUserId } });
+            const isKid = targetUser?.accountType === "KID";
+            const isLivingRoom = targetUser?.accountType === "LIVING_ROOM";
+
+            pref = await prisma.userContentPreference.create({
+                data: {
+                    userId: effectiveUserId,
+                    maxContentRating: isKid ? "PG" : "ALL",
+                    hideLeavingSoon: false,
+                    hideHorror: isKid,
+                    hideNsfw: isKid || isLivingRoom,
+                    hideGore: isKid,
+                    excludedGenres: JSON.stringify([]),
+                    excludedTags: isLivingRoom ? JSON.stringify(["IMDb:Severe:Nudity", "Severe Nudity", "Nudity:Severe"]) : JSON.stringify([])
+                }
+            });
+        }
+
+        let parsedGenres: string[] = [];
+        let parsedTags: string[] = [];
+        try {
+            if (pref.excludedGenres) {
+                if (pref.excludedGenres.startsWith("[")) {
+                    parsedGenres = JSON.parse(pref.excludedGenres);
+                } else {
+                    parsedGenres = pref.excludedGenres.split(",").map(s => s.trim()).filter(Boolean);
+                }
+            }
+            if (pref.excludedTags) {
+                if (pref.excludedTags.startsWith("[")) {
+                    parsedTags = JSON.parse(pref.excludedTags);
+                } else {
+                    parsedTags = pref.excludedTags.split(",").map(s => s.trim()).filter(Boolean);
+                }
+            }
+        } catch (e) {}
+
+        return {
+            success: true,
+            preferences: {
+                ...pref,
+                excludedGenresList: parsedGenres,
+                excludedTagsList: parsedTags
+            }
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to fetch content preferences" };
+    }
+}
+
+export async function updateUserContentPreferencesAction(data: {
+    targetUserId?: string;
+    maxContentRating?: string | null;
+    hideLeavingSoon?: boolean;
+    hideHorror?: boolean;
+    hideNsfw?: boolean;
+    hideGore?: boolean;
+    excludedGenres?: string[];
+    excludedTags?: string[];
+}) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+
+        let effectiveUserId = user.id;
+        if (data.targetUserId && data.targetUserId !== user.id) {
+            const isSub = await prisma.user.findFirst({
+                where: { id: data.targetUserId, parentUserId: user.id }
+            });
+            if (!isSub && user.role !== "ADMIN" && user.role !== "SUPER_USER") {
+                return { success: false, error: "Unauthorized access to content preferences" };
+            }
+            effectiveUserId = data.targetUserId;
+        }
+
+        const updated = await prisma.userContentPreference.upsert({
+            where: { userId: effectiveUserId },
+            update: {
+                maxContentRating: data.maxContentRating || "ALL",
+                hideLeavingSoon: Boolean(data.hideLeavingSoon),
+                hideHorror: Boolean(data.hideHorror),
+                hideNsfw: Boolean(data.hideNsfw),
+                hideGore: Boolean(data.hideGore),
+                excludedGenres: JSON.stringify(data.excludedGenres || []),
+                excludedTags: JSON.stringify(data.excludedTags || [])
+            },
+            create: {
+                userId: effectiveUserId,
+                maxContentRating: data.maxContentRating || "ALL",
+                hideLeavingSoon: Boolean(data.hideLeavingSoon),
+                hideHorror: Boolean(data.hideHorror),
+                hideNsfw: Boolean(data.hideNsfw),
+                hideGore: Boolean(data.hideGore),
+                excludedGenres: JSON.stringify(data.excludedGenres || []),
+                excludedTags: JSON.stringify(data.excludedTags || [])
+            }
+        });
+
+        return { success: true, message: "Content safety preferences saved successfully!", preferences: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update content preferences" };
+    }
+}
+
+export async function updateUserAccountTypeAction(userId: string, accountType: string) {
+    try {
+        await verifyAdmin();
+        const validTypes = ["STANDARD", "KID", "LIVING_ROOM"];
+        const cleanType = validTypes.includes(accountType) ? accountType : "STANDARD";
+
+        const updated = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                accountType: cleanType,
+                // Automatically enforce kid restrictions if accountType is KID
+                ...(cleanType === "KID"
+                    ? {
+                          canRequest4k: false,
+                          autoApproveMovies: true,
+                          autoApproveTv: true
+                      }
+                    : {})
+            },
+            select: { id: true, username: true, accountType: true, membershipTier: true }
+        });
+
+        // Set default kid content preference if newly assigned
+        if (cleanType === "KID") {
+            await prisma.userContentPreference.upsert({
+                where: { userId },
+                update: {
+                    maxContentRating: "PG",
+                    hideHorror: true,
+                    hideNsfw: true,
+                    hideGore: true
+                },
+                create: {
+                    userId,
+                    maxContentRating: "PG",
+                    hideHorror: true,
+                    hideNsfw: true,
+                    hideGore: true
+                }
+            }).catch(() => {});
+        }
+
+        revalidatePath("/settings/access");
+        return { success: true, message: `Updated ${updated.username} account type to ${cleanType}`, user: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update account type" };
+    }
+}
+
+export async function updateUserMembershipTierAction(userId: string, membershipTier: string) {
+    try {
+        await verifyAdmin();
+        const validTiers = ["STANDARD", "TIER_2_VIP", "TRIAL"];
+        const cleanTier = validTiers.includes(membershipTier) ? membershipTier : "STANDARD";
+
+        const updatePayload: any = { membershipTier: cleanTier };
+        if (cleanTier === "TRIAL") {
+            updatePayload.status = "TRIAL";
+        } else {
+            const target = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+            if (target?.status === "TRIAL") {
+                updatePayload.status = "APPROVED";
+                updatePayload.trialEndsAt = null;
+            }
+        }
+
+        const updated = await prisma.user.update({
+            where: { id: userId },
+            data: updatePayload,
+            select: { id: true, username: true, membershipTier: true, canRequest4k: true }
+        });
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier === "TIER_2_VIP" ? "Tier 2 (Managed Support)" : cleanTier === "TRIAL" ? "Trial Pass" : "Tier 1 (Regular Member)"}`, user: updated };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update membership tier" };
+    }
+}
+
+/**
+ * Fetches the master pool of Plex libraries allowed for the current logged-in user,
+ * along with their currently selected subset of libraries.
+ */
+export async function getUserAllowedPlexLibrariesAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                status: true,
+                role: true,
+                plexUsername: true,
+                plexEmail: true,
+                plexLibrarySectionIds: true,
+                selectedPlexLibrarySectionIds: true,
+                accountType: true,
+                membershipTier: true,
+                parentUserId: true
+            }
+        });
+        if (!dbUser) return { success: false, error: "User not found", allowedKeys: [], selectedKeys: [], servers: [] };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        // Determine the allowed keys pool for this user
+        let allowedRawKeys: string[] = [];
+        if (dbUser.status === "TRIAL") {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultTrialPlexLibraries) {
+                allowedRawKeys = settings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        } else if (dbUser.accountType === "KID") {
+            if (settings?.defaultKidsPlexLibraries) {
+                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        } else {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        }
+
+        // Fetch server library sections to provide detailed names & types
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        let allServersWithSections: any[] = [];
+        if (adminToken) {
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            allServersWithSections = srvSections.map(s => ({
+                serverId: s.serverId,
+                serverName: s.serverName,
+                sections: (s.sections || []).map(sec => ({
+                    id: sec.id,
+                    key: sec.key || String(sec.id),
+                    title: sec.title,
+                    type: sec.type,
+                    uniqueKey: `${s.serverId}:${sec.id}`
+                }))
+            }));
+        }
+
+        if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN") {
+            // Strictly exclude kids servers, backup servers, and kids sections from trial users
+            allServersWithSections = allServersWithSections
+                .filter(s => {
+                    const sName = (s.serverName || "").toLowerCase();
+                    return !sName.includes("kid") && !sName.includes("backup");
+                })
+                .map(s => ({
+                    ...s,
+                    sections: (s.sections || []).filter((sec: any) => {
+                        const secTitle = (sec.title || "").toLowerCase();
+                        return !secTitle.includes("kid");
+                    })
+                }))
+                .filter(s => s.sections.length > 0);
+
+            const allowedUniqueKeys = new Set<string>();
+            const allowedIds = new Set<string>();
+            for (const s of allServersWithSections) {
+                for (const sec of s.sections) {
+                    allowedUniqueKeys.add(`${s.serverId}:${sec.id}`);
+                    allowedUniqueKeys.add(`${s.serverId}:${sec.key}`);
+                    allowedIds.add(String(sec.id));
+                    allowedIds.add(String(sec.key));
+                }
+            }
+
+            if (allServersWithSections.length > 0) {
+                if (allowedRawKeys.length > 0) {
+                    allowedRawKeys = allowedRawKeys.filter(k => 
+                        allowedUniqueKeys.has(k) || allowedIds.has(k) ||
+                        Array.from(allowedUniqueKeys).some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`))
+                    );
+                }
+                if (allowedRawKeys.length === 0) {
+                    allowedRawKeys = Array.from(allowedUniqueKeys);
+                }
+            }
+        }
+
+        // If no specific libraries selected, user gets all allowed
+        let selectedKeys: string[] = [];
+        if (dbUser.selectedPlexLibrarySectionIds) {
+            selectedKeys = dbUser.selectedPlexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN" && allServersWithSections.length > 0) {
+                selectedKeys = selectedKeys.filter(k =>
+                    allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`) || ak === k)
+                );
+                if (selectedKeys.length === 0) {
+                    selectedKeys = [...allowedRawKeys];
+                }
+            }
+        } else {
+            selectedKeys = [...allowedRawKeys];
+        }
+
+        return {
+            success: true,
+            allowedKeys: allowedRawKeys,
+            selectedKeys,
+            servers: allServersWithSections
+        };
+    } catch (e: any) {
+        console.error("[GET-USER-ALLOWED-LIBRARIES-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to load libraries", allowedKeys: [], selectedKeys: [], servers: [] };
+    }
+}
+
+/**
+ * Updates the user's selected subset of Plex libraries (must be within their allowed pool)
+ * and immediately updates the active share on Plex.
+ */
+export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string[]) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id }
+        });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        // Master pool
+        let allowedRawKeys: string[] = [];
+        if (dbUser.status === "TRIAL") {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultTrialPlexLibraries) {
+                allowedRawKeys = settings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        } else if (dbUser.accountType === "KID") {
+            if (settings?.defaultKidsPlexLibraries) {
+                allowedRawKeys = settings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        } else {
+            if (dbUser.plexLibrarySectionIds) {
+                allowedRawKeys = dbUser.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (settings?.defaultPlexLibraries) {
+                allowedRawKeys = settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        }
+
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        let allServersWithSections: any[] = [];
+        if (adminToken) {
+            try {
+                const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                allServersWithSections = srvSections.map(s => ({
+                    serverId: s.serverId,
+                    serverName: s.serverName,
+                    sections: (s.sections || []).map(sec => ({
+                        id: sec.id,
+                        key: sec.key || String(sec.id),
+                        title: sec.title,
+                        type: sec.type,
+                        uniqueKey: `${s.serverId}:${sec.id}`
+                    }))
+                }));
+            } catch (_) {}
+        }
+
+        if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN") {
+            const allowedUniqueKeys = new Set<string>();
+            const allowedIds = new Set<string>();
+            for (const s of allServersWithSections) {
+                const sName = (s.serverName || "").toLowerCase();
+                if (!sName.includes("kid") && !sName.includes("backup")) {
+                    for (const sec of s.sections) {
+                        const secTitle = (sec.title || "").toLowerCase();
+                        if (!secTitle.includes("kid")) {
+                            allowedUniqueKeys.add(`${s.serverId}:${sec.id}`);
+                            allowedUniqueKeys.add(`${s.serverId}:${sec.key}`);
+                            allowedIds.add(String(sec.id));
+                            allowedIds.add(String(sec.key));
+                        }
+                    }
+                }
+            }
+
+            if (allServersWithSections.length > 0) {
+                if (allowedRawKeys.length > 0) {
+                    allowedRawKeys = allowedRawKeys.filter(k => 
+                        allowedUniqueKeys.has(k) || allowedIds.has(k) ||
+                        Array.from(allowedUniqueKeys).some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`))
+                    );
+                }
+                if (allowedRawKeys.length === 0) {
+                    allowedRawKeys = Array.from(allowedUniqueKeys);
+                }
+            }
+        }
+
+        // If allowedRawKeys is empty or user is admin, allow any valid key
+        let filteredSelected = (allowedRawKeys.length > 0 && dbUser.role !== "ADMIN")
+            ? selectedKeys.filter(k => allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`) || ak === k))
+            : selectedKeys;
+
+        if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN" && allServersWithSections.length > 0) {
+            filteredSelected = filteredSelected.filter(k =>
+                allowedRawKeys.includes(k) || allowedRawKeys.some(ak => ak.endsWith(`:${k}`) || k.endsWith(`:${ak}`) || ak === k)
+            );
+        }
+
+        const savedStr = Array.from(new Set(filteredSelected)).join(",");
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { selectedPlexLibrarySectionIds: savedStr }
+        });
+
+        // Apply immediately to Plex if active
+        if (dbUser.status === "APPROVED" || dbUser.status === "TRIAL") {
+            const requireApproval = (settings?.requireApprovalForPlexChanges !== false) && dbUser.role !== "ADMIN";
+            if (requireApproval) {
+                const existing = await prisma.adminApproval.findFirst({
+                    where: {
+                        userId: user.id,
+                        type: "PLEX_ACCESS_GRANT",
+                        status: "PENDING"
+                    }
+                });
+                if (!existing) {
+                    const approval = await prisma.adminApproval.create({
+                        data: {
+                            type: "PLEX_ACCESS_GRANT",
+                            status: "PENDING",
+                            title: `Plex Preference Change: ${dbUser.username}`,
+                            description: `User selected ${filteredSelected.length} library sections. Pending admin approval before updating live Plex shares.`,
+                            targetUser: dbUser.username,
+                            targetEmail: dbUser.email,
+                            userId: dbUser.id,
+                            payload: JSON.stringify({
+                                userId: dbUser.id,
+                                action: "SYNC_SHARE",
+                                selectedKeys: filteredSelected
+                            })
+                        }
+                    });
+                    logger.addLog("INFO", "APPROVAL", `Plex library preference update for "${dbUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                }
+                revalidatePath("/settings/profile");
+                return {
+                    success: true,
+                    message: "Your library preference request has been submitted for admin approval!",
+                    staged: true,
+                    selectedKeys: filteredSelected
+                };
+            } else {
+                let adminToken = "";
+                if (settings?.mainPlexToken) {
+                    adminToken = decryptData(settings.mainPlexToken);
+                }
+                if (!adminToken) {
+                    adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+                }
+                if (adminToken) {
+                    await syncUserPlexShareInternal(adminToken, dbUser, filteredSelected);
+                }
+            }
+        }
+
+        revalidatePath("/settings/profile");
+        return {
+            success: true,
+            message: "Your shared Plex library preferences have been updated!",
+            selectedKeys: filteredSelected
+        };
+    } catch (e: any) {
+        console.error("[UPDATE-USER-SELECTED-LIBRARIES-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to save library preferences" };
+    }
+}
+
+/**
+ * Fetches all sub-accounts nested under the current user.
+ */
+export async function getUserSubAccountsAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const subAccounts = await prisma.user.findMany({
+            where: { parentUserId: user.id },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                plexUsername: true,
+                plexEmail: true,
+                accountType: true,
+                subAccountLabel: true,
+                status: true,
+                trialEndsAt: true,
+                subscriptionEndsAt: true,
+                createdAt: true,
+                contentPreference: {
+                    select: {
+                        maxContentRating: true,
+                        hideHorror: true,
+                        hideNsfw: true,
+                        hideGore: true,
+                        excludedTags: true
+                    }
+                }
+            },
+            orderBy: { createdAt: "asc" }
+        });
+
+        // Check active add-ons for extra profile allowances
+        const parentUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { enabledAddons: true, membershipTier: true, status: true, role: true }
+        });
+        const isTrial = (parentUser?.status === "TRIAL" || parentUser?.membershipTier === "TRIAL") && parentUser?.status !== "APPROVED" && parentUser?.role !== "ADMIN";
+        const enabledAddonsList: string[] = parentUser?.enabledAddons ? JSON.parse(parentUser.enabledAddons) : [];
+        const extraKidsAllowed = isTrial ? 0 : (enabledAddonsList.includes("extra_kid_profile") ? 3 : 1);
+        const extraLivingRoomsAllowed = isTrial ? 0 : (enabledAddonsList.includes("extra_living_room") ? 3 : 1);
+
+        return {
+            success: true,
+            subAccounts: isTrial ? [] : subAccounts,
+            limits: {
+                includedLivingRooms: extraLivingRoomsAllowed,
+                includedKids: extraKidsAllowed,
+                totalActive: isTrial ? 0 : subAccounts.length
+            }
+        };
+    } catch (e: any) {
+        console.error("[GET-USER-SUB-ACCOUNTS-ERROR]:", e);
+        return { success: false, subAccounts: [], limits: { includedLivingRooms: 1, includedKids: 1, totalActive: 0 }, error: e.message };
+    }
+}
+
+/**
+ * Creates or updates a nested sub-account (Living Room or Kids).
+ */
+export async function createOrUpdateSubAccountAction(payload: {
+    id?: string;
+    type: "LIVING_ROOM" | "KID";
+    label: string;
+    plexUsernameOrEmail: string;
+}) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const parentUser = await prisma.user.findUnique({ where: { id: user.id } });
+        if (!parentUser) return { success: false, error: "Parent user not found" };
+
+        if ((parentUser.status === "TRIAL" || parentUser.membershipTier === "TRIAL") && parentUser.status !== "APPROVED" && parentUser.role !== "ADMIN") {
+            return {
+                success: false,
+                error: "Secondary profiles and sub-accounts unlock upon upgrading to full membership."
+            };
+        }
+
+        const cleanType = payload.type === "KID" ? "KID" : "LIVING_ROOM";
+        const cleanLabel = payload.label?.trim() || (cleanType === "KID" ? "Kids Account" : "Living Room Account");
+        const cleanPlexHandle = payload.plexUsernameOrEmail?.trim() || "";
+
+        if (!cleanPlexHandle) {
+            return { success: false, error: "Plex username or email is required for the sub-account." };
+        }
+
+        const isPlexEmail = cleanPlexHandle.includes("@");
+        const plexUsername = isPlexEmail ? null : cleanPlexHandle;
+        const plexEmail = isPlexEmail ? cleanPlexHandle.toLowerCase() : null;
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        if (payload.id) {
+            // Update existing sub-account
+            const existing = await prisma.user.findFirst({
+                where: { id: payload.id, parentUserId: user.id }
+            });
+            if (!existing) return { success: false, error: "Sub-account not found" };
+
+            const updated = await prisma.user.update({
+                where: { id: payload.id },
+                data: {
+                    subAccountLabel: cleanLabel,
+                    plexUsername,
+                    plexEmail,
+                    accountType: cleanType
+                }
+            });
+
+            // Update Plex Share if active
+            if (adminToken && (parentUser.status === "APPROVED" || parentUser.status === "TRIAL")) {
+                const targetKeys = cleanType === "KID"
+                    ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
+                    : (parentUser.selectedPlexLibrarySectionIds || parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                if (targetKeys.length > 0) {
+                    const requirePlexApproval = settings?.requireApprovalForPlexChanges !== false;
+                    if (requirePlexApproval) {
+                        const existing = await prisma.adminApproval.findFirst({
+                            where: {
+                                userId: updated.id,
+                                type: "PLEX_ACCESS_GRANT",
+                                status: "PENDING"
+                            }
+                        });
+                        if (!existing) {
+                            const approval = await prisma.adminApproval.create({
+                                data: {
+                                    type: "PLEX_ACCESS_GRANT",
+                                    status: "PENDING",
+                                    title: `Plex Access: Sub-Account (${cleanLabel})`,
+                                    description: `Sub-account ${cleanType} for ${parentUser.username} (${cleanPlexHandle}). Pending admin approval before syncing ${targetKeys.length} Plex libraries.`,
+                                    targetUser: updated.username,
+                                    targetEmail: updated.email,
+                                    userId: updated.id,
+                                    payload: JSON.stringify({
+                                        userId: updated.id,
+                                        action: "SYNC_SHARE",
+                                        selectedKeys: targetKeys
+                                    })
+                                }
+                            });
+                            logger.addLog("INFO", "APPROVAL", `Sub-account Plex access for "${updated.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                        }
+                    } else {
+                        await syncUserPlexShareInternal(adminToken, updated, targetKeys);
+                    }
+                }
+            }
+
+            revalidatePath("/settings/profile");
+            revalidatePath("/settings/access");
+            return { success: true, message: `Updated sub-account "${cleanLabel}" successfully!`, subAccount: updated };
+        } else {
+            // Create new sub-account
+            // Check limits
+            const existingSubs = await prisma.user.findMany({
+                where: { parentUserId: user.id, accountType: cleanType }
+            });
+            const enabledAddonsList: string[] = parentUser.enabledAddons ? JSON.parse(parentUser.enabledAddons) : [];
+            const maxForType = cleanType === "KID" 
+                ? (enabledAddonsList.includes("extra_kid_profile") ? 3 : 1)
+                : (enabledAddonsList.includes("extra_living_room") ? 3 : 1);
+
+            if (existingSubs.length >= maxForType) {
+                return {
+                    success: false,
+                    error: `You have reached the maximum allowed ${cleanType === "KID" ? "Kids" : "Living Room"} sub-accounts (${maxForType}). Enable an extra profile add-on to add more!`
+                };
+            }
+
+            // Generate unique sub-account username & internal email
+            const randomSuffix = Math.random().toString(36).substring(2, 7);
+            const subUsername = `${parentUser.username}_${cleanType.toLowerCase()}_${randomSuffix}`;
+            const subEmail = `${subUsername}@domshomelab.subaccount.local`;
+            const dummyPassword = await hash(Math.random().toString(36), 10);
+
+            // Inherit parent's status and expiration dates
+            const newSub = await prisma.user.create({
+                data: {
+                    username: subUsername,
+                    email: subEmail,
+                    password: dummyPassword,
+                    parentUserId: parentUser.id,
+                    subAccountLabel: cleanLabel,
+                    accountType: cleanType,
+                    status: parentUser.status,
+                    trialEndsAt: parentUser.trialEndsAt,
+                    subscriptionEndsAt: parentUser.subscriptionEndsAt,
+                    convertedAt: parentUser.convertedAt,
+                    plexUsername,
+                    plexEmail,
+                    plexLibrarySectionIds: cleanType === "KID" 
+                        ? (settings?.defaultKidsPlexLibraries || "")
+                        : (parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "")
+                }
+            });
+
+            // Set up default content safety restrictions
+            if (cleanType === "KID") {
+                await prisma.userContentPreference.create({
+                    data: {
+                        userId: newSub.id,
+                        maxContentRating: "PG",
+                        hideHorror: true,
+                        hideNsfw: true,
+                        hideGore: true
+                    }
+                }).catch(() => {});
+            } else if (cleanType === "LIVING_ROOM") {
+                // Severe nudity exclusion by default
+                await prisma.userContentPreference.create({
+                    data: {
+                        userId: newSub.id,
+                        maxContentRating: "ALL",
+                        hideHorror: false,
+                        hideNsfw: true,
+                        hideGore: false,
+                        excludedTags: "IMDb:Severe:Nudity,Severe Nudity,Nudity:Severe"
+                    }
+                }).catch(() => {});
+            }
+
+            // Grant Plex share if parent is active
+            if (adminToken && (parentUser.status === "APPROVED" || parentUser.status === "TRIAL")) {
+                const targetKeys = cleanType === "KID"
+                    ? (settings?.defaultKidsPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean)
+                    : (parentUser.selectedPlexLibrarySectionIds || parentUser.plexLibrarySectionIds || settings?.defaultPlexLibraries || "").split(",").map(s => s.trim()).filter(Boolean);
+                if (targetKeys.length > 0) {
+                    const requirePlexApproval = settings?.requireApprovalForPlexChanges !== false;
+                    if (requirePlexApproval) {
+                        const existing = await prisma.adminApproval.findFirst({
+                            where: {
+                                userId: newSub.id,
+                                type: "PLEX_ACCESS_GRANT",
+                                status: "PENDING"
+                            }
+                        });
+                        if (!existing) {
+                            const approval = await prisma.adminApproval.create({
+                                data: {
+                                    type: "PLEX_ACCESS_GRANT",
+                                    status: "PENDING",
+                                    title: `Plex Access: New Sub-Account (${cleanLabel})`,
+                                    description: `New sub-account ${cleanType} for ${parentUser.username} (${cleanPlexHandle}). Pending admin approval before granting ${targetKeys.length} Plex libraries.`,
+                                    targetUser: newSub.username,
+                                    targetEmail: newSub.email,
+                                    userId: newSub.id,
+                                    payload: JSON.stringify({
+                                        userId: newSub.id,
+                                        action: "SYNC_SHARE",
+                                        selectedKeys: targetKeys
+                                    })
+                                }
+                            });
+                            logger.addLog("INFO", "APPROVAL", `New sub-account Plex access for "${newSub.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                        }
+                    } else {
+                        await syncUserPlexShareInternal(adminToken, newSub, targetKeys);
+                    }
+                }
+            }
+
+            revalidatePath("/settings/profile");
+            revalidatePath("/settings/access");
+            return { success: true, message: `Created sub-account "${cleanLabel}" for ${cleanPlexHandle}!`, subAccount: newSub };
+        }
+    } catch (e: any) {
+        console.error("[CREATE-OR-UPDATE-SUB-ACCOUNT-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to create sub-account" };
+    }
+}
+
+/**
+ * Deletes a nested sub-account and revokes its Plex shares.
+ */
+export async function deleteSubAccountAction(subAccountId: string) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const subAccount = await prisma.user.findFirst({
+            where: {
+                id: subAccountId,
+                OR: [
+                    { parentUserId: user.id },
+                    ...(user.role === "ADMIN" ? [{ id: subAccountId }] : [])
+                ]
+            }
+        });
+        if (!subAccount) return { success: false, error: "Sub-account not found or unauthorized" };
+
+        // Revoke Plex access
+        await revokePlexAccessForUserInternal(subAccount, "Sub-account deleted.", { bypassApproval: true });
+
+        // Delete from DB
+        await prisma.user.delete({ where: { id: subAccountId } });
+
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings/access");
+        return { success: true, message: `Deleted sub-account "${subAccount.subAccountLabel || subAccount.username}".` };
+    } catch (e: any) {
+        console.error("[DELETE-SUB-ACCOUNT-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to delete sub-account" };
+    }
+}
+
+const DEFAULT_ADDONS_CATALOG = [
+    {
+        id: "iptv_livetv",
+        name: "Live TV & IPTV Streams",
+        description: "Stream live broadcast television channels, live sports, and digital TV guides (EPG) directly in your media player.",
+        price: 0,
+        isFree: true,
+        isAvailable: false,
+        icon: "tv",
+        tag: "Live TV"
+    },
+    {
+        id: "music_streaming",
+        name: "Music & Hi-Fi Audio Access",
+        description: "Unlimited high-fidelity lossless FLAC & audio streaming with Plexamp support, curated artist playlists, and offline caching.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "music",
+        tag: "Audio"
+    },
+    {
+        id: "books_audiobooks",
+        name: "Books & Audiobooks Access",
+        description: "Full library access for Ebooks, comics, and Audiobooks with instant Send-to-Kindle delivery and in-browser audio player.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "book",
+        tag: "Reading"
+    },
+    {
+        id: "extra_kid_profile",
+        name: "Additional Kids Sub-Account",
+        description: "Set up a 2nd or 3rd dedicated Kids iPad/Tablet profile with curated safe libraries and parental restrictions.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "baby",
+        tag: "Household"
+    },
+    {
+        id: "extra_living_room",
+        name: "Additional Living Room Profile",
+        description: "Set up a 2nd Living Room TV profile with shared family filters and nudity exclusion.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "monitor",
+        tag: "Household"
+    },
+    {
+        id: "priority_requests",
+        name: "Priority Media Requests",
+        description: "Jump to the front of the download queue with fast-tracked automated grabs for newly requested releases.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "sparkles",
+        tag: "Requests"
+    }
+];
+
+/**
+ * Fetches the add-on catalog and the current user's active add-ons.
+ */
+export async function getAvailableAddonsAction() {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        let catalog = [...DEFAULT_ADDONS_CATALOG];
+        if (settings?.availableAddons) {
+            try {
+                const parsed = JSON.parse(settings.availableAddons);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
+                    catalog = DEFAULT_ADDONS_CATALOG.map(def => {
+                        const existing = parsedMap.get(def.id);
+                        return existing ? { ...def, ...existing } : def;
+                    });
+                    for (const item of parsed) {
+                        if (!catalog.some(c => c.id === item.id)) {
+                            catalog.push(item);
+                        }
+                    }
+                }
+            } catch (parseErr) {
+                console.warn("[ADDONS-CATALOG-PARSE-WARN]:", parseErr);
+            }
+        }
+
+        const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { enabledAddons: true, membershipTier: true }
+        });
+
+        let userEnabledAddons: string[] = [];
+        if (dbUser?.enabledAddons) {
+            try {
+                userEnabledAddons = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {
+                userEnabledAddons = [];
+            }
+        }
+
+        return {
+            success: true,
+            catalog,
+            userEnabledAddons
+        };
+    } catch (e: any) {
+        console.error("[GET-AVAILABLE-ADDONS-ERROR]:", e);
+        return { success: false, catalog: DEFAULT_ADDONS_CATALOG, userEnabledAddons: [], error: e.message };
+    }
+}
+
+/**
+ * Toggles a Free add-on on or off for the current user.
+ */
+export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
+    try {
+        await ensureSchemaColumns();
+        const user: any = await verifyUser();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+
+        let catalog = [...DEFAULT_ADDONS_CATALOG];
+        if (settings?.availableAddons) {
+            try {
+                const parsed = JSON.parse(settings.availableAddons);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
+                    catalog = DEFAULT_ADDONS_CATALOG.map(def => {
+                        const existing = parsedMap.get(def.id);
+                        return existing ? { ...def, ...existing } : def;
+                    });
+                    for (const item of parsed) {
+                        if (!catalog.some(c => c.id === item.id)) {
+                            catalog.push(item);
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        const targetAddon = catalog.find(a => a.id === addonId);
+        if (!targetAddon) return { success: false, error: "Add-on not found" };
+
+        if (targetAddon.isAvailable === false) {
+            return { success: false, error: `${targetAddon.name} is currently not available yet or under maintenance.` };
+        }
+
+        if (!targetAddon.isFree && targetAddon.price > 0) {
+            return { success: false, error: "This is a paid add-on. Please contact your server administrator to activate." };
+        }
+
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        if ((dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.status !== "APPROVED" && dbUser.role !== "ADMIN") {
+            return {
+                success: false,
+                error: "Optional add-ons unlock upon upgrading to full membership."
+            };
+        }
+
+        let enabledList: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                enabledList = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {
+                enabledList = [];
+            }
+        }
+
+        if (enabled) {
+            if (!enabledList.includes(addonId)) enabledList.push(addonId);
+        } else {
+            enabledList = enabledList.filter(id => id !== addonId);
+        }
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { enabledAddons: JSON.stringify(enabledList) }
+        });
+
+        revalidatePath("/settings/profile");
+        return {
+            success: true,
+            message: `${targetAddon.name} is now ${enabled ? "enabled" : "disabled"}!`,
+            enabledAddons: enabledList
+        };
+    } catch (e: any) {
+        console.error("[TOGGLE-FREE-ADDON-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to toggle add-on" };
+    }
+}
+
+/**
+ * Toggles an add-on on or off for a specific user (Admin only).
+ */
+export async function toggleUserAddonAdminAction(userId: string, addonId: string, enabled: boolean) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        let enabledList: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                enabledList = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {
+                enabledList = [];
+            }
+        }
+
+        if (enabled) {
+            if (!enabledList.includes(addonId)) enabledList.push(addonId);
+        } else {
+            enabledList = enabledList.filter(id => id !== addonId);
+        }
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { enabledAddons: JSON.stringify(enabledList) }
+        });
+
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return {
+            success: true,
+            message: `Updated add-on preference for ${dbUser.username}`,
+            enabledAddons: enabledList
+        };
+    } catch (e: any) {
+        console.error("[TOGGLE-USER-ADDON-ADMIN-ERROR]:", e);
+        return { success: false, error: e.message || "Failed to update user add-on" };
+    }
+}
+
+/**
+ * Toggles an add-on's global availability (Admin only).
+ */
+export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvailable: boolean) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        
+        let catalog = [...DEFAULT_ADDONS_CATALOG];
+        if (settings?.availableAddons) {
+            try {
+                const parsed = JSON.parse(settings.availableAddons);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
+                    catalog = DEFAULT_ADDONS_CATALOG.map(def => {
+                        const existing = parsedMap.get(def.id);
+                        return existing ? { ...def, ...existing } : def;
+                    });
+                    for (const item of parsed) {
+                        if (!catalog.some(c => c.id === item.id)) {
+                            catalog.push(item);
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        catalog = catalog.map(a => a.id === addonId ? { ...a, isAvailable } : a);
+        const jsonStr = JSON.stringify(catalog);
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { availableAddons: jsonStr },
+            create: { id: "global", availableAddons: jsonStr }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return { success: true, message: `Add-on availability updated!`, catalog };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update add-on availability" };
+    }
+}
+
+/**
+ * Saves the global add-ons catalog (Admin only).
+ */
+export async function saveAddonsCatalogAction(addons: any[]) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+        const jsonStr = JSON.stringify(addons);
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { availableAddons: jsonStr },
+            create: { id: "global", availableAddons: jsonStr }
+        });
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        revalidatePath("/settings/profile");
+        return { success: true, message: "Add-ons catalog saved successfully!" };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to save add-ons catalog" };
+    }
+}
+
+export async function requestTierUpgradeAction(targetTier: string, note?: string) {
+    try {
+        const user: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        const tierTitles: Record<string, string> = {
+            TIER_2_VIP: "Tier 2: Managed Support (VIP Setup & Remote Assistance)",
+            STANDARD: "Tier 1: Regular Member",
+            TRIAL: "Trial Pass"
+        };
+        const title = tierTitles[targetTier] || targetTier;
+
+        // Auto-create support ticket for admin review
+        await prisma.supportTicket.create({
+            data: {
+                name: dbUser.username,
+                email: dbUser.email,
+                issue: `[TIER UPGRADE REQUEST] User requested upgrade to ${title}.\n\nCurrent Tier: ${dbUser.membershipTier || "STANDARD"}\nStatus: ${dbUser.status}\nUser Note: ${note || "No additional note provided."}`,
+                status: "Pending"
+            }
+        });
+
+        return {
+            success: true,
+            message: `Your upgrade request for ${title} has been submitted! An administrator will review your account.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to submit upgrade request" };
     }
 }
 
@@ -1348,13 +7508,19 @@ export async function sendManualEmail(formData: FormData) {
 // ============================================================================
 
 export async function getPublicMediaApps() {
-    const apps = await prisma.mediaApp.findMany();
-    return apps.map(app => ({
-        id: app.id,
-        name: app.name,
-        type: app.type,
-        externalUrl: app.externalUrl 
-    }));
+    try {
+        await ensureSchemaColumns();
+        const apps = await prisma.mediaApp.findMany().catch(() => []);
+        return apps.map(app => ({
+            id: app.id,
+            name: app.name,
+            type: app.type,
+            externalUrl: app.externalUrl 
+        }));
+    } catch (e) {
+        console.error("getPublicMediaApps error:", e);
+        return [];
+    }
 }
 
 export async function submitSupportTicket(formData: FormData) {
@@ -1383,42 +7549,26 @@ export async function submitSupportTicket(formData: FormData) {
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
-        if (settings?.smtpHost && settings?.smtpUser) {
-            const transporter = nodemailer.createTransport({
-                host: settings.smtpHost,
-                port: settings.smtpPort,
-                secure: settings.smtpPort === 465, 
-                auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-            } as any);
-
+        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             const appUrl = await getAppUrl();
-            const htmlContent = `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-                    <h2 style="color: #0f172a;">New Support Ticket</h2>
-                    <p><strong>User:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
-                    
-                    <div style="background-color: #f8fafc; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; border-radius: 4px;">
-                        <h4 style="margin-top: 0; color: #475569;">Issue:</h4>
-                        <p style="white-space: pre-wrap; margin-bottom: 0;">${issue}</p>
-                    </div>
+            const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                name,
+                email,
+                pageUrl: "/",
+                errorTitle: `New Ticket from ${name}`,
+                errorMessage: issue,
+                userNoteBlock: "",
+                ticketsUrl: `${appUrl}/admin/tickets`,
+                appUrl
+            });
 
-                    <h4 style="color: #475569; margin-bottom: 10px;">Quick Actions</h4>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <a href="${appUrl}/settings/access?search=${encodeURIComponent(email)}" style="display: inline-block; padding: 8px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Manage User Access</a>
-                        <a href="${appUrl}/radarr" style="display: inline-block; padding: 8px 12px; background-color: #eab308; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Radarr (Movies)</a>
-                        <a href="${appUrl}/sonarr" style="display: inline-block; padding: 8px 12px; background-color: #06b6d4; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Sonarr (Shows)</a>
-                        <a href="${appUrl}/admin/tickets" style="display: inline-block; padding: 8px 12px; background-color: #64748b; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">View Tickets Dashboard</a>
-                    </div>
-                </div>
-            `;
-
-            await transporter.sendMail({
-                from: `"Support" <${settings.smtpUser}>`,
-                to: settings.smtpUser, 
-                replyTo: email,
-                subject: `New Ticket from ${name}`,
+            await sendOrQueueEmail({
+                to: settings.smtpUser,
+                subject,
+                html,
                 text: `User: ${name} (${email})\n\nIssue:\n${issue}\n\nQuick Actions:\nManage User: ${appUrl}/settings/access?search=${encodeURIComponent(email)}\nTickets: ${appUrl}/admin/tickets`,
-                html: htmlContent
+                templateId: "ticket_error_alert",
+                targetUser: name
             });
         }
         revalidatePath("/");
@@ -1438,13 +7588,13 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 }) {
     try {
         let name = "Anonymous User";
-        let email = "user@portalarr.local";
+        let email = "user@domshomelab.local";
         
         try {
             const session: any = await verifyUser();
             if (session) {
-                name = (session.username as string) || "Portalarr User";
-                email = (session.email as string) || `${session.username || "user"}@portalarr.local`;
+                name = (session.username as string) || "DomsHomeLab User";
+                email = (session.email as string) || `${session.username || "user"}@domshomelab.local`;
             }
         } catch (e) {
             // Unauthenticated or guest fallback
@@ -1476,45 +7626,29 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 
         // Send email notification to Admin if SMTP is configured
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (settings?.smtpHost && settings?.smtpUser) {
+        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             try {
-                const transporter = nodemailer.createTransport({
-                    host: settings.smtpHost,
-                    port: settings.smtpPort,
-                    secure: settings.smtpPort === 465,
-                    auth: { user: settings.smtpUser, pass: decryptData(settings.smtpPass as string) },
-                } as any);
-
                 const appUrl = await getAppUrl();
-                const htmlContent = `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-                        <h2 style="color: #dc2626; display: flex; align-items: center; gap: 8px;">
-                            🚨 Automated Error Report Ticket
-                        </h2>
-                        <p><strong>User:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
-                        <p><strong>Page:</strong> <code>${errorPayload.pageUrl || "/"}</code></p>
-                        
-                        <div style="background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 20px 0; border-radius: 4px;">
-                            <h4 style="margin-top: 0; color: #991b1b;">Error:</h4>
-                            <pre style="white-space: pre-wrap; word-break: break-all; color: #7f1d1d; font-family: monospace; font-size: 13px;">${errorPayload.errorMessage}</pre>
-                            ${errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : ""}
-                        </div>
+                const userNoteBlock = errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : "";
 
-                        <h4 style="color: #475569; margin-bottom: 10px;">Quick Actions</h4>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <a href="${appUrl}/admin/tickets" style="display: inline-block; padding: 8px 12px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">View Tickets Dashboard</a>
-                            <a href="${appUrl}/settings/access?search=${encodeURIComponent(email)}" style="display: inline-block; padding: 8px 12px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; margin-right: 5px; margin-bottom: 5px;">Manage User Access</a>
-                        </div>
-                    </div>
-                `;
+                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                    name,
+                    email,
+                    pageUrl: errorPayload.pageUrl || "/",
+                    errorTitle: errorPayload.errorTitle || "System Error",
+                    errorMessage: errorPayload.errorMessage,
+                    userNoteBlock,
+                    ticketsUrl: `${appUrl}/admin/tickets`,
+                    appUrl
+                });
 
-                await transporter.sendMail({
-                    from: `"Portalarr Error Alert" <${settings.smtpUser}>`,
+                await sendOrQueueEmail({
                     to: settings.smtpUser,
-                    replyTo: email,
-                    subject: `🚨 [Error Ticket] ${errorPayload.errorTitle || "System Error"} reported by ${name}`,
+                    subject,
+                    html,
                     text: formattedIssue,
-                    html: htmlContent
+                    templateId: "ticket_error_alert",
+                    targetUser: name
                 });
             } catch (mailErr: any) {
                 console.error("[AUTO-TICKET] Failed to send email alert for ticket:", mailErr.message || mailErr);
@@ -1535,214 +7669,372 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 }
 
 export async function getActiveDownloads() {
-    const apps = await prisma.mediaApp.findMany({
-        where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }
-    });
+    try {
+        await ensureSchemaColumns();
+        const apps = await prisma.mediaApp.findMany({
+            where: { type: { in: ["sabnzbd", "nzbget", "qBittorrent", "qbittorrent", "SABnzbd", "NZBGet"] } }
+        }).catch(() => []);
 
-    const results = await Promise.all(apps.map(async (app) => {
-        let data: any = { 
-            id: app.id, 
-            type: app.type, 
-            name: app.name, 
-            online: false,
-            queue: []
-        };
+        const results = await Promise.all(apps.map(async (app) => {
+            let data: any = { 
+                id: app.id, 
+                type: app.type, 
+                name: app.name, 
+                online: false,
+                queue: []
+            };
 
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); 
+                let clean = cleanUrl(app.url || "").trim();
+                if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                    clean = `http://${clean}`;
+                }
+                const cleanBase = clean.replace(/\/api\/?$/, "");
+                const decryptedKey = app.apiKey ? decryptData(app.apiKey as string) : "";
+                const appType = app.type.toLowerCase();
+
+                if (appType === "qbittorrent") {
+                    const res = await fetch(`${cleanBase}/api/v2/torrents/info?filter=downloading`, { 
+                        signal: controller.signal, 
+                        cache: "no-store" 
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (res.ok) {
+                        const torrents = await res.json();
+                        if (Array.isArray(torrents)) {
+                            data.online = true;
+                            data.queue = torrents.map((t: any) => {
+                                const sizeMb = t.size ? Math.round(t.size / (1024 * 1024)) : 0;
+                                const leftMb = t.amount_left ? Math.round(t.amount_left / (1024 * 1024)) : 0;
+                                const pct = t.progress ? (t.progress * 100).toFixed(1) : "0";
+                                const etaSec = t.eta || 0;
+                                const mins = Math.floor(etaSec / 60);
+                                const secs = etaSec % 60;
+                                const timeleftStr = etaSec > 0 ? `${mins}m ${secs}s` : "Unknown";
+
+                                return {
+                                    filename: t.name || "Unknown Torrent",
+                                    percentage: pct,
+                                    timeleft: timeleftStr,
+                                    mb: sizeMb,
+                                    mbleft: leftMb
+                                };
+                            });
+                        }
+                    }
+                } else if (appType === "nzbget") {
+                    let authHeader: Record<string, string> = { "Content-Type": "application/json" };
+                    if (decryptedKey && decryptedKey.includes(":")) {
+                        authHeader["Authorization"] = `Basic ${Buffer.from(decryptedKey).toString("base64")}`;
+                    }
+                    const res = await fetch(`${cleanBase}/jsonrpc`, {
+                        method: "POST",
+                        headers: authHeader,
+                        body: JSON.stringify({ method: "listgroups", params: [0] }),
+                        signal: controller.signal,
+                        cache: "no-store"
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json && Array.isArray(json.result)) {
+                            data.online = true;
+                            data.queue = json.result.map((grp: any) => {
+                                const totalMb = grp.FileSizeMB || 0;
+                                const leftMb = grp.RemainingSizeMB || 0;
+                                const pct = totalMb > 0 ? (((totalMb - leftMb) / totalMb) * 100).toFixed(1) : "0";
+                                return {
+                                    filename: grp.NZBName || "Unknown Download",
+                                    percentage: pct,
+                                    timeleft: "In Progress",
+                                    mb: totalMb,
+                                    mbleft: leftMb
+                                };
+                            });
+                        }
+                    }
+                } else {
+                    const res = await fetch(`${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(decryptedKey)}`, { 
+                        signal: controller.signal, 
+                        cache: "no-store" 
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json.queue) {
+                            data.online = true;
+                            data.queue = (json.queue.slots || []).map((slot: any) => ({
+                                filename: slot.filename || "Unknown Download",
+                                percentage: slot.percentage || "0",
+                                timeleft: slot.timeleft || "0:00",
+                                mb: slot.mb || 0,
+                                mbleft: slot.mbleft || 0
+                            }));
+                        }
+                    }
+                }
+                return data;
+            } catch (e) {
+                return data;
+            }
+        }));
+
+        return results;
+    } catch (e) {
+        console.error("getActiveDownloads error:", e);
+        return [];
+    }
+}
+
+/**
+ * Lightweight, resilient reachability check for monitored MediaApp instances.
+ * Targets native API status endpoints first with decrypted API credentials,
+ * falling back gracefully to base web server responses.
+ * Treats any HTTP 200..499 status (including redirects and auth challenges) as reachable.
+ */
+export async function checkMediaAppReachability(app: { name: string; type?: string | null; url?: string | null; apiKey?: string | null }, timeoutMs = 4500): Promise<boolean> {
+    if (!app || !app.url) return false;
+
+    let clean = cleanUrl(app.url.trim());
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        clean = `http://${clean}`;
+    }
+    const cleanBase = clean.replace(/\/api(\/v?[123])?$/, "").replace(/\/+$/, "");
+
+    let apiKey = "";
+    if (app.apiKey) {
+        try {
+            apiKey = decryptData(app.apiKey).trim();
+        } catch {
+            apiKey = (app.apiKey || "").trim();
+        }
+    }
+
+    const typeStr = (app.type || "").toLowerCase().trim();
+    const nameStr = (app.name || "").toLowerCase().trim();
+
+    const candidates: { url: string; headers?: Record<string, string>; method?: string; body?: string }[] = [];
+
+    if (typeStr.includes("sabnzb") || nameStr.includes("sabnzb")) {
+        if (apiKey) {
+            candidates.push({ url: `${cleanBase}/api?mode=version&output=json&apikey=${encodeURIComponent(apiKey)}` });
+            candidates.push({ url: `${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(apiKey)}` });
+        }
+        candidates.push({ url: `${cleanBase}/api?mode=version&output=json` });
+    } else if (typeStr.includes("qbit") || nameStr.includes("qbit")) {
+        candidates.push({ url: `${cleanBase}/api/v2/app/version` });
+        candidates.push({ url: `${cleanBase}/api/v2/app/webapiVersion` });
+    } else if (typeStr.includes("nzbget") || nameStr.includes("nzbget")) {
+        let authHeader: Record<string, string> = { "Content-Type": "application/json" };
+        if (apiKey && apiKey.includes(":")) {
+            authHeader["Authorization"] = `Basic ${Buffer.from(apiKey).toString("base64")}`;
+        }
+        candidates.push({ 
+            url: `${cleanBase}/jsonrpc`, 
+            method: "POST", 
+            headers: authHeader, 
+            body: JSON.stringify({ method: "version", params: [] }) 
+        });
+        candidates.push({ url: `${cleanBase}/jsonrpc/version` });
+    } else if (typeStr.includes("prowlarr") || nameStr.includes("prowlarr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/ping` });
+    } else if (typeStr.includes("readarr") || nameStr.includes("readarr") || typeStr.includes("lidarr") || nameStr.includes("lidarr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/ping` });
+    } else if (typeStr.includes("radarr") || nameStr.includes("radarr") || typeStr.includes("sonarr") || nameStr.includes("sonarr") || typeStr.includes("whisparr") || nameStr.includes("whisparr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v3/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/ping` });
+    } else if (typeStr.includes("seerr") || nameStr.includes("seerr") || typeStr.includes("overseerr") || nameStr.includes("overseerr")) {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v1/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+    } else if (typeStr.includes("ombi") || nameStr.includes("ombi")) {
+        const headers = apiKey ? { "ApiKey": apiKey } : undefined;
+        candidates.push({ url: `${cleanBase}/api/v1/Status`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/Status/info`, headers });
+    } else if (typeStr.includes("bazarr") || nameStr.includes("bazarr")) {
+        const headers = apiKey ? { "X-API-KEY": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/system/status${q}`, headers });
+    } else if (typeStr.includes("maintainerr") || nameStr.includes("maintainerr")) {
+        const headers = apiKey ? { "X-API-KEY": apiKey } : undefined;
+        candidates.push({ url: `${cleanBase}/api/version`, headers });
+        candidates.push({ url: `${cleanBase}/api/health` });
+    } else {
+        const headers = apiKey ? { "X-Api-Key": apiKey } : undefined;
+        const q = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+        candidates.push({ url: `${cleanBase}/api/v3/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/system/status${q}`, headers });
+        candidates.push({ url: `${cleanBase}/api/v1/status${q}`, headers });
+    }
+
+    candidates.push({ url: cleanBase });
+
+    for (const target of candidates) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); 
-            let clean = cleanUrl(app.url || "").trim();
-            if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-                clean = `http://${clean}`;
+            const tid = setTimeout(() => controller.abort(), timeoutMs);
+            const reqHeaders: Record<string, string> = {
+                "Accept": "application/json, text/plain, */*",
+                ...(target.headers || {})
+            };
+            const res = await fetch(target.url, {
+                method: target.method || "GET",
+                headers: reqHeaders,
+                body: target.body,
+                signal: controller.signal,
+                cache: "no-store",
+                redirect: "follow"
+            });
+            clearTimeout(tid);
+
+            // Any HTTP response from 200 to 499 indicates the web server is online and running
+            if (res.status >= 200 && res.status < 500) {
+                return true;
             }
-            const cleanBase = clean.replace(/\/api\/?$/, "");
-            const decryptedKey = app.apiKey ? decryptData(app.apiKey as string) : "";
-            const appType = app.type.toLowerCase();
 
-            if (appType === "qbittorrent") {
-                const res = await fetch(`${cleanBase}/api/v2/torrents/info?filter=downloading`, { 
-                    signal: controller.signal, 
-                    cache: "no-store" 
-                });
-                clearTimeout(timeoutId);
-
-                if (res.ok) {
-                    const torrents = await res.json();
-                    if (Array.isArray(torrents)) {
-                        data.online = true;
-                        data.queue = torrents.map((t: any) => {
-                            const sizeMb = t.size ? Math.round(t.size / (1024 * 1024)) : 0;
-                            const leftMb = t.amount_left ? Math.round(t.amount_left / (1024 * 1024)) : 0;
-                            const pct = t.progress ? (t.progress * 100).toFixed(1) : "0";
-                            const etaSec = t.eta || 0;
-                            const mins = Math.floor(etaSec / 60);
-                            const secs = etaSec % 60;
-                            const timeleftStr = etaSec > 0 ? `${mins}m ${secs}s` : "Unknown";
-
-                            return {
-                                filename: t.name || "Unknown Torrent",
-                                percentage: pct,
-                                timeleft: timeleftStr,
-                                mb: sizeMb,
-                                mbleft: leftMb
-                            };
-                        });
-                    }
-                }
-            } else if (appType === "nzbget") {
-                let authHeader: Record<string, string> = { "Content-Type": "application/json" };
-                if (decryptedKey && decryptedKey.includes(":")) {
-                    authHeader["Authorization"] = `Basic ${Buffer.from(decryptedKey).toString("base64")}`;
-                }
-                const res = await fetch(`${cleanBase}/jsonrpc`, {
-                    method: "POST",
-                    headers: authHeader,
-                    body: JSON.stringify({ method: "listgroups", params: [0] }),
-                    signal: controller.signal,
-                    cache: "no-store"
-                });
-                clearTimeout(timeoutId);
-
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json && Array.isArray(json.result)) {
-                        data.online = true;
-                        data.queue = json.result.map((grp: any) => {
-                            const totalMb = grp.FileSizeMB || 0;
-                            const leftMb = grp.RemainingSizeMB || 0;
-                            const pct = totalMb > 0 ? (((totalMb - leftMb) / totalMb) * 100).toFixed(1) : "0";
-                            return {
-                                filename: grp.NZBName || "Unknown Download",
-                                percentage: pct,
-                                timeleft: "In Progress",
-                                mb: totalMb,
-                                mbleft: leftMb
-                            };
-                        });
-                    }
-                }
-            } else {
-                const res = await fetch(`${cleanBase}/api?mode=queue&output=json&apikey=${encodeURIComponent(decryptedKey)}`, { 
-                    signal: controller.signal, 
-                    cache: "no-store" 
-                });
-                clearTimeout(timeoutId);
-
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json.queue) {
-                        data.online = true;
-                        data.queue = (json.queue.slots || []).map((slot: any) => ({
-                            filename: slot.filename || "Unknown Download",
-                            percentage: slot.percentage || "0",
-                            timeleft: slot.timeleft || "0:00",
-                            mb: slot.mb || 0,
-                            mbleft: slot.mbleft || 0
-                        }));
-                    }
+            // SABnzbd check
+            if (typeStr.includes("sabnzb") || nameStr.includes("sabnzb")) {
+                const sabJson = await res.json().catch(() => null);
+                if (sabJson && (sabJson.version || sabJson.status !== undefined)) {
+                    return true;
                 }
             }
-            return data;
-        } catch (e) {
-            return data;
-        }
-    }));
+        } catch {}
+    }
 
-    return results;
+    return false;
 }
 
 export async function getLandingStats() {
-    const [tautulli, glances, apps] = await Promise.all([
-        prisma.tautulliInstance.findMany(),
-        prisma.glancesInstance.findMany(),
-        prisma.mediaApp.findMany()
-    ]);
-
-    let streamStats: { name: string, count: number }[] = [];
-    let serverStats: any[] = [];
-    let downApps: string[] = [];
-
-    await Promise.all(tautulli.map(async (t) => {
-        let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
-        const apiKey = decryptData(t.apiKey);
-        const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
-
-        try {
-            const res = await fetch(fullUrl, { next: { revalidate: 10 } });
-            
-            if (!res.ok) {
-                streamStats.push({ name: t.name, count: 0 }); 
-                return;
-            }
-            
-            const data = await res.json();
-            const count = data.response?.data?.stream_count ? Number(data.response.data.stream_count) : 0;
-            streamStats.push({ name: t.name, count: count });
-
-        } catch (e: any) { 
-            streamStats.push({ name: t.name, count: 0 }); 
-        }
-    }));
-
-    await Promise.all(glances.map(async (g) => {
-        let clean = cleanUrl(g.url?.trim() || "");
-        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-            clean = `http://${clean}`;
-        }
-        const baseGlances = clean.replace(/\/api(\/v?[234])?$/, "");
-        
-        const fetchGlancesMetric = async (endpoint: string) => {
-            const versions = [4, 3, 2]; 
-            for (const v of versions) {
-                try {
-                    const url = `${baseGlances}/api/${v}/${endpoint}`;
-                    const res = await fetch(url, { next: { revalidate: 10 } });
-                    if (res.ok) return await res.json();
-                } catch (e) { }
-            }
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
             try {
-                const url = `${baseGlances}/${endpoint}`;
-                const res = await fetch(url, { next: { revalidate: 10 } });
-                if (res.ok) return await res.json();
-            } catch (e) { }
-            throw new Error(`Failed`);
-        };
-
-        try {
-            const cpu = await fetchGlancesMetric("cpu");
-            const mem = await fetchGlancesMetric("mem");
-            
-            const cpuTotal = typeof cpu?.total === 'number' 
-                ? Math.round(cpu.total) 
-                : (typeof cpu?.user === 'number' ? Math.round(cpu.user + (cpu.system || 0)) : (typeof cpu === 'number' ? Math.round(cpu) : 0));
-                
-            const ramPercent = typeof mem?.percent === 'number' 
-                ? Math.round(mem.percent) 
-                : (mem?.total && mem?.used ? Math.round((mem.used / mem.total) * 100) : (typeof mem === 'number' ? Math.round(mem) : 0));
-
-            serverStats.push({ 
-                name: g.name, 
-                cpu: cpuTotal, 
-                ram: ramPercent, 
-                online: true 
-            });
-        } catch (e: any) {
-            serverStats.push({ name: g.name, online: false });
+                adminToken = decryptData(settings.mainPlexToken);
+            } catch (e) {}
         }
-    }));
 
-    await Promise.all(apps.map(async (app) => {
-        try {
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 2000); 
-            await fetch(app.url, { signal: controller.signal, mode: 'no-cors' });
-            clearTimeout(id);
-        } catch (e) {
-            downApps.push(app.name);
-        }
-    }));
+        const [tautulli, glances, apps, plexServers] = await Promise.all([
+            prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.mediaApp.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
+        ]);
 
-    return { streamStats, serverStats, downApps };
+        const downApps: string[] = [];
+
+        // STRICT SYSTEM OPERATION MONITORING:
+        // Only monitor items that have monitoring turned ON in settings (monitored !== false).
+        // Discovered unconfigured servers or items with monitored: false are completely skipped.
+        const monitoredTautulli = tautulli.filter(t => t.monitored !== false);
+        const monitoredGlances = glances.filter(g => g.monitored !== false);
+        const monitoredApps = apps.filter(a => a.monitored !== false);
+        const monitoredPlex = plexServers.filter(p => p.monitored !== false);
+
+        // 1. Tautulli Stream Stats & Reachability (only for monitored instances)
+        const streamStats = await Promise.all(monitoredTautulli.map(async (t) => {
+            let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+            const apiKey = decryptData(t.apiKey);
+            const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const actResult = await fetchTautulliApiJson(fullUrl, controller.signal, { revalidate: 10 });
+                clearTimeout(timeoutId);
+                if (actResult.ok && actResult.data) {
+                    const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
+                    return { name: t.name, count, online: true };
+                } else {
+                    downApps.push(`${t.name} (Tautulli)`);
+                    return { name: t.name, count: 0, online: false };
+                }
+            } catch (e: any) { 
+                downApps.push(`${t.name} (Tautulli)`);
+                return { name: t.name, count: 0, online: false }; 
+            }
+        }));
+
+        // 2. Glances Host Hardware Stats & Reachability (only for monitored instances)
+        const serverStats = await Promise.all(monitoredGlances.map(async (g) => {
+            try {
+                const stats = await fetchGlancesHardwareStats(g.url, 4000);
+                if (stats.online) {
+                    return { 
+                        name: g.name, 
+                        cpu: stats.cpu, 
+                        ram: stats.ram, 
+                        online: true 
+                    };
+                } else {
+                    downApps.push(`${g.name} (Host Server)`);
+                    return { name: g.name, cpu: 0, ram: 0, online: false };
+                }
+            } catch (e: any) {
+                downApps.push(`${g.name} (Host Server)`);
+                return { name: g.name, cpu: 0, ram: 0, online: false };
+            }
+        }));
+
+        // 3. Media Apps Reachability (only for monitored apps)
+        await Promise.all(monitoredApps.map(async (app) => {
+            try {
+                const isOnline = await checkMediaAppReachability(app);
+                if (!isOnline) {
+                    downApps.push(app.name);
+                }
+            } catch (e) {
+                downApps.push(app.name);
+            }
+        }));
+
+        // 4. Plex Servers Reachability (strictly ONLY for configured, monitored Plex servers)
+        await Promise.all(monitoredPlex.map(async (ps) => {
+            try {
+                let clean = cleanUrl(ps.url?.trim() || "");
+                if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+                    clean = `http://${clean}`;
+                }
+                clean = clean.replace(/\/+$/, "");
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 5000);
+                const sToken = ps.token ? decryptData(ps.token) : adminToken;
+                const testUrl = `${clean}/identity?X-Plex-Token=${encodeURIComponent(sToken || adminToken || "")}`;
+                const res = await fetch(testUrl, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": sToken || adminToken || "" },
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(id);
+                if (!res.ok && res.status !== 401 && res.status !== 403) {
+                    downApps.push(`${ps.name} (Plex Server)`);
+                }
+            } catch (e) {
+                downApps.push(`${ps.name} (Plex Server)`);
+            }
+        }));
+
+        return { streamStats, serverStats, downApps };
+    } catch (e) {
+        console.error("getLandingStats error:", e);
+        return { streamStats: [], serverStats: [], downApps: [] };
+    }
 }
 
 // ============================================================================
@@ -1750,8 +8042,13 @@ export async function getLandingStats() {
 // ============================================================================
 
 export async function getBetaDashboardText() {
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    return settings?.betaDashboardText || "### Interested in Beta Testing?\nWe are rolling out new features. Click below to see what we are currently testing and how you can get access!";
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        return settings?.betaDashboardText || "### Interested in Beta Testing?\nWe are rolling out new features. Click below to see what we are currently testing and how you can get access!";
+    } catch (e) {
+        return "### Interested in Beta Testing?\nWe are rolling out new features. Click below to see what we are currently testing and how you can get access!";
+    }
 }
 
 export async function updateBetaDashboardText(formData: FormData) {
@@ -1767,7 +8064,12 @@ export async function updateBetaDashboardText(formData: FormData) {
 }
 
 export async function getBetaCards() {
-    return await prisma.betaCard.findMany({ orderBy: { createdAt: 'desc' } });
+    try {
+        await ensureSchemaColumns();
+        return await prisma.betaCard.findMany({ orderBy: { createdAt: 'desc' } }).catch(() => []);
+    } catch (e) {
+        return [];
+    }
 }
 
 export async function createBetaCard(formData: FormData) {
@@ -1824,8 +8126,13 @@ export async function getRoadmapText(): Promise<string> {
     } catch (e) {
         console.warn("Failed to read roadmap.md from disk:", e);
     }
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
-    return settings?.roadmapText || "# 🗺️ Portalarr Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        return settings?.roadmapText || "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+    } catch (e) {
+        return "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+    }
 }
 
 export async function updateRoadmapText(formData: FormData) {
@@ -1861,7 +8168,7 @@ export async function getFeatureSuggestions() {
         const user: any = await verifyUser().catch(() => null);
         const username: string = String(user?.username || "");
 
-        const suggestions = await prisma.featureSuggestion.findMany({
+        let suggestions = await prisma.featureSuggestion.findMany({
             include: {
                 votes: true
             },
@@ -1869,6 +8176,27 @@ export async function getFeatureSuggestions() {
                 createdAt: "desc"
             }
         });
+
+        // Ensure default community suggestion for Subtitle Engine exists
+        const subtitleExists = suggestions.some(s => s.title.toLowerCase().includes("subtitle"));
+        if (!subtitleExists) {
+            try {
+                const newSub = await prisma.featureSuggestion.create({
+                    data: {
+                        title: "Native Subtitle Engine & Auto-Sync (Bazarr Replacement)",
+                        description: "Automated missing subtitle downloader across OpenSubtitles, Subscene, and Addic7ed, with AI speech-to-text audio sync alignment and 1-click user 'Fix Subtitles' in My Plex Hub.",
+                        category: "Subtitles",
+                        createdBy: "DomsHomeLab"
+                    },
+                    include: {
+                        votes: true
+                    }
+                });
+                suggestions.unshift(newSub);
+            } catch (seedErr) {
+                console.warn("Could not auto-seed subtitle feature suggestion:", seedErr);
+            }
+        }
 
         const formatted = suggestions.map(s => {
             const hasVoted = username ? s.votes.some(v => v.username.toLowerCase() === username.toLowerCase()) : false;
@@ -2039,7 +8367,7 @@ export async function getEbooksUserGuide(): Promise<string> {
     } catch (e) {
         console.warn("Failed to read user_guide_ebooks.md from disk:", e);
     }
-    return "# 📖 Portalarr Ebooks & Audiobooks User Guide\n\nWelcome to Portalarr!";
+    return "# 📖 DomsHomeLab Ebooks & Audiobooks User Guide\n\nWelcome to DomsHomeLab!";
 }
 
 export async function saveEbooksUserGuide(content: string) {
@@ -2055,16 +8383,243 @@ export async function saveEbooksUserGuide(content: string) {
     }
 }
 
+export async function getFullUserGuideAction(): Promise<string> {
+    await verifyAdmin();
+    try {
+        const rootGuidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        if (fs.existsSync(rootGuidePath)) {
+            return fs.readFileSync(rootGuidePath, "utf-8");
+        }
+    } catch (e) {
+        console.warn("Failed to read USER_GUIDE.md from disk:", e);
+    }
+    return "# 📚 DomsHomeLab (d281knilb) — Full Platform User Guide\n\nWelcome to DomsHomeLab!";
+}
+
+export async function saveFullUserGuideAction(content: string) {
+    await verifyAdmin();
+    try {
+        const guidePath = path.join(process.cwd(), "USER_GUIDE.md");
+        fs.writeFileSync(guidePath, content, "utf-8");
+        revalidatePath("/guides");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to write USER_GUIDE.md:", e);
+        return { success: false, error: e.message || "Failed to save user guide." };
+    }
+}
+
+export interface UserGuideAccess {
+    isAdmin: boolean;
+    isSuperUser: boolean;
+    isTrial: boolean;
+    accountType: string;
+    canRequest: boolean;
+    hasEbooksAccess: boolean;
+    hasAudiobooksAccess: boolean;
+    hasReferralAccess: boolean;
+    allowedCategories: string[];
+    allowedGuideTopicIds: string[];
+    headerSubtitle: string;
+}
+
+export async function calculateUserGuideAccess(
+    user: {
+        username?: string | null;
+        email?: string | null;
+        role?: string | null;
+        status?: string | null;
+        membershipTier?: string | null;
+        accountType?: string | null;
+        canRequest?: boolean | null;
+    } | null,
+    libraries: Array<{
+        name?: string | null;
+        allowedUsers?: string | null;
+        restrictedUsers?: string | null;
+        mediaType?: string | null;
+    }> = []
+): Promise<UserGuideAccess> {
+    if (!user) {
+        return {
+            isAdmin: false,
+            isSuperUser: false,
+            isTrial: false,
+            accountType: "STANDARD",
+            canRequest: false,
+            hasEbooksAccess: false,
+            hasAudiobooksAccess: false,
+            hasReferralAccess: false,
+            allowedCategories: ["devices"],
+            allowedGuideTopicIds: ["general"],
+            headerSubtitle: "Configure streaming devices for 100% Direct Play."
+        };
+    }
+
+    const role = (user.role || "USER").toUpperCase();
+    const isAdmin = role === "ADMIN";
+    const isSuperUser = role === "SUPER_USER";
+    const isTrial = (user.status === "TRIAL" || user.membershipTier === "TRIAL") && user.status !== "APPROVED" && !isAdmin;
+    const accountType = (user.accountType || "STANDARD").toUpperCase();
+    const isKidOrLivingRoom = accountType === "KID" || accountType === "LIVING_ROOM";
+
+    const canRequest = isAdmin || user.canRequest !== false;
+
+    let hasEbooksAccess = false;
+    let hasAudiobooksAccess = false;
+
+    if (isAdmin) {
+        hasEbooksAccess = true;
+        hasAudiobooksAccess = true;
+    } else if (!isTrial) {
+        const safeUsername = (user.username || "").toLowerCase();
+        const safeEmail = (user.email || "").toLowerCase();
+
+        for (const lib of libraries) {
+            const isAudioByName = (lib.name || "").toLowerCase().includes("audio");
+            const effectiveMediaType = lib.mediaType || (isAudioByName ? "audiobook" : "ebook");
+
+            // Evaluate library access
+            let hasAccess = false;
+            const restrictedStr = lib.restrictedUsers || "";
+            let isRestricted = false;
+            if (restrictedStr.trim() !== "") {
+                const restricted = restrictedStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+                if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
+                    isRestricted = true;
+                }
+            }
+
+            if (!isRestricted) {
+                const allowedStr = lib.allowedUsers || "";
+                if (!allowedStr || allowedStr.trim() === "" || allowedStr.trim() === "*") {
+                    hasAccess = true;
+                } else {
+                    const allowed = allowedStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+                    if (allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail))) {
+                        hasAccess = true;
+                    }
+                }
+            }
+
+            if (hasAccess) {
+                if (effectiveMediaType === "audiobook") {
+                    hasAudiobooksAccess = true;
+                } else {
+                    hasEbooksAccess = true;
+                }
+            }
+        }
+    }
+
+    const hasReferralAccess = !isKidOrLivingRoom;
+
+    // Build allowedCategories for /guides
+    const allowedCategories: string[] = ["devices", "ai-assistant"];
+    if (canRequest) allowedCategories.push("movies-tv");
+    if (hasEbooksAccess) allowedCategories.push("ebooks");
+    if (hasAudiobooksAccess) allowedCategories.push("audiobooks");
+    if (hasReferralAccess) allowedCategories.push("referral-rewards");
+    if (isAdmin) {
+        allowedCategories.push("curation-studio");
+        allowedCategories.push("manual");
+    }
+
+    // Build allowedGuideTopicIds for feature modals
+    const allowedGuideTopicIds: string[] = ["general", "ai-assistant", "stream-diagnostics"];
+    if (canRequest) allowedGuideTopicIds.push("movies-tv");
+    if (hasEbooksAccess || hasAudiobooksAccess) allowedGuideTopicIds.push("requests-pipeline");
+    if (hasEbooksAccess) {
+        allowedGuideTopicIds.push("ebooks");
+        allowedGuideTopicIds.push("kindle-setup");
+    }
+    if (hasAudiobooksAccess) allowedGuideTopicIds.push("audiobooks");
+    if (hasReferralAccess) allowedGuideTopicIds.push("referral-rewards");
+    if (isAdmin) allowedGuideTopicIds.push("curation-studio");
+
+    // Dynamic header subtitle matching user's exact feature set
+    let headerSubtitle = "Configure streaming devices for 100% Direct Play, troubleshoot buffering with our AI bot, ";
+    if (hasEbooksAccess && hasAudiobooksAccess) {
+        headerSubtitle += "navigate audiobooks & Send-to-Kindle, and master platform features.";
+    } else if (hasEbooksAccess) {
+        headerSubtitle += "navigate ebooks & Send-to-Kindle, and master platform features.";
+    } else if (hasAudiobooksAccess) {
+        headerSubtitle += "navigate audiobooks & chapter streaming, and master platform features.";
+    } else if (canRequest) {
+        headerSubtitle += "browse movie & TV requests, and master platform playback features.";
+    } else {
+        headerSubtitle += "and master platform playback features.";
+    }
+
+    return {
+        isAdmin,
+        isSuperUser,
+        isTrial,
+        accountType,
+        canRequest,
+        hasEbooksAccess,
+        hasAudiobooksAccess,
+        hasReferralAccess,
+        allowedCategories,
+        allowedGuideTopicIds,
+        headerSubtitle
+    };
+}
+
+export async function getUserGuideAccessAction(): Promise<UserGuideAccess> {
+    try {
+        const sessionUser: any = await verifyUser().catch(() => null);
+        if (!sessionUser || !sessionUser.id) {
+            return await calculateUserGuideAccess(null);
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: sessionUser.id },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                role: true,
+                status: true,
+                membershipTier: true,
+                accountType: true,
+                canRequest: true
+            }
+        });
+
+        if (!user) {
+            return await calculateUserGuideAccess(null);
+        }
+
+        const libraries = await prisma.library.findMany({
+            select: { id: true, name: true, allowedUsers: true, restrictedUsers: true, mediaType: true }
+        }).catch(() => []);
+
+        return await calculateUserGuideAccess(user, libraries);
+    } catch (e: any) {
+        console.error("getUserGuideAccessAction failed:", e);
+        return await calculateUserGuideAccess(null);
+    }
+}
+
 // ============================================================================
 // --- ALERT BANNER ACTIONS ---
 // ============================================================================
 
 export async function getAlertBanner() {
-    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    return {
-        enabled: settings?.alertBannerEnabled || false,
-        text: settings?.alertBannerText || "⚠️ **System Maintenance:** Expected downtime this weekend."
-    };
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        return {
+            enabled: settings?.alertBannerEnabled || false,
+            text: settings?.alertBannerText || "⚠️ **System Maintenance:** Expected downtime this weekend."
+        };
+    } catch (e) {
+        return {
+            enabled: false,
+            text: ""
+        };
+    }
 }
 
 export async function updateAlertBanner(formData: FormData) {
@@ -2085,8 +8640,13 @@ export async function updateAlertBanner(formData: FormData) {
 // ============================================================================
 
 async function verifyUser() {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("session")?.value;
+    let session = "";
+    try {
+        const cookieStore = await cookies();
+        session = cookieStore.get("session")?.value || "";
+    } catch {
+        // cookies() called outside request scope
+    }
     if (!session) throw new Error("Unauthorized");
     try {
         const { payload } = await jwtVerify(session, getJwtSecret());
@@ -2098,8 +8658,8 @@ async function verifyUser() {
         if (userId) {
             dbUser = await prisma.user.findUnique({
                 where: { id: userId },
-                select: { id: true, username: true, email: true, role: true, status: true }
-            });
+                select: { id: true, username: true, email: true, role: true, status: true, accountType: true }
+            }).catch(() => null);
         }
         if (!dbUser && (username || email)) {
             const conditions = [];
@@ -2110,8 +8670,8 @@ async function verifyUser() {
 
             dbUser = await prisma.user.findFirst({
                 where: { OR: conditions },
-                select: { id: true, username: true, email: true, role: true, status: true }
-            });
+                select: { id: true, username: true, email: true, role: true, status: true, accountType: true }
+            }).catch(() => null);
         }
 
         if (dbUser) {
@@ -2121,7 +8681,8 @@ async function verifyUser() {
                 username: dbUser.username,
                 email: dbUser.email,
                 role: dbUser.role,
-                status: dbUser.status
+                status: dbUser.status,
+                accountType: dbUser.accountType
             };
         }
         return payload;
@@ -2362,6 +8923,192 @@ export async function deleteLibrary(id: string) {
     }
 }
 
+
+export async function getUserKidsLibraryAccessAction() {
+    try {
+        const session: any = await verifyUser();
+        const username = String(session?.username || "").toLowerCase().trim();
+        const email = String(session?.email || "").toLowerCase().trim();
+
+        const allLibraries = await prisma.library.findMany();
+        const kidsLibraries = allLibraries.filter(l => isKidsLibrary(l));
+
+        if (kidsLibraries.length === 0) {
+            return {
+                success: true,
+                hasKidsAccess: false,
+                kidsLibraries: []
+            };
+        }
+
+        const libsStatus = kidsLibraries.map(l => {
+            const rawAllowed = (l.allowedUsers || "").trim();
+            const allowed = rawAllowed.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+            const isAllowed = rawAllowed === "*" || allowed.includes("*") || (username && allowed.includes(username)) || (email && allowed.includes(email));
+            return {
+                id: l.id,
+                name: l.name,
+                isAllowed
+            };
+        });
+
+        const hasKidsAccess = libsStatus.some(l => l.isAllowed);
+
+        return {
+            success: true,
+            hasKidsAccess,
+            kidsLibraries: libsStatus
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to get kids library access status" };
+    }
+}
+
+export async function updateUserKidsLibraryAccessAction(enable: boolean) {
+    try {
+        const session: any = await verifyUser();
+        const targetUsername = String(session?.username || "").trim();
+        const safeUserLower = targetUsername.toLowerCase();
+        const userEmail = String(session?.email || "").toLowerCase().trim();
+
+        let allLibraries = await prisma.library.findMany();
+        let kidsLibraries = allLibraries.filter(l => isKidsLibrary(l));
+
+        // Auto-provision standard Kids bookshelf if none exist
+        if (kidsLibraries.length === 0) {
+            const defaultKidsLib = await prisma.library.create({
+                data: {
+                    name: "Kids' Bookshelf",
+                    description: "Comics, picture books, and age-appropriate reading.",
+                    path: fs.existsSync("/Kidsbooks") ? "/Kidsbooks" : (fs.existsSync("./Kidsbooks") ? "./Kidsbooks" : ""),
+                    allowedUsers: enable ? `admin, ${targetUsername}` : "admin",
+                    restrictedUsers: "",
+                    downloadCategory: "books",
+                    mediaType: "ebook"
+                }
+            });
+            kidsLibraries = [defaultKidsLib];
+        } else {
+            for (const lib of kidsLibraries) {
+                let currentUsers: string[] = [];
+                const raw = (lib.allowedUsers || "").trim();
+                if (raw === "*") {
+                    currentUsers = ["admin"];
+                } else if (raw.length > 0) {
+                    currentUsers = raw.split(",").map(u => u.trim()).filter(Boolean);
+                }
+
+                if (enable) {
+                    const exists = currentUsers.some(u => u.toLowerCase() === safeUserLower || (userEmail && u.toLowerCase() === userEmail));
+                    if (!exists) {
+                        currentUsers.push(targetUsername);
+                    }
+                } else {
+                    currentUsers = currentUsers.filter(u => u.toLowerCase() !== safeUserLower && (!userEmail || u.toLowerCase() !== userEmail));
+                    if (currentUsers.length === 0) {
+                        currentUsers = ["admin"];
+                    }
+                }
+
+                const newAllowedUsers = currentUsers.join(", ");
+                await prisma.library.update({
+                    where: { id: lib.id },
+                    data: { allowedUsers: newAllowedUsers }
+                });
+                logger.addLog("INFO", "DATABASE", `Updated kids library "${lib.name}" allowedUsers: "${newAllowedUsers}" (User: ${targetUsername})`);
+            }
+        }
+
+        revalidatePath("/settings/profile");
+        revalidatePath("/library");
+        revalidatePath("/discover");
+
+        return {
+            success: true,
+            message: enable ? "Kids library added to your access list!" : "Kids library removed from your access list."
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update kids library access" };
+    }
+}
+
+export async function toggleLibraryUserAccessAction(libraryId: string, username: string) {
+    try {
+        await verifyAdmin();
+        const lib = await prisma.library.findUnique({ where: { id: libraryId } });
+        if (!lib) return { success: false, error: "Library not found" };
+
+        const targetUser = username.trim();
+        const targetLower = targetUser.toLowerCase();
+        let allowedList: string[] = [];
+
+        const raw = (lib.allowedUsers || "").trim();
+        if (raw === "*") {
+            allowedList = ["admin"];
+        } else if (raw.length > 0) {
+            allowedList = raw.split(",").map(u => u.trim()).filter(Boolean);
+        }
+
+        const isCurrentlyAllowed = allowedList.some(u => u.toLowerCase() === targetLower);
+        let updatedList: string[];
+        if (isCurrentlyAllowed) {
+            updatedList = allowedList.filter(u => u.toLowerCase() !== targetLower);
+            if (updatedList.length === 0) updatedList = ["admin"];
+        } else {
+            updatedList = [...allowedList, targetUser];
+        }
+
+        const newAllowedStr = updatedList.join(", ");
+        await prisma.library.update({
+            where: { id: libraryId },
+            data: { allowedUsers: newAllowedStr }
+        });
+
+        logger.addLog("INFO", "DATABASE", `Toggled user "${targetUser}" on library "${lib.name}": now "${newAllowedStr}"`);
+        revalidatePath("/library");
+        revalidatePath("/settings/profile");
+
+        return { success: true, allowedUsers: newAllowedStr };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to toggle library user access" };
+    }
+}
+
+export async function approveBookRequestAction(requestId: string) {
+    try {
+        await verifyAdmin();
+        const request = await prisma.bookRequest.findUnique({
+            where: { id: requestId }
+        });
+        if (!request) return { success: false, error: "Request not found" };
+
+        await prisma.bookRequest.update({
+            where: { id: requestId },
+            data: { status: "Approved" }
+        });
+
+        // Mirror to MediaRequest
+        await prisma.mediaRequest.updateMany({
+            where: {
+                title: request.title,
+                requestedByUsername: request.requestedBy,
+                status: "PENDING"
+            },
+            data: { status: "APPROVED" }
+        }).catch(() => {});
+
+        autoDownloadBookRequest(requestId, request.title, request.author || "").catch(err => {
+            console.error(`[BOOK-REQUEST-APPROVAL] Auto-download error for "${request.title}":`, err);
+        });
+
+        revalidatePath("/library");
+        revalidatePath("/requests");
+        return { success: true, message: `Approved request for "${request.title}". Searching indexers...` };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to approve request" };
+    }
+}
+
 export async function getLibraryBooks(libraryId?: string) {
     let session: any = null;
     try {
@@ -2392,13 +9139,53 @@ export async function getLibraryBooks(libraryId?: string) {
         targetLibraryIds = [libraryId];
     }
     
+    const isKid = (session as any)?.accountType === "KID";
+    const whereClause: any = { libraryId: { in: targetLibraryIds } };
+    if (isKid) {
+        whereClause.AND = [
+            { NOT: { maturityRating: "MATURE" } },
+            { NOT: { ageRating: "18+ Mature" } }
+        ];
+    }
+    
     const books = await prisma.book.findMany({
-        where: { libraryId: { in: targetLibraryIds } },
+        where: whereClause,
         orderBy: { createdAt: "desc" }
     });
     
-    books.sort((a, b) => a.title.localeCompare(b.title));
-    return books;
+    // Evaluate and repair ratings dynamically (e.g. adult romance formerly saved as "All Ages" or null)
+    for (const b of books) {
+        if (!b.ageRating || b.ageRating === "All Ages") {
+            const inferred = inferBookRating({
+                title: b.title,
+                author: b.author,
+                series: b.series || undefined
+            });
+            if (inferred.isMature && b.ageRating !== "18+ Mature") {
+                b.ageRating = inferred.ageRating;
+                b.maturityRating = inferred.maturityRating;
+                prisma.book.update({
+                    where: { id: b.id },
+                    data: { ageRating: inferred.ageRating, maturityRating: inferred.maturityRating }
+                }).catch(() => {});
+            } else if (!b.ageRating) {
+                b.ageRating = inferred.ageRating;
+                b.maturityRating = inferred.maturityRating;
+            }
+        }
+    }
+
+    let resultBooks = books;
+    if (isKid) {
+        // Strict Whitelist for Kids: Child accounts strictly only see verified Kids or YA books
+        resultBooks = books.filter(b => {
+            if (b.maturityRating === "MATURE" || b.ageRating === "18+ Mature") return false;
+            return b.ageRating === "Kids" || b.ageRating === "YA (12+)";
+        });
+    }
+
+    resultBooks.sort((a, b) => a.title.localeCompare(b.title));
+    return resultBooks;
 }
 
 export async function deleteBook(id: string) {
@@ -2417,10 +9204,37 @@ export async function deleteBook(id: string) {
 export async function updateBook(id: string, title: string, author: string, coverUrl: string) {
     await verifyAdmin();
     
-    // 1. Immediately save the new text metadata
+    // Resolve and link Author and BookSeries in SQLite
+    let authorId: string | undefined;
+    let seriesId: string | undefined;
+    let inferredAgeRating: string | undefined;
+    let inferredMaturityRating: string | undefined;
+    try {
+        const currentBook = await prisma.book.findUnique({ where: { id } });
+        const resolved = await resolveOrLinkAuthorAndSeries(author, currentBook?.series, currentBook?.volumeNumber);
+        authorId = resolved.authorId;
+        seriesId = resolved.seriesId;
+        const rating = inferBookRating({
+            title,
+            author,
+            series: currentBook?.series || undefined
+        });
+        inferredAgeRating = rating.ageRating;
+        inferredMaturityRating = rating.maturityRating;
+    } catch (e) {}
+
+    // 1. Immediately save the new text metadata and relational foreign keys
     await prisma.book.updateMany({
         where: { id },
-        data: { title, author, coverUrl }
+        data: {
+            title,
+            author,
+            coverUrl,
+            ...(authorId ? { authorId } : {}),
+            ...(seriesId ? { seriesId } : {}),
+            ...(inferredAgeRating ? { ageRating: inferredAgeRating } : {}),
+            ...(inferredMaturityRating ? { maturityRating: inferredMaturityRating } : {})
+        }
     });
     
     // 2. Instantly reorganize the folder on disk
@@ -2581,6 +9395,7 @@ export async function getBookRequests() {
                 const reqMedia = req.mediaType || "ebook";
                 const isFound = allBooks.some(b => {
                     if (b.fileType === "missing") return false;
+                    if (req.libraryId && b.libraryId !== req.libraryId) return false;
                     const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const bMedia = b.mediaType || "ebook";
                     return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
@@ -2598,6 +9413,7 @@ export async function getBookRequests() {
                 const reqMedia = req.mediaType || "ebook";
                 const isFound = allBooks.some(b => {
                     if (b.fileType === "missing") return false;
+                    if (req.libraryId && b.libraryId !== req.libraryId) return false;
                     const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                     const bMedia = b.mediaType || "ebook";
                     return bMedia === reqMedia && (normB === normReq || (normReq.length > 5 && normB.includes(normReq)));
@@ -2690,7 +9506,7 @@ export async function getBookRequests() {
 export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
             return;
         }
 
@@ -2718,18 +9534,6 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
         const title = book?.title || request.title;
         const author = book?.author || request.author || "Unknown Author";
         const appUrl = await getAppUrl();
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
-
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
-
         const coverUrl = book?.coverUrl || request.coverUrl;
         const cleanCoverUrl = coverUrl ? (coverUrl.startsWith("http") ? coverUrl : `${appUrl}${coverUrl}`) : null;
 
@@ -2739,44 +9543,27 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
 
         const actionText = isAudiobook ? "🎧 Listen in Player" : "📖 Read in Browser";
 
-        const mailOptions = {
-            from: senderEmail,
+        const { subject, html } = await renderEmailTemplate("media_ready", {
+            username: requester.username,
+            title,
+            author,
+            mediaType: isAudiobook ? "audiobook" : "ebook",
+            mediaLabel,
+            actionUrl: actionLink,
+            actionText,
+            coverUrl: cleanCoverUrl || "",
+            appUrl
+        });
+
+        await sendOrQueueEmail({
             to: requester.email,
-            subject: `🎉 Your ${mediaLabel} is Ready: ${title}`,
-            html: `
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <span style="display: inline-block; font-size: 11px; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; background: ${isAudiobook ? '#fef3c7' : '#dbeafe'}; color: ${isAudiobook ? '#b45309' : '#1e40af'};">
-                            ${isAudiobook ? '🎧 Audiobook Ready' : '📖 Ebook Ready'}
-                        </span>
-                        <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 22px; font-weight: 800;">Your Request has Arrived!</h2>
-                        <p style="color: #64748b; font-size: 14px; margin: 0;">Hi <strong>${requester.username}</strong>, your requested media was successfully downloaded and imported into the library.</p>
-                    </div>
-
-                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 20px 0; display: flex; gap: 16px; align-items: center;">
-                        ${cleanCoverUrl ? `<img src="${cleanCoverUrl}" alt="${title}" style="width: 70px; height: 100px; object-fit: cover; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);" />` : ''}
-                        <div>
-                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: #0f172a; font-weight: 700;">${title}</h3>
-                            <p style="margin: 0 0 4px 0; font-size: 13px; color: #475569;">by <strong>${author}</strong></p>
-                            ${request.series ? `<p style="margin: 0; font-size: 12px; color: #64748b;">Series: <em>${request.series}</em> ${request.volumeNumber ? `#${request.volumeNumber}` : ''}</p>` : ''}
-                        </div>
-                    </div>
-
-                    <div style="text-align: center; margin: 28px 0 16px 0;">
-                        <a href="${actionLink}" style="background-color: ${isAudiobook ? '#d97706' : '#2563eb'}; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                            ${actionText}
-                        </a>
-                    </div>
-
-                    <p style="text-align: center; font-size: 12px; color: #94a3b8; margin-top: 24px;">
-                        Portalarr Media Server • <a href="${appUrl}/library" style="color: #64748b; text-decoration: underline;">View Library</a>
-                    </p>
-                </div>
-            `
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`[SMTP-NOTIFICATION] Sent request completion email to ${requester.email} for "${title}"`);
+            subject,
+            html,
+            templateId: "media_ready",
+            targetUser: requester.username,
+            userId: requester.id
+        });
+        console.log(`[SMTP-NOTIFICATION] Sent or queued request completion email to ${requester.email} for "${title}"`);
     } catch (e: any) {
         console.error("[SMTP-NOTIFICATION] Failed to send request completion email:", e.message || e);
     }
@@ -2785,8 +9572,8 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
 async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            console.log("[SMTP-NOTIFICATION] SMTP is not configured. Skipping request notification.");
+        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
+            console.log("[SMTP-NOTIFICATION] Request notifications to admins disabled or not configured.");
             return;
         }
 
@@ -2801,82 +9588,31 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
 
         const isAudiobook = request.mediaType === "audiobook";
         const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
-        const mediaBadge = isAudiobook
-            ? `<span style="font-size: 11px; font-weight: bold; padding: 2px 8px; background-color: #fef3c7; color: #b45309; border-radius: 4px;">🎧 AUDIOBOOK</span>`
-            : `<span style="font-size: 11px; font-weight: bold; padding: 2px 8px; background-color: #dbeafe; color: #1e40af; border-radius: 4px;">📖 EBOOK</span>`;
 
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
+        const adminEmails = admins.map(a => a.email).filter(Boolean) as string[];
+        if (adminEmails.length === 0) return;
+
+        const appUrl = await getAppUrl();
+        const { subject, html } = await renderEmailTemplate("media_request_admin", {
+            title: request.title,
+            author: request.author || "Unknown Author",
+            mediaType: request.mediaType || "ebook",
+            mediaLabel,
+            requestedBy: request.requestedBy,
+            type: request.type || "book",
+            publishYear: request.publishYear || "",
+            manageUrl: `${appUrl}/requests`,
+            appUrl
         });
 
-        for (const admin of admins) {
-            if (!admin.email) continue;
-            
-            let detailsHtml = "";
-            if (request.type === "checklist") {
-                detailsHtml = `
-                    <p>Multiple ${isAudiobook ? "audiobooks" : "books"} were requested from a checklist by <strong>${request.requestedBy}</strong>:</p>
-                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${request.author}</div>
-                `;
-            } else {
-                detailsHtml = `
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-                        <tr style="background-color: #f8fafc;">
-                            <td style="padding: 10px; font-weight: bold; width: 120px; border: 1px solid #e2e8f0;">Title:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>${request.title}</strong></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Author:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.author || "Unknown Author"}</td>
-                        </tr>
-                        <tr style="background-color: #f8fafc;">
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Format:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${mediaBadge}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Requested By:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><code>${request.requestedBy}</code></td>
-                        </tr>
-                        <tr style="background-color: #f8fafc;">
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Type:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="text-transform: uppercase; font-size: 11px; font-weight: bold; padding: 2px 6px; background-color: #e2e8f0; color: #334155; border-radius: 4px;">${request.type}</span></td>
-                        </tr>
-                        ${request.publishYear ? `
-                        <tr>
-                            <td style="padding: 10px; font-weight: bold; border: 1px solid #e2e8f0;">Publish Year:</td>
-                            <td style="padding: 10px; border: 1px solid #e2e8f0;">${request.publishYear}</td>
-                        </tr>
-                        ` : ""}
-                    </table>
-                `;
-            }
-
-            const appUrl = await getAppUrl();
-            const mailOptions = {
-                from: senderEmail,
-                to: admin.email,
-                subject: `${isAudiobook ? "🎧 New Audiobook Request" : "📚 New Ebook Request"}: ${request.title}`,
-                html: `
-                    <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <h2 style="color: ${isAudiobook ? "#d97706" : "#4f46e5"}; margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">${isAudiobook ? "New Audiobook Request 🎧" : "New Ebook Request 📖"}</h2>
-                        ${detailsHtml}
-                        <div style="margin-top: 25px; text-align: center;">
-                            <a href="${appUrl}/library?tab=requests" style="background-color: ${isAudiobook ? "#d97706" : "#4f46e5"}; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Manage Requests</a>
-                        </div>
-                    </div>
-                `
-            };
-
-            await transporter.sendMail(mailOptions);
-        }
-        console.log(`[SMTP-NOTIFICATION] Request notification sent successfully for "${request.title}" (${mediaLabel})`);
+        await sendOrQueueEmail({
+            to: adminEmails,
+            subject,
+            html,
+            templateId: "media_request_admin",
+            targetUser: request.requestedBy
+        });
+        console.log(`[SMTP-NOTIFICATION] Request notification sent or queued for "${request.title}" (${mediaLabel})`);
     } catch (e: any) {
         console.error("[SMTP-NOTIFICATION] Failed to send request email notification to admins:", e);
     }
@@ -2903,8 +9639,8 @@ export async function createBookRequest(formData: FormData) {
         
         let finalTitle = title.trim();
         let finalAuthor = author.trim();
-        let finalSeries: string | null = null;
-        let finalVolNum: string | null = null;
+        let finalSeries: string | null = (formData.get("series") as string) || null;
+        let finalVolNum: string | null = (formData.get("volumeNumber") as string) || null;
         let finalCover = coverUrl;
         let finalYear = publishYear;
 
@@ -2931,8 +9667,8 @@ export async function createBookRequest(formData: FormData) {
                 if (heur) {
                     if (heur.title) finalTitle = heur.title;
                     if (heur.author && heur.author !== "Unknown Author") finalAuthor = heur.author;
-                    if (heur.series) finalSeries = heur.series;
-                    if (heur.volumeNumber) finalVolNum = String(heur.volumeNumber);
+                    if (heur.series && !finalSeries) finalSeries = heur.series;
+                    if (heur.volumeNumber && !finalVolNum) finalVolNum = String(heur.volumeNumber);
                 }
             }
         } catch (e) {}
@@ -2944,14 +9680,24 @@ export async function createBookRequest(formData: FormData) {
         }
         
         const libraryId = formData.get("libraryId") as string;
+        let targetLib: any = null;
         if (libraryId) {
+            targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
             finalCover = finalCover 
                 ? (finalCover.includes("?") ? `${finalCover}&lib=${libraryId}` : `${finalCover}?lib=${libraryId}`) 
                 : `?lib=${libraryId}`;
         }
 
+        const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+        const inferredRating = inferBookRating({
+            title: finalTitle,
+            author: finalAuthor,
+            series: finalSeries
+        });
+        const isKidsBook = isKidsLib || inferredRating.ageRating === "Kids";
+
         if (type === "series") {
-            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId);
+            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId, isKidsBook);
             if (expanded) {
                 // Save the parent series request record itself in the DB
                 await prisma.bookRequest.create({
@@ -2962,10 +9708,12 @@ export async function createBookRequest(formData: FormData) {
                         volumeNumber: finalVolNum,
                         coverUrl: finalCover,
                         publishYear: finalYear,
+                        maturityRating: inferredRating.maturityRating || null,
+                        ageRating: inferredRating.ageRating || null,
                         requestedBy: targetUser,
                         type: "series",
                         mediaType,
-                        status: "Approved"
+                        status: isKidsBook ? "Pending" : "Approved"
                     }
                 });
 
@@ -2980,13 +9728,23 @@ export async function createBookRequest(formData: FormData) {
                     console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
                 });
                 revalidatePath("/library");
-                return { success: true, message: "Series request submitted successfully!" };
+                return { 
+                    success: true, 
+                    message: isKidsBook 
+                        ? "Kids series request submitted for admin review." 
+                        : "Series request submitted successfully!" 
+                };
             }
         }
         
-        const isApproved = true; // Auto-approve all requests
+        const isApproved = !isKidsBook; // Kids books require admin approval
         const disableAutoDownload = formData.get("disableAutoDownload") === "true";
+        const sendToKindleVal = formData.get("sendToKindle") === "true";
         
+        const reqUser = await prisma.user.findFirst({
+            where: { username: targetUser }
+        });
+
         const request = await prisma.bookRequest.create({
             data: {
                 title: finalTitle,
@@ -2995,12 +9753,45 @@ export async function createBookRequest(formData: FormData) {
                 volumeNumber: finalVolNum,
                 coverUrl: finalCover,
                 publishYear: finalYear,
+                maturityRating: inferredRating.maturityRating || null,
+                ageRating: inferredRating.ageRating || null,
                 requestedBy: targetUser,
+                requestedByUserId: reqUser?.id || null,
+                userEmail: reqUser?.email || null,
+                kindleEmail: reqUser?.kindleEmail || null,
+                sendToKindle: Boolean(sendToKindleVal && mediaType === "ebook"),
+                libraryId: libraryId || null,
                 type,
                 mediaType,
                 status: isApproved ? "Approved" : "Pending"
             }
         });
+
+        // Mirror to MediaRequest for unified request tracking
+        try {
+            await ensureSchemaColumns();
+            await prisma.mediaRequest.create({
+                data: {
+                    mediaType,
+                    title: finalTitle,
+                    requestedByUsername: targetUser,
+                    requestedByUserId: reqUser?.id || null,
+                    userEmail: reqUser?.email || null,
+                    kindleEmail: reqUser?.kindleEmail || null,
+                    bookAuthor: finalAuthor,
+                    bookSeries: finalSeries,
+                    bookVolume: finalVolNum,
+                    bookLibraryId: libraryId || null,
+                    sendToKindle: Boolean(sendToKindleVal && mediaType === "ebook"),
+                    posterPath: finalCover || null,
+                    releaseYear: finalYear || null,
+                    contentRating: inferredRating.ageRating || null,
+                    status: isApproved ? "PROCESSING" : "PENDING"
+                }
+            });
+        } catch (mErr: any) {
+            // Non-fatal if MediaRequest mirror fails
+        }
         
         if (type === "book" && isApproved && !disableAutoDownload) {
             autoDownloadBookRequest(request.id, finalTitle, finalAuthor).catch(err => {
@@ -3020,14 +9811,19 @@ export async function createBookRequest(formData: FormData) {
         });
 
         revalidatePath("/library");
-        return { success: true, message: "Request submitted successfully!" };
+        return { 
+            success: true, 
+            message: isKidsBook 
+                ? "Kids book request submitted for admin review." 
+                : "Request submitted successfully!" 
+        };
     } catch (e: any) {
         console.error("[CREATE-BOOK-REQUEST-ERROR]:", e);
         return { success: false, error: e.message || "Failed to submit request" };
     }
 }
 
-async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string): Promise<boolean> {
+async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string, isKidsSeries: boolean = false): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
         const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
@@ -3100,22 +9896,35 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
         if (uniqueBooks.length === 0) return false;
         
         for (const book of uniqueBooks) {
+            const inferred = inferBookRating({
+                title: book.title,
+                author: book.author,
+                series: seriesTitle
+            });
+            const isKidsBook = isKidsSeries || inferred.ageRating === "Kids";
+
             const req = await prisma.bookRequest.create({
                 data: {
                     title: book.title,
                     author: book.author,
+                    series: seriesTitle,
                     coverUrl: book.coverUrl,
                     publishYear: book.publishYear,
+                    maturityRating: inferred.maturityRating || null,
+                    ageRating: inferred.ageRating || null,
                     requestedBy,
+                    libraryId: libraryId || null,
                     type: "book",
                     mediaType,
-                    status: "Approved"
+                    status: isKidsBook ? "Pending" : "Approved"
                 }
             });
             
-            autoDownloadBookRequest(req.id, book.title, book.author).catch(err => {
-                console.error(`[AUTO-DOWNLOAD] Background process failed for series book:`, err);
-            });
+            if (!isKidsBook) {
+                autoDownloadBookRequest(req.id, book.title, book.author).catch(err => {
+                    console.error(`[AUTO-DOWNLOAD] Background process failed for series book:`, err);
+                });
+            }
         }
         
         return true;
@@ -3250,8 +10059,12 @@ function cleanSearchQuery(searchQuery: string): string {
 }
 
 async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortSignal): Promise<any> {
-    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" }, signal });
+    const headers = { 
+        "Accept": "application/json",
+        "User-Agent": "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)"
+    };
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+    const res = await fetch(url, { headers, signal });
     if (!res.ok) return null;
     const data = await res.json();
     
@@ -3264,8 +10077,8 @@ async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortS
     if (prefixRegex.test(cleanedQuery)) {
         const fallbackQuery = cleanedQuery.replace(prefixRegex, "").trim();
         console.log(`[OPEN-LIBRARY-FALLBACK] No matches for "${cleanedQuery}". Retrying with stripped prefix: "${fallbackQuery}"`);
-        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1`;
-        const fallbackRes = await fetch(fallbackUrl, { headers: { "Accept": "application/json" }, signal });
+        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+        const fallbackRes = await fetch(fallbackUrl, { headers, signal });
         if (fallbackRes.ok) {
             return await fallbackRes.json();
         }
@@ -3610,18 +10423,25 @@ function extractMetadataFromPath(fullPath: string, file: string, ext: string, sc
     return { title, author, series: finalParse.series || parsedFile.series, volumeNumber: finalParse.volumeNumber || parsedFile.volumeNumber, cleanQuery: `${title} ${author !== "Unknown Author" ? author : ""}`.trim() };
 }
 
-function purgeEmptyDirectories(dir: string) {
+function purgeEmptyDirectories(dir: string, protectedFolderSet?: Set<string>) {
     if (!fs.existsSync(dir)) return;
     try {
+        const dirNorm = path.resolve(dir).toLowerCase();
+        if (protectedFolderSet && protectedFolderSet.has(dirNorm)) {
+            // Explicitly protected directory (belongs to an active book or request in DB)
+            return;
+        }
+
         const files = fs.readdirSync(dir);
         let isEmpty = true;
         
         for (const file of files) {
             const fullPath = path.join(dir, file);
+            const fullPathNorm = path.resolve(fullPath).toLowerCase();
             const stat = fs.statSync(fullPath);
             
             if (stat.isDirectory()) {
-                purgeEmptyDirectories(fullPath);
+                purgeEmptyDirectories(fullPath, protectedFolderSet);
                 if (fs.existsSync(fullPath)) {
                     isEmpty = false;
                 }
@@ -3631,15 +10451,15 @@ function purgeEmptyDirectories(dir: string) {
                     file === 'Thumbs.db' || 
                     file === 'desktop.ini' || 
                     file === '.nomedia' ||
-                    file.endsWith('.jpg') ||
-                    file.endsWith('.png') ||
                     file.endsWith('.nfo') ||
                     file.endsWith('.txt') ||
                     file.endsWith('.cue') ||
                     file.endsWith('.md5') ||
                     file.endsWith('.url') ||
                     file.endsWith('.log') ||
-                    file.endsWith('.srt');
+                    file.endsWith('.srt') ||
+                    file.endsWith('.diz') ||
+                    file.endsWith('.sfv');
                     
                 if (file === '.portalarr-missing') {
                     isEmpty = false;
@@ -3650,8 +10470,11 @@ function purgeEmptyDirectories(dir: string) {
         }
         
         if (isEmpty) {
+            if (protectedFolderSet && protectedFolderSet.has(dirNorm)) {
+                return;
+            }
             fs.rmSync(dir, { recursive: true, force: true });
-            console.log(`[CLEANUP] 🧹 Purged zombie directory: ${dir}`);
+            console.log(`[CLEANUP] 🧹 Purged orphaned zombie directory: ${dir}`);
         }
     } catch (e) {}
 }
@@ -3731,15 +10554,105 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         const dbBooks = await prisma.book.findMany({
             where: { libraryId: libraryId }
         });
-        const allDbBooks = await prisma.book.findMany();
+
+        const [dbBookRequests, dbMediaRequests] = await Promise.all([
+            prisma.bookRequest.findMany({
+                where: {
+                    OR: [
+                        { libraryId: libraryId },
+                        { libraryId: null }
+                    ]
+                }
+            }).catch(() => []),
+            prisma.mediaRequest.findMany({
+                where: {
+                    mediaType: { in: ["book", "audiobook"] },
+                    OR: [
+                        { bookLibraryId: libraryId },
+                        { bookLibraryId: null }
+                    ]
+                }
+            }).catch(() => [])
+        ]);
+
+        interface CanonicalRequestMatch {
+            requestId?: string;
+            title: string;
+            author?: string | null;
+            series?: string | null;
+            volumeNumber?: string | null;
+            coverUrl?: string | null;
+            mediaType?: string | null;
+        }
+
+        const canonicalRequests: CanonicalRequestMatch[] = [];
+        for (const br of dbBookRequests) {
+            if (br.title) {
+                canonicalRequests.push({
+                    requestId: br.id,
+                    title: br.title,
+                    author: br.author,
+                    series: br.series,
+                    volumeNumber: br.volumeNumber,
+                    coverUrl: br.coverUrl,
+                    mediaType: br.mediaType || "ebook"
+                });
+            }
+        }
+        for (const mr of dbMediaRequests) {
+            if (mr.title) {
+                canonicalRequests.push({
+                    requestId: mr.id,
+                    title: mr.title,
+                    author: mr.bookAuthor,
+                    series: mr.bookSeries,
+                    volumeNumber: mr.bookVolume,
+                    coverUrl: mr.posterPath,
+                    mediaType: mr.mediaType === "audiobook" ? "audiobook" : "ebook"
+                });
+            }
+        }
+
+        function findMatchingRequest(targetTitle: string, targetAuthor: string, filePathStr: string, itemMediaType: string): CanonicalRequestMatch | null {
+            const cleanTargetT = getNormTitle(targetTitle);
+            const cleanTargetA = getNormTitle(targetAuthor);
+            const cleanPath = filePathStr.toLowerCase();
+
+            for (const req of canonicalRequests) {
+                if (req.mediaType && req.mediaType !== itemMediaType) continue;
+
+                const reqT = getNormTitle(req.title);
+                const reqA = getNormTitle(req.author || "");
+
+                // 1. Exact normalized title match
+                if (reqT && reqT === cleanTargetT) {
+                    if (!cleanTargetA || cleanTargetA === "unknownauthor" || !reqA || cleanTargetA === reqA || cleanPath.includes(reqA)) {
+                        return req;
+                    }
+                }
+
+                // 2. Path contains request title and request author
+                if (reqT && reqT.length > 3 && cleanPath.includes(reqT.replace(/[^a-z0-9]/g, ""))) {
+                    if (!reqA || cleanPath.includes(reqA.replace(/[^a-z0-9]/g, ""))) {
+                        return req;
+                    }
+                }
+
+                // 3. Substring inclusion for long titles (>5 chars)
+                if (reqT && reqT.length > 5 && (cleanTargetT.includes(reqT) || reqT.includes(cleanTargetT))) {
+                    if (!cleanTargetA || cleanTargetA === "unknownauthor" || !reqA || cleanTargetA === reqA) {
+                        return req;
+                    }
+                }
+            }
+            return null;
+        }
 
         const dbBooksByPathLower = new Map<string, any>();
         for (const b of dbBooks) {
-            dbBooksByPathLower.set(b.filePath.toLowerCase(), b);
-        }
-        const allDbBooksByPathLower = new Map<string, any>();
-        for (const b of allDbBooks) {
-            allDbBooksByPathLower.set(b.filePath.toLowerCase(), b);
+            if (b.filePath) {
+                dbBooksByPathLower.set(normalizePathForLookup(b.filePath), b);
+            }
         }
 
 
@@ -3830,18 +10743,11 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             } catch (e) {}
         }
 
-        // Build list of paths to scan strictly scoped to this library's configured path
-        const pathsToScan = [scanPath];
-
-        for (const targetDir of pathsToScan) {
-            collectFiles(targetDir);
-        }
-
         collectFiles(scanPath);
 
-        let finalMediaItems = foundMediaItems;
+        let finalMediaItems: { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }[] = [];
         if (isAudiobookLib) {
-            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: any }>();
+            const consolidatedMap = new Map<string, { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }>();
             for (const item of foundMediaItems) {
                 const parentDir = path.dirname(item.fullPath);
                 let groupFolder = item.fullPath; // default for loose files in root
@@ -3857,11 +10763,9 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 const folderKey = groupFolder.toLowerCase();
-                
                 const folderLower = path.basename(groupFolder).toLowerCase();
                 const isGenericRootFolder = folderLower === "books" || folderLower === "audiobooks" || folderLower === "userbooks" || folderLower === "kidsbooks" || folderLower === "kyrabooks" || folderLower === "downloads" || folderLower.includes("library") || folderLower.includes("bookshelf");
                 if (isGenericRootFolder && groupFolder !== item.fullPath) {
-                    // Fallback to grouping by file itself if the parent is a generic root
                     groupFolder = item.fullPath;
                 }
 
@@ -3870,7 +10774,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         fullPath: groupFolder,
                         file: item.file,
                         ext: item.ext,
-                        stats: { size: item.stats.size }
+                        stats: { size: item.stats.size, birthtime: item.stats.birthtime, mtime: item.stats.mtime }
                     });
                 } else {
                     const existing = consolidatedMap.get(folderKey)!;
@@ -3886,6 +10790,139 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
             }
             finalMediaItems = Array.from(consolidatedMap.values());
+        } else {
+            // Ebooks Consolidation: If an .epub exists for a book, delete redundant .azw3/.mobi files from disk
+            function getEbookExtPriority(ext: string): number {
+                const e = ext.toLowerCase();
+                if (e === ".epub") return 100;
+                if (e === ".azw3") return 80;
+                if (e === ".mobi") return 60;
+                if (e === ".pdf") return 40;
+                if (e === ".cbz") return 30;
+                if (e === ".cbr") return 20;
+                return 10;
+            }
+
+            const ebookGroups = new Map<string, typeof foundMediaItems>();
+
+            for (const item of foundMediaItems) {
+                const cleanMeta = extractMetadataFromPath(item.fullPath, item.file, item.ext, scanPath);
+                const normTitle = cleanTitleForMatch(cleanMeta.title || path.basename(item.file, item.ext));
+                const rawAuth = cleanMeta.author || "";
+                const normAuthor = (rawAuth && rawAuth !== "Unknown Author") ? getNormTitle(rawAuth) : "unknown";
+
+                const ebookKey = `${normAuthor !== "unknownauthor" && normAuthor !== "unknown" ? normAuthor : "all"}:::${normTitle}`;
+
+                if (!ebookGroups.has(ebookKey)) {
+                    ebookGroups.set(ebookKey, []);
+                }
+                ebookGroups.get(ebookKey)!.push(item);
+            }
+
+            const consolidatedEbookMap = new Map<string, { fullPath: string, file: string, ext: string, stats: { size: number, birthtime?: Date, mtime?: Date } }>();
+
+            for (const [ebookKey, group] of ebookGroups.entries()) {
+                // Sort group so highest-priority, organized bracketed paths and larger files come first
+                group.sort((a, b) => {
+                    const aPriority = getEbookExtPriority(a.ext);
+                    const bPriority = getEbookExtPriority(b.ext);
+                    if (aPriority !== bPriority) return bPriority - aPriority;
+
+                    const aHasBrackets = a.fullPath.includes("[") && a.fullPath.includes("]");
+                    const bHasBrackets = b.fullPath.includes("[") && b.fullPath.includes("]");
+                    if (aHasBrackets !== bHasBrackets) return aHasBrackets ? -1 : 1;
+
+                    return (b.stats.size || 0) - (a.stats.size || 0);
+                });
+
+                const epubItem = group.find(i => i.ext.toLowerCase() === ".epub");
+
+                if (epubItem) {
+                    // 1. Deep validate & repair EPUB for Amazon Send-to-Kindle compliance
+                    try {
+                        await validateAndFixEpubForKindle(epubItem.fullPath);
+                    } catch (vErr: any) {
+                        console.warn(`[SCANNER] Preflight check warning for ${epubItem.fullPath}:`, vErr.message);
+                    }
+
+                    // 2. Delete redundant non-EPUB files (AZW3, MOBI, AZW, AZW4, PDF, etc.) from disk
+                    for (const other of group) {
+                        const otherExt = other.ext.toLowerCase();
+                        if (otherExt !== ".epub") {
+                            try {
+                                if (fs.existsSync(other.fullPath)) {
+                                    fs.unlinkSync(other.fullPath);
+                                    console.log(`[SCANNER] 🧹 Deleted redundant ${otherExt} file on disk: ${other.fullPath} (.epub version exists)`);
+                                    logger.addLog("INFO", "SCANNER", `🗑️ Deleted redundant "${other.file}" (${otherExt}) from disk since EPUB version is present.`);
+                                }
+                            } catch (delErr: any) {
+                                console.warn(`[SCANNER] Could not delete redundant format file ${other.fullPath}:`, delErr.message);
+                            }
+                        }
+                    }
+
+                    const st = fs.existsSync(epubItem.fullPath) ? fs.statSync(epubItem.fullPath) : epubItem.stats;
+                    consolidatedEbookMap.set(ebookKey, {
+                        fullPath: epubItem.fullPath,
+                        file: epubItem.file,
+                        ext: ".epub",
+                        stats: {
+                            size: st.size,
+                            birthtime: epubItem.stats.birthtime,
+                            mtime: epubItem.stats.mtime
+                        }
+                    });
+                } else {
+                    // No EPUB exists! Attempt Calibre conversion from the highest-priority non-EPUB format
+                    group.sort((a, b) => getEbookExtPriority(b.ext) - getEbookExtPriority(a.ext));
+                    const primaryItem = group[0];
+
+                    console.log(`[SCANNER] 🔄 Non-EPUB book found with no EPUB equivalent: "${primaryItem.file}" (${primaryItem.ext}). Converting to EPUB...`);
+                    const convRes = await convertEbookToEpub(primaryItem.fullPath);
+
+                    if (convRes.success && convRes.epubPath && fs.existsSync(convRes.epubPath)) {
+                        const newEpubPath = convRes.epubPath;
+                        await validateAndFixEpubForKindle(newEpubPath).catch(() => {});
+
+                        // Delete any other non-EPUB files in the group
+                        for (const other of group) {
+                            if (other.fullPath !== primaryItem.fullPath && fs.existsSync(other.fullPath)) {
+                                try {
+                                    fs.unlinkSync(other.fullPath);
+                                    console.log(`[SCANNER] 🧹 Cleaned up non-EPUB file: ${other.fullPath}`);
+                                } catch (e) {}
+                            }
+                        }
+
+                        const newStat = fs.statSync(newEpubPath);
+                        consolidatedEbookMap.set(ebookKey, {
+                            fullPath: newEpubPath,
+                            file: path.basename(newEpubPath),
+                            ext: ".epub",
+                            stats: {
+                                size: newStat.size,
+                                birthtime: primaryItem.stats.birthtime,
+                                mtime: newStat.mtime
+                            }
+                        });
+                    } else {
+                        console.warn(`[SCANNER] ❌ Could not convert "${primaryItem.file}" (${primaryItem.ext}) to EPUB: ${convRes.error}. Rejecting unconvertible file.`);
+                        logger.addLog("WARN", "SCANNER", `⚠️ Unconvertible non-EPUB file rejected: "${primaryItem.file}" (${primaryItem.ext}). Only EPUBs are kept.`);
+
+                        // Delete unconvertible non-EPUB files from disk so only valid EPUBs remain
+                        for (const other of group) {
+                            if (fs.existsSync(other.fullPath)) {
+                                try {
+                                    fs.unlinkSync(other.fullPath);
+                                    console.log(`[SCANNER] 🗑️ Deleted unconvertible non-EPUB file from disk: ${other.fullPath}`);
+                                } catch (e) {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            finalMediaItems = Array.from(consolidatedEbookMap.values());
         }
 
         console.log(`[SCANNER] 🔍 Located ${foundMediaItems.length} media files on disk for "${library.name}". (Consolidated into ${finalMediaItems.length} entries)`);
@@ -3902,353 +10939,405 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             const { file, ext, stats } = item;
             let fullPath = item.fullPath;
             if (!fs.existsSync(fullPath)) {
-                continue; // File was moved/deleted by a concurrent scan thread
+                continue;
             }
 
-                // Check and handle foreign language ebooks in library folders
-                if (isForeignLanguage(file)) {
-                    console.log(`[SCANNER] Detected foreign language file in library: ${file}. Deleting file and requesting English copy.`);
+            // Check and handle foreign language ebooks in library folders
+            if (isForeignLanguage(file)) {
+                console.log(`[SCANNER] Detected foreign language file in library: ${file}. Deleting file and requesting English copy.`);
+                
+                const cleanBase = path.basename(file, ext);
+                let author = "Unknown Author";
+                let title = cleanBase.replace(/[_-]/g, ' ').trim();
+                if (cleanBase.includes(" - ")) {
+                    const parts = cleanBase.split(" - ").map(p => p.trim());
+                    if (parts.length >= 2) {
+                        author = parts[0];
+                        title = parts.slice(1).join(" - ");
+                    }
+                }
+                
+                const cleanedTitle = title
+                    .replace(/\b(?:epub|pdf|mobi|cbz|ebook|retail|decipher|repack|web|download)\b/gi, "")
+                    .replace(/\b(?:swedish|svensk|utgava|german|french|spanish|dutch|italian|danish|norwegian|russian|polish)\b/gi, "")
+                    .replace(/\b\d{4}\b/g, "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                try {
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (err: any) {
+                    console.error(`[SCANNER] Failed to delete foreign language file ${file}:`, err.message);
+                }
+
+                const cleanTitleLower = cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                let englishVersionExists = false;
+                const otherFiles = fs.readdirSync(library.path);
+                for (const otherFile of otherFiles) {
+                    if (otherFile === file) continue;
+                    const otherExt = path.extname(otherFile).toLowerCase();
+                    if (validExtensions.includes(otherExt) && !isForeignLanguage(otherFile)) {
+                        const otherClean = otherFile.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        if (otherClean.includes(cleanTitleLower)) {
+                            englishVersionExists = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!englishVersionExists) {
+                    console.log(`[SCANNER] No English version of "${cleanedTitle}" found. Resetting request or adding request to auto-download...`);
                     
-                    const cleanBase = path.basename(file, ext);
-                    let author = "Unknown Author";
-                    let title = cleanBase.replace(/[_-]/g, ' ').trim();
-                    if (cleanBase.includes(" - ")) {
-                        const parts = cleanBase.split(" - ").map(p => p.trim());
-                        if (parts.length >= 2) {
-                            author = parts[0];
-                            title = parts.slice(1).join(" - ");
+                    let matchedRequest = await prisma.bookRequest.findFirst({
+                        where: {
+                            OR: [
+                                {
+                                    title: { contains: cleanedTitle },
+                                    author: { contains: author === "Unknown Author" ? "" : author }
+                                },
+                                {
+                                    title: { contains: author === "Unknown Author" ? "" : author },
+                                    author: { contains: cleanedTitle }
+                                }
+                            ]
                         }
-                    }
-                    
-                    const cleanedTitle = title
-                        .replace(/\b(?:epub|pdf|mobi|cbz|ebook|retail|decipher|repack|web|download)\b/gi, "")
-                        .replace(/\b(?:swedish|svensk|utgava|german|french|spanish|dutch|italian|danish|norwegian|russian|polish)\b/gi, "")
-                        .replace(/\b\d{4}\b/g, "")
-                        .replace(/\s+/g, " ")
-                        .trim();
+                    });
 
-                    try {
-                        if (fs.existsSync(fullPath)) {
-                            fs.unlinkSync(fullPath);
-                        }
-                    } catch (err: any) {
-                        console.error(`[SCANNER] Failed to delete foreign language file ${file}:`, err.message);
-                    }
-
-                    const cleanTitleLower = cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    let englishVersionExists = false;
-                    const otherFiles = fs.readdirSync(library.path);
-                    for (const otherFile of otherFiles) {
-                        if (otherFile === file) continue;
-                        const otherExt = path.extname(otherFile).toLowerCase();
-                        if (validExtensions.includes(otherExt) && !isForeignLanguage(otherFile)) {
-                            const otherClean = otherFile.toLowerCase().replace(/[^a-z0-9]/g, "");
-                            if (otherClean.includes(cleanTitleLower)) {
-                                englishVersionExists = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (!englishVersionExists) {
-                        console.log(`[SCANNER] No English version of "${cleanedTitle}" found. Resetting request or adding request to auto-download...`);
-                        
-                        let matchedRequest = await prisma.bookRequest.findFirst({
-                            where: {
-                                OR: [
-                                    {
-                                        title: { contains: cleanedTitle },
-                                        author: { contains: author === "Unknown Author" ? "" : author }
-                                    },
-                                    {
-                                        title: { contains: author === "Unknown Author" ? "" : author },
-                                        author: { contains: cleanedTitle }
-                                    }
-                                ]
+                    if (matchedRequest) {
+                        await prisma.bookRequest.update({
+                            where: { id: matchedRequest.id },
+                            data: { status: "Searching" }
+                        });
+                        autoDownloadBookRequest(matchedRequest.id, cleanedTitle, author).catch(err => {
+                            console.error(`[SCANNER] Failed to trigger auto-download for request ${matchedRequest.id}:`, err.message);
+                        });
+                    } else {
+                        const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+                        const requestedBy = adminUser ? adminUser.username : "system";
+                        const newRequest = await prisma.bookRequest.create({
+                            data: {
+                                title: cleanedTitle,
+                                author: author,
+                                requestedBy,
+                                status: "Searching"
                             }
                         });
-
-                        if (matchedRequest) {
-                            await prisma.bookRequest.update({
-                                where: { id: matchedRequest.id },
-                                data: { status: "Searching" }
-                            });
-                            autoDownloadBookRequest(matchedRequest.id, cleanedTitle, author).catch(err => {
-                                console.error(`[SCANNER] Failed to trigger auto-download for request ${matchedRequest.id}:`, err.message);
-                            });
-                        } else {
-                            const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
-                            const requestedBy = adminUser ? adminUser.username : "system";
-                            const newRequest = await prisma.bookRequest.create({
-                                data: {
-                                    title: cleanedTitle,
-                                    author: author,
-                                    requestedBy,
-                                    status: "Searching"
-                                }
-                            });
-                            autoDownloadBookRequest(newRequest.id, cleanedTitle, author).catch(err => {
-                                console.error(`[SCANNER] Failed to trigger auto-download for request ${newRequest.id}:`, err.message);
-                            });
-                        }
+                        autoDownloadBookRequest(newRequest.id, cleanedTitle, author).catch(err => {
+                            console.error(`[SCANNER] Failed to trigger auto-download for request ${newRequest.id}:`, err.message);
+                        });
                     }
+                }
+                continue;
+            }
+
+            if (ext === ".epub") {
+                try {
+                    fullPath = await processEpubForKindle(fullPath);
+                } catch (err: any) {
+                    console.warn(`[KINDLE-PROCESS] EPUB check failed for ${file}: ${err.message}`);
+                }
+            }
+
+            const targetMediaType = library.mediaType || "ebook";
+            const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
+            const normFullPathForLookup = normalizePathForLookup(fullPath);
+
+            let existing = dbBooksByPathLower.get(normFullPathForLookup);
+            if (existing && matchedDbBookIds.has(existing.id)) {
+                existing = undefined;
+            }
+
+            const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
+            const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
+            const targetCheckTitle = parsedMetaCheck.title || cleanBaseCheck;
+            const targetCheckAuthor = parsedMetaCheck.author || "";
+
+            if (!existing) {
+                existing = dbBooks.find(b => {
+                    if (matchedDbBookIds.has(b.id)) return false;
+                    const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
+                    const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
+                    if (bMedia !== normTargetMedia) return false;
+
+                    if (!isTitleMatch(b.title, targetCheckTitle)) return false;
+                    if (!isAuthorMatch(b.author, targetCheckAuthor)) return false;
+                    return true;
+                });
+            }
+
+            if (existing) {
+                matchedDbBookIds.add(existing.id);
+
+                const updateData: any = {};
+                if (existing.libraryId !== libraryId) updateData.libraryId = libraryId;
+                if (typeof stats.size === 'number' && stats.size > 0 && Math.abs((existing.fileSize || 0) - stats.size) > 0) updateData.fileSize = stats.size;
+                
+                const normExistingPath = normalizePathForLookup(existing.filePath);
+                if (normExistingPath !== normFullPathForLookup) updateData.filePath = fullPath;
+                
+                if (existing.mediaType !== targetMediaType) updateData.mediaType = targetMediaType;
+
+                const newFileType = (ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub")).toLowerCase();
+                if ((existing.fileType || "").toLowerCase() !== newFileType) updateData.fileType = newFileType;
+
+                // Check for Tier 1 request metadata match to backfill series, volume, author, or relational links
+                const matchedReq = findMatchingRequest(existing.title, existing.author || "", fullPath, targetMediaType);
+                if (matchedReq) {
+                    if (matchedReq.series && matchedReq.series.trim() && (existing.series || "").trim().toLowerCase() !== matchedReq.series.trim().toLowerCase()) {
+                        updateData.series = matchedReq.series.trim();
+                    }
+                    if (matchedReq.volumeNumber && matchedReq.volumeNumber.trim()) {
+                        const v1 = (existing.volumeNumber || "").trim();
+                        const v2 = matchedReq.volumeNumber.trim();
+                        const eq = v1.toLowerCase() === v2.toLowerCase() || (!isNaN(parseFloat(v1)) && !isNaN(parseFloat(v2)) && parseFloat(v1) === parseFloat(v2));
+                        if (!eq) updateData.volumeNumber = v2;
+                    }
+                    if (matchedReq.author && matchedReq.author.trim() && (!existing.author || existing.author === "Unknown Author")) updateData.author = matchedReq.author;
+                    if (matchedReq.coverUrl && (!existing.coverUrl || existing.coverUrl.trim().length < 10)) updateData.coverUrl = matchedReq.coverUrl;
+                }
+
+                // Check on-disk parsed metadata for series and volume number backfill if missing
+                if (!existing.series && parsedMetaCheck.series && !updateData.series) {
+                    updateData.series = parsedMetaCheck.series.trim();
+                }
+                if (!existing.volumeNumber && parsedMetaCheck.volumeNumber && !updateData.volumeNumber) {
+                    updateData.volumeNumber = parsedMetaCheck.volumeNumber.trim();
+                }
+                if ((!existing.author || existing.author === "Unknown Author") && parsedMetaCheck.author && parsedMetaCheck.author !== "Unknown Author" && !updateData.author) {
+                    updateData.author = parsedMetaCheck.author;
+                }
+
+                // Ensure Author and BookSeries relational keys (authorId, seriesId) are resolved and linked in SQLite
+                const effectiveAuthor = updateData.author || existing.author;
+                const effectiveSeries = updateData.series || existing.series;
+                const effectiveVol = updateData.volumeNumber || existing.volumeNumber;
+                if ((effectiveAuthor && !existing.authorId) || (effectiveSeries && !existing.seriesId)) {
+                    try {
+                        const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(effectiveAuthor, effectiveSeries, effectiveVol);
+                        if (authorId && existing.authorId !== authorId) updateData.authorId = authorId;
+                        if (seriesId && existing.seriesId !== seriesId) updateData.seriesId = seriesId;
+                    } catch (e) {}
+                }
+
+                // Ensure age rating and maturity are evaluated / updated
+                const ratingCheck = inferBookRating({
+                    title: existing.title,
+                    author: effectiveAuthor,
+                    series: effectiveSeries
+                });
+                if (!existing.ageRating || (ratingCheck.isMature && existing.ageRating !== "18+ Mature")) {
+                    updateData.ageRating = ratingCheck.ageRating;
+                    updateData.maturityRating = ratingCheck.maturityRating;
+                }
+
+                if (Object.keys(updateData).length > 0) {
+                    logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${existing.title}" [${Object.keys(updateData).join(", ")}] (ID: ${existing.id}, Target Lib: "${library.name}", Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                    console.log(`[SCANNER] 🔄 Updated book "${existing.title}" [${Object.keys(updateData).join(", ")}] in library "${library.name}" (ID: ${existing.id})`);
+                    await prisma.book.updateMany({
+                        where: { id: existing.id },
+                        data: updateData
+                    }).catch(err => {
+                        logger.addLog("ERROR", "DATABASE", `❌ Failed to update book "${existing.title}" (ID: ${existing.id}): ${err?.message || err}`);
+                        console.warn(`[SCANNER] Failed to update book ${existing.id}:`, err?.message || err);
+                    });
+                    Object.assign(existing, updateData);
+                }
+                dbBooksByPathLower.set(normFullPathForLookup, existing);
+
+                // Only fetch cover if completely missing or empty
+                if (!existing.coverUrl || existing.coverUrl.trim().length < 10) {
+                    (async () => {
+                        try {
+                            const fetchedCover = await fetchBookCover(existing.title, existing.author, targetMediaType);
+                            if (fetchedCover) {
+                                console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${existing.title}": ${fetchedCover}`);
+                                await prisma.book.updateMany({
+                                    where: { id: existing.id },
+                                    data: { coverUrl: fetchedCover }
+                                }).catch(() => {});
+                            }
+                        } catch (e) {}
+                    })();
+                }
+            } else {
+                // New book creation
+                const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
+                const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
+                let title = parsedMeta.title;
+                let author = parsedMeta.author;
+
+                const normT = (title || "").toLowerCase().trim();
+                if (normT === "userbooks" || normT === "user books" || normT === "books" || normT === "audiobooks" || normT === "downloads") {
                     continue;
                 }
 
-                if (ext === ".epub") {
-                    try {
-                        fullPath = await processEpubForKindle(fullPath);
-                    } catch (err: any) {
-                        console.warn(`[KINDLE-PROCESS] EPUB check failed for ${file}: ${err.message}`);
-                    }
-                }
+                // Dynamic Author Heuristic based on existing DB authors
+                try {
+                    const titleLower = (title || "").toLowerCase();
+                    const isProtectedTitle = titleLower.startsWith("harry potter") ||
+                                            titleLower.startsWith("the lord of the rings") ||
+                                            titleLower.startsWith("the hobbit") ||
+                                            titleLower.startsWith("alix") ||
+                                            titleLower.startsWith("percy jackson");
 
-                const targetMediaType = library.mediaType || "ebook";
-                const effectiveFilePath = isAudiobookLib ? path.join(fullPath, file) : fullPath;
-
-                let existing = dbBooksByPathLower.get(fullPath.toLowerCase());
-                if (!existing) {
-                    const crossMatch = allDbBooksByPathLower.get(fullPath.toLowerCase());
-                    if (crossMatch && (crossMatch.mediaType || "ebook") === targetMediaType) {
-                        existing = crossMatch;
-                    }
-                }
-                
-                if (existing && matchedDbBookIds.has(existing.id)) {
-                    const rowIsEpub = (existing.filePath || "").toLowerCase().endsWith(".epub");
-                    const newIsEpub = ext === ".epub";
-                    if (rowIsEpub && !newIsEpub) {
-                        continue; // Skip worse duplicate file
-                    } else if (newIsEpub && !rowIsEpub) {
-                        // Allow stealing the row
-                    } else if (stats.size <= (existing.fileSize || 0)) {
-                        continue; // Skip smaller/equal duplicate file
-                    }
-                }
-
-                // ==== AUTO-ORGANIZE ALL ITEMS (NEW & EXISTING) ====
-                let orgTitle = "";
-                let orgAuthor = "";
-                let orgSeries = "";
-                let orgVolume = "";
-                if (existing) {
-                    orgTitle = existing.title || "";
-                    orgAuthor = existing.author || "";
-                    orgSeries = existing.series || "";
-                    orgVolume = existing.volumeNumber || "";
-                }
-                
-                const cleanBaseCheckForOrg = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                const parsedMetaCheckForOrg = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                
-                if (!orgTitle || !orgAuthor || orgAuthor === "Unknown Author") {
-                    if (!orgTitle) orgTitle = parsedMetaCheckForOrg.title || cleanBaseCheckForOrg;
-                    if (!orgAuthor || orgAuthor === "Unknown Author") orgAuthor = parsedMetaCheckForOrg.author || "Unknown Author";
-                    if (!orgSeries) orgSeries = parsedMetaCheckForOrg.series || "";
-                    if (!orgVolume) orgVolume = parsedMetaCheckForOrg.volumeNumber || "";
-                }
-
-                if (library.path && orgTitle) {
-                    try {
-                        let seriesTag = "";
-                        if (orgSeries) {
-                            let safeSeries = orgSeries.replace(/[\\/\\\\?%*:|"\[\]<>]/g, "").trim();
-                            let vol = orgVolume ? orgVolume.replace(/[^a-zA-Z0-9.\\-]/g, "").trim() : "01";
-                            if (vol.length === 1) vol = "0" + vol;
-                            seriesTag = `[${safeSeries} ${vol}] `;
-                        }
-
-                        const safeAuthor = (orgAuthor && orgAuthor !== "Unknown Author") 
-                            ? orgAuthor.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim() 
-                            : "Unknown Author";
-                            
-                        let safeTitle = orgTitle.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
-                        safeTitle = parseFilenameMetadata(safeTitle).title; // Strip any baked-in tags
-                        let safeTitleWithSeries = `${seriesTag}${safeTitle}`;
-                        if (safeTitleWithSeries.length > 100) safeTitleWithSeries = safeTitleWithSeries.substring(0, 100).trim();
-
-                        const destFolder = path.join(library.path, safeAuthor, safeTitleWithSeries);
-                        safeTitle = safeTitleWithSeries; // Reassign safeTitle so the file itself gets the tag too!
-                        
-                        if (!fs.existsSync(destFolder)) {
-                            fs.mkdirSync(destFolder, { recursive: true });
-                        }
-                        const isDir = fs.statSync(fullPath).isDirectory();
-                        if (isDir) {
-                            if (fullPath !== destFolder) {
-                                try {
-                                    await fs.promises.rename(fullPath, destFolder);
-                                } catch (err: any) {
-                                    if (err.code === 'EXDEV' || err.code === 'ENOTEMPTY' || err.code === 'EEXIST' || err.code === 'EPERM') {
-                                        await copyFolderRecursiveAsync(fullPath, destFolder);
-                                        removePathSafely(fullPath);
-                                    } else throw err;
-                                }
-                                await setPermissionsRecursiveAsync(destFolder);
-                                fullPath = destFolder;
-                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved folder to ${fullPath}`);
-                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Moved folder into pristine path -> "${destFolder}"`);
-                            }
-                        } else {
-                            const newFileName = safeAuthor ? `${safeAuthor} - ${safeTitle}${ext}` : `${safeTitle}${ext}`;
-                            const destPath = path.join(destFolder, newFileName);
-                            if (fullPath !== destPath) {
-                                try {
-                                    await fs.promises.rename(fullPath, destPath);
-                                } catch (err: any) {
-                                    if (err.code === 'EXDEV' || err.code === 'EEXIST' || err.code === 'EPERM') {
-                                        await fs.promises.copyFile(fullPath, destPath);
-                                        removePathSafely(fullPath);
-                                    } else throw err;
-                                }
-                                await setPermissionsRecursiveAsync(destPath);
-                                const oldDir = path.dirname(fullPath);
-                                fullPath = destPath;
-                                console.log(`[SCANNER-AUTO-ORGANIZE] Moved/Renamed file to ${fullPath}`);
-                                logger.addLog("INFO", "SCANNER", `📁 AUTO-ORGANIZE: Renamed & moved file into pristine path -> "${destPath}"`);
-                                
-                                try {
-                                    if (fs.existsSync(oldDir)) {
-                                        cleanUpEmptyFolder(oldDir);
-                                    }
-                                } catch (e) {}
-                            }
-                        }
-                    } catch (orgErr: any) {
-                        if (orgErr.code === 'ENOENT') continue;
-                        console.error(`[SCANNER-AUTO-ORGANIZE] Failed to organize ${fullPath}:`, orgErr.message);
-                        logger.addLog("ERROR", "SCANNER", `❌ AUTO-ORGANIZE FAILED for "${fullPath}": ${orgErr.message}`);
-                    }
-                }
-                // ==== END AUTO-ORGANIZE ====
-
-                if (!existing) {
-                    const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                    const targetTitleNorm = getNormTitle(parsedMetaCheck.title || cleanBaseCheck);
-
-                    if (targetTitleNorm.length > 3) {
-                        const targetMediaType = library.mediaType || "ebook";
-                        existing = dbBooks.find(b => {
-                            const dbMediaType = b.mediaType || "ebook";
-                            if (dbMediaType !== targetMediaType) return false;
-                            const dbTitleNorm = getNormTitle(b.title || "");
-                            if (dbTitleNorm !== targetTitleNorm) return false;
-                            
-                            if (matchedDbBookIds.has(b.id)) {
-                                const rowIsEpub = (b.filePath || "").toLowerCase().endsWith(".epub");
-                                const newIsEpub = ext === ".epub";
-                                if (rowIsEpub && !newIsEpub) return false;
-                                if (newIsEpub && !rowIsEpub) return true;
-                                if (stats.size <= (b.fileSize || 0)) return false;
-                            }
-                            return true;
+                    if (!isProtectedTitle && author === "Unknown Author") {
+                        const dbAuthors = await prisma.book.findMany({
+                            where: { author: { not: "Unknown Author" } },
+                            select: { author: true },
+                            distinct: ['author']
                         });
-                    }
-                }
 
-                if (!existing) {
-                    const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                    let title = parsedMeta.title;
-                    let author = parsedMeta.author;
-                    let coverUrl = "";
-
-                    const normT = (title || "").toLowerCase().trim();
-                    if (normT === "userbooks" || normT === "user books" || normT === "books" || normT === "audiobooks" || normT === "downloads") {
-                        continue;
-                    }
-
-                    // Dynamic Author Heuristic based on existing DB authors & requested authors
-                    try {
-                        const titleLower = (title || "").toLowerCase();
-                        const isProtectedTitle = titleLower.startsWith("harry potter") ||
-                                                titleLower.startsWith("the lord of the rings") ||
-                                                titleLower.startsWith("the hobbit") ||
-                                                titleLower.startsWith("alix") ||
-                                                titleLower.startsWith("percy jackson");
-
-                        if (!isProtectedTitle && author === "Unknown Author") {
-                            const dbAuthors = await prisma.book.findMany({
-                                where: { author: { not: "Unknown Author" } },
-                                select: { author: true },
-                                distinct: ['author']
-                            });
-
-                            for (const row of dbAuthors) {
-                                if (!row.author) continue;
-                                const auth = row.author.trim();
-                                const authLower = auth.toLowerCase();
-                                if (authLower.length > 3 && !authLower.startsWith("harry potter") && !authLower.startsWith("the lord")) {
-                                    if (titleLower.startsWith(authLower) && title.length > auth.length + 3) {
-                                        author = auth;
-                                        const newT = title.substring(auth.length).replace(/^[:\-\s]+/, "").trim();
-                                        if (newT.length >= 3) title = newT;
-                                        break;
-                                    }
+                        for (const row of dbAuthors) {
+                            if (!row.author) continue;
+                            const auth = row.author.trim();
+                            const authLower = auth.toLowerCase();
+                            if (authLower.length > 3 && !authLower.startsWith("harry potter") && !authLower.startsWith("the lord")) {
+                                if (titleLower.startsWith(authLower) && title.length > auth.length + 3) {
+                                    author = auth;
+                                    const newT = title.substring(auth.length).replace(/^[:\-\s]+/, "").trim();
+                                    if (newT.length >= 3) title = newT;
+                                    break;
                                 }
                             }
+                        }
+                    }
+                } catch (e) {}
+
+                if (!title || !title.trim()) {
+                    title = parsedMeta.title || cleanBase;
+                }
+
+                let series: string | null = null;
+                let volumeNumber: string | null = null;
+                let initialCoverUrl: string | null = null;
+
+                // TIER 1: Match against active/fulfilled BookRequest or MediaRequest
+                const matchedReq = findMatchingRequest(title, author, fullPath, targetMediaType);
+                if (matchedReq) {
+                    console.log(`[SCANNER] 🎯 Matched authoritative request for "${title}" -> Canonical Title: "${matchedReq.title}", Author: "${matchedReq.author || author}", Series: "${matchedReq.series || 'N/A'}" Vol: ${matchedReq.volumeNumber || 'N/A'}`);
+                    if (matchedReq.title) title = matchedReq.title;
+                    if (matchedReq.author && matchedReq.author !== "Unknown Author") author = matchedReq.author;
+                    if (matchedReq.series) series = matchedReq.series;
+                    if (matchedReq.volumeNumber) volumeNumber = String(matchedReq.volumeNumber);
+                    if (matchedReq.coverUrl) initialCoverUrl = matchedReq.coverUrl;
+                }
+
+                // TIER 4: AI metadata resolution fallback ONLY if series is missing or author is unknown
+                if (options?.enableAi && (!series || !author || author === "Unknown Author")) {
+                    try {
+                        const aiMeta = await resolveMetadataWithAI(parsedMeta.cleanQuery || cleanBase, targetMediaType);
+                        if (aiMeta) {
+                            if (aiMeta.title && (!title || title === cleanBase)) title = aiMeta.title;
+                            if (aiMeta.author && aiMeta.author !== "Unknown Author" && (!author || author === "Unknown Author")) author = aiMeta.author;
+                            if (aiMeta.series && !series) series = aiMeta.series;
+                            if (aiMeta.volumeNumber && !volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
                         }
                     } catch (e) {}
+                }
 
-                    if (!title || !title.trim()) {
-                        title = parsedMeta.title || cleanBase;
+                // Resolve and link relational Author and BookSeries foreign keys in SQLite
+                let authorId: string | undefined;
+                let seriesId: string | undefined;
+                try {
+                    const resolved = await resolveOrLinkAuthorAndSeries(author, series, volumeNumber);
+                    authorId = resolved.authorId;
+                    seriesId = resolved.seriesId;
+                } catch (e) {}
+
+                const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
+                    ? stats.birthtime
+                    : (stats.mtime || new Date());
+
+                try {
+                    let newBook: any = null;
+                    const pathMatched = await prisma.book.findFirst({
+                        where: { filePath: fullPath, libraryId }
+                    });
+                    if (pathMatched && !matchedDbBookIds.has(pathMatched.id)) {
+                        newBook = pathMatched;
                     }
 
-                    let series: string | null = null;
-                    let volumeNumber: string | null = null;
+                    if (!newBook) {
+                        const potentialMatch = dbBooks.find(b => {
+                            if (matchedDbBookIds.has(b.id)) return false;
+                            const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
+                            const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
+                            if (bMedia !== normTargetMedia) return false;
 
-                    if (options?.enableAi) {
-                        try {
-                            const aiMeta = await resolveMetadataWithAI(parsedMeta.cleanQuery || cleanBase, library.mediaType || "ebook");
-                            if (aiMeta) {
-                                if (aiMeta.title) title = aiMeta.title;
-                                if (aiMeta.author && aiMeta.author !== "Unknown Author") author = aiMeta.author;
-                                if (aiMeta.series) series = aiMeta.series;
-                                if (aiMeta.volumeNumber) volumeNumber = String(aiMeta.volumeNumber);
-                            }
-                        } catch (e) {}
-                    }
-
-                    const fileAddedDate = (stats.birthtime && stats.birthtime.getTime() > 0 && stats.birthtime.getFullYear() > 1970)
-                        ? stats.birthtime
-                        : (stats.mtime || new Date());
-
-                    try {
-                        let newBook = await prisma.book.findFirst({
-                            where: { filePath: fullPath }
+                            if (!isTitleMatch(b.title, title)) return false;
+                            if (!isAuthorMatch(b.author, author)) return false;
+                            return true;
+                        });
+                        const ratingResult = inferBookRating({
+                            title,
+                            author,
+                            series: series || undefined
                         });
 
-                        if (!newBook) {
-                            newBook = await prisma.book.create({
+                        if (potentialMatch) {
+                            newBook = potentialMatch;
+                            await prisma.book.update({
+                                where: { id: newBook.id },
                                 data: {
-                                    title,
-                                    author,
-                                    series,
-                                    volumeNumber,
-                                    coverUrl: "",
                                     filePath: fullPath,
                                     fileSize: stats.size,
-                                    fileType: ext.replace(".", ""),
-                                    mediaType: library.mediaType || "ebook",
-                                    libraryId: libraryId,
-                                    createdAt: fileAddedDate
+                                    title,
+                                    author: author !== "Unknown Author" ? author : newBook.author,
+                                    series: series || newBook.series,
+                                    volumeNumber: volumeNumber || newBook.volumeNumber,
+                                    authorId: authorId || newBook.authorId,
+                                    seriesId: seriesId || newBook.seriesId,
+                                    coverUrl: initialCoverUrl || newBook.coverUrl,
+                                    mediaType: targetMediaType,
+                                    fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub"),
+                                    ...(!newBook.ageRating || (ratingResult.isMature && newBook.ageRating !== "18+ Mature") ? { ageRating: ratingResult.ageRating, maturityRating: ratingResult.maturityRating } : {})
                                 }
                             });
-                            logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                            console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
+                            logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Updated book "${newBook.title}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                            console.log(`[SCANNER] 🔄 Updated existing book DB record for "${title}" by "${author}" (ID: ${newBook.id})`);
                         }
-                        
-                        matchedDbBookIds.add(newBook.id);
-                        
-                        if (options?.enableAi) {
-                            await renameBookFileOnDisk(newBook.id);
-                        }
+                    }
 
-                        // Fetch cover artwork asynchronously in background
+                    if (!newBook) {
+                        const ratingResult = inferBookRating({
+                            title,
+                            author,
+                            series: series || undefined
+                        });
+
+                        newBook = await prisma.book.create({
+                            data: {
+                                title,
+                                author,
+                                series,
+                                volumeNumber,
+                                authorId: authorId || null,
+                                seriesId: seriesId || null,
+                                coverUrl: initialCoverUrl || "",
+                                filePath: fullPath,
+                                fileSize: stats.size,
+                                fileType: ext.replace(".", "") || (isAudiobookLib ? "folder" : "epub"),
+                                mediaType: targetMediaType,
+                                libraryId: libraryId,
+                                createdAt: fileAddedDate,
+                                maturityRating: ratingResult.maturityRating,
+                                ageRating: ratingResult.ageRating
+                            }
+                        });
+                        logger.addLog("SUCCESS", "DATABASE", `✍️ DB-WRITE (Create): Created book "${title}" by "${author}" (ID: ${newBook.id}, Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                        console.log(`[SCANNER] 💾 Saved book to DB: "${title}" by "${author}" ${series ? `[Series: ${series} #${volumeNumber || "?"}]` : ""} (ID: ${newBook.id})`);
+                    }
+
+                    matchedDbBookIds.add(newBook.id);
+                    dbBooksByPathLower.set(normalizePathForLookup(fullPath), newBook);
+
+                    // Fetch cover artwork asynchronously in background if not already provided
+                    if (!newBook.coverUrl || newBook.coverUrl.trim().length < 10) {
                         (async () => {
                             try {
-                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
+                                const fetchedCover = await fetchBookCover(title, author, targetMediaType);
                                 if (fetchedCover) {
                                     console.log(`[SCANNER] 🖼️ Cover artwork fetched for "${title}": ${fetchedCover}`);
                                     await prisma.book.updateMany({
@@ -4258,74 +11347,20 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 }
                             } catch (e) {}
                         })();
-                    } catch (createErr: any) {
-                        logger.addLog("ERROR", "DATABASE", `❌ DB-WRITE FAILED for "${title}" by "${author}": ${createErr.message}`);
-                        console.error(`[SCANNER-ERROR] Failed to save book "${title}" to DB:`, createErr.message);
                     }
-                } else {
-                    matchedDbBookIds.add(existing.id);
-                    const updateData: any = {};
-                    if (existing.libraryId !== libraryId) updateData.libraryId = libraryId;
-                    if (existing.fileSize !== stats.size) updateData.fileSize = stats.size;
-                    if (existing.filePath !== fullPath) updateData.filePath = fullPath;
-                    if (existing.mediaType !== (library.mediaType || "ebook")) updateData.mediaType = library.mediaType || "ebook";
-                    
-                    const newFileType = ext.replace(".", "") || "folder";
-                    if (existing.fileType !== newFileType) updateData.fileType = newFileType;
-
-                    if (Object.keys(updateData).length > 0) {
-                        logger.addLog("INFO", "DATABASE", `🔄 DB-CHANGE (Update): Reassigned/Updated book "${existing.title}" (ID: ${existing.id}, Target Lib: "${library.name}", New Path: "${fullPath}", Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                        console.log(`[SCANNER] 🔄 Reassigned/Updated book "${existing.title}" to library "${library.name}" (ID: ${existing.id})`);
-                        await prisma.book.updateMany({
-                            where: { id: existing.id },
-                            data: updateData
-                        }).catch(() => {});
-                        Object.assign(existing, updateData);
-                    }
-                    const cleanBase = getEffectiveBookBaseName(effectiveFilePath, file, ext);
-                    const parsedMeta = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-                    let parsedAuthor = parsedMeta.author;
-                    let parsedTitle = parsedMeta.title;
-
-                    let title = parsedTitle;
-                    let author = parsedAuthor;
-                    let coverUrl = existing.coverUrl || "";
-
-                    const needsCleaning = existing.title !== title || 
-                                          existing.author !== author || 
-                                          existing.author === "Unknown Author" || 
-                                          existing.title.includes("[") || 
-                                          existing.title.includes("]") ||
-                                          existing.title.includes("(");
-
-                    if (needsCleaning || !coverUrl) {
-                        (async () => {
-                            try {
-                                const fetchedCover = await fetchBookCover(title, author, library.mediaType || "ebook");
-                                if (fetchedCover) {
-                                    coverUrl = fetchedCover;
-                                }
-                            } catch (e) {}
-
-                            await prisma.book.updateMany({
-                                where: { id: existing.id },
-                                data: {
-                                    title,
-                                    author,
-                                    coverUrl
-                                }
-                            }).catch(() => {});
-                        })();
-                    }
+                } catch (createErr: any) {
+                    logger.addLog("ERROR", "DATABASE", `❌ DB-WRITE FAILED for "${title}" by "${author}": ${createErr.message}`);
+                    console.error(`[SCANNER-ERROR] Failed to save book "${title}" to DB:`, createErr.message);
                 }
             }
+        }
 
         for (const dbBook of dbBooks) {
             if (!matchedDbBookIds.has(dbBook.id) && dbBook.fileType !== 'missing') {
                 try {
                     logger.addLog("WARN", "DATABASE", `🗑️ DB-DELETE: Purged missing book "${dbBook.title}" (ID: ${dbBook.id}) from SQLite.`);
                     await prisma.book.deleteMany({
-                        where: { id: dbBook.id }
+                        where: { id: dbBook.id, libraryId }
                     });
                 } catch (delErr) {
                     // Ignore record if already deleted
@@ -4356,7 +11391,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             }
         } catch (pathDedupErr) {}
 
-        // Post-scan database deduplication by title key
+        // Post-scan database deduplication by composite mediaType + author + title key
         try {
             const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
             const titleMap = new Map<string, typeof currentDbBooks>();
@@ -4394,13 +11429,23 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
 
                 if (!cleanKey) continue;
-                if (!titleMap.has(cleanKey)) titleMap.set(cleanKey, []);
-                titleMap.get(cleanKey)!.push(b);
+                const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
+                const bAuthorKey = getNormTitle(b.author || "");
+                const authorGroupKey = (bAuthorKey && bAuthorKey !== "unknownauthor") ? bAuthorKey : "all";
+                const compositeKey = `${bMedia}:::${authorGroupKey}:::${cleanKey}`;
+
+                if (!titleMap.has(compositeKey)) titleMap.set(compositeKey, []);
+                titleMap.get(compositeKey)!.push(b);
             }
 
             for (const [key, group] of titleMap.entries()) {
                 if (group.length > 1) {
-                    group.sort((a, b) => (b.fileSize || 0) - (a.fileSize || 0));
+                    group.sort((a, b) => {
+                        const aIsMissing = a.fileType === 'missing' ? 1 : 0;
+                        const bIsMissing = b.fileType === 'missing' ? 1 : 0;
+                        if (aIsMissing !== bIsMissing) return aIsMissing - bIsMissing; // Real files first
+                        return (b.fileSize || 0) - (a.fileSize || 0); // Largest file size first
+                    });
                     const keepBook = group[0];
                     const deleteIds = group.slice(1).map(b => b.id);
                     console.log(`[SCANNER-DEDUP] Purging ${deleteIds.length} duplicate DB rows for book "${keepBook.title}" (Keeping ID: ${keepBook.id})`);
@@ -4415,11 +11460,49 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         if (scanPath && fs.existsSync(scanPath)) {
             console.log(`[SCANNER] 🧹 Running zombie directory sweep on ${scanPath}...`);
             try {
+                // Build set of protected directory paths from SQLite
+                const protectedFolderSet = new Set<string>();
+                protectedFolderSet.add(path.resolve(scanPath).toLowerCase());
+
+                const currentDbBooks = await prisma.book.findMany({
+                    where: { libraryId },
+                    select: { filePath: true, title: true, author: true }
+                });
+                for (const b of currentDbBooks) {
+                    if (b.filePath) {
+                        try {
+                            const resolved = path.resolve(b.filePath).toLowerCase();
+                            protectedFolderSet.add(resolved);
+                            protectedFolderSet.add(path.dirname(resolved));
+                            protectedFolderSet.add(path.dirname(path.dirname(resolved)));
+                        } catch (e) {}
+                    }
+                }
+
+                const activeBookReqs = await prisma.bookRequest.findMany({
+                    where: {
+                        libraryId,
+                        status: { notIn: ["Rejected"] }
+                    },
+                    select: { title: true, author: true }
+                });
+                for (const r of activeBookReqs) {
+                    if (r.author) {
+                        protectedFolderSet.add(path.resolve(path.join(scanPath, r.author)).toLowerCase());
+                        if (r.title) {
+                            protectedFolderSet.add(path.resolve(path.join(scanPath, r.author, r.title)).toLowerCase());
+                        }
+                    }
+                    if (r.title) {
+                        protectedFolderSet.add(path.resolve(path.join(scanPath, r.title)).toLowerCase());
+                    }
+                }
+
                 const topLevelDirs = fs.readdirSync(scanPath);
                 for (const d of topLevelDirs) {
                     const fullD = path.join(scanPath, d);
                     if (fs.statSync(fullD).isDirectory()) {
-                        purgeEmptyDirectories(fullD);
+                        purgeEmptyDirectories(fullD, protectedFolderSet);
                     }
                 }
             } catch (e) {}
@@ -4435,8 +11518,18 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
     }
 }
 
-async function getTargetLibraryForUser(username: string, mediaType: string = "ebook", coverUrl?: string | null) {
+async function getTargetLibraryForUser(
+    username: string, 
+    mediaType: string = "ebook", 
+    coverUrl?: string | null,
+    explicitLibraryId?: string | null
+) {
     try {
+        if (explicitLibraryId) {
+            const explicitLib = await prisma.library.findUnique({ where: { id: explicitLibraryId } });
+            if (explicitLib) return explicitLib;
+        }
+
         if (coverUrl && /[\?&]lib=/.test(coverUrl)) {
             const parsedLibId = coverUrl.split(/[\?&]lib=/)[1].split("&")[0];
             const explicitLib = await prisma.library.findUnique({ where: { id: parsedLibId } });
@@ -4481,12 +11574,22 @@ async function getTargetLibraryForUser(username: string, mediaType: string = "eb
     }
 }
 
-function getDownloadCategoryForLibrary(libraryName: string, mediaType: string = "ebook"): string {
-    const nameLower = libraryName.toLowerCase();
-    if (nameLower.includes("kids")) return "kids-books";
-    if (nameLower.includes("wife")) return "wife-books";
-    if (mediaType === "audiobook" || nameLower.includes("audio")) return "audiobooks";
-    return "books";
+function getDownloadCategoryForLibrary(library: any, mediaType: string = "ebook"): string {
+    if (typeof library === "object" && library !== null) {
+        if (library.downloadCategory && typeof library.downloadCategory === "string" && library.downloadCategory.trim()) {
+            return library.downloadCategory.trim();
+        }
+        const nameLower = (library.name || "").toLowerCase();
+        if (nameLower.includes("kids")) return "kids-books";
+        if (nameLower.includes("wife")) return "wife-books";
+        if (library.mediaType === "audiobook" || nameLower.includes("audio")) return "audiobooks";
+    } else if (typeof library === "string") {
+        const nameLower = library.toLowerCase();
+        if (nameLower.includes("kids")) return "kids-books";
+        if (nameLower.includes("wife")) return "wife-books";
+        if (mediaType === "audiobook" || nameLower.includes("audio")) return "audiobooks";
+    }
+    return mediaType === "audiobook" ? "audiobooks" : "books";
 }
 
 interface ReleaseMatchEvaluation {
@@ -4759,31 +11862,147 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const requester = req?.requestedBy || "";
         const reqMediaType = req?.mediaType || "ebook";
         
-        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl);
+        const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req?.coverUrl, req?.libraryId);
         const resolvedLibId = targetLib?.id;
         
+        logger.addLog("INFO", "AUTO_GRAB", `📚 Initiating auto-grab for "${title}" by ${author || "Unknown Author"} (${reqMediaType.toUpperCase()}) -> Target shelf: "${targetLib?.name || "Default"}" [ID: ${resolvedLibId || "none"}]`);
+
         // Instant Fulfill: Check if book is already downloaded in the TARGET library
         const normTitleReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (normTitleReq.length > 2 && resolvedLibId) {
-            const allBooks = await prisma.book.findMany({
+        if (normTitleReq.length > 2 && resolvedLibId && targetLib) {
+            const allBooksInTarget = await prisma.book.findMany({
                 where: { mediaType: reqMediaType, libraryId: resolvedLibId }
             });
-            const existingBook = allBooks.find(b => {
+            const existingBook = allBooksInTarget.find(b => {
                 if (b.fileType === "missing") return false;
                 const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 return normB === normTitleReq || (normTitleReq.length > 5 && normB.includes(normTitleReq));
             });
 
             if (existingBook) {
-                console.log(`[AUTO-DOWNLOAD] Book "${title}" already exists in target library! Fulfilling request ${requestId} immediately.`);
+                logger.addLog("SUCCESS", "AUTO_GRAB", `✅ Book "${title}" already exists in target shelf "${targetLib.name}". Fulfilling request immediately.`);
                 await prisma.bookRequest.update({
                     where: { id: requestId },
                     data: { status: "Downloaded" }
                 });
+                await prisma.mediaRequest.updateMany({
+                    where: {
+                        mediaType: reqMediaType,
+                        title: { contains: title }
+                    },
+                    data: { status: "AVAILABLE", downloadProgress: 100 }
+                }).catch(() => {});
                 sendRequestCompletionNotification(req, existingBook).catch(() => {});
                 return;
             }
+
+            // --------------------------------------------------------------------------------------
+            // MULTI-LIBRARY INSTANT SYNC / CLONE:
+            // If the requested book already exists in another shelf on disk, copy it into the target shelf!
+            // --------------------------------------------------------------------------------------
+            const otherShelfBooks = await prisma.book.findMany({
+                where: {
+                    mediaType: reqMediaType,
+                    libraryId: { not: resolvedLibId },
+                    fileType: { not: "missing" }
+                },
+                include: { library: true }
+            });
+
+            const donorBook = otherShelfBooks.find(b => {
+                const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+                return (normB === normTitleReq || (normTitleReq.length > 5 && normB.includes(normTitleReq))) &&
+                       b.filePath && fs.existsSync(b.filePath);
+            });
+
+            if (donorBook && donorBook.filePath && fs.existsSync(donorBook.filePath)) {
+                logger.addLog("INFO", "AUTO_GRAB", `⚡ Cross-Library Sync: Found existing copy of "${title}" in "${donorBook.library?.name || "another shelf"}". Syncing into "${targetLib.name}"...`);
+                try {
+                    const sanitize = (str: string) => str.replace(/[<>:"/\|?*\x00-\x1F]/g, "").trim();
+                    const seriesTag = req?.series ? `[${sanitize(req.series)}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
+                    const cleanAuthorStr = sanitize(author || donorBook.author || "Unknown Author");
+                    const cleanTitleStr = sanitize(title || donorBook.title);
+                    const targetFolder = path.join(targetLib.path, cleanAuthorStr, `${seriesTag}${cleanTitleStr}`);
+
+                    if (!fs.existsSync(targetFolder)) {
+                        fs.mkdirSync(targetFolder, { recursive: true });
+                    }
+
+                    const isDir = fs.statSync(donorBook.filePath).isDirectory();
+                    let destPath = targetFolder;
+                    if (isDir) {
+                        fs.cpSync(donorBook.filePath, targetFolder, { recursive: true });
+                    } else {
+                        const fileName = path.basename(donorBook.filePath);
+                        destPath = path.join(targetFolder, fileName);
+                        fs.copyFileSync(donorBook.filePath, destPath);
+                    }
+
+                    // Remove .portalarr-missing marker if present
+                    const missingMarker = path.join(targetFolder, ".portalarr-missing");
+                    if (fs.existsSync(missingMarker)) {
+                        try { fs.unlinkSync(missingMarker); } catch {}
+                    }
+
+                    // Clean up any missing stub record in DB for this folder
+                    await prisma.book.deleteMany({
+                        where: {
+                            libraryId: resolvedLibId,
+                            filePath: targetFolder,
+                            fileType: "missing"
+                        }
+                    }).catch(() => {});
+
+                    // Resolve or link relational author & series
+                    let authorId: string | undefined;
+                    let seriesId: string | undefined;
+                    try {
+                        const resolved = await resolveOrLinkAuthorAndSeries(donorBook.author || author, req?.series || donorBook.series, req?.volumeNumber || donorBook.volumeNumber);
+                        authorId = resolved.authorId;
+                        seriesId = resolved.seriesId;
+                    } catch (e) {}
+
+                    const syncedBook = await prisma.book.create({
+                        data: {
+                            title: title,
+                            author: donorBook.author || author || "Unknown Author",
+                            series: req?.series || donorBook.series || null,
+                            volumeNumber: req?.volumeNumber ? String(req.volumeNumber) : (donorBook.volumeNumber || null),
+                            authorId: authorId || null,
+                            seriesId: seriesId || null,
+                            filePath: destPath,
+                            fileType: donorBook.fileType || (reqMediaType === "audiobook" ? "mp3" : "epub"),
+                            fileSize: donorBook.fileSize || 0,
+                            mediaType: reqMediaType,
+                            libraryId: resolvedLibId,
+                            coverUrl: donorBook.coverUrl || req?.coverUrl || null,
+                            maturityRating: req?.maturityRating || donorBook.maturityRating || null,
+                            ageRating: req?.ageRating || donorBook.ageRating || null
+                        }
+                    });
+
+                    logger.addLog("SUCCESS", "AUTO_GRAB", `🎉 Instant Cross-Library Fulfillment: Successfully cloned "${title}" from "${donorBook.library?.name}" into "${targetLib.name}" shelf!`);
+
+                    await prisma.bookRequest.update({
+                        where: { id: requestId },
+                        data: { status: "Downloaded" }
+                    });
+                    await prisma.mediaRequest.updateMany({
+                        where: {
+                            mediaType: reqMediaType,
+                            title: { contains: title }
+                        },
+                        data: { status: "AVAILABLE", downloadProgress: 100 }
+                    }).catch(() => {});
+
+                    sendRequestCompletionNotification(req, syncedBook).catch(() => {});
+                    return;
+                } catch (cloneErr: any) {
+                    logger.addLog("WARN", "AUTO_GRAB", `Cross-library clone attempt encountered error: ${cloneErr.message}. Proceeding to search indexers.`);
+                }
+            }
         }
+
         // Update status to Searching while Prowlarr fetches
         await prisma.bookRequest.update({
             where: { id: requestId },
@@ -4815,18 +12034,42 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 });
 
                 if (!existingStub) {
+                    let authorId: string | undefined;
+                    let seriesId: string | undefined;
+                    try {
+                        const resolved = await resolveOrLinkAuthorAndSeries(author, req?.series, req?.volumeNumber);
+                        authorId = resolved.authorId;
+                        seriesId = resolved.seriesId;
+                    } catch (e) {}
+
+                    let stubAgeRating = req?.ageRating || null;
+                    let stubMaturityRating = req?.maturityRating || null;
+                    if (!stubAgeRating || !stubMaturityRating) {
+                        const inferred = inferBookRating({
+                            title,
+                            author: author || undefined,
+                            series: req?.series || undefined
+                        });
+                        stubAgeRating = stubAgeRating || inferred.ageRating;
+                        stubMaturityRating = stubMaturityRating || inferred.maturityRating;
+                    }
+
                     const newBook = await prisma.book.create({
                         data: {
                             title: title,
                             author: author || "Unknown Author",
                             series: req?.series || null,
                             volumeNumber: req?.volumeNumber ? String(req.volumeNumber) : null,
+                            authorId: authorId || null,
+                            seriesId: seriesId || null,
                             filePath: folderPath,
                             fileType: 'missing',
                             fileSize: 0,
                             mediaType: reqMediaType,
                             libraryId: resolvedLibId,
-                            coverUrl: req?.coverUrl || null
+                            coverUrl: req?.coverUrl || null,
+                            maturityRating: stubMaturityRating,
+                            ageRating: stubAgeRating
                         }
                     });
 
@@ -4852,12 +12095,13 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             }
         }
         
-        const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
+        const category = targetLib ? getDownloadCategoryForLibrary(targetLib, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
 
         const prowlarrApp = await prisma.mediaApp.findFirst({
             where: { type: "prowlarr" }
         });
         if (!prowlarrApp) {
+            logger.addLog("WARN", "AUTO_GRAB", "⚠️ Prowlarr indexer app is not configured under Settings.");
             await prisma.bookRequest.update({
                 where: { id: requestId },
                 data: { status: "Failed - Prowlarr is not configured under settings" }
@@ -4871,13 +12115,15 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const cleanAuthorBase = (author && author !== "Unknown Author" ? author : "").trim();
         const queryText = cleanAuthorBase ? `${cleanTitleBase} ${cleanAuthorBase}` : cleanTitleBase;
 
+        logger.addLog("INFO", "AUTO_GRAB", `🔍 Querying Prowlarr indexers for "${queryText}" (Category: "${category}")...`);
+
         // Tier 1: Title + Author (using executeProwlarrSearch for multi-tier Torznab fallbacks)
         let results = await executeProwlarrSearch(queryText, reqMediaType, prowlarrUrl, prowlarrKey);
         let candidates = await filterReleasesForMediaType(results, reqMediaType);
 
         // Tier 2: Title Only (using executeProwlarrSearch for multi-tier Torznab fallbacks)
         if (candidates.length === 0 && cleanTitleBase && cleanTitleBase !== queryText) {
-            console.log(`[AUTO-DOWNLOAD] Tier 1 search yielded 0 candidates. Retrying with Title-only query: "${cleanTitleBase}"`);
+            logger.addLog("INFO", "AUTO_GRAB", `🔄 Tier 1 search returned 0 candidates. Retrying with Title-only query: "${cleanTitleBase}"...`);
             results = await executeProwlarrSearch(cleanTitleBase, reqMediaType, prowlarrUrl, prowlarrKey);
             candidates = await filterReleasesForMediaType(results, reqMediaType);
         }
@@ -4899,8 +12145,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
 
             if (reqMediaType === "ebook") {
                 const aTitle = (r.title || "").toLowerCase();
-                if (aTitle.includes("epub")) totalScore += 5;
-                else if (aTitle.includes("mobi") || aTitle.includes("azw3")) totalScore += 2;
+                if (aTitle.includes("epub")) totalScore += 20;
+                else if (aTitle.includes("mobi") || aTitle.includes("azw3") || aTitle.includes("azw")) totalScore += 2;
+                else if (aTitle.includes("pdf")) totalScore -= 5;
             }
             if (r.protocol === "usenet") totalScore += 3;
             else if (r.protocol === "torrent") totalScore += Math.min((r.seeders || 0) / 25, 2);
@@ -4912,18 +12159,27 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             };
         }).filter((r: any) => r && !r.rejected && r.matchQuality !== "mismatch" && r.totalScore >= 35);
 
+        logger.addLog("INFO", "AUTO_GRAB", `📊 Evaluated ${candidates.length} indexer releases. ${evaluatedCandidates.length} eligible candidates met threshold.`);
+
         if (evaluatedCandidates.length === 0) {
-            console.log(`[AUTO-DOWNLOAD] No valid matching releases found on indexers for "${title}" by "${author}". Rejecting mismatches.`);
+            logger.addLog("WARN", "AUTO_GRAB", `⚠️ No valid matching ${reqMediaType} release found on indexers for "${title}" by "${author || "Unknown Author"}".`);
             await prisma.bookRequest.update({
                 where: { id: requestId },
                 data: { status: `Failed - No matching ${reqMediaType} release found for "${title}" by "${author || "Unknown Author"}"` }
             });
+            await prisma.mediaRequest.updateMany({
+                where: {
+                    mediaType: reqMediaType,
+                    title: { contains: title }
+                },
+                data: { status: "FAILED", downloadProgress: 0 }
+            }).catch(() => {});
             return;
         }
 
         evaluatedCandidates.sort((a: any, b: any) => b.totalScore - a.totalScore);
         const selectedRelease = evaluatedCandidates[0];
-        console.log(`[AUTO-DOWNLOAD] Selected release for grab (Score: ${selectedRelease.totalScore}, Quality: ${selectedRelease.matchQuality}): ${selectedRelease.title}`);
+        logger.addLog("SUCCESS", "AUTO_GRAB", `🎯 Selected best release: "${selectedRelease.title}" (Score: ${selectedRelease.totalScore}, Quality: ${selectedRelease.matchQuality}, Protocol: ${selectedRelease.protocol.toUpperCase()})`);
 
         let downloadId = "";
         if (selectedRelease.protocol === "usenet") {
@@ -4970,10 +12226,19 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             }
         }
 
+        logger.addLog("SUCCESS", "AUTO_GRAB", `🚀 Queued release to ${selectedRelease.protocol.toUpperCase()} downloader (${category}). Launching monitor...`);
+
         await prisma.bookRequest.update({
             where: { id: requestId },
             data: { status: "Downloading" }
         });
+        await prisma.mediaRequest.updateMany({
+            where: {
+                mediaType: reqMediaType,
+                title: { contains: title }
+            },
+            data: { status: "DOWNLOADING", downloadProgress: 10 }
+        }).catch(() => {});
 
         // Launch background downloader polling and failover task
         monitorAndRetryDownload(requestId, evaluatedCandidates, 0, downloadId).catch(err => {
@@ -4981,11 +12246,17 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         });
         
     } catch (e: any) {
-        console.error(`[AUTO-DOWNLOAD] Error:`, e);
+        logger.addLog("ERROR", "AUTO_GRAB", `❌ Auto-grab failed for "${title}": ${e.message}`);
         await prisma.bookRequest.update({
             where: { id: requestId },
             data: { status: `Failed - ${e.message || "Unknown error during download client push"}` }
         });
+        await prisma.mediaRequest.updateMany({
+            where: {
+                title: { contains: title }
+            },
+            data: { status: "FAILED", downloadProgress: 0 }
+        }).catch(() => {});
     }
 }
 
@@ -5076,7 +12347,7 @@ export async function searchProwlarrIndexers(
     });
     
     if (!prowlarrApp) {
-        throw new Error("Prowlarr is not configured in Portalarr Settings. Please add it first under Settings.");
+        throw new Error("Prowlarr is not configured in Settings. Please add it first under Settings.");
     }
     
     const prowlarrUrl = cleanUrl(prowlarrApp.url);
@@ -5224,8 +12495,8 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
     
     const requester = req.requestedBy || "";
     const reqMediaType = req.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl);
-    const category = targetLib ? getDownloadCategoryForLibrary(targetLib.name, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
+    const targetLib = await getTargetLibraryForUser(requester, reqMediaType, req.coverUrl, req.libraryId);
+    const category = targetLib ? getDownloadCategoryForLibrary(targetLib, reqMediaType) : (reqMediaType === "audiobook" ? "audiobooks" : "books");
     
     let downloadId = "";
     if (protocol === "usenet") {
@@ -5234,7 +12505,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         });
         
         if (!sabApp) {
-            throw new Error("No SABnzbd download client configured in Portalarr Settings.");
+            throw new Error("No SABnzbd download client configured in Settings.");
         }
         
         const sabUrl = cleanUrl(sabApp.url);
@@ -5259,7 +12530,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
         });
         
         if (!qbitApp) {
-            throw new Error("No qBittorrent client configured in Portalarr Settings.");
+            throw new Error("No qBittorrent client configured in Settings.");
         }
         
         const qbitUrl = cleanUrl(qbitApp.url);
@@ -5322,7 +12593,7 @@ export async function sendReleaseToDownloadClient(requestId: string, downloadUrl
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: string, releaseTitle: string = ""): Promise<"downloading" | "completed" | "failed" | "unknown"> {
+async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: string, releaseTitle: string = ""): Promise<{ status: "downloading" | "completed" | "failed" | "unknown", storage?: string, category?: string }> {
     try {
         const titleLower = releaseTitle.toLowerCase().trim();
         const qRes = await fetch(`${sabUrl}/api?mode=queue&output=json&apikey=${sabKey}`);
@@ -5338,8 +12609,8 @@ async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: st
                 );
             }
             if (slot) {
-                if (slot.status?.toLowerCase() === "failed") return "failed";
-                return "downloading";
+                if (slot.status?.toLowerCase() === "failed") return { status: "failed" };
+                return { status: "downloading", category: slot.cat };
             }
         }
 
@@ -5356,14 +12627,14 @@ async function checkSabnzbdStatus(sabUrl: string, sabKey: string, downloadId: st
                 );
             }
             if (slot) {
-                if (slot.status?.toLowerCase() === "failed") return "failed";
-                if (slot.status?.toLowerCase() === "completed") return "completed";
+                if (slot.status?.toLowerCase() === "failed") return { status: "failed" };
+                if (slot.status?.toLowerCase() === "completed") return { status: "completed", storage: slot.storage, category: slot.category };
             }
         }
-        return "unknown";
+        return { status: "unknown" };
     } catch (e) {
         console.error("Error checking SABnzbd status:", e);
-        return "unknown";
+        return { status: "unknown" };
     }
 }
 
@@ -5532,10 +12803,21 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
     let matches: string[] = [];
 
     try {
-        const files = fs.readdirSync(dir);
+        let files: string[] = [];
+        try {
+            files = fs.readdirSync(dir);
+        } catch (readErr) {
+            return matches;
+        }
+
         for (const file of files) {
             const fullPath = path.join(dir, file);
-            const stat = fs.statSync(fullPath);
+            let stat: fs.Stats;
+            try {
+                stat = fs.statSync(fullPath);
+            } catch (statErr) {
+                continue;
+            }
             
             if (stat.isDirectory()) {
                 // Skip incomplete SABnzbd folders
@@ -5571,10 +12853,12 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 }
                 
                 // Recurse into subdirectories
-                const subFound = findDownloadedFile(fullPath, bookTitle, mediaType, bookAuthor);
-                if (subFound.length > 0) {
-                    matches.push(...subFound);
-                }
+                try {
+                    const subFound = findDownloadedFile(fullPath, bookTitle, mediaType, bookAuthor);
+                    if (subFound.length > 0) {
+                        matches.push(...subFound);
+                    }
+                } catch (subErr) {}
 
             } else {
                 const ext = path.extname(file).toLowerCase();
@@ -5602,9 +12886,7 @@ function findDownloadedFile(dir: string, bookTitle: string, mediaType: string = 
                 }
             }
         }
-    } catch (e: any) {
-        console.error(`[BACKGROUND-DOWNLOAD-FINDER] Error reading directory ${dir}:`, e.message);
-    }
+    } catch (e: any) {}
     
     return matches;
 }
@@ -5671,13 +12953,16 @@ export async function monitorAndRetryDownload(
         }
 
         let downloadStatus: "downloading" | "completed" | "failed" | "unknown" = "unknown";
+        let sabStoragePath: string | undefined = undefined;
         
         if (release.protocol === "usenet") {
             const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
             if (sabApp) {
                 const sabUrl = cleanUrl(sabApp.url);
                 const sabKey = decryptData(sabApp.apiKey as string);
-                downloadStatus = await checkSabnzbdStatus(sabUrl, sabKey, downloadId, release.title);
+                const sabRes = await checkSabnzbdStatus(sabUrl, sabKey, downloadId, release.title);
+                downloadStatus = sabRes.status;
+                sabStoragePath = sabRes.storage;
             }
         } else {
             const qbitApp = await prisma.mediaApp.findFirst({
@@ -5704,17 +12989,30 @@ export async function monitorAndRetryDownload(
             let finalDestPath = "";
             try {
                 const reqMedia = currentReq?.mediaType || "ebook";
-                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
+                targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl, currentReq.libraryId);
                 if (targetLib) {
                     const settings = await prisma.settings.findFirst();
                     const configuredPath = settings?.downloadsPath || "/downloads";
+                    const targetCategory = (targetLib?.downloadCategory || "").trim();
                     const searchPaths = [
+                        ...(sabStoragePath ? [sabStoragePath, path.dirname(sabStoragePath)] : []),
+                        ...(targetCategory ? [
+                            path.join(configuredPath, targetCategory),
+                            path.join(configuredPath, "complete", targetCategory),
+                            path.join(configuredPath, "completed", targetCategory)
+                        ] : []),
+                        path.join(configuredPath, "books"),
+                        path.join(configuredPath, "audiobooks"),
+                        path.join(configuredPath, "complete", "books"),
+                        path.join(configuredPath, "complete", "audiobooks"),
+                        path.join(configuredPath, "complete"),
+                        path.join(configuredPath, "completed"),
                         configuredPath,
                         process.env.DOWNLOADS_DIR || "/downloads",
                         "/downloads",
                         "/app/downloads",
                         "./downloads"
-                    ];
+                    ].filter(Boolean);
                     console.log(`[AUTO-DOWNLOAD-MONITOR] Searching for completed download in paths:`, searchPaths);
                     let foundFilePath: string | null = null;
                     let allFound: string[] = [];
@@ -5805,52 +13103,54 @@ export async function monitorAndRetryDownload(
                                 finalDestPath = destPath;
                             }
                             
-                            const ext = path.extname(finalDestPath).toLowerCase();
-                            if (ext === ".mobi") {
-                                try {
-                                    const epubPath = finalDestPath.replace(/\.mobi$/i, ".epub");
-                                    console.log(`[AUTO-DOWNLOAD-MONITOR] Attempting to convert MOBI to EPUB: ${finalDestPath} -> ${epubPath}`);
-                                    const { exec } = require("child_process");
-                                    const { promisify } = require("util");
-                                    const execAsync = promisify(exec);
-                                    
-                                    let hasConverter = false;
-                                    try {
-                                        const checkCmd = process.platform === "win32" ? "where ebook-convert" : "which ebook-convert";
-                                        await execAsync(checkCmd);
-                                        hasConverter = true;
-                                    } catch (e) {
-                                        console.log("[AUTO-DOWNLOAD-MONITOR] ebook-convert is not in PATH. Skipping MOBI conversion.");
+                            let ebookFailed = false;
+                            let failReason = "";
+
+                            if (reqMedia === "ebook") {
+                                const destExt = path.extname(finalDestPath).toLowerCase();
+                                if (destExt !== ".epub") {
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] 🔄 Non-EPUB downloaded (${destExt}). Converting to standard EPUB...`);
+                                    const convRes = await convertEbookToEpub(finalDestPath);
+                                    if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
+                                        ebookFailed = true;
+                                        failReason = `Failed to convert ${destExt} to EPUB: ${convRes.error || "Conversion failed"}`;
+                                    } else {
+                                        finalDestPath = convRes.epubPath;
                                     }
-                                    
-                                    if (hasConverter) {
-                                        await execAsync(`ebook-convert "${finalDestPath}" "${epubPath}" --language en`);
-                                        if (fs.existsSync(epubPath)) {
-                                            fs.unlinkSync(finalDestPath);
-                                            finalDestPath = epubPath;
-                                            console.log(`[AUTO-DOWNLOAD-MONITOR] MOBI successfully converted to EPUB!`);
+                                }
+
+                                if (!ebookFailed) {
+                                    // Deep Kindle validation and auto-repair
+                                    console.log(`[AUTO-DOWNLOAD-MONITOR] 🔍 Validating EPUB for Amazon Send-to-Kindle compliance...`);
+                                    const valRes = await validateAndFixEpubForKindle(finalDestPath);
+                                    if (!valRes.valid) {
+                                        ebookFailed = true;
+                                        failReason = `EPUB failed Kindle preflight check: ${valRes.error || "Malformed EPUB"}`;
+                                    }
+                                }
+
+                                // Delete any redundant non-EPUB files in destination directory
+                                try {
+                                    const destDir = path.dirname(finalDestPath);
+                                    if (fs.existsSync(destDir)) {
+                                        const destEntries = fs.readdirSync(destDir);
+                                        for (const de of destEntries) {
+                                            const deExt = path.extname(de).toLowerCase();
+                                            if (deExt === ".azw3" || deExt === ".mobi" || deExt === ".azw" || deExt === ".azw4") {
+                                                try {
+                                                    fs.unlinkSync(path.join(destDir, de));
+                                                    console.log(`[AUTO-DOWNLOAD-MONITOR] 🧹 Cleaned redundant ${deExt} file from library folder: ${de}`);
+                                                } catch (e) {}
+                                            }
                                         }
                                     }
-                                } catch (convErr: any) {
-                                    console.error(`[AUTO-DOWNLOAD-MONITOR] MOBI to EPUB conversion failed:`, convErr.message);
-                                }
-                            }
-                            
-                            // Sanitize and flatten formatting (Mobi-Bounce)
-                            let hasDrm = false;
-                            try {
-                                await mobiBounceEpub(finalDestPath);
-                            } catch (bounceErr: any) {
-                                if (bounceErr.message === "DRM_PROTECTED") {
-                                    hasDrm = true;
-                                    console.warn(`[AUTO-DOWNLOAD-MONITOR] Detected DRM in release "${release.title}". Deleting and marking download as failed to retry another release.`);
-                                    await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, "DRM protected file", requestId);
-                                } else {
-                                    console.error(`[AUTO-DOWNLOAD-MONITOR] Mobi-Bounce failed for ${finalDestPath}:`, bounceErr.message);
-                                }
+                                } catch (e) {}
                             }
 
-                            if (hasDrm) {
+                            if (ebookFailed) {
+                                console.warn(`[AUTO-DOWNLOAD-MONITOR] ❌ Release "${release.title}" rejected: ${failReason}. Deleting and failing over to next release.`);
+                                await recordFailedRelease(release.title, release.downloadUrl, release.guid, release.protocol, failReason, requestId);
+
                                 copySuccessful = false;
                                 downloadStatus = "failed";
 
@@ -5923,25 +13223,41 @@ export async function monitorAndRetryDownload(
                     try {
                         await scanLibraryInternal(targetLib.id, { enableAi: true });
 
-                    // Inherit series metadata from the original BookRequest
+                    // Inherit series & author metadata from the authoritative BookRequest / MediaRequest
                     try {
-                        if (currentReq.series) {
-                            const ingestedBooks = await prisma.book.findMany({
-                                where: {
-                                    libraryId: targetLib.id,
-                                    filePath: { startsWith: path.dirname(finalDestPath) }
+                        const canonicalAuthor = (currentReq.author && currentReq.author !== "Unknown Author") ? currentReq.author : undefined;
+                        const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(canonicalAuthor, currentReq.series, currentReq.volumeNumber);
+
+                        const ingestedBooks = await prisma.book.findMany({
+                            where: {
+                                libraryId: targetLib.id,
+                                filePath: { startsWith: path.dirname(finalDestPath) }
+                            }
+                        });
+                        for (const ib of ingestedBooks) {
+                            await prisma.book.update({
+                                where: { id: ib.id },
+                                data: {
+                                    title: currentReq.title || ib.title,
+                                    author: canonicalAuthor || ib.author,
+                                    series: currentReq.series || ib.series,
+                                    volumeNumber: currentReq.volumeNumber || ib.volumeNumber,
+                                    authorId: authorId || ib.authorId,
+                                    seriesId: seriesId || ib.seriesId,
+                                    coverUrl: currentReq.coverUrl || ib.coverUrl
                                 }
                             });
-                            for (const ib of ingestedBooks) {
-                                await prisma.book.update({
-                                    where: { id: ib.id },
-                                    data: {
-                                        series: currentReq.series,
-                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
-                                    }
-                                });
-                            }
                         }
+
+                        // Sync corresponding Seerr MediaRequest to AVAILABLE
+                        await prisma.mediaRequest.updateMany({
+                            where: {
+                                title: currentReq.title,
+                                mediaType: { in: ["book", "audiobook"] },
+                                status: { notIn: ["AVAILABLE", "DECLINED"] }
+                            },
+                            data: { status: "AVAILABLE" }
+                        }).catch(() => {});
                     } catch (e) {
                         console.warn("Failed to inherit series metadata for imported download:", e);
                     }
@@ -5959,7 +13275,9 @@ export async function monitorAndRetryDownload(
                     }
                 }
                 
-                const allBooks = await prisma.book.findMany();
+                const allBooks = await prisma.book.findMany({
+                    where: targetLib?.id ? { libraryId: targetLib.id } : undefined
+                });
                 const finalPathClean = finalDestPath ? finalDestPath.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
                 const reqTitleClean = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");
                 
@@ -6033,8 +13351,8 @@ export async function monitorAndRetryDownload(
             const currentReq = await prisma.bookRequest.findUnique({ where: { id: requestId } });
             const reqMedia = currentReq?.mediaType || "ebook";
             const requester = currentReq?.requestedBy || "";
-            const backupLib = await getTargetLibraryForUser(requester, reqMedia, currentReq?.coverUrl);
-            const nextCategory = backupLib ? getDownloadCategoryForLibrary(backupLib.name, reqMedia) : (reqMedia === "audiobook" ? "audiobooks" : "books");
+            const backupLib = await getTargetLibraryForUser(requester, reqMedia, currentReq?.coverUrl, currentReq?.libraryId);
+            const nextCategory = backupLib ? getDownloadCategoryForLibrary(backupLib, reqMedia) : (reqMedia === "audiobook" ? "audiobooks" : "books");
             
             let nextDownloadId = "";
             if (nextRelease.protocol === "usenet") {
@@ -6119,24 +13437,85 @@ export async function saveUserKindleSettings(formData: FormData) {
     revalidatePath("/library");
 }
 
+export async function updateCurrentUserKindleEmail(kindleEmail: string) {
+    let session: any;
+    try {
+        session = await verifyUser();
+    } catch {
+        return { error: "User session not found." };
+    }
+    const userId = session?.userId || session?.id;
+    const username = session?.username;
+
+    if (!userId && !username) {
+        return { error: "User session not found." };
+    }
+
+    try {
+        const rawTrimmed = (kindleEmail || "").trim();
+        const isBypass = rawTrimmed.toUpperCase() === "DIRECT_DOWNLOAD";
+        const cleanEmail = isBypass ? "DIRECT_DOWNLOAD" : rawTrimmed.toLowerCase();
+
+        if (cleanEmail && !isBypass && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            return { error: "Please enter a valid email address (e.g. yourname@kindle.com)." };
+        }
+
+        if (userId) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: { kindleEmail: cleanEmail }
+            });
+        } else if (username) {
+            await prisma.user.update({
+                where: { username },
+                data: { kindleEmail: cleanEmail }
+            });
+        }
+
+        revalidatePath("/settings/profile");
+        revalidatePath("/library");
+
+        return {
+            success: true,
+            kindleEmail: cleanEmail,
+            message: isBypass
+                ? "Direct download & browser reading bypass unlocked! Book Library access granted."
+                : (cleanEmail
+                    ? "Your Send-to-Kindle email address has been updated successfully!"
+                    : "Your Send-to-Kindle email address has been cleared.")
+        };
+    } catch (e: any) {
+        return { error: e.message || "Failed to update Send-to-Kindle email address." };
+    }
+}
+
 export async function getAiAgentSettings() {
     await verifyAdmin();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    const { normalizeGeminiModel } = await import("@/lib/ai-agent");
+    const rawModel = settings?.aiModel || "gemini-3.5-flash-lite";
+    const provider = settings?.aiProvider || "default";
     return {
-        aiProvider: settings?.aiProvider || "default",
+        aiProvider: provider,
         aiApiKey: settings?.aiApiKey ? decryptData(settings.aiApiKey) : "",
-        aiModel: settings?.aiModel || "gemini-2.5-flash",
-        aiAutoResolve: settings?.aiAutoResolve ?? true
+        aiModel: (provider === "gemini" || provider === "google" || provider === "default") ? normalizeGeminiModel(rawModel) : rawModel,
+        aiAutoResolve: settings?.aiAutoResolve ?? true,
+        aiAutonomyLevel: settings?.aiAutonomyLevel || "autonomous",
+        aiMaxDailyGrabs: settings?.aiMaxDailyGrabs ?? 3
     };
 }
 
 export async function saveAiAgentSettings(formData: FormData) {
     try {
         await verifyAdmin();
+        const { normalizeGeminiModel } = await import("@/lib/ai-agent");
         const aiProvider = (formData.get("aiProvider") as string) || "default";
         const aiApiKeyRaw = (formData.get("aiApiKey") as string) || "";
-        const aiModel = (formData.get("aiModel") as string) || "gemini-2.5-flash";
+        const rawModel = (formData.get("aiModel") as string) || "gemini-3.5-flash-lite";
+        const aiModel = (aiProvider === "gemini" || aiProvider === "google" || aiProvider === "default") ? normalizeGeminiModel(rawModel) : rawModel;
         const aiAutoResolve = formData.get("aiAutoResolve") === "true";
+        const aiAutonomyLevel = (formData.get("aiAutonomyLevel") as string) || "autonomous";
+        const aiMaxDailyGrabs = parseInt(formData.get("aiMaxDailyGrabs") as string, 10) || 3;
 
         const encryptedKey = aiApiKeyRaw ? encryptData(aiApiKeyRaw) : null;
 
@@ -6147,13 +13526,17 @@ export async function saveAiAgentSettings(formData: FormData) {
                 aiProvider,
                 aiApiKey: encryptedKey,
                 aiModel,
-                aiAutoResolve
+                aiAutoResolve,
+                aiAutonomyLevel,
+                aiMaxDailyGrabs
             },
             update: {
                 aiProvider,
                 aiApiKey: encryptedKey,
                 aiModel,
-                aiAutoResolve
+                aiAutoResolve,
+                aiAutonomyLevel,
+                aiMaxDailyGrabs
             }
         });
 
@@ -6169,10 +13552,11 @@ export async function saveAiAgentSettings(formData: FormData) {
 export async function testAiAgentConnection(sampleText?: string, tempProvider?: string, tempKey?: string, tempModel?: string) {
     try {
         await verifyAdmin();
-        const { resolveMetadataWithAI } = await import("@/lib/ai-agent");
+        const { resolveMetadataWithAI, normalizeGeminiModel } = await import("@/lib/ai-agent");
         const targetSample = sampleText || "J.R.R.Tolkien-Lord.of.the.Rings.01-The.Hobbit.Rob.Inglis-PoF";
         console.log(`[AI-AGENT-TEST] 🤖 Testing AI Metadata Agent with query: "${targetSample}"...`);
-        const result = await resolveMetadataWithAI(targetSample, "audiobook", true, tempProvider, tempKey, tempModel);
+        const modelToUse = (tempProvider === "gemini" || tempProvider === "google" || !tempProvider) ? normalizeGeminiModel(tempModel) : tempModel;
+        const result = await resolveMetadataWithAI(targetSample, "audiobook", true, tempProvider, tempKey, modelToUse);
         console.log(`[AI-AGENT-TEST] ✨ Test Result: "${result.title}" by "${result.author}" [Series: ${result.series || "N/A"} #${result.volumeNumber || "N/A"}] via ${result.providerUsed}`);
         return { success: true, result };
     } catch (e: any) {
@@ -6316,68 +13700,52 @@ export async function validateAndSanitizeKindleEbook(filePath: string, title?: s
         return { valid: false, error: "Target path is a directory stub rather than a media file.", fileSize: 0, fileSizeMb: "0" };
     }
 
-    const maxSizeBytes = 50 * 1024 * 1024; // Amazon 50MB limit
-    const fileSizeMb = (stat.size / (1024 * 1024)).toFixed(1);
-    if (stat.size > maxSizeBytes) {
-        return {
-            valid: false,
-            error: `File size (${fileSizeMb} MB) exceeds Amazon Send-to-Kindle's 50 MB email limit. Please read this book directly in your browser or download it directly to your device.`,
-            fileSize: stat.size,
-            fileSizeMb
-        };
-    }
+    let effectivePath = filePath;
+    let ext = path.extname(effectivePath).toLowerCase();
 
-    const ext = path.extname(filePath).toLowerCase();
-    const unsupported = [".cbr", ".cbz", ".rar", ".zip", ".7z", ".mp3", ".m4b", ".m4a", ".flac", ".wav"];
-    if (unsupported.includes(ext)) {
-        return {
-            valid: false,
-            error: `Format '${ext}' is not supported by Amazon Send-to-Kindle. Only EPUB, PDF, and standard text formats are supported.`,
-            fileSize: stat.size,
-            fileSizeMb
-        };
-    }
-
-    // EPUB format integrity check (magic bytes 'PK\x03\x04')
-    if (ext === ".epub") {
-        try {
-            const fd = fs.openSync(filePath, "r");
-            const buffer = Buffer.alloc(4);
-            fs.readSync(fd, buffer, 0, 4, 0);
-            fs.closeSync(fd);
-            const isZip = buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
-            if (!isZip) {
-                return {
-                    valid: false,
-                    error: "EPUB file is corrupted or not a valid archive (missing standard ZIP header).",
-                    fileSize: stat.size,
-                    fileSizeMb
-                };
-            }
-        } catch (e: any) {
+    // 1. If format is non-EPUB (.azw3, .mobi, .azw, .azw4, .pdf, .cbz, .cbr, etc.), auto-convert to standard EPUB
+    if (ext !== ".epub") {
+        console.log(`[KINDLE-SANITIZER] Auto-converting non-EPUB file "${path.basename(effectivePath)}" (${ext}) to EPUB for Kindle delivery...`);
+        const convRes = await convertEbookToEpub(effectivePath);
+        if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
             return {
                 valid: false,
-                error: `Failed to verify EPUB integrity: ${e.message}`,
+                error: `Format '${ext}' is not supported by Amazon Send-to-Kindle, and automatic EPUB conversion failed: ${convRes.error || "Conversion error"}`,
                 fileSize: stat.size,
-                fileSizeMb
+                fileSizeMb: (stat.size / (1024 * 1024)).toFixed(1)
             };
         }
+        effectivePath = convRes.epubPath;
+        ext = ".epub";
     }
 
-    const rawBase = title && author ? `${author}_${title}` : path.basename(filePath, ext);
+    // 2. Run deep preflight check & Calibre auto-repair to ensure 100% compliance with Amazon Send-to-Kindle
+    const validation = await validateAndFixEpubForKindle(effectivePath);
+    if (!validation.valid) {
+        return {
+            valid: false,
+            error: validation.error || "EPUB failed Amazon Kindle validation and could not be repaired.",
+            fileSize: validation.fileSize || stat.size,
+            fileSizeMb: validation.fileSizeMb || "0"
+        };
+    }
+
+    const rawBase = title && author ? `${author}_${title}` : path.basename(effectivePath, ext);
     const cleanAttachmentName = rawBase
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "") // remove accents
         .replace(/[^a-zA-Z0-9_\-]/g, "_")
         .replace(/__+/g, "_")
-        .substring(0, 80) + ext;
+        .substring(0, 80) + ".epub";
 
     return {
         valid: true,
-        fileSize: stat.size,
-        fileSizeMb,
+        filePath: effectivePath,
+        fileSize: validation.fileSize,
+        fileSizeMb: validation.fileSizeMb,
         cleanAttachmentName,
-        ext
+        ext: ".epub",
+        repaired: validation.repaired
     };
 }
 
@@ -6435,39 +13803,73 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
             return { success: false, error: validation.error };
         }
 
+        // If file was converted/repaired to a new path, synchronize book database record
+        if (validation.filePath && validation.filePath !== book.filePath) {
+            await prisma.book.update({
+                where: { id: book.id },
+                data: {
+                    filePath: validation.filePath,
+                    fileType: "epub",
+                    fileSize: validation.fileSize
+                }
+            }).catch(() => {});
+        }
+
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: false, error: "SMTP is not configured on this server. Please contact your administrator to configure SMTP." };
         }
+        if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
+            return { success: false, error: "Send-to-Kindle email delivery is currently disabled in Email Notification Settings." };
+        }
 
         const senderEmail = settings.smtpFrom || settings.smtpUser;
-        
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
-
-        const mailOptions = {
-            from: senderEmail,
-            to: user.kindleEmail,
-            subject: `Deliver Book: ${book.title}`,
-            text: `Delivering your ebook "${book.title}" to your Kindle device.`,
-            attachments: [
-                {
-                    filename: validation.cleanAttachmentName,
-                    path: book.filePath
-                }
-            ]
-        };
 
         try {
-            await transporter.sendMail(mailOptions);
-            
+            const mailRes = await sendOrQueueEmail({
+                to: user.kindleEmail,
+                subject: `Deliver Book: ${book.title}`,
+                text: `Delivering your ebook "${book.title}" to your Kindle device.`,
+                html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
+                templateId: "kindle_delivery",
+                targetUser: user.username,
+                userId: user.id,
+                attachments: [
+                    {
+                        filename: validation.cleanAttachmentName || `${book.title}.epub`,
+                        path: validation.filePath || book.filePath
+                    }
+                ]
+            });
+
+            if (!mailRes.success) {
+                throw new Error(mailRes.error || "Failed to send or queue email");
+            }
+
+            if (mailRes.queued) {
+                await prisma.kindleDeliveryLog.create({
+                    data: {
+                        bookId: book.id,
+                        bookTitle: book.title,
+                        bookAuthor: book.author || "Unknown",
+                        recipientEmail: user.kindleEmail,
+                        userEmail: user.email || "",
+                        username: user.username,
+                        status: "STAGED",
+                        fileSize: validation.fileSize,
+                        fileType: validation.ext?.replace(".", "") || "epub",
+                        diagnostics: JSON.stringify({
+                            sanitizedAttachment: validation.cleanAttachmentName,
+                            sizeMb: `${validation.fileSizeMb} MB`,
+                            approvalId: mailRes.approvalId,
+                            stagedAt: new Date().toISOString()
+                        })
+                    }
+                }).catch(() => {});
+                revalidatePath("/library");
+                return { success: true, staged: true, message: "Kindle delivery staged in Admin Approval Queue for review." };
+            }
+
             // Record successful delivery
             await prisma.kindleDeliveryLog.create({
                 data: {
@@ -6517,42 +13919,24 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
 
             if (user.email) {
                 try {
-                    const failMailOptions = {
-                        from: senderEmail,
+                    const appUrl = await getAppUrl();
+                    const { subject, html } = await renderEmailTemplate("kindle_failed", {
+                        title: book.title,
+                        kindleEmail: user.kindleEmail,
+                        senderEmail,
+                        errorMessage: e.message || "Unknown SMTP delivery error",
+                        fileSizeMb: String(validation.fileSizeMb || 0),
+                        appUrl
+                    });
+
+                    await sendOrQueueEmail({
                         to: user.email,
-                        subject: `❌ Failed to Deliver Ebook to Kindle: ${book.title}`,
-                        html: `
-                            <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                                <h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
-                                <p>We attempted to send <strong>${book.title}</strong> to your Kindle email (<code>${user.kindleEmail}</code>), but the SMTP server rejected the delivery.</p>
-                                
-                                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                                
-                                <h3 style="color: #0f172a; margin-bottom: 8px;">Troubleshooting Steps:</h3>
-                                <ol style="line-height: 1.6; padding-left: 20px;">
-                                    <li>
-                                        <strong>Approve our Sender Address:</strong> Amazon will silently reject or bounce emails from addresses they don't recognize. 
-                                        Make sure you have added our server sender address to your approved list:
-                                        <br />
-                                        <code style="background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; margin-top: 4px; color: #0f172a;">${senderEmail}</code>
-                                    </li>
-                                    <li style="margin-top: 10px;">
-                                        <strong>How to authorize:</strong>
-                                        <ul style="padding-left: 20px; margin-top: 4px;">
-                                            <li>Log into your Amazon Account.</li>
-                                            <li>Go to <em>Manage Your Content and Devices</em> &rarr; <em>Preferences</em>.</li>
-                                            <li>Scroll down to <em>Approved Personal Document E-mail List</em> and add the address above.</li>
-                                        </ul>
-                                    </li>
-                                    <li style="margin-top: 10px;">
-                                        <strong>Technical error detail:</strong>
-                                        <pre style="background: #f1f5f9; padding: 10px; border-radius: 4px; font-size: 12px; overflow-x: auto; color: #ef4444; border: 1px solid #fecaca; margin-top: 4px;">${e.message || "Unknown SMTP delivery error"}</pre>
-                                    </li>
-                                </ol>
-                            </div>
-                        `
-                    };
-                    await transporter.sendMail(failMailOptions);
+                        subject,
+                        html,
+                        templateId: "kindle_failed",
+                        targetUser: user.username,
+                        userId: user.id
+                    });
                 } catch (err) {
                     console.error("Failed to send Kindle failure email to personal address:", err);
                 }
@@ -6597,18 +13981,9 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: false, error: "SMTP email is not configured on this server. Please contact your administrator." };
         }
-
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
-        
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
-        });
+        if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
+            return { success: false, error: "Email file delivery is currently disabled in Email Notification Settings." };
+        }
 
         const ext = path.extname(book.filePath).toLowerCase();
         const cleanAttachmentName = path.basename(book.filePath, ext)
@@ -6619,10 +13994,9 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         const isAudio = book.mediaType === "audiobook";
         const itemTypeLabel = isAudio ? "Audiobook" : "Ebook";
 
-        const mailOptions = {
-            from: senderEmail,
+        const mailRes = await sendOrQueueEmail({
             to: user.email,
-            subject: `📦 Portalarr Delivery: ${book.title}`,
+            subject: `📦 DomsHomeLab Book Delivery: ${book.title}`,
             html: `
                 <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
                     <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">${itemTypeLabel} File Delivery</h2>
@@ -6638,15 +14012,23 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
                     <p style="font-size: 13px; color: #64748b;">The media file is attached directly to this email so you can save or transfer it to your device.</p>
                 </div>
             `,
+            templateId: "book_file_delivery",
+            targetUser: user.username,
+            userId: user.id,
             attachments: [
                 {
                     filename: cleanAttachmentName,
                     path: book.filePath
                 }
             ]
-        };
+        });
 
-        await transporter.sendMail(mailOptions);
+        if (!mailRes.success) {
+            return { success: false, error: mailRes.error || "Failed to deliver email." };
+        }
+        if (mailRes.queued) {
+            return { success: true, staged: true, message: "File delivery staged in Admin Approval Queue for review." };
+        }
         console.log(`[SMTP-DELIVERY] Successfully emailed ${book.title} to ${user.email}`);
         return { success: true };
     } catch (e: any) {
@@ -6698,39 +14080,75 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         return;
     }
 
+    // If file was converted/repaired to a new path, synchronize book database record
+    if (validation.filePath && validation.filePath !== book.filePath) {
+        await prisma.book.update({
+            where: { id: book.id },
+            data: {
+                filePath: validation.filePath,
+                fileType: "epub",
+                fileSize: validation.fileSize
+            }
+        }).catch(() => {});
+    }
+
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
     if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
         console.error("[AUTO-KINDLE] SMTP is not configured on this server.");
         return;
     }
+    if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
+        console.log(`[AUTO-KINDLE] Send-to-Kindle is disabled in notification settings. Skipping "${book.title}" for ${username}.`);
+        return;
+    }
 
     const senderEmail = settings.smtpFrom || settings.smtpUser;
-    
-    const transporter = nodemailer.createTransport({
-        host: settings.smtpHost,
-        port: settings.smtpPort || 587,
-        secure: settings.smtpPort === 465,
-        auth: {
-            user: settings.smtpUser,
-            pass: decryptData(settings.smtpPass)
-        }
-    });
-
-    const mailOptions = {
-        from: senderEmail,
-        to: user.kindleEmail,
-        subject: `Deliver Book: ${book.title}`,
-        text: `Delivering your ebook "${book.title}" to your Kindle device.`,
-        attachments: [
-            {
-                filename: validation.cleanAttachmentName,
-                path: book.filePath
-            }
-        ]
-    };
 
     try {
-        await transporter.sendMail(mailOptions);
+        const mailRes = await sendOrQueueEmail({
+            to: user.kindleEmail,
+            subject: `Deliver Book: ${book.title}`,
+            text: `Delivering your ebook "${book.title}" to your Kindle device.`,
+            html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
+            templateId: "kindle_delivery",
+            targetUser: username,
+            userId: user.id,
+            attachments: [
+                {
+                    filename: validation.cleanAttachmentName || `${book.title}.epub`,
+                    path: validation.filePath || book.filePath
+                }
+            ]
+        });
+
+        if (!mailRes.success) {
+            throw new Error(mailRes.error || "Failed to send or queue email");
+        }
+
+        if (mailRes.queued) {
+            console.log(`[AUTO-KINDLE] Ebook "${book.title}" delivery staged for admin approval (ID: ${mailRes.approvalId})`);
+            await prisma.kindleDeliveryLog.create({
+                data: {
+                    bookId: book.id,
+                    bookTitle: book.title,
+                    bookAuthor: book.author || "Unknown",
+                    recipientEmail: user.kindleEmail,
+                    userEmail: user.email || "",
+                    username: user.username,
+                    status: "STAGED",
+                    fileSize: validation.fileSize,
+                    fileType: validation.ext?.replace(".", "") || "epub",
+                    diagnostics: JSON.stringify({
+                        sanitizedAttachment: validation.cleanAttachmentName,
+                        sizeMb: `${validation.fileSizeMb} MB`,
+                        approvalId: mailRes.approvalId,
+                        stagedAt: new Date().toISOString()
+                    })
+                }
+            }).catch(() => {});
+            return { success: true, staged: true };
+        }
+
         console.log(`[AUTO-KINDLE] Ebook "${book.title}" successfully emailed to ${user.kindleEmail} for ${username}`);
         
         await prisma.kindleDeliveryLog.create({
@@ -6780,36 +14198,24 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
 
         if (user.email) {
             try {
-                const failMailOptions = {
-                    from: senderEmail,
+                const appUrl = await getAppUrl();
+                const { subject, html } = await renderEmailTemplate("kindle_failed", {
+                    title: book.title,
+                    kindleEmail: user.kindleEmail,
+                    senderEmail,
+                    errorMessage: e.message || "Unknown SMTP Error",
+                    fileSizeMb: String(validation.fileSizeMb || 0),
+                    appUrl
+                });
+
+                await sendOrQueueEmail({
                     to: user.email,
-                    subject: `❌ Failed to Deliver Ebook to Kindle: ${book.title}`,
-                    html: `
-                        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                            <h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
-                            <p>We attempted to automatically deliver your requested book <strong>"${book.title}"</strong> to your Kindle, but the email transmission failed.</p>
-                            
-                            <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
-                                <strong>Error Details:</strong><br/>
-                                ${e.message || "Unknown SMTP Error"}
-                            </div>
-                            
-                            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                            
-                            <h3 style="margin-bottom: 8px;">Troubleshooting Checklist:</h3>
-                            <ol style="padding-left: 20px; line-height: 1.6;">
-                                <li>
-                                    <strong>Add Approved Sender:</strong> Ensure the portal's public sender address <strong><code>${senderEmail}</code></strong> is added to your approved list in your Amazon account:
-                                    <br/>
-                                    <span style="color: #64748b; font-size: 12px;">Amazon.com &rarr; Preferences &rarr; Personal Document Settings &rarr; Approved Personal Document E-mail List</span>
-                                </li>
-                                <li><strong>Check File Size:</strong> Kindle has a 50MB email file size limit. Your book size is <code>${validation.fileSizeMb} MB</code>.</li>
-                                <li><strong>Verify Kindle Email:</strong> Double-check that your Kindle address (currently configured as <code>${user.kindleEmail}</code>) is exactly correct in your library settings.</li>
-                            </ol>
-                        </div>
-                    `
-                };
-                await transporter.sendMail(failMailOptions);
+                    subject,
+                    html,
+                    templateId: "kindle_failed",
+                    targetUser: user.username,
+                    userId: user.id
+                });
             } catch (err) {
                 console.error("[AUTO-KINDLE] Failed to send troubleshooting email:", err);
             }
@@ -6884,6 +14290,21 @@ export async function clearKindleDeliveryLogs() {
         return { success: true, message: "Kindle delivery logs cleared." };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to clear logs" };
+    }
+}
+
+export async function scanKindleBouncesAction(lookbackHours: number = 24) {
+    try {
+        const session = await verifyUser();
+        const { scanKindleBouncesInternal } = await import("@/lib/kindle-email-scanner");
+        const res = await scanKindleBouncesInternal({
+            lookbackMinutes: lookbackHours * 60,
+            forceCheckAll: true
+        });
+        revalidatePath("/library");
+        return res;
+    } catch (e: any) {
+        return { success: false, checked: 0, bouncesFound: 0, message: "", error: e.message || "Failed to scan for Amazon bounces." };
     }
 }
 
@@ -7110,7 +14531,8 @@ export async function fulfillRequestWithUpload(formData: FormData) {
             if (!sabApp) return { success: false, error: "SABnzbd is not configured." };
             const sabUrl = cleanUrl(sabApp.url);
             const sabKey = decryptData(sabApp.apiKey as string);
-            const category = request.mediaType === "audiobook" ? "audiobooks" : "books";
+            const targetLibForNzb = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl, request.libraryId);
+            const category = targetLibForNzb ? getDownloadCategoryForLibrary(targetLibForNzb, request.mediaType || "ebook") : (request.mediaType === "audiobook" ? "audiobooks" : "books");
 
             const form = new FormData();
             form.append("name", new Blob([buffer], { type: "application/x-nzb" }), originalName);
@@ -7131,7 +14553,7 @@ export async function fulfillRequestWithUpload(formData: FormData) {
         }
 
         // Media file (.epub, .pdf, .m4b, .mp3, etc.)
-        const targetLib = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl);
+        const targetLib = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl, request.libraryId);
         if (!targetLib) {
             return { success: false, error: "No target library found for user." };
         }
@@ -7144,8 +14566,25 @@ export async function fulfillRequestWithUpload(formData: FormData) {
             fs.mkdirSync(destDir, { recursive: true });
         }
 
-        const destPath = path.join(destDir, `${safeAuthor} - ${safeTitle}${ext}`);
+        let destPath = path.join(destDir, `${safeAuthor} - ${safeTitle}${ext}`);
         fs.writeFileSync(destPath, buffer);
+
+        if (request.mediaType !== "audiobook") {
+            if (ext !== ".epub") {
+                const convRes = await convertEbookToEpub(destPath);
+                if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
+                    try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
+                    return { success: false, error: `Failed to convert uploaded ${ext} file to EPUB: ${convRes.error || "Conversion error"}` };
+                }
+                destPath = convRes.epubPath;
+            }
+
+            const valRes = await validateAndFixEpubForKindle(destPath);
+            if (!valRes.valid) {
+                try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
+                return { success: false, error: `Uploaded EPUB failed Kindle preflight validation: ${valRes.error}` };
+            }
+        }
 
         // Scan the library to register the new book
         await scanLibraryInternal(targetLib.id, { enableAi: true });
@@ -7278,19 +14717,39 @@ export async function toggleMonitorSeries(requestId: string, monitor?: boolean) 
 
 
 export async function getPublicSmtpFromEmail() {
-    const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings) return "";
-    return settings.smtpFrom || settings.smtpUser || "";
+    try {
+        await ensureSchemaColumns();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        if (!settings) return "";
+        return settings.smtpFrom || settings.smtpUser || "";
+    } catch (e) {
+        return "";
+    }
 }
 
 export async function checkUserLibraryAccess(): Promise<boolean> {
     try {
+        await ensureSchemaColumns();
         const session = await verifyUser();
         if (session.role === "ADMIN") return true;
 
+        // Trial accounts never have access to the Book Library
+        if ((session.status === "TRIAL" || (session as any).isTrial === true) && session.status !== "APPROVED") {
+            return false;
+        }
+
         const username = (session.username as string).toLowerCase();
-        
-        const libs = await prisma.library.findMany();
+
+        // Full accounts must configure Send-to-Kindle or opt for Direct Download bypass
+        const user = await prisma.user.findUnique({
+            where: { username: session.username as string },
+            select: { kindleEmail: true }
+        });
+        if (!user?.kindleEmail || user.kindleEmail.trim() === "") {
+            return false;
+        }
+
+        const libs = await prisma.library.findMany().catch(() => []);
 
         const filtered = libs.filter(lib => {
             const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
@@ -7304,6 +14763,699 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
         return filtered.length > 0;
     } catch (e) {
         return false;
+    }
+}
+
+/**
+ * Self-service setup for Book Library access.
+ * Users can either provide their Send-to-Kindle email address or choose to bypass
+ * (direct download / personal email delivery).
+ */
+export async function setupBookLibraryAccessAction(options: { kindleEmail?: string; bypassKindle?: boolean }) {
+    try {
+        const session = await verifyUser();
+        const user = await prisma.user.findUnique({
+            where: { username: session.username as string }
+        });
+
+        if (!user) {
+            return { success: false, error: "User not found." };
+        }
+
+        if (user.status === "TRIAL") {
+            return { success: false, error: "Trial accounts do not have access to the Book Library. Please upgrade to a full account." };
+        }
+
+        let newKindleEmail = user.kindleEmail || "";
+        if (options.bypassKindle) {
+            newKindleEmail = user.kindleEmail && user.kindleEmail.trim() !== "" ? user.kindleEmail : "DIRECT_DOWNLOAD";
+        } else if (options.kindleEmail) {
+            newKindleEmail = options.kindleEmail.trim();
+        }
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { kindleEmail: newKindleEmail }
+        });
+
+        // Ensure user is not restricted in any library
+        const libs = await prisma.library.findMany();
+        for (const lib of libs) {
+            const restricted = (lib.restrictedUsers || "").split(",").map(u => u.trim().toLowerCase());
+            if (restricted.includes(user.username.toLowerCase())) {
+                const cleanedRestricted = restricted.filter(u => u !== user.username.toLowerCase()).join(",");
+                await prisma.library.update({
+                    where: { id: lib.id },
+                    data: { restrictedUsers: cleanedRestricted }
+                });
+            }
+        }
+
+        revalidatePath("/");
+        revalidatePath("/library");
+        revalidatePath("/settings/profile");
+
+        return { 
+            success: true, 
+            kindleEmail: newKindleEmail,
+            message: options.bypassKindle 
+                ? "Book Library access unlocked! You can now download books directly or send them to personal email." 
+                : "Send-to-Kindle email saved! Book Library access unlocked."
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to setup book library access." };
+    }
+}
+
+/**
+ * Self-service toggle for Super User access.
+ * Gives full accounts direct access to Radarr & Sonarr to fix and manage their own media.
+ * Trial accounts are strictly blocked.
+ */
+export async function toggleSelfSuperUserAction() {
+    try {
+        const session = await verifyUser();
+        const user = await prisma.user.findUnique({
+            where: { username: session.username as string }
+        });
+
+        if (!user) {
+            return { success: false, error: "User not found." };
+        }
+
+        if (user.status === "TRIAL") {
+            return { success: false, error: "Trial accounts cannot enable Super User access. Please upgrade to a full account." };
+        }
+
+        if (user.role === "ADMIN") {
+            return { success: true, isSuperUser: true, role: "ADMIN", message: "You are already a Platform Administrator." };
+        }
+
+        const newRole = user.role === "SUPER_USER" ? "USER" : "SUPER_USER";
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { role: newRole }
+        });
+
+        const { createSession } = await import("./auth-actions");
+        await createSession(user.id, user.username, newRole, user.status, user.trialEndsAt, user.subscriptionEndsAt);
+
+        revalidatePath("/");
+        revalidatePath("/settings/profile");
+
+        return { 
+            success: true, 
+            isSuperUser: newRole === "SUPER_USER",
+            role: newRole,
+            message: newRole === "SUPER_USER" 
+                ? "Super User mode enabled! You now have direct access to Radarr & Sonarr." 
+                : "Standard User mode restored."
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed toggling Super User mode." };
+    }
+}
+
+/**
+ * Detailed real-time stream monitor and server performance metrics for Admins.
+ * Fetches all active sessions across all Tautulli instances without filtering to a single user.
+ */
+export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
+    try {
+        if (!skipAuth) {
+            await verifyAdmin();
+        }
+        const [tautulliInstances, glances, plexServers, settings] = await Promise.all([
+            prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
+            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null)
+        ]);
+
+        const allSessions: any[] = [];
+        let totalStreamCount = 0;
+        const coveredServerNames = new Set<string>();
+
+        // Build set of unmonitored Plex server names to strictly exclude from active stream tallies
+        const unmonitoredPlexNames = new Set(
+            plexServers.filter(ps => ps.monitored === false).map(ps => ps.name.toLowerCase().trim())
+        );
+
+        // 1. Tautulli Session Collection
+        for (const t of tautulliInstances) {
+            if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
+            let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+            const apiKey = decryptData(t.apiKey);
+            const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+
+            try {
+                const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
+                if (actResult.ok && actResult.data) {
+                    coveredServerNames.add(t.name.toLowerCase().trim());
+                    const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
+                    totalStreamCount += count;
+                    const sessions = actResult.data.sessions || [];
+                    for (const s of sessions) {
+                        let rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
+                        if (rawThumb && rawThumb.includes("pms_image_proxy")) {
+                            try {
+                                const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
+                                const nested = dummyUrl.searchParams.get("img") || dummyUrl.searchParams.get("url");
+                                if (nested) rawThumb = nested;
+                            } catch (e) {}
+                        }
+                        const thumbUrl = rawThumb
+                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(s.grandparent_title || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
+                            : null;
+
+                        const isEpisode = s.media_type === "episode" || !!s.grandparent_title;
+                        const seasonNum = s.parent_media_index ? Number(s.parent_media_index) : undefined;
+                        const episodeNum = s.media_index ? Number(s.media_index) : undefined;
+                        const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
+                            ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
+                            : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parent_title || ""));
+
+                        let fullTitle = s.title || "Unknown Media";
+                        if (isEpisode && s.grandparent_title) {
+                            if (seasonEpisodeTag) {
+                                fullTitle = `${s.grandparent_title} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
+                            } else {
+                                fullTitle = `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}`;
+                            }
+                        }
+
+                        allSessions.push({
+                            instanceId: t.id,
+                            serverName: t.name,
+                            sessionKey: String(s.session_key || ""),
+                            sessionId: String(s.session_id || ""),
+                            user: s.friendly_name || s.user || "Plex User",
+                            email: s.email || "",
+                            title: fullTitle,
+                            grandparentTitle: s.grandparent_title || "",
+                            parentTitle: s.parent_title || "",
+                            seasonNum: seasonNum,
+                            episodeNum: episodeNum,
+                            seasonEpisodeTag: seasonEpisodeTag,
+                            episodeTitle: isEpisode ? (s.title || "") : "",
+                            mediaType: isEpisode ? "episode" : "movie",
+                            year: s.year || "",
+                            thumb: thumbUrl,
+                            player: s.player || s.platform || "Plex Client",
+                            device: s.device || s.platform || "",
+                            ipAddress: s.ip_address || "",
+                            videoDecision: (s.video_decision || "direct play").toLowerCase(),
+                            audioDecision: (s.audio_decision || "direct play").toLowerCase(),
+                            videoCodec: (s.video_codec || "").toUpperCase(),
+                            audioCodec: (s.audio_codec || "").toUpperCase(),
+                            streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate)) : (s.bitrate ? Math.round(Number(s.bitrate)) : 0),
+                            transcodeHwRequested: !!s.transcode_hw_requested,
+                            transcodeHwDecoding: s.transcode_hw_decoding || "",
+                            transcodeHwEncoding: s.transcode_hw_encoding || "",
+                            progressPercent: s.progress_percent ? Number(s.progress_percent) : 0,
+                            state: s.state || "playing"
+                        });
+                    }
+                }
+            } catch (err: any) {
+                console.warn(`[ADMIN-STREAMS] Failed to fetch activity for Tautulli "${t.name}":`, err.message || err);
+            }
+        }
+
+        // 2. Direct Plex Active Sessions Fallback (for configured Plex servers not monitored by Tautulli)
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            try {
+                adminToken = decryptData(settings.mainPlexToken);
+            } catch (e) {}
+        }
+
+        if (adminToken && !isPlexMaintenanceWindow()) {
+            try {
+                const directPlexResults = await getPlexActiveSessions(adminToken);
+                for (const srv of directPlexResults) {
+                    const norm = srv.serverName.toLowerCase().trim();
+                    // Skip if Plex server is unmonitored (monitored: false)
+                    if (unmonitoredPlexNames.has(norm)) continue;
+
+                    const isCovered = Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
+                    if (!isCovered && srv.sessions && srv.sessions.length > 0) {
+                        for (const s of srv.sessions) {
+                            const isTranscode = s.TranscodeSession || (s.Media && s.Media[0]?.Part && s.Media[0]?.Part[0]?.decision === "transcode");
+                            const userTitle = s.User?.title || s.User?.username || s.User?.name || s.username || "Plex User";
+                            const isEpisode = s.type === "episode" || !!s.grandparentTitle;
+                            const seasonNum = s.parentIndex ? Number(s.parentIndex) : undefined;
+                            const episodeNum = s.index ? Number(s.index) : undefined;
+                            const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
+                                ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
+                                : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parentTitle || ""));
+
+                            let fullTitle = s.title || "Unknown Media";
+                            if (isEpisode && s.grandparentTitle) {
+                                if (seasonEpisodeTag) {
+                                    fullTitle = `${s.grandparentTitle} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
+                                } else {
+                                    fullTitle = `${s.grandparentTitle} - ${s.title || "Episode"}`;
+                                }
+                            }
+                            
+                            const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : 0;
+                            totalStreamCount++;
+                            allSessions.push({
+                                instanceId: `plex_${srv.serverId}`,
+                                serverName: srv.serverName,
+                                sessionKey: String(s.sessionKey || s.ratingKey || Math.random()),
+                                sessionId: String(s.Session?.id || ""),
+                                user: userTitle,
+                                email: s.User?.email || "",
+                                title: fullTitle,
+                                grandparentTitle: s.grandparentTitle || "",
+                                parentTitle: s.parentTitle || "",
+                                seasonNum: seasonNum,
+                                episodeNum: episodeNum,
+                                seasonEpisodeTag: seasonEpisodeTag,
+                                episodeTitle: isEpisode ? (s.title || "") : "",
+                                mediaType: isEpisode ? "episode" : "movie",
+                                year: s.year || "",
+                                thumb: s.thumb ? `${srv.serverUrl}${s.thumb}?X-Plex-Token=${srv.token}` : null,
+                                player: s.Player?.title || s.Player?.device || "Plex Client",
+                                device: s.Player?.platform || s.Player?.device || "",
+                                ipAddress: s.Player?.address || "",
+                                videoDecision: isTranscode ? "transcode" : "direct play",
+                                audioDecision: "direct play",
+                                videoCodec: (s.Media && s.Media[0]?.videoCodec || "H264").toUpperCase(),
+                                audioCodec: (s.Media && s.Media[0]?.audioCodec || "AAC").toUpperCase(),
+                                streamBitrate: bitrate,
+                                transcodeHwRequested: !!s.TranscodeSession?.hwRequested,
+                                transcodeHwDecoding: s.TranscodeSession?.videoDecoder || "",
+                                transcodeHwEncoding: s.TranscodeSession?.videoEncoder || "",
+                                progressPercent: s.viewOffset && s.duration ? Math.round((Number(s.viewOffset) / Number(s.duration)) * 100) : 0,
+                                state: s.Player?.state || "playing"
+                            });
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 3. Streams Per Plex Server Registry & Usage Calculation (ONLY monitored servers with monitoring turned on)
+        const serverUsageMap = new Map<string, {
+            id: string;
+            name: string;
+            type: string;
+            streamCount: number;
+            directPlayCount: number;
+            transcodeCount: number;
+            bandwidthKbps: number;
+            online: boolean;
+            monitored: boolean;
+        }>();
+
+        // Seed with configured Plex servers that have monitoring TURNED ON
+        for (const ps of plexServers) {
+            if (ps.monitored === false) continue; // STRICT: only monitored servers
+            const normKey = ps.name.toLowerCase().trim();
+            serverUsageMap.set(normKey, {
+                id: ps.id,
+                name: ps.name,
+                type: "Plex Media Server",
+                streamCount: 0,
+                directPlayCount: 0,
+                transcodeCount: 0,
+                bandwidthKbps: 0,
+                online: true,
+                monitored: true
+            });
+        }
+
+        // Seed or merge with Tautulli instances that have monitoring TURNED ON
+        for (const t of tautulliInstances) {
+            if (t.monitored === false) continue; // STRICT: only monitored instances
+            const normKey = t.name.toLowerCase().trim();
+            if (!serverUsageMap.has(normKey)) {
+                serverUsageMap.set(normKey, {
+                    id: t.id,
+                    name: t.name,
+                    type: "Tautulli",
+                    streamCount: 0,
+                    directPlayCount: 0,
+                    transcodeCount: 0,
+                    bandwidthKbps: 0,
+                    online: true,
+                    monitored: true
+                });
+            }
+        }
+
+        // Tally active streams and bandwidth per server
+        for (const s of allSessions) {
+            const srvKey = (s.serverName || "").toLowerCase().trim();
+            if (unmonitoredPlexNames.has(srvKey)) continue;
+
+            let entry = serverUsageMap.get(srvKey);
+            if (!entry) {
+                for (const [k, v] of serverUsageMap.entries()) {
+                    if (k === srvKey || k.includes(srvKey) || srvKey.includes(k)) {
+                        entry = v;
+                        break;
+                    }
+                }
+            }
+            if (!entry && s.serverName) {
+                const isExplicitlyUnmonitored = plexServers.some(p => p.monitored === false && p.name.toLowerCase().trim() === srvKey);
+                if (!isExplicitlyUnmonitored) {
+                    entry = {
+                        id: s.instanceId || s.serverName,
+                        name: s.serverName,
+                        type: "Plex Media Server",
+                        streamCount: 0,
+                        directPlayCount: 0,
+                        transcodeCount: 0,
+                        bandwidthKbps: 0,
+                        online: true,
+                        monitored: true
+                    };
+                    serverUsageMap.set(srvKey, entry);
+                }
+            }
+            if (entry) {
+                entry.streamCount++;
+                // ONLY count as transcode if it's actually using video transcoding power (audio transcode does NOT use transcoding power)
+                if (s.videoDecision === "transcode") {
+                    entry.transcodeCount++;
+                } else {
+                    entry.directPlayCount++;
+                }
+                entry.bandwidthKbps += (s.streamBitrate || 0);
+            }
+        }
+
+        // Convert to array and rank by highest usage first (ONLY monitored servers with monitoring turned on)
+        const serversUsage = Array.from(serverUsageMap.values())
+            .filter(srv => srv.monitored !== false)
+            .map(srv => ({
+                ...srv,
+                bandwidthMbps: Number((srv.bandwidthKbps / 1000).toFixed(1)),
+                percentOfTotal: totalStreamCount > 0 ? Math.round((srv.streamCount / totalStreamCount) * 100) : 0
+            }))
+            .sort((a, b) => b.streamCount - a.streamCount || b.bandwidthKbps - a.bandwidthKbps);
+
+        // 4. Glances Hardware Monitoring
+        const glancesStats: any[] = await Promise.all(glances.map(async (g) => {
+            if (g.monitored === false) {
+                return { name: g.name, online: false, monitored: false, cpu: 0, ram: 0 };
+            }
+            try {
+                const stats = await fetchGlancesHardwareStats(g.url);
+                return {
+                    name: g.name,
+                    online: stats.online,
+                    monitored: true,
+                    cpu: stats.cpu,
+                    ram: stats.ram
+                };
+            } catch {
+                return { name: g.name, online: false, monitored: true, cpu: 0, ram: 0 };
+            }
+        }));
+
+        return {
+            success: true,
+            totalStreams: totalStreamCount,
+            sessions: allSessions,
+            glances: glancesStats,
+            serversUsage: serversUsage
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed fetching admin streams" };
+    }
+}
+
+export type InfrastructureServiceItem = {
+    id: string;
+    name: string;
+    type: string;
+    category: "plex" | "glances" | "tautulli" | "apps" | "downloaders";
+    url: string;
+    status: "ONLINE" | "OFFLINE" | "PAUSED";
+    monitored: boolean;
+    latencyMs?: number;
+    details?: string;
+    metrics?: {
+        cpu?: number;
+        ram?: number;
+        streamCount?: number;
+    };
+};
+
+/**
+ * Real-time Admin Infrastructure Status Cockpit Action
+ * Queries all configured Plex servers, Glances hosts, Tautulli monitors, and Media Apps
+ * with parallel reachability probing, latency measurement, and strict opt-in monitoring.
+ */
+export async function getAdminInfrastructureStatusAction(skipAuth: boolean = false): Promise<{
+    success: boolean;
+    error?: string;
+    summary: {
+        totalConfigured: number;
+        totalMonitored: number;
+        onlineCount: number;
+        offlineCount: number;
+        pausedCount: number;
+    };
+    services: InfrastructureServiceItem[];
+}> {
+    try {
+        if (!skipAuth) {
+            await verifyAdmin();
+        }
+
+        const [plexServers, glances, tautulli, mediaApps, settings] = await Promise.all([
+            prisma.plexServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.tautulliInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.mediaApp.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null)
+        ]);
+
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            try {
+                adminToken = decryptData(settings.mainPlexToken);
+            } catch (e) {}
+        }
+
+        // 1. Plex Media Servers
+        const plexPromises = plexServers.map(async (ps): Promise<InfrastructureServiceItem> => {
+            const isMonitored = ps.monitored !== false;
+            const clean = cleanUrl(ps.url?.trim() || "");
+            const baseItem: InfrastructureServiceItem = {
+                id: ps.id,
+                name: ps.name,
+                type: "Plex Media Server",
+                category: "plex",
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                let targetUrl = clean;
+                if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+                    targetUrl = `http://${targetUrl}`;
+                }
+                targetUrl = targetUrl.replace(/\/+$/, "");
+                const controller = new AbortController();
+                const tid = setTimeout(() => controller.abort(), 4500);
+                const sToken = ps.token ? decryptData(ps.token) : adminToken;
+                const testUrl = `${targetUrl}/identity?X-Plex-Token=${encodeURIComponent(sToken || adminToken || "")}`;
+                const res = await fetch(testUrl, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": sToken || adminToken || "" },
+                    signal: controller.signal,
+                    cache: "no-store"
+                });
+                clearTimeout(tid);
+                const elapsed = Date.now() - startTime;
+                if (res.ok || res.status === 401 || res.status === 403 || (res.status >= 200 && res.status < 500)) {
+                    baseItem.status = "ONLINE";
+                    baseItem.latencyMs = elapsed;
+                    baseItem.details = `PMS reachable (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.latencyMs = elapsed;
+                    baseItem.details = `HTTP ${res.status}`;
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
+            }
+            return baseItem;
+        });
+
+        // 2. Glances Physical Hosts
+        const glancesPromises = glances.map(async (g): Promise<InfrastructureServiceItem> => {
+            const isMonitored = g.monitored !== false;
+            const clean = cleanUrl(g.url?.trim() || "");
+            const baseItem: InfrastructureServiceItem = {
+                id: g.id,
+                name: g.name,
+                type: "Host Server (Glances)",
+                category: "glances",
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                const stats = await fetchGlancesHardwareStats(g.url, 4500);
+                const elapsed = Date.now() - startTime;
+                baseItem.latencyMs = elapsed;
+                if (stats.online) {
+                    baseItem.status = "ONLINE";
+                    baseItem.metrics = { cpu: stats.cpu, ram: stats.ram };
+                    baseItem.details = `CPU: ${stats.cpu}% | RAM: ${stats.ram}% (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.details = "Host offline or Glances port 61208 closed";
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = "Unreachable";
+            }
+            return baseItem;
+        });
+
+        // 3. Tautulli Stream Monitors
+        const tautulliPromises = tautulli.map(async (t): Promise<InfrastructureServiceItem> => {
+            const isMonitored = t.monitored !== false;
+            const clean = cleanUrl(t.url?.trim() || "");
+            const baseItem: InfrastructureServiceItem = {
+                id: t.id,
+                name: t.name,
+                type: "Stream Monitor (Tautulli)",
+                category: "tautulli",
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                const cleanBase = clean.replace(/\/api\/v2\/?$/, "");
+                const apiKey = decryptData(t.apiKey);
+                const fullUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+                const controller = new AbortController();
+                const tid = setTimeout(() => controller.abort(), 4500);
+                const actResult = await fetchTautulliApiJson(fullUrl, controller.signal, { revalidate: 0 });
+                clearTimeout(tid);
+                const elapsed = Date.now() - startTime;
+                baseItem.latencyMs = elapsed;
+                if (actResult.ok && actResult.data) {
+                    baseItem.status = "ONLINE";
+                    const streamCount = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
+                    baseItem.metrics = { streamCount };
+                    baseItem.details = `${streamCount} active stream${streamCount === 1 ? "" : "s"} (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.details = actResult.error || "Tautulli API unreachable";
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
+            }
+            return baseItem;
+        });
+
+        // 4. Media Stack Apps & Download Clients
+        const appPromises = mediaApps.map(async (app): Promise<InfrastructureServiceItem> => {
+            const isMonitored = app.monitored !== false;
+            const clean = cleanUrl(app.url?.trim() || "");
+            const tLower = (app.type || "").toLowerCase();
+            const nLower = (app.name || "").toLowerCase();
+            const isDownloader = ["sabnzb", "qbit", "nzbget"].some(d => tLower.includes(d) || nLower.includes(d));
+            const category: "downloaders" | "apps" = isDownloader ? "downloaders" : "apps";
+
+            const baseItem: InfrastructureServiceItem = {
+                id: app.id,
+                name: app.name,
+                type: app.type ? app.type.toUpperCase() : "MEDIA APP",
+                category,
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            const startTime = Date.now();
+            try {
+                const isOnline = await checkMediaAppReachability(app);
+                const elapsed = Date.now() - startTime;
+                baseItem.latencyMs = elapsed;
+                if (isOnline) {
+                    baseItem.status = "ONLINE";
+                    baseItem.details = `Responsive (${elapsed}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.details = "Port closed or service unresponsive";
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = "Unreachable";
+            }
+            return baseItem;
+        });
+
+        const [plexResults, glancesResults, tautulliResults, appResults] = await Promise.all([
+            Promise.all(plexPromises),
+            Promise.all(glancesPromises),
+            Promise.all(tautulliPromises),
+            Promise.all(appPromises)
+        ]);
+
+        const services: InfrastructureServiceItem[] = [
+            ...plexResults,
+            ...glancesResults,
+            ...tautulliResults,
+            ...appResults
+        ];
+
+        const summary = {
+            totalConfigured: services.length,
+            totalMonitored: services.filter(s => s.monitored).length,
+            onlineCount: services.filter(s => s.status === "ONLINE").length,
+            offlineCount: services.filter(s => s.status === "OFFLINE").length,
+            pausedCount: services.filter(s => s.status === "PAUSED").length
+        };
+
+        return {
+            success: true,
+            summary,
+            services
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed fetching infrastructure status",
+            summary: { totalConfigured: 0, totalMonitored: 0, onlineCount: 0, offlineCount: 0, pausedCount: 0 },
+            services: []
+        };
     }
 }
 
@@ -7323,6 +15475,9 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
         if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: false, error: "SMTP is not configured on the server. Please contact your administrator." };
         }
+        if (settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
+            return { success: true, message: "Your access request has been recorded." };
+        }
 
         const admins = await prisma.user.findMany({
             where: { role: "ADMIN" }
@@ -7330,60 +15485,31 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
 
         const adminEmails = admins
             .map(admin => admin.email)
-            .filter(email => !!email);
+            .filter(email => !!email) as string[];
 
-        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser as string];
 
-        const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
-            auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
-            }
+        const appUrl = await getAppUrl();
+        const { subject, html } = await renderEmailTemplate("library_access_request", {
+            username: user.username,
+            email: user.email || "Not Provided",
+            kindleEmail: user.kindleEmail || "Not Provided",
+            accessUrl: `${appUrl}/settings/access`,
+            appUrl
         });
 
-        const mailOptions = {
-            from: senderEmail,
-            to: recipientEmails.join(", "),
-            subject: `🚨 Library Access Request from ${user.username}`,
-            html: `
-                <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                    <h2 style="color: #0f172a; margin-top: 0;">Library Access Request</h2>
-                    <p>The user <strong>${user.username}</strong> has requested access to the Book Library.</p>
-                    
-                    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                    
-                    <h3 style="color: #0f172a; margin-bottom: 8px;">User Details:</h3>
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr>
-                            <td style="padding: 6px 0; font-weight: bold; width: 150px;">Username:</td>
-                            <td style="padding: 6px 0;">${user.username}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 6px 0; font-weight: bold;">Personal Email:</td>
-                            <td style="padding: 6px 0;"><code>${user.email || "Not Provided"}</code></td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 6px 0; font-weight: bold;">Send-to-Kindle:</td>
-                            <td style="padding: 6px 0;"><code>${user.kindleEmail || "Not Provided"}</code></td>
-                        </tr>
-                    </table>
-
-                    <h3 style="color: #0f172a; margin-bottom: 8px;">How to Approve:</h3>
-                    <p style="line-height: 1.6;">
-                        To grant access to this user, log into Portalarr and open the Book Library Manage tab. 
-                        Edit the library you want them to access (e.g. <em>Wife's Bookshelf</em> or <em>Kids' Bookshelf</em>), 
-                        and add their username <strong><code>${user.username}</code></strong> to the <strong>Allowed Users</strong> list.
-                    </p>
-                </div>
-            `
-        };
-
         try {
-            await transporter.sendMail(mailOptions);
+            const mailRes = await sendOrQueueEmail({
+                to: recipientEmails,
+                subject,
+                html,
+                templateId: "library_access_request",
+                targetUser: user.username,
+                userId: user.id
+            });
+            if (!mailRes.success) {
+                return { success: false, error: mailRes.error || "Failed to send request email" };
+            }
             return { success: true };
         } catch (e: any) {
             console.error("Failed to email admin about access request:", e);
@@ -7485,8 +15611,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
         // 3. Open Library
         try {
             const olUrl = parsedAuthor
-                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(parsedTitle)}&author=${encodeURIComponent(parsedAuthor)}&limit=12`
-                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=12`;
+                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(parsedTitle)}&author=${encodeURIComponent(parsedAuthor)}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`
+                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`;
             const response = await fetchWithRetry(olUrl, {
                 headers: { "Accept": "application/json" }
             });
@@ -7504,8 +15630,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] OpenLibrary search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary search failed:", e?.message || String(e));
         }
 
         // 4. Google Books
@@ -7529,8 +15655,8 @@ export async function searchOpenLibrary(query: string, mediaType: "ebook" | "aud
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] Google Books API Error:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] Google Books API Error:", e?.message || String(e));
         }
         
         // Deduplicate results by normalized title + author
@@ -7635,8 +15761,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                         results.push({ title, author: authorName, coverUrl, year, mediaType: "audiobook" });
                     }
                 }
-            } catch (e) {
-                console.warn("[API-FAILOVER] Audible author search failed:", e);
+            } catch (e: any) {
+                console.warn("[API-FAILOVER] Audible author search failed:", e?.message || String(e));
             }
         }
 
@@ -7670,8 +15796,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                     });
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] iTunes author search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] iTunes author search failed:", e?.message || String(e));
         }
 
         // 3. Open Library (Author Search)
@@ -7703,8 +15829,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] OpenLibrary author search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary author search failed:", e?.message || String(e));
         }
 
         // 4. Google Books API (Author Search)
@@ -7726,8 +15852,8 @@ export async function searchOpenLibraryByAuthor(author: string, mediaType: "eboo
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] Google Books author API error:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] Google Books author API error:", e?.message || String(e));
         }
 
         // Deduplicate results by normalized title + author
@@ -7813,8 +15939,8 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
                     }
                 }
             }
-        } catch (e) {
-            console.warn("[API-FAILOVER] OpenLibrary series search failed:", e);
+        } catch (e: any) {
+            console.warn("[API-FAILOVER] OpenLibrary series search failed:", e?.message || String(e));
         }
         
         // 2. Failover: Google Books
@@ -7887,6 +16013,12 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
             targetUser = requestedFor;
         }
         
+        let targetLib: any = null;
+        if (libraryId) {
+            targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
+        }
+        const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+
         for (const book of booksList) {
             let finalCover = book.coverUrl;
             if (libraryId) {
@@ -7895,22 +16027,34 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
                     : `?lib=${libraryId}`;
             }
             
+            const rating = inferBookRating({
+                title: book.title,
+                author: book.author
+            });
+            const isKidsBook = isKidsLib || rating.ageRating === "Kids";
+            const isApproved = !isKidsBook;
+
             const request = await prisma.bookRequest.create({
                 data: {
                     title: book.title,
                     author: book.author,
                     coverUrl: finalCover,
                     publishYear: book.publishYear,
+                    maturityRating: rating.maturityRating || null,
+                    ageRating: rating.ageRating || null,
                     requestedBy: targetUser,
+                    libraryId: libraryId || null,
                     type: "book",
                     mediaType: mediaType,
-                    status: "Approved"
+                    status: isApproved ? "Approved" : "Pending"
                 }
             });
             
-            autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
-                console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
-            });
+            if (isApproved) {
+                autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
+                    console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
+                });
+            }
         }
 
         if (booksList.length > 0) {
@@ -7993,11 +16137,23 @@ export async function syncPlexFriendsInternal() {
             return { success: false, error: "Admin Plex Token is not configured. Go to Settings -> General Setup to enter your Admin Plex Token (or sign in once with Plex)." };
         }
 
+        if (isPlexMaintenanceWindow()) {
+            console.log("[PLEX-SYNC] Skipped: Plex maintenance window is active (5:00 AM – 5:30 AM).");
+            return { success: false, error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Unraid is checking databases and restarting containers." };
+        }
+
         const adminToken = decryptData(settings.mainPlexToken);
 
-        // Fetch all Plex Friends & Shared Users across API endpoints
-        const friendsList = await getPlexServerFriends(adminToken);
-        console.log(`[PLEX-SYNC] Fetched ${friendsList.length} Plex friends from server.`);
+        // Auto-expire any elapsed trials or subscriptions before syncing
+        await expireDueTrialsAndSubscriptionsInternal().catch(e => console.warn("[PLEX-SYNC] Trial expiration check warning:", e));
+
+        // Fetch all Plex Friends, Shared Servers & Sections across API endpoints
+        const [friendsList, sharesList, serversWithSections] = await Promise.all([
+            getPlexServerFriends(adminToken),
+            getPlexSharedServersList(adminToken),
+            getPlexServerLibrarySections(adminToken)
+        ]);
+        console.log(`[PLEX-SYNC] Fetched ${friendsList.length} Plex friends and ${sharesList.length} share records from server.`);
 
         // Fetch Plex Admin Owner profile
         let adminPlexProfile: any = null;
@@ -8020,6 +16176,22 @@ export async function syncPlexFriendsInternal() {
         let addedCount = 0;
         let updatedCount = 0;
         let revokedCount = 0;
+        let securityLeaksRemediatedCount = 0;
+        const securityAlertUsers: string[] = [];
+
+        // Auto-recover any ADMIN whose status was inadvertently set to EXPIRED or SUSPENDED
+        for (const u of dbUsers) {
+            if (u.role === "ADMIN" && (u.status === "EXPIRED" || u.status === "SUSPENDED")) {
+                await prisma.user.update({
+                    where: { id: u.id },
+                    data: { status: "APPROVED", trialEndsAt: null, subscriptionEndsAt: null }
+                }).catch(() => {});
+                u.status = "APPROVED";
+                u.trialEndsAt = null;
+                u.subscriptionEndsAt = null;
+                updatedCount++;
+            }
+        }
 
         const activePlexEmails = new Set<string>();
         const activePlexUsernames = new Set<string>();
@@ -8031,28 +16203,127 @@ export async function syncPlexFriendsInternal() {
             if (adminUserObj.title) activePlexUsernames.add(adminUserObj.title.toLowerCase().trim());
         }
 
+        // Helper to accurately extract live Plex library keys across all discovered servers
+        const extractUserLiveLibraryKeys = (target: any): string[] => {
+            const matchedShares = sharesList.filter(s => matchesPlexUser(target, s));
+            const liveKeys: string[] = [];
+
+            for (const share of matchedShares) {
+                const srv = serversWithSections.find(sv => 
+                    (sv.serverId && share.serverId && sv.serverId.toLowerCase() === share.serverId.toLowerCase()) ||
+                    (sv.serverName && share.serverName && sv.serverName.toLowerCase() === share.serverName.toLowerCase()) ||
+                    (sv.serverName && share.serverId && sv.serverName.toLowerCase() === share.serverId.toLowerCase()) ||
+                    (sv.serverId && share.serverName && sv.serverId.toLowerCase() === share.serverName.toLowerCase())
+                ) || (serversWithSections.length === 1 ? serversWithSections[0] : null);
+
+                if (srv) {
+                    if (share.allLibraries) {
+                        for (const sec of srv.sections || []) {
+                            liveKeys.push(`${srv.serverId}:${sec.id}`);
+                        }
+                    } else {
+                        for (const secId of (share.librarySectionIds || [])) {
+                            const sec = (srv.sections || []).find((s: any) => 
+                                s.id === secId || 
+                                (s.key && String(s.key) === String(secId)) ||
+                                (s.key && parseInt(s.key, 10) === secId) ||
+                                String(s.id) === String(secId)
+                            );
+                            if (sec) {
+                                liveKeys.push(`${srv.serverId}:${sec.id}`);
+                            } else {
+                                liveKeys.push(`${srv.serverId}:${secId}`);
+                            }
+                        }
+                    }
+                } else if (share.serverId) {
+                    for (const secId of (share.librarySectionIds || [])) {
+                        liveKeys.push(`${share.serverId}:${secId}`);
+                    }
+                }
+            }
+
+            return Array.from(new Set(liveKeys));
+        };
+
         for (const friend of friendsList) {
             const fEmail = (friend.email || "").toLowerCase().trim();
             const fUsername = (friend.username || (fEmail ? fEmail.split('@')[0] : "")).trim();
+            const fTitle = (friend.title || "").trim();
 
             if (!fEmail && !fUsername) continue;
 
             if (fEmail) activePlexEmails.add(fEmail);
             if (fUsername) activePlexUsernames.add(fUsername.toLowerCase());
 
-            // Match existing user by email or username (case-insensitive)
-            let existingUser = dbUsers.find(u => 
-                (fEmail && u.email.toLowerCase() === fEmail) ||
-                (fUsername && u.username.toLowerCase() === fUsername.toLowerCase())
-            );
+            // Determine actual live shared library sections for this friend across all servers
+            const userLibraryKeys = extractUserLiveLibraryKeys(friend);
+            const userLibraryKeyStr = userLibraryKeys.join(",");
+
+            // Match existing user by email, username, name, plexEmail, or plexUsername
+            // Match existing user strictly using matchesPlexUser
+            let existingUser = dbUsers.find(u => {
+                return matchesPlexUser(u, {
+                    id: friend.id || undefined,
+                    serverId: "",
+                    librarySectionIds: [],
+                    user: { 
+                        id: friend.id ? Number(friend.id) : undefined, 
+                        email: fEmail, 
+                        username: fUsername, 
+                        title: fTitle 
+                    },
+                    invitedEmail: fEmail
+                });
+            });
 
             if (existingUser) {
-                // Update existing user details/status if needed
+                const isImmuneRole = existingUser.role === "ADMIN";
+                const userMatchedShares = sharesList.filter(s => matchesPlexUser(existingUser, s));
+
+                // Strict Security Enforcement: If user is suspended, expired, rejected, or pending, they MUST NOT have Plex access
+                if (!isImmuneRole && (existingUser.status === "EXPIRED" || existingUser.status === "SUSPENDED" || existingUser.status === "REJECTED" || existingUser.status === "PENDING")) {
+                    if (userMatchedShares.length > 0 || userLibraryKeys.length > 0) {
+                        console.warn(`[SECURITY-AUDIT] Inactive user "${existingUser.username}" (${existingUser.status}) had ${userMatchedShares.length} active Plex shares (${userLibraryKeys.length} libraries). Revoking immediately...`);
+                        logger.addLog("ERROR", "SECURITY", `🚨 [SECURITY BREACH REMEDIATED] Inactive user "${existingUser.username}" (${existingUser.status}) had ${userMatchedShares.length} active Plex shares. Automatically revoked.`);
+                        await revokePlexAccessForUserInternal(existingUser, `Account access is ${existingUser.status.toLowerCase()} (unauthorized share purged).`);
+                        await notifyAdminUserRoleOrAccessChange({
+                            username: existingUser.username,
+                            email: existingUser.email,
+                            oldStatus: existingUser.status,
+                            newStatus: existingUser.status,
+                            oldRole: existingUser.role,
+                            newRole: existingUser.role,
+                            reason: `Active Plex shares purged: User is in ${existingUser.status} state.`,
+                            revokedLibrariesCount: userLibraryKeys.length
+                        }).catch(() => {});
+                        revokedCount++;
+                        securityLeaksRemediatedCount++;
+                        if (!securityAlertUsers.includes(existingUser.username)) {
+                            securityAlertUsers.push(existingUser.username);
+                        }
+                    }
+                    if (existingUser.plexLibrarySectionIds !== "") {
+                        await prisma.user.update({
+                            where: { id: existingUser.id },
+                            data: { plexLibrarySectionIds: "" }
+                        }).catch(() => {});
+                        existingUser.plexLibrarySectionIds = "";
+                    }
+                    continue;
+                }
+
+                // Update existing user details/status/libraries with live Plex telemetry
                 let needsUpdate = false;
                 const updateData: any = {};
 
-                if (existingUser.role !== "ADMIN" && existingUser.status !== "APPROVED") {
-                    updateData.status = "APPROVED";
+                if (fEmail && existingUser.plexEmail !== fEmail) {
+                    updateData.plexEmail = fEmail;
+                    needsUpdate = true;
+                }
+
+                if (fUsername && existingUser.plexUsername !== fUsername) {
+                    updateData.plexUsername = fUsername;
                     needsUpdate = true;
                 }
 
@@ -8062,6 +16333,19 @@ export async function syncPlexFriendsInternal() {
                         updateData.email = fEmail;
                         needsUpdate = true;
                     }
+                }
+
+                // Auto-fill real name if empty and Plex friend has title/name
+                if (!existingUser.name && friend.title && friend.title !== fUsername && friend.title !== fEmail && friend.title.length >= 3) {
+                    updateData.name = friend.title.trim();
+                    needsUpdate = true;
+                }
+
+                // Update live scanned library access from Plex (accurately syncing empty "" if 0 shares)
+                if ((existingUser.plexLibrarySectionIds || "") !== userLibraryKeyStr) {
+                    updateData.plexLibrarySectionIds = userLibraryKeyStr;
+                    existingUser.plexLibrarySectionIds = userLibraryKeyStr;
+                    needsUpdate = true;
                 }
 
                 if (needsUpdate) {
@@ -8095,10 +16379,14 @@ export async function syncPlexFriendsInternal() {
                 const newUser = await prisma.user.create({
                     data: {
                         username: safeUsername,
+                        name: friend.title && friend.title !== fUsername && friend.title !== fEmail ? friend.title.trim() : null,
                         email: safeEmail,
                         password: hashedPassword,
                         role: "USER",
-                        status: "APPROVED"
+                        status: "APPROVED",
+                        plexEmail: fEmail || null,
+                        plexUsername: fUsername || null,
+                        plexLibrarySectionIds: userLibraryKeyStr
                     }
                 });
 
@@ -8107,20 +16395,51 @@ export async function syncPlexFriendsInternal() {
             }
         }
 
-        // Revoke access for users no longer in Plex friends list (excluding ADMIN accounts)
-        for (const user of dbUsers) {
-            if (user.role === "ADMIN") continue;
-            
-            const isListedInPlex = 
-                (user.email && activePlexEmails.has(user.email.toLowerCase())) ||
-                (user.username && activePlexUsernames.has(user.username.toLowerCase()));
+        // Secondary Pass: Scan actual live Plex library shares for all remaining DB users
+        for (const u of dbUsers) {
+            const isImmuneRole = u.role === "ADMIN";
+            const isInactive = u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED" || u.status === "PENDING";
+            const liveKeys = extractUserLiveLibraryKeys(u);
+            const liveKeysStr = liveKeys.join(",");
 
-            if (!isListedInPlex && user.status === "APPROVED") {
+            if (isInactive && !isImmuneRole) {
+                if (liveKeys.length > 0) {
+                    console.warn(`[SECURITY-AUDIT] Secondary scan: Inactive user "${u.username}" (${u.status}) had ${liveKeys.length} active Plex libraries. Revoking...`);
+                    logger.addLog("ERROR", "SECURITY", `🚨 [SECURITY BREACH REMEDIATED] Inactive user "${u.username}" (${u.status}) had ${liveKeys.length} active Plex libraries. Automatically revoked.`);
+                    await revokePlexAccessForUserInternal(u, `Account access is ${u.status.toLowerCase()} (unauthorized share purged).`);
+                    await notifyAdminUserRoleOrAccessChange({
+                        username: u.username,
+                        email: u.email,
+                        oldStatus: u.status,
+                        newStatus: u.status,
+                        oldRole: u.role,
+                        newRole: u.role,
+                        reason: `Active Plex shares purged during secondary scan: User is in ${u.status} state.`,
+                        revokedLibrariesCount: liveKeys.length
+                    }).catch(() => {});
+                    revokedCount++;
+                    securityLeaksRemediatedCount++;
+                    if (!securityAlertUsers.includes(u.username)) {
+                        securityAlertUsers.push(u.username);
+                    }
+                }
+                if (u.plexLibrarySectionIds !== "") {
+                    await prisma.user.update({
+                        where: { id: u.id },
+                        data: { plexLibrarySectionIds: "" }
+                    }).catch(() => {});
+                    u.plexLibrarySectionIds = "";
+                }
+                continue;
+            }
+
+            if (!isImmuneRole && (u.plexLibrarySectionIds || "") !== liveKeysStr) {
                 await prisma.user.update({
-                    where: { id: user.id },
-                    data: { status: "REJECTED" }
-                });
-                revokedCount++;
+                    where: { id: u.id },
+                    data: { plexLibrarySectionIds: liveKeysStr }
+                }).catch(() => {});
+                u.plexLibrarySectionIds = liveKeysStr;
+                updatedCount++;
             }
         }
 
@@ -8130,18 +16449,115 @@ export async function syncPlexFriendsInternal() {
             create: { id: "global", lastAutoSync: new Date() }
         });
 
-        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}`);
+        const auditSummary = securityLeaksRemediatedCount > 0 
+            ? ` | 🚨 ${securityLeaksRemediatedCount} security leaks revoked (${securityAlertUsers.join(", ")})` 
+            : "";
+
+        logger.addLog("SUCCESS", "PLEX", `[PLEX-SYNC] Completed friends sync. Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}${auditSummary}`, `Friends discovered: ${friendsList.length}`);
+        console.log(`[PLEX-SYNC] Completed. Friends: ${friendsList.length}, Added: ${addedCount}, Updated: ${updatedCount}, Revoked: ${revokedCount}${auditSummary}`);
         return {
             success: true,
             totalFriends: friendsList.length,
             addedCount,
             updatedCount,
-            revokedCount
+            revokedCount,
+            securityLeaksRemediatedCount,
+            securityAlertUsers
         };
 
     } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `[PLEX-SYNC] Error during Plex friends sync: ${e.message}`);
         console.error("[PLEX-SYNC] Error during Plex friends sync:", e.message || e);
         return { success: false, error: e.message || "Failed to sync Plex friends" };
+    }
+}
+
+export async function forceRevokePlexAccessAction(userId: string) {
+    await verifyAdmin();
+    try {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return { success: false, error: "User not found." };
+        const res = await revokePlexAccessForUserInternal(user, "Administrator forced immediate revocation of Plex access.", { bypassApproval: true });
+        await notifyAdminUserRoleOrAccessChange({
+            username: user.username,
+            email: user.email,
+            oldStatus: user.status,
+            newStatus: user.status,
+            oldRole: user.role,
+            newRole: user.role,
+            reason: "Administrator forced immediate revocation of Plex library access."
+        }).catch(() => {});
+        await prisma.user.update({
+            where: { id: userId },
+            data: { plexLibrarySectionIds: "" }
+        }).catch(() => {});
+        revalidatePath("/settings/access");
+        revalidatePath("/settings");
+        return {
+            success: res.success,
+            message: res.success ? `Successfully revoked all Plex library access for ${user.username}.` : res.error
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to revoke Plex access." };
+    }
+}
+
+export async function autoLinkAdminPlexTokenAction(authToken: string) {
+    await verifyAdmin();
+    if (!authToken) return { success: false, error: "No Plex authentication token provided." };
+
+    try {
+        const res = await fetch("https://plex.tv/api/v2/user", {
+            headers: {
+                "Accept": "application/json",
+                "X-Plex-Token": authToken,
+                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+            }
+        });
+
+        if (!res.ok) {
+            return { success: false, error: `Failed to validate token with Plex.tv (HTTP ${res.status}).` };
+        }
+
+        const profile = await res.json();
+        const userObj = profile.user || profile;
+        const plexUsername = userObj.username || userObj.title || "";
+        const plexEmail = userObj.email || "";
+
+        const encryptedToken = encryptData(authToken);
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { mainPlexToken: encryptedToken },
+            create: { id: "global", mainPlexToken: encryptedToken }
+        });
+
+        const adminUser = await verifyAdmin();
+        if (adminUser?.id) {
+            await prisma.user.update({
+                where: { id: adminUser.id },
+                data: {
+                    plexEmail: plexEmail || undefined,
+                    plexUsername: plexUsername || undefined
+                }
+            });
+        }
+
+        logger.addLog("SUCCESS", "PLEX", `[AUTH] Admin Plex Token successfully linked and saved for "${plexUsername}" (${plexEmail})`);
+
+        // Trigger background sync
+        syncPlexFriendsInternal().catch(e => console.warn("[PLEX-SYNC] Background sync warning:", e));
+
+        revalidatePath("/settings");
+        revalidatePath("/settings/access");
+        return { 
+            success: true, 
+            message: `Admin Plex Token successfully linked to account "${plexUsername || plexEmail}"!`,
+            username: plexUsername,
+            email: plexEmail
+        };
+    } catch (e: any) {
+        logger.addLog("ERROR", "PLEX", `[AUTH] Error linking Admin Plex Token: ${e.message}`);
+        return { success: false, error: e.message || "Failed to link Plex Token" };
     }
 }
 
@@ -8265,7 +16681,9 @@ export async function refreshRequestCover(requestId: string) {
         // Also update any matching book in library
         const normReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
         const reqMedia = req.mediaType || "ebook";
-        const matchingBooks = await prisma.book.findMany();
+        const matchingBooks = await prisma.book.findMany({
+            where: req.libraryId ? { libraryId: req.libraryId } : undefined
+        });
         for (const b of matchingBooks) {
             const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
             const bMedia = b.mediaType || "ebook";
@@ -8289,17 +16707,25 @@ export async function importCompletedDownload(requestId: string) {
     if (!currentReq) return { success: false, error: "Request not found" };
 
     const reqMedia = currentReq.mediaType || "ebook";
-    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl);
+    const targetLib = await getTargetLibraryForUser(currentReq.requestedBy, reqMedia, currentReq.coverUrl, currentReq.libraryId);
     if (!targetLib) return { success: false, error: "No target library shelf configured for user" };
 
     const settings = await prisma.settings.findFirst();
     const configuredPath = settings?.downloadsPath || "/downloads";
+    const targetCategory = (targetLib?.downloadCategory || "").trim();
     const searchPaths = [
-        configuredPath,
-        path.join(configuredPath, "completed"),
-        path.join(configuredPath, "complete"),
-        path.join(configuredPath, "audiobooks"),
+        ...(targetCategory ? [
+            path.join(configuredPath, targetCategory),
+            path.join(configuredPath, "complete", targetCategory),
+            path.join(configuredPath, "completed", targetCategory)
+        ] : []),
         path.join(configuredPath, "books"),
+        path.join(configuredPath, "audiobooks"),
+        path.join(configuredPath, "complete", "books"),
+        path.join(configuredPath, "complete", "audiobooks"),
+        path.join(configuredPath, "complete"),
+        path.join(configuredPath, "completed"),
+        configuredPath,
         process.env.DOWNLOADS_DIR || "/downloads",
         "/downloads",
         "/downloads/completed",
@@ -8313,7 +16739,7 @@ export async function importCompletedDownload(requestId: string) {
         "/mnt/user/Books",
         "/app/downloads",
         "./downloads"
-    ];
+    ].filter(Boolean);
 
     let foundFilePath: string | null = null;
     let allFound: string[] = [];
@@ -8376,6 +16802,38 @@ export async function importCompletedDownload(requestId: string) {
         finalDestPath = destPath;
     }
 
+    if (reqMedia === "ebook") {
+        const destExt = path.extname(finalDestPath).toLowerCase();
+        if (destExt !== ".epub") {
+            const convRes = await convertEbookToEpub(finalDestPath);
+            if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
+                removePathSafely(finalDestPath);
+                return { success: false, error: `Failed to convert imported ${destExt} file to EPUB: ${convRes.error || "Conversion error"}` };
+            }
+            finalDestPath = convRes.epubPath;
+        }
+
+        const valRes = await validateAndFixEpubForKindle(finalDestPath);
+        if (!valRes.valid) {
+            removePathSafely(finalDestPath);
+            return { success: false, error: `Imported EPUB failed Kindle preflight validation: ${valRes.error}` };
+        }
+
+        // Clean redundant non-EPUB files in destination directory
+        try {
+            const destEntries = fs.readdirSync(destFolder);
+            for (const de of destEntries) {
+                const deExt = path.extname(de).toLowerCase();
+                if (deExt === ".azw3" || deExt === ".mobi" || deExt === ".azw" || deExt === ".azw4") {
+                    try {
+                        fs.unlinkSync(path.join(destFolder, de));
+                        console.log(`[IMPORT-DOWNLOAD] 🧹 Cleaned redundant ${deExt} file from library folder: ${de}`);
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {}
+    }
+
     // Clean up original downloaded file/folder and client entries
     let clientCleanedUsenet = false;
     let clientCleanedTorrent = false;
@@ -8397,28 +16855,44 @@ export async function importCompletedDownload(requestId: string) {
     // Auto-scan target library shelf so newly imported media is immediately available with AI resolution
     await scanLibraryInternal(targetLib.id, { enableAi: true });
 
-                    // Inherit series metadata from the original BookRequest
-                    try {
-                        if (currentReq.series) {
-                            const ingestedBooks = await prisma.book.findMany({
-                                where: {
-                                    libraryId: targetLib.id,
-                                    filePath: { startsWith: path.dirname(finalDestPath) }
-                                }
-                            });
-                            for (const ib of ingestedBooks) {
-                                await prisma.book.update({
-                                    where: { id: ib.id },
-                                    data: {
-                                        series: currentReq.series,
-                                        volumeNumber: currentReq.volumeNumber || ib.volumeNumber
-                                    }
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        console.warn("Failed to inherit series metadata for imported download:", e);
-                    }
+    // Inherit series & author metadata from the authoritative BookRequest / MediaRequest
+    try {
+        const canonicalAuthor = (currentReq.author && currentReq.author !== "Unknown Author") ? currentReq.author : undefined;
+        const { authorId, seriesId } = await resolveOrLinkAuthorAndSeries(canonicalAuthor, currentReq.series, currentReq.volumeNumber);
+
+        const ingestedBooks = await prisma.book.findMany({
+            where: {
+                libraryId: targetLib.id,
+                filePath: { startsWith: path.dirname(finalDestPath) }
+            }
+        });
+        for (const ib of ingestedBooks) {
+            await prisma.book.update({
+                where: { id: ib.id },
+                data: {
+                    title: currentReq.title || ib.title,
+                    author: canonicalAuthor || ib.author,
+                    series: currentReq.series || ib.series,
+                    volumeNumber: currentReq.volumeNumber || ib.volumeNumber,
+                    authorId: authorId || ib.authorId,
+                    seriesId: seriesId || ib.seriesId,
+                    coverUrl: currentReq.coverUrl || ib.coverUrl
+                }
+            });
+        }
+
+        // Sync corresponding Seerr MediaRequest to AVAILABLE
+        await prisma.mediaRequest.updateMany({
+            where: {
+                title: currentReq.title,
+                mediaType: { in: ["book", "audiobook"] },
+                status: { notIn: ["AVAILABLE", "DECLINED"] }
+            },
+            data: { status: "AVAILABLE" }
+        }).catch(() => {});
+    } catch (e) {
+        console.warn("Failed to inherit series metadata for imported download:", e);
+    }
 
     await prisma.bookRequest.update({
         where: { id: requestId },
@@ -9004,44 +17478,364 @@ export async function testFolderPermissions(folderPath: string, targetLibraryPat
     }
 }
 
-export async function getSystemLogsAction() {
-    return logger.getLogs();
+export async function getSystemLogsAction(limit = 5000, sinceId?: string) {
+    try {
+        return logger.getLogs(limit, sinceId);
+    } catch (e: any) {
+        console.error("Error retrieving system logs:", e);
+        return [];
+    }
 }
 
 export async function clearSystemLogsAction() {
-    await verifyAdmin();
-    logger.clearLogs();
-    return { success: true };
+    try {
+        await verifyAdmin();
+        logger.clearLogs();
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to clear logs" };
+    }
 }
 
 export async function dumpEntireDatabaseAction() {
-    await verifyAdmin();
-    const libraries = await prisma.library.findMany();
-    const books = await prisma.book.findMany();
-    const requests = await prisma.bookRequest.findMany();
-    const users = await prisma.user.findMany({ select: { id: true, username: true, role: true, status: true } });
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
 
-    logger.addLog("SYSTEM", "DATABASE", `=================== DUMPING ENTIRE SQLITE DATABASE ===================`);
-    logger.addLog("SYSTEM", "DATABASE", `📚 Libraries Count: ${libraries.length}`);
-    libraries.forEach(l => logger.addLog("INFO", "DATABASE", `  - [Lib ID: ${l.id}] Name: "${l.name}" | Path: "${l.path}" | MediaType: ${l.mediaType}`));
-    
-    logger.addLog("SYSTEM", "DATABASE", `📖 Books Count: ${books.length}`);
-    books.forEach(b => logger.addLog("INFO", "DATABASE", `  - [Book ID: ${b.id}] Title: "${b.title}" | Author: "${b.author}" | Path: "${b.filePath}" | Size: ${(((b.fileSize || 0)) / 1024 / 1024).toFixed(2)} MB`));
-    
-    logger.addLog("SYSTEM", "DATABASE", `👥 Users Count: ${users.length}`);
-    users.forEach(u => logger.addLog("INFO", "DATABASE", `  - [User ID: ${u.id}] Username: "${u.username}" | Role: ${u.role} | Status: ${u.status}`));
+        const dbUrl = process.env.DATABASE_URL || "";
+        const rawPath = dbUrl.replace("file:", "").trim();
+        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+        const targetExists = fs.existsSync(targetPath);
+        const targetSize = targetExists ? fs.statSync(targetPath).size : 0;
 
-    logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
-    return { librariesCount: libraries.length, booksCount: books.length, usersCount: users.length };
+        const [
+            settings,
+            tautulliList,
+            glancesList,
+            mediaAppsList,
+            servicesList,
+            libraries,
+            users,
+            requests,
+            failedReleases,
+            ticketCount,
+            betaCardCount
+        ] = await Promise.all([
+            prisma.settings.findFirst().catch(() => null),
+            prisma.tautulliInstance.findMany().catch(() => []),
+            prisma.glancesInstance.findMany().catch(() => []),
+            prisma.mediaApp.findMany().catch(() => []),
+            prisma.service.findMany().catch(() => []),
+            prisma.library.findMany({
+                include: {
+                    _count: { select: { books: true } }
+                }
+            }).catch(() => []),
+            prisma.user.findMany({
+                select: {
+                    id: true,
+                    username: true,
+                    email: true,
+                    role: true,
+                    status: true,
+                    kindleEmail: true,
+                    referralCode: true,
+                    referredByUserId: true,
+                    trialEndsAt: true,
+                    convertedAt: true,
+                    createdAt: true
+                },
+                orderBy: { createdAt: "desc" }
+            }).catch(() => []),
+            prisma.bookRequest.findMany({
+                orderBy: { createdAt: "desc" },
+                take: 50
+            }).catch(() => []),
+            prisma.failedRelease.findMany({
+                orderBy: { createdAt: "desc" },
+                take: 20
+            }).catch(() => []),
+            prisma.supportTicket.count().catch(() => 0),
+            prisma.betaCard.count().catch(() => 0)
+        ]);
+
+        const totalBooks = libraries.reduce((acc, l) => acc + (l._count?.books || 0), 0);
+
+        logger.addLog("SYSTEM", "DATABASE", `=================== DUMPING ENTIRE SQLITE DATABASE ===================`);
+        logger.addLog("INFO", "DATABASE", `📁 Database File: ${targetPath} | Size: ${(targetSize / 1024 / 1024).toFixed(2)} MB | Exists: ${targetExists}`);
+        
+        // Settings Summary
+        if (settings) {
+            logger.addLog("INFO", "DATABASE", `⚙️ Settings: SMTP Host="${settings.smtpHost || 'None'}" | Port=${settings.smtpPort || 'None'} | From="${settings.smtpFrom || 'None'}" | Downloads="${settings.downloadsPath || '/downloads'}" | AI Provider="${settings.aiProvider || 'default'}" (Model: ${settings.aiModel || 'default'}) | TrialDays=${settings.defaultTrialDays} | YearlyPrice=$${settings.yearlyPrice} | Renewal=${settings.renewalMonth}/${settings.renewalDay} | Billing=${settings.billingType || 'YEARLY_PRORATED'}`);
+        } else {
+            logger.addLog("WARN", "DATABASE", `⚙️ Settings: No global settings record found.`);
+        }
+
+        // Instances & Apps
+        logger.addLog("INFO", "DATABASE", `🔌 Connected Services: Tautulli (${tautulliList.length}) | Glances (${glancesList.length}) | MediaApps (${mediaAppsList.length}) | Services (${servicesList.length}) | Tickets (${ticketCount}) | BetaCards (${betaCardCount})`);
+        tautulliList.forEach(t => logger.addLog("INFO", "DATABASE", `  - [Tautulli] Name: "${t.name}" | URL: "${t.url}"`));
+        glancesList.forEach(g => logger.addLog("INFO", "DATABASE", `  - [Glances] Name: "${g.name}" | URL: "${g.url}"`));
+        mediaAppsList.forEach(m => logger.addLog("INFO", "DATABASE", `  - [MediaApp] Type: ${m.type} | Name: "${m.name}" | URL: "${m.url}"`));
+
+        // Libraries & Books Breakdown
+        logger.addLog("INFO", "DATABASE", `📚 Libraries Count: ${libraries.length} (Total Books: ${totalBooks})`);
+        libraries.forEach(l => {
+            logger.addLog("INFO", "DATABASE", `  - [Library: ${l.name}] (ID: ${l.id}) | MediaType: ${l.mediaType} | Books: ${l._count?.books || 0} | Path: "${l.path}" | Allowed: "${l.allowedUsers || '*'}"`);
+        });
+
+        // Users
+        logger.addLog("INFO", "DATABASE", `👥 Users Count: ${users.length}`);
+        users.forEach(u => {
+            const trialInfo = u.status === "TRIAL" ? ` | TrialEnds: ${u.trialEndsAt?.toISOString() || 'N/A'}` : "";
+            const refInfo = u.referredByUserId ? ` | RefBy: ${u.referredByUserId}` : "";
+            logger.addLog("INFO", "DATABASE", `  - [User: ${u.username}] Email: "${u.email}" | Role: ${u.role} | Status: ${u.status}${trialInfo}${refInfo} | Kindle: "${u.kindleEmail || 'None'}"`);
+        });
+
+        // Requests
+        logger.addLog("INFO", "DATABASE", `📥 Book Requests Count (Recent 50): ${requests.length}`);
+        requests.forEach(r => {
+            logger.addLog("INFO", "DATABASE", `  - [Request: ${r.title}] Author: "${r.author || ''}" | MediaType: ${r.mediaType} | RequestedBy: "${r.requestedBy}" | Status: ${r.status}`);
+        });
+
+        if (failedReleases.length > 0) {
+            logger.addLog("INFO", "DATABASE", `⚠️ Failed Releases Count: ${failedReleases.length}`);
+            failedReleases.forEach(f => logger.addLog("INFO", "DATABASE", `  - [Failed Release] "${f.releaseTitle}" | Protocol: ${f.protocol} | Reason: ${f.reason || 'Unknown'}`));
+        }
+
+        // Available Backups
+        const backupDir = path.join(path.dirname(targetPath), "backups");
+        let availableBackups: { name: string; size: number; mtime: string }[] = [];
+        if (fs.existsSync(backupDir)) {
+            try {
+                availableBackups = fs.readdirSync(backupDir)
+                    .filter(f => f.startsWith("dev_backup_") && f.endsWith(".db"))
+                    .map(f => {
+                        const full = path.join(backupDir, f);
+                        const stat = fs.statSync(full);
+                        return {
+                            name: f,
+                            size: stat.size,
+                            mtime: stat.mtime.toISOString()
+                        };
+                    })
+                    .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime());
+            } catch (e) {}
+        }
+
+        if (availableBackups.length > 0) {
+            logger.addLog("INFO", "DATABASE", `💾 Found ${availableBackups.length} Automatic Database Backups in ${backupDir}:`);
+            availableBackups.forEach(b => {
+                logger.addLog("INFO", "DATABASE", `  - [Backup] ${b.name} (${(b.size / 1024 / 1024).toFixed(2)} MB, saved: ${b.mtime})`);
+            });
+        }
+
+        logger.addLog("SYSTEM", "DATABASE", `=====================================================================`);
+        
+        return {
+            success: true,
+            summary: {
+                targetPath,
+                targetSize,
+                librariesCount: libraries.length,
+                totalBooks,
+                usersCount: users.length,
+                requestsCount: requests.length,
+                servicesCount: tautulliList.length + glancesList.length + mediaAppsList.length,
+                availableBackupsCount: availableBackups.length,
+                latestBackup: availableBackups[0]?.name || null
+            }
+        };
+    } catch (e: any) {
+        console.error("dumpEntireDatabaseAction error:", e);
+        return { success: false, error: e.message || "Failed to dump database" };
+    }
 }
 
+export async function restoreDatabaseBackupAction(backupFileName: string) {
+    try {
+        await verifyAdmin();
+        const dbUrl = process.env.DATABASE_URL || "";
+        const rawPath = dbUrl.replace("file:", "").trim();
+        const targetPath = path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+        const backupDir = path.join(path.dirname(targetPath), "backups");
+        const safeName = path.basename(backupFileName);
+        const backupFile = path.join(backupDir, safeName);
 
+        if (!fs.existsSync(backupFile)) {
+            return { success: false, error: "Backup file not found." };
+        }
 
+        // Create safety snapshot before restoring
+        if (fs.existsSync(targetPath)) {
+            const safetyFile = path.join(backupDir, `dev_backup_pre_restore_${Date.now()}.db`);
+            fs.copyFileSync(targetPath, safetyFile);
+        }
 
+        fs.copyFileSync(backupFile, targetPath);
+        logger.addLog("SYSTEM", "DATABASE", `♻️ Database successfully restored from backup: ${safeName}`);
+        return { success: true, message: `Database restored from ${safeName}. Please reload the dashboard.` };
+    } catch (e: any) {
+        console.error("restoreDatabaseBackupAction error:", e);
+        return { success: false, error: e.message || "Failed to restore backup." };
+    }
+}
 
+export async function runPlexDiagnosticsAction() {
+    try {
+        await verifyAdmin();
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!settings?.mainPlexToken) {
+            logger.addLog("ERROR", "PLEX", "❌ Plex Diagnostics: No Admin Plex Token configured in Settings!");
+            return { success: false, error: "No Plex Admin Token configured in Settings." };
+        }
 
+        let adminToken = "";
+        try {
+            adminToken = decryptData(settings.mainPlexToken);
+        } catch (e: any) {
+            logger.addLog("ERROR", "PLEX", `❌ Plex Diagnostics: Failed to decrypt Admin Plex Token: ${e.message}`);
+            return { success: false, error: "Failed to decrypt token." };
+        }
 
+        if (!adminToken) {
+            logger.addLog("ERROR", "PLEX", "❌ Plex Diagnostics: Admin Plex Token is empty after decryption.");
+            return { success: false, error: "Decrypted Plex Token is empty." };
+        }
 
+        const masked = maskToken(adminToken);
+        logger.addLog("SYSTEM", "PLEX", `=================== STARTING PLEX FULL DIAGNOSTIC AUDIT ===================`);
+        logger.addLog("INFO", "PLEX", `🔑 Using Decrypted Plex Token: ${masked}`);
+
+        // 1. Verify User on plex.tv
+        let plexUser: any = null;
+        try {
+            const userRes = await fetch("https://plex.tv/api/v2/user", {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (userRes.ok) {
+                plexUser = await userRes.json();
+                logger.addLog("SUCCESS", "PLEX", `👤 Plex Account Verified: "${plexUser.username || plexUser.title}" (Email: ${plexUser.email || 'None'}, ID: ${plexUser.id || 'N/A'})`, `Subscription: ${plexUser.subscriptionDescription || plexUser.subscription?.status || 'Active'}`);
+            } else {
+                const errText = await userRes.text().catch(() => "");
+                logger.addLog("ERROR", "PLEX", `❌ Failed to authenticate token with plex.tv/api/v2/user (HTTP ${userRes.status}): ${errText}`);
+            }
+        } catch (uErr: any) {
+            logger.addLog("ERROR", "PLEX", `❌ Network exception querying plex.tv/api/v2/user: ${uErr.message}`);
+        }
+
+        // 2. Discover Servers via /api/v2/resources
+        let resourcesList: any[] = [];
+        try {
+            const resRes = await fetch("https://plex.tv/api/v2/resources?includeHttps=1", {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (resRes.ok) {
+                const allRes = await resRes.json();
+                resourcesList = (Array.isArray(allRes) ? allRes : []).filter((r: any) => 
+                    r.provides && typeof r.provides === "string" && r.provides.includes("server")
+                );
+                logger.addLog("INFO", "PLEX", `🖥️ Discovered ${resourcesList.length} Plex Server Resources on account "${plexUser?.username || 'admin'}":`);
+                resourcesList.forEach(s => {
+                    const conns = (s.connections || []).map((c: any) => `${c.uri} (${c.local ? 'Local' : 'Remote'}${c.relay ? ', Relay' : ''})`).join(" | ");
+                    logger.addLog(s.owned ? "SUCCESS" : "WARN", "PLEX", `  - [Server: ${s.name}] Identifier: ${s.clientIdentifier} | Owned: ${s.owned} | Platform: ${s.platform || 'Unknown'}`, `Connections: ${conns || 'None'}`);
+                });
+            } else {
+                logger.addLog("WARN", "PLEX", `⚠️ Failed to fetch /api/v2/resources (HTTP ${resRes.status})`);
+            }
+        } catch (rErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Network error querying /api/v2/resources: ${rErr.message}`);
+        }
+
+        // 3. Inspect Canonical servers XML (https://plex.tv/api/servers)
+        try {
+            const srvXmlRes = await fetch(`https://plex.tv/api/servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+                headers: {
+                    "Accept": "application/xml, text/xml, */*",
+                    "X-Plex-Token": adminToken,
+                    "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                },
+                cache: "no-store"
+            });
+            if (srvXmlRes.ok) {
+                const xml = await srvXmlRes.text();
+                logger.addLog("INFO", "PLEX", `☁️ Cloud Servers XML Endpoint (https://plex.tv/api/servers) HTTP 200 OK:`, `Payload: ${xml.slice(0, 400)}...`);
+            } else {
+                const errText = await srvXmlRes.text().catch(() => "");
+                logger.addLog("WARN", "PLEX", `⚠️ Cloud Servers XML returned HTTP ${srvXmlRes.status}: ${errText}`);
+            }
+        } catch (xErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Cloud Servers XML query error: ${xErr.message}`);
+        }
+
+        // 4. Test Library Sections on each Server & Direct PMS Reachability
+        try {
+            const sectionsData = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            logger.addLog("INFO", "PLEX", `📚 Evaluated Library Sections across all servers (${sectionsData.length} servers):`);
+            sectionsData.forEach(srv => {
+                const secStr = srv.sections.map(s => `"${s.title}" [ID: ${s.id}, Key: ${s.key}, Type: ${s.type}]`).join(", ");
+                logger.addLog(srv.sections.length > 0 ? "SUCCESS" : "WARN", "PLEX", `  - [${srv.serverName}] (ID: ${srv.serverId}): ${srv.sections.length} Libraries found`, `Sections: ${secStr || 'No sections discovered'}`);
+            });
+        } catch (secErr: any) {
+            logger.addLog("ERROR", "PLEX", `❌ Error evaluating server library sections: ${secErr.message}`);
+        }
+
+        // 4b. Canonical Cloud Server & Section Map (authoritative for Plex sharing)
+        try {
+            const cloudMap = await getPlexCloudServersMap(adminToken, true);
+            logger.addLog("INFO", "PLEX", `🗺️ Canonical Cloud Server & Section Map (${cloudMap.size} servers discovered):`);
+            cloudMap.forEach(s => {
+                const sStr = (s.sections || []).map(sec => `"${sec.title}" (CloudID: ${sec.id}, Key: ${sec.key})`).join(", ");
+                logger.addLog("INFO", "PLEX", `  - [${s.serverName}] ServerId: "${s.serverId}": ${s.sections?.length || 0} Cloud Sections`, `Sections: ${sStr || 'None'}`);
+            });
+        } catch (cmErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Error building canonical cloud server map: ${cmErr.message}`);
+        }
+
+        // 5. Inspect Plex Friends
+        try {
+            const friends = await getPlexServerFriends(adminToken);
+            logger.addLog("INFO", "PLEX", `👥 Plex Friends: Found ${friends.length} friends on Plex account:`);
+            friends.slice(0, 25).forEach(f => {
+                logger.addLog("INFO", "PLEX", `  - Friend: "${f.username}" | Email: "${f.email}" | ID: ${f.id || 'N/A'}`);
+            });
+            if (friends.length > 25) {
+                logger.addLog("INFO", "PLEX", `  ... and ${friends.length - 25} more friends.`);
+            }
+        } catch (fErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Error fetching Plex friends: ${fErr.message}`);
+        }
+
+        // 6. Inspect Active Shares (Shared Servers)
+        try {
+            const shares = await getPlexSharedServersList(adminToken);
+            logger.addLog("INFO", "PLEX", `🤝 Plex Active Shares: Found ${shares.length} shared server entries:`);
+            shares.forEach(sh => {
+                const uName = sh.user?.username || sh.invitedEmail || "unknown";
+                const uEmail = sh.user?.email || sh.invitedEmail || "none";
+                const secIds = (sh.librarySectionIds || []).join(", ");
+                logger.addLog("INFO", "PLEX", `  - Share ID: ${sh.id} | User: "${uName}" (${uEmail}) | ServerId: "${sh.serverId || 'all'}" | Sections: [${secIds || 'none'}] | AllLibraries: ${sh.allLibraries ? 'Yes' : 'No'}`);
+            });
+        } catch (shErr: any) {
+            logger.addLog("WARN", "PLEX", `⚠️ Error fetching Plex shares: ${shErr.message}`);
+        }
+
+        logger.addLog("SYSTEM", "PLEX", `=================== PLEX DIAGNOSTIC AUDIT COMPLETED ===================`);
+        return { success: true, message: "Plex Diagnostics completed. Check System Logs (Plex filter) for the full audit report." };
+    } catch (e: any) {
+        console.error("runPlexDiagnosticsAction error:", e);
+        return { success: false, error: e.message || "Failed to run Plex diagnostics" };
+    }
+}
 
 export async function fetchAvailableAiModels(provider: string, apiKey: string) {
     await verifyAdmin();
@@ -9197,19 +17991,24 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
 }
 
 export async function getUserPlexHubData() {
-    let user: any = null;
     try {
-        user = await verifyUser();
-    } catch (e) {
-        return { success: false, error: "Unauthorized" };
-    }
-    if (!user) {
-        return { success: false, error: "Unauthorized" };
-    }
+        await ensureSchemaColumns();
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch (e) {
+            return { success: false, error: "Unauthorized" };
+        }
+        if (!user) {
+            return { success: false, error: "Unauthorized" };
+        }
 
-    const isAdmin = user.role === "ADMIN";
-    const settings = await prisma.settings.findFirst();
-    const tautulli = await prisma.tautulliInstance.findMany();
+        const isAdmin = user.role === "ADMIN";
+        const [settings, tautulli, dbPlexServers] = await Promise.all([
+            prisma.settings.findFirst().catch(() => null),
+            prisma.tautulliInstance.findMany().catch(() => []),
+            prisma.plexServer.findMany().catch(() => [])
+        ]);
     
     const safeUsername = String(user?.username || "");
     const safeEmail = String(user?.email || "");
@@ -9251,6 +18050,23 @@ export async function getUserPlexHubData() {
         }
     }
 
+    // Expand user aliases with linked sub-accounts (e.g. kids, living room) if caller is primary account
+    if (user?.id && !user?.parentUserId) {
+        try {
+            const subAccounts = await prisma.user.findMany({
+                where: { parentUserId: user.id },
+                select: { username: true, email: true, plexUsername: true, plexEmail: true, subAccountLabel: true }
+            });
+            for (const sub of subAccounts) {
+                if (sub.username) userAliases.add(sub.username.toLowerCase().trim());
+                if (sub.email) userAliases.add(sub.email.toLowerCase().trim());
+                if (sub.plexUsername) userAliases.add(sub.plexUsername.toLowerCase().trim());
+                if (sub.plexEmail) userAliases.add(sub.plexEmail.toLowerCase().trim());
+                if (sub.subAccountLabel) userAliases.add(sub.subAccountLabel.toLowerCase().trim());
+            }
+        } catch (e) {}
+    }
+
     // Portalarr Reading/Listening statistics
     const [userRequests, userKindleLogs, accessibleLibraries] = await Promise.all([
         prisma.bookRequest.findMany({
@@ -9283,6 +18099,8 @@ export async function getUserPlexHubData() {
     let watchHistory: any[] = [];
     let watchStats = {
         totalWatchTimeHours: 0,
+        totalWatchTimeDays: 0,
+        remainingWatchTimeHours: 0,
         moviesWatched: 0,
         episodesWatched: 0,
         musicTracksPlayed: 0
@@ -9295,7 +18113,23 @@ export async function getUserPlexHubData() {
         directPms: boolean;
         tautulli: boolean;
         online: boolean;
+        monitored?: boolean;
     }>();
+
+    // Populate serverMap with explicitly configured Plex servers first (strictly monitored servers only)
+    for (const ps of dbPlexServers) {
+        if (ps.monitored === false) continue;
+        const normKey = ps.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        serverMap.set(normKey, {
+            id: ps.id,
+            name: ps.name,
+            type: "Plex Media Server",
+            directPms: true,
+            tautulli: false,
+            online: false,
+            monitored: true
+        });
+    }
 
     // --- 1. DIRECT PLEX MEDIA SERVER MONITORING (Via Admin Stored Plex Token) ---
     if (adminToken) {
@@ -9305,14 +18139,30 @@ export async function getUserPlexHubData() {
             for (const srv of directPlexResults) {
                 const srvId = `plex::${srv.serverId}::${srv.serverUrl}`;
                 const normKey = srv.serverName.toLowerCase().replace(/[^a-z0-9]/g, "");
-                serverMap.set(normKey, {
-                    id: srvId,
-                    name: srv.serverName,
-                    type: "Plex Media Server",
-                    directPms: true,
-                    tautulli: false,
-                    online: true
+
+                // Skip if Plex server is configured as unmonitored (monitored: false) in settings
+                const matchedDb = dbPlexServers.find(ps => {
+                    const psNorm = ps.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return psNorm === normKey || (psNorm.length > 2 && normKey.includes(psNorm)) || (normKey.length > 2 && psNorm.includes(normKey));
                 });
+                if (matchedDb && matchedDb.monitored === false) {
+                    continue;
+                }
+
+                const existing = serverMap.get(normKey);
+                if (existing) {
+                    existing.online = true;
+                } else {
+                    serverMap.set(normKey, {
+                        id: srvId,
+                        name: srv.serverName,
+                        type: "Plex Media Server",
+                        directPms: true,
+                        tautulli: false,
+                        online: true,
+                        monitored: true
+                    });
+                }
 
                 for (const s of srv.sessions) {
                     const sessionUser = (s.User?.title || s.User?.username || s.User?.name || s.username || s.user || "").toLowerCase().trim();
@@ -9393,28 +18243,28 @@ export async function getUserPlexHubData() {
 
     const rawWatchHistory: any[] = [];
 
-    // --- 2. TAUTULLI INSTANCES MONITORING (Query all Tautulli servers concurrently) ---
-    await Promise.allSettled(tautulli.map(async (t) => {
+    // --- 2. TAUTULLI INSTANCES MONITORING (Query only monitored Tautulli servers concurrently) ---
+    const monitoredTautulli = tautulli.filter(t => t.monitored !== false);
+    await Promise.allSettled(monitoredTautulli.map(async (t) => {
         const normTName = t.name.toLowerCase().replace(/^tautulli\s*[-_:]*\s*/i, "").replace(/[^a-z0-9]/g, "");
         const existingKey = normTName ? Array.from(serverMap.keys()).find(k => k === normTName || (k.length > 2 && normTName.includes(k)) || (normTName.length > 2 && k.includes(normTName))) : null;
         
-        if (existingKey && serverMap.has(existingKey)) {
-            const existing = serverMap.get(existingKey)!;
-            existing.tautulli = true;
-            existing.type = "Direct PMS + Tautulli";
-        } else {
-            serverMap.set(normTName || t.id, {
-                id: t.id,
-                name: t.name,
-                type: "Tautulli Monitor",
-                directPms: false,
-                tautulli: true,
-                online: true
-            });
-        }
         const cleanBase = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
         const apiKey = decryptData(t.apiKey);
-        if (!apiKey) return;
+        if (!apiKey) {
+            if (!existingKey || !serverMap.has(existingKey)) {
+                serverMap.set(normTName || t.id, {
+                    id: t.id,
+                    name: t.name,
+                    type: "Tautulli Monitor",
+                    directPms: false,
+                    tautulli: true,
+                    online: false,
+                    monitored: t.monitored !== false
+                });
+            }
+            return;
+        }
 
         // Find matching user in this Tautulli instance to get exact user_id
         let tautulliUserId: string | number | null = null;
@@ -9424,12 +18274,11 @@ export async function getUserPlexHubData() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3500);
             const usersUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_users`;
-            const usersRes = await fetch(usersUrl, { signal: controller.signal, next: { revalidate: 120 } });
+            const usersResult = await fetchTautulliApiJson(usersUrl, controller.signal, { revalidate: 120 });
             clearTimeout(timeoutId);
 
-            if (usersRes.ok) {
-                const usersJson = await usersRes.json();
-                const tUsers = usersJson.response?.data || [];
+            if (usersResult.ok && Array.isArray(usersResult.data)) {
+                const tUsers = usersResult.data;
                 const match = tUsers.find((u: any) => {
                     const uName = (u.username || "").toLowerCase().trim();
                     const uEmail = (u.email || "").toLowerCase().trim();
@@ -9449,9 +18298,11 @@ export async function getUserPlexHubData() {
                     tautulliMatchedUser = match;
                     tautulliUserId = match.user_id;
                 }
+            } else if (!usersResult.ok && usersResult.error) {
+                console.warn(`[TAUTULLI] Could not fetch users for Tautulli "${t.name}": ${usersResult.error}`);
             }
-        } catch (e) {
-            console.warn(`[PLEX-HUB] Failed to fetch users for Tautulli ${t.name}:`, e);
+        } catch (e: any) {
+            console.warn(`[TAUTULLI] Failed to fetch users for Tautulli "${t.name}":`, e.message || e);
         }
         
         // 1. Active Streams from Tautulli
@@ -9459,12 +18310,31 @@ export async function getUserPlexHubData() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3500);
             const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
-            const res = await fetch(activityUrl, { signal: controller.signal, cache: "no-store" });
+            const actResult = await fetchTautulliApiJson(activityUrl, controller.signal);
             clearTimeout(timeoutId);
 
-            if (res.ok) {
-                const json = await res.json();
-                const sessions = json.response?.data?.sessions || [];
+            if (actResult.ok && actResult.data) {
+                // Verified online Tautulli instance
+                if (existingKey && serverMap.has(existingKey)) {
+                    const existing = serverMap.get(existingKey)!;
+                    existing.tautulli = true;
+                    existing.type = existing.directPms && existing.online ? "Direct PMS + Tautulli" : (existing.directPms ? "Direct PMS (Offline) + Tautulli" : "Tautulli Monitor");
+                    if (!existing.directPms) {
+                        existing.online = true;
+                    }
+                } else {
+                    serverMap.set(normTName || t.id, {
+                        id: t.id,
+                        name: t.name,
+                        type: "Tautulli Monitor",
+                        directPms: false,
+                        tautulli: true,
+                        online: true,
+                        monitored: t.monitored !== false
+                    });
+                }
+
+                const sessions = actResult.data.sessions || [];
                 
                 for (const s of sessions) {
                     const sessionKey = String(s.session_key || "");
@@ -9537,9 +18407,22 @@ export async function getUserPlexHubData() {
                         });
                     }
                 }
+            } else if (!actResult.ok && actResult.error) {
+                console.warn(`[TAUTULLI] Could not fetch activity for Tautulli "${t.name}": ${actResult.error}`);
+                if (!existingKey || !serverMap.has(existingKey)) {
+                    serverMap.set(normTName || t.id, {
+                        id: t.id,
+                        name: t.name,
+                        type: "Tautulli Monitor",
+                        directPms: false,
+                        tautulli: true,
+                        online: false,
+                        monitored: t.monitored !== false
+                    });
+                }
             }
-        } catch (e) {
-            console.warn(`[PLEX-HUB] Failed to fetch activity for ${t.name}:`, e);
+        } catch (e: any) {
+            console.warn(`[TAUTULLI] Failed to fetch activity for "${t.name}":`, e.message || e);
         }
 
         // 2. Watch History from this Tautulli instance (STRICTLY GATED TO MATCHED USER)
@@ -9549,12 +18432,11 @@ export async function getUserPlexHubData() {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${histUserParam}&length=20`;
-                const histRes = await fetch(histUrl, { signal: controller.signal, next: { revalidate: 30 } });
+                const histResult = await fetchTautulliApiJson(histUrl, controller.signal, { revalidate: 30 });
                 clearTimeout(timeoutId);
 
-                if (histRes.ok) {
-                    const histJson = await histRes.json();
-                    const rows = histJson.response?.data?.data || [];
+                if (histResult.ok && histResult.data) {
+                    const rows = histResult.data.data || (Array.isArray(histResult.data) ? histResult.data : []);
                     
                     rows.forEach((r: any) => {
                         const rawThumb = r.thumb || r.parent_thumb || r.grandparent_thumb || r.art || (r.rating_key ? `/library/metadata/${r.rating_key}/thumb` : "");
@@ -9591,30 +18473,63 @@ export async function getUserPlexHubData() {
                 }
             } catch (e) {}
 
-            // 3. User Watch Time Stats from this Tautulli instance
+            // 3. User Watch Time Stats & Media Breakdown from this Tautulli instance
             try {
                 const statsUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliMatchedUser.username)}`;
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const timeoutId = setTimeout(() => controller.abort(), 4500);
+
                 const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&${statsUserParam}`;
-                const statsRes = await fetch(statsUrl, { signal: controller.signal, next: { revalidate: 60 } });
+                const movieHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${statsUserParam}&media_type=movie&length=1`;
+                const epHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${statsUserParam}&media_type=episode&length=1`;
+
+                const [statsSettled, movieSettled, epSettled] = await Promise.allSettled([
+                    fetchTautulliApiJson(statsUrl, controller.signal, { revalidate: 60 }),
+                    fetchTautulliApiJson(movieHistUrl, controller.signal, { revalidate: 60 }),
+                    fetchTautulliApiJson(epHistUrl, controller.signal, { revalidate: 60 })
+                ]);
                 clearTimeout(timeoutId);
 
-                if (statsRes.ok) {
-                    const statsJson = await statsRes.json();
-                    const data = statsJson.response?.data || [];
+                if (statsSettled.status === "fulfilled" && statsSettled.value.ok && statsSettled.value.data) {
+                    const rawStats = statsSettled.value.data;
+                    const data = Array.isArray(rawStats) ? rawStats : (rawStats.data || []);
                     const allTime = data.find((d: any) => d.query_days === 0) || data[data.length - 1];
                     if (allTime) {
                         const totalSec = Number(allTime.total_time || 0);
                         watchStats.totalWatchTimeHours += Math.round(totalSec / 3600);
-                        watchStats.moviesWatched += Number(allTime.total_movies || 0);
-                        watchStats.episodesWatched += Number(allTime.total_episodes || 0);
-                        watchStats.musicTracksPlayed += Number(allTime.total_music || 0);
+                        if (allTime.total_movies) watchStats.moviesWatched += Number(allTime.total_movies);
+                        if (allTime.total_episodes) watchStats.episodesWatched += Number(allTime.total_episodes);
+                        if (allTime.total_music) watchStats.musicTracksPlayed += Number(allTime.total_music);
+                    }
+                }
+
+                if (movieSettled.status === "fulfilled" && movieSettled.value.ok && movieSettled.value.data) {
+                    const mData = movieSettled.value.data;
+                    const count = Number(mData.recordsFiltered ?? mData.recordsTotal ?? (Array.isArray(mData.data) ? mData.data.length : 0));
+                    if (count > 0) {
+                        watchStats.moviesWatched += count;
+                    }
+                }
+
+                if (epSettled.status === "fulfilled" && epSettled.value.ok && epSettled.value.data) {
+                    const eData = epSettled.value.data;
+                    const count = Number(eData.recordsFiltered ?? eData.recordsTotal ?? (Array.isArray(eData.data) ? eData.data.length : 0));
+                    if (count > 0) {
+                        watchStats.episodesWatched += count;
                     }
                 }
             } catch (e) {}
         }
     }));
+
+    // Fallback: If Tautulli total counts were 0 or missing, estimate from fetched history rows
+    if (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0 && rawWatchHistory.length > 0) {
+        for (const item of rawWatchHistory) {
+            if (item.mediaType === "movie") watchStats.moviesWatched++;
+            else if (item.mediaType === "episode") watchStats.episodesWatched++;
+            else if (item.mediaType === "track") watchStats.musicTracksPlayed++;
+        }
+    }
 
     // --- 3. DIRECT PLEX MEDIA SERVERS HISTORY SCAN (Query ALL discovered PMS instances) ---
     if (adminToken) {
@@ -9687,11 +18602,15 @@ export async function getUserPlexHubData() {
                                     });
 
                                     // If watch stats on this server were not provided by Tautulli, sum duration
-                                    if (tautulli.length === 0) {
-                                        if (durMs > 0) watchStats.totalWatchTimeHours += Math.round(durMs / 3600000);
-                                        if (r.type === "movie") watchStats.moviesWatched++;
-                                        else if (r.type === "episode") watchStats.episodesWatched++;
-                                        else if (r.type === "track") watchStats.musicTracksPlayed++;
+                                    if (tautulli.length === 0 || (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0)) {
+                                        if (tautulli.length === 0 && durMs > 0) {
+                                            watchStats.totalWatchTimeHours += Math.round(durMs / 3600000);
+                                        }
+                                        if (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0) {
+                                            if (r.type === "movie") watchStats.moviesWatched++;
+                                            else if (r.type === "episode") watchStats.episodesWatched++;
+                                            else if (r.type === "track") watchStats.musicTracksPlayed++;
+                                        }
                                     }
                                 }
                             }
@@ -9704,6 +18623,10 @@ export async function getUserPlexHubData() {
             console.warn("[PLEX-HUB] Plex stats calculation error:", e);
         }
     }
+
+    // Compute decomposed days and remaining hours
+    watchStats.totalWatchTimeDays = Math.floor(watchStats.totalWatchTimeHours / 24);
+    watchStats.remainingWatchTimeHours = watchStats.totalWatchTimeHours % 24;
 
     // --- 4. DEDUPLICATE AND GLOBALLY SORT RECENT WATCH HISTORY ACROSS ALL SERVERS ---
     const seenPlays = new Set<string>();
@@ -9720,7 +18643,7 @@ export async function getUserPlexHubData() {
     watchHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     watchHistory = watchHistory.slice(0, 20);
 
-    const serversList = Array.from(serverMap.values());
+    const serversList = Array.from(serverMap.values()).filter(srv => srv.monitored !== false);
 
     return {
         success: true,
@@ -9741,6 +18664,10 @@ export async function getUserPlexHubData() {
             kindleDeliveries: userKindleLogs.length
         }
     };
+    } catch (e: any) {
+        console.error("getUserPlexHubData error:", e);
+        return { success: false, error: e.message || "Failed to load Plex Hub data" };
+    }
 }
 
 export async function killUserStream(instanceId: string, sessionKey: string) {
@@ -9797,6 +18724,23 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         }
     }
 
+    // Expand user aliases with linked sub-accounts (e.g. kids, living room) if caller is primary account
+    if (user?.id && !user?.parentUserId) {
+        try {
+            const subAccounts = await prisma.user.findMany({
+                where: { parentUserId: user.id },
+                select: { username: true, email: true, plexUsername: true, plexEmail: true, subAccountLabel: true }
+            });
+            for (const sub of subAccounts) {
+                if (sub.username) userAliases.add(sub.username.toLowerCase().trim());
+                if (sub.email) userAliases.add(sub.email.toLowerCase().trim());
+                if (sub.plexUsername) userAliases.add(sub.plexUsername.toLowerCase().trim());
+                if (sub.plexEmail) userAliases.add(sub.plexEmail.toLowerCase().trim());
+                if (sub.subAccountLabel) userAliases.add(sub.subAccountLabel.toLowerCase().trim());
+            }
+        } catch (e) {}
+    }
+
     // CASE 1: Direct Plex Media Server Stream Termination via Plex Token
     if (instanceId.startsWith("plex::")) {
         const parts = instanceId.split("::");
@@ -9823,7 +18767,13 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                 return { success: false, error: "Could not reach Plex Media Server to verify session" };
             }
 
-            const data = await res.json();
+            const text = await res.text();
+            let data: any = null;
+            try {
+                data = JSON.parse(text);
+            } catch {
+                return { success: false, error: "Plex Media Server returned non-JSON response" };
+            }
             const rawSessions = data.MediaContainer?.Metadata || [];
             const sessions = Array.isArray(rawSessions) ? rawSessions : [rawSessions];
             
@@ -9846,7 +18796,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                             (isAdmin && (!sessionUser || sessionUser === "local" || sessionUser === "admin"));
 
             if (!isOwner && !isAdmin) {
-                return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
+                return { success: false, error: "Unauthorized: You can only terminate playback sessions for your own account and directly linked family sub-accounts." };
             }
 
             const sessionId = targetSession.Session?.id ? String(targetSession.Session.id) : undefined;
@@ -9855,11 +18805,11 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                 adminToken, 
                 String(targetSession.sessionKey || sessionKey), 
                 sessionId, 
-                "Stream ended by user via Portalarr My Plex Hub"
+                "Stream ended by user via DomsHomeLab My Plex Hub"
             );
 
             if (termResult.success) {
-                logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
+                logger.addLog("INFO", "PLEX", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
                 return { success: true, message: "Stream terminated successfully." };
             } else {
                 return { success: false, error: termResult.message || "Failed to terminate stream" };
@@ -9884,12 +18834,11 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
     // 1. Fetch current activity to strictly verify ownership
     try {
         const activityUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
-        const res = await fetch(activityUrl, { cache: "no-store" });
-        if (!res.ok) {
-            return { success: false, error: "Could not reach server to verify session" };
+        const actResult = await fetchTautulliApiJson(activityUrl);
+        if (!actResult.ok || !actResult.data) {
+            return { success: false, error: actResult.error || "Could not reach server to verify session" };
         }
-        const json = await res.json();
-        const sessions = json.response?.data?.sessions || [];
+        const sessions = actResult.data.sessions || [];
         const targetSession = sessions.find((s: any) => 
             String(s.session_key || "") === String(sessionKey) ||
             String(s.session_id || "") === String(sessionKey)
@@ -9909,23 +18858,17 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                         userAliases.has(sessionFriendly) ||
                         (isAdmin && (sessionUserId === "0" || sessionUser === "local" || sessionUser === "admin"));
 
-        if (!isOwner && !isAdmin) {
-            return { success: false, error: "Unauthorized: You can only terminate your own playback sessions." };
-        }
+            if (!isOwner && !isAdmin) {
+                return { success: false, error: "Unauthorized: You can only terminate playback sessions for your own account and directly linked family sub-accounts." };
+            }
 
         // 2. Execute termination via Tautulli
         const sessionKeyParam = targetSession.session_key ? `&session_key=${encodeURIComponent(String(targetSession.session_key))}` : `&session_key=${encodeURIComponent(sessionKey)}`;
         const sessionIdParam = targetSession.session_id ? `&session_id=${encodeURIComponent(String(targetSession.session_id))}` : "";
-        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session${sessionKeyParam}${sessionIdParam}&message=${encodeURIComponent("Stream ended by user via Portalarr My Plex Hub")}`;
-        const killRes = await fetch(killUrl);
+        const killUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=terminate_session${sessionKeyParam}${sessionIdParam}&message=${encodeURIComponent("Stream ended by user via DomsHomeLab My Plex Hub")}`;
+        const killResult = await fetchTautulliApiJson(killUrl);
         
-        let killed = false;
-        if (killRes.ok) {
-            const killJson = await killRes.json().catch(() => null);
-            if (killJson?.response?.result === "success") {
-                killed = true;
-            }
-        }
+        let killed = killResult.ok;
 
         // If Tautulli termination returned failure and adminToken is available, try terminating directly on Plex
         if (!killed && adminToken) {
@@ -9939,7 +18882,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                             sToken,
                             String(targetSession.session_key || sessionKey),
                             targetSession.session_id ? String(targetSession.session_id) : undefined,
-                            "Stream ended by user via Portalarr My Plex Hub"
+                            "Stream ended by user via DomsHomeLab My Plex Hub"
                         );
                         if (directRes.success) {
                             killed = true;
@@ -9951,8 +18894,8 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
             } catch (e) {}
         }
 
-        if (killed || killRes.ok) {
-            logger.addLog("INFO", "PLEX_HUB", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
+        if (killed) {
+            logger.addLog("INFO", "TAUTULLI", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
             return { success: true, message: "Stream terminated successfully." };
         } else {
             return { success: false, error: "Failed to terminate stream on server" };
@@ -10133,5 +19076,66 @@ export async function getPlexSetupGuides() {
             ]
         }
     ];
+}
+
+export async function getUserAiDiagnosticSnapshotAction() {
+    try {
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch (e) {
+            user = { username: "Guest User", role: "USER" };
+        }
+        const { getUserDiagnosticSnapshot } = await import("@/lib/ai-server-assistant");
+        const snapshot = await getUserDiagnosticSnapshot(user);
+        return { success: true, snapshot };
+    } catch (e: any) {
+        console.error("getUserAiDiagnosticSnapshotAction error:", e);
+        return { success: false, error: e.message || "Failed to generate diagnostic snapshot" };
+    }
+}
+
+export async function askAiServerMasterAction(
+    question: string,
+    history: Array<{ role: "user" | "assistant"; content: string }> = []
+): Promise<AiAssistantResponse> {
+    try {
+        if (!question || !question.trim()) {
+            return { success: false, error: "Question cannot be empty" };
+        }
+
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch (e) {
+            user = { username: "Plex User", role: "USER" };
+        }
+
+        const { askAiServerMaster } = await import("@/lib/ai-server-assistant");
+        const response = await askAiServerMaster(question.trim(), history, user);
+        return response;
+    } catch (e: any) {
+        console.error("askAiServerMasterAction error:", e);
+        return { success: false, error: e.message || "AI Assistant failed to process question" };
+    }
+}
+
+export async function verifyPlexPlaybackHealthAction() {
+    try {
+        const { runDeepPlexPlaybackHealthCheck } = await import("@/lib/plex-playback-probe");
+        return await runDeepPlexPlaybackHealthCheck();
+    } catch (e: any) {
+        console.error("verifyPlexPlaybackHealthAction error:", e);
+        return { 
+            success: false, 
+            error: e.message || "Failed to execute Plex playback probe",
+            timestamp: new Date().toISOString(),
+            totalServers: 0,
+            operationalServers: 0,
+            allCanPlay: false,
+            servers: [],
+            summary: `Error executing playback probe: ${e.message}`
+        };
+    }
 }
 

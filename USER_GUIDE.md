@@ -1,26 +1,41 @@
-# 📖 User Guide: Portalarr Media Portal, Plex Hub & Libraries
+# 📖 User Guide: DomsHomeLab (d281knilb) Media Portal, Plex Hub & Libraries
 
-Welcome to Portalarr! This guide will walk you through monitoring your Plex streams, diagnosing playback issues, testing network speeds, setting up automatic Kindle delivery, requesting new Ebooks & Audiobooks, listening or reading media, and managing your server stack.
+Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you through monitoring your Plex streams, diagnosing playback issues, testing network speeds, setting up wireless Kindle delivery, reading in-browser with Kindle Paperwhite mode, listening to audiobooks, requesting movies and TV shows, earning referral rewards, and managing your member account.
 
 ---
 
-## 📑 Table of Contents
-1. [Getting Started & Logging In](#1-getting-started--logging-in)
+### 📑 Table of Contents
+1. [Getting Started, Invitations & Free Trial Passes](#1-getting-started-invitations--free-trial-passes)
 2. [My Plex Hub, Stream Diagnostics & Speed Tests](#2-my-plex-hub-stream-diagnostics--speed-tests)
-3. [Plex Device Setup & Optimization Guides](#3-plex-device-setup--optimization-guides)
-4. [Optional Send-to-Kindle Setup (For E-Readers)](#4-optional-send-to-kindle-setup-for-e-readers)
-5. [Browsing & Accessing Media (Ebooks & Audiobooks)](#5-browsing--accessing-media-ebooks--audiobooks)
-6. [Requesting New Books & Audiobooks](#6-requesting-new-books--audiobooks)
-7. [Troubleshooting, Release Selection & 1-Click Import](#7-troubleshooting-release-selection--1-click-import)
-8. [Need Help or Technical Support?](#8-need-help-or-technical-support)
+3. [🤖 Plex & Server Master AI Support Assistant](#3-plex--server-master-ai-support-assistant)
+4. [Plex Device Setup & Quality Optimization Guides](#4-plex-device-setup--quality-optimization-guides)
+5. [Wireless Send-to-Kindle Setup (For E-Readers)](#5-wireless-send-to-kindle-setup-for-e-readers)
+6. [Browsing & Accessing Media (Ebooks & Audiobooks)](#6-browsing--accessing-media-ebooks--audiobooks)
+7. [In-Browser Kindle Paperwhite & Comic Readers](#7-in-browser-kindle-paperwhite--comic-readers)
+8. [Audiobooks, Floating Web Player & Chapter Track Studio](#8-audiobooks-floating-web-player--chapter-track-studio)
+9. [Requesting New Books & Audiobooks (Unified Discover Hub)](#9-requesting-new-books--audiobooks-unified-discover-hub)
+10. [Troubleshooting, Request Tracking & 1-Click Import](#10-troubleshooting-request-tracking--1-click-import)
+11. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#11-native-movie--tv-show-requests-seerr-engine--episode-guides)
+12. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#12-curation-studio-suite-kometa-agregarr-maintainerr-tagging)
+13. [💳 Subscriptions, Referral Rewards & Family Profiles](#13-subscriptions-referral-rewards--family-profiles)
+14. [👁️ Admin Tools: Impersonation & Approval Governance](#14-admin-tools-impersonation--approval-governance)
+15. [Need Help or Technical Support?](#15-need-help-or-technical-support)
 
 ---
 
-## 🚀 1. Getting Started & Logging In
+## 🚀 1. Getting Started, Invitations & Free Trial Passes
 
-1. Open your browser and navigate to the Portalarr server address (e.g. `https://home.yourdomain.com`).
+1. Open your web browser and navigate to the DomsHomeLab portal address (e.g. `https://home.yourdomain.com`).
 2. Log in using your Username/Email & Password or click **Sign in with Plex**.
-3. If you are a new user, click **Request Account Access** on the login screen. An administrator will review and approve your account.
+3. **New User Invitations (`/join`):**
+   - DomsHomeLab is a private, invite-only community. New users can join via a direct referral invite link (e.g. `/join?ref=YOUR_CODE`) or by entering the referral code or username of an existing active member.
+   - **Free Trial Pass:** New members receive a complimentary all-access trial pass with **zero payment required up front** to preview movies and TV shows in pristine 4K HDR and 1080p studio master quality on Plex.
+   - **Upgrading to Full Membership:** Upgrading unlocks all premium community perks:
+     - 🎬 **Unrestricted 4K HDR Direct Play:** Original studio bitrates with zero transcoding lag.
+     - 🧒 **Dedicated Kids & Living Room Profiles:** Child-safe managed accounts with custom PIN protection and age rating filters.
+     - 📚 **Full Digital Book & Audiobook Library:** In-browser Kindle Paperwhite reading mode, floating HTML5 audiobook player, and wireless Send-to-Kindle delivery.
+     - ⚡ **Priority Server Bandwidth:** Dedicated high-priority streaming and transcode allocation.
+     - 🎁 **Discord VIP & Referral Rewards:** Live server downtime alerts, member chat, and earn **1 free month ($15.00 discount)** for every friend referred.
 4. Once logged in, your session remains securely active for 30 days with sliding automatic renewal.
 
 ---
@@ -30,15 +45,15 @@ Welcome to Portalarr! This guide will walk you through monitoring your Plex stre
 Your personalized **My Plex Hub** dashboard gives you real-time insight into your active streams, server connections, watch statistics, and playback health.
 
 ### 🔴 Real-Time Active Stream Monitoring
-- **Live Playback Cards:** View everything currently streaming on your account across TVs, tablets, web browsers, and phones.
-- **Playback Telemetry:** See video resolution (4K, 1080p, 720p), video/audio codecs, playback progress, direct stream bitrate, and server bandwidth consumption.
+- **Live Playback Cards:** View everything currently streaming on your account across Smart TVs, Apple TVs, streaming sticks, web browsers, and phones.
+- **Playback Telemetry:** See video resolution (4K UHD, 1080p, 720p), video/audio codecs (HEVC, H.264, EAC3, TrueHD Atmos), playback progress, direct stream bitrate, and hardware NVENC acceleration.
 - **Direct Play vs. Transcode Indicators:**
   - 🟢 **Direct Play / Direct Stream:** The media is streaming at original pristine quality without taxing server CPU/GPU.
   - 🟡 **Transcoding (Video/Audio/Subtitles):** The server is converting the file on-the-fly to match your player's capabilities or bandwidth limit.
 
 ### 🩺 Transcode Doctor
 If a stream is transcoding, click **Transcode Doctor** on the playback card:
-- **Instant Root-Cause Analysis:** Identifies why transcoding is occurring (e.g. incompatible audio codec like TrueHD/DTS, burning PGS/VOBSUB subtitles, player maximum bitrate limit, or remote quality cap).
+- **Instant Root-Cause Analysis:** Identifies why transcoding is occurring (e.g. incompatible audio codec like TrueHD 7.1/DTS, burning PGS/VOBSUB image subtitles, client maximum bitrate cap, or remote quality limit).
 - **Device-Specific Fixes:** Provides tailored instructions to adjust your Plex client settings to achieve Direct Play.
 
 ### ⏹️ Terminating Stuck Playback Sessions (`Stop Stream`)
@@ -49,33 +64,61 @@ If a TV app crashed, lost Wi-Fi, or left a "ghost session" running in the backgr
 
 ### 🌐 Connected Plex Servers Modal
 Click the **Connected Servers** badge in the hub header to view:
-- All healthy Plex Media Server instances linked to your ecosystem.
+- All healthy Plex Media Server instances linked to your ecosystem (e.g. Main Plex Server, 4K UHD Server).
 - Server names, active versions, local/public IP addresses, and secure HTTPS connection statuses.
+
+### ⏱️ Personalized Watch Time Analytics
+- **Formatted Days & Hours:** Displays your total streaming duration formatted into clean days and hours (e.g. `33 days 4 hrs` rather than confusing raw hour counts).
+- **Milestone Counts:** Tracks your total Movies Finished and TV Episodes Watched, synchronized automatically from your watch history.
 
 ### ⚡ In-Browser Server Speed Test
 Diagnose buffering or stuttering directly from your current viewing device:
 1. Click the **Speed Test** (`⚡`) button in My Plex Hub.
-2. Click **Start Test** to measure real-time download bandwidth and latency directly between your browser/device and the Plex media server.
+2. Click **Start Test** to measure real-time download bandwidth and latency directly between your browser/device and the media server.
 3. Use the measured speed to select the ideal streaming quality preset on your player.
 
 ---
 
-## 📱 3. Plex Device Setup & Optimization Guides
+## 🤖 3. Plex & Server Master AI Support Assistant
 
-To eliminate buffering and enjoy maximum 4K HDR / 1080p video quality, configure your Plex client apps using our built-in interactive guides:
+Need instant help troubleshooting a playback error on your TV or streaming device? Use the built-in **Plex & Server Master AI Assistant**!
 
-1. Click **Setup Guides** (`📖`) in the My Plex Hub header.
+### Key Capabilities & How to Ask:
+1. **Live Playback Storage & File Health Probing:**
+   - Ask the bot to test any specific movie or episode before you start watching:
+     - *"Test to make sure The Sandlot runs on the main Plex server"*
+     - *"Can you check if Gladiator is ready to play?"*
+     - *"Is Dune available with English audio?"*
+   - The AI identifies the target server, locates the title in the Plex database, and executes an **active byte-range disk read test** (`Range: bytes=0-65535`) directly against physical media storage.
+   - It reports physical readability, disk latency in milliseconds (e.g. `✅ Streamed 64 KB from storage in 18ms`), container format, English audio streams, and subtitle availability.
+2. **Device Buffering & Playback Diagnostics:**
+   - Type your question or paste the exact error message (e.g. *"not enough bandwidth for any playback of this item. can not convert to below minimum bandwidth"* or *"why is my Roku buffering on 4K?"*).
+   - The AI analyzes your active stream telemetry, client player profile, and known platform bugs to provide step-by-step resolution steps tailored to your TV model.
+3. **Automated Audio Language Replacement:**
+   - If a movie or episode is missing English audio (e.g. Spanish-only release), tell the bot: *"The Sandlot only has Spanish audio"*.
+   - The AI inspects the media streams, verifies the absence of English audio, queries connected indexers (Radarr/Sonarr) for an English replacement release, and automatically grabs a verified candidate.
+4. **1-Click Ticket Escalation:**
+   - If an issue requires administrator intervention, click **Open Ticket With This Diagnosis** to submit a support ticket pre-populated with the AI's diagnostic snapshot!
+
+---
+
+## 📱 4. Plex Device Setup & Quality Optimization Guides
+
+To eliminate buffering and enjoy maximum 4K HDR and 1080p video quality, configure your Plex client apps using our built-in interactive guides:
+
+1. Click **Setup Guides** (`📖`) in the My Plex Hub header (or visit `/guides`).
 2. Select your streaming platform:
    - 🍏 **Apple TV:** Enable Direct Play, set Home & Remote Streaming to *Maximum/Original*, and enable Match Dynamic Range & Frame Rate.
-   - 📺 **Roku:** Set Video Quality to *Original*, configure Audio to *Passthrough*, and enable Burn Subtitles *Automatic/Only Image Formats*.
+   - 📺 **Roku:** Set Video Quality to *Original*, configure Audio to *Passthrough*, and enable Burn Subtitles *Automatic / Only Image Formats*.
    - 🔥 **Amazon Fire TV / Fire Stick:** Enable hardware acceleration, set Remote Streaming to *Maximum*, and set Subtitle Burn to *Automatic*.
    - 🤖 **Android TV / Google TV / Nvidia Shield:** Enable Refresh Rate Switching, set Remote Quality to *Original*, and enable Audio Passthrough (HDMI).
    - 📱 **Smart TVs (LG webOS / Samsung Tizen):** Disable *Auto Quality Adjust*, set Local and Remote Quality to *Original*, and avoid PGS subtitles if unsupported.
    - 💻 **Web Browsers & Mobile (iOS / Android):** Use the official Plex Desktop app or native mobile apps for direct codec support.
+3. **Interactive In-App Feature Guide Modal:** Click the **`📖 Feature Guide`** button available across app pages to open full interactive walk-throughs for all features without leaving your current view.
 
 ---
 
-## 📱 4. Optional Send-to-Kindle Setup (For E-Readers)
+## 📱 5. Wireless Send-to-Kindle Setup (For E-Readers)
 
 When you first visit the Library, you will be prompted to set up Send-to-Kindle for 1-click Wireless Ebook Delivery.
 
@@ -85,93 +128,227 @@ When you first visit the Library, you will be prompted to set up Send-to-Kindle 
 3. Scroll down and click **Personal Document Settings**.
 4. Look under **Send-to-Kindle E-mail Settings** to find your e-reader's email address (usually ends in `@kindle.com`).
 
-### Step 2: Authorize Portalarr's Sender Email
+### Step 2: Authorize DomsHomeLab's Sender Email
 Amazon requires all senders to be approved before emails can reach your Kindle:
 1. Under *Personal Document Settings*, scroll to **Approved Personal Document E-mail List**.
 2. Click **Add a new approved e-mail address**.
-3. Add the server sender address provided in your Portalarr Kindle Setup prompt (or ask your server admin).
+3. Add the server sender address provided in your Kindle Setup prompt (or ask your server admin).
 
-### Step 3: Save or Skip
-- Enter your Kindle email in Portalarr and click **Save Email & Unlock Automatic Delivery**.
-- *Don't have a Kindle or want to download files manually?* Click **Skip for Now & Browse Library**. You can update this anytime by clicking the **Kindle Settings** button in the header.
+### Step 3: Save & Test
+- Enter your Kindle email and click **Save Email & Unlock Automatic Delivery**.
+- Click **Run Pre-Flight Delivery Check** to test your configuration before sending your first book!
+- **⚡ Automatic Delivery on Request:** Whenever you request an ebook in Discover, DomsHomeLab automatically emails the clean EPUB directly to your Kindle as soon as the download finishes!
+- **📋 Outbound Delivery Logs & Retries:** Inspect previous Kindle email dispatches in the Kindle Delivery History panel, and retry any failed dispatches with 1 click.
+- *Don't have a Kindle or want to download files manually?* Click **Skip for Now & Browse Library**. You can update this anytime by clicking the **Kindle** tab in `/library`.
 
 ---
 
-## 📚 5. Browsing & Accessing Media (Ebooks & Audiobooks)
+## 📚 6. Browsing & Accessing Media (Ebooks & Audiobooks)
 
-Portalarr organizes your reading and listening collection into dedicated tabs:
+DomsHomeLab organizes your reading and listening collection into dedicated tabs:
 
 ### 📖 Ebooks Tab
 - **Browse & Search:** Filter by library shelves, search by title or author, and sort by date or title.
 - **Series Grouping:** Toggle *Group by Series* to view books neatly organized by their book series with volume numbers.
-- **🔍 Show Missing Books:** Click **Show Missing Books** on any series group to discover unacquired books in that series.
+- **🔍 Show Missing Books:** Click **Show Missing Books** on any series group to discover unacquired books in that series, sorted chronologically and sequentially by volume number (`Vol 1`, `Vol 2`, `Vol 3`...) with knockoff study guides and summary publishers automatically filtered out.
 - **⚡ 1-Click Auto-Grab:** In the Missing Books view, click **Auto-Grab** on any missing installment (or grab the entire series) to immediately auto-request and download it.
 - **🌫️ Missing Book Cards:** Missing books display on your shelf with a grayscale poster, "MISSING" badge, and 0 MB indicator. You can click **Re-Grab Release** directly from the book card modal to search indexers anytime.
-- **1-Click Kindle Send (`📧`):** Click the Kindle button on any book card to wirelessly dispatch the EPUB/MOBI file directly to your e-reader.
+- **1-Click Kindle Send (`📧`):** Click the Kindle button on any book card to wirelessly dispatch the standardized EPUB file directly to your e-reader.
+- **Format Standardization:** Non-EPUB files (MOBI, AZW3, PDF) are automatically converted to clean EPUBs via background conversion (`ebook-convert`), and redundant legacy formats are pruned to save disk space.
 - **Direct Download (`⬇️`):** Click the Download button to download EPUB or PDF files directly to your phone, tablet, or computer.
-- **Kindle-Style In-Browser Reader:** Read EPUBs with instant 0ms CacheStorage reopening, Bookerly typography, dark/sepia themes, and reading time estimation.
-- **Comic Reader:** Stream `.cbr`, `.cbz`, and archive pages with WebAssembly unrar and JSZip.
+- **Interactive Metadata Matcher (`BookMatchModal`):** For unlinked or manually uploaded books, click the Match button to run the interactive matcher. It scores suggestions against local database relations, Audible, iTunes, and Google Books with AI fallback, allowing 1-click field updates, volume linking, cover fetching, and disk reorganization.
 
-### 🎧 Audiobooks Tab
-- **Listen Online:** Click Play (`▶️`) on any audiobook to start streaming immediately in the built-in web audio player.
+---
+
+## 📖 7. In-Browser Kindle Paperwhite & Comic Readers
+
+DomsHomeLab includes high-performance in-browser readers for all major book and comic formats—no third-party apps required.
+
+### 📖 Kindle Paperwhite EPUB Reader
+Click **`Read`** or **`Resume (X%)`** on any EPUB book card to launch the reader:
+- **Instant 0ms Reopening:** Uses browser CacheStorage (`portalarr-books-v1`) to cache downloaded books for instant offline reopening without waiting on network transfers.
+- **Fast Reading Percentage & Progress Bar:** Real-time accurate percentage calculations shown directly on library cards and in the reader.
+- **Estimated Reading Time:**
+  - *"X mins left in chapter"*
+  - *"Y hrs Z mins left in book"* (calibrated to a standard 220 WPM reading rate).
+- **Tappable Kindle Status Footer:** Tap the bottom footer bar to cycle between:
+  `Time Left in Book` ↔ `Time Left in Chapter` ↔ `Page in Book` ↔ `Location` ↔ `Percentage`
+- **Kindle `Aa` Typography Customization:**
+  - **Typefaces:** Bookerly (Kindle Serif), Ember (Kindle Sans-Serif), and System Monospace.
+  - **Font Size:** Stepped adjustment from 70% to 200%.
+  - **Margins:** Narrow, Normal, or Wide page gutters.
+  - **Line Height:** Compact, Normal, or Relaxed line spacing.
+  - **Themes:** Dark (Night Mode), Sepia (Warm Paper), or Light (Daylight).
+- **Distraction-Free Reading:** Tap the center of the page to auto-hide toolbars. A discrete corner badge continues to show your active reading metric.
+- **Reading Progress Persistence:** Automatically bookmarks your position and displays a **`Resume (X%)`** amber badge on library cards.
+
+### 🦸 Comic Book Reader (`.cbr`, `.cbz`, & Folder Archives)
+- **Zero-Conversion Streaming:** Streams compressed archive pages on-the-fly via WebAssembly `unrar` and `JSZip`.
+- **Display Modes:** Toggle between Fit-to-Width, Fit-to-Height, and Original resolution.
+- **Navigation:** Use keyboard arrow keys, spacebar, on-screen arrows, or the bottom thumbnail scrubber to quickly jump between pages.
+- **Page Position Memory:** Automatically resumes at the exact page you last viewed.
+
+### 📄 PDF Document Viewer
+- Embedded inline PDF rendering with zoom controls, page jumping, and direct download capabilities.
+
+---
+
+## 🎧 8. Audiobooks, Floating Web Player & Chapter Track Studio
+
+DomsHomeLab delivers an Audible-quality audiobook experience right in your web browser:
+
+- **Floating Web Player:** Pinned audio controls at the bottom of your screen let you listen uninterrupted while browsing other libraries and tabs.
+- **Continuous Autoplay:** Seamlessly transitions to the next chapter track when the current chapter finishes.
+- **HTTP Range Streaming:** Fast scrubbing and instant seeking without waiting for the full audio file to download.
+- **Playback Speed & Volume Memory:** Remembers your volume, playback speed (1.0x, 1.25x, 1.5x, 2.0x), and current track position across sessions.
+- **Multi-Disc & Multi-Track Auto-Consolidation:** Folder structures with chapter tracks (`01 Intro.mp3`, `02 Chapter 1.mp3`) or multi-disc subdirectories (`Disc 01/`, `Disc 02/`) are automatically merged into a single audiobook card displaying total duration and consolidated size.
 - **Interactive Chapter Selector:** Click **Listen & Chapters** on any audiobook card to open the Chapter Selector Modal, jump to any specific chapter, or view file details.
 - **Reorder & Edit Chapters:** Click **✏️ Reorder & Edit Chapters** in the Chapter Selector Modal to change chapter numbers or click ⬆️ / ⬇️ buttons. Click **Save** to rename track files on disk so your custom order is permanent for all users!
-- **Multi-Track & Multi-Disc Support:** All chapter tracks and multi-disc folders (`Disc 01`, `Disc 02`) are seamlessly consolidated into a single master audiobook card with consolidated duration and total size.
-- **Continuous Autoplay:** The built-in player automatically proceeds to the next chapter track seamlessly when the current chapter finishes.
-- **Floating Player:** The web audio player stays pinned at the bottom of your screen as you browse.
+- **✨ AI Chapter Track Analysis:** Click **Analyze with AI** to automatically inspect raw audio tracks, infer official chapter boundaries and titles, and auto-populate metadata.
 
 ---
 
-## 🔍 6. Requesting New Books & Audiobooks
+## 🔍 9. Requesting New Books & Audiobooks (Unified Discover Hub)
 
-Can't find a title in the library? Request to download it in seconds!
+Requesting books and audiobooks is fully integrated into the unified **Discover (`/discover`)** and **Requests (`/requests`)** hub:
 
-### Step 1: Open the Request Modal
-Click the `+ Request Ebook / Audiobook` button on the Library page.
+### Step 1: Open Discover (`/discover`)
+- Navigate to the **Discover** page from the sidebar or header.
+- Browse the dedicated **Popular Books**, **Trending Books**, **Trending Audiobooks**, and **"Missing from Your Series"** carousels.
 
 ### Step 2: Search & Auto-Complete
-1. Start typing the **Title** or **Author**. Instant autocomplete suggestions from the central book registry will appear.
-2. Select the matching book to auto-fill title, author, publish year, and official high-definition cover artwork.
+- Type any **Title**, **Author**, or **Series** in the global search bar.
+- Real-time suggestions appear with cover art, release year, author name, and format badges (**`📖 Ebook`** vs **`🎧 Audiobook`**).
 
-### Step 3: Choose Format
-- Format: Select **📖 Ebook** or **🎧 Audiobook**.
+### Step 3: Interactive Detail View & 1-Click Request
+1. Click on any book to open the comprehensive **Book Detail Modal**.
+2. View synopsis, publisher, publication date, series reading order, and similar book recommendations.
+3. Click **`📖 Request Ebook`** or **`🎧 Request Audiobook`**.
+4. **Instant Auto-Approval:** All book requests are automatically approved and dispatched to indexers immediately.
 
-### Step 4: Submit & Track Progress
-Click **Submit Request**. You can track live progress under the **Requests** tab:
-- ⏳ **Pending / Approved:** Request is auto-approved and queued for background processing.
-- 🔍 **Searching:** Multi-tier search engine is querying connected indexers for the best quality release.
-- 📥 **Downloading:** Download active in SABnzbd or qBittorrent.
-- ✅ **Downloaded:** Download complete! The book is automatically organized onto your library shelf and ready for reading/listening. (The system continuously validates that the physical media file exists on disk).
-- ❌ **Failed / Failed (Missing):** If a grab fails or the file is removed, the request displays in red with actionable retry buttons.
+### Step 4: Author & Series Bibliographies
+- Click on any author's name to open the **Author Detail Modal** showing their full published bibliography.
+- Click on any series title to open the **Series Detail Modal** displaying all installments in chronological reading order with 1-click grab buttons for missing volumes.
+
+### Step 5: Automatic Send-to-Kindle Delivery
+- When an ebook request finishes downloading, DomsHomeLab automatically sends the clean EPUB directly to your Kindle if you have configured your Kindle email address!
 
 ---
 
-## 🛠️ 7. Troubleshooting, Release Selection & 1-Click Import
+## 🛠️ 10. Troubleshooting, Request Tracking & 1-Click Import
 
-- 🔄 **User Scan Folder:** All approved users can click **Scan Share Folder** or **Scan Audio Folder** directly on library shelves to instantly scan folders for new files without needing admin intervention.
-- 🖼️ **Fetch Cover (`🖼️`):** Click the Fetch Cover button on any library card to query iTunes HD (600x600/600x900), OpenLibrary, and Google Books to refresh low-resolution or missing covers.
+- 🔄 **User Scan Folder:** All approved users can click **Scan Share Folder** or **Scan Audio Folder** directly on library shelves in `/library` to instantly scan folders for new files without needing admin intervention.
+- 🖼️ **Fetch Cover (`🖼️`):** Click the Fetch Cover button on any library card to query iTunes HD (600x900), OpenLibrary, and Google Books to refresh low-resolution or missing covers.
 
-### 🔍 Manual Release Search (`Search Release` / `Re-Search`)
-1. Go to the **Requests** tab.
-2. On your request card, click **`🔍 Search Release`** (or `Re-Search`).
-3. Portalarr will query connected torrent and Usenet/NZB indexers and open an **Interactive Release Chooser Modal**.
-4. Browse available releases showing title, size, format, protocol (Torrent vs Usenet), seeders, and age.
-5. Click **Push Release** (`📥`) on your preferred release to send that exact file to the download client.
+### 📨 Tracking Requests in `/requests`
+- Visit the **Requests** page (`/requests`) to monitor active book, audiobook, movie, and TV downloads with real-time download speed, progress bars, and ETA.
+- **Statuses:** Approved → Searching → Downloading → Available / Downloaded.
+
+### 🔍 Manual Release Search (`Search Release`)
+1. On any request card in `/requests`, click **`🔍 Search Release`**.
+2. DomsHomeLab queries connected torrent and Usenet/NZB indexers and opens an **Interactive Release Chooser Modal**.
+3. Browse available releases showing title, size, format, protocol (Torrent vs Usenet), seeders, and age.
+4. Click **Push Release** (`📥`) to dispatch that exact release to your download client.
+
+### 🚫 Permanent Release Blocklisting
+- Corrupted, password-protected, foreign-language, or mismatched releases are automatically recorded to the blocklist database (`FailedRelease`).
+- Subsequent auto-searches skip these releases automatically, and they are marked with a **`🚫 Blocklisted Release`** badge in the Interactive Release Chooser.
 
 ### 📥 1-Click Download Import (`Import Download`)
-- If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared on your shelf yet, click **`📥 Import Download`** on your request card. Portalarr will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as `Downloaded`.
+- If SABnzbd or qBittorrent finished downloading a file but it hasn't appeared on your shelf yet, click **`📥 Import Download`** in `/requests`. The system will scan all completed download directories, copy the files to your shelf, auto-consolidate multi-track audiobooks, and mark the status as `Downloaded`.
 
 ### 🔄 Retrying Failed Downloads (`Auto-Retry`)
-- If a request shows `Failed` or `Failed (Missing)`, click **Auto-Retry** to trigger an immediate automated background search using all fallback queries.
+- If a request shows `Failed` or `Failed (Missing)`, click **Auto-Retry** in `/requests` to trigger an immediate automated background search using multi-tier fallback queries.
 
 ---
 
-## ❓ 8. Need Help or Technical Support?
+## 🎬 11. Native Movie & TV Show Requests (Seerr Engine & Episode Guides)
 
-If a download fails, a stream won't play, or you need server assistance:
-1. Click the **Support** (`💬`) icon in the main navigation bar.
-2. Submit a ticket detailing the issue.
+DomsHomeLab includes a built-in media discovery and request engine directly connected with TMDb, Plex, Radarr, and Sonarr!
+
+### 🌟 Discovering Trending & Recommended Media (`/discover`)
+- **Interactive Carousels:** Browse Trending Movies, Trending TV Shows, Upcoming Releases, and Popular Titles with real-time availability badges (`Available`, `Partially Available`, `Requested`, `Monitored`).
+- **Live Search & Autocomplete:** Search for any movie, TV series, actor, director, or studio with instant keyboard navigation.
+- **Media Detail Modals:** Click any title to view high-definition artwork, overview, runtime, genres, trailers, cast/crew directory, ratings, and recommendations.
+
+### 📥 Requesting Movies & TV Shows
+- **1-Click Movie Requests:** Click **Request** to dispatch the movie directly to Radarr. If 4K is configured and permitted on your account, toggle between standard 1080p and dedicated 4K UHD quality.
+- **TV Series & Granular Season/Episode Requests:**
+  - **Full Series:** Request all past, present, and future seasons with one click.
+  - **Specific Seasons:** Pick and choose exact seasons using the interactive season grid.
+  - **Episode-Level Monitoring:** Expand any season to view episode thumbnails, titles, air dates, and individual episode monitoring switches (`Monitored` vs `Unmonitored`).
+- **Deep Episode Sync:** If a series is already partially monitored in Sonarr, requesting newly selected episodes dynamically updates Sonarr via `PUT /api/v3/episode/monitor` and immediately triggers an automatic `EpisodeSearch` command.
+- **Quota Management:** Enforces user-specific weekly/daily movie and TV request quotas.
+
+### 🔔 Live Discord & Email Notifications
+- **Discord Webhook Alerts:** When a request is submitted, approved, or downloaded, rich Discord embed cards are automatically dispatched with color coding (🟡 Pending, 🟢 Approved/Available, 🔴 Declined/Failed), media poster thumbnails, format tags (`4K UHD` vs `1080p`), and requesting user details.
+- **Styled HTML Email Notifications:** Administrators receive instant email updates with direct links to approve or manage requests.
+
+---
+
+## 🎨 12. Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)
+
+Administrators can curate Plex libraries natively without external scripts or extra docker containers via the **Curation Studio (`/curation`)**:
+
+- **✨ Kometa Overlays Studio:** Apply high-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, audio codecs, and custom user overlays to movie and TV posters with live canvas previews.
+- **🎬 Agregarr Hubs:** Generate dynamic trending hubs, smart collections, and discovery rows linked directly with Trakt, TMDb, and IMDb charts.
+- **🧹 Maintainerr Prune:** Set disk quota rules, identify unwatched media, and safely prune media to recover storage automatically with Leaving Soon staging collections and poster countdown badges.
+- **🏷️ Parental Guide & Tagging Studio:** Tag movies, shows, and parental guide labels across Plex libraries with IMDb / Common Sense Media content advisory severity ratings (violence, sex, substance, gore) to prepare for user-level customizable shelf toggles.
+
+---
+
+## 💳 13. Subscriptions, Referral Rewards & Family Profiles
+
+### 📅 Flexible Membership Plans
+When upgrading from your free trial pass to full membership, choose the cadence that fits you best:
+- **Flexible Monthly Plan ($17.50/month):** Pay-as-you-go month-to-month access. Cancel or resume at any time with zero long-term commitment.
+- **Rest-of-Year Annual Pass ($180/year — Best Value):** Derived from the $15/month base rate ($180/year). You only pay for the remaining calendar days and full months in the current year, then renew on January 1st:
+  - Prorated first month: `(remaining days / total days in month) * $15`
+  - Remaining months: `remaining full months * $15`
+  - *Example:* Upgrading on October 10th covers 21 days in October ($10.16) + November ($15) + December ($15) = **$40.16** for the remainder of the year.
+
+### 🎁 Referral Rewards: Earn 1 Free Month Per Friend
+- Invite your friends to join DomsHomeLab using your personal invite link (`/join?ref=YOUR_CODE`).
+- When an invited friend joins and becomes an active member:
+  - **Annual Subscribers:** Earn **$15.00 off** your next annual renewal (e.g. $180 - $15 = **$165.00** with 1 referral; $180 - $30 = **$150.00** with 2 referrals; 12 referrals makes the entire upcoming year **100% FREE**).
+  - **Monthly Subscribers:** Your monthly billing is delayed by **+1 full month** per friend (e.g. pushes billing start from January 1 to February 1).
+
+### 💳 Zero-Fee P2P Payments & Automated Receipts
+- **P2P Direct Methods:** Renew seamlessly via Venmo, PayPal, Cash App, or Zelle with zero gateway fees.
+- **Pre-Filled Memo Notes & QR Codes:** Use the interactive QR code modal on the dashboard, `/profile`, or `/join` to prefill your exact payment memo (your clean username, e.g. `dominicjuliano`) for automated IMAP reconciliation.
+- **Instant Payment Receipts:** Whenever your payment is processed, DomsHomeLab automatically dispatches a branded HTML payment confirmation receipt (`payment_received`) confirming the amount received, date, new expiration date, and active perks.
+- **Full Membership Activation Alerts:** Upgrading from trial to full membership dispatches a welcome email (`subscription_activated`) highlighting all unlocked features.
+
+### 🧒 Family & Living Room TV Profiles
+- **Living Room TV Profiles:** Managed profiles configured with content safety tags to filter out explicit content for family viewing areas.
+- **Kids Profiles:** Curated child-safe profiles locked strictly to G and PG-rated movies and TV animations with optional PIN protection.
+- *Access Security:* Trial accounts are strictly restricted to primary server libraries; Kids and backup servers remain isolated until upgrading to full membership.
+
+---
+
+## 👁️ 14. Admin Tools: Impersonation & Approval Governance
+
+Administrators have powerful management and safety tools:
+
+### 👁️ View Site As User (Impersonation)
+1. Navigate to **System Settings** → **Access Control** (`/settings/access`).
+2. On any user's card in the User Directory, click **`👁️ View As`**.
+3. Confirm the prompt to switch your active session to that user.
+4. While impersonating, a prominent sticky warning banner appears across all pages: `Viewing site as [Username] ([ROLE])`.
+5. To exit and return to your Admin account, click **`Return to Admin`** on the top banner anytime.
+
+### 🛡️ Action Approval Gates & Governance
+When `requireApprovalForPlexChanges` or `requireApprovalForEmails` switches are active in System Settings:
+1. Critical actions (such as user account permission adjustments, library sharing edits, or bulk notification emails) are staged in the **Admin Approval Queue (`/admin/approvals`)**.
+2. Administrators can review, batch-approve, or reject staged modifications with full audit history before they are executed live on Plex or dispatched via SMTP.
+
+---
+
+## ❓ 15. Need Help or Technical Support?
+
+If a stream won't play, a book download fails, or you need server assistance:
+1. **Try the AI Support Bot:** Ask questions in the floating AI Assistant on My Plex Hub for instant storage diagnostics and stream fixes.
+2. **Submit a Ticket:** Click the **Support** (`💬`) icon in the navigation bar to submit a ticket detailing the issue.
 3. You will receive email updates as the administrator investigates and resolves your request.
 
 *Happy Streaming, Reading & Listening!* 🎬📖🎧
-

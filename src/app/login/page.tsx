@@ -53,7 +53,7 @@ export default function LoginPage() {
     try {
       setPlexStatus("Contacting Plex.tv for authorization PIN...");
       const pin = await getPlexPin();
-      const authUrl = `https://app.plex.tv/auth/#!?clientID=portalarr-custom-dashboard-app&code=${pin.code}&context[device][product]=Portalarr`;
+      const authUrl = `https://app.plex.tv/auth/#!?clientID=domshomelab-dashboard-app&code=${pin.code}&context[device][product]=DomsHomeLab`;
       
       // Update the popup location to the actual Plex Auth URL
       popup.location.href = authUrl;
@@ -90,7 +90,7 @@ export default function LoginPage() {
             }
 
             const plexUser = await getPlexUser(token);
-            setPlexStatus("Authenticating with Portalarr...");
+            setPlexStatus("Authenticating with DomsHomeLab...");
             const plexUsername = plexUser.username || plexUser.title || (plexUser.email ? plexUser.email.split("@")[0] : "");
             const plexEmail = plexUser.email || (plexUsername ? `${plexUsername}@plex.local` : "");
             const res = await handlePlexCallback(token, plexUsername, plexEmail, isSetupMode || false);
@@ -131,7 +131,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-background p-4 animate-in fade-in duration-500">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4 py-8 animate-in fade-in duration-500">
       <Card className="w-full max-w-md shadow-2xl bg-[#121218]/90 backdrop-blur-md border-border/50">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">

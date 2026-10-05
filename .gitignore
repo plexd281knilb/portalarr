@@ -54,3 +54,4 @@ good*.jpg
 next-env.d.ts
 
 /src/generated/client
+data/

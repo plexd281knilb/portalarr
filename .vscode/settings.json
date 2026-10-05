@@ -1,0 +1,8 @@
+{
+  "antigravity.agent.permissionMode": "auto-approve",
+  "antigravity.tools.autoApprove": true,
+  "antigravity.terminal.allowAutoExecution": true,
+  "antigravity.fileOperations.autoApprove": true,
+  "chat.agent.allowTerminal": true,
+  "chat.agent.autoApprove": true
+}

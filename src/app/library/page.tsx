@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   getLibraries,
   getLibraryBooks,
@@ -12,7 +13,6 @@ import {
   deleteLibrary,
   getBookRequests,
   createBookRequest,
-  updateBookRequestStatus,
   scanLibrary,
   searchProwlarrIndexers,
   sendReleaseToDownloadClient,
@@ -21,16 +21,8 @@ import {
   sendBookToPersonalEmail,
   getPublicSmtpFromEmail,
   getAppUsers,
-  searchOpenLibrary,
-  searchOpenLibraryByAuthor,
-  deleteBookRequest,
-  getSeriesBooksList,
-  createMultipleBookRequests,
-  deleteMultipleBookRequests,
   submitSupportTicket,
-  retryBookRequest,
   refreshBookCover,
-  refreshRequestCover,
   findMissingBooksInSeries,
   seedDefaultLibraries,
   importCompletedDownload,
@@ -44,16 +36,17 @@ import {
   getKindleDeliveryLogs,
   retryKindleDelivery,
   clearKindleDeliveryLogs,
+  scanKindleBouncesAction,
   diagnoseKindleHealth,
-  getServicesHealthPulse,
-  fulfillRequestWithUpload,
-  toggleMonitorSeries,
-  getBlocklistedReleases,
-  unblocklistRelease,
+  toggleLibraryUserAccessAction,
+  approveBookRequestAction,
 } from "@/app/actions";
+import { isKidsLibrary } from "@/lib/books/book-rating";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
+import { BookMatchModal } from "@/components/book-match-modal";
 import ErrorTicketModal from "@/components/error-ticket-modal";
+import FeatureGuideModal from "@/components/feature-guide-modal";
 import {
   Card,
   CardHeader,
@@ -71,6 +64,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   BookOpen,
   Plus,
+  Link2,
   Search,
   Trash2,
   Edit3,
@@ -89,6 +83,7 @@ import {
   Loader2,
   Sparkles,
   Mail,
+  MailCheck,
   Send,
   AlertTriangle,
   ArrowRight,
@@ -113,7 +108,22 @@ import {
   Clock,
   Zap,
   Ban,
+  MoreVertical,
+  User,
+  Baby,
+  Users,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -307,6 +317,7 @@ function BookLibraryPageContent() {
   const [user, setUser] = useState<any>(null);
   const [fullUser, setFullUser] = useState<any>(null);
   const isAdmin = user?.role === "ADMIN" || fullUser?.role === "ADMIN";
+  const isKidUser = Boolean(user?.accountType === "KID" || fullUser?.accountType === "KID");
 
   useEffect(() => {
     const handleGlobalError = (event: PromiseRejectionEvent | ErrorEvent) => {
@@ -330,6 +341,9 @@ function BookLibraryPageContent() {
         ? localStorage.getItem("book-library-active-tab")
         : null;
     let targetTab = activeTabParam || savedTab || "libs";
+    if (targetTab === "requests") {
+      targetTab = "libs";
+    }
     if (targetTab === "manage" && user && !isAdmin) {
       targetTab = "libs";
     }
@@ -365,8 +379,6 @@ function BookLibraryPageContent() {
       setReqMediaType("audiobook");
     } else if (val === "kindle") {
       loadKindleLogs();
-    } else if (val === "requests") {
-      loadServicesPulse();
     }
   };
 
@@ -470,23 +482,6 @@ function BookLibraryPageContent() {
   const [requestedFor, setRequestedFor] = useState("");
   const [visibleCount, setVisibleCount] = useState(48);
 
-  // Open Library Autocomplete states
-  const [openLibrarySuggestions, setOpenLibrarySuggestions] = useState<any[]>(
-    [],
-  );
-  const [searchingRegistry, setSearchingRegistry] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-
-  // Author Autocomplete states
-  const [authorSuggestions, setAuthorSuggestions] = useState<any[]>([]);
-  const [searchingAuthorRegistry, setSearchingAuthorRegistry] = useState(false);
-  const [showAuthorSuggestions, setShowAuthorSuggestions] = useState(false);
-  const [reqType, setReqType] = useState("book"); // "book" or "series"
-  const [reqCoverUrl, setReqCoverUrl] = useState("");
-  const [reqPublishYear, setReqPublishYear] = useState("");
-  const [seriesBooksChecklist, setSeriesBooksChecklist] = useState<any[]>([]);
-  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
-
   // Report Issue states
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportName, setReportName] = useState("");
@@ -502,8 +497,17 @@ function BookLibraryPageContent() {
   const [editBookCoverUrl, setEditBookCoverUrl] = useState("");
   const [updatingBook, setUpdatingBook] = useState(false);
   const [refreshingCoverId, setRefreshingCoverId] = useState<string | null>(
-    null,
+    null
   );
+
+  // Match & Link Modal states
+  const [isMatchModalOpen, setIsMatchModalOpen] = useState(false);
+  const [matchModalBook, setMatchModalBook] = useState<any | null>(null);
+
+  const handleOpenMatchModal = (book: any) => {
+    setMatchModalBook(book);
+    setIsMatchModalOpen(true);
+  };
 
   // User Guide states
   const [guideMarkdown, setGuideMarkdown] = useState("");
@@ -524,19 +528,7 @@ function BookLibraryPageContent() {
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
   const [clearingKindleLogs, setClearingKindleLogs] = useState(false);
-
-  // Services Health Pulse State
-  const [servicesPulse, setServicesPulse] = useState<any>(null);
-  const [loadingPulse, setLoadingPulse] = useState(false);
-
-  // Request File Upload & Monitoring
-  const [uploadingFulfillId, setUploadingFulfillId] = useState<string | null>(null);
-  const [togglingMonitorId, setTogglingMonitorId] = useState<string | null>(null);
-
-  // Blocklisted Releases State
-  const [blocklistedReleases, setBlocklistedReleases] = useState<any[]>([]);
-  const [loadingBlocklist, setLoadingBlocklist] = useState(false);
-  const [unblocklistingGuid, setUnblocklistingGuid] = useState<string | null>(null);
+  const [scanningBounces, setScanningBounces] = useState(false);
 
   const loadKindleLogs = useCallback(async () => {
     setLoadingKindleLogs(true);
@@ -549,6 +541,27 @@ function BookLibraryPageContent() {
       setLoadingKindleLogs(false);
     }
   }, []);
+
+  const handleScanBounces = async () => {
+    setScanningBounces(true);
+    try {
+      const res = await scanKindleBouncesAction(24);
+      if (res.success) {
+        if (res.bouncesFound > 0) {
+          alert(`Detected ${res.bouncesFound} Amazon rejection(s)! Delivery status updated to FAILED with error details.`);
+        } else {
+          alert(res.message || "Inbox scanned. No Amazon rejection emails detected.");
+        }
+        await loadKindleLogs();
+      } else {
+        alert(res.error || "Failed to scan inbox for Amazon bounces.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Error scanning inbox for bounces.");
+    } finally {
+      setScanningBounces(false);
+    }
+  };
 
   const handleRunKindleDiagnostics = async () => {
     setRunningDiagnostics(true);
@@ -592,91 +605,6 @@ function BookLibraryPageContent() {
     }
   };
 
-  const loadServicesPulse = useCallback(async () => {
-    setLoadingPulse(true);
-    try {
-      const pulse = await getServicesHealthPulse();
-      setServicesPulse(pulse);
-    } catch (e) {
-      console.error("Failed to check services health pulse:", e);
-    } finally {
-      setLoadingPulse(false);
-    }
-  }, []);
-
-  const handleFulfillWithUpload = async (requestId: string, file: File) => {
-    setUploadingFulfillId(requestId);
-    try {
-      const formData = new FormData();
-      formData.append("requestId", requestId);
-      formData.append("file", file);
-      const res = await fulfillRequestWithUpload(formData);
-      if (res.success) {
-        alert(res.message || "File uploaded and processed successfully!");
-        const reqs = await getBookRequests();
-        setRequests(reqs || []);
-        if (selectedLibrary?.id) {
-          const freshBooks = await getLibraryBooks(selectedLibrary.id);
-          setBooks(freshBooks || []);
-        }
-      } else {
-        showErrorModal(res.error || "Failed to fulfill request with uploaded file.", "Upload Fulfillment Error");
-      }
-    } catch (e: any) {
-      showErrorModal(e.message || "Failed to upload file.", "Upload Error");
-    } finally {
-      setUploadingFulfillId(null);
-    }
-  };
-
-  const handleToggleSeriesMonitoring = async (requestId: string) => {
-    setTogglingMonitorId(requestId);
-    try {
-      const res = await toggleMonitorSeries(requestId);
-      if (res.success) {
-        setRequests((prev) =>
-          prev.map((r) =>
-            r.id === requestId ? { ...r, monitorSeries: res.monitorSeries } : r
-          )
-        );
-      } else {
-        alert(res.error || "Failed to update series monitoring.");
-      }
-    } catch (e: any) {
-      alert(e.message || "Failed to toggle series monitoring.");
-    } finally {
-      setTogglingMonitorId(null);
-    }
-  };
-
-  const loadBlocklist = useCallback(async () => {
-    setLoadingBlocklist(true);
-    try {
-      const list = await getBlocklistedReleases();
-      setBlocklistedReleases(list || []);
-    } catch (e) {
-      console.error("Failed to load blocklisted releases:", e);
-    } finally {
-      setLoadingBlocklist(false);
-    }
-  }, []);
-
-  const handleUnblocklist = async (guid: string) => {
-    setUnblocklistingGuid(guid);
-    try {
-      const res = await unblocklistRelease(guid);
-      if (res.success) {
-        setBlocklistedReleases((prev) => prev.filter((r) => r.guid !== guid));
-      } else {
-        alert(res.error || "Failed to remove blocklist entry.");
-      }
-    } catch (e: any) {
-      alert(e.message || "Failed to unblocklist release.");
-    } finally {
-      setUnblocklistingGuid(null);
-    }
-  };
-
   const handleRefreshCover = async (bookId: string) => {
     setRefreshingCoverId(bookId);
     try {
@@ -693,28 +621,6 @@ function BookLibraryPageContent() {
       alert(e.message || "Failed to refresh cover.");
     } finally {
       setRefreshingCoverId(null);
-    }
-  };
-
-  const [refreshingRequestCoverId, setRefreshingRequestCoverId] = useState<string | null>(null);
-
-  const handleRefreshRequestCover = async (requestId: string) => {
-    setRefreshingRequestCoverId(requestId);
-    try {
-      const res = await refreshRequestCover(requestId);
-      if (res.success && res.coverUrl) {
-        setRequests((prev) =>
-          prev.map((r) =>
-            r.id === requestId ? { ...r, coverUrl: res.coverUrl } : r
-          )
-        );
-      } else {
-        alert(res.error || "Could not fetch cover artwork.");
-      }
-    } catch (e: any) {
-      alert(e.message || "Failed to refresh request cover.");
-    } finally {
-      setRefreshingRequestCoverId(null);
     }
   };
 
@@ -925,6 +831,26 @@ function BookLibraryPageContent() {
     return { displayTitle, displayAuthor };
   }
 
+  const renderAgeRatingBadge = (ageRating?: string | null) => {
+    if (!ageRating || ageRating === "All Ages" || ageRating === "General") return null;
+    return (
+      <Badge
+        variant="outline"
+        className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded backdrop-blur-md border shadow-xs ${
+          ageRating === "Kids"
+            ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
+            : ageRating === "YA (12+)"
+            ? "bg-sky-500/25 text-sky-300 border-sky-500/40"
+            : ageRating === "18+ Mature"
+            ? "bg-rose-500/25 text-rose-300 border-rose-500/40"
+            : "bg-slate-900/80 text-slate-300 border-slate-700/60"
+        }`}
+      >
+        {ageRating}
+      </Badge>
+    );
+  };
+
   const renderBookCard = (book: any) => {
     let { displayTitle, displayAuthor } = normalizeBookCardMetadata(book);
     if (groupBySeries && book.cleanSeriesTitle) {
@@ -959,6 +885,7 @@ function BookLibraryPageContent() {
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
                 {book.fileType?.toUpperCase()}
               </Badge>
+              {renderAgeRatingBadge(book.ageRating)}
               {volumeBadge}
             </div>
           </div>
@@ -968,6 +895,7 @@ function BookLibraryPageContent() {
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
                 {book.fileType?.toUpperCase()}
               </Badge>
+              {renderAgeRatingBadge(book.ageRating)}
               {volumeBadge}
             </div>
             <div className="flex-1 flex flex-col justify-center items-center">
@@ -1026,7 +954,7 @@ function BookLibraryPageContent() {
             <span>Added: {new Date(book.createdAt).toLocaleDateString()}</span>
           </div>
         </div>
-        <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
+        <CardFooter className="p-2.5 bg-muted/20 border-t border-muted/50 flex flex-col gap-2">
           {(() => {
             const isComic = book.fileType === "cbr" || book.fileType === "cbz" || (book.filePath && /\.(?:cbr|cbz)$/i.test(book.filePath));
             const progress = readingProgressMap[book.id];
@@ -1038,210 +966,206 @@ function BookLibraryPageContent() {
             const displayPercentage = hasProgress ? Math.max(1, progress.percentage || 1) : 0;
             return (
               <>
-                <div className="flex gap-2 w-full">
+                {/* 1. Primary Action & More Options Row */}
+                <div className="flex items-center gap-1.5 w-full">
                   <Button
                     variant="default"
                     size="sm"
-                    className="flex-1 text-xs font-semibold text-black"
+                    className="flex-1 h-8 text-xs font-bold text-black bg-primary hover:bg-primary/90 gap-1.5 shadow-sm min-w-0 cursor-pointer"
+                    title={hasProgress ? `Resume reading (${displayPercentage}%)` : isComic ? "Open Comic Reader" : "Read Book"}
                     onClick={() => setActiveReadingBook(book)}
                   >
-                    <BookOpen className="h-3 w-3 mr-1" />
-                    {hasProgress ? `Resume (${displayPercentage}%)` : "Read"}
+                    <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{hasProgress ? `Resume (${displayPercentage}%)` : isComic ? "Read Comic" : "Read Book"}</span>
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`flex-1 text-xs border-primary/20 text-primary font-semibold ${
-                      isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-primary/10"
-                    }`}
-                    title={
-                      isComic
-                        ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle. Please use Read or Direct Download."
-                        : "Send to Kindle"
-                    }
-                    disabled={sendingToKindleId !== null || isComic}
-                    onClick={() => !isComic && handleSendToKindle(book.id)}
-                  >
-                    {sendingToKindleId === book.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    ) : (
-                      <Send className="h-3 w-3 mr-1" />
-                    )}
-                    Kindle
-                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                        title="More Actions"
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>Book Options</DropdownMenuLabel>
+
+                      <DropdownMenuItem asChild>
+                        <a href={`/api/books/${book.id}`} download className="flex items-center gap-2 w-full">
+                          <Download className="h-3.5 w-3.5 text-slate-400" />
+                          <span>Download File</span>
+                        </a>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        disabled={sendingToPersonalEmailId === book.id}
+                        onClick={() => handleSendToPersonalEmail(book.id)}
+                      >
+                        {sendingToPersonalEmailId === book.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                        ) : (
+                          <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                        )}
+                        <span>Email to Inbox</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem onClick={() => handleSearchAndReplaceRelease(book)}>
+                        <Search className="h-3.5 w-3.5 text-cyan-400" />
+                        <span>Search &amp; Re-Grab</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        disabled={refreshingCoverId === book.id}
+                        onClick={() => handleRefreshCover(book.id)}
+                      >
+                        {refreshingCoverId === book.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                        ) : (
+                          <ImageIcon className="h-3.5 w-3.5 text-purple-400" />
+                        )}
+                        <span>Fetch Cover Artwork</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleOpenReportIssueModal({
+                            type: "book",
+                            title: book.title,
+                            id: book.id,
+                          })
+                        }
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                        <span>Report an Issue</span>
+                      </DropdownMenuItem>
+
+                      {isAdmin && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel>Administration</DropdownMenuLabel>
+
+                          <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
+                            <Link2 className="h-3.5 w-3.5 text-indigo-400" />
+                            <span>Match &amp; Link Series</span>
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            disabled={resolvingAiId === book.id}
+                            onClick={async () => {
+                              setResolvingAiId(book.id);
+                              const res = await resolveBookWithAI(book.id);
+                              setResolvingAiId(null);
+                              if (res.success) {
+                                handleScanLibrary(book.libraryId || selectedLibrary?.id);
+                              } else {
+                                alert(res.error || "Failed to resolve with AI Agent");
+                              }
+                            }}
+                          >
+                            {resolvingAiId === book.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                            ) : (
+                              <Bot className="h-3.5 w-3.5 text-purple-400" />
+                            )}
+                            <span>AI Metadata Agent</span>
+                          </DropdownMenuItem>
+
+                          {!isComic && allUsers.filter((u) => u.kindleEmail && u.kindleEmail.trim()).length > 0 && (
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger>
+                                {sendingToKindleId === book.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                                ) : (
+                                  <Send className="h-3.5 w-3.5 text-amber-400" />
+                                )}
+                                <span>Send to User Kindle</span>
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="w-64 max-h-56 overflow-y-auto">
+                                <DropdownMenuLabel className="text-[10px] text-muted-foreground">Select User</DropdownMenuLabel>
+                                {allUsers
+                                  .filter((u) => u.kindleEmail && u.kindleEmail.trim())
+                                  .map((u) => (
+                                    <DropdownMenuItem
+                                      key={u.id}
+                                      onClick={async () => {
+                                        const confirmSend = window.confirm(
+                                          `Send this book to ${u.username}'s Kindle (${u.kindleEmail})?`
+                                        );
+                                        if (!confirmSend) return;
+                                        setSendingToKindleId(book.id);
+                                        try {
+                                          const res = await sendBookToKindle(book.id, u.username);
+                                          if (res && !res.success) {
+                                            alert(res.error || `Delivery failed.`);
+                                          } else {
+                                            alert(`Sent to ${u.username}'s Kindle!`);
+                                          }
+                                        } catch (err: any) {
+                                          alert(err.message || `Delivery failed.`);
+                                        } finally {
+                                          setSendingToKindleId(null);
+                                        }
+                                      }}
+                                    >
+                                      <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                      <div className="flex flex-col flex-1 min-w-0">
+                                        <span className="truncate font-medium text-xs text-foreground">{u.username}</span>
+                                        <span className="truncate text-[10px] text-muted-foreground">{u.kindleEmail}</span>
+                                      </div>
+                                    </DropdownMenuItem>
+                                  ))}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          )}
+
+                          <DropdownMenuItem onClick={() => handleOpenEditBookModal(book)}>
+                            <Edit3 className="h-3.5 w-3.5 text-blue-400" />
+                            <span>Edit Details</span>
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => handleDeleteBook(book.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                            <span>Delete Book</span>
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                {user?.role === "ADMIN" && allUsers.length > 0 && (
-                  <div className="w-full flex gap-1 items-center mt-1">
-                    <select
-                      id={`send-to-user-${book.id}`}
-                      className={`flex-1 h-7 text-[10px] rounded border border-[#2d2d34] bg-[#111115] px-2 py-0.5 text-muted-foreground focus:outline-none ${
-                        isComic ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
-                      }`}
-                      defaultValue=""
-                      disabled={isComic}
-                      title={isComic ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle." : "Send to User's Kindle"}
-                      onChange={async (e) => {
-                        const targetUsername = e.target.value;
-                        if (!targetUsername || isComic) return;
 
-                        const confirmSend = window.confirm(
-                          `Are you sure you want to send this book to ${targetUsername}'s Kindle?`,
-                        );
-                        if (!confirmSend) {
-                          e.target.value = "";
-                          return;
-                        }
-
-                        // Reset value of select
-                        e.target.value = "";
-
-                        setSendingToKindleId(book.id);
-                        try {
-                          const res = await sendBookToKindle(book.id, targetUsername);
-                          if (res && !res.success) {
-                            alert(
-                              res.error ||
-                                `Delivery to ${targetUsername}'s Kindle failed.`,
-                            );
-                          } else {
-                            alert(
-                              `Ebook successfully sent to ${targetUsername}'s Kindle!`,
-                            );
-                          }
-                        } catch (err: any) {
-                          alert(err.message || `Delivery failed.`);
-                        } finally {
-                          setSendingToKindleId(null);
-                        }
-                      }}
-                    >
-                      <option value="">{isComic ? "Kindle Unsupported for Comic" : "Send to User's Kindle..."}</option>
-                      {!isComic &&
-                        allUsers
-                          .filter((u) => u.kindleEmail)
-                          .map((u) => (
-                            <option key={u.id} value={u.username}>
-                              {u.username} ({u.kindleEmail})
-                            </option>
-                          ))}
-                    </select>
-                  </div>
-                )}
+                {/* 2. Send to Kindle Full-Width Action (Zero Truncation Guaranteed) */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`w-full h-7.5 text-xs border-amber-500/30 text-amber-400 font-semibold px-2 gap-1.5 min-w-0 shadow-sm transition-colors cursor-pointer ${
+                    isComic ? "opacity-40 cursor-not-allowed hover:bg-transparent" : "hover:bg-amber-500/10"
+                  }`}
+                  title={
+                    isComic
+                      ? "Comic archives (.cbr/.cbz) cannot be emailed to Kindle."
+                      : "Send to Kindle"
+                  }
+                  disabled={sendingToKindleId !== null || isComic}
+                  onClick={() => !isComic && handleSendToKindle(book.id)}
+                >
+                  {sendingToKindleId === book.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-400" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                  )}
+                  <span className="whitespace-nowrap font-medium text-xs">
+                    {sendingToKindleId === book.id ? "Sending to Kindle..." : "Send to Kindle"}
+                  </span>
+                </Button>
               </>
             );
           })()}
-          <div className="flex flex-wrap gap-2 justify-center w-full border-t border-muted/40 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
-              asChild
-              title="Download File directly to your device"
-            >
-              <a href={`/api/books/${book.id}`} download>
-                <Download className="h-3.5 w-3.5" />
-              </a>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-              title="Email File to Personal Inbox"
-              disabled={sendingToPersonalEmailId === book.id}
-              onClick={() => handleSendToPersonalEmail(book.id)}
-            >
-              {sendingToPersonalEmailId === book.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Mail className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
-              title="Report an Issue"
-              onClick={() =>
-                handleOpenReportIssueModal({
-                  type: "book",
-                  title: book.title,
-                  id: book.id,
-                })
-              }
-            >
-              <AlertTriangle className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-semibold"
-              title="Search & Re-Grab Release"
-              onClick={() => handleSearchAndReplaceRelease(book)}
-            >
-              <Search className="h-3.5 w-3.5 mr-1" /> Re-Grab Release
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-              title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
-              disabled={refreshingCoverId === book.id}
-              onClick={() => handleRefreshCover(book.id)}
-            >
-              {refreshingCoverId === book.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ImageIcon className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs h-7 px-2 border-purple-500/40 text-purple-300 hover:bg-purple-500/20"
-                title="Run AI Metadata Agent (Extract Official Title, Author & HD Cover)"
-                disabled={resolvingAiId === book.id}
-                onClick={async () => {
-                  setResolvingAiId(book.id);
-                  const res = await resolveBookWithAI(book.id);
-                  setResolvingAiId(null);
-                  if (res.success) {
-                    handleScanLibrary(book.libraryId || selectedLibrary?.id);
-                  } else {
-                    alert(res.error || "Failed to resolve with AI Agent");
-                  }
-                }}
-              >
-                {resolvingAiId === book.id ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
-                ) : (
-                  <Bot className="h-3.5 w-3.5 text-purple-400" />
-                )}
-              </Button>
-            )}
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs h-7 px-2 border-blue-500/20 text-blue-500 hover:bg-blue-500/10"
-                title="Edit Book"
-                onClick={() => handleOpenEditBookModal(book)}
-              >
-                <Edit3 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {isAdmin && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDeleteBook(book.id)}
-                className="text-xs h-7 px-2"
-                title="Delete"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-          </div>
         </CardFooter>
       </Card>
     );
@@ -1276,6 +1200,7 @@ function BookLibraryPageContent() {
             <Badge className="bg-amber-500/90 text-black border border-amber-400/50 text-[10px] uppercase font-extrabold tracking-wider shadow">
               🎧 {ext}
             </Badge>
+            {renderAgeRatingBadge(book.ageRating)}
           </div>
         </div>
 
@@ -1301,105 +1226,118 @@ function BookLibraryPageContent() {
           </div>
         </div>
 
-        <CardFooter className="p-3 bg-muted/20 border-t border-muted/50 flex flex-col gap-2 relative z-20">
+        <CardFooter className="p-2.5 bg-muted/20 border-t border-muted/50 flex flex-col gap-2 relative z-20">
+          {/* Hero Primary Action CTA */}
           <Button
             variant="default"
             size="sm"
-            className="w-full text-xs font-extrabold text-black bg-amber-400 hover:bg-amber-300 gap-1.5 shadow cursor-pointer relative z-30 py-2"
+            className="w-full h-8 text-xs font-extrabold text-black bg-amber-400 hover:bg-amber-300 gap-1.5 shadow cursor-pointer relative z-30"
             onClick={(e) => {
               e.stopPropagation();
               handleOpenChaptersModal(book);
             }}
           >
-            <Play className="h-4 w-4 fill-black" /> Listen &amp; Chapters
+            <Play className="h-3.5 w-3.5 fill-black shrink-0" />
+            <span>Listen &amp; Chapters</span>
           </Button>
 
-          <div className="flex flex-wrap gap-1.5 justify-center w-full border-t border-muted/40 pt-2">
+          {/* 2. Secondary Action & Options Row */}
+          <div className="flex items-center gap-1 sm:gap-1.5 w-full">
             <Button
               variant="outline"
               size="sm"
-              className="text-xs h-7 px-2.5 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1 cursor-pointer relative z-30"
+              className="flex-1 h-7 text-[11px] sm:text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold gap-1 sm:gap-1.5 px-1.5 sm:px-2 min-w-0"
               asChild
-              title="Download Audiobook"
+              title="Direct Download Audiobook"
             >
               <a href={`/api/books/${book.id}`} download>
-                <Download className="h-3.5 w-3.5" /> Download
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Download</span>
               </a>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 font-semibold gap-1"
-              title="Search & Re-Grab Release"
-              onClick={() => handleSearchAndReplaceRelease(book)}
-            >
-              <Search className="h-3.5 w-3.5" /> Re-Grab
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1"
-              title="Email Audio File to Personal Inbox"
-              disabled={sendingToPersonalEmailId === book.id}
-              onClick={() => handleSendToPersonalEmail(book.id)}
-            >
-              {sendingToPersonalEmailId === book.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Mail className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
-              title="Report an Issue"
-              onClick={() =>
-                handleOpenReportIssueModal({
-                  type: "audiobook",
-                  title: book.title,
-                  id: book.id,
-                })
-              }
-            >
-              <AlertTriangle className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-7 px-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-              title="Fetch Cover Artwork (iTunes, Open Library, Google Books)"
-              disabled={refreshingCoverId === book.id}
-              onClick={() => handleRefreshCover(book.id)}
-            >
-              {refreshingCoverId === book.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ImageIcon className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            {isAdmin && (
-              <>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs h-7 px-2 border-blue-500/20 text-blue-500 hover:bg-blue-500/10"
-                  title="Edit Audiobook"
-                  onClick={() => handleOpenEditBookModal(book)}
+                  className="h-7 w-7 p-0 flex items-center justify-center border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                  title="More Actions"
                 >
-                  <Edit3 className="h-3.5 w-3.5" />
+                  <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDeleteBook(book.id)}
-                  className="text-xs h-7 px-2"
-                  title="Delete"
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Audiobook Options</DropdownMenuLabel>
+
+                <DropdownMenuItem
+                  disabled={sendingToPersonalEmailId === book.id}
+                  onClick={() => handleSendToPersonalEmail(book.id)}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
+                  {sendingToPersonalEmailId === book.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                  ) : (
+                    <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                  )}
+                  <span>Email to Inbox</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => handleSearchAndReplaceRelease(book)}>
+                  <Search className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Search &amp; Re-Grab</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  disabled={refreshingCoverId === book.id}
+                  onClick={() => handleRefreshCover(book.id)}
+                >
+                  {refreshingCoverId === book.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                  ) : (
+                    <ImageIcon className="h-3.5 w-3.5 text-purple-400" />
+                  )}
+                  <span>Fetch Cover Artwork</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    handleOpenReportIssueModal({
+                      type: "audiobook",
+                      title: book.title,
+                      id: book.id,
+                    })
+                  }
+                >
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Report an Issue</span>
+                </DropdownMenuItem>
+
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Administration</DropdownMenuLabel>
+
+                    <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
+                      <Link2 className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Match &amp; Link Series</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem onClick={() => handleOpenEditBookModal(book)}>
+                      <Edit3 className="h-3.5 w-3.5 text-blue-400" />
+                      <span>Edit Details</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => handleDeleteBook(book.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                      <span>Delete Audiobook</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardFooter>
       </Card>
@@ -1416,10 +1354,6 @@ function BookLibraryPageContent() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
-  // Request Form states
-  const [reqTitle, setReqTitle] = useState("");
-  const [reqAuthor, setReqAuthor] = useState("");
-  const [isSelectedFromRegistry, setIsSelectedFromRegistry] = useState(false);
 
   // Reader state
   const [activeBook, setActiveBook] = useState<any>(null);
@@ -1431,6 +1365,10 @@ function BookLibraryPageContent() {
         setUser(session);
 
         const profile = await getCurrentUser();
+        if (profile && (profile.status === "EXPIRED" || profile.status === "PENDING" || profile.status === "REJECTED" || profile.status === "SUSPENDED")) {
+          window.location.href = "/pending";
+          return;
+        }
         setFullUser(profile);
         if (profile) {
           setUserEmail(profile.email || "");
@@ -1514,7 +1452,6 @@ function BookLibraryPageContent() {
           console.warn("Failed to load user guide:", e);
         }
 
-        getServicesHealthPulse().then((p) => setServicesPulse(p)).catch(() => {});
         getKindleDeliveryLogs().then((l) => setKindleLogs(l || [])).catch(() => {});
       } catch (e) {
         console.error("Failed to load initial library data:", e);
@@ -1592,60 +1529,14 @@ function BookLibraryPageContent() {
         (r.status && r.status.startsWith("Downloading")),
     );
 
-    const intervalMs = hasActiveRequests
-      ? 5000
-      : activeTab === "requests"
-        ? 10000
-        : 15000;
+    const intervalMs = hasActiveRequests ? 5000 : 15000;
 
     const timer = setInterval(() => {
       refreshRequests();
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [requests, activeTab, refreshRequests]);
-
-  useEffect(() => {
-    if (!reqTitle || reqTitle.trim().length < 2) {
-      setOpenLibrarySuggestions([]);
-      return;
-    }
-
-    const delayDebounceFn = setTimeout(async () => {
-      setSearchingRegistry(true);
-      try {
-        const results = await searchOpenLibrary(reqTitle, reqMediaType);
-        setOpenLibrarySuggestions(results || []);
-      } catch (e) {
-        console.error("Autocomplete search error:", e);
-      } finally {
-        setSearchingRegistry(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [reqTitle, reqMediaType]);
-
-  useEffect(() => {
-    if (!reqAuthor || reqAuthor.trim().length < 2) {
-      setAuthorSuggestions([]);
-      return;
-    }
-
-    const delayDebounceFn = setTimeout(async () => {
-      setSearchingAuthorRegistry(true);
-      try {
-        const results = await searchOpenLibraryByAuthor(reqAuthor, reqMediaType);
-        setAuthorSuggestions(results || []);
-      } catch (e) {
-        console.error("Author autocomplete search error:", e);
-      } finally {
-        setSearchingAuthorRegistry(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [reqAuthor, reqMediaType]);
+  }, [requests, refreshRequests]);
 
   useEffect(() => {
     if (selectedLibrary) {
@@ -1799,6 +1690,25 @@ function BookLibraryPageContent() {
     } catch (e: any) {
       console.error("Failed to seed default libraries:", e);
       alert(e.message || "Failed to seed default libraries.");
+    }
+  }
+
+  async function handleToggleUserAccess(libraryId: string, username: string) {
+    try {
+      const res = await toggleLibraryUserAccessAction(libraryId, username);
+      if (res && res.success && res.allowedUsers !== undefined) {
+        setLibraries((prev) =>
+          prev.map((lib) =>
+            lib.id === libraryId
+              ? { ...lib, allowedUsers: res.allowedUsers }
+              : lib,
+          ),
+        );
+      } else {
+        alert(res?.error || "Failed to toggle user access.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to toggle user access.");
     }
   }
 
@@ -2170,6 +2080,7 @@ function BookLibraryPageContent() {
       const res = await findMissingBooksInSeries(
         seriesName,
         author,
+        selectedLibrary?.id,
       );
       if (res.success && res.data) {
         setMissingBooksMap((prev) => ({ ...prev, [seriesName]: res.data }));
@@ -2274,6 +2185,8 @@ function BookLibraryPageContent() {
       const fd = new FormData();
       fd.append("title", book.title);
       fd.append("author", book.author || "");
+      if (book.series) fd.append("series", book.series);
+      if (book.volumeNumber) fd.append("volumeNumber", String(book.volumeNumber));
       if (book.publishYear) fd.append("publishYear", String(book.publishYear));
       if (book.coverUrl) fd.append("coverUrl", book.coverUrl);
       fd.append("mediaType", detectedMediaType);
@@ -2309,179 +2222,15 @@ function BookLibraryPageContent() {
     }
   }
 
-  async function handleCreateRequest(e: React.FormEvent) {
-    e.preventDefault();
-    if (!reqTitle || !reqTitle.trim()) {
-      showErrorModal(
-        "Please enter a title for your book or audiobook request.",
-        "Form Validation Error",
-      );
-      return;
-    }
-
-    if (reqType !== "series" && !isSelectedFromRegistry) {
-      showErrorModal(
-        "Please select a verified book from the auto-populated search results dropdown. Selecting from the registry ensures complete book details, author formatting, and official cover artwork.",
-        "Registry Selection Required",
-      );
-      return;
-    }
-
-    setIsSubmittingRequest(true);
-    try {
-      let res: any;
-      if (reqType === "series" && seriesBooksChecklist.length > 0) {
-        const checkedBooks = seriesBooksChecklist.filter((b) => b.checked);
-        if (checkedBooks.length === 0) {
-          showErrorModal(
-            "Please select at least one book in the series to request.",
-            "Form Validation Error",
-          );
-          setIsSubmittingRequest(false);
-          return;
-        }
-        res = await createMultipleBookRequests(
-          checkedBooks,
-          requestedFor,
-          reqMediaType,
-          selectedLibrary?.id,
-        );
-      } else {
-        let sendTitle = reqTitle.trim();
-        let sendAuthor = reqAuthor.trim();
-        if (!sendAuthor) {
-          if (/\s+by\s+/i.test(sendTitle)) {
-            const parts = sendTitle.split(/\s+by\s+/i);
-            sendTitle = parts[0].trim();
-            sendAuthor = parts.slice(1).join(" by ").trim();
-          } else if (sendTitle.includes(" - ")) {
-            const parts = sendTitle.split(" - ");
-            sendTitle = parts[0].trim();
-            sendAuthor = parts.slice(1).join(" - ").trim();
-          } else if (sendTitle.includes(": ")) {
-            const parts = sendTitle.split(": ");
-            sendTitle = parts[0].trim();
-            sendAuthor = parts.slice(1).join(": ").trim();
-          }
-        }
-
-        const formData = new FormData();
-        formData.append("title", sendTitle);
-        formData.append("author", sendAuthor);
-        formData.append("type", reqType);
-        formData.append("mediaType", reqMediaType);
-        formData.append("coverUrl", reqCoverUrl);
-        formData.append("publishYear", reqPublishYear);
-        if (requestedFor) {
-          formData.append("requestedFor", requestedFor);
-        }
-        if (selectedLibrary?.id) {
-          formData.append("libraryId", selectedLibrary.id);
-        }
-        res = await createBookRequest(formData);
-      }
-
-      if (res && res.error) {
-        showErrorModal(res.error, "Request Submission Error");
-        return;
-      }
-
-      setReqTitle("");
-      setReqAuthor("");
-      setReqCoverUrl("");
-      setReqPublishYear("");
-      setReqType("book");
-      setReqMediaType(activeTab === "audiobooks" ? "audiobook" : "ebook");
-      setRequestedFor("");
-      setSeriesBooksChecklist([]);
-      setIsSelectedFromRegistry(false);
-      const reqs = await getBookRequests();
-      setRequests(reqs || []);
-    } catch (e: any) {
-      console.error("Failed to submit request:", e);
-      showErrorModal(e.message || "Failed to submit request.", "Request Error");
-    } finally {
-      setIsSubmittingRequest(false);
-    }
-  }
-
-  function toggleChecklistItem(index: number) {
-    setSeriesBooksChecklist((prev) =>
-      prev.map((item, idx) =>
-        idx === index ? { ...item, checked: !item.checked } : item,
-      ),
-    );
-  }
-
-  function selectAllChecklist(checked: boolean) {
-    setSeriesBooksChecklist((prev) =>
-      prev.map((item) => ({ ...item, checked })),
-    );
-  }
-
-  async function handleBulkDeleteRequests() {
-    if (selectedRequestIds.length === 0) return;
-    if (
-      !confirm(
-        `Are you sure you want to delete ${selectedRequestIds.length} selected requests?`,
-      )
-    )
-      return;
-    try {
-      await deleteMultipleBookRequests(selectedRequestIds);
-      setSelectedRequestIds([]);
-      const reqs = await getBookRequests();
-      setRequests(reqs || []);
-    } catch (e: any) {
-      alert(e.message || "Failed to delete selected requests.");
-    }
-  }
-
-  function toggleSelectRequest(id: string) {
-    setSelectedRequestIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  }
-
-  function toggleSelectAllRequests() {
-    const deletableRequests = requests.filter(
-      (req) => isAdmin || req.requestedBy === user?.username,
-    );
-    const deletableIds = deletableRequests.map((r) => r.id);
-
-    const allAlreadySelected = deletableIds.every((id) =>
-      selectedRequestIds.includes(id),
-    );
-    if (allAlreadySelected) {
-      setSelectedRequestIds((prev) =>
-        prev.filter((id) => !deletableIds.includes(id)),
-      );
-    } else {
-      setSelectedRequestIds((prev) => {
-        const newIds = [...prev];
-        deletableIds.forEach((id) => {
-          if (!newIds.includes(id)) newIds.push(id);
-        });
-        return newIds;
-      });
-    }
-  }
-
   function handleOpenReportIssueModal(item: {
-    type: "book" | "audiobook" | "request";
+    type: "book" | "audiobook";
     title: string;
     id: string;
-    status?: string;
   }) {
     setReportName(user?.username || "");
     setReportEmail(user?.email || "");
 
-    let prefilledIssue = "";
-    if (item.type === "book") {
-      prefilledIssue = `Issue with library book: "${item.title}" (ID: ${item.id})\n\nDescribe the issue: `;
-    } else {
-      prefilledIssue = `Issue with book request: "${item.title}" (ID: ${item.id}, Status: ${item.status || "Pending"})\n\nDescribe the issue: `;
-    }
+    const prefilledIssue = `Issue with library ${item.type}: "${item.title}" (ID: ${item.id})\n\nDescribe the issue: `;
 
     setReportDescription(prefilledIssue);
     setIsReportModalOpen(true);
@@ -2546,35 +2295,23 @@ function BookLibraryPageContent() {
     }
   };
 
-  async function handleUpdateRequestStatus(id: string, status: string) {
-    try {
-      await updateBookRequestStatus(id, status);
-      const reqs = await getBookRequests();
-      setRequests(reqs || []);
-    } catch (e) {
-      console.error("Failed to update request:", e);
-    }
-  }
-
-  async function handleDeleteRequest(id: string) {
-    if (!confirm("Are you sure you want to delete this request?")) return;
-    try {
-      await deleteBookRequest(id);
-      const reqs = await getBookRequests();
-      setRequests(reqs || []);
-    } catch (e: any) {
-      alert(e.message || "Failed to delete request.");
-    }
-  }
-
   const { sortedBooks, seriesGroups, standaloneBooks } = useMemo(() => {
     const sorted = [...books]
-      .filter(
-        (book) =>
+      .filter((book) => {
+        if (isKidUser) {
+          const isMature =
+            book.maturityRating === "MATURE" ||
+            book.ageRating === "18+ Mature";
+          if (isMature) return false;
+          // Strict whitelist: Child accounts strictly only see verified Kids or YA books
+          if (book.ageRating !== "Kids" && book.ageRating !== "YA (12+)") return false;
+        }
+        return (
           book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (book.author &&
-            book.author.toLowerCase().includes(searchQuery.toLowerCase())),
-      )
+            book.author.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+      })
       .sort((a, b) => {
         if (sortBy === "title-asc") {
           return a.title.localeCompare(b.title);
@@ -2664,7 +2401,7 @@ function BookLibraryPageContent() {
       seriesGroups: sGroups,
       standaloneBooks: stBooks,
     };
-  }, [books, searchQuery, sortBy, requests, groupBySeries]);
+  }, [books, searchQuery, sortBy, requests, groupBySeries, isKidUser]);
 
 
 
@@ -2791,7 +2528,7 @@ function BookLibraryPageContent() {
                   </div>
                   <p className="text-xs text-red-200 leading-relaxed">
                     Amazon will silently delete your books unless you whitelist
-                    our server. You <strong>MUST</strong> add the Portalarr
+                    our server. You <strong>MUST</strong> add the DomsHomeLab (d281knilb)
                     server email address to your Amazon "Approved Personal
                     Document E-mail List" before saving.
                   </p>
@@ -2876,6 +2613,28 @@ function BookLibraryPageContent() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            asChild
+            variant="default"
+            size="sm"
+            className="text-xs gap-1.5 shadow-md bg-primary text-slate-950 font-bold hover:bg-primary/90"
+          >
+            <Link href={activeTab === "audiobooks" ? "/discover?tab=audiobooks" : "/discover?tab=ebooks"}>
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Media Requests</span>
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="text-xs gap-1.5 border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-200"
+          >
+            <Link href="/requests">
+              <Send className="h-3.5 w-3.5 text-blue-400" />
+              <span>Requests</span>
+            </Link>
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
@@ -2885,6 +2644,20 @@ function BookLibraryPageContent() {
             <Mail className="h-3.5 w-3.5 text-primary" />
             <span>Kindle: {userKindleEmail || "Not Configured"}</span>
           </Button>
+          <FeatureGuideModal 
+            guideId={
+              activeTab === "audiobooks" ? "audiobooks" :
+              activeTab === "kindle" ? "kindle-setup" :
+              activeTab === "manage" ? "requests-pipeline" :
+              "ebooks"
+            } 
+            triggerText={
+              activeTab === "audiobooks" ? "Audiobooks Guide" :
+              activeTab === "kindle" ? "Kindle Guide" :
+              activeTab === "manage" ? "Pipeline Guide" :
+              "Ebooks Guide"
+            } 
+          />
           {isAdmin && (
             <Badge
               variant="outline"
@@ -2901,52 +2674,69 @@ function BookLibraryPageContent() {
         onValueChange={handleTabChange}
         className="w-full space-y-6"
       >
-        <TabsList className="flex flex-wrap sm:flex-nowrap w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
+        <TabsList className="flex flex-wrap sm:flex-nowrap overflow-x-auto no-scrollbar w-full max-w-4xl h-auto p-1.5 bg-slate-900/90 border border-slate-800/80 rounded-xl gap-1.5 shadow-md">
           <TabsTrigger
             value="libs"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(255,255,255,0.22)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <BookOpen className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Ebooks</span>
+            <BookOpen className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span className="truncate">Ebooks</span>
           </TabsTrigger>
           <TabsTrigger
             value="audiobooks"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-amber-400 data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400 data-[state=active]:text-slate-950" /> <span>Audiobooks</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="requests"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(96,165,250,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
-          >
-            <Send className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Requests</span>
+            <Headphones className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400 data-[state=active]:text-slate-950" /> <span className="truncate">Audiobooks</span>
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
               value="manage"
-              className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+              className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
             >
-              <Plus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span>Manage</span>
+              <Plus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" /> <span className="truncate">Manage</span>
             </TabsTrigger>
           )}
           <TabsTrigger
             value="kindle"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-cyan-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
             <Mail className="h-4 w-4 text-cyan-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
-            <span>Kindle</span>
+            <span className="truncate">Kindle</span>
           </TabsTrigger>
           <TabsTrigger
             value="help"
-            className="group py-2 px-3 sm:px-4 flex-1 flex items-center justify-center gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(192,132,252,0.35)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(192,132,252,0.35)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
             <HelpCircle className="h-4 w-4 text-purple-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
-            <span>Help & Guide</span>
+            <span className="truncate">Help & Guide</span>
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="libs" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1 space-y-4">
+          {/* Mobile & Tablet Horizontal Ebook Library Bar */}
+          {ebookLibraries.length > 0 && (
+            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-xl w-full">
+              {ebookLibraries.map((lib) => {
+                const isSelected = selectedLibrary?.id === lib.id;
+                return (
+                  <button
+                    key={lib.id}
+                    onClick={() => setSelectedLibrary(lib)}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? "bg-primary text-slate-950 shadow-md font-extrabold"
+                        : "bg-slate-950/60 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800"
+                    }`}
+                  >
+                    <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate max-w-[150px]">{lib.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 lg:gap-6">
+            <div className="hidden xl:block xl:col-span-3 space-y-4">
               <Card className="border-muted/60 bg-muted/10">
                 <CardHeader className="py-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -2994,17 +2784,17 @@ function BookLibraryPageContent() {
               </Card>
             </div>
 
-            <div className="lg:col-span-3 space-y-6">
+            <div className="w-full xl:col-span-9 space-y-6 min-w-0">
               {selectedLibrary ? (
                 <>
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
                       <div className="relative w-full sm:flex-1">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                         <Input
                           type="search"
                           placeholder="Search books by title or author..."
-                          className="pl-9 bg-muted/20"
+                          className="pl-9 h-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-400 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm font-medium w-full shadow-sm rounded-xl"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -3232,18 +3022,38 @@ function BookLibraryPageContent() {
                         .map(([seriesName, seriesBooks]) => {
                           const actualMissing = (
                             missingBooksMap[seriesName] || []
-                          ).filter((mBook: any) => {
-                            const mTitle = mBook.title.toLowerCase();
-                            return !seriesBooks.some((b: any) => {
-                              const bTitle = (
-                                b.cleanSeriesTitle || b.title
-                              ).toLowerCase();
-                              return (
-                                bTitle.includes(mTitle) ||
-                                mTitle.includes(bTitle)
-                              );
+                          )
+                            .filter((mBook: any) => {
+                              if (isKidUser) {
+                                const isMature =
+                                  mBook.maturityRating === "MATURE" ||
+                                  mBook.ageRating === "18+ Mature";
+                                if (isMature) return false;
+                              }
+                              const mNorm = (mBook.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                              const mVol = String(mBook.volumeNumber || "").replace(/^0+/, "");
+                              return !seriesBooks.some((b: any) => {
+                                const bNorm = (
+                                  b.cleanSeriesTitle || b.title || ""
+                                ).toLowerCase().replace(/[^a-z0-9]/g, "");
+                                const bVol = String(b.seriesVolume || b.volumeNumber || "").replace(/^0+/, "");
+                                if (mVol && bVol && mVol !== "0" && mVol === bVol) return true;
+                                if (mNorm === bNorm) return true;
+                                if (
+                                  (mNorm.includes("sorcerer") || mNorm.includes("philosopher")) &&
+                                  (bNorm.includes("sorcerer") || bNorm.includes("philosopher"))
+                                ) {
+                                  return true;
+                                }
+                                return false;
+                              });
+                            })
+                            .sort((a: any, b: any) => {
+                              const vA = parseFloat(String(a.volumeNumber || "999").replace(/[^0-9.]/g, "")) || 999;
+                              const vB = parseFloat(String(b.volumeNumber || "999").replace(/[^0-9.]/g, "")) || 999;
+                              if (vA !== vB) return vA - vB;
+                              return (a.title || "").localeCompare(b.title || "");
                             });
-                          });
 
                           return (
                             <div
@@ -3274,7 +3084,7 @@ function BookLibraryPageContent() {
                                   </Button>
                                 )}
                               </h3>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                                 {seriesBooks.map((book) =>
                                   renderBookCard(book),
                                 )}
@@ -3286,10 +3096,11 @@ function BookLibraryPageContent() {
                                     <Library className="h-3 w-3" /> Missing from
                                     Series
                                   </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
+                                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5 opacity-60 grayscale hover:grayscale-0 transition-all duration-300">
                                     {actualMissing.map(
                                       (book: any, i: number) => {
                                         const extMissing = extractSeriesInfo(book.title, "", [seriesName]);
+                                        const displayVol = book.volumeNumber || extMissing.volume;
                                         return (
                                         <div
                                           key={i}
@@ -3317,9 +3128,9 @@ function BookLibraryPageContent() {
                                               >
                                                 {extMissing.bookTitle}
                                               </h4>
-                                              {(book.volumeNumber || extMissing.volume) && (
+                                              {displayVol && (
                                                 <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 bg-primary/10 text-primary border-primary/20">
-                                                  Vol {book.volumeNumber || extMissing.volume}
+                                                  Vol {displayVol}
                                                 </Badge>
                                               )}
                                             </div>
@@ -3338,6 +3149,8 @@ function BookLibraryPageContent() {
                                                   handleAutoDownloadMissingBook(
                                                     {
                                                       ...book,
+                                                      series: seriesName,
+                                                      volumeNumber: displayVol,
                                                       mediaType:
                                                         activeTab ===
                                                         "audiobooks"
@@ -3358,6 +3171,8 @@ function BookLibraryPageContent() {
                                                   handleSearchAndReplaceRelease(
                                                     {
                                                       ...book,
+                                                      series: seriesName,
+                                                      volumeNumber: displayVol,
                                                       mediaType:
                                                         activeTab ===
                                                         "audiobooks"
@@ -3406,7 +3221,7 @@ function BookLibraryPageContent() {
                               {standaloneBooks.length === 1 ? "Book" : "Books"}
                             </Badge>
                           </h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                             {standaloneBooks
                               .slice(
                                 0,
@@ -3422,7 +3237,7 @@ function BookLibraryPageContent() {
                       )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                       {sortedBooks
                         .slice(0, visibleCount)
                         .map((book) => renderBookCard(book))}
@@ -3455,8 +3270,31 @@ function BookLibraryPageContent() {
         </TabsContent>
 
         <TabsContent value="audiobooks" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1 space-y-4">
+          {/* Mobile & Tablet Horizontal Audiobook Library Bar */}
+          {audiobookLibraries.length > 0 && (
+            <div className="flex xl:hidden overflow-x-auto no-scrollbar gap-2 p-1.5 bg-slate-900/80 border border-slate-800 rounded-xl w-full">
+              {audiobookLibraries.map((lib) => {
+                const isSelected = selectedLibrary?.id === lib.id;
+                return (
+                  <button
+                    key={lib.id}
+                    onClick={() => setSelectedLibrary(lib)}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? "bg-amber-400 text-slate-950 shadow-md font-extrabold"
+                        : "bg-slate-950/60 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800"
+                    }`}
+                  >
+                    <Headphones className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate max-w-[150px]">{lib.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 lg:gap-6">
+            <div className="hidden xl:block xl:col-span-3 space-y-4">
               <Card className="border-muted/60 bg-muted/10 overflow-hidden">
                 <CardHeader className="py-4">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
@@ -3521,17 +3359,17 @@ function BookLibraryPageContent() {
               </Card>
             </div>
 
-            <div className="lg:col-span-3 space-y-6">
+            <div className="w-full xl:col-span-9 space-y-6 min-w-0">
               {selectedLibrary && selectedLibrary.mediaType === "audiobook" ? (
                 <>
                   <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                     <div className="flex flex-col sm:flex-row gap-3 items-center w-full lg:max-w-3xl">
                       <div className="relative w-full sm:flex-1">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                         <Input
                           type="search"
                           placeholder="Search audiobooks by title or author..."
-                          className="pl-9 bg-muted/20"
+                          className="pl-9 h-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-400 focus:border-amber-400/80 focus:ring-1 focus:ring-amber-400/40 text-sm font-medium w-full shadow-sm rounded-xl"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -3540,7 +3378,7 @@ function BookLibraryPageContent() {
                         <select
                           value={sortBy}
                           onChange={(e) => handleSortChange(e.target.value)}
-                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-md border border-muted/60 bg-muted/20 text-foreground hover:bg-muted/30 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
+                          className="flex h-10 w-auto min-w-[170px] px-3.5 items-center justify-between rounded-xl border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 text-sm focus:outline-none font-medium cursor-pointer transition-all shadow-sm"
                         >
                           <option
                             value="recent"
@@ -3636,7 +3474,7 @@ function BookLibraryPageContent() {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-5 4xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                       {sortedBooks
                         .slice(0, visibleCount)
                         .map((book) => renderAudiobookCard(book))}
@@ -3662,1158 +3500,6 @@ function BookLibraryPageContent() {
                   </p>
                 </div>
               )}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="requests" className="space-y-6">
-          {/* Services Health Pulse & Indexer Status Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-muted/50 bg-[#16161c]/80 backdrop-blur-sm shadow-sm">
-            <div className="flex items-center gap-4 flex-wrap">
-              <span className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
-                <Activity className="h-3.5 w-3.5 text-primary" /> Pipeline Pulse:
-              </span>
-              
-              {/* Prowlarr */}
-              <div className="flex items-center gap-1.5 text-xs font-medium">
-                <span className={`h-2 w-2 rounded-full ${servicesPulse?.prowlarr?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-red-400"}`} />
-                <span className="text-muted-foreground">Prowlarr:</span>
-                <span className={servicesPulse?.prowlarr?.online ? "text-emerald-400 font-semibold" : servicesPulse?.prowlarr?.configured === false ? "text-muted-foreground" : "text-red-400 font-semibold"}>
-                  {servicesPulse?.prowlarr?.online ? `Online (${servicesPulse.prowlarr.indexersCount || 0} indexers)` : servicesPulse?.prowlarr?.configured === false ? "Not Configured" : "Offline"}
-                </span>
-              </div>
-
-              {/* SABnzbd */}
-              <div className="flex items-center gap-1.5 text-xs font-medium">
-                <span className={`h-2 w-2 rounded-full ${servicesPulse?.sabnzbd?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : servicesPulse?.sabnzbd?.configured ? "bg-red-400" : "bg-muted-foreground/40"}`} />
-                <span className="text-muted-foreground">Usenet (SABnzbd):</span>
-                <span className={servicesPulse?.sabnzbd?.online ? "text-emerald-400 font-semibold" : servicesPulse?.sabnzbd?.configured ? "text-red-400 font-semibold" : "text-muted-foreground"}>
-                  {servicesPulse?.sabnzbd?.online ? "Active" : servicesPulse?.sabnzbd?.configured ? "Offline" : "Disabled"}
-                </span>
-              </div>
-
-              {/* qBittorrent */}
-              <div className="flex items-center gap-1.5 text-xs font-medium">
-                <span className={`h-2 w-2 rounded-full ${servicesPulse?.qbittorrent?.online ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : servicesPulse?.qbittorrent?.configured ? "bg-red-400" : "bg-muted-foreground/40"}`} />
-                <span className="text-muted-foreground">Torrent (qBittorrent):</span>
-                <span className={servicesPulse?.qbittorrent?.online ? "text-emerald-400 font-semibold" : servicesPulse?.qbittorrent?.configured ? "text-red-400 font-semibold" : "text-muted-foreground"}>
-                  {servicesPulse?.qbittorrent?.online ? "Active" : servicesPulse?.qbittorrent?.configured ? "Offline" : "Disabled"}
-                </span>
-              </div>
-            </div>
-
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 text-[10px] text-muted-foreground hover:text-foreground gap-1 px-2"
-              disabled={loadingPulse}
-              onClick={loadServicesPulse}
-            >
-              {loadingPulse ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
-              Refresh Pulse
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
-              <Card className="border-muted/60 bg-muted/10 sticky top-6">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    {reqMediaType === "audiobook" ? (
-                      <>
-                        <Headphones className="h-5 w-5 text-amber-400" />{" "}
-                        Request an Audiobook
-                      </>
-                    ) : (
-                      <>
-                        <BookOpen className="h-5 w-5 text-primary" /> Request an
-                        Ebook
-                      </>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    {reqMediaType === "audiobook"
-                      ? "Can't find an audiobook in the library? Request to download it."
-                      : "Can't find an ebook in the library? Request to download it."}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleCreateRequest} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">
-                        Format / Media Type
-                      </Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          type="button"
-                          variant={
-                            reqMediaType === "ebook" ? "default" : "outline"
-                          }
-                          className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "ebook" ? "text-black bg-primary" : ""}`}
-                          onClick={() => {
-                            setReqMediaType("ebook");
-                            setIsSelectedFromRegistry(false);
-                          }}
-                        >
-                          <BookOpen className="h-3.5 w-3.5" /> Ebook
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={
-                            reqMediaType === "audiobook" ? "default" : "outline"
-                          }
-                          className={`h-9 text-xs font-semibold gap-1.5 ${reqMediaType === "audiobook" ? "text-black bg-amber-400 hover:bg-amber-300" : ""}`}
-                          onClick={() => {
-                            setReqMediaType("audiobook");
-                            setIsSelectedFromRegistry(false);
-                          }}
-                        >
-                          <Headphones className="h-3.5 w-3.5" /> Audiobook
-                        </Button>
-                      </div>
-                    </div>
-                    {/* Single Book request only */}
-
-                    <div className="space-y-1.5 relative">
-                      <Label htmlFor="reqTitle" className="text-xs font-medium flex items-center justify-between">
-                        <span>
-                          {reqType === "series"
-                            ? "Series Title"
-                            : reqMediaType === "audiobook"
-                              ? "Audiobook Title (or Title + Author)"
-                              : "Book Title (or Title + Author)"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground font-normal">
-                          e.g. "Project Hail Mary Andy Weir"
-                        </span>
-                      </Label>
-                      <Input
-                        id="reqTitle"
-                        type="text"
-                        placeholder="e.g. Project Hail Mary Andy Weir"
-                        value={reqTitle}
-                        onChange={(e) => {
-                          setReqTitle(e.target.value);
-                          setIsSelectedFromRegistry(false);
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => setShowSuggestions(true)}
-                        required
-                        autoComplete="off"
-                      />
-
-                      {showSuggestions && (
-                        <div
-                          className="fixed inset-0 z-40 bg-transparent"
-                          onClick={() => setShowSuggestions(false)}
-                        />
-                      )}
-
-                      {showSuggestions && reqTitle.trim().length >= 2 && (
-                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1e1e24] text-foreground border border-muted/80 rounded-md shadow-xl max-h-60 overflow-y-auto divide-y divide-muted/50">
-                          {searchingRegistry ? (
-                            <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
-                              <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                              Searching book registry...
-                            </div>
-                          ) : openLibrarySuggestions.length === 0 ? (
-                            <div className="p-3 text-center text-xs text-muted-foreground italic">
-                              No matches found in registry.
-                            </div>
-                          ) : (
-                            openLibrarySuggestions.map((book, idx) => (
-                              <div
-                                key={idx}
-                                className="p-2.5 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
-                                onMouseDown={async (e) => {
-                                  e.preventDefault();
-                                  setReqTitle(book.title);
-                                  setReqAuthor(book.author);
-                                  setReqCoverUrl(book.coverUrl || "");
-                                  setReqPublishYear(
-                                    book.year ? String(book.year) : "",
-                                  );
-                                  setIsSelectedFromRegistry(true);
-                                  setShowSuggestions(false);
-
-                                  if (reqType === "series") {
-                                    setSearchingRegistry(true);
-                                    try {
-                                      const list = await getSeriesBooksList(
-                                        book.title,
-                                        book.author,
-                                      );
-                                      setSeriesBooksChecklist(
-                                        list.map((b) => ({
-                                          ...b,
-                                          checked: true,
-                                        })),
-                                      );
-                                    } catch (err) {
-                                      console.error(
-                                        "Failed to load series books list:",
-                                        err,
-                                      );
-                                    } finally {
-                                      setSearchingRegistry(false);
-                                    }
-                                  }
-                                }}
-                              >
-                                <div className="flex gap-2.5 items-center min-w-0 flex-1">
-                                  {book.coverUrl ? (
-                                    <img
-                                      src={book.coverUrl}
-                                      alt={book.title}
-                                      className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
-                                    />
-                                  ) : (
-                                    <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
-                                      NO COVER
-                                    </div>
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <h5
-                                      className="text-xs font-semibold text-foreground leading-snug truncate group-hover:text-primary transition-colors"
-                                      title={book.title}
-                                    >
-                                      {book.title}
-                                    </h5>
-                                    <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
-                                      <span>{book.author}</span>
-                                      {book.year && book.year !== "Unknown Year" && (
-                                        <>
-                                          <span>•</span>
-                                          <span>{book.year}</span>
-                                        </>
-                                      )}
-                                      <span>•</span>
-                                      <span
-                                        className={`px-1 py-0.2 rounded text-[9px] font-bold ${
-                                          reqMediaType === "audiobook"
-                                            ? "bg-amber-400/20 text-amber-400"
-                                            : "bg-primary/20 text-primary"
-                                        }`}
-                                      >
-                                        {reqMediaType === "audiobook" ? "AUDIOBOOK" : "EBOOK"}
-                                      </span>
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5 relative">
-                      <Label
-                        htmlFor="reqAuthor"
-                        className="text-xs font-medium flex items-center justify-between"
-                      >
-                        <span>Author (Optional)</span>
-                        {authorSuggestions.length > 0 && showAuthorSuggestions && (
-                          <span className="text-[10px] text-muted-foreground font-normal">
-                            {authorSuggestions.length} {reqMediaType === "audiobook" ? "audiobooks" : "books"} found
-                          </span>
-                        )}
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          id="reqAuthor"
-                          type="text"
-                          placeholder="e.g. Andy Weir"
-                          value={reqAuthor}
-                          onChange={(e) => {
-                            setReqAuthor(e.target.value);
-                            setIsSelectedFromRegistry(false);
-                            setShowAuthorSuggestions(true);
-                          }}
-                          onFocus={() => {
-                            if (reqAuthor.trim().length >= 2) {
-                              setShowAuthorSuggestions(true);
-                            }
-                          }}
-                          autoComplete="off"
-                        />
-                        {searchingAuthorRegistry && (
-                          <Loader2 className="h-4 w-4 animate-spin text-primary absolute right-3 top-2.5 pointer-events-none" />
-                        )}
-                      </div>
-
-                      {showAuthorSuggestions && (
-                        <div
-                          className="fixed inset-0 z-40 bg-transparent"
-                          onClick={() => setShowAuthorSuggestions(false)}
-                        />
-                      )}
-
-                      {showAuthorSuggestions && reqAuthor.trim().length >= 2 && (
-                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1e1e24] text-foreground border border-muted/80 rounded-md shadow-xl max-h-72 overflow-y-auto divide-y divide-muted/50">
-                          <div className="px-3 py-1.5 bg-[#17171c] border-b border-muted/40 text-[10px] uppercase font-bold tracking-wider text-muted-foreground flex items-center justify-between">
-                            <span className="flex items-center gap-1.5">
-                              {reqMediaType === "audiobook" ? (
-                                <Headphones className="h-3 w-3 text-amber-400" />
-                              ) : (
-                                <BookOpen className="h-3 w-3 text-primary" />
-                              )}
-                              Available Books by {reqAuthor}
-                            </span>
-                            <span className="text-[9px] lowercase font-normal opacity-80">
-                              click to select
-                            </span>
-                          </div>
-                          {searchingAuthorRegistry ? (
-                            <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-1.5">
-                              <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                              Searching {reqMediaType === "audiobook" ? "audiobooks" : "books"} by {reqAuthor}...
-                            </div>
-                          ) : authorSuggestions.length === 0 ? (
-                            <div className="p-3 text-center text-xs text-muted-foreground italic">
-                              No {reqMediaType === "audiobook" ? "audiobooks" : "books"} found for "{reqAuthor}".
-                            </div>
-                          ) : (
-                            authorSuggestions.map((book, idx) => (
-                              <div
-                                key={idx}
-                                className="p-2.5 flex gap-3 hover:bg-muted/40 cursor-pointer items-center justify-between transition-colors z-50 relative group"
-                                onMouseDown={async (e) => {
-                                  e.preventDefault();
-                                  setReqTitle(book.title);
-                                  setReqAuthor(book.author);
-                                  setReqCoverUrl(book.coverUrl || "");
-                                  setReqPublishYear(
-                                    book.year ? String(book.year) : "",
-                                  );
-                                  setIsSelectedFromRegistry(true);
-                                  setShowAuthorSuggestions(false);
-                                  setShowSuggestions(false);
-
-                                  if (reqType === "series") {
-                                    setSearchingRegistry(true);
-                                    try {
-                                      const list = await getSeriesBooksList(
-                                        book.title,
-                                        book.author,
-                                      );
-                                      setSeriesBooksChecklist(
-                                        list.map((b) => ({
-                                          ...b,
-                                          checked: true,
-                                        })),
-                                      );
-                                    } catch (err) {
-                                      console.error(
-                                        "Failed to load series books list:",
-                                        err,
-                                      );
-                                    } finally {
-                                      setSearchingRegistry(false);
-                                    }
-                                  }
-                                }}
-                              >
-                                <div className="flex gap-2.5 items-center min-w-0 flex-1">
-                                  {book.coverUrl ? (
-                                    <img
-                                      src={book.coverUrl}
-                                      alt={book.title}
-                                      className="w-8 h-10 object-cover rounded bg-muted/20 shrink-0 border border-muted"
-                                    />
-                                  ) : (
-                                    <div className="w-8 h-10 rounded bg-muted flex items-center justify-center text-[8px] text-muted-foreground shrink-0 border border-muted">
-                                      NO COVER
-                                    </div>
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <h5
-                                      className="text-xs font-semibold text-foreground leading-snug truncate group-hover:text-primary transition-colors"
-                                      title={book.title}
-                                    >
-                                      {book.title}
-                                    </h5>
-                                    <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
-                                      <span>{book.author}</span>
-                                      {book.year && book.year !== "Unknown Year" && (
-                                        <>
-                                          <span>•</span>
-                                          <span>{book.year}</span>
-                                        </>
-                                      )}
-                                      <span>•</span>
-                                      <span
-                                        className={`px-1 py-0.2 rounded text-[9px] font-bold ${
-                                          reqMediaType === "audiobook"
-                                            ? "bg-amber-400/20 text-amber-400"
-                                            : "bg-primary/20 text-primary"
-                                        }`}
-                                      >
-                                        {reqMediaType === "audiobook" ? "AUDIOBOOK" : "EBOOK"}
-                                      </span>
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {reqType === "series" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full text-xs border-primary/20 text-primary hover:bg-primary/10 font-semibold h-9"
-                        disabled={searchingRegistry || !reqTitle}
-                        onClick={async () => {
-                          setSearchingRegistry(true);
-                          try {
-                            const list = await getSeriesBooksList(
-                              reqTitle,
-                              reqAuthor,
-                            );
-                            if (list.length === 0) {
-                              alert(
-                                "No books found matching this series title and author in the registry.",
-                              );
-                            }
-                            setSeriesBooksChecklist(
-                              list.map((b) => ({ ...b, checked: true })),
-                            );
-                          } catch (err) {
-                            console.error(err);
-                            alert("Failed to lookup series books.");
-                          } finally {
-                            setSearchingRegistry(false);
-                          }
-                        }}
-                      >
-                        {searchingRegistry ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                            Searching Book Registry...
-                          </>
-                        ) : (
-                          <>
-                            <Search className="h-3.5 w-3.5 mr-1.5" />
-                            Lookup Series Books List
-                          </>
-                        )}
-                      </Button>
-                    )}
-
-                    {reqType === "series" &&
-                      seriesBooksChecklist.length > 0 && (
-                        <div className="space-y-2 border border-muted/80 rounded p-2 bg-[#1e1e24]/40 max-h-52 overflow-y-auto">
-                          <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground mb-1 pb-1 border-b border-muted/30">
-                            <span>
-                              Select Books (
-                              {
-                                seriesBooksChecklist.filter((b) => b.checked)
-                                  .length
-                              }{" "}
-                              selected)
-                            </span>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                className="text-primary hover:underline text-[9px]"
-                                onClick={() => selectAllChecklist(true)}
-                              >
-                                All
-                              </button>
-                              <button
-                                type="button"
-                                className="text-primary hover:underline text-[9px]"
-                                onClick={() => selectAllChecklist(false)}
-                              >
-                                None
-                              </button>
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            {seriesBooksChecklist.map((book, idx) => (
-                              <label
-                                key={idx}
-                                className="flex gap-2 items-start text-[11px] cursor-pointer hover:bg-muted/20 p-1 rounded transition-colors"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={book.checked}
-                                  onChange={() => toggleChecklistItem(idx)}
-                                  className="mt-0.5 h-3.5 w-3.5 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <span
-                                    className="font-semibold text-foreground block truncate"
-                                    title={book.title}
-                                  >
-                                    {book.title}
-                                  </span>
-                                  <span className="text-[9px] text-muted-foreground block truncate">
-                                    {book.author}{" "}
-                                    {book.publishYear
-                                      ? `(${book.publishYear})`
-                                      : ""}
-                                  </span>
-                                </div>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                    {isAdmin && eligibleRequestUsers.length > 0 && (
-                      <div className="space-y-1.5">
-                        <Label
-                          htmlFor="requestedFor"
-                          className="text-xs font-medium"
-                        >
-                          Request For (Admin Only)
-                        </Label>
-                        <select
-                          id="requestedFor"
-                          className="flex h-9 w-full rounded-md border border-[#2d2d34] bg-[#111115] px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                          value={requestedFor}
-                          onChange={(e) => setRequestedFor(e.target.value)}
-                        >
-                          <option value="">
-                            Myself ({fullUser?.username || "Admin"})
-                          </option>
-                          {eligibleRequestUsers.map((u) => (
-                            <option key={u.id} value={u.username}>
-                              {u.username} (
-                              {u.kindleEmail || "No Kindle configured"})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {reqType !== "series" && reqTitle.trim().length >= 2 && (
-                      isSelectedFromRegistry ? (
-                        <div className="flex items-center gap-2 p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium animate-in fade-in">
-                          <Check className="h-4 w-4 shrink-0 text-emerald-400" />
-                          <span className="truncate">
-                            Verified registry book selected: <strong>{reqTitle}</strong> {reqAuthor ? `by ${reqAuthor}` : ""}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs animate-in fade-in">
-                          <Info className="h-4 w-4 shrink-0 text-amber-400" />
-                          <span>
-                            Please select an auto-populated match from the suggestions list above to submit.
-                          </span>
-                        </div>
-                      )
-                    )}
-
-                    <Button
-                      type="submit"
-                      disabled={
-                        isSubmittingRequest ||
-                        (!isSelectedFromRegistry && reqType !== "series") ||
-                        !reqTitle.trim()
-                      }
-                      className={`w-full font-semibold text-black gap-2 ${reqMediaType === "audiobook" ? "bg-amber-400 hover:bg-amber-300" : "bg-primary hover:bg-primary/90"} disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      {isSubmittingRequest ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin text-black" />
-                          Submitting Request...
-                        </>
-                      ) : reqMediaType === "audiobook" ? (
-                        "Submit Audiobook Request"
-                      ) : (
-                        "Submit Ebook Request"
-                      )}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="lg:col-span-2">
-              <Card className="border-muted/60">
-                <CardHeader className="py-3.5 border-b border-muted/50 flex flex-row justify-between items-center flex-wrap gap-2">
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <LifeBuoy className="h-4.5 w-4.5 text-primary" /> Active
-                    Requests Log
-                  </CardTitle>
-                  {requests.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1 bg-muted/20 p-1 rounded-lg border border-muted/50">
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant={reqLogFilter === "all" ? "default" : "ghost"}
-                          className={`h-7 text-[11px] px-2.5 font-medium ${reqLogFilter === "all" ? "bg-primary text-black font-semibold" : "text-muted-foreground"}`}
-                          onClick={() => setReqLogFilter("all")}
-                        >
-                          All ({requests.length})
-                        </Button>
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant={
-                            reqLogFilter === "ebook" ? "default" : "ghost"
-                          }
-                          className={`h-7 text-[11px] px-2.5 font-medium ${reqLogFilter === "ebook" ? "bg-blue-600 text-white font-semibold" : "text-muted-foreground"}`}
-                          onClick={() => setReqLogFilter("ebook")}
-                        >
-                          <BookOpen className="h-3 w-3 mr-1" /> Ebooks (
-                          {
-                            requests.filter((r) => r.mediaType !== "audiobook")
-                              .length
-                          }
-                          )
-                        </Button>
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant={
-                            reqLogFilter === "audiobook" ? "default" : "ghost"
-                          }
-                          className={`h-7 text-[11px] px-2.5 font-medium ${reqLogFilter === "audiobook" ? "bg-amber-400 text-black font-semibold" : "text-muted-foreground"}`}
-                          onClick={() => setReqLogFilter("audiobook")}
-                        >
-                          <Headphones className="h-3 w-3 mr-1" /> Audiobooks (
-                          {
-                            requests.filter((r) => r.mediaType === "audiobook")
-                              .length
-                          }
-                          )
-                        </Button>
-                      </div>
-                      {selectedRequestIds.length > 0 && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-7 text-xs font-semibold px-3"
-                          onClick={handleBulkDeleteRequests}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
-                          Selected ({selectedRequestIds.length})
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-3"
-                        onClick={toggleSelectAllRequests}
-                      >
-                        Select All / None
-                      </Button>
-                    </div>
-                  )}
-                </CardHeader>
-                <CardContent className="p-0">
-                  {requests.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-muted-foreground italic">
-                      No book requests found.
-                    </div>
-                  ) : requests.filter((r) => {
-                      if (reqLogFilter === "audiobook")
-                        return r.mediaType === "audiobook";
-                      if (reqLogFilter === "ebook")
-                        return r.mediaType !== "audiobook";
-                      return true;
-                    }).length === 0 ? (
-                    <div className="p-8 text-center text-sm text-muted-foreground italic">
-                      No {reqLogFilter === "audiobook" ? "audiobook" : "ebook"}{" "}
-                      requests found.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-muted/50">
-                      {requests
-                        .filter((r) => {
-                          if (reqLogFilter === "audiobook")
-                            return r.mediaType === "audiobook";
-                          if (reqLogFilter === "ebook")
-                            return r.mediaType !== "audiobook";
-                          return true;
-                        })
-                        .map((req) => {
-                          const canDelete =
-                            isAdmin || req.requestedBy === user?.username;
-                          const isDownloading =
-                            (req.status && req.status.startsWith("Downloading")) ||
-                            !!req.downloadProgress;
-                          const isSearching = req.status === "Searching";
-                          const isFailed = req.status && req.status.startsWith("Failed");
-                          const isPending = req.status === "Pending";
-                          const isApproved =
-                            req.status && req.status.startsWith("Approved");
-                          const isDownloaded = req.status === "Downloaded";
-
-                          // Format download progress safely
-                          const rawPct =
-                            req.downloadProgress?.percentage !== undefined
-                              ? parseFloat(req.downloadProgress.percentage)
-                              : undefined;
-                          const hasProgressPercent =
-                            rawPct !== undefined && !isNaN(rawPct);
-                          const progressPercent = hasProgressPercent
-                            ? Math.max(0, Math.min(100, rawPct))
-                            : 0;
-
-                          return (
-                            <div
-                              key={req.id}
-                              className={`p-4 space-y-3 transition-all duration-200 border-b border-muted/40 last:border-b-0 ${
-                                isDownloading
-                                  ? "bg-cyan-950/10"
-                                  : isFailed
-                                    ? "bg-red-950/10"
-                                    : "hover:bg-muted/10"
-                              }`}
-                            >
-                              {/* Main Header / Info Row */}
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
-                                {/* Left: Checkbox + Artwork + Book Details */}
-                                <div className="flex gap-3 items-start min-w-0 flex-1">
-                                  {canDelete && (
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedRequestIds.includes(req.id)}
-                                      onChange={() => toggleSelectRequest(req.id)}
-                                      className="mt-1 h-4 w-4 rounded border-muted/80 bg-muted/20 text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
-                                    />
-                                  )}
-
-                                  {/* Cover Thumbnail */}
-                                  <div className="relative group shrink-0">
-                                    {req.coverUrl &&
-                                    req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? (
-                                      <img
-                                        src={req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim()}
-                                        alt={req.title}
-                                        className="w-10 h-14 object-cover rounded bg-muted/20 border border-muted/50 shrink-0"
-                                        onError={(e) => {
-                                          (e.target as HTMLElement).style.display = "none";
-                                          const fb = (e.target as HTMLElement).parentElement?.querySelector(".cover-fallback");
-                                          if (fb) (fb as HTMLElement).style.display = "flex";
-                                        }}
-                                      />
-                                    ) : null}
-                                    <div
-                                      className={`cover-fallback w-10 h-14 rounded bg-muted/30 border border-muted/50 flex-col items-center justify-center text-[7px] text-muted-foreground shrink-0 font-bold uppercase text-center p-0.5 ${
-                                        req.coverUrl && req.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "").trim().length > 3 ? "hidden" : "flex"
-                                      }`}
-                                    >
-                                      <BookOpen className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
-                                      No Cover
-                                    </div>
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      className="absolute -bottom-1 -right-1 h-5 w-5 p-0 rounded-full bg-primary/90 text-black shadow hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                                      title="Fetch / Refresh Cover Artwork"
-                                      disabled={refreshingRequestCoverId === req.id}
-                                      onClick={() => handleRefreshRequestCover(req.id)}
-                                    >
-                                      {refreshingRequestCoverId === req.id ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <ImageIcon className="h-3 w-3" />
-                                      )}
-                                    </Button>
-                                  </div>
-
-                                  {/* Titles, Badges, and Requester */}
-                                  <div className="space-y-1 min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <h4
-                                        className="font-semibold text-sm truncate max-w-[260px] sm:max-w-md"
-                                        title={req.title}
-                                      >
-                                        {req.title}
-                                      </h4>
-                                      {req.mediaType === "audiobook" ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] py-0 px-1.5 border-amber-500/40 text-amber-400 bg-amber-500/10 font-bold flex items-center gap-1 shrink-0"
-                                        >
-                                          <Headphones className="h-3 w-3" /> AUDIOBOOK
-                                        </Badge>
-                                      ) : req.type === "series" ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] py-0 px-1.5 border-purple-500/30 text-purple-400 bg-purple-500/5 font-semibold shrink-0"
-                                        >
-                                          SERIES
-                                        </Badge>
-                                      ) : (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[10px] py-0 px-1.5 border-blue-500/30 text-blue-400 bg-blue-500/5 font-semibold shrink-0"
-                                        >
-                                          EBOOK
-                                        </Badge>
-                                      )}
-
-                                      {/* Status Badge */}
-                                      <Badge
-                                        className={`text-xs font-semibold shrink-0 ${
-                                          isDownloading
-                                            ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 animate-pulse"
-                                            : isSearching
-                                              ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 animate-pulse"
-                                              : isApproved
-                                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                                                : isPending
-                                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                                  : isDownloaded
-                                                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                                    : "bg-red-500/20 text-red-400 border border-red-500/30"
-                                        }`}
-                                      >
-                                        {isDownloading ? (
-                                          <span className="flex items-center gap-1.5">
-                                            <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />
-                                            Downloading
-                                          </span>
-                                        ) : isSearching ? (
-                                          <span className="flex items-center gap-1.5">
-                                            <Search className="h-3 w-3 text-indigo-400" />
-                                            Searching
-                                          </span>
-                                        ) : (
-                                          req.status
-                                        )}
-                                      </Badge>
-                                    </div>
-
-                                    <p className="text-xs text-muted-foreground truncate font-medium">
-                                      {req.author ? `by ${req.author}` : "Unknown Author"}{" "}
-                                      {req.publishYear ? `(${req.publishYear})` : ""}
-                                    </p>
-                                    <p className="text-[10px] text-muted-foreground">
-                                      Requested by{" "}
-                                      <span className="font-semibold text-foreground">
-                                        {req.requestedBy}
-                                      </span>{" "}
-                                      • {new Date(req.createdAt).toLocaleDateString()}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Right: Actions Cluster */}
-                                <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0">
-                                  {/* Series Auto-Monitor Toggle */}
-                                  {(req.series || req.type === "series") && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className={`h-7 text-[10px] font-semibold px-2 gap-1 ${
-                                        req.monitorSeries
-                                          ? "bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25"
-                                          : "border-muted text-muted-foreground hover:text-foreground"
-                                      }`}
-                                      title={
-                                        req.monitorSeries
-                                          ? "Series is being automatically monitored for new installments"
-                                          : "Enable automatic background monitoring for new books in this series"
-                                      }
-                                      disabled={togglingMonitorId === req.id}
-                                      onClick={() => handleToggleSeriesMonitoring(req.id)}
-                                    >
-                                      {togglingMonitorId === req.id ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <Zap
-                                          className={`h-3 w-3 ${req.monitorSeries ? "text-purple-400 fill-purple-400" : ""}`}
-                                        />
-                                      )}
-                                      {req.monitorSeries ? "Monitored" : "Monitor Series"}
-                                    </Button>
-                                  )}
-
-                                  {/* Direct File Upload / Fulfill */}
-                                  {(isAdmin || req.requestedBy === user?.username) &&
-                                    req.status !== "Downloaded" && (
-                                      <label className="cursor-pointer">
-                                        <input
-                                          type="file"
-                                          accept=".epub,.pdf,.m4b,.mp3,.torrent,.nzb"
-                                          className="hidden"
-                                          disabled={uploadingFulfillId === req.id}
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                              handleFulfillWithUpload(req.id, file);
-                                              e.target.value = "";
-                                            }
-                                          }}
-                                        />
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          type="button"
-                                          asChild
-                                          className="h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
-                                          title="Fulfill directly by uploading book file (.epub, .pdf, .m4b, .mp3) or NZB/Torrent"
-                                          disabled={uploadingFulfillId === req.id}
-                                        >
-                                          <span>
-                                            {uploadingFulfillId === req.id ? (
-                                              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                            ) : (
-                                              <FileUp className="h-3.5 w-3.5 text-primary" />
-                                            )}
-                                            <span className="hidden sm:inline text-[11px]">Upload</span>
-                                          </span>
-                                        </Button>
-                                      </label>
-                                    )}
-
-                                  {/* Auto-Retry for Failed requests */}
-                                  {isFailed && (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-amber-500/5 font-semibold"
-                                        onClick={async () => {
-                                          try {
-                                            await retryBookRequest(req.id);
-                                            alert(
-                                              "Auto-retry search successfully queued in the background!",
-                                            );
-                                            const reqs = await getBookRequests();
-                                            setRequests(reqs || []);
-                                          } catch (err: any) {
-                                            alert(
-                                              err.message || "Failed to retry request.",
-                                            );
-                                          }
-                                        }}
-                                      >
-                                        Auto-Retry
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 text-[10px]"
-                                        onClick={() => triggerProwlarrSearch(req)}
-                                      >
-                                        <Search className="h-3 w-3 mr-1" /> Search Release
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 w-7 p-0 border-red-500/40 text-red-400 hover:bg-red-950/60 shrink-0"
-                                        title="Copy Full Error Message"
-                                        onClick={() =>
-                                          showErrorModal(
-                                            req.status,
-                                            "Request Error Details",
-                                          )
-                                        }
-                                      >
-                                        <Copy className="h-3 w-3" />
-                                      </Button>
-                                    </>
-                                  )}
-
-                                  {/* Pending actions */}
-                                  {isPending && (
-                                    <>
-                                      {(isAdmin || req.requestedBy === user?.username) && (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 font-semibold"
-                                          onClick={() => triggerProwlarrSearch(req)}
-                                        >
-                                          <Search className="h-3 w-3 mr-1" /> Search Release
-                                        </Button>
-                                      )}
-                                      {isAdmin && (
-                                        <>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="p-1 h-7 w-7 text-green-500 hover:text-green-600 border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
-                                            onClick={() =>
-                                              handleUpdateRequestStatus(req.id, "Approved")
-                                            }
-                                            title="Approve Request"
-                                          >
-                                            <Check className="h-4 w-4" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10"
-                                            onClick={() =>
-                                              handleUpdateRequestStatus(req.id, "Rejected")
-                                            }
-                                            title="Reject Request"
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
-                                        </>
-                                      )}
-                                    </>
-                                  )}
-
-                                  {/* Active downloading / downloaded search actions */}
-                                  {(isAdmin || req.requestedBy === user?.username) &&
-                                    (isDownloading || isDownloaded) && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 text-xs border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 bg-cyan-500/5 font-semibold"
-                                        onClick={() => triggerProwlarrSearch(req)}
-                                      >
-                                        <Search className="h-3 w-3 mr-1" /> Search Release
-                                      </Button>
-                                    )}
-
-                                  {(isAdmin || req.requestedBy === user?.username) &&
-                                    (isApproved || isDownloading) && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 bg-blue-500/5 font-semibold"
-                                        onClick={async () => {
-                                          try {
-                                            const res = await importCompletedDownload(req.id);
-                                            if (res.success) {
-                                              alert(
-                                                res.message ||
-                                                  "Imported completed download to library!",
-                                              );
-                                            } else {
-                                              showErrorModal(
-                                                res.error ||
-                                                  "Failed to locate completed download.",
-                                                "Import Download Error",
-                                              );
-                                            }
-                                            const reqs = await getBookRequests();
-                                            setRequests(reqs || []);
-                                          } catch (err: any) {
-                                            showErrorModal(
-                                              err.message ||
-                                                "Failed to import download.",
-                                              "Import Download Error",
-                                            );
-                                          }
-                                        }}
-                                      >
-                                        <Download className="h-3 w-3 mr-1" /> Import Download
-                                      </Button>
-                                    )}
-
-                                  {isAdmin && (isApproved || isDownloading) && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs border-green-500/30 text-green-500 hover:bg-green-500/10 bg-green-500/5"
-                                      onClick={() =>
-                                        handleUpdateRequestStatus(req.id, "Downloaded")
-                                      }
-                                    >
-                                      Mark Downloaded
-                                    </Button>
-                                  )}
-
-                                  {/* Utility actions: Cover, Report Issue, Delete */}
-                                  {(isAdmin || req.requestedBy === user?.username) && (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="p-1 h-7 text-xs border-muted/80 text-muted-foreground hover:text-foreground font-semibold px-2 gap-1 shrink-0"
-                                        title="Fetch / Refresh Cover Artwork"
-                                        disabled={refreshingRequestCoverId === req.id}
-                                        onClick={() => handleRefreshRequestCover(req.id)}
-                                      >
-                                        {refreshingRequestCoverId === req.id ? (
-                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                        ) : (
-                                          <ImageIcon className="h-3.5 w-3.5 text-primary" />
-                                        )}
-                                        <span className="hidden sm:inline text-[11px]">Cover</span>
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="p-1 h-7 w-7 text-amber-500 hover:text-amber-600 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 shrink-0"
-                                        title="Report Request Issue"
-                                        onClick={() =>
-                                          handleOpenReportIssueModal({
-                                            type: "request",
-                                            title: req.title,
-                                            id: req.id,
-                                            status: req.status,
-                                          })
-                                        }
-                                      >
-                                        <AlertTriangle className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="p-1 h-7 w-7 text-red-500 hover:text-red-600 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 shrink-0"
-                                        title="Delete Request"
-                                        onClick={() => handleDeleteRequest(req.id)}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Dedicated Full-Width Download Progress Bar (when Downloading) */}
-                              {isDownloading && (
-                                <div className="w-full bg-cyan-950/20 border border-cyan-500/30 rounded-lg p-3 space-y-2 shadow-inner animate-in fade-in duration-300">
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="font-semibold text-cyan-400 flex items-center gap-1.5">
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
-                                      {req.downloadProgress?.client
-                                        ? `Downloading via ${req.downloadProgress.client}`
-                                        : "Active Download in Client Queue"}
-                                    </span>
-                                    <span className="font-mono font-bold text-foreground">
-                                      {hasProgressPercent
-                                        ? `${progressPercent.toFixed(1)}%`
-                                        : "Connecting / Downloading..."}
-                                    </span>
-                                  </div>
-                                  <Progress
-                                    value={hasProgressPercent ? progressPercent : undefined}
-                                    className="h-2 bg-zinc-900/80 rounded-full"
-                                  />
-                                  <div className="flex justify-between items-center text-[11px] text-muted-foreground font-mono">
-                                    <span>
-                                      {req.downloadProgress?.mb
-                                        ? `${req.downloadProgress.mb} MB`
-                                        : ""}
-                                      {req.downloadProgress?.mbleft
-                                        ? ` (${req.downloadProgress.mbleft} MB remaining)`
-                                        : ""}
-                                    </span>
-                                    <span>
-                                      {req.downloadProgress?.timeleft
-                                        ? `ETA: ${req.downloadProgress.timeleft}`
-                                        : ""}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
             </div>
           </div>
         </TabsContent>
@@ -4879,7 +3565,7 @@ function BookLibraryPageContent() {
                           onChange={(e) => setLibPath(e.target.value)}
                         />
                         <p className="text-[10px] text-muted-foreground">
-                          Folder directory inside Portalarr Docker mapped to
+                          Folder directory inside server Docker container mapped to
                           your Unraid share.
                         </p>
                       </div>
@@ -4956,26 +3642,38 @@ function BookLibraryPageContent() {
                       </div>
 
                       <div className="space-y-2 border border-muted/80 p-3 rounded-md bg-muted/20">
-                        <Label className="text-xs font-semibold block border-b border-muted pb-1 mb-1 text-primary">
-                          Allowed Users Quick Toggle List
-                        </Label>
-                        {libAllowedUsers === "*" ? (
-                          <div className="text-[10px] text-muted-foreground flex justify-between items-center">
-                            <span>
-                              Everyone has access (<code>*</code>)
-                            </span>
+                        <div className="flex items-center justify-between border-b border-muted pb-1 mb-1">
+                          <Label className="text-xs font-semibold text-primary">
+                            Allowed Users Quick Toggle List
+                          </Label>
+                          {libAllowedUsers === "*" ? (
                             <Button
                               type="button"
-                              variant="outline"
-                              className="h-5 text-[9px] px-2 py-0 border-primary/20 text-primary hover:bg-primary/10"
-                              onClick={() => setLibAllowedUsers("")}
+                              variant="ghost"
+                              className="h-4 text-[9px] p-0 text-primary hover:underline hover:bg-transparent font-semibold"
+                              onClick={() => setLibAllowedUsers("admin")}
                             >
-                              Restrict Access
+                              Switch to Specific Users
                             </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-4 text-[9px] p-0 text-primary hover:underline hover:bg-transparent font-semibold"
+                              onClick={() => setLibAllowedUsers("*")}
+                            >
+                              Grant to Everyone (*)
+                            </Button>
+                          )}
+                        </div>
+
+                        {libAllowedUsers === "*" ? (
+                          <div className="p-2 rounded bg-primary/5 border border-primary/20 text-[11px] text-muted-foreground flex items-center justify-between">
+                            <span>Everyone currently has access (<code>*</code>). Click above to restrict to selected users.</span>
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-0.5">
+                            <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-0.5">
                               {allUsers.length === 0 ? (
                                 <span className="text-[10px] text-muted-foreground italic">
                                   No users found.
@@ -4986,52 +3684,49 @@ function BookLibraryPageContent() {
                                     .split(",")
                                     .map((item) => item.trim())
                                     .filter(Boolean);
-                                  const isAllowed = allowedList.includes(
-                                    u.username,
+                                  const isAllowed = allowedList.some(
+                                    (item) => item.toLowerCase() === u.username.toLowerCase(),
                                   );
                                   return (
                                     <Badge
                                       key={u.id}
-                                      variant={
-                                        isAllowed ? "default" : "outline"
-                                      }
-                                      className={`cursor-pointer transition-colors text-[9px] px-2 py-0.5 ${
+                                      variant={isAllowed ? "default" : "outline"}
+                                      className={`cursor-pointer transition-colors text-[10px] px-2 py-0.5 font-mono ${
                                         isAllowed
                                           ? "bg-primary text-black hover:bg-primary/80 font-bold border-primary"
                                           : "hover:bg-muted/30 border-muted-foreground/30 text-muted-foreground"
                                       }`}
                                       onClick={() => {
-                                        let newList;
+                                        let newList: string[];
                                         if (isAllowed) {
                                           newList = allowedList.filter(
-                                            (item) => item !== u.username,
+                                            (item) => item.toLowerCase() !== u.username.toLowerCase(),
                                           );
+                                          if (newList.length === 0) newList = ["admin"];
                                         } else {
-                                          newList = [
-                                            ...allowedList,
-                                            u.username,
-                                          ];
+                                          newList = [...allowedList.filter(i => i !== "*"), u.username];
                                         }
                                         setLibAllowedUsers(newList.join(", "));
                                       }}
                                     >
                                       {u.username}
+                                      {isAllowed && " ✓"}
                                     </Badge>
                                   );
                                 })
                               )}
                             </div>
-                            <div className="flex justify-between items-center text-[9px]">
+                            <div className="flex justify-between items-center text-[9px] pt-1">
                               <span className="text-muted-foreground">
                                 Click badges to grant or revoke library access.
                               </span>
                               <Button
                                 type="button"
                                 variant="ghost"
-                                className="h-4 text-[9px] p-0 text-primary hover:underline hover:bg-transparent font-semibold"
-                                onClick={() => setLibAllowedUsers("*")}
+                                className="h-4 text-[9px] p-0 text-muted-foreground hover:text-red-400 hover:bg-transparent"
+                                onClick={() => setLibAllowedUsers("admin")}
                               >
-                                Grant to Everyone (*)
+                                Reset to Admin Only
                               </Button>
                             </div>
                           </div>
@@ -5183,64 +3878,156 @@ function BookLibraryPageContent() {
                       </div>
                     ) : (
                       <div className="divide-y divide-muted/50">
-                        {libraries.map((lib) => (
-                          <div
-                            key={lib.id}
-                            className="p-4 flex items-center justify-between gap-4"
-                          >
-                            <div className="space-y-1">
-                              <h4 className="font-semibold text-sm">
-                                {lib.name}
-                              </h4>
-                              <p className="text-xs text-muted-foreground">
-                                {lib.description || "No description."}
-                              </p>
-                              <div className="flex items-center gap-2 pt-1 flex-wrap">
-                                <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
-                                  Access:{" "}
-                                  {lib.allowedUsers === "*"
-                                    ? "Public"
-                                    : lib.allowedUsers || "Private"}
-                                </Badge>
-                                {lib.restrictedUsers && (
-                                  <Badge
-                                    variant="destructive"
-                                    className="bg-red-950/80 text-red-300 border border-red-800 text-[10px] flex items-center gap-1"
-                                  >
-                                    <UserX className="h-3 w-3" /> Excluded:{" "}
-                                    {lib.restrictedUsers}
+                        {libraries.map((lib: any) => {
+                          const isKids = isKidsLibrary(lib);
+                          const rawAllowed = (lib.allowedUsers || "").trim();
+                          const isPublic = rawAllowed === "*";
+                          const allowedList = isPublic 
+                            ? [] 
+                            : rawAllowed.split(",").map((u: string) => u.trim()).filter(Boolean);
+
+                          return (
+                            <div
+                              key={lib.id}
+                              className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                            >
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-semibold text-sm">
+                                    {lib.name}
+                                  </h4>
+                                  {isKids && (
+                                    <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] flex items-center gap-1 font-semibold">
+                                      <Baby className="h-3 w-3" /> Kids Shelf
+                                    </Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                                    {lib.mediaType === "audiobook" ? "🎧 Audiobook" : "📖 Ebook"}
                                   </Badge>
-                                )}
-                                {lib.path && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] border-primary/20 text-primary bg-primary/5"
-                                  >
-                                    Path: {lib.path}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {lib.description || "No description."}
+                                </p>
+                                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                  <Badge className="bg-slate-900 border border-slate-800 text-slate-200 text-[10px]">
+                                    Access: {isPublic ? "Public (*)" : `${allowedList.length} User${allowedList.length === 1 ? "" : "s"}`}
                                   </Badge>
+                                  {lib.restrictedUsers && (
+                                    <Badge
+                                      variant="destructive"
+                                      className="bg-red-950/80 text-red-300 border border-red-800 text-[10px] flex items-center gap-1"
+                                    >
+                                      <UserX className="h-3 w-3" /> Excluded:{" "}
+                                      {lib.restrictedUsers}
+                                    </Badge>
+                                  )}
+                                  {lib.path && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] border-primary/20 text-primary bg-primary/5"
+                                    >
+                                      Path: {lib.path}
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                {/* Allowed Users Badges & Quick Management */}
+                                {!isPublic && (
+                                  <div className="pt-1.5 space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                                        <Users className="h-3 w-3 text-primary" /> Allowed Members:
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {allowedList.map((uname: string) => (
+                                        <Badge
+                                          key={uname}
+                                          variant="secondary"
+                                          className="text-[10px] font-mono bg-primary/10 border border-primary/25 text-primary hover:bg-red-950/40 hover:text-red-400 hover:border-red-800/40 cursor-pointer transition-colors group"
+                                          title={`Click to remove ${uname}`}
+                                          onClick={() => handleToggleUserAccess(lib.id, uname)}
+                                        >
+                                          {uname}
+                                          <X className="h-2.5 w-2.5 ml-1 opacity-60 group-hover:opacity-100" />
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
                                 )}
                               </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Quick User Access Dropdown */}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                                    >
+                                      <Users className="h-3.5 w-3.5" />
+                                      <span>Manage Users</span>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56 p-1 bg-slate-900 border-slate-800">
+                                    <DropdownMenuLabel className="text-xs font-semibold px-2 py-1.5 flex items-center justify-between">
+                                      <span>Toggle Member Access</span>
+                                      <span className="text-[10px] text-muted-foreground font-normal">Click user</span>
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator className="bg-slate-800" />
+                                    <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
+                                      {allUsers.length === 0 ? (
+                                        <div className="p-2 text-xs text-muted-foreground text-center">No users available</div>
+                                      ) : (
+                                        allUsers.map((u: any) => {
+                                          const userAllowed = isPublic || allowedList.some((item: string) => item.toLowerCase() === u.username.toLowerCase());
+                                          return (
+                                            <DropdownMenuItem
+                                              key={u.id}
+                                              className="flex items-center justify-between text-xs cursor-pointer py-1.5 px-2 rounded hover:bg-slate-800"
+                                              onSelect={(e) => {
+                                                e.preventDefault();
+                                                handleToggleUserAccess(lib.id, u.username);
+                                              }}
+                                            >
+                                              <span className="font-mono">{u.username}</span>
+                                              {userAllowed ? (
+                                                <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] px-1 py-0 h-4">
+                                                  Allowed
+                                                </Badge>
+                                              ) : (
+                                                <span className="text-[10px] text-muted-foreground">+ Add</span>
+                                              )}
+                                            </DropdownMenuItem>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 p-1"
+                                  title="Edit Library"
+                                  onClick={() => startEditLibrary(lib)}
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 p-1"
+                                  title="Delete Library"
+                                  onClick={() => handleDeleteLibrary(lib.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-1"
-                                onClick={() => startEditLibrary(lib)}
-                              >
-                                <Edit3 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                className="h-8 w-8 p-1"
-                                onClick={() => handleDeleteLibrary(lib.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -5469,6 +4256,17 @@ function BookLibraryPageContent() {
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+                  disabled={scanningBounces}
+                  onClick={handleScanBounces}
+                  title="Scan email inbox for Amazon Send-to-Kindle rejection / bounce notices"
+                >
+                  <MailCheck className={`h-3 w-3 ${scanningBounces ? "animate-spin" : ""}`} />
+                  {scanningBounces ? "Scanning..." : "Check Inbox for Bounces"}
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
@@ -6301,7 +5099,7 @@ function BookLibraryPageContent() {
           }}
         >
           <Card
-            className="w-full max-w-2xl max-h-[88vh] flex flex-col border-amber-500/30 bg-slate-955 text-slate-100 shadow-2xl overflow-hidden cursor-default"
+            className="w-[96vw] sm:max-w-2xl max-h-[85vh] flex flex-col border-amber-500/30 bg-slate-955 text-slate-100 shadow-2xl overflow-hidden cursor-default"
             onClick={(e) => e.stopPropagation()}
           >
             <CardHeader className="border-b border-slate-800 pb-4 bg-slate-900/60">
@@ -6681,6 +5479,20 @@ function BookLibraryPageContent() {
           }}
         />
       )}
+
+      <BookMatchModal
+        book={matchModalBook}
+        isOpen={isMatchModalOpen}
+        onClose={() => {
+          setIsMatchModalOpen(false);
+          setMatchModalBook(null);
+        }}
+        onMatched={() => {
+          if (selectedLibrary) {
+            handleScanLibrary(selectedLibrary.id);
+          }
+        }}
+      />
     </div>
   );
 }

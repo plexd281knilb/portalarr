@@ -1,46 +1,236 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { UnsavedChangesPrompt, CustomPendingNavigation } from "@/components/ui/unsaved-changes-prompt";
 import { 
     getAppUsers, 
     createAppUser, 
     deleteAppUser, 
     approveAppUser, 
     rejectAppUser, 
-    syncPlexFriendsAction,
-    updateAppUserRole,
-    updateAppUserKindleEmail,
-    adminResetUserPassword,
-    approveAllPendingAppUsers
+    syncPlexFriendsAction, 
+    updateAppUserRole, 
+    updateAppUserKindleEmail, 
+    updateAppUserName,
+    adminResetUserPassword, 
+    approveAllPendingAppUsers,
+    fetchPlexServerLibraries,
+    fetchUserPlexLibrariesAction,
+    updateUserPlexLibraries,
+    setUserTrialOrSubscription,
+    markUserConverted,
+    getReferralStats,
+    getPaymentAndTrialSettings,
+    savePaymentAndTrialSettings,
+    updateUserMembershipTierAction,
+    toggleUserAddonAdminAction,
+    toggleAdminAddonAvailabilityAction,
+    getAvailableAddonsAction,
+    restoreAllUsersPlexAccessAction,
+    forceRevokePlexAccessAction,
+    getAdminApprovalsAction,
+    getAdminApprovalCountsAction,
+    approveAdminApprovalAction,
+    rejectAdminApprovalAction,
+    bulkApproveAdminApprovalsAction,
+    bulkRejectAdminApprovalsAction,
+    getApprovalSettingsAction,
+    saveApprovalSettingsAction,
+    bulkSetUsersTrialOrSubscriptionAction,
+    creditUserReferralAction,
+    unlinkUserReferralAction,
+    sendSubscriptionRenewalReminderAction,
+    getUserRenewalSummaryAction
 } from "@/app/actions";
-import { changeUserPassword } from "@/app/auth-actions";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
+import { calculateProratedBilling } from "@/lib/prorated-billing";
+import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
-    Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
-    Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2
+    UserCheck, Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
+    Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
+    Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
+    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap
 } from "lucide-react";
-import { format } from "date-fns";
+import { updateUserSubscriptionCadenceAction } from "@/app/payment-actions";
+import { format, differenceInDays } from "date-fns";
+import PaymentEmailManager from "@/components/payment-email-manager";
 
 export default function AccessSettingsPage() {
+    const [activeTab, setActiveTab] = useState("users");
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncingPlex, setSyncingPlex] = useState(false);
     const [syncMessage, setSyncMessage] = useState("");
-    const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
+    const [restoringAccess, setRestoringAccess] = useState(false);
+    const [restoreStatusMsg, setRestoreStatusMsg] = useState("");
+    const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "TRIAL" | "INACTIVE">("ALL");
     const [searchQuery, setSearchQuery] = useState("");
 
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            const params = new URLSearchParams(window.location.search);
-            const search = params.get("search");
-            if (search) setSearchQuery(search);
-        }
-    }, []);
+    // Plex Libraries & Shares state
+    const [serverLibraries, setServerLibraries] = useState<any[]>([]);
+    const [loadingLibraries, setLoadingLibraries] = useState(false);
+
+    // Manage Libraries Modal state
+    const [libModalUser, setLibModalUser] = useState<any | null>(null);
+    const [userSelectedKeys, setUserSelectedKeys] = useState<string[]>([]);
+    const [loadingUserLibs, setLoadingUserLibs] = useState(false);
+    const [savingUserLibs, setSavingUserLibs] = useState(false);
+    const [libSuccessMsg, setLibSuccessMsg] = useState("");
+    const [libErrMsg, setLibErrMsg] = useState("");
+
+    // Suspended User Activation Confirmation Modal state
+    const [showActivationPrompt, setShowActivationPrompt] = useState(false);
+    const [pendingLibSaveKeys, setPendingLibSaveKeys] = useState<string[]>([]);
+    const [selectedActivationType, setSelectedActivationType] = useState<"APPROVED" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "30_DAYS" | "REST_OF_YEAR" | "KEEP_SUSPENDED">("APPROVED");
+    const [activationPromptCustomDays, setActivationPromptCustomDays] = useState<number>(7);
+
+    // Pending Trial / Subscription Activation awaiting library selection
+    const [pendingTrialActivation, setPendingTrialActivation] = useState<{
+        user: any;
+        type: "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "CUSTOM";
+        customDateOrDays?: string | number;
+    } | null>(null);
+
+    // Manage Trial / Subscription Modal state
+    const [subModalUser, setSubModalUser] = useState<any | null>(null);
+    const [showCustomTrialScreen, setShowCustomTrialScreen] = useState(false);
+    const [customTrialDaysInput, setCustomTrialDaysInput] = useState<number>(7);
+    const [subActionLoading, setSubActionLoading] = useState(false);
+    const [subSuccessMsg, setSubSuccessMsg] = useState("");
+    const [subErrMsg, setSubErrMsg] = useState("");
+
+    // Bulk User Selection & Action state
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [bulkUpdating, setBulkUpdating] = useState(false);
+    const [bulkSuccessMsg, setBulkSuccessMsg] = useState("");
+    const [bulkErrMsg, setBulkErrMsg] = useState("");
+    const [showBulkCustomModal, setShowBulkCustomModal] = useState(false);
+    const [bulkCustomDate, setBulkCustomDate] = useState("");
+
+    // Referral Stats & Leaderboard state
+    const [referralStats, setReferralStats] = useState<any>(null);
+    const [loadingReferrals, setLoadingReferrals] = useState(false);
+
+    // Referral Credit Modal state
+    const [showCreditReferralModal, setShowCreditReferralModal] = useState(false);
+    const [creditReferrerId, setCreditReferrerId] = useState("");
+    const [creditReferredId, setCreditReferredId] = useState("");
+    const [creditExtendExpiry, setCreditExtendExpiry] = useState(false);
+    const [creditBonusMonths, setCreditBonusMonths] = useState<number>(0);
+    const [creditAdminNotes, setCreditAdminNotes] = useState("");
+    const [submittingCredit, setSubmittingCredit] = useState(false);
+    const [creditSuccessMsg, setCreditSuccessMsg] = useState("");
+    const [creditErrMsg, setCreditErrMsg] = useState("");
+    const [sendingReminderUserId, setSendingReminderUserId] = useState<string | null>(null);
+    const [reminderSuccessMsg, setReminderSuccessMsg] = useState("");
+    const [reminderErrMsg, setReminderErrMsg] = useState("");
+
+    // Payment & Onboarding Defaults state
+    const [paymentSettings, setPaymentSettings] = useState({
+        defaultTrialDays: 14,
+        defaultPlexLibraries: "",
+        defaultTrialPlexLibraries: "",
+        defaultKidsPlexLibraries: "",
+        paymentPaypal: "",
+        paymentVenmo: "",
+        paymentCashApp: "",
+        paymentZelle: "",
+        paymentInstructions: "",
+        subscriptionPrice: "$180 / year",
+        yearlyPrice: 180,
+        monthlyPrice: 15,
+        tier2YearlyPrice: 240,
+        tier2MonthlyPrice: 25,
+        availableAddons: null as string | null,
+        renewalMonth: 1,
+        renewalDay: 1,
+        billingType: "YEARLY_PRORATED",
+        requireReferralForSignup: false,
+        discordInviteUrl: "",
+        subscriptionGracePeriodDays: 3,
+        membershipTiersEnabled: true,
+        autoSuspendExpiredAccounts: false
+    });
+    const [defaultSelectedKeys, setDefaultSelectedKeys] = useState<string[]>([]);
+    const [defaultTrialSelectedKeys, setDefaultTrialSelectedKeys] = useState<string[]>([]);
+    const [defaultKidsSelectedKeys, setDefaultKidsSelectedKeys] = useState<string[]>([]);
+    const [adminAddonsCatalog, setAdminAddonsCatalog] = useState<any[]>([]);
+    const [togglingAdminAddonId, setTogglingAdminAddonId] = useState<string | null>(null);
+    const [savingSettings, setSavingSettings] = useState(false);
+    const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
+    const [settingsErrMsg, setSettingsErrMsg] = useState("");
+
+    const initialPaymentSettingsRef = useRef<{
+        paymentSettings: any;
+        defaultSelectedKeys: string[];
+        defaultTrialSelectedKeys: string[];
+        defaultKidsSelectedKeys: string[];
+    } | null>(null);
+    const [customPendingNav, setCustomPendingNav] = useState<CustomPendingNavigation | null>(null);
+
+    const areArraysEqual = (a: string[] = [], b: string[] = []) => {
+        if (a.length !== b.length) return false;
+        const sortedA = [...a].sort();
+        const sortedB = [...b].sort();
+        return sortedA.every((val, idx) => val === sortedB[idx]);
+    };
+
+    const isPricingDirty = Boolean(initialPaymentSettingsRef.current && (
+        paymentSettings.defaultTrialDays !== initialPaymentSettingsRef.current.paymentSettings.defaultTrialDays ||
+        paymentSettings.subscriptionPrice !== initialPaymentSettingsRef.current.paymentSettings.subscriptionPrice ||
+        paymentSettings.yearlyPrice !== initialPaymentSettingsRef.current.paymentSettings.yearlyPrice ||
+        paymentSettings.monthlyPrice !== initialPaymentSettingsRef.current.paymentSettings.monthlyPrice ||
+        (paymentSettings.tier2YearlyPrice ?? 240) !== (initialPaymentSettingsRef.current.paymentSettings.tier2YearlyPrice ?? 240) ||
+        (paymentSettings.tier2MonthlyPrice ?? 25) !== (initialPaymentSettingsRef.current.paymentSettings.tier2MonthlyPrice ?? 25) ||
+        paymentSettings.renewalMonth !== initialPaymentSettingsRef.current.paymentSettings.renewalMonth ||
+        paymentSettings.renewalDay !== initialPaymentSettingsRef.current.paymentSettings.renewalDay ||
+        paymentSettings.billingType !== initialPaymentSettingsRef.current.paymentSettings.billingType ||
+        (paymentSettings.membershipTiersEnabled ?? true) !== (initialPaymentSettingsRef.current.paymentSettings.membershipTiersEnabled ?? true)
+    ));
+
+    const isPaymentMethodsDirty = Boolean(initialPaymentSettingsRef.current && (
+        (paymentSettings.paymentPaypal || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentPaypal || "") ||
+        (paymentSettings.paymentVenmo || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentVenmo || "") ||
+        (paymentSettings.paymentCashApp || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentCashApp || "") ||
+        (paymentSettings.paymentZelle || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentZelle || "") ||
+        (paymentSettings.paymentInstructions || "") !== (initialPaymentSettingsRef.current.paymentSettings.paymentInstructions || "") ||
+        (paymentSettings.discordInviteUrl || "") !== (initialPaymentSettingsRef.current.paymentSettings.discordInviteUrl || "") ||
+        (paymentSettings.subscriptionGracePeriodDays ?? 3) !== (initialPaymentSettingsRef.current.paymentSettings.subscriptionGracePeriodDays ?? 3) ||
+        (paymentSettings.autoSuspendExpiredAccounts ?? false) !== (initialPaymentSettingsRef.current.paymentSettings.autoSuspendExpiredAccounts ?? false) ||
+        (paymentSettings.requireReferralForSignup ?? false) !== (initialPaymentSettingsRef.current.paymentSettings.requireReferralForSignup ?? false)
+    ));
+
+    const isDefaultLibrariesDirty = Boolean(initialPaymentSettingsRef.current && (
+        !areArraysEqual(defaultSelectedKeys, initialPaymentSettingsRef.current.defaultSelectedKeys) ||
+        !areArraysEqual(defaultTrialSelectedKeys, initialPaymentSettingsRef.current.defaultTrialSelectedKeys) ||
+        !areArraysEqual(defaultKidsSelectedKeys, initialPaymentSettingsRef.current.defaultKidsSelectedKeys)
+    ));
+
+    const unsavedSections: string[] = [];
+    if (isPricingDirty) unsavedSections.push("Subscription & Trial Pricing");
+    if (isPaymentMethodsDirty) unsavedSections.push("Payment Methods & Policy");
+    if (isDefaultLibrariesDirty) unsavedSections.push("Default Plex Libraries");
+
+    const hasUnsavedChanges = unsavedSections.length > 0;
+
+    const handleDiscardAll = () => {
+        if (!initialPaymentSettingsRef.current) return;
+        const init = initialPaymentSettingsRef.current;
+        setPaymentSettings({ ...init.paymentSettings });
+        setDefaultSelectedKeys([...init.defaultSelectedKeys]);
+        setDefaultTrialSelectedKeys([...init.defaultTrialSelectedKeys]);
+        setDefaultKidsSelectedKeys([...init.defaultKidsSelectedKeys]);
+    };
 
     // Change Password state
     const [passCurrent, setPassCurrent] = useState("");
@@ -60,14 +250,415 @@ export default function AccessSettingsPage() {
     const [editingKindleUserId, setEditingKindleUserId] = useState<string | null>(null);
     const [kindleEmailInput, setKindleEmailInput] = useState("");
 
-    const loadUsers = async () => {
-        setLoading(true);
-        const data = await getAppUsers();
-        setUsers(data || []);
-        setLoading(false);
+    // Inline Edit Real Name state
+    const [editingNameUserId, setEditingNameUserId] = useState<string | null>(null);
+    const [nameInput, setNameInput] = useState("");
+
+    // Impersonation state
+    const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
+
+    // Admin Approval Queue State
+    const [approvals, setApprovals] = useState<any[]>([]);
+    const [approvalCounts, setApprovalCounts] = useState({ pendingCount: 0, approvedCount: 0, rejectedCount: 0, totalCount: 0 });
+    const [loadingApprovals, setLoadingApprovals] = useState(false);
+    const [approvalFilterStatus, setApprovalFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
+    const [approvalFilterType, setApprovalFilterType] = useState<"ALL" | "EMAIL" | "PLEX_ACCESS_GRANT" | "PLEX_ACCESS_REVOKE">("ALL");
+    const [approvalSettings, setApprovalSettings] = useState({ requireApprovalForPlexChanges: true, requireApprovalForEmails: true });
+    const [savingApprovalSettings, setSavingApprovalSettings] = useState(false);
+    const [processingApprovalId, setProcessingApprovalId] = useState<string | null>(null);
+    const [emailPreviewApproval, setEmailPreviewApproval] = useState<any | null>(null);
+    const [approvalSuccessMsg, setApprovalSuccessMsg] = useState("");
+    const [approvalErrMsg, setApprovalErrMsg] = useState("");
+    const [selectedApprovalIds, setSelectedApprovalIds] = useState<string[]>([]);
+
+    const loadApprovalCounts = async () => {
+        try {
+            const counts = await getAdminApprovalCountsAction();
+            if (counts && counts.success) {
+                setApprovalCounts(prev => ({ ...prev, pendingCount: counts.pendingCount, totalCount: counts.totalCount }));
+            }
+        } catch (e) {
+            console.error("loadApprovalCounts error:", e);
+        }
     };
 
-    useEffect(() => { loadUsers(); }, []);
+    const loadApprovals = async () => {
+        setLoadingApprovals(true);
+        try {
+            const res = await getAdminApprovalsAction({
+                status: approvalFilterStatus,
+                type: approvalFilterType,
+                page: 1,
+                pageSize: 50
+            });
+            if (res && res.success && res.approvals) {
+                setApprovals(res.approvals);
+                setApprovalCounts({
+                    pendingCount: res.pendingCount || 0,
+                    approvedCount: res.approvedCount || 0,
+                    rejectedCount: res.rejectedCount || 0,
+                    totalCount: res.totalCount || 0
+                });
+            }
+            const settingsRes = await getApprovalSettingsAction();
+            if (settingsRes && settingsRes.success) {
+                setApprovalSettings({
+                    requireApprovalForPlexChanges: settingsRes.requireApprovalForPlexChanges,
+                    requireApprovalForEmails: settingsRes.requireApprovalForEmails
+                });
+            }
+        } catch (e: any) {
+            console.error("loadApprovals error:", e);
+        } finally {
+            setLoadingApprovals(false);
+        }
+    };
+
+    const handleApproveItem = async (id: string) => {
+        setProcessingApprovalId(id);
+        setApprovalSuccessMsg("");
+        setApprovalErrMsg("");
+        try {
+            const res = await approveAdminApprovalAction(id);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Approved successfully!");
+                loadApprovals();
+                loadUsers();
+            } else {
+                setApprovalErrMsg(res.error || "Approval failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Approval failed.");
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
+
+    const handleRejectItem = async (id: string, reason?: string) => {
+        setProcessingApprovalId(id);
+        setApprovalSuccessMsg("");
+        setApprovalErrMsg("");
+        try {
+            const res = await rejectAdminApprovalAction(id, reason);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Rejected successfully.");
+                loadApprovals();
+            } else {
+                setApprovalErrMsg(res.error || "Rejection failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Rejection failed.");
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
+
+    const handleBulkApprove = async () => {
+        if (selectedApprovalIds.length === 0) return;
+        setLoadingApprovals(true);
+        try {
+            const res = await bulkApproveAdminApprovalsAction(selectedApprovalIds);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Selected items approved.");
+                setSelectedApprovalIds([]);
+                loadApprovals();
+                loadUsers();
+            } else {
+                setApprovalErrMsg(res.error || "Bulk approval failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Bulk approval failed.");
+        } finally {
+            setLoadingApprovals(false);
+        }
+    };
+
+    const handleBulkReject = async () => {
+        if (selectedApprovalIds.length === 0) return;
+        setLoadingApprovals(true);
+        try {
+            const res = await bulkRejectAdminApprovalsAction(selectedApprovalIds);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Selected items rejected.");
+                setSelectedApprovalIds([]);
+                loadApprovals();
+            } else {
+                setApprovalErrMsg(res.error || "Bulk rejection failed.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Bulk rejection failed.");
+        } finally {
+            setLoadingApprovals(false);
+        }
+    };
+
+    const handleToggleApprovalSetting = async (key: "requireApprovalForPlexChanges" | "requireApprovalForEmails", value: boolean) => {
+        setSavingApprovalSettings(true);
+        try {
+            const updated = { ...approvalSettings, [key]: value };
+            setApprovalSettings(updated);
+            const res = await saveApprovalSettingsAction(updated);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Settings updated.");
+            } else {
+                setApprovalErrMsg(res.error || "Failed to update settings.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Failed to update settings.");
+        } finally {
+            setSavingApprovalSettings(false);
+        }
+    };
+
+    const loadUsers = async () => {
+        setLoading(true);
+        try {
+            const data = await getAppUsers();
+            setUsers(data || []);
+        } catch (e) {
+            console.error("loadUsers error:", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadLibraries = async () => {
+        setLoadingLibraries(true);
+        try {
+            const res = await fetchPlexServerLibraries();
+            if (res && res.success && res.servers) {
+                setServerLibraries(res.servers);
+            }
+        } catch (e) {
+            console.error("loadLibraries error:", e);
+        } finally {
+            setLoadingLibraries(false);
+        }
+    };
+
+    const loadReferrals = async () => {
+        setLoadingReferrals(true);
+        try {
+            const res = await getReferralStats();
+            if (res && res.success && res.stats) {
+                setReferralStats(res.stats);
+            }
+        } catch (e) {
+            console.error("loadReferrals error:", e);
+        } finally {
+            setLoadingReferrals(false);
+        }
+    };
+
+    const handleOpenCreditReferralModal = (targetUser?: any, asReferred = false) => {
+        setCreditSuccessMsg("");
+        setCreditErrMsg("");
+        setCreditExtendExpiry(false);
+        setCreditBonusMonths(0);
+        setCreditAdminNotes("");
+
+        if (targetUser && asReferred) {
+            setCreditReferredId(targetUser.id);
+            setCreditReferrerId(targetUser.referredByUserId || "");
+        } else if (targetUser) {
+            setCreditReferrerId(targetUser.id);
+            setCreditReferredId("");
+        } else {
+            setCreditReferrerId("");
+            setCreditReferredId("");
+        }
+        setShowCreditReferralModal(true);
+    };
+
+    const handleSubmitCreditReferral = async () => {
+        if (!creditReferrerId || !creditReferredId) {
+            setCreditErrMsg("Please select both the referring member and the friend who joined.");
+            return;
+        }
+        if (creditReferrerId === creditReferredId) {
+            setCreditErrMsg("A user cannot be credited for referring themselves.");
+            return;
+        }
+
+        setSubmittingCredit(true);
+        setCreditErrMsg("");
+        setCreditSuccessMsg("");
+
+        try {
+            const res = await creditUserReferralAction({
+                referrerUserId: creditReferrerId,
+                referredUserId: creditReferredId,
+                extendSubscriptionExpiry: creditExtendExpiry,
+                bonusMonths: creditBonusMonths,
+                adminNotes: creditAdminNotes
+            });
+
+            if (res.success) {
+                setCreditSuccessMsg(res.message || "Referral credit successfully applied!");
+                await loadUsers();
+                await loadReferrals();
+                setTimeout(() => {
+                    setShowCreditReferralModal(false);
+                }, 1800);
+            } else {
+                setCreditErrMsg(res.error || "Failed to credit referral.");
+            }
+        } catch (e: any) {
+            setCreditErrMsg(e.message || "Error processing referral credit.");
+        } finally {
+            setSubmittingCredit(false);
+        }
+    };
+
+    const handleUnlinkReferral = async (referredUserId: string) => {
+        if (!confirm("Are you sure you want to unlink this referral attribution?")) return;
+        try {
+            const res = await unlinkUserReferralAction(referredUserId);
+            if (res.success) {
+                await loadUsers();
+                await loadReferrals();
+            } else {
+                console.error("Failed to unlink referral:", res.error);
+            }
+        } catch (e: any) {
+            console.error("Failed to unlink referral:", e.message);
+        }
+    };
+
+    const handleSendRenewalReminder = async (userId: string) => {
+        setSendingReminderUserId(userId);
+        setReminderSuccessMsg("");
+        setReminderErrMsg("");
+        try {
+            const res = await sendSubscriptionRenewalReminderAction(userId);
+            if (res.success) {
+                setReminderSuccessMsg(res.message || "Renewal reminder dispatched!");
+                setTimeout(() => setReminderSuccessMsg(""), 5000);
+            } else {
+                setReminderErrMsg(res.error || "Failed to send reminder.");
+                setTimeout(() => setReminderErrMsg(""), 5000);
+            }
+        } catch (e: any) {
+            setReminderErrMsg(e.message || "Failed to send reminder.");
+            setTimeout(() => setReminderErrMsg(""), 5000);
+        } finally {
+            setSendingReminderUserId(null);
+        }
+    };
+
+    const handleUpdateCadence = async (userId: string, cadence: "YEARLY" | "MONTHLY") => {
+        try {
+            const res = await updateUserSubscriptionCadenceAction(userId, cadence);
+            if (res.success) {
+                if (subModalUser && subModalUser.id === userId) {
+                    setSubModalUser((prev: any) => prev ? { ...prev, subscriptionCadence: cadence } : null);
+                }
+                setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, subscriptionCadence: cadence } : u));
+                setSubSuccessMsg(`Updated plan cadence to ${cadence === "YEARLY" ? "Annual" : "Monthly"}`);
+                setTimeout(() => setSubSuccessMsg(""), 3000);
+            } else {
+                setSubErrMsg(res.error || "Failed to update subscription cadence.");
+            }
+        } catch (e: any) {
+            setSubErrMsg(e.message || "Failed to update cadence.");
+        }
+    };
+
+    const [togglingAddonUserId, setTogglingAddonUserId] = useState<string | null>(null);
+    const handleToggleUserAddon = async (userId: string, addonId: string, enabled: boolean) => {
+        setTogglingAddonUserId(`${userId}:${addonId}`);
+        setSubErrMsg("");
+        try {
+            const res = await toggleUserAddonAdminAction(userId, addonId, enabled);
+            if (res.success && res.enabledAddons) {
+                const updatedAddonsJson = JSON.stringify(res.enabledAddons);
+                setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, enabledAddons: updatedAddonsJson } : u));
+                if (subModalUser && subModalUser.id === userId) {
+                    setSubModalUser((prev: any) => prev ? { ...prev, enabledAddons: updatedAddonsJson } : null);
+                }
+                setSubSuccessMsg(res.message || "Updated add-on!");
+                setTimeout(() => setSubSuccessMsg(""), 3000);
+            } else {
+                setSubErrMsg(res.error || "Failed to toggle add-on.");
+            }
+        } catch (e: any) {
+            setSubErrMsg(e.message || "Failed to toggle add-on.");
+        } finally {
+            setTogglingAddonUserId(null);
+        }
+    };
+
+    const loadPaymentSettings = async () => {
+        try {
+            const res = await getPaymentAndTrialSettings();
+            if (res && res.success && res.settings) {
+                setPaymentSettings(res.settings);
+                const loadedKeys = res.settings.defaultPlexLibraries
+                    ? res.settings.defaultPlexLibraries
+                        .split(",")
+                        .map((s: string) => s.trim())
+                        .filter(Boolean)
+                    : [];
+                setDefaultSelectedKeys(loadedKeys);
+
+                const loadedTrialKeys = res.settings.defaultTrialPlexLibraries
+                    ? res.settings.defaultTrialPlexLibraries
+                        .split(",")
+                        .map((s: string) => s.trim())
+                        .filter(Boolean)
+                    : [];
+                setDefaultTrialSelectedKeys(loadedTrialKeys);
+
+                const loadedKidsKeys = res.settings.defaultKidsPlexLibraries
+                    ? res.settings.defaultKidsPlexLibraries
+                        .split(",")
+                        .map((s: string) => s.trim())
+                        .filter(Boolean)
+                    : [];
+                setDefaultKidsSelectedKeys(loadedKidsKeys);
+
+                initialPaymentSettingsRef.current = {
+                    paymentSettings: { ...res.settings },
+                    defaultSelectedKeys: loadedKeys,
+                    defaultTrialSelectedKeys: loadedTrialKeys,
+                    defaultKidsSelectedKeys: loadedKidsKeys
+                };
+            }
+
+            const addonRes = await getAvailableAddonsAction();
+            if (addonRes && addonRes.success && addonRes.catalog) {
+                setAdminAddonsCatalog(addonRes.catalog);
+            }
+        } catch (e) {
+            console.error("loadPaymentSettings error:", e);
+        }
+    };
+
+    useEffect(() => {
+        loadUsers();
+        loadLibraries();
+        loadReferrals();
+        loadPaymentSettings();
+        loadApprovalCounts();
+
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const search = params.get("search");
+            if (search) setSearchQuery(search);
+            const tab = params.get("tab");
+            if (tab && ["users", "referrals", "onboarding", "scraper", "approvals"].includes(tab)) {
+                setActiveTab(tab);
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === "approvals") {
+            loadApprovals();
+        }
+    }, [activeTab, approvalFilterStatus, approvalFilterType]);
+
+    const [revokingUserId, setRevokingUserId] = useState<string | null>(null);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -83,10 +674,49 @@ export default function AccessSettingsPage() {
         const res = await syncPlexFriendsAction();
         setSyncingPlex(false);
         if (res.success) {
-            setSyncMessage(`Synced ${res.totalFriends} Plex friends (${res.addedCount} added, ${res.updatedCount} updated, ${res.revokedCount} revoked).`);
+            let msg = `Synced ${res.totalFriends} Plex friends (${res.addedCount} added, ${res.updatedCount} updated).`;
+            if (res.securityLeaksRemediatedCount && res.securityLeaksRemediatedCount > 0) {
+                msg += ` 🚨 Automatically revoked unauthorized Plex access for ${res.securityLeaksRemediatedCount} inactive users (${(res.securityAlertUsers || []).join(", ")}).`;
+            }
+            setSyncMessage(msg);
             loadUsers();
+            loadLibraries();
         } else {
             setSyncMessage(res.error || "Failed to sync Plex friends.");
+        }
+    };
+
+    const handleForceRevoke = async (userId: string, username: string) => {
+        if (!confirm(`Are you sure you want to immediately revoke all Plex library access and terminate active playback sessions for ${username}?`)) {
+            return;
+        }
+        setRevokingUserId(userId);
+        try {
+            const res = await forceRevokePlexAccessAction(userId);
+            if (res.success) {
+                await loadUsers();
+                await loadLibraries();
+            } else {
+                setSyncMessage(res.error || "Failed to revoke Plex access.");
+            }
+        } catch (e: any) {
+            setSyncMessage(e.message || "An error occurred.");
+        } finally {
+            setRevokingUserId(null);
+        }
+    };
+
+    const handleRestoreAllPlexAccess = async () => {
+        setRestoringAccess(true);
+        setRestoreStatusMsg("");
+        const res = await restoreAllUsersPlexAccessAction();
+        setRestoringAccess(false);
+        if (res.success) {
+            setRestoreStatusMsg(res.message || `Restored Plex libraries for ${res.restoredCount} users.`);
+            loadUsers();
+            loadLibraries();
+        } else {
+            setRestoreStatusMsg(res.error || "Failed to restore Plex libraries.");
         }
     };
 
@@ -126,11 +756,19 @@ export default function AccessSettingsPage() {
         if (confirm("Delete this user? They will lose access immediately.")) {
             await deleteAppUser(id);
             loadUsers();
+            loadReferrals();
         }
     };
 
     const handleRoleChange = async (userId: string, newRole: string) => {
+        setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
         await updateAppUserRole(userId, newRole);
+        loadUsers();
+    };
+
+    const handleMembershipTierChange = async (userId: string, newTier: string) => {
+        setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, membershipTier: newTier } : u));
+        await updateUserMembershipTierAction(userId, newTier);
         loadUsers();
     };
 
@@ -139,6 +777,33 @@ export default function AccessSettingsPage() {
         setEditingKindleUserId(null);
         setKindleEmailInput("");
         loadUsers();
+    };
+
+    const handleSaveName = async (userId: string) => {
+        await updateAppUserName(userId, nameInput);
+        setEditingNameUserId(null);
+        setNameInput("");
+        loadUsers();
+    };
+
+    const handleImpersonateUser = async (targetUserId: string, username: string) => {
+        if (!confirm(`Switch to viewing the site as "${username}"?\n\nYou will experience the site exactly as this user sees it (their personal shelves, hub stats, active streams, and user role restrictions).\n\nA sticky banner at the top of the screen will let you return to your Admin account anytime.`)) {
+            return;
+        }
+        setImpersonatingUserId(targetUserId);
+        try {
+            const res = await impersonateUserAction(targetUserId);
+            if (res?.error) {
+                setSyncMessage("Unable to switch user: " + res.error);
+                setImpersonatingUserId(null);
+                return;
+            }
+            window.location.assign("/");
+        } catch (err: any) {
+            console.error("Impersonate error:", err);
+            setSyncMessage("Failed to switch user. Please try again.");
+            setImpersonatingUserId(null);
+        }
     };
 
     const handleAdminResetPassword = async (e: React.FormEvent) => {
@@ -171,195 +836,3879 @@ export default function AccessSettingsPage() {
         }
     };
 
+    const getActivationTypeLabel = (type?: string, customDateOrDays?: string | number) => {
+        switch (type) {
+            case "CUSTOM_TRIAL": 
+                return `${customDateOrDays || 'X'}-Day Free Trial`;
+            case "TRIAL": 
+                return `${customDateOrDays || paymentSettings.defaultTrialDays || 14}-Day Free Trial`;
+            case "7_DAYS_TRIAL": return "7-Day Free Trial";
+            case "14_DAYS_TRIAL": return "14-Day Free Trial";
+            case "30_DAYS": return "30-Day Subscription";
+            case "REST_OF_YEAR": return `Rest of ${new Date().getFullYear()}`;
+            case "1_YEAR": return "1-Year Subscription";
+            case "PERMANENT":
+            case "APPROVED": return "Full Activation";
+            case "CUSTOM": return customDateOrDays ? `${customDateOrDays}-Day Access` : "Custom Access";
+            default: return "Activation";
+        }
+    };
+
+    // Open Manage Libraries Modal for a user
+    const handleOpenLibrariesModal = async (
+        user: any,
+        activatingTrialType?: "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "CUSTOM",
+        activatingCustomDateOrDays?: string | number
+    ) => {
+        setLibModalUser(user);
+        if (activatingTrialType) {
+            setPendingTrialActivation({ user, type: activatingTrialType, customDateOrDays: activatingCustomDateOrDays });
+        } else {
+            setPendingTrialActivation(null);
+        }
+        setLibSuccessMsg("");
+        setLibErrMsg("");
+        setLoadingUserLibs(true);
+
+        let currentServers = serverLibraries;
+        if (currentServers.length === 0) {
+            try {
+                const libRes = await fetchPlexServerLibraries();
+                if (libRes?.success && libRes.servers && libRes.servers.length > 0) {
+                    setServerLibraries(libRes.servers);
+                    currentServers = libRes.servers;
+                }
+            } catch (err) {}
+        }
+
+        const normalizeKeyList = (keys: string[]) => {
+            return keys.map(k => {
+                if (k.includes(":")) return k;
+                const matchedServer = currentServers.find(s => (s.sections || []).some((sec: any) => String(sec.id) === k || (sec.key && String(sec.key) === k)));
+                if (matchedServer) {
+                    return `${matchedServer.serverId}:${k}`;
+                }
+                if (currentServers.length > 0) {
+                    return `${currentServers[0].serverId}:${k}`;
+                }
+                return k;
+            });
+        };
+
+        // Pre-fill initial keys from user record, onboarding default, or all libraries if activating
+        let initialKeys: string[] = [];
+        if (activatingTrialType) {
+            if (user.accountType === "KID" && (paymentSettings.defaultKidsPlexLibraries || defaultKidsSelectedKeys.length > 0)) {
+                const kKeys = paymentSettings.defaultKidsPlexLibraries ? paymentSettings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultKidsSelectedKeys;
+                initialKeys = normalizeKeyList(kKeys);
+            } else if (activatingTrialType.includes("TRIAL") && (paymentSettings.defaultTrialPlexLibraries || defaultTrialSelectedKeys.length > 0)) {
+                const tKeys = paymentSettings.defaultTrialPlexLibraries ? paymentSettings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean) : defaultTrialSelectedKeys;
+                initialKeys = normalizeKeyList(tKeys);
+            } else if (paymentSettings.defaultPlexLibraries) {
+                initialKeys = normalizeKeyList(paymentSettings.defaultPlexLibraries
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean));
+            } else if (defaultSelectedKeys.length > 0) {
+                initialKeys = normalizeKeyList(defaultSelectedKeys);
+            } else {
+                initialKeys = currentServers.flatMap(srv => (srv.sections || []).map((sec: any) => `${srv.serverId}:${sec.id}`));
+            }
+
+            if (activatingTrialType.includes("TRIAL")) {
+                initialKeys = initialKeys.filter(k => {
+                    for (const srv of currentServers) {
+                        const sName = (srv.serverName || "").toLowerCase();
+                        if (sName.includes("kid") || sName.includes("backup")) {
+                            if (k.startsWith(`${srv.serverId}:`)) return false;
+                        }
+                        for (const sec of (srv.sections || [])) {
+                            const secTitle = (sec.title || "").toLowerCase();
+                            if (secTitle.includes("kid") && (k === `${srv.serverId}:${sec.id}` || k === String(sec.id))) {
+                                return false;
+                            }
+                        }
+                    }
+                    return true;
+                });
+            }
+        } else {
+            // Normal "Manage Libraries" click: load what is currently in SQLite (or [] if inactive/empty)
+            const isInactive = user.status === "SUSPENDED" || user.status === "EXPIRED" || user.status === "REJECTED" || user.status === "PENDING";
+            if (user.plexLibrarySectionIds && !isInactive) {
+                initialKeys = normalizeKeyList(user.plexLibrarySectionIds
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean));
+            } else {
+                initialKeys = [];
+            }
+        }
+        setUserSelectedKeys(initialKeys);
+
+        // Fetch live shared library sections directly from Plex
+        try {
+            const res = await fetchUserPlexLibrariesAction(user.id);
+            if (res.success && Array.isArray(res.selectedKeys)) {
+                if (!activatingTrialType) {
+                    // Accurately reflect live Plex state (empty array if 0 shares)
+                    setUserSelectedKeys(normalizeKeyList(res.selectedKeys));
+                }
+            }
+        } catch (e) {
+            console.warn("Could not query Plex for user libraries:", e);
+        } finally {
+            setLoadingUserLibs(false);
+        }
+    };
+
+    const isSectionSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        if (userSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && userSelectedKeys.includes(altFullKey)) return true;
+        if (userSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && userSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
+    };
+
+    const handleToggleUserSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        setUserSelectedKeys(prev => {
+            const isCurrentlySelected = isSectionSelected(serverId, sectionId, sectionKey);
+            if (isCurrentlySelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
+            } else {
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
+            }
+        });
+    };
+
+    const handleToggleAllServerSections = (serverId: string, selectAll: boolean) => {
+        const server = serverLibraries.find(s => s.serverId === serverId);
+        if (!server) return;
+        const serverKeys = (server.sections || []).map((sec: any) => `${serverId}:${sec.id}`);
+        const serverRawIds = new Set((server.sections || []).flatMap((sec: any) => [
+            String(sec.id),
+            sec.key ? String(sec.key) : null,
+            `${serverId}:${sec.id}`,
+            sec.key ? `${serverId}:${sec.key}` : null
+        ].filter(Boolean)));
+        
+        setUserSelectedKeys(prev => {
+            const otherServerKeys = prev.filter(k => !k.startsWith(`${serverId}:`) && !serverRawIds.has(k));
+            return selectAll ? [...otherServerKeys, ...serverKeys] : otherServerKeys;
+        });
+    };
+
+    const handleSelectAllSections = () => {
+        setUserSelectedKeys(allUniqueKeys);
+    };
+
+    const handleDeselectAllSections = () => {
+        setUserSelectedKeys([]);
+    };
+
+    const isDefaultSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        if (defaultSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && defaultSelectedKeys.includes(altFullKey)) return true;
+        if (defaultSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && defaultSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
+    };
+
+    const handleToggleDefaultSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        setDefaultSelectedKeys(prev => {
+            const isCurrentlySelected = isDefaultSelected(serverId, sectionId, sectionKey);
+            if (isCurrentlySelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
+            } else {
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
+            }
+        });
+    };
+
+    const isTrialDefaultSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        if (defaultTrialSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && defaultTrialSelectedKeys.includes(altFullKey)) return true;
+        if (defaultTrialSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && defaultTrialSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
+    };
+
+    const handleToggleTrialDefaultSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        setDefaultTrialSelectedKeys(prev => {
+            const isCurrentlySelected = isTrialDefaultSelected(serverId, sectionId, sectionKey);
+            if (isCurrentlySelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
+            } else {
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
+            }
+        });
+    };
+
+    const isKidsDefaultSelected = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        if (defaultKidsSelectedKeys.includes(fullKey)) return true;
+        if (altFullKey && defaultKidsSelectedKeys.includes(altFullKey)) return true;
+        if (defaultKidsSelectedKeys.includes(rawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => String(sec.id) === rawKey || (sec.key && String(sec.key) === rawKey)));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        if (altRawKey && defaultKidsSelectedKeys.includes(altRawKey)) {
+            const matches = serverLibraries.filter(s => (s.sections || []).some((sec: any) => (sec.key && String(sec.key) === altRawKey) || String(sec.id) === altRawKey));
+            if (matches.length === 1 && matches[0].serverId === serverId) return true;
+            if (matches.length > 1 && serverLibraries[0]?.serverId === serverId) return true;
+        }
+        return false;
+    };
+
+    const handleToggleKidsDefaultSection = (serverId: string, sectionId: number | string, sectionKey?: number | string) => {
+        const fullKey = `${serverId}:${sectionId}`;
+        const rawKey = String(sectionId);
+        const altFullKey = sectionKey !== undefined && sectionKey !== null ? `${serverId}:${sectionKey}` : null;
+        const altRawKey = sectionKey !== undefined && sectionKey !== null ? String(sectionKey) : null;
+
+        setDefaultKidsSelectedKeys(prev => {
+            const isCurrentlySelected = isKidsDefaultSelected(serverId, sectionId, sectionKey);
+            if (isCurrentlySelected) {
+                return prev.filter(k => k !== fullKey && k !== rawKey && (!altFullKey || k !== altFullKey) && (!altRawKey || k !== altRawKey));
+            } else {
+                return [...prev.filter(k => k !== rawKey && (!altRawKey || k !== altRawKey)), fullKey];
+            }
+        });
+    };
+
+    const handleToggleAdminAddonAvailability = async (addonId: string, isAvailable: boolean) => {
+        setTogglingAdminAddonId(addonId);
+        try {
+            const res = await toggleAdminAddonAvailabilityAction(addonId, isAvailable);
+            if (res.success && res.catalog) {
+                setAdminAddonsCatalog(res.catalog);
+            }
+        } catch (err) {
+            console.error("Failed to toggle addon availability:", err);
+        } finally {
+            setTogglingAdminAddonId(null);
+        }
+    };
+
+    const handleSaveUserLibraries = async () => {
+        if (!libModalUser) return;
+
+        // Normalize keys before saving
+        const normalizedKeys = userSelectedKeys.map(k => {
+            if (k.includes(":")) return k;
+            const matchedServer = serverLibraries.find(s => (s.sections || []).some((sec: any) => String(sec.id) === k || (sec.key && String(sec.key) === k)));
+            if (matchedServer) return `${matchedServer.serverId}:${k}`;
+            if (serverLibraries.length > 0) return `${serverLibraries[0].serverId}:${k}`;
+            return k;
+        });
+
+        // If this was triggered from a trial/subscription activation with 0 libraries:
+        if (pendingTrialActivation) {
+            await executeSaveUserLibraries(normalizedKeys, pendingTrialActivation.type, pendingTrialActivation.customDateOrDays);
+            return;
+        }
+
+        // If user is currently suspended or expired and at least 1 library is selected:
+        // prompt the admin with activation options before saving and granting access.
+        if ((libModalUser.status === "SUSPENDED" || libModalUser.status === "EXPIRED") && normalizedKeys.length > 0) {
+            setPendingLibSaveKeys(normalizedKeys);
+            setSelectedActivationType("APPROVED");
+            setShowActivationPrompt(true);
+            return;
+        }
+
+        await executeSaveUserLibraries(normalizedKeys);
+    };
+
+    const executeSaveUserLibraries = async (
+        normalizedKeys: string[], 
+        activationType?: "APPROVED" | "PERMANENT" | "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "CUSTOM" | "KEEP_SUSPENDED",
+        customDateOrDays?: string | number
+    ) => {
+        if (!libModalUser) return;
+        setSavingUserLibs(true);
+        setLibSuccessMsg("");
+        setLibErrMsg("");
+
+        const res = await updateUserPlexLibraries(libModalUser.id, normalizedKeys, activationType, customDateOrDays);
+        setSavingUserLibs(false);
+        setShowActivationPrompt(false);
+        if (res.success) {
+            setLibSuccessMsg(res.message || "Plex libraries updated successfully!");
+            loadUsers();
+            loadReferrals();
+            loadApprovalCounts();
+            setTimeout(() => {
+                setLibModalUser(null);
+                setPendingTrialActivation(null);
+                setLibSuccessMsg("");
+            }, 1400);
+        } else {
+            setLibErrMsg(res.error || "Failed to update libraries on Plex.");
+        }
+    };
+
+    // Handle Trial & Subscription updates
+    const handleSetTrialOrSub = async (
+        type: "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM",
+        customDateOrDays?: string | number
+    ) => {
+        if (!subModalUser) return;
+
+        // If setting a trial or subscription (not suspending/expiring) and user currently has access to 0 libraries:
+        // Prompt which libraries to grant access to first!
+        if (type !== "SUSPENDED" && type !== "EXPIRED") {
+            const userLibs = (subModalUser.plexLibrarySectionIds || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+            if (userLibs.length === 0) {
+                const targetUser = subModalUser;
+                setSubModalUser(null);
+                handleOpenLibrariesModal(targetUser, type, customDateOrDays);
+                return;
+            }
+        }
+
+        setSubActionLoading(true);
+        setSubSuccessMsg("");
+        setSubErrMsg("");
+
+        const res = await setUserTrialOrSubscription(subModalUser.id, type, customDateOrDays);
+        setSubActionLoading(false);
+        if (res.success) {
+            setSubSuccessMsg(res.message || "Access updated successfully!");
+            loadUsers();
+            loadReferrals();
+            setTimeout(() => {
+                setSubModalUser(null);
+                setSubSuccessMsg("");
+            }, 1200);
+        } else {
+            setSubErrMsg(res.error || "Failed to update status.");
+        }
+    };
+
+    const handleMarkUserConverted = async () => {
+        if (!subModalUser) return;
+        setSubActionLoading(true);
+        const res = await markUserConverted(subModalUser.id);
+        setSubActionLoading(false);
+        if (res.success) {
+            setSubSuccessMsg("User marked as converted! Referral stats updated.");
+            loadUsers();
+            loadReferrals();
+            setTimeout(() => {
+                setSubModalUser(null);
+                setSubSuccessMsg("");
+            }, 1200);
+        } else {
+            setSubErrMsg(res.error || "Failed to mark converted.");
+        }
+    };
+
+    // Bulk User Selection Handlers
+    const toggleSelectUser = (userId: string) => {
+        setSelectedUserIds(prev => 
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
+
+    const handleSelectAllFiltered = (filtered: any[]) => {
+        const filteredIds = filtered.map(u => u.id);
+        const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedUserIds.includes(id));
+        if (allSelected) {
+            setSelectedUserIds(prev => prev.filter(id => !filteredIds.includes(id)));
+        } else {
+            setSelectedUserIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+        }
+    };
+
+    const handleClearSelected = () => {
+        setSelectedUserIds([]);
+    };
+
+    const handleBulkSetSubscription = async (
+        type: "REST_OF_YEAR" | "1_YEAR" | "30_DAYS" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL",
+        customVal?: string | number
+    ) => {
+        if (selectedUserIds.length === 0) return;
+        setBulkUpdating(true);
+        setBulkSuccessMsg("");
+        setBulkErrMsg("");
+        try {
+            const res = await bulkSetUsersTrialOrSubscriptionAction(selectedUserIds, type, customVal);
+            if (res.success) {
+                setBulkSuccessMsg(res.message || `Updated ${res.updatedCount} user(s) successfully!`);
+                setSelectedUserIds([]);
+                await loadUsers();
+                setTimeout(() => setBulkSuccessMsg(""), 6000);
+            } else {
+                setBulkErrMsg(res.error || "Failed to bulk update users.");
+                setTimeout(() => setBulkErrMsg(""), 6000);
+            }
+        } catch (e: any) {
+            setBulkErrMsg(e.message || "Failed to bulk update users.");
+            setTimeout(() => setBulkErrMsg(""), 6000);
+        } finally {
+            setBulkUpdating(false);
+        }
+    };
+
+    // Save Payment & Onboarding Defaults
+    const handleSaveOnboardingDirect = async (): Promise<boolean> => {
+        setSavingSettings(true);
+        setSettingsSuccessMsg("");
+        setSettingsErrMsg("");
+
+        const formData = new FormData();
+        formData.append("defaultTrialDays", String(paymentSettings.defaultTrialDays));
+        formData.append("defaultPlexLibraries", defaultSelectedKeys.join(","));
+        formData.append("defaultTrialPlexLibraries", defaultTrialSelectedKeys.join(","));
+        formData.append("defaultKidsPlexLibraries", defaultKidsSelectedKeys.join(","));
+        formData.append("paymentPaypal", paymentSettings.paymentPaypal || "");
+        formData.append("paymentVenmo", paymentSettings.paymentVenmo || "");
+        formData.append("paymentCashApp", paymentSettings.paymentCashApp || "");
+        formData.append("paymentZelle", paymentSettings.paymentZelle || "");
+        formData.append("paymentInstructions", paymentSettings.paymentInstructions || "");
+        formData.append("subscriptionPrice", paymentSettings.subscriptionPrice || "");
+        formData.append("yearlyPrice", String(paymentSettings.yearlyPrice));
+        formData.append("monthlyPrice", String(paymentSettings.monthlyPrice));
+        formData.append("tier2YearlyPrice", String(paymentSettings.tier2YearlyPrice ?? 240));
+        formData.append("tier2MonthlyPrice", String(paymentSettings.tier2MonthlyPrice ?? 25));
+        formData.append("renewalMonth", String(paymentSettings.renewalMonth));
+        formData.append("renewalDay", String(paymentSettings.renewalDay));
+        formData.append("billingType", paymentSettings.billingType || "YEARLY_PRORATED");
+        formData.append("requireReferralForSignup", String(paymentSettings.requireReferralForSignup ?? false));
+        formData.append("discordInviteUrl", paymentSettings.discordInviteUrl || "");
+        formData.append("subscriptionGracePeriodDays", String(paymentSettings.subscriptionGracePeriodDays ?? 3));
+        formData.append("membershipTiersEnabled", String(paymentSettings.membershipTiersEnabled ?? true));
+        formData.append("autoSuspendExpiredAccounts", String(paymentSettings.autoSuspendExpiredAccounts ?? false));
+
+        const res = await savePaymentAndTrialSettings(formData);
+        setSavingSettings(false);
+        if (res.success) {
+            setSettingsSuccessMsg(res.message || "Payment & Trial settings saved successfully!");
+            setTimeout(() => setSettingsSuccessMsg(""), 5000);
+
+            const savedSettings = (res as any).settings ? { ...(res as any).settings } : { ...paymentSettings };
+            const snapshot = {
+                paymentSettings: { ...savedSettings },
+                defaultSelectedKeys: [...defaultSelectedKeys],
+                defaultTrialSelectedKeys: [...defaultTrialSelectedKeys],
+                defaultKidsSelectedKeys: [...defaultKidsSelectedKeys]
+            };
+            initialPaymentSettingsRef.current = snapshot;
+            setPaymentSettings(snapshot.paymentSettings);
+            setDefaultSelectedKeys([...snapshot.defaultSelectedKeys]);
+            setDefaultTrialSelectedKeys([...snapshot.defaultTrialSelectedKeys]);
+            setDefaultKidsSelectedKeys([...snapshot.defaultKidsSelectedKeys]);
+            return true;
+        } else {
+            setSettingsErrMsg(res.error || "Failed to save settings.");
+            setTimeout(() => setSettingsErrMsg(""), 5000);
+            return false;
+        }
+    };
+
+    const handleSaveOnboardingSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSaveOnboardingDirect();
+    };
+
+    const handleTabChange = (newTab: string) => {
+        if (hasUnsavedChanges && newTab !== activeTab) {
+            setCustomPendingNav({
+                type: "tab",
+                target: newTab,
+                onDiscardAndProceed: () => {
+                    handleDiscardAll();
+                    setActiveTab(newTab);
+                    setCustomPendingNav(null);
+                },
+                onSaveAndProceed: async () => {
+                    const ok = await handleSaveOnboardingDirect();
+                    if (ok) {
+                        setActiveTab(newTab);
+                        setCustomPendingNav(null);
+                    }
+                }
+            });
+            return;
+        }
+        setActiveTab(newTab);
+    };
+
     const pendingUsersCount = users.filter(u => u.status === "PENDING").length;
 
+    // Detect any inactive users who still retain active Plex library access (Security Breach)
+    const usersWithSecurityLeaks = users.filter(u => {
+        const isInactive = u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED" || u.status === "PENDING";
+        const isAdmin = u.role === "ADMIN";
+        if (!isInactive || isAdmin) return false;
+        return !!(u.plexLibrarySectionIds && u.plexLibrarySectionIds.trim().length > 0);
+    });
+
+    // Filter users
     const filteredUsers = users.filter(u => {
         const matchStatus = 
             filterStatus === "ALL" ? true :
             filterStatus === "PENDING" ? u.status === "PENDING" :
             filterStatus === "APPROVED" ? (u.status === "APPROVED" || !u.status) :
-            filterStatus === "REJECTED" ? u.status === "REJECTED" : true;
+            filterStatus === "TRIAL" ? u.status === "TRIAL" :
+            filterStatus === "INACTIVE" ? (u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED") : true;
 
         const q = searchQuery.toLowerCase().trim();
         const matchSearch = !q || 
             u.username.toLowerCase().includes(q) || 
+            (u.name && u.name.toLowerCase().includes(q)) ||
             (u.email && u.email.toLowerCase().includes(q)) ||
             (u.kindleEmail && u.kindleEmail.toLowerCase().includes(q)) ||
+            (u.referredBy?.username && u.referredBy.username.toLowerCase().includes(q)) ||
             u.role.toLowerCase().includes(q);
 
         return matchStatus && matchSearch;
     });
 
+    // Helper to calculate trial days left
+    const getDaysLeft = (endsAt: string | null) => {
+        if (!endsAt) return 0;
+        const diff = differenceInDays(new Date(endsAt), new Date());
+        return Math.max(0, diff);
+    };
+
+    // Flatten all unique composite keys across servers
+    const allUniqueKeys: string[] = serverLibraries.flatMap(srv => (srv.sections || []).map((sec: any) => `${srv.serverId}:${sec.id}`));
+    const totalLibrariesCount = allUniqueKeys.length;
+    const allSections = serverLibraries.flatMap(s => s.sections || []);
+
+    // Live calculation for preview
+    const liveProrated = calculateProratedBilling({
+        startDate: new Date(),
+        trialDays: paymentSettings.defaultTrialDays,
+        yearlyPrice: paymentSettings.yearlyPrice,
+        monthlyPrice: paymentSettings.monthlyPrice,
+        renewalMonth: paymentSettings.renewalMonth,
+        renewalDay: paymentSettings.renewalDay
+    });
+
     return (
-        <div className="space-y-6 max-w-5xl">
+        <div className="space-y-6 w-full min-w-0">
             <div>
                 <h3 className="text-xl font-bold tracking-tight text-emerald-400">Access Control & User Directory</h3>
                 <p className="text-sm text-muted-foreground">
-                    Provision accounts, manage user roles, process pending access requests, and sync accounts from your Plex Friends list.
+                    Provision accounts, manage Plex library access, configure prorated annual subscriptions & trials, and track member referrals.
                 </p>
             </div>
 
-            {/* PLEX AUTO-SYNC BANNER */}
-            <Card className="border-[#e5a00d]/40 bg-[#e5a00d]/5 backdrop-blur-md shadow-sm hover:border-[#e5a00d]/60 hover:shadow-md transition-all duration-200">
-                <CardContent className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-2 font-bold text-foreground">
-                            <Play className="h-4 w-4 text-[#e5a00d] fill-current" />
-                            <span>Plex Friends Auto-Sync</span>
+            {/* TOP NAVIGATION TABS */}
+            <Tabs defaultValue="users" value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                    <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                        <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="referrals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                        <Trophy className="h-4 w-4 text-amber-400 shrink-0" /> <span className="truncate">Referrals & Leaderboard</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="onboarding" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
+                        <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Payment & Onboarding</span>
+                        {hasUnsavedChanges && (
+                            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse ml-1 shrink-0" />
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="scraper" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
+                        <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Email Scraper</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="approvals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
+                        <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0" />
+                        <span className="truncate">Approval Queue</span>
+                        {approvalCounts.pendingCount > 0 && (
+                            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-black animate-pulse">
+                                {approvalCounts.pendingCount}
+                            </span>
+                        )}
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* ========================================================================= */}
+                {/* TAB 1: USERS DIRECTORY & ACCESS CONTROL */}
+                {/* ========================================================================= */}
+                <TabsContent value="users" className="space-y-6 animate-in fade-in-50 duration-200">
+                    {/* PLEX AUTO-SYNC BANNER */}
+                    <Card className="border-[#e5a00d]/40 bg-[#e5a00d]/5 backdrop-blur-md shadow-sm hover:border-[#e5a00d]/60 hover:shadow-md transition-all duration-200">
+                        <CardContent className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2 font-bold text-foreground">
+                                    <Play className="h-4 w-4 text-[#e5a00d] fill-current" />
+                                    <span>Plex Friends Auto-Sync</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground max-w-xl">
+                                    Scans your Plex server for friends and automatically provisions approved accounts for them. Updates user details when usernames or emails change without affecting non-Plex registered users.
+                                </p>
+                                {syncMessage && (
+                                    <div className="text-xs text-[#e5a00d] pt-1 font-medium">
+                                        {syncMessage}
+                                    </div>
+                                )}
+                            </div>
+                            <Button 
+                                type="button" 
+                                variant="outline"
+                                className="border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/10 shrink-0 gap-2 h-10 font-semibold transition-all duration-200 hover:ring-2 hover:ring-[#e5a00d]/40 active:scale-95"
+                                onClick={handleSyncPlex}
+                                disabled={syncingPlex}
+                            >
+                                {syncingPlex ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                Sync Plex Friends Now
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <div className="grid gap-5 grid-cols-1 lg:grid-cols-2">
+                        {/* CREATE USER FORM */}
+                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                    <UserPlus className="h-5 w-5 text-primary" /> Create Account
+                                </CardTitle>
+                                <CardDescription>Add a new administrator or pre-approved user.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form 
+                                    onSubmit={handleCreate} 
+                                    className="space-y-4"
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">Username</Label>
+                                        <Input 
+                                            name="username" 
+                                            placeholder="e.g. jsmith" 
+                                            required 
+                                            className="bg-background/60" 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">Email Address</Label>
+                                        <Input 
+                                            name="email" 
+                                            type="email" 
+                                            placeholder="user@example.com" 
+                                            required 
+                                            className="bg-background/60" 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">Password</Label>
+                                        <Input 
+                                            name="password" 
+                                            type="password" 
+                                            required 
+                                            placeholder="Minimum 6 characters" 
+                                            className="bg-background/60" 
+                                            autoComplete="new-password"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">Role</Label>
+                                        <Select name="role" defaultValue="USER">
+                                            <SelectTrigger className="bg-background/80"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ADMIN">Admin (Full Access & Settings)</SelectItem>
+                                                <SelectItem value="SUPER_USER">Super User (Radarr/Sonarr Access)</SelectItem>
+                                                <SelectItem value="USER">User (Standard Access)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Button type="submit" className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
+                                        <UserPlus className="h-4 w-4 mr-2" /> Create Approved User
+                                    </Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+
+                        {/* CHANGE PASSWORD FORM */}
+                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                    <KeyRound className="h-5 w-5 text-primary" /> Change Your Password
+                                </CardTitle>
+                                <CardDescription>Update your logged-in administrator password.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form 
+                                    onSubmit={handleChangePassword} 
+                                    className="space-y-4"
+                                    autoComplete="off"
+                                >
+                                    {passMsg && (
+                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                            <span>{passMsg}</span>
+                                        </div>
+                                    )}
+                                    {passErr && (
+                                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <XCircle className="h-4 w-4 shrink-0" />
+                                            <span>{passErr}</span>
+                                        </div>
+                                    )}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">Current / Temp Password</Label>
+                                        <Input 
+                                            type="password" required 
+                                            value={passCurrent} 
+                                            onChange={(e) => setPassCurrent(e.target.value)} 
+                                            placeholder="Enter current password"
+                                            className="bg-background/60"
+                                            autoComplete="current-password"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">New Password</Label>
+                                        <Input 
+                                            type="password" required 
+                                            value={passNew} 
+                                            onChange={(e) => setPassNew(e.target.value)} 
+                                            placeholder="Minimum 6 characters"
+                                            className="bg-background/60"
+                                            autoComplete="new-password"
+                                        />
+                                    </div>
+                                    <Button type="submit" disabled={passLoading} className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
+                                        {passLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
+                                        Update My Password
+                                    </Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* USER DIRECTORY TABLE & CONTROLS */}
+                    <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <CardHeader className="space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div>
+                                    <CardTitle className="text-xl font-bold">Existing Users & Access Directory</CardTitle>
+                                    <CardDescription>Manage user permissions, Plex library shares, trial expiration timers, and Kindle emails.</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        disabled={syncingPlex}
+                                        className="border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/10 gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-[#e5a00d]/40 active:scale-95"
+                                        onClick={handleSyncPlex}
+                                        title="Scan live friend access directly from Plex and update all user cards"
+                                    >
+                                        {syncingPlex ? <Loader2 className="h-4 w-4 animate-spin text-[#e5a00d]" /> : <RefreshCw className="h-4 w-4 text-[#e5a00d]" />}
+                                        Scan Live Plex Access
+                                    </Button>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        disabled={restoringAccess}
+                                        className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95"
+                                        onClick={handleRestoreAllPlexAccess}
+                                        title="Re-synchronize and restore default Plex libraries across all servers for all active users"
+                                    >
+                                        {restoringAccess ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Layers className="h-4 w-4 text-primary" />}
+                                        Restore All Users' Libraries
+                                    </Button>
+                                    {pendingUsersCount > 0 && (
+                                        <Button 
+                                            variant="default" 
+                                            size="sm" 
+                                            className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-md active:scale-95"
+                                            onClick={handleApproveAllPending}
+                                        >
+                                            <CheckCheck className="h-4 w-4" /> Approve All Pending ({pendingUsersCount})
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {usersWithSecurityLeaks.length > 0 && (
+                                <div className="bg-red-500/15 border-2 border-red-500/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-red-200 animate-pulse shadow-lg shadow-red-950/40">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <ShieldAlert className="h-6 w-6 text-red-400 shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="font-bold text-sm text-red-200">
+                                                🚨 CRITICAL SECURITY ALERT: {usersWithSecurityLeaks.length} Inactive User{usersWithSecurityLeaks.length > 1 ? "s Retain" : " Retains"} Active Plex Access!
+                                            </div>
+                                            <div className="text-xs text-red-300/80 truncate">
+                                                {usersWithSecurityLeaks.map(u => `${u.username} (${u.status})`).join(", ")} {usersWithSecurityLeaks.length > 1 ? "have" : "has"} active Plex shares that should be immediately revoked.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Button 
+                                        variant="destructive" 
+                                        size="sm" 
+                                        className="font-bold bg-red-600 hover:bg-red-500 text-white gap-2 shadow shrink-0 active:scale-95 whitespace-nowrap"
+                                        disabled={syncingPlex}
+                                        onClick={handleSyncPlex}
+                                    >
+                                        {syncingPlex ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}
+                                        Scan & Auto-Revoke All Leaks
+                                    </Button>
+                                </div>
+                            )}
+
+                            {restoreStatusMsg && (
+                                <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground">
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <span>{restoreStatusMsg}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setRestoreStatusMsg("")}>
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
+
+                            {reminderSuccessMsg && (
+                                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground animate-in fade-in">
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <span>{reminderSuccessMsg}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setReminderSuccessMsg("")}>
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
+
+                            {reminderErrMsg && (
+                                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground animate-in fade-in">
+                                    <div className="flex items-center gap-2">
+                                        <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                        <span>{reminderErrMsg}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setReminderErrMsg("")}>
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-2 min-w-0">
+                                {/* SEARCH INPUT */}
+                                <div className="relative flex-1 min-w-0 sm:min-w-[220px]">
+                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input 
+                                        placeholder="Search by username, email, referrer..." 
+                                        className="pl-9 text-xs h-9 bg-background/60 w-full"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                    />
+                                </div>
+
+                                {/* STATUS FILTER BUTTONS */}
+                                <div className="flex flex-wrap sm:flex-nowrap lg:flex-wrap overflow-x-auto no-scrollbar gap-1 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs w-full lg:w-auto max-w-full">
+                                    <Button 
+                                        variant={filterStatus === "ALL" ? "secondary" : "ghost"} 
+                                        size="sm" 
+                                        className="h-7 text-xs px-2.5 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
+                                        onClick={() => setFilterStatus("ALL")}
+                                    >
+                                        All ({users.length})
+                                    </Button>
+                                    <Button 
+                                        variant={filterStatus === "PENDING" ? "secondary" : "ghost"} 
+                                        size="sm" 
+                                        className="h-7 text-xs px-2.5 text-amber-400 transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
+                                        onClick={() => setFilterStatus("PENDING")}
+                                    >
+                                        Pending ({users.filter(u => u.status === "PENDING").length})
+                                    </Button>
+                                    <Button 
+                                        variant={filterStatus === "TRIAL" ? "secondary" : "ghost"} 
+                                        size="sm" 
+                                        className="h-7 text-xs px-2.5 text-blue-400 transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
+                                        onClick={() => setFilterStatus("TRIAL")}
+                                    >
+                                        Trials ({users.filter(u => u.status === "TRIAL").length})
+                                    </Button>
+                                    <Button 
+                                        variant={filterStatus === "APPROVED" ? "secondary" : "ghost"} 
+                                        size="sm" 
+                                        className="h-7 text-xs px-2.5 text-emerald-400 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
+                                        onClick={() => setFilterStatus("APPROVED")}
+                                    >
+                                        Subscribed ({users.filter(u => u.status === "APPROVED" || !u.status).length})
+                                    </Button>
+                                    <Button 
+                                        variant={filterStatus === "INACTIVE" ? "secondary" : "ghost"} 
+                                        size="sm" 
+                                        className={`h-7 text-xs px-2.5 transition-all duration-200 active:scale-95 font-semibold whitespace-nowrap shrink-0 ${
+                                            usersWithSecurityLeaks.length > 0 
+                                                ? "text-red-400 font-bold hover:ring-2 hover:ring-red-500/50" 
+                                                : "text-red-400 hover:ring-2 hover:ring-red-400/40"
+                                        }`}
+                                        onClick={() => setFilterStatus("INACTIVE")}
+                                    >
+                                        Inactive ({users.filter(u => u.status === "SUSPENDED" || u.status === "EXPIRED" || u.status === "REJECTED").length})
+                                        {usersWithSecurityLeaks.length > 0 && (
+                                            <Badge variant="destructive" className="ml-1 px-1 py-0 text-[9px] font-mono animate-pulse">
+                                                ⚠️ {usersWithSecurityLeaks.length}
+                                            </Badge>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-3.5">
+                                {/* BULK ACTION ALERTS */}
+                                {bulkSuccessMsg && (
+                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs flex items-center justify-between text-emerald-200 animate-in fade-in-50">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                            <span>{bulkSuccessMsg}</span>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 cursor-pointer" onClick={() => setBulkSuccessMsg("")}>✕</Button>
+                                    </div>
+                                )}
+                                {bulkErrMsg && (
+                                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs flex items-center justify-between text-red-200 animate-in fade-in-50">
+                                        <div className="flex items-center gap-2">
+                                            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                            <span>{bulkErrMsg}</span>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 cursor-pointer" onClick={() => setBulkErrMsg("")}>✕</Button>
+                                    </div>
+                                )}
+
+                                {/* BULK SELECTION & ACTIONS TOOLBAR */}
+                                {!loading && filteredUsers.length > 0 && (
+                                    <div className="space-y-2.5">
+                                        {/* Master Select Bar */}
+                                        <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 bg-muted/20 rounded-xl border border-border/40 text-xs">
+                                            <div className="flex items-center gap-2.5">
+                                                <input
+                                                    type="checkbox"
+                                                    id="bulk-select-all"
+                                                    checked={filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u.id))}
+                                                    onChange={() => handleSelectAllFiltered(filteredUsers)}
+                                                    className="h-4 w-4 rounded border-slate-750 bg-slate-950 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
+                                                />
+                                                <label htmlFor="bulk-select-all" className="font-semibold text-foreground cursor-pointer select-none">
+                                                    Select All Filtered ({filteredUsers.length})
+                                                </label>
+                                                {selectedUserIds.length > 0 && (
+                                                    <Badge variant="outline" className="text-[11px] bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold px-2 py-0.5">
+                                                        {selectedUserIds.length} user{selectedUserIds.length === 1 ? "" : "s"} selected
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {selectedUserIds.length > 0 && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleClearSelected}
+                                                    className="h-6 text-[11px] text-muted-foreground hover:text-foreground px-2 cursor-pointer"
+                                                >
+                                                    Deselect All
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {/* Action Bar when users selected */}
+                                        {selectedUserIds.length > 0 && (
+                                            <div className="p-3.5 bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-slate-950/70 rounded-xl border border-amber-500/50 shadow-lg space-y-2.5 animate-in fade-in-50">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                                        <span className="text-xs font-bold text-amber-200">
+                                                            Bulk Actions for {selectedUserIds.length} Selected User{selectedUserIds.length === 1 ? "" : "s"}:
+                                                        </span>
+                                                    </div>
+                                                    {bulkUpdating && (
+                                                        <span className="text-xs text-amber-300 flex items-center gap-1.5 font-medium animate-pulse">
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing bulk update...
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-wrap pt-1">
+                                                    {/* Primary User-Requested Action: Subscribed through End of Year */}
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("REST_OF_YEAR")}
+                                                        className="h-8 px-3 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all gap-1.5 cursor-pointer"
+                                                    >
+                                                        <Calendar className="h-3.5 w-3.5 text-black" />
+                                                        Subscribed Through End of {new Date().getFullYear()} (Dec 31)
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("1_YEAR")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-200 gap-1.5 cursor-pointer"
+                                                    >
+                                                        <Clock className="h-3.5 w-3.5" />
+                                                        +1 Full Year
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("30_DAYS")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-white/5 text-foreground gap-1.5 cursor-pointer"
+                                                    >
+                                                        +30 Days
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("PERMANENT")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-300 gap-1.5 cursor-pointer"
+                                                    >
+                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        Permanent / Lifetime
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => {
+                                                            const now = new Date();
+                                                            const eoy = new Date(now.getFullYear(), 11, 31);
+                                                            setBulkCustomDate(format(eoy, "yyyy-MM-dd"));
+                                                            setShowBulkCustomModal(true);
+                                                        }}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-white/5 text-purple-300 gap-1.5 cursor-pointer"
+                                                    >
+                                                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                                                        Custom Date...
+                                                    </Button>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={bulkUpdating}
+                                                        onClick={() => handleBulkSetSubscription("SUSPENDED")}
+                                                        className="h-8 px-2.5 text-xs font-semibold border-red-500/30 hover:bg-red-500/10 text-red-300 gap-1.5 cursor-pointer sm:ml-auto"
+                                                    >
+                                                        <PauseCircle className="h-3.5 w-3.5" />
+                                                        Suspend Selected
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {loading ? (
+                                    <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
+                                        <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
+                                    </div>
+                                ) : filteredUsers.length === 0 ? (
+                                    <div className="text-sm text-muted-foreground italic p-8 text-center border border-dashed border-border/40 rounded-xl bg-muted/10">
+                                        No matching users found.
+                                    </div>
+                                ) : (
+                                    filteredUsers.map((user) => {
+                                        const isTrial = user.status === "TRIAL";
+                                        const isSuspended = user.status === "SUSPENDED";
+                                        const isExpired = user.status === "EXPIRED";
+                                        const isPending = user.status === "PENDING";
+                                        const isRejected = user.status === "REJECTED";
+                                        const isInactive = isExpired || isSuspended || isRejected || isPending;
+                                        const isAdmin = user.role === "ADMIN";
+                                        const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
+
+                                        // Calculate actual active libraries scanned from Plex
+                                        const actualPlexShareCount = (() => {
+                                            if (isAdmin && serverLibraries && serverLibraries.length > 0) {
+                                                return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
+                                            }
+                                            if (!user.plexLibrarySectionIds || !user.plexLibrarySectionIds.trim()) {
+                                                return 0;
+                                            }
+                                            const rawKeys = user.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            if (rawKeys.length === 0) return 0;
+                                            if (serverLibraries && serverLibraries.length > 0) {
+                                                let count = 0;
+                                                for (const srv of serverLibraries) {
+                                                    for (const sec of srv.sections || []) {
+                                                        const fullKey = `${srv.serverId}:${sec.id}`;
+                                                        const altFullKey = sec.key ? `${srv.serverId}:${sec.key}` : null;
+                                                        const rawKey = String(sec.id);
+                                                        const altRawKey = sec.key ? String(sec.key) : null;
+                                                        if (
+                                                            rawKeys.includes(fullKey) || 
+                                                            (altFullKey && rawKeys.includes(altFullKey)) || 
+                                                            rawKeys.includes(rawKey) || 
+                                                            (altRawKey && rawKeys.includes(altRawKey)) ||
+                                                            rawKeys.some((k: string) => {
+                                                                const clean = k.includes(":") ? k.split(":")[1] : k;
+                                                                return clean === String(sec.id) || (sec.key && clean === String(sec.key));
+                                                            })
+                                                        ) {
+                                                            count++;
+                                                        }
+                                                    }
+                                                }
+                                                if (count > 0) return count;
+                                            }
+                                            return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
+                                        })();
+
+                                        // Security leak: inactive account that still retains active shares on Plex
+                                        const hasSecurityLeak = isInactive && !isAdmin && actualPlexShareCount > 0;
+
+                                        const userLibraryCount = (() => {
+                                            if (isAdmin && serverLibraries && serverLibraries.length > 0) {
+                                                return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
+                                            }
+
+                                            if (hasSecurityLeak) {
+                                                return actualPlexShareCount;
+                                            }
+
+                                            // Clean inactive account with no shares
+                                            if (isInactive) {
+                                                return 0;
+                                            }
+
+                                            // Non-admin active user: ONLY count explicit configured/shared libraries
+                                            const explicitKeys = (user.selectedPlexLibrarySectionIds || user.plexLibrarySectionIds || "").trim();
+                                            if (!explicitKeys) {
+                                                return 0;
+                                            }
+
+                                            const rawKeys = explicitKeys.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            if (rawKeys.length === 0) return 0;
+
+                                            if (serverLibraries && serverLibraries.length > 0) {
+                                                let count = 0;
+                                                for (const srv of serverLibraries) {
+                                                    for (const sec of srv.sections || []) {
+                                                        const fullKey = `${srv.serverId}:${sec.id}`;
+                                                        const altFullKey = sec.key ? `${srv.serverId}:${sec.key}` : null;
+                                                        const rawKey = String(sec.id);
+                                                        const altRawKey = sec.key ? String(sec.key) : null;
+                                                        if (
+                                                            rawKeys.includes(fullKey) || 
+                                                            (altFullKey && rawKeys.includes(altFullKey)) || 
+                                                            rawKeys.includes(rawKey) || 
+                                                            (altRawKey && rawKeys.includes(altRawKey)) ||
+                                                            rawKeys.some((k: string) => {
+                                                                const clean = k.includes(":") ? k.split(":")[1] : k;
+                                                                return clean === String(sec.id) || (sec.key && clean === String(sec.key));
+                                                            })
+                                                        ) {
+                                                            count++;
+                                                        }
+                                                    }
+                                                }
+                                                return count;
+                                            }
+
+                                            return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
+                                        })();
+
+                                        return (
+                                            <div 
+                                                key={user.id} 
+                                                className={`p-4 rounded-xl border transition-all duration-200 space-y-3 ${
+                                                    selectedUserIds.includes(user.id)
+                                                        ? "bg-amber-500/10 border-amber-500/80 shadow-md shadow-amber-500/10 ring-1 ring-amber-500/50"
+                                                        : hasSecurityLeak
+                                                        ? "bg-red-950/30 border-2 border-red-500 shadow-lg shadow-red-950/50"
+                                                        : isPending 
+                                                        ? "bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60" 
+                                                        : isSuspended || isExpired || isRejected
+                                                        ? "bg-red-500/5 border-red-500/30 hover:border-red-500/50"
+                                                        : "bg-[#101014]/90 border-border/50 hover:border-primary/40 hover:shadow-sm"
+                                                }`}
+                                            >
+                                                {/* SECURITY LEAK BANNER */}
+                                                {hasSecurityLeak && (
+                                                    <div className="bg-red-500/20 border border-red-500/60 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <ShieldAlert className="h-5 w-5 text-red-400 shrink-0 animate-bounce" />
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs font-bold text-red-200 flex items-center gap-1.5 flex-wrap">
+                                                                    <span>🚨 CRITICAL SECURITY LEAK: Unauthorized Plex Access Detected</span>
+                                                                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-mono uppercase">
+                                                                        {user.status}
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="text-[11px] text-red-300/90 mt-0.5">
+                                                                    This account is inactive ({user.status}) but still retains active sharing permissions for <span className="font-bold underline text-white">{actualPlexShareCount} Plex librar{actualPlexShareCount === 1 ? "y" : "ies"}</span> on the server.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="destructive" 
+                                                            className="h-8 px-3 text-xs font-bold gap-1.5 bg-red-600 hover:bg-red-500 text-white shadow-md shrink-0 active:scale-95 whitespace-nowrap"
+                                                            onClick={() => handleForceRevoke(user.id, user.username)}
+                                                            disabled={revokingUserId === user.id}
+                                                            title="Immediately revoke all Plex shares and terminate active playback sessions"
+                                                        >
+                                                            {revokingUserId === user.id ? (
+                                                                <>
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                    Revoking...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <ShieldAlert className="h-3.5 w-3.5" />
+                                                                    🚨 Revoke Now
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                                {/* TOP ROW: USER INFO & BADGES */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedUserIds.includes(user.id)}
+                                                            onChange={() => toggleSelectUser(user.id)}
+                                                            className="w-4 h-4 rounded border-border/60 bg-muted/30 text-amber-500 focus:ring-amber-500/50 cursor-pointer accent-amber-500 shrink-0"
+                                                            title={`Select ${user.username} for bulk actions`}
+                                                        />
+                                                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                                                            {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
+                                                        </div>
+                                                        <div className="min-w-0 space-y-0.5 flex-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-bold text-base text-foreground truncate">{user.username}</span>
+                                                                {editingNameUserId === user.id ? (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Input 
+                                                                            className="h-6 text-xs bg-background/90 px-1.5 py-0 font-medium w-36" 
+                                                                            placeholder="Real Name (e.g. John Doe)"
+                                                                            value={nameInput}
+                                                                            onChange={(e) => setNameInput(e.target.value)}
+                                                                            autoFocus
+                                                                        />
+                                                                        <Button size="sm" className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 font-semibold" onClick={() => handleSaveName(user.id)}>
+                                                                            Save
+                                                                        </Button>
+                                                                        <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] shrink-0" onClick={() => setEditingNameUserId(null)}>
+                                                                            ✕
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1">
+                                                                        {user.name ? (
+                                                                            <span className="text-xs font-semibold text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                                                                                👤 {user.name}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-[11px] text-muted-foreground/60 italic">
+                                                                                (No Name)
+                                                                            </span>
+                                                                        )}
+                                                                        <Button 
+                                                                            variant="ghost" 
+                                                                            size="icon" 
+                                                                            className="h-5 w-5 text-muted-foreground/70 hover:text-foreground shrink-0"
+                                                                            onClick={() => {
+                                                                                setEditingNameUserId(user.id);
+                                                                                setNameInput(user.name || "");
+                                                                            }}
+                                                                            title="Edit Real Name"
+                                                                        >
+                                                                            <Edit2 className="h-2.5 w-2.5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                                <Badge variant={user.role === "ADMIN" ? "default" : "secondary"} className="text-[10px] font-bold shrink-0">
+                                                                    {user.role || "USER"}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+                                                                <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                                                                <span className="truncate">{user.email || "No Email Associated"}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* STATUS & ATTRIBUTION BADGES */}
+                                                    <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center">
+                                                        {user.parentUserId && (
+                                                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs font-bold gap-1">
+                                                                🔗 Sub-Account of @{user.parentUser?.username || "Parent"}
+                                                            </Badge>
+                                                        )}
+                                                        {user.accountType && user.accountType !== "STANDARD" && (
+                                                            <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs font-semibold">
+                                                                {user.accountType === "KID" ? "👶 Kid Profile" : "📺 Living Room"}
+                                                            </Badge>
+                                                        )}
+                                                        {user.subAccountLabel && (
+                                                            <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border/40 text-[11px]">
+                                                                "{user.subAccountLabel}"
+                                                            </Badge>
+                                                        )}
+                                                        {user.membershipTier === "TIER_2_VIP" ? (
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-bold">
+                                                                🛡️ Tier 2 (Managed Support)
+                                                            </Badge>
+                                                        ) : user.membershipTier === "TRIAL" ? (
+                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs font-bold">
+                                                                ⏱️ Trial Pass
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-semibold">
+                                                                ⭐ Tier 1 (Regular)
+                                                            </Badge>
+                                                        )}
+                                                        {(() => {
+                                                            let userAddonList: string[] = [];
+                                                            try {
+                                                                if (user.enabledAddons) userAddonList = JSON.parse(user.enabledAddons);
+                                                            } catch {}
+                                                            if (userAddonList.length === 0) return null;
+                                                            return (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-xs font-semibold gap-1 cursor-pointer hover:bg-amber-500/25 transition-colors"
+                                                                    onClick={() => {
+                                                                        setSubModalUser(user);
+                                                                        setShowCustomTrialScreen(false);
+                                                                        setCustomTrialDaysInput(paymentSettings.defaultTrialDays || 7);
+                                                                        setSubSuccessMsg("");
+                                                                        setSubErrMsg("");
+                                                                    }}
+                                                                    title={`Active Add-ons:\n${userAddonList.map((id: string) => `• ${adminAddonsCatalog.find((a: any) => a.id === id)?.name || id}`).join("\n")}`}
+                                                                >
+                                                                    <Zap className="h-3 w-3 text-amber-400" />
+                                                                    {userAddonList.length} Add-on{userAddonList.length > 1 ? "s" : ""}
+                                                                </Badge>
+                                                            );
+                                                        })()}
+                                                        {user.subAccounts && user.subAccounts.length > 0 && (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className="bg-indigo-500/15 text-indigo-300 border-indigo-500/40 text-[10px] font-semibold cursor-help"
+                                                                title={`Linked Household Profiles:\n${user.subAccounts.map((s: any) => `• ${s.subAccountLabel || s.username} (${s.accountType === "KID" ? "👶 Kid Profile" : "📺 Living Room"})`).join("\n")}`}
+                                                            >
+                                                                {user.subAccounts.length} Sub-Account{user.subAccounts.length > 1 ? "s" : ""}
+                                                            </Badge>
+                                                        )}
+                                                        {isPending && (
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-bold">
+                                                                <Clock className="h-3 w-3" /> Pending Approval
+                                                            </Badge>
+                                                        )}
+                                                        {isTrial && (
+                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs gap-1 font-bold">
+                                                                <Timer className="h-3 w-3" /> Trial ({daysLeft}d left)
+                                                            </Badge>
+                                                        )}
+                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
+                                                                <CheckCircle2 className="h-3 w-3" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} ({format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
+                                                            </Badge>
+                                                        )}
+                                                        {user.lastRenewalReminderSentAt && (
+                                                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] gap-1 font-medium" title={`Last renewal reminder dispatched on ${format(new Date(user.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}`}>
+                                                                <CalendarClock className="h-3 w-3 text-amber-400" /> Reminder Sent ({format(new Date(user.lastRenewalReminderSentAt), "MMM d")})
+                                                            </Badge>
+                                                        )}
+                                                        {user.status === "APPROVED" && !user.subscriptionEndsAt && (
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
+                                                                <CheckCircle2 className="h-3 w-3" /> Permanent Access
+                                                            </Badge>
+                                                        )}
+                                                        {isSuspended && (
+                                                            <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500/40 text-xs font-bold">
+                                                                Suspended
+                                                            </Badge>
+                                                        )}
+                                                        {isExpired && (
+                                                            <Badge variant="outline" className="bg-orange-500/20 text-orange-300 border-orange-500/40 text-xs font-bold">
+                                                                Expired
+                                                            </Badge>
+                                                        )}
+                                                        {isRejected && (
+                                                            <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500/40 text-xs font-bold">
+                                                                Rejected
+                                                            </Badge>
+                                                        )}
+                                                        {user.referredBy?.username && (
+                                                            <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs gap-1 font-medium" title={`Invited by @${user.referredBy.username}`}>
+                                                                <Gift className="h-3 w-3" /> @{user.referredBy.username}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleUnlinkReferral(user.id);
+                                                                    }}
+                                                                    className="ml-1 text-muted-foreground hover:text-red-400 text-[10px] cursor-pointer"
+                                                                    title="Unlink referral"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </Badge>
+                                                        )}
+                                                        {user.referrals && user.referrals.length > 0 && (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs gap-1 font-semibold cursor-pointer hover:bg-purple-500/30 transition-colors"
+                                                                onClick={() => handleOpenCreditReferralModal(user)}
+                                                                title={`Friends Referred:\n${user.referrals.map((r: any) => `• @${r.username} (${r.status === 'APPROVED' || r.convertedAt ? 'Converted 🎁 1 Mo Free' : r.status})`).join('\n')}`}
+                                                            >
+                                                                <Trophy className="h-3 w-3 text-amber-400" />
+                                                                {user.referrals.length} Ref{user.referrals.length > 1 ? "s" : ""} ({user.referrals.filter((r: any) => r.status === "APPROVED" || r.convertedAt).length} Converted 🎁)
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* MIDDLE ROW: METADATA GRID (KINDLE, LIBRARIES, DATES, PAYMENTS) */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs bg-background/50 p-2.5 rounded-lg border border-border/40">
+                                                    {/* SEND-TO-KINDLE */}
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <Send className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                        {editingKindleUserId === user.id ? (
+                                                            <div className="flex items-center gap-1 flex-1 min-w-0">
+                                                                <Input 
+                                                                    className="h-6 text-xs bg-background/90 px-1.5 py-0 font-mono" 
+                                                                    placeholder="user@kindle.com"
+                                                                    value={kindleEmailInput}
+                                                                    onChange={(e) => setKindleEmailInput(e.target.value)}
+                                                                />
+                                                                <Button size="sm" className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 font-semibold" onClick={() => handleSaveKindleEmail(user.id)}>
+                                                                    Save
+                                                                </Button>
+                                                                <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] shrink-0" onClick={() => setEditingKindleUserId(null)}>
+                                                                    ✕
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1 truncate flex-1">
+                                                                <span className="text-muted-foreground shrink-0">Kindle:</span>
+                                                                <span className="font-mono text-foreground truncate font-medium">{user.kindleEmail || "Not set"}</span>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-5 w-5 text-muted-foreground hover:text-foreground shrink-0"
+                                                                    onClick={() => {
+                                                                        setEditingKindleUserId(user.id);
+                                                                        setKindleEmailInput(user.kindleEmail || "");
+                                                                    }}
+                                                                    title="Edit Kindle Email"
+                                                                >
+                                                                    <Edit2 className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* PLEX LIBRARIES */}
+                                                    <div className="flex items-center gap-1.5 truncate">
+                                                        <Layers className={`h-3.5 w-3.5 shrink-0 ${hasSecurityLeak ? "text-red-400 animate-pulse" : "text-primary"}`} />
+                                                        <span className="text-muted-foreground">Libraries:</span>
+                                                        {hasSecurityLeak ? (
+                                                            <span className="font-bold text-red-400 truncate flex items-center gap-1">
+                                                                ⚠️ {actualPlexShareCount} active on Plex (Security Leak)
+                                                            </span>
+                                                        ) : isInactive && !isAdmin ? (
+                                                            <span className="text-muted-foreground truncate italic">
+                                                                None (0 active - {user.status.toLowerCase()})
+                                                            </span>
+                                                        ) : (
+                                                            <span className="font-semibold text-foreground truncate">
+                                                                {userLibraryCount > 0 ? `${userLibraryCount} server libraries` : "None configured"}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* JOINED & ACTIVITY */}
+                                                    <div className="flex items-center gap-1.5 truncate sm:col-span-2 lg:col-span-1">
+                                                        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                        <span className="text-muted-foreground">Joined:</span>
+                                                        <span className="text-foreground">{format(new Date(user.createdAt), "MMM d, yyyy")}</span>
+                                                        {user.lastLogin && (
+                                                            <span className="text-muted-foreground text-[11px] truncate">
+                                                                (active {format(new Date(user.lastLogin), "MMM d")})
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* LAST PAID / PAYMENT SUMMARY */}
+                                                    <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
+                                                        <DollarSign className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                        <span className="text-muted-foreground shrink-0 font-medium">Payment:</span>
+                                                        {user.paymentTransactions && user.paymentTransactions.length > 0 ? (
+                                                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                                                <span className="font-semibold text-emerald-400">
+                                                                    Last Paid: ${user.paymentTransactions[0].amount.toFixed(2)} ({user.paymentTransactions[0].provider})
+                                                                </span>
+                                                                <span className="text-muted-foreground text-[11px]">
+                                                                    on {format(new Date(user.paymentTransactions[0].emailDate), "MMM d, yyyy")}
+                                                                </span>
+                                                                {user.paymentTransactions.length > 1 && (
+                                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 px-1.5 py-0 font-mono font-semibold" title={`All ${user.paymentTransactions.length} payments: ${user.paymentTransactions.map((p: any) => `$${p.amount.toFixed(2)} (${format(new Date(p.emailDate), "MMM d, yyyy")})`).join(", ")}`}>
+                                                                        Total Paid: ${user.paymentTransactions.reduce((acc: number, p: any) => acc + (p.amount || 0), 0).toFixed(2)} ({user.paymentTransactions.length} payments)
+                                                                    </Badge>
+                                                                )}
+                                                                {user.paymentTransactions[0].subscriptionPeriodGranted && (
+                                                                    <span className="text-muted-foreground/80 text-[11px] italic truncate">
+                                                                        • {user.paymentTransactions[0].subscriptionPeriodGranted}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-muted-foreground italic text-xs">No payments recorded</span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* ACTIVE ADD-ONS ROW */}
+                                                    <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
+                                                        <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                        <span className="text-muted-foreground shrink-0 font-medium">Add-ons:</span>
+                                                        {(() => {
+                                                            let userAddonList: string[] = [];
+                                                            try {
+                                                                if (user.enabledAddons) userAddonList = JSON.parse(user.enabledAddons);
+                                                            } catch {}
+                                                            if (userAddonList.length === 0) {
+                                                                return <span className="text-muted-foreground italic text-xs">None enabled</span>;
+                                                            }
+                                                            return (
+                                                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                                                    {userAddonList.map((addonId: string) => {
+                                                                        const catalogItem = adminAddonsCatalog.find((a: any) => a.id === addonId);
+                                                                        return (
+                                                                            <Badge key={addonId} variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30 px-1.5 py-0 font-medium">
+                                                                                {catalogItem?.name || addonId}
+                                                                            </Badge>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
+
+                                                {/* BOTTOM ROW: ACTIONS TOOLBAR */}
+                                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/30">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {/* PLEX LIBRARIES BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className={`h-8 px-2.5 text-xs font-semibold gap-1.5 transition-all active:scale-95 ${
+                                                                hasSecurityLeak 
+                                                                    ? "border-red-500/60 text-red-400 hover:bg-red-500/20 hover:border-red-500 font-bold" 
+                                                                    : "border-primary/40 hover:border-primary hover:bg-primary/10"
+                                                            }`}
+                                                            onClick={() => handleOpenLibrariesModal(user)}
+                                                            title="Manage Shared Plex Libraries"
+                                                        >
+                                                            {hasSecurityLeak ? (
+                                                                <ShieldAlert className="h-3.5 w-3.5 text-red-400 animate-pulse" />
+                                                            ) : (
+                                                                <Layers className="h-3.5 w-3.5 text-primary" />
+                                                            )}
+                                                            Manage Libraries ({userLibraryCount})
+                                                        </Button>
+
+                                                        {/* TRIAL / SUBSCRIPTION TIMER BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500 transition-all active:scale-95"
+                                                            onClick={() => {
+                                                                setSubModalUser(user);
+                                                                setShowCustomTrialScreen(false);
+                                                                setCustomTrialDaysInput(paymentSettings.defaultTrialDays || 7);
+                                                                setSubSuccessMsg("");
+                                                                setSubErrMsg("");
+                                                            }}
+                                                            title="Adjust Trial or Subscription Period"
+                                                        >
+                                                            <Timer className="h-3.5 w-3.5 text-blue-400" />
+                                                            Access & Timer
+                                                        </Button>
+
+                                                        {/* VIEW AS USER (IMPERSONATE) BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-500/15 hover:border-amber-500 transition-all active:scale-95"
+                                                            onClick={() => handleImpersonateUser(user.id, user.username)}
+                                                            title={`View Site As ${user.username}`}
+                                                            disabled={impersonatingUserId === user.id}
+                                                        >
+                                                            {impersonatingUserId === user.id ? (
+                                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                                                            ) : (
+                                                                <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                                            )}
+                                                            View As
+                                                        </Button>
+
+                                                        {/* CREDIT REFERRAL BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-purple-500/40 text-purple-300 hover:bg-purple-500/15 hover:border-purple-500 transition-all active:scale-95"
+                                                            onClick={() => handleOpenCreditReferralModal(user)}
+                                                            title="Credit this member for a referral or assign who invited them"
+                                                        >
+                                                            <Gift className="h-3.5 w-3.5 text-purple-400" />
+                                                            Credit Referral
+                                                        </Button>
+
+                                                        {/* SEND RENEWAL REMINDER BUTTON */}
+                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                className="h-8 px-2 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-500 transition-all active:scale-95"
+                                                                onClick={() => handleSendRenewalReminder(user.id)}
+                                                                title="Send annual renewal & payment reminder email with referral discounts"
+                                                                disabled={sendingReminderUserId === user.id}
+                                                            >
+                                                                {sendingReminderUserId === user.id ? (
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                                                                ) : (
+                                                                    <Send className="h-3 w-3 text-emerald-400" />
+                                                                )}
+                                                                Renewal Notice
+                                                            </Button>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {/* MEMBERSHIP TIER SELECTOR */}
+                                                        <Select value={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
+                                                            <SelectTrigger className="h-8 text-xs w-44 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="STANDARD">⭐ Tier 1: Regular Member</SelectItem>
+                                                                <SelectItem value="TIER_2_VIP">🛡️ Tier 2: Managed Support</SelectItem>
+                                                                <SelectItem value="TRIAL">⏱️ Trial Pass</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        {/* ROLE SELECTOR */}
+                                                        <Select value={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
+                                                            <SelectTrigger className="h-8 text-xs w-28 bg-background/80 border-border/60 font-semibold" title="User Permission Role">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="ADMIN">Admin</SelectItem>
+                                                                <SelectItem value="SUPER_USER">Super User</SelectItem>
+                                                                <SelectItem value="USER">User</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        {/* APPROVE / REJECT */}
+                                                        {isPending ? (
+                                                            <>
+                                                                <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
+                                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                                                                </Button>
+                                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" onClick={() => handleReject(user.id)}>
+                                                                    <XCircle className="h-3.5 w-3.5" /> Reject
+                                                                </Button>
+                                                            </>
+                                                        ) : isRejected ? (
+                                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
+                                                                <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                                                            </Button>
+                                                        ) : null}
+
+                                                        {/* ADMIN RESET PASSWORD BUTTON */}
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            className="h-8 px-2 text-xs text-amber-500 border-amber-500/40 hover:bg-amber-500/10 gap-1 font-semibold transition-all hover:ring-2 hover:ring-amber-500/40 active:scale-95"
+                                                            onClick={() => {
+                                                                setResetModalUserId(user.id);
+                                                                setAdminResetMsg("");
+                                                                setAdminResetErr("");
+                                                            }}
+                                                            title="Reset User Password"
+                                                        >
+                                                            <KeyRound className="h-3.5 w-3.5" />
+                                                        </Button>
+
+                                                        {/* DELETE USER BUTTON */}
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="ghost" 
+                                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" 
+                                                            onClick={() => handleDelete(user.id)} 
+                                                            title="Delete User"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 2: REFERRALS & LEADERBOARD */}
+                {/* ========================================================================= */}
+                <TabsContent value="referrals" className="space-y-6 animate-in fade-in-50 duration-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                            <CardContent className="pt-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Referred</p>
+                                        <p className="text-2xl font-black text-foreground">{referralStats?.totalReferred ?? 0}</p>
+                                    </div>
+                                    <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-purple-400">
+                                        <Users className="h-6 w-6" />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                            <CardContent className="pt-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active Trials</p>
+                                        <p className="text-2xl font-black text-blue-400">{referralStats?.totalTrials ?? 0}</p>
+                                    </div>
+                                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+                                        <Timer className="h-6 w-6" />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                            <CardContent className="pt-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Paid Conversions</p>
+                                        <p className="text-2xl font-black text-emerald-400">{referralStats?.totalConversions ?? 0}</p>
+                                    </div>
+                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                                        <DollarSign className="h-6 w-6" />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                            <CardContent className="pt-6">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Conversion Rate</p>
+                                        <p className="text-2xl font-black text-amber-400">
+                                            {referralStats?.totalReferred ? `${Math.round((referralStats.totalConversions / referralStats.totalReferred) * 100)}%` : "0%"}
+                                        </p>
+                                    </div>
+                                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
+                                        <Trophy className="h-6 w-6" />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* TOP REFERRERS LEADERBOARD */}
+                    <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                    <Trophy className="h-5 w-5 text-amber-400" /> Member Referral Leaderboard
+                                </CardTitle>
+                                <CardDescription>Track which members bring the most friends and successful conversions to your server.</CardDescription>
+                            </div>
+                            <Button 
+                                size="sm" 
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold gap-1.5 text-xs shadow-sm shrink-0 active:scale-95"
+                                onClick={() => handleOpenCreditReferralModal()}
+                            >
+                                <Gift className="h-4 w-4" /> Credit Member Referral
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            {loadingReferrals ? (
+                                <div className="p-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                                    <Loader2 className="h-5 w-5 animate-spin text-primary" /> Loading referral leaderboard...
+                                </div>
+                            ) : !referralStats?.leaderboard || referralStats.leaderboard.length === 0 ? (
+                                <div className="p-8 text-center text-sm text-muted-foreground italic border border-dashed border-border/40 rounded-xl">
+                                    No referrals registered yet. Share invite links from user profiles to start tracking referrals.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="text-[11px] text-muted-foreground uppercase border-b border-border/40 bg-muted/20">
+                                            <tr>
+                                                <th className="py-3 px-4">Rank</th>
+                                                <th className="py-3 px-4">Member</th>
+                                                <th className="py-3 px-4 text-center">Friends Invited</th>
+                                                <th className="py-3 px-4 text-center">Active Trials</th>
+                                                <th className="py-3 px-4 text-center">Conversions</th>
+                                                <th className="py-3 px-4 text-right">Conversion Rate</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border/20">
+                                            {referralStats.leaderboard.map((ref: any, idx: number) => {
+                                                const rate = ref.totalReferrals > 0 ? Math.round((ref.conversions / ref.totalReferrals) * 100) : 0;
+                                                return (
+                                                    <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
+                                                        <td className="py-3.5 px-4 font-bold">
+                                                            {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 font-bold text-foreground">
+                                                            @{ref.username}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-center font-semibold">
+                                                            {ref.totalReferrals}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-center font-semibold text-blue-400">
+                                                            {ref.trials}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-center font-bold text-emerald-400">
+                                                            {ref.conversions}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-right font-bold text-amber-400">
+                                                            {rate}%
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 3: PAYMENT & ONBOARDING SETTINGS */}
+                {/* ========================================================================= */}
+                <TabsContent value="onboarding" className="space-y-6 animate-in fade-in-50 duration-200">
+                    <Card className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-border/50"}`}>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                                <Sparkles className="h-5 w-5 text-emerald-400" /> Wizarr-Style Onboarding, Trials & Prorated Yearly Billing
+                                {hasUnsavedChanges && (
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </CardTitle>
+                            <CardDescription>
+                                Configure custom trial days, yearly/monthly subscription pricing, annual January 1st proration, and payment gateways.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleSaveOnboardingSettings} className="space-y-6">
+                                {settingsSuccessMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        <span>{settingsSuccessMsg}</span>
+                                    </div>
+                                )}
+                                {settingsErrMsg && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <XCircle className="h-4 w-4 shrink-0" />
+                                        <span>{settingsErrMsg}</span>
+                                    </div>
+                                )}
+
+                                {/* PRICING & TRIAL SETTINGS */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                                        <Calculator className="h-4 w-4" />
+                                        <span>Subscription & Trial Customization</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Free Trial (Days)</Label>
+                                            <Input 
+                                                type="number"
+                                                min="1"
+                                                max="365"
+                                                value={paymentSettings.defaultTrialDays}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, defaultTrialDays: parseInt(e.target.value, 10) || 14 })}
+                                                className="bg-background/60 font-mono"
+                                                required
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">Standard time-limited trial pass.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 1 Annual ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Yearly</Badge>
+                                            </div>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={paymentSettings.yearlyPrice}
+                                                    onChange={(e) => {
+                                                        const y = parseFloat(e.target.value) || 0;
+                                                        setPaymentSettings({ ...paymentSettings, yearlyPrice: y, subscriptionPrice: `$${y} / year` });
+                                                    }}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Standard annual rate.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 1 Monthly ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Monthly</Badge>
+                                            </div>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={paymentSettings.monthlyPrice}
+                                                    onChange={(e) => {
+                                                        const m = parseFloat(e.target.value) || 0;
+                                                        setPaymentSettings({ ...paymentSettings, monthlyPrice: m });
+                                                    }}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Manual monthly rate.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 2 Annual ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Yearly</Badge>
+                                            </div>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={paymentSettings.tier2YearlyPrice ?? 240}
+                                                    onChange={(e) => {
+                                                        const y = parseFloat(e.target.value) || 0;
+                                                        setPaymentSettings({ ...paymentSettings, tier2YearlyPrice: y });
+                                                    }}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Needy annual rate.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold">Tier 2 Monthly ($)</Label>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Monthly</Badge>
+                                            </div>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={paymentSettings.tier2MonthlyPrice ?? 25}
+                                                    onChange={(e) => {
+                                                        const m = parseFloat(e.target.value) || 0;
+                                                        setPaymentSettings({ ...paymentSettings, tier2MonthlyPrice: m });
+                                                    }}
+                                                    className="pl-9 bg-background/60 font-mono"
+                                                    required
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Needy monthly rate.</p>
+                                        </div>
+                                    </div>
+
+                                    {/* ANNUAL RENEWAL DATE CONFIG */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border/30">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Annual Billing Renewal Date</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Select 
+                                                    value={String(paymentSettings.renewalMonth)} 
+                                                    onValueChange={(val) => setPaymentSettings({ ...paymentSettings, renewalMonth: parseInt(val, 10) })}
+                                                >
+                                                    <SelectTrigger className="bg-background/80 text-xs"><SelectValue placeholder="Month" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="1">January</SelectItem>
+                                                        <SelectItem value="2">February</SelectItem>
+                                                        <SelectItem value="3">March</SelectItem>
+                                                        <SelectItem value="4">April</SelectItem>
+                                                        <SelectItem value="5">May</SelectItem>
+                                                        <SelectItem value="6">June</SelectItem>
+                                                        <SelectItem value="7">July</SelectItem>
+                                                        <SelectItem value="8">August</SelectItem>
+                                                        <SelectItem value="9">September</SelectItem>
+                                                        <SelectItem value="10">October</SelectItem>
+                                                        <SelectItem value="11">November</SelectItem>
+                                                        <SelectItem value="12">December</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+
+                                                <Select 
+                                                    value={String(paymentSettings.renewalDay)} 
+                                                    onValueChange={(val) => setPaymentSettings({ ...paymentSettings, renewalDay: parseInt(val, 10) })}
+                                                >
+                                                    <SelectTrigger className="bg-background/80 text-xs"><SelectValue placeholder="Day" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="1">1st of the month</SelectItem>
+                                                        <SelectItem value="15">15th of the month</SelectItem>
+                                                        <SelectItem value="28">28th of the month</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Default: Yearly payments renew on January 1st.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Subscription Display Label</Label>
+                                            <Input 
+                                                placeholder="e.g. $180 / year ($15/mo)"
+                                                value={paymentSettings.subscriptionPrice}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, subscriptionPrice: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">Rendered on user paywalls and cards.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* LIVE PRORATED CALCULATION PREVIEW BOX */}
+                                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-emerald-900/20 to-transparent border border-emerald-500/30 space-y-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                                            <Sparkles className="h-4 w-4" />
+                                            <span>Live Prorated Billing Calculation Preview</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px]">
+                                                Tier 1 Conversion Default
+                                            </Badge>
+                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
+                                                Dynamic Engine
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-xs space-y-2 text-muted-foreground">
+                                        <p>
+                                            If a prospective user signs up today (<strong className="text-foreground">{format(new Date(), "MMM d, yyyy")}</strong>) with a <strong className="text-foreground">{paymentSettings.defaultTrialDays}-day trial</strong> (free through <strong className="text-foreground">{format(new Date(liveProrated.trialEndDate), "MMM d, yyyy")}</strong>):
+                                        </p>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {/* YEARLY PRORATED PREVIEW */}
+                                            <div className="p-3 rounded-xl bg-background/70 border border-emerald-500/30 space-y-1.5 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-emerald-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" /> Annual Plan (Prorated)
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                                        Tier 1 (${liveProrated.yearlyRate}/yr)
+                                                    </Badge>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Due at Trial End (Remainder of {liveProrated.trialEndYear}):</span>
+                                                    <span className="text-emerald-400 font-black text-base">
+                                                        ${liveProrated.amountDueNow.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded-lg space-y-0.5 font-mono">
+                                                    <div>• {liveProrated.daysRemainingInMonth} days in {liveProrated.trialEndMonthName}: <span className="text-foreground font-semibold">${liveProrated.proratedMonthAmount.toFixed(2)}</span> (${liveProrated.dailyRate.toFixed(2)}/day)</div>
+                                                    <div>• {liveProrated.remainingMonthsCount} remaining full mos: <span className="text-foreground font-semibold">${(liveProrated.remainingMonthsCount * liveProrated.monthlyRate).toFixed(2)}</span> (${liveProrated.monthlyRate}/mo)</div>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground pt-0.5">
+                                                    Renews at <strong>${liveProrated.yearlyRate}/year</strong> on <strong>{liveProrated.nextRenewalDate}</strong>.
+                                                </p>
+                                            </div>
+
+                                            {/* MONTHLY PRORATED PREVIEW */}
+                                            <div className="p-3 rounded-xl bg-background/70 border border-purple-500/30 space-y-1.5 text-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-purple-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                                                        <CreditCard className="h-3 w-3" /> Monthly Plan (Prorated)
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[9px] bg-purple-500/15 text-purple-300 border-purple-500/30">
+                                                        Tier 1 (${liveProrated.standaloneMonthlyRate}/mo)
+                                                    </Badge>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">1st Partial Month (Due {format(new Date(liveProrated.trialEndDate), "MMM d")}):</span>
+                                                    <span className="text-purple-300 font-black text-base">
+                                                        ${liveProrated.monthlyAmountDueNow.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground bg-muted/20 p-2 rounded-lg space-y-0.5 font-mono">
+                                                    <div>• {liveProrated.daysRemainingInMonth} remaining days in {liveProrated.trialEndMonthName} ({liveProrated.trialEndDay}–{liveProrated.daysInTrialEndMonth})</div>
+                                                    <div>• Daily rate: <span className="text-foreground font-semibold">${liveProrated.monthlyDailyRate.toFixed(2)}/day</span> (${liveProrated.standaloneMonthlyRate} ÷ {liveProrated.daysInTrialEndMonth} days)</div>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground pt-0.5">
+                                                    Renews at standard rate <strong>${liveProrated.standaloneMonthlyRate}/month</strong> on <strong>{liveProrated.nextMonthlyRenewalDate}</strong>.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-1 text-[11px] text-muted-foreground/90 italic space-y-1">
+                                            <p><strong>Annual Summary:</strong> "{liveProrated.breakdownSummary}"</p>
+                                            <p><strong>Monthly Summary:</strong> "{liveProrated.monthlyBreakdownSummary}"</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* PAYMENT GATEWAYS & HANDLES */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
+                                        <CreditCard className="h-4 w-4 text-emerald-400" />
+                                        <span>Custom Payment Gateways & Handles</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">PayPal Username or Me Link</Label>
+                                            <Input 
+                                                placeholder="e.g. paypal.me/YourUsername or admin@example.com"
+                                                value={paymentSettings.paymentPaypal}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentPaypal: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Venmo Handle</Label>
+                                            <Input 
+                                                placeholder="e.g. @YourVenmoHandle"
+                                                value={paymentSettings.paymentVenmo}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentVenmo: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">CashApp Tag</Label>
+                                            <Input 
+                                                placeholder="e.g. $YourCashtag"
+                                                value={paymentSettings.paymentCashApp}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentCashApp: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Zelle Email or Phone</Label>
+                                            <Input 
+                                                placeholder="e.g. payments@example.com or (555) 123-4567"
+                                                value={paymentSettings.paymentZelle}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentZelle: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Discord Server Invite Link</Label>
+                                            <Input 
+                                                placeholder="e.g. https://discord.gg/yourserver"
+                                                value={paymentSettings.discordInviteUrl || ""}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, discordInviteUrl: e.target.value })}
+                                                className="bg-background/60 text-xs"
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">Presented to users during onboarding / join wizard.</p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Subscription Grace Period (Days)</Label>
+                                            <Input 
+                                                type="number"
+                                                min="0"
+                                                max="30"
+                                                value={paymentSettings.subscriptionGracePeriodDays ?? 3}
+                                                onChange={(e) => setPaymentSettings({ ...paymentSettings, subscriptionGracePeriodDays: parseInt(e.target.value, 10) || 0 })}
+                                                className="bg-background/60 text-xs font-mono"
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">Days allowed past expiration before auto-suspending account.</p>
+                                        </div>
+                                    </div>
+
+                                    {/* AUTO-SUSPEND EXPIRED ACCOUNTS TOGGLE */}
+                                    <div className="p-3.5 rounded-xl border border-border/50 bg-background/40 flex items-center justify-between gap-4">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="auto-suspend-toggle" className="text-xs font-bold text-foreground cursor-pointer">
+                                                    Automatic Access Suspension on Expiration
+                                                </Label>
+                                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${paymentSettings.autoSuspendExpiredAccounts ? "bg-amber-950/40 text-amber-300 border-amber-500/40" : "bg-muted/40 text-muted-foreground border-border/40"}`}>
+                                                    {paymentSettings.autoSuspendExpiredAccounts ? "Active" : "Disabled (Safe Default)"}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground leading-tight">
+                                                When enabled, accounts past their trial or membership date + grace period are automatically suspended and their Plex server shares revoked by the background scheduler. Disabled by default for full manual oversight.
+                                            </p>
+                                        </div>
+                                        <Switch 
+                                            id="auto-suspend-toggle"
+                                            checked={paymentSettings.autoSuspendExpiredAccounts ?? false}
+                                            onCheckedChange={(val) => setPaymentSettings({ ...paymentSettings, autoSuspendExpiredAccounts: val })}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5 pt-2 border-t border-border/30">
+                                        <Label className="text-xs font-semibold">Custom Payment & Subscription Instructions</Label>
+                                        <Textarea 
+                                            rows={3}
+                                            placeholder="e.g. Send payment via Friends & Family. Please include your username in the transaction note so your subscription can be activated immediately!"
+                                            value={paymentSettings.paymentInstructions}
+                                            onChange={(e) => setPaymentSettings({ ...paymentSettings, paymentInstructions: e.target.value })}
+                                            className="bg-background/60 text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* DEFAULT PLEX LIBRARIES SELECTION (REGULAR / FULL MEMBERS) */}
+                                <div className="space-y-3 pt-2 border-t border-border/40">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Regular Members & Signups</Label>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-300 border-emerald-500/30">Full Member Shelf</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Select which server libraries are available to regular full members. Members can select from these in their profile.</p>
+                                        </div>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-7 text-xs text-primary"
+                                            onClick={loadLibraries}
+                                            disabled={loadingLibraries}
+                                        >
+                                            {loadingLibraries ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                                            Refresh Libraries
+                                        </Button>
+                                    </div>
+
+                                    {serverLibraries.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-border/40">
+                                            No Plex libraries detected. Verify your Admin Plex token is configured in Settings.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {serverLibraries.map((srv) => {
+                                                const srvSections = srv.sections || [];
+                                                const srvSelectedCount = srvSections.filter((sec: any) => 
+                                                    isDefaultSelected(srv.serverId, sec.id, sec.key)
+                                                ).length;
+                                                const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
+
+                                                return (
+                                                    <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server className="h-3.5 w-3.5 text-primary" />
+                                                                <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50">
+                                                                    {srvSelectedCount}/{srvSections.length} Default
+                                                                </Badge>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                                onClick={() => {
+                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvRawIds = srvSections.map((sec: any) => String(sec.id));
+                                                                    setDefaultSelectedKeys(prev => {
+                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
+                                                                        return allSrvSelected ? otherKeys : [...otherKeys, ...srvKeys];
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {allSrvSelected ? "Deselect All" : "Select All"}
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {srvSections.map((sec: any) => {
+                                                                const uniqueKey = `${srv.serverId}:${sec.id}`;
+                                                                const isChecked = isDefaultSelected(srv.serverId, sec.id, sec.key);
+                                                                return (
+                                                                    <label 
+                                                                        key={uniqueKey} 
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            handleToggleDefaultSection(srv.serverId, sec.id, sec.key);
+                                                                        }}
+                                                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                                                                            isChecked ? "bg-primary/15 border-primary/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
+                                                                        }`}
+                                                                    >
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {}}
+                                                                            className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 shrink-0 pointer-events-none"
+                                                                        />
+                                                                        <span className="truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* DEFAULT PLEX LIBRARIES SELECTION FOR TRIAL ACCOUNTS */}
+                                <div className="space-y-3 pt-2 border-t border-border/40">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Trial Accounts</Label>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-300 border-amber-500/30">Trial Safe Pool / Restricted Shelf</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Select which server library sections are shared with prospective trial users. Trial users are restricted strictly to this pool and cannot access full member libraries.</p>
+                                        </div>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-7 text-xs text-primary"
+                                            onClick={loadLibraries}
+                                            disabled={loadingLibraries}
+                                        >
+                                            {loadingLibraries ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                                            Refresh Libraries
+                                        </Button>
+                                    </div>
+
+                                    {serverLibraries.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-border/40">
+                                            No Plex libraries detected. Verify your Admin Plex token is configured in Settings.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {serverLibraries.map((srv) => {
+                                                const srvSections = srv.sections || [];
+                                                const srvSelectedCount = srvSections.filter((sec: any) => 
+                                                    isTrialDefaultSelected(srv.serverId, sec.id, sec.key)
+                                                ).length;
+                                                const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
+
+                                                return (
+                                                    <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server className="h-3.5 w-3.5 text-amber-400" />
+                                                                <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-amber-300">
+                                                                    {srvSelectedCount}/{srvSections.length} Trial Default
+                                                                </Badge>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                                onClick={() => {
+                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvRawIds = srvSections.map((sec: any) => String(sec.id));
+                                                                    setDefaultTrialSelectedKeys(prev => {
+                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
+                                                                        return allSrvSelected ? otherKeys : [...otherKeys, ...srvKeys];
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {allSrvSelected ? "Deselect All" : "Select All"}
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {srvSections.map((sec: any) => {
+                                                                const uniqueKey = `${srv.serverId}:${sec.id}`;
+                                                                const isChecked = isTrialDefaultSelected(srv.serverId, sec.id, sec.key);
+                                                                return (
+                                                                    <label 
+                                                                        key={uniqueKey} 
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            handleToggleTrialDefaultSection(srv.serverId, sec.id, sec.key);
+                                                                        }}
+                                                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                                                                            isChecked ? "bg-amber-500/15 border-amber-500/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
+                                                                        }`}
+                                                                    >
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {}}
+                                                                            className="rounded border-border text-amber-500 focus:ring-amber-500 h-3.5 w-3.5 shrink-0 pointer-events-none"
+                                                                        />
+                                                                        <span className="truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* DEFAULT PLEX LIBRARIES SELECTION FOR KIDS ACCOUNTS */}
+                                <div className="space-y-3 pt-2 border-t border-border/40">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Kids Accounts</Label>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-300 border-blue-500/30">Kids Server / Safe Shelf</Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">Select which server library sections are shared by default when members create a Kids sub-account. Kids accounts inherit this library pool and automatic PG rating restrictions.</p>
+                                        </div>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-7 text-xs text-primary"
+                                            onClick={loadLibraries}
+                                            disabled={loadingLibraries}
+                                        >
+                                            {loadingLibraries ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                                            Refresh Libraries
+                                        </Button>
+                                    </div>
+
+                                    {serverLibraries.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-border/40">
+                                            No Plex libraries detected. Verify your Admin Plex token is configured in Settings.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {serverLibraries.map((srv) => {
+                                                const srvSections = srv.sections || [];
+                                                const srvSelectedCount = srvSections.filter((sec: any) => 
+                                                    isKidsDefaultSelected(srv.serverId, sec.id, sec.key)
+                                                ).length;
+                                                const allSrvSelected = srvSections.length > 0 && srvSelectedCount === srvSections.length;
+
+                                                return (
+                                                    <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
+                                                            <div className="flex items-center gap-2">
+                                                                <Server className="h-3.5 w-3.5 text-blue-400" />
+                                                                <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-blue-300">
+                                                                    {srvSelectedCount}/{srvSections.length} Kids Default
+                                                                </Badge>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                                onClick={() => {
+                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvRawIds = srvSections.map((sec: any) => String(sec.id));
+                                                                    setDefaultKidsSelectedKeys(prev => {
+                                                                        const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
+                                                                        return allSrvSelected ? otherKeys : [...otherKeys, ...srvKeys];
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {allSrvSelected ? "Deselect All" : "Select All"}
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {srvSections.map((sec: any) => {
+                                                                const uniqueKey = `${srv.serverId}:${sec.id}`;
+                                                                const isChecked = isKidsDefaultSelected(srv.serverId, sec.id, sec.key);
+                                                                return (
+                                                                    <label 
+                                                                        key={uniqueKey} 
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            handleToggleKidsDefaultSection(srv.serverId, sec.id, sec.key);
+                                                                        }}
+                                                                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                                                                            isChecked ? "bg-blue-500/15 border-blue-500/40 text-foreground font-semibold" : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground"
+                                                                        }`}
+                                                                    >
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {}}
+                                                                            className="rounded border-border text-blue-500 focus:ring-blue-500 h-3.5 w-3.5 shrink-0 pointer-events-none"
+                                                                        />
+                                                                        <span className="truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ADD-ONS CATALOG & AVAILABILITY MANAGER */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-400">
+                                            <Sparkles className="h-4 w-4" />
+                                            <span>Add-ons & Household Features (Modular Availability Controls)</span>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-300 border-purple-500/30">
+                                            Live Feature Flags
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Toggle availability for each add-on feature. Add-ons marked as <strong>Available</strong> can be enabled by users on their settings page. Disabled add-ons are locked as "Coming Soon" or hidden from user activation until ready.
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                                        {adminAddonsCatalog.map((addon) => {
+                                            const isAvail = addon.isAvailable !== false;
+                                            const isToggling = togglingAdminAddonId === addon.id;
+                                            return (
+                                                <div 
+                                                    key={addon.id} 
+                                                    className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
+                                                        isAvail 
+                                                            ? "bg-background/60 border-border/60" 
+                                                            : "bg-muted/10 border-border/30 opacity-70"
+                                                    }`}
+                                                >
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-2">
+                                                                {addon.icon === "tv" ? (
+                                                                    <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
+                                                                ) : addon.icon === "music" ? (
+                                                                    <Music className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                                ) : addon.icon === "book" ? (
+                                                                    <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                ) : addon.icon === "baby" ? (
+                                                                    <Baby className="h-4 w-4 text-purple-400 shrink-0" />
+                                                                ) : addon.icon === "monitor" ? (
+                                                                    <Monitor className="h-4 w-4 text-indigo-400 shrink-0" />
+                                                                ) : (
+                                                                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                )}
+                                                                <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
+                                                            </div>
+                                                            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 shrink-0 ${addon.isFree ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"}`}>
+                                                                {addon.isFree ? "Free" : `$${addon.price}/mo`}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                                            {addon.description}
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="pt-2 flex items-center justify-between border-t border-border/30 text-xs">
+                                                        <span className={`text-[10px] font-semibold ${isAvail ? "text-emerald-400" : "text-muted-foreground"}`}>
+                                                            {isAvail ? "✅ Available to Users" : "🔒 Disabled / Coming Soon"}
+                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            {isToggling && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                                                            <Switch 
+                                                                checked={isAvail}
+                                                                disabled={isToggling}
+                                                                onCheckedChange={(checked) => handleToggleAdminAddonAvailability(addon.id, checked)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* REQUIRE REFERRAL SWITCH */}
+                                <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-xs font-bold text-foreground">Require Invite Link to Join</Label>
+                                        <p className="text-[11px] text-muted-foreground">When enabled, visitors to <code className="bg-muted px-1 py-0.5 rounded">/join</code> must have a valid referral code to sign up.</p>
+                                    </div>
+                                    <Switch 
+                                        checked={paymentSettings.requireReferralForSignup}
+                                        onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, requireReferralForSignup: checked })}
+                                    />
+                                </div>
+
+                                {/* MEMBERSHIP TIERS SWITCH */}
+                                <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-xs font-bold text-foreground">Enable Membership Tiers & Add-ons</Label>
+                                        <p className="text-[11px] text-muted-foreground">Enables 4K dedicated transcode tiers, VIP IPTV access, and family kid profiles.</p>
+                                    </div>
+                                    <Switch 
+                                        checked={paymentSettings.membershipTiersEnabled ?? true}
+                                        onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, membershipTiersEnabled: checked })}
+                                    />
+                                </div>
+
+                                <Button 
+                                    type="submit" 
+                                    disabled={savingSettings}
+                                    className="w-full font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-98"
+                                >
+                                    {savingSettings ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                                    Save Onboarding & Payment Settings
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 4: EMAIL PAYMENT SCRAPER & AUTOMATED SUBSCRIPTION FULFILLMENT */}
+                {/* ========================================================================= */}
+                <TabsContent value="scraper" className="space-y-6 animate-in fade-in-50 duration-200">
+                    <PaymentEmailManager />
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 5: ADMIN APPROVAL QUEUE & ACTION STAGING GATE */}
+                {/* ========================================================================= */}
+                <TabsContent value="approvals" className="space-y-6 animate-in fade-in-50 duration-200">
+                    {/* Header info */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                <ShieldAlert className="h-5 w-5 text-amber-400" />
+                                Admin Approval Center & Action Staging Gate
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                                Review, approve, or reject pending system actions before they execute on live Plex servers or send emails to users.
+                            </p>
                         </div>
-                        <p className="text-xs text-muted-foreground max-w-xl">
-                            Scans your Plex server for friends and automatically provisions approved accounts for them. Updates user details when emails change, and revokes access if users are removed from your Plex server.
-                        </p>
-                        {syncMessage && (
-                            <div className="text-xs text-[#e5a00d] pt-1 font-medium">
-                                {syncMessage}
+                        <div className="flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={loadApprovals}
+                                disabled={loadingApprovals}
+                                className="h-9 gap-1.5 text-xs font-semibold"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${loadingApprovals ? "animate-spin" : ""}`} />
+                                Refresh
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Notification Messages */}
+                    {approvalSuccessMsg && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-medium flex items-center justify-between">
+                            <span>{approvalSuccessMsg}</span>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-emerald-400" onClick={() => setApprovalSuccessMsg("")}>✕</Button>
+                        </div>
+                    )}
+                    {approvalErrMsg && (
+                        <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium flex items-center justify-between">
+                            <span>{approvalErrMsg}</span>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-rose-400" onClick={() => setApprovalErrMsg("")}>✕</Button>
+                        </div>
+                    )}
+
+                    {/* KPI STATS CARDS */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Pending Review</span>
+                                <Clock className="h-4 w-4 text-amber-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-amber-400">{approvalCounts.pendingCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Actions awaiting review</span>
+                        </Card>
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Approved & Applied</span>
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-emerald-400">{approvalCounts.approvedCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Authorized by admins</span>
+                        </Card>
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Rejected</span>
+                                <XCircle className="h-4 w-4 text-rose-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-rose-400">{approvalCounts.rejectedCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Dismissed or blocked</span>
+                        </Card>
+                        <Card className="bg-[#121218] border-border/50 p-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground font-medium">Total Staged</span>
+                                <Shield className="h-4 w-4 text-blue-400" />
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-blue-400">{approvalCounts.totalCount}</div>
+                            <span className="text-[10px] text-muted-foreground">Lifetime audit history</span>
+                        </Card>
+                    </div>
+
+                    {/* APPROVAL WORKFLOW GOVERNANCE TOGGLES */}
+                    <Card className="border-border/60 bg-[#121218] shadow-md">
+                        <CardHeader className="pb-3 border-b border-border/40">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                                Action Approval Gates & Governance
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Configure which actions require explicit admin review before affecting real servers or users.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted/20 rounded-xl border border-border/40">
+                                <div className="space-y-0.5">
+                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                                        <FolderCheck className="h-3.5 w-3.5 text-blue-400" />
+                                        Require Admin Approval for Plex Access Changes
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        When enabled, all modifications to user Plex library shares (granting new access, removing libraries, or expired account revocations) are staged in this queue instead of pushing immediately to live Plex servers.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={approvalSettings.requireApprovalForPlexChanges}
+                                    onCheckedChange={(checked) => handleToggleApprovalSetting("requireApprovalForPlexChanges", checked)}
+                                    disabled={savingApprovalSettings}
+                                />
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted/20 rounded-xl border border-border/40">
+                                <div className="space-y-0.5">
+                                    <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                                        <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                                        Require Admin Approval for Outgoing Emails
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        When enabled, all automated notifications (welcome emails, account approvals, media request alerts, ticket updates, broadcasts) are held in this queue until approved before dispatching via SMTP.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={approvalSettings.requireApprovalForEmails}
+                                    onCheckedChange={(checked) => handleToggleApprovalSetting("requireApprovalForEmails", checked)}
+                                    disabled={savingApprovalSettings}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* FILTER & BULK ACTIONS BAR */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#121218] border border-border/50 rounded-xl">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-semibold">Filter Status:</span>
+                            <div className="flex items-center gap-1">
+                                {(["PENDING", "APPROVED", "REJECTED", "ALL"] as const).map(st => (
+                                    <Button
+                                        key={st}
+                                        type="button"
+                                        size="sm"
+                                        variant={approvalFilterStatus === st ? "default" : "outline"}
+                                        onClick={() => setApprovalFilterStatus(st)}
+                                        className="h-7 px-2.5 text-[11px] font-semibold"
+                                    >
+                                        {st === "PENDING" ? `Pending (${approvalCounts.pendingCount})` : st}
+                                    </Button>
+                                ))}
+                            </div>
+                            <span className="text-xs text-muted-foreground font-semibold ml-2">Type:</span>
+                            <Select value={approvalFilterType} onValueChange={(val: any) => setApprovalFilterType(val)}>
+                                <SelectTrigger className="h-7 w-[150px] text-[11px] bg-background/60">
+                                    <SelectValue placeholder="All Types" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All Types</SelectItem>
+                                    <SelectItem value="EMAIL">✉️ Outgoing Emails</SelectItem>
+                                    <SelectItem value="PLEX_ACCESS_GRANT">🟢 Plex Grants</SelectItem>
+                                    <SelectItem value="PLEX_ACCESS_REVOKE">🔴 Plex Revocations</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {approvalFilterStatus === "PENDING" && approvals.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={loadingApprovals}
+                                    onClick={() => {
+                                        const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
+                                        setSelectedApprovalIds(pendingIds);
+                                        handleBulkApprove();
+                                    }}
+                                    className="h-7 px-2.5 text-[11px] font-semibold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
+                                >
+                                    <CheckCheck className="h-3.5 w-3.5" />
+                                    Approve All ({approvals.filter(a => a.status === "PENDING").length})
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={loadingApprovals}
+                                    onClick={() => {
+                                        const pendingIds = approvals.filter(a => a.status === "PENDING").map(a => a.id);
+                                        setSelectedApprovalIds(pendingIds);
+                                        handleBulkReject();
+                                    }}
+                                    className="h-7 px-2.5 text-[11px] font-semibold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5"
+                                >
+                                    <XCircle className="h-3.5 w-3.5" />
+                                    Reject All
+                                </Button>
                             </div>
                         )}
                     </div>
-                    <Button 
-                        type="button" 
-                        variant="outline"
-                        className="border-[#e5a00d]/40 text-[#e5a00d] hover:bg-[#e5a00d]/10 shrink-0 gap-2 h-10 font-semibold transition-all duration-200 hover:ring-2 hover:ring-[#e5a00d]/40 active:scale-95"
-                        onClick={handleSyncPlex}
-                        disabled={syncingPlex}
-                    >
-                        {syncingPlex ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                        Sync Plex Friends Now
-                    </Button>
-                </CardContent>
-            </Card>
 
-            <div className="grid gap-6 md:grid-cols-2">
-                {/* CREATE USER FORM */}
-                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                            <UserPlus className="h-5 w-5 text-primary" /> Create Account
-                        </CardTitle>
-                        <CardDescription>Add a new administrator or pre-approved user.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form 
-                            onSubmit={handleCreate} 
-                            className="space-y-4"
-                            autoComplete="off"
-                            data-1p-ignore="true"
-                            data-lpignore="true"
-                        >
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Username</Label>
-                                <Input 
-                                    name="username" 
-                                    placeholder="e.g. jsmith" 
-                                    required 
-                                    className="bg-background/60" 
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                />
+                    {/* APPROVAL ITEMS LIST */}
+                    {loadingApprovals ? (
+                        <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-[#121218] border border-border/40 rounded-xl">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <p className="text-xs text-muted-foreground font-medium">Loading approval queue...</p>
+                        </div>
+                    ) : approvals.length === 0 ? (
+                        <Card className="bg-[#121218] border-border/40 p-12 text-center">
+                            <div className="flex flex-col items-center justify-center space-y-2 max-w-sm mx-auto">
+                                <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30 text-emerald-400">
+                                    <Check className="h-6 w-6" />
+                                </div>
+                                <h4 className="text-sm font-bold text-foreground">Queue is Clear</h4>
+                                <p className="text-xs text-muted-foreground">
+                                    No actions match your current filter ({approvalFilterStatus.toLowerCase()}). New Plex modifications or outgoing emails requiring approval will appear here.
+                                </p>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Email Address</Label>
-                                <Input 
-                                    name="email" 
-                                    type="email" 
-                                    placeholder="user@example.com" 
-                                    required 
-                                    className="bg-background/60" 
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Password</Label>
-                                <Input 
-                                    name="password" 
-                                    type="password" 
-                                    required 
-                                    placeholder="Minimum 6 characters" 
-                                    className="bg-background/60" 
-                                    autoComplete="new-password"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Role</Label>
-                                <Select name="role" defaultValue="USER">
-                                    <SelectTrigger className="bg-background/80"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ADMIN">Admin (Full Access & Settings)</SelectItem>
-                                        <SelectItem value="SUPER_USER">Super User (Radarr/Sonarr Access)</SelectItem>
-                                        <SelectItem value="USER">User (Standard Access)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button type="submit" className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
-                                <UserPlus className="h-4 w-4 mr-2" /> Create Approved User
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
+                        </Card>
+                    ) : (
+                        <div className="space-y-3">
+                            {approvals.map((item) => {
+                                const isPending = item.status === "PENDING";
+                                const isApproved = item.status === "APPROVED";
+                                const isRejected = item.status === "REJECTED";
+                                const isEmail = item.type === "EMAIL";
+                                const isPlexGrant = item.type === "PLEX_ACCESS_GRANT";
+                                const isPlexRevoke = item.type === "PLEX_ACCESS_REVOKE";
 
-                {/* CHANGE PASSWORD FORM */}
-                <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                            <KeyRound className="h-5 w-5 text-primary" /> Change Your Password
-                        </CardTitle>
-                        <CardDescription>Update your logged-in administrator password.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form 
-                            onSubmit={handleChangePassword} 
-                            className="space-y-4"
-                            autoComplete="off"
-                        >
-                            {passMsg && (
+                                return (
+                                    <Card
+                                        key={item.id}
+                                        className={`transition-all duration-200 border ${
+                                            isPending 
+                                                ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/60" 
+                                                : isApproved 
+                                                    ? "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50" 
+                                                    : "border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50"
+                                        }`}
+                                    >
+                                        <CardContent className="pt-5 pb-5">
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                <div className="space-y-1.5 flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {isEmail ? (
+                                                            <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 gap-1 text-[11px] font-bold">
+                                                                <Mail className="h-3 w-3" /> Outgoing Email
+                                                            </Badge>
+                                                        ) : isPlexGrant ? (
+                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 gap-1 text-[11px] font-bold">
+                                                                <FolderCheck className="h-3 w-3" /> Plex Share Grant
+                                                            </Badge>
+                                                        ) : isPlexRevoke ? (
+                                                            <Badge variant="outline" className="bg-rose-500/10 text-rose-400 border-rose-500/30 gap-1 text-[11px] font-bold">
+                                                                <XCircle className="h-3 w-3" /> Plex Share Revoke
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 gap-1 text-[11px] font-bold">
+                                                                <Shield className="h-3 w-3" /> {item.type}
+                                                            </Badge>
+                                                        )}
+
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`text-[10px] font-black uppercase px-2 py-0.5 ${
+                                                                isPending 
+                                                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse" 
+                                                                    : isApproved 
+                                                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50" 
+                                                                        : "bg-rose-500/20 text-rose-300 border-rose-500/50"
+                                                            }`}
+                                                        >
+                                                            {item.status}
+                                                        </Badge>
+
+                                                        <span className="text-[11px] text-muted-foreground ml-auto sm:ml-0">
+                                                            {format(new Date(item.createdAt), "MMM d, yyyy h:mm a")}
+                                                        </span>
+                                                    </div>
+
+                                                    <h5 className="font-bold text-sm text-foreground break-words">{item.title}</h5>
+
+                                                    {item.description && (
+                                                        <p className="text-xs text-muted-foreground break-words">{item.description}</p>
+                                                    )}
+
+                                                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-1">
+                                                        {item.targetUser && (
+                                                            <span><strong>User:</strong> {item.targetUser}</span>
+                                                        )}
+                                                        {item.targetEmail && (
+                                                            <span><strong>Email:</strong> {item.targetEmail}</span>
+                                                        )}
+                                                        {isApproved && (
+                                                            <span className="text-emerald-400 font-medium">
+                                                                ✓ Approved by {item.approvedBy || "Admin"} on {item.approvedAt ? format(new Date(item.approvedAt), "MMM d, h:mm a") : "N/A"}
+                                                            </span>
+                                                        )}
+                                                        {isRejected && (
+                                                            <span className="text-rose-400 font-medium">
+                                                                ✕ Rejected by {item.approvedBy || "Admin"}{item.rejectionReason ? `: ${item.rejectionReason}` : ""}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Action Buttons */}
+                                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                    {isEmail && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setEmailPreviewApproval(item)}
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 hover:bg-muted/30"
+                                                        >
+                                                            <Eye className="h-3.5 w-3.5 text-primary" />
+                                                            Preview
+                                                        </Button>
+                                                    )}
+
+                                                    {isPending && (
+                                                        <>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                onClick={() => handleApproveItem(item.id)}
+                                                                disabled={processingApprovalId === item.id}
+                                                                className="h-8 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 shadow-sm active:scale-95"
+                                                            >
+                                                                {processingApprovalId === item.id ? (
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <Check className="h-3.5 w-3.5" />
+                                                                )}
+                                                                Approve
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleRejectItem(item.id)}
+                                                                disabled={processingApprovalId === item.id}
+                                                                className="h-8 px-3 text-xs font-bold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5 active:scale-95"
+                                                            >
+                                                                <XCircle className="h-3.5 w-3.5" />
+                                                                Reject
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
+
+            {/* ========================================================================= */}
+            {/* MANAGE PLEX LIBRARIES MODAL */}
+            {/* ========================================================================= */}
+            {libModalUser && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-lg bg-[#121218] border-border/60 shadow-2xl">
+                        <CardHeader className="pb-3 border-b border-border/40">
+                            <CardTitle className="flex items-center gap-2 text-lg font-bold text-primary">
+                                <Layers className="h-5 w-5 text-primary" /> Manage Plex Libraries
+                            </CardTitle>
+                            <CardDescription>
+                                Select which server library sections are shared with <strong>{libModalUser.username}</strong> ({libModalUser.email}).
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-4">
+                            {pendingTrialActivation && (
+                                <div className="text-xs text-blue-300 bg-blue-950/40 border border-blue-500/40 p-3 rounded-xl flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="h-4 w-4 text-blue-400 shrink-0" />
+                                        <span>
+                                            <strong>{getActivationTypeLabel(pendingTrialActivation.type)}:</strong> Select the Plex libraries to share with <strong>{libModalUser.username}</strong> to activate access.
+                                        </span>
+                                    </div>
+                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-200 border-blue-500/40 text-[10px] shrink-0">
+                                        Activation Step
+                                    </Badge>
+                                </div>
+                            )}
+
+                            {libSuccessMsg && (
                                 <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                    <span>{passMsg}</span>
+                                    <span>{libSuccessMsg}</span>
                                 </div>
                             )}
-                            {passErr && (
+                            {libErrMsg && (
                                 <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <XCircle className="h-4 w-4 shrink-0" />
-                                    <span>{passErr}</span>
+                                    <span>{libErrMsg}</span>
                                 </div>
                             )}
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Current / Temp Password</Label>
-                                <Input 
-                                    type="password" required 
-                                    value={passCurrent} 
-                                    onChange={(e) => setPassCurrent(e.target.value)} 
-                                    placeholder="Enter current password"
-                                    className="bg-background/60"
-                                    autoComplete="current-password"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">New Password</Label>
-                                <Input 
-                                    type="password" required 
-                                    value={passNew} 
-                                    onChange={(e) => setPassNew(e.target.value)} 
-                                    placeholder="Minimum 6 characters"
-                                    className="bg-background/60"
-                                    autoComplete="new-password"
-                                />
-                            </div>
-                            <Button type="submit" disabled={passLoading} className="w-full font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98">
-                                {passLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
-                                Update My Password
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
-            </div>
 
+                            {loadingUserLibs && (
+                                <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground bg-primary/5 rounded-xl border border-primary/20 animate-pulse">
+                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                    <span>Fetching current shared libraries from Plex...</span>
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground font-semibold">
+                                    {allUniqueKeys.filter(k => {
+                                        const [srvId, secId] = k.split(":");
+                                        const matchedSec = serverLibraries.find(s => s.serverId === srvId)?.sections?.find((s: any) => String(s.id) === secId || (s.key && String(s.key) === secId));
+                                        return isSectionSelected(srvId, secId, matchedSec?.key);
+                                    }).length} of {totalLibrariesCount} libraries selected
+                                </span>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-7 text-xs px-2"
+                                        onClick={handleSelectAllSections}
+                                    >
+                                        Select All
+                                    </Button>
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-7 text-xs px-2"
+                                        onClick={handleDeselectAllSections}
+                                    >
+                                        Clear All
+                                    </Button>
+                                    <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                                        disabled={loadingLibraries}
+                                        onClick={loadLibraries}
+                                        title="Rescan libraries from Plex"
+                                    >
+                                        <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loadingLibraries ? 'animate-spin' : ''}`} />
+                                        Rescan
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="max-h-[50vh] overflow-y-auto space-y-4 pr-1">
+                                {serverLibraries.length === 0 ? (
+                                    <div className="text-xs text-muted-foreground italic p-6 text-center border border-dashed border-border/40 rounded-xl bg-muted/10 space-y-3">
+                                        <p>No Plex servers or libraries found. Ensure your Admin Plex Token is connected.</p>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm" 
+                                            disabled={loadingLibraries}
+                                            onClick={loadLibraries}
+                                            className="text-xs h-8 border-primary/30 text-primary hover:bg-primary/10"
+                                        >
+                                            {loadingLibraries ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                                            Rescan Plex for Libraries
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    serverLibraries.map((server) => {
+                                        const serverSections = server.sections || [];
+                                        const serverSelectedCount = serverSections.filter((sec: any) => 
+                                            isSectionSelected(server.serverId, sec.id, sec.key)
+                                        ).length;
+                                        const allServerSelected = serverSections.length > 0 && serverSelectedCount === serverSections.length;
+
+                                        return (
+                                            <div key={server.serverId} className="space-y-2.5 p-3.5 bg-muted/10 rounded-xl border border-border/40">
+                                                <div className="flex items-center justify-between pb-2 border-b border-border/30">
+                                                    <div className="flex items-center gap-2">
+                                                        <Server className="h-4 w-4 text-primary shrink-0" />
+                                                        <span className="font-bold text-xs text-foreground">{server.serverName || "Plex Server"}</span>
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50">
+                                                            {serverSelectedCount}/{serverSections.length} Shared
+                                                        </Badge>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                                                        onClick={() => handleToggleAllServerSections(server.serverId, !allServerSelected)}
+                                                    >
+                                                        {allServerSelected ? "Deselect All" : "Select All"}
+                                                    </Button>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {serverSections.map((sec: any) => {
+                                                        const uniqueKey = `${server.serverId}:${sec.id}`;
+                                                        const isChecked = isSectionSelected(server.serverId, sec.id, sec.key);
+                                                        return (
+                                                            <div 
+                                                                key={uniqueKey} 
+                                                                onClick={() => handleToggleUserSection(server.serverId, sec.id, sec.key)}
+                                                                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
+                                                                    isChecked 
+                                                                        ? "bg-primary/15 border-primary/50 text-foreground font-semibold shadow-sm" 
+                                                                        : "bg-background/40 border-border/30 text-muted-foreground hover:text-foreground hover:bg-background/70"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <input 
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={() => {}}
+                                                                        className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 pointer-events-none shrink-0"
+                                                                    />
+                                                                    <div className="min-w-0">
+                                                                        <span className="font-semibold block truncate">{sec.title}</span>
+                                                                        <span className="text-[9px] text-muted-foreground uppercase">{sec.type}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0 ml-1 text-muted-foreground">
+                                                                    #{sec.key || sec.id}
+                                                                </Badge>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            <div className="flex gap-2 justify-end pt-3 border-t border-border/40">
+                                <Button type="button" variant="outline" onClick={() => { setLibModalUser(null); setPendingTrialActivation(null); setShowActivationPrompt(false); }}>
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    type="button" 
+                                    disabled={savingUserLibs}
+                                    onClick={handleSaveUserLibraries}
+                                    className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground transition-all hover:ring-2 hover:ring-primary/40 active:scale-95"
+                                >
+                                    {savingUserLibs ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                                    {pendingTrialActivation 
+                                        ? `Grant Access & Start ${getActivationTypeLabel(pendingTrialActivation.type)}`
+                                        : "Save & Sync to Plex"
+                                    }
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* SUSPENDED USER ACTIVATION PROMPT MODAL */}
+            {/* ========================================================================= */}
+            {showActivationPrompt && libModalUser && (
+                <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-lg bg-[#121218] border-border/70 shadow-2xl overflow-hidden">
+                        <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                                    <ShieldAlert className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-base font-bold text-foreground">
+                                        Activate Suspended User?
+                                    </CardTitle>
+                                    <CardDescription className="text-xs mt-0.5">
+                                        <strong>{libModalUser.username}</strong> is currently <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/40 text-amber-400 uppercase font-bold">{libModalUser.status}</Badge>. Library access cannot be granted on Plex while suspended.
+                                    </CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-4">
+                            <p className="text-xs text-muted-foreground">
+                                Please select how you would like to activate this user before submitting their granted library access:
+                            </p>
+
+                            <div className="space-y-2">
+                                {/* Option 1: Full Activation (Approved) */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("APPROVED")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "APPROVED"
+                                            ? "bg-emerald-950/30 border-emerald-500/60 ring-1 ring-emerald-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "APPROVED"} 
+                                        onChange={() => setSelectedActivationType("APPROVED")}
+                                        className="mt-0.5 text-emerald-500 focus:ring-emerald-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                            <span className="text-xs font-bold text-foreground">Full Activation (Approved)</span>
+                                            <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0 border border-emerald-500/30">Permanent</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Activate account permanently with no expiration date. Immediately enables selected libraries on Plex.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 2: Default Free Trial from Settings */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("TRIAL")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "TRIAL"
+                                            ? "bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "TRIAL"} 
+                                        onChange={() => setSelectedActivationType("TRIAL")}
+                                        className="mt-0.5 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Timer className="h-4 w-4 text-blue-400" />
+                                            <span className="text-xs font-bold text-foreground">Default Free Trial</span>
+                                            <Badge className="bg-blue-500/20 text-blue-400 text-[10px] px-1.5 py-0 border border-blue-500/30">
+                                                {paymentSettings.defaultTrialDays || 14} Days
+                                            </Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Place user on the standard {paymentSettings.defaultTrialDays || 14}-day trial period configured in Settings. Automatically suspends when trial time runs out.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 3: Custom Trial (X Days) */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("CUSTOM_TRIAL")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col gap-2 ${
+                                        selectedActivationType === "CUSTOM_TRIAL"
+                                            ? "bg-cyan-950/30 border-cyan-500/60 ring-1 ring-cyan-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <div className="flex items-start gap-3 w-full">
+                                        <input 
+                                            type="radio" 
+                                            name="activation_type" 
+                                            checked={selectedActivationType === "CUSTOM_TRIAL"} 
+                                            onChange={() => setSelectedActivationType("CUSTOM_TRIAL")}
+                                            className="mt-0.5 text-cyan-500 focus:ring-cyan-500"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <SlidersHorizontal className="h-4 w-4 text-cyan-400" />
+                                                <span className="text-xs font-bold text-foreground">Custom X-Day Trial</span>
+                                                <Badge className="bg-cyan-500/20 text-cyan-400 text-[10px] px-1.5 py-0 border border-cyan-500/30">
+                                                    {activationPromptCustomDays} Days
+                                                </Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-1">
+                                                Specify an exact custom number of days for this user's trial period.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {selectedActivationType === "CUSTOM_TRIAL" && (
+                                        <div className="mt-2 pt-2 border-t border-cyan-500/20 flex flex-wrap items-center gap-2 pl-7" onClick={(e) => e.stopPropagation()}>
+                                            <Label className="text-xs font-semibold text-foreground shrink-0">Duration:</Label>
+                                            <Input 
+                                                type="number" 
+                                                min={1} 
+                                                max={365} 
+                                                value={activationPromptCustomDays} 
+                                                onChange={(e) => setActivationPromptCustomDays(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                                className="h-7 w-20 text-center font-bold bg-background/80 text-xs"
+                                            />
+                                            <span className="text-xs text-muted-foreground">Days</span>
+                                            <div className="flex gap-1 ml-auto">
+                                                {[3, 5, 7, 14, 21, 30].map(d => (
+                                                    <Button
+                                                        key={d}
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className={`h-6 px-1.5 text-[10px] ${activationPromptCustomDays === d ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+                                                        onClick={() => setActivationPromptCustomDays(d)}
+                                                    >
+                                                        {d}d
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Option 4: 30-Day Subscription */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("30_DAYS")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "30_DAYS"
+                                            ? "bg-purple-950/30 border-purple-500/60 ring-1 ring-purple-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "30_DAYS"} 
+                                        onChange={() => setSelectedActivationType("30_DAYS")}
+                                        className="mt-0.5 text-purple-500 focus:ring-purple-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-4 w-4 text-purple-400" />
+                                            <span className="text-xs font-bold text-foreground">30-Day Subscription</span>
+                                            <Badge className="bg-purple-500/20 text-purple-400 text-[10px] px-1.5 py-0 border border-purple-500/30">30 Days</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Grant 30 days of active subscription access from today, and enable selected libraries on Plex.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 5: Rest of Year */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("REST_OF_YEAR")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "REST_OF_YEAR"
+                                            ? "bg-emerald-950/30 border-emerald-500/60 ring-1 ring-emerald-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "REST_OF_YEAR"} 
+                                        onChange={() => setSelectedActivationType("REST_OF_YEAR")}
+                                        className="mt-0.5 text-emerald-500 focus:ring-emerald-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-4 w-4 text-emerald-400" />
+                                            <span className="text-xs font-bold text-foreground">Rest of {new Date().getFullYear()}</span>
+                                            <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0 border border-emerald-500/30">Annual</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Grant active subscription access through December 31, {new Date().getFullYear()}, and enable selected libraries on Plex.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Option 6: Keep Suspended (Save Libraries Only) */}
+                                <div 
+                                    onClick={() => setSelectedActivationType("KEEP_SUSPENDED")}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                                        selectedActivationType === "KEEP_SUSPENDED"
+                                            ? "bg-amber-950/30 border-amber-500/60 ring-1 ring-amber-500/40"
+                                            : "bg-background/40 border-border/40 hover:bg-background/70"
+                                    }`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="activation_type" 
+                                        checked={selectedActivationType === "KEEP_SUSPENDED"} 
+                                        onChange={() => setSelectedActivationType("KEEP_SUSPENDED")}
+                                        className="mt-0.5 text-amber-500 focus:ring-amber-500"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <PauseCircle className="h-4 w-4 text-amber-400" />
+                                            <span className="text-xs font-bold text-foreground">Keep Suspended (Save Libraries Only)</span>
+                                            <Badge className="bg-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0 border border-amber-500/30">No Access</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Save these library preferences to the database only. Do not activate the user or grant access on Plex.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 justify-end pt-3 border-t border-border/40">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    disabled={savingUserLibs}
+                                    onClick={() => setShowActivationPrompt(false)}
+                                >
+                                    Back
+                                </Button>
+                                <Button 
+                                    type="button" 
+                                    disabled={savingUserLibs}
+                                    onClick={() => executeSaveUserLibraries(
+                                        pendingLibSaveKeys, 
+                                        selectedActivationType, 
+                                        selectedActivationType === "CUSTOM_TRIAL" ? activationPromptCustomDays : (selectedActivationType === "TRIAL" ? (paymentSettings.defaultTrialDays || 14) : undefined)
+                                    )}
+                                    className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground transition-all active:scale-95"
+                                >
+                                    {savingUserLibs ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                                    Confirm & Proceed
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* MANAGE TRIAL / SUBSCRIPTION TIMER MODAL */}
+            {/* ========================================================================= */}
+            {subModalUser && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-md bg-[#121218] border-border/60 shadow-2xl max-h-[90vh] flex flex-col">
+                        <CardHeader className="pb-3 border-b border-border/40 shrink-0">
+                            <CardTitle className="flex items-center gap-2 text-lg font-bold text-blue-400">
+                                <Timer className="h-5 w-5 text-blue-400" /> Trial & Subscription Controls
+                            </CardTitle>
+                            <CardDescription>
+                                Set access timers, extend subscriptions, or suspend access for <strong>{subModalUser.username}</strong>.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1">
+                            {subSuccessMsg && (
+                                <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                    <span>{subSuccessMsg}</span>
+                                </div>
+                            )}
+                            {subErrMsg && (
+                                <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <XCircle className="h-4 w-4 shrink-0" />
+                                    <span>{subErrMsg}</span>
+                                </div>
+                            )}
+
+                            <div className="p-3 rounded-xl bg-muted/20 border border-border/40 space-y-2 text-xs">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Current Status:</span>
+                                    <span className="font-bold text-foreground">{subModalUser.status}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Membership Tier:</span>
+                                    <span className="font-semibold text-foreground">
+                                        {subModalUser.membershipTier === "TIER_2_VIP" ? "🛡️ Tier 2: Managed Support" : subModalUser.membershipTier === "TRIAL" ? "⏱️ Trial Pass" : "⭐ Tier 1: Regular Member"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Plan Cadence:</span>
+                                    {(() => {
+                                        const isModalUserTier2 = subModalUser.membershipTier === "TIER_2_VIP";
+                                        const modalYearlyPrice = isModalUserTier2 
+                                            ? (paymentSettings.tier2YearlyPrice ?? 240) 
+                                            : (paymentSettings.yearlyPrice ?? 180);
+                                        const modalMonthlyPrice = isModalUserTier2 
+                                            ? (paymentSettings.tier2MonthlyPrice ?? 25) 
+                                            : (paymentSettings.monthlyPrice ?? 15);
+                                        return (
+                                            <Select 
+                                                value={subModalUser.subscriptionCadence || "YEARLY"} 
+                                                onValueChange={(val: "YEARLY" | "MONTHLY") => handleUpdateCadence(subModalUser.id, val)}
+                                            >
+                                                <SelectTrigger className="h-7 text-xs w-44 bg-background/80 font-semibold">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="YEARLY">Annual (${modalYearlyPrice}/yr)</SelectItem>
+                                                    <SelectItem value="MONTHLY">Monthly (${modalMonthlyPrice}/mo)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        );
+                                    })()}
+                                </div>
+                                {subModalUser.trialEndsAt && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Trial Expires:</span>
+                                        <span className="font-bold text-blue-400">{format(new Date(subModalUser.trialEndsAt), "MMM d, yyyy h:mm a")}</span>
+                                    </div>
+                                )}
+                                {subModalUser.subscriptionEndsAt && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Subscription Expires:</span>
+                                        <span className="font-bold text-emerald-400">{format(new Date(subModalUser.subscriptionEndsAt), "MMM d, yyyy")}</span>
+                                    </div>
+                                )}
+                                {subModalUser.lastRenewalReminderSentAt && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Last Renewal Notice:</span>
+                                        <span className="font-medium text-amber-400">{format(new Date(subModalUser.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}</span>
+                                    </div>
+                                )}
+
+                                {/* ASSIGNED ADD-ONS MANAGEMENT */}
+                                <div className="pt-2 border-t border-border/30 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground font-semibold flex items-center gap-1.5">
+                                            <Zap className="h-3.5 w-3.5 text-amber-400" />
+                                            Active Add-ons & Profile Perks:
+                                        </span>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        {adminAddonsCatalog
+                                            .filter((addon: any) => addon.isAvailable !== false && !addon.comingSoon && addon.status !== "coming_soon")
+                                            .map((addon: any) => {
+                                                let userAddonList: string[] = [];
+                                                try {
+                                                    if (subModalUser.enabledAddons) userAddonList = JSON.parse(subModalUser.enabledAddons);
+                                                } catch {}
+                                                const isEnabled = userAddonList.includes(addon.id);
+                                                const isToggling = togglingAddonUserId === `${subModalUser.id}:${addon.id}`;
+                                                return (
+                                                    <div key={addon.id} className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/40 text-xs">
+                                                        <div className="space-y-0.5 min-w-0 pr-2">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-semibold text-foreground truncate">{addon.name}</span>
+                                                                {addon.isFree ? (
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">${addon.price}/mo</Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground line-clamp-1">{addon.description}</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {isToggling && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
+                                                            <Switch 
+                                                                checked={isEnabled}
+                                                                disabled={isToggling}
+                                                                onCheckedChange={(checked) => handleToggleUserAddon(subModalUser.id, addon.id, checked)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {showCustomTrialScreen ? (
+                                <div className="space-y-4 p-4 rounded-xl bg-muted/20 border border-cyan-500/30 animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="flex items-center justify-between pb-2 border-b border-border/30">
+                                        <div className="flex items-center gap-2">
+                                            <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                                                <SlidersHorizontal className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-bold text-foreground">Custom Trial Duration</h4>
+                                                <p className="text-[10px] text-muted-foreground">Specify exact number of trial days</p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                            onClick={() => setShowCustomTrialScreen(false)}
+                                        >
+                                            Back
+                                        </Button>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-semibold text-foreground">Number of Days</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={365}
+                                                value={customTrialDaysInput}
+                                                onChange={(e) => setCustomTrialDaysInput(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                                className="h-9 text-sm font-bold bg-background/80 w-28 text-center"
+                                            />
+                                            <span className="text-xs text-muted-foreground font-medium">Days from today</span>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Trial will expire on: <strong className="text-cyan-400">{format(new Date(Date.now() + customTrialDaysInput * 24 * 60 * 60 * 1000), "MMM d, yyyy h:mm a")}</strong>
+                                        </p>
+                                    </div>
+
+                                    {/* Quick select presets */}
+                                    <div className="space-y-1.5">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quick Presets</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {[3, 5, 7, 10, 14, 21, 30].map(days => (
+                                                <Button
+                                                    key={days}
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className={`h-7 px-2.5 text-xs ${customTrialDaysInput === days ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold' : 'border-border/40 text-muted-foreground hover:text-foreground'}`}
+                                                    onClick={() => setCustomTrialDaysInput(days)}
+                                                >
+                                                    {days} Days
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2 justify-end pt-3 border-t border-border/30">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={subActionLoading}
+                                            onClick={() => setShowCustomTrialScreen(false)}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={subActionLoading || customTrialDaysInput < 1}
+                                            className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all active:scale-95"
+                                            onClick={() => handleSetTrialOrSub("CUSTOM_TRIAL", customTrialDaysInput)}
+                                        >
+                                            {subActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+                                            Apply {customTrialDaysInput}-Day Trial
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Quick Actions</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-blue-500/30 hover:bg-blue-500/10 text-blue-400"
+                                            onClick={() => handleSetTrialOrSub("TRIAL", paymentSettings.defaultTrialDays || 14)}
+                                            title={`Apply default ${paymentSettings.defaultTrialDays || 14}-day trial configured in Settings`}
+                                        >
+                                            <Timer className="h-3.5 w-3.5" /> {paymentSettings.defaultTrialDays || 14}-Day Trial
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-cyan-500/30 hover:bg-cyan-500/10 text-cyan-400"
+                                            onClick={() => setShowCustomTrialScreen(true)}
+                                            title="Specify custom amount of trial days"
+                                        >
+                                            <SlidersHorizontal className="h-3.5 w-3.5" /> X-Day Trial
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-purple-500/30 hover:bg-purple-500/10 text-purple-400"
+                                            onClick={() => handleSetTrialOrSub("30_DAYS")}
+                                        >
+                                            <Calendar className="h-3.5 w-3.5" /> 30-Day Subscription
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
+                                            onClick={() => handleSetTrialOrSub("REST_OF_YEAR")}
+                                        >
+                                            <Calendar className="h-3.5 w-3.5" /> Rest of {new Date().getFullYear()}
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
+                                            onClick={() => handleSetTrialOrSub("1_YEAR")}
+                                        >
+                                            <CheckCircle2 className="h-3.5 w-3.5" /> Add 1 Full Year
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
+                                            onClick={() => handleSetTrialOrSub("PERMANENT")}
+                                        >
+                                            <Sparkles className="h-3.5 w-3.5" /> Permanent Access
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-purple-500/30 hover:bg-purple-500/10 text-purple-400"
+                                            onClick={handleMarkUserConverted}
+                                        >
+                                            <Trophy className="h-3.5 w-3.5 text-purple-400" /> Mark Converted
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-red-500/30 hover:bg-red-500/10 text-red-400"
+                                            onClick={() => handleSetTrialOrSub("SUSPENDED")}
+                                        >
+                                            <ShieldAlert className="h-3.5 w-3.5" /> Suspend Access
+                                        </Button>
+
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            disabled={subActionLoading}
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-orange-500/30 hover:bg-orange-500/10 text-orange-400"
+                                            onClick={() => handleSetTrialOrSub("EXPIRED")}
+                                        >
+                                            <AlertTriangle className="h-3.5 w-3.5" /> Mark Expired
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end pt-2">
+                                <Button type="button" variant="outline" onClick={() => setSubModalUser(null)}>
+                                    Close
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
             {/* ADMIN RESET USER PASSWORD MODAL */}
+            {/* ========================================================================= */}
             {resetModalUserId && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <Card className="w-full max-w-md bg-[#121218] border-border/60 shadow-2xl">
@@ -419,229 +4768,486 @@ export default function AccessSettingsPage() {
                 </div>
             )}
 
-            {/* USER LIST & FILTERS */}
-            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
-                <CardHeader className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <CardTitle className="text-xl font-bold">Existing Users & Access Directory</CardTitle>
-                            <CardDescription>Manage user permissions, roles, Kindle emails, and account requests.</CardDescription>
-                        </div>
-                        {pendingUsersCount > 0 && (
-                            <Button 
-                                variant="default" 
-                                size="sm" 
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/50 hover:shadow-md active:scale-95"
-                                onClick={handleApproveAllPending}
-                            >
-                                <CheckCheck className="h-4 w-4" /> Approve All Pending ({pendingUsersCount})
-                            </Button>
-                        )}
-                    </div>
+            {/* ========================================================================= */}
+            {/* EMAIL PREVIEW MODAL */}
+            {/* ========================================================================= */}
+            {emailPreviewApproval && (() => {
+                let p: any = {};
+                try {
+                    p = JSON.parse(emailPreviewApproval.payload);
+                } catch {}
 
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                        {/* SEARCH INPUT */}
-                        <div className="relative w-full sm:w-72">
-                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                                placeholder="Search users..." 
-                                className="pl-9 text-xs h-9 bg-background/60"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-
-                        {/* STATUS FILTER BUTTONS */}
-                        <div className="flex flex-wrap gap-1.5 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs w-full sm:w-auto">
-                            <Button 
-                                variant={filterStatus === "ALL" ? "secondary" : "ghost"} 
-                                size="sm" 
-                                className="h-7 text-xs px-2.5 transition-all duration-200 hover:ring-2 hover:ring-primary/40 active:scale-95 font-semibold"
-                                onClick={() => setFilterStatus("ALL")}
-                            >
-                                All ({users.length})
-                            </Button>
-                            <Button 
-                                variant={filterStatus === "PENDING" ? "secondary" : "ghost"} 
-                                size="sm" 
-                                className="h-7 text-xs px-2.5 text-amber-400 transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95 font-semibold"
-                                onClick={() => setFilterStatus("PENDING")}
-                            >
-                                Pending ({users.filter(u => u.status === "PENDING").length})
-                            </Button>
-                            <Button 
-                                variant={filterStatus === "APPROVED" ? "secondary" : "ghost"} 
-                                size="sm" 
-                                className="h-7 text-xs px-2.5 text-emerald-400 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 font-semibold"
-                                onClick={() => setFilterStatus("APPROVED")}
-                            >
-                                Approved ({users.filter(u => u.status === "APPROVED" || !u.status).length})
-                            </Button>
-                            <Button 
-                                variant={filterStatus === "REJECTED" ? "secondary" : "ghost"} 
-                                size="sm" 
-                                className="h-7 text-xs px-2.5 text-red-400 transition-all duration-200 hover:ring-2 hover:ring-red-400/40 active:scale-95 font-semibold"
-                                onClick={() => setFilterStatus("REJECTED")}
-                            >
-                                Rejected ({users.filter(u => u.status === "REJECTED").length})
-                            </Button>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-3">
-                        {loading ? (
-                            <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
-                                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
-                            </div>
-                        ) : filteredUsers.length === 0 ? (
-                            <div className="text-sm text-muted-foreground italic p-8 text-center border border-dashed border-border/40 rounded-xl bg-muted/10">
-                                No matching users found.
-                            </div>
-                        ) : (
-                            filteredUsers.map((user) => (
-                                <div key={user.id} className={`flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-xl gap-4 transition-all duration-200 ${user.status === "PENDING" ? "bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60" : "bg-[#101014]/90 border-border/40 hover:border-emerald-500/30 hover:ring-2 hover:ring-emerald-500/20"}`}>
-                                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 border border-primary/20">
-                                            {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
-                                        </div>
-                                        <div className="space-y-1.5 flex-1 min-w-0">
-                                            <div className="font-semibold text-sm flex flex-wrap items-center gap-2">
-                                                <span className="truncate text-foreground">{user.username}</span>
-                                                {user.status === "PENDING" && (
-                                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/40 text-[10px] gap-1 font-bold">
-                                                        <Clock className="h-3 w-3" /> Pending Approval
-                                                    </Badge>
-                                                )}
-                                                {user.status === "REJECTED" && (
-                                                    <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/40 text-[10px] font-bold">
-                                                        Rejected
-                                                    </Badge>
-                                                )}
-                                                {user.kindleEmail ? (
-                                                    <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/40 text-[10px] gap-1 font-semibold" title={user.kindleEmail}>
-                                                        <Send className="h-3 w-3" /> Kindle Ready
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-700/50 text-[10px]">
-                                                        No Kindle Email
-                                                    </Badge>
-                                                )}
-                                            </div>
-
-                                            <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1">
-                                                <span className="flex items-center gap-1">
-                                                    <Mail className="h-3 w-3 text-muted-foreground" /> {user.email || "No Email"}
-                                                </span>
-                                                <span>•</span>
-                                                <span>Registered {format(new Date(user.createdAt), "MMM d, yyyy")}</span>
-                                                {user.lastLogin && (
-                                                    <>
-                                                        <span>•</span>
-                                                        <span>Last login: {format(new Date(user.lastLogin), "MMM d, yyyy h:mm a")}</span>
-                                                    </>
-                                                )}
-                                            </div>
-
-                                            {/* INLINE KINDLE EMAIL DISPLAY / EDIT */}
-                                            <div className="pt-1 flex items-center gap-2 text-xs">
-                                                {editingKindleUserId === user.id ? (
-                                                    <div className="flex items-center gap-2 w-full max-w-sm">
-                                                        <Input 
-                                                            className="h-7 text-xs bg-background/80" 
-                                                            placeholder="e.g. user_123@kindle.com"
-                                                            value={kindleEmailInput}
-                                                            onChange={(e) => setKindleEmailInput(e.target.value)}
-                                                        />
-                                                        <Button size="sm" className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40" onClick={() => handleSaveKindleEmail(user.id)}>
-                                                            Save
-                                                        </Button>
-                                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingKindleUserId(null)}>
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-muted-foreground flex items-center gap-1.5 group/k">
-                                                        <Send className="h-3 w-3 text-amber-500/80" />
-                                                        <span>Send-to-Kindle: <strong className="text-foreground">{user.kindleEmail || "Not Configured"}</strong></span>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-5 w-5 text-muted-foreground hover:text-foreground opacity-60 group-hover/k:opacity-100 transition-all duration-200 hover:ring-1 hover:ring-primary/40"
-                                                            onClick={() => {
-                                                                setEditingKindleUserId(user.id);
-                                                                setKindleEmailInput(user.kindleEmail || "");
-                                                            }}
-                                                            title="Edit Kindle Email"
-                                                        >
-                                                            <Edit2 className="h-3 w-3" />
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* CONTROLS & ACTIONS */}
-                                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-end md:self-center">
-                                        {/* ROLE SELECTOR */}
-                                        <Select defaultValue={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>
-                                            <SelectTrigger className="h-8 text-xs w-28 bg-background/80 border-border/60 font-semibold">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="ADMIN">Admin</SelectItem>
-                                                <SelectItem value="SUPER_USER">Super User</SelectItem>
-                                                <SelectItem value="USER">User</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-
-                                        {user.status === "PENDING" ? (
-                                            <>
-                                                <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
-                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Approve
-                                                </Button>
-                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95" onClick={() => handleReject(user.id)}>
-                                                    <XCircle className="h-3.5 w-3.5" /> Reject
-                                                </Button>
-                                            </>
-                                        ) : user.status === "REJECTED" ? (
-                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1 text-xs font-semibold transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
-                                                <CheckCircle2 className="h-3.5 w-3.5" /> Approve
-                                            </Button>
-                                        ) : null}
-
-                                        {/* ADMIN RESET PASSWORD BUTTON */}
-                                        <Button 
-                                            size="sm" 
-                                            variant="outline" 
-                                            className="h-8 px-2.5 text-xs text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-1 font-semibold transition-all duration-200 hover:ring-2 hover:ring-amber-500/40 active:scale-95"
+                return (
+                    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <Card className="w-full max-w-2xl bg-[#121218] border-border/60 shadow-2xl flex flex-col max-h-[90vh]">
+                            <CardHeader className="pb-3 border-b border-border/40 shrink-0">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                                        <Mail className="h-5 w-5 text-primary" />
+                                        Preview Outgoing Email
+                                    </CardTitle>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => setEmailPreviewApproval(null)}
+                                    >
+                                        ✕
+                                    </Button>
+                                </div>
+                                <CardDescription className="text-xs space-y-1 pt-1">
+                                    <div><strong>Subject:</strong> {p.subject || emailPreviewApproval.title}</div>
+                                    <div><strong>Recipient:</strong> {Array.isArray(p.to) ? p.to.join(", ") : p.to || emailPreviewApproval.targetEmail}</div>
+                                    {p.templateId && <div><strong>Template:</strong> <code className="text-primary">{p.templateId}</code></div>}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-1 overflow-y-auto p-4 space-y-3">
+                                <div className="rounded-xl border border-border/40 bg-white text-black p-4 overflow-x-auto min-h-[250px]">
+                                    {p.html ? (
+                                        <div dangerouslySetInnerHTML={{ __html: p.html }} />
+                                    ) : (
+                                        <pre className="text-xs whitespace-pre-wrap font-sans text-gray-800">{p.text || "No preview content available."}</pre>
+                                    )}
+                                </div>
+                            </CardContent>
+                            <div className="p-4 border-t border-border/40 flex items-center justify-between shrink-0 bg-[#0d0d12]">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEmailPreviewApproval(null)}
+                                >
+                                    Close
+                                </Button>
+                                {emailPreviewApproval.status === "PENDING" && (
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
                                             onClick={() => {
-                                                setResetModalUserId(user.id);
-                                                setAdminResetMsg("");
-                                                setAdminResetErr("");
+                                                handleRejectItem(emailPreviewApproval.id);
+                                                setEmailPreviewApproval(null);
                                             }}
-                                            title="Set New Password for User"
+                                            className="border-rose-500/40 text-rose-400 hover:bg-rose-500/10 font-semibold"
                                         >
-                                            <KeyRound className="h-3.5 w-3.5" /> Reset Pass
+                                            Reject
                                         </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => {
+                                                handleApproveItem(emailPreviewApproval.id);
+                                                setEmailPreviewApproval(null);
+                                            }}
+                                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+                                        >
+                                            <Check className="h-3.5 w-3.5 mr-1.5" />
+                                            Approve & Send Now
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+                );
+            })()}
 
-                                        <Button 
-                                            size="icon" 
-                                            variant="ghost" 
-                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95" 
-                                            onClick={() => handleDelete(user.id)} 
-                                            title="Delete User"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+            {/* BULK CUSTOM DATE EXPIRATION MODAL */}
+            {showBulkCustomModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                    <Card className="w-full max-w-md border-amber-500/30 bg-[#0f0f13] text-foreground shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400" />
+                        <CardHeader className="pb-3 pt-5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                                        <Calendar className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-base font-bold flex items-center gap-1.5">
+                                            Bulk Set Subscription Expiration
+                                        </CardTitle>
+                                        <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                                            Applying to <span className="font-bold text-amber-300">{selectedUserIds.length} selected user{selectedUserIds.length === 1 ? "" : "s"}</span>
+                                        </CardDescription>
                                     </div>
                                 </div>
-                            ))
-                        )}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setShowBulkCustomModal(false)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-foreground/90">
+                                    Subscription Expiration Date (Until 23:59:59)
+                                </label>
+                                <Input
+                                    type="date"
+                                    value={bulkCustomDate}
+                                    onChange={(e) => setBulkCustomDate(e.target.value)}
+                                    className="bg-black/40 border-border/60 text-sm font-mono h-10"
+                                    min={format(new Date(), "yyyy-MM-dd")}
+                                />
+                                <p className="text-[11px] text-muted-foreground">
+                                    All selected users will be set to <span className="text-emerald-400 font-semibold">APPROVED</span> status with active access until this date ends.
+                                </p>
+                            </div>
+
+                            {/* Quick Presets */}
+                            <div className="space-y-1.5 pt-1 border-t border-border/40">
+                                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                    Quick Presets
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-amber-500/30 hover:bg-amber-500/10 text-amber-200 justify-start"
+                                        onClick={() => {
+                                            const now = new Date();
+                                            setBulkCustomDate(format(new Date(now.getFullYear(), 11, 31), "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        Dec 31, {new Date().getFullYear()} (End of Year)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        onClick={() => {
+                                            const now = new Date();
+                                            setBulkCustomDate(format(new Date(now.getFullYear() + 1, 11, 31), "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        Dec 31, {new Date().getFullYear() + 1}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        onClick={() => {
+                                            const d = new Date();
+                                            d.setDate(d.getDate() + 90);
+                                            setBulkCustomDate(format(d, "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        +90 Days
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        onClick={() => {
+                                            const d = new Date();
+                                            d.setFullYear(d.getFullYear() + 1);
+                                            setBulkCustomDate(format(d, "yyyy-MM-dd"));
+                                        }}
+                                    >
+                                        +1 Year
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                        <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-black/20">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowBulkCustomModal(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={bulkUpdating || !bulkCustomDate}
+                                onClick={async () => {
+                                    setShowBulkCustomModal(false);
+                                    await handleBulkSetSubscription("CUSTOM", bulkCustomDate);
+                                }}
+                                className="bg-amber-500 hover:bg-amber-400 text-black font-bold shadow-md shadow-amber-500/20 gap-1.5 cursor-pointer"
+                            >
+                                {bulkUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                Apply to {selectedUserIds.length} User{selectedUserIds.length === 1 ? "" : "s"}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* CREDIT MEMBER REFERRAL MODAL */}
+            {/* ========================================================================= */}
+            {showCreditReferralModal && (() => {
+                const selectedReferrer = users.find((u: any) => u.id === creditReferrerId);
+                const selectedReferred = users.find((u: any) => u.id === creditReferredId);
+
+                // Compute preview summary if referrer is selected
+                let liveSummary = null;
+                if (selectedReferrer) {
+                    const existingRefs = (selectedReferrer.referrals || []).map((r: any) => ({ ...r }));
+                    if (selectedReferred && !existingRefs.some((r: any) => r.id === selectedReferred.id)) {
+                        existingRefs.push({
+                            id: selectedReferred.id,
+                            username: selectedReferred.username,
+                            name: selectedReferred.name,
+                            status: "APPROVED",
+                            convertedAt: new Date()
+                        });
+                    }
+                    liveSummary = calculateUserRenewalSummary({
+                        user: {
+                            ...selectedReferrer,
+                            referrals: existingRefs,
+                            referralBonusMonths: (selectedReferrer.referralBonusMonths || 0) + (creditBonusMonths || 0)
+                        },
+                        yearlyPrice: paymentSettings?.yearlyPrice ?? 180,
+                        monthlyPrice: paymentSettings?.monthlyPrice ?? 15
+                    });
+                }
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <Card className="w-full max-w-lg border-purple-500/40 bg-[#0f0f15] text-foreground shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500" />
+                            <CardHeader className="pb-3 pt-5">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300">
+                                            <Gift className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-base font-bold flex items-center gap-1.5">
+                                                Credit Member Referral
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                                                Assign referral credit (+1 free month / $15 value) to an existing member.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                                        onClick={() => setShowCreditReferralModal(false)}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </CardHeader>
+
+                            <CardContent className="space-y-4 overflow-y-auto flex-1 pr-2">
+                                {creditSuccessMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        <span>{creditSuccessMsg}</span>
+                                    </div>
+                                )}
+                                {creditErrMsg && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <XCircle className="h-4 w-4 shrink-0" />
+                                        <span>{creditErrMsg}</span>
+                                    </div>
+                                )}
+
+                                {/* Referrer dropdown */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                        <Trophy className="h-3.5 w-3.5 text-amber-400" />
+                                        Referring Member (Earns Reward)
+                                    </Label>
+                                    <select
+                                        value={creditReferrerId}
+                                        onChange={(e) => setCreditReferrerId(e.target.value)}
+                                        className="w-full h-10 px-3 rounded-md bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium cursor-pointer"
+                                    >
+                                        <option value="">-- Select Member to Reward --</option>
+                                        {users.map((u: any) => {
+                                            const exp = u.subscriptionEndsAt ? ` (Exp: ${format(new Date(u.subscriptionEndsAt), "MMM d, yyyy")})` : "";
+                                            const count = (u.referrals || []).filter((r: any) => r.status === "APPROVED" || r.convertedAt).length;
+                                            const countLabel = count > 0 ? ` [${count} converted]` : "";
+                                            return (
+                                                <option key={u.id} value={u.id}>
+                                                    @{u.username} {u.name ? `(${u.name})` : ""} - {u.status} {exp}{countLabel}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        The existing member who invited a friend.
+                                    </p>
+                                </div>
+
+                                {/* Referred friend dropdown */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                        <UserCheck className="h-3.5 w-3.5 text-emerald-400" />
+                                        Referred Friend (Joined Member)
+                                    </Label>
+                                    <select
+                                        value={creditReferredId}
+                                        onChange={(e) => setCreditReferredId(e.target.value)}
+                                        className="w-full h-10 px-3 rounded-md bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium cursor-pointer"
+                                    >
+                                        <option value="">-- Select Invited Friend --</option>
+                                        {users.filter((u: any) => u.id !== creditReferrerId).map((u: any) => {
+                                            const isReferredAlready = u.referredBy ? ` (currently invited by @${u.referredBy.username})` : "";
+                                            return (
+                                                <option key={u.id} value={u.id}>
+                                                    @{u.username} {u.name ? `(${u.name})` : ""} - {u.status}{isReferredAlready}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        The newly joined user who was invited.
+                                    </p>
+                                </div>
+
+                                {/* Option: Immediately extend subscription date by +1 month */}
+                                <div className="p-3 rounded-lg border border-purple-500/20 bg-purple-500/5 space-y-2">
+                                    <label className="flex items-start gap-2.5 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={creditExtendExpiry}
+                                            onChange={(e) => setCreditExtendExpiry(e.target.checked)}
+                                            className="mt-0.5 rounded border-border bg-black text-purple-500 focus:ring-purple-400 cursor-pointer"
+                                        />
+                                        <div className="space-y-0.5">
+                                            <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                <Calendar className="h-3.5 w-3.5 text-purple-400" />
+                                                Immediately extend referrer's subscription expiry date by +1 month
+                                            </span>
+                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                If checked, adds 30 days to their current expiration date right now. If unchecked, their expiration date remains as-is, and the referral reward will be automatically applied as a discount on their upcoming payment statement ($15 off annual or delayed monthly billing).
+                                            </p>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {/* Optional Bonus Months */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-muted-foreground">
+                                        Additional Bonus Months (Optional)
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={12}
+                                        value={creditBonusMonths}
+                                        onChange={(e) => setCreditBonusMonths(parseInt(e.target.value) || 0)}
+                                        className="bg-black/40 border-border/60 text-sm h-9"
+                                        placeholder="0"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Extra bonus reward months to award (beyond the 1 month for this friend).
+                                    </p>
+                                </div>
+
+                                {/* Admin notes */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-muted-foreground">
+                                        Admin Notes (Optional)
+                                    </Label>
+                                    <Input
+                                        type="text"
+                                        value={creditAdminNotes}
+                                        onChange={(e) => setCreditAdminNotes(e.target.value)}
+                                        className="bg-black/40 border-border/60 text-sm h-9"
+                                        placeholder="e.g. Manually verified friend invited in Discord"
+                                    />
+                                </div>
+
+                                {/* LIVE REWARD & RENEWAL PREVIEW */}
+                                {liveSummary && (
+                                    <div className="p-3.5 rounded-xl border border-border/60 bg-black/40 space-y-2.5">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-semibold text-purple-300 flex items-center gap-1.5">
+                                                <Sparkles className="h-3.5 w-3.5 text-purple-400" /> Live Statement Preview
+                                            </span>
+                                            <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/30 text-[10px]">
+                                                {liveSummary.convertedReferralsCount} Converted ({liveSummary.convertedReferralsCount} Free Mo)
+                                            </Badge>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="p-2.5 rounded-lg bg-white/5 border border-border/30">
+                                                <div className="text-[10px] uppercase font-semibold text-muted-foreground">Annual Renewal</div>
+                                                <div className="font-bold text-emerald-400 text-sm mt-0.5">
+                                                    ${liveSummary.discountedYearlyPrice.toFixed(2)}
+                                                    <span className="text-xs text-muted-foreground line-through ml-1.5 font-normal">
+                                                        ${liveSummary.baseYearlyPrice.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[10px] text-purple-300 mt-0.5">
+                                                    -${liveSummary.rewardDiscountAmount.toFixed(2)} referral discount
+                                                </div>
+                                            </div>
+
+                                            <div className="p-2.5 rounded-lg bg-white/5 border border-border/30">
+                                                <div className="text-[10px] uppercase font-semibold text-muted-foreground">Monthly Alternative</div>
+                                                <div className="font-bold text-amber-300 text-sm mt-0.5">
+                                                    {liveSummary.delayedMonthlyStartDate || "Delayed +1 mo"}
+                                                </div>
+                                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                                    Starts after free month
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-[11px] text-muted-foreground italic border-t border-border/30 pt-2">
+                                            "{liveSummary.reminderNoticeText}"
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+
+                            <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-black/30 shrink-0">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowCreditReferralModal(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={submittingCredit || !creditReferrerId || !creditReferredId}
+                                    onClick={handleSubmitCreditReferral}
+                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold shadow-md shadow-purple-600/25 gap-1.5 cursor-pointer active:scale-95"
+                                >
+                                    {submittingCredit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gift className="h-3.5 w-3.5" />}
+                                    Grant Referral Credit
+                                </Button>
+                            </CardFooter>
+                        </Card>
                     </div>
-                </CardContent>
-            </Card>
+                );
+            })()}
+
+            {/* UNSAVED CHANGES FLOATING BAR & MODAL */}
+            <UnsavedChangesPrompt
+                hasUnsavedChanges={hasUnsavedChanges}
+                unsavedSections={unsavedSections}
+                onSave={handleSaveOnboardingDirect}
+                onDiscard={handleDiscardAll}
+                isSaving={savingSettings}
+                customPendingNav={customPendingNav}
+                onCancelPendingNav={() => setCustomPendingNav(null)}
+            />
         </div>
     );
 }
