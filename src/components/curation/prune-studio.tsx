@@ -15,6 +15,8 @@ import {
     Play,
     Check,
     CheckCheck,
+    CheckSquare,
+    Square,
     X,
     FolderOpen,
     Loader2,
@@ -66,6 +68,7 @@ import {
     getLeavingSoonItemsAction,
     markItemLeavingSoonAction,
     unmarkItemLeavingSoonAction,
+    bulkUnmarkItemsLeavingSoonAction,
     clearAllLeavingSoonFlagsAction,
     syncLeavingSoonCollectionHubAction,
     runPruneSimulationAction,
@@ -667,6 +670,8 @@ export function PruneStudio() {
     const [leavingSoonHubMsg, setLeavingSoonHubMsg] = useState<{ success: boolean; text: string } | null>(null);
     const [clearingFlags, setClearingFlags] = useState(false);
     const [clearFlagsMsg, setClearFlagsMsg] = useState<string | null>(null);
+    const [selectedLeavingSoonKeys, setSelectedLeavingSoonKeys] = useState<string[]>([]);
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
     // Recheck Watch Activity State
     const [recheckingWatchActivity, setRecheckingWatchActivity] = useState(false);
@@ -1604,6 +1609,103 @@ export function PruneStudio() {
         }
     };
 
+    // Staged Leaving Soon Items Selection & Bulk Actions
+    const toggleSelectLeavingSoonItem = (compoundKey: string) => {
+        setSelectedLeavingSoonKeys(prev => 
+            prev.includes(compoundKey) ? prev.filter(k => k !== compoundKey) : [...prev, compoundKey]
+        );
+    };
+
+    const handleSelectAllLeavingSoon = (displayedItems: any[]) => {
+        const displayedKeys = displayedItems.map(it => `${it.serverId || selectedServerId}:${it.ratingKey}`);
+        const allSelected = displayedKeys.length > 0 && displayedKeys.every(k => selectedLeavingSoonKeys.includes(k));
+        if (allSelected) {
+            setSelectedLeavingSoonKeys(prev => prev.filter(k => !displayedKeys.includes(k)));
+        } else {
+            setSelectedLeavingSoonKeys(prev => Array.from(new Set([...prev, ...displayedKeys])));
+        }
+    };
+
+    const handleClearLeavingSoonSelection = () => {
+        setSelectedLeavingSoonKeys([]);
+    };
+
+    const handleBulkCancelRemoval = async () => {
+        const selectedItems = leavingSoonItems
+            .filter(it => selectedLeavingSoonKeys.includes(`${it.serverId || selectedServerId}:${it.ratingKey}`))
+            .map(it => ({ ratingKey: it.ratingKey, serverId: it.serverId || selectedServerId }));
+
+        if (selectedItems.length === 0) return;
+        if (!confirm(`Cancel removal for ${selectedItems.length} media item(s)?\n\nTheir Leaving Soon status will be cleared and original poster artwork restored in Plex.`)) {
+            return;
+        }
+
+        setBulkActionLoading(true);
+        try {
+            const res = await bulkUnmarkItemsLeavingSoonAction(selectedItems);
+            if (res.success) {
+                setSelectedLeavingSoonKeys([]);
+                await loadLeavingSoonItems();
+                setClearFlagsMsg(res.message || `Cancelled removal for ${selectedItems.length} item(s).`);
+                setTimeout(() => setClearFlagsMsg(null), 4000);
+            }
+        } catch (e: any) {
+            console.error("Failed bulk cancel removal:", e);
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
+    const handleBulkDeleteNow = async () => {
+        const selectedItems = leavingSoonItems
+            .filter(it => selectedLeavingSoonKeys.includes(`${it.serverId || selectedServerId}:${it.ratingKey}`))
+            .map(it => ({ ratingKey: it.ratingKey, serverId: it.serverId || selectedServerId, title: it.title, fileSizeGb: it.fileSizeGb }));
+
+        if (selectedItems.length === 0) return;
+        if (!confirm(`⚠️ PERMANENT PRUNE WARNING:\n\nYou are about to PERMANENTLY DELETE ${selectedItems.length} media item(s) from disk and Plex immediately without waiting for the grace period.\n\nThis cannot be undone. Proceed?`)) {
+            return;
+        }
+
+        setBulkActionLoading(true);
+        try {
+            const res = await executePruneAction(selectedItems, { forceLiveDelete: true });
+            if (res.success) {
+                setSelectedLeavingSoonKeys([]);
+                await loadLeavingSoonItems();
+                setClearFlagsMsg(`Permanently deleted ${selectedItems.length} media item(s) from disk & Plex.`);
+                setTimeout(() => setClearFlagsMsg(null), 5000);
+            }
+        } catch (e: any) {
+            console.error("Failed bulk delete:", e);
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
+    const handleCancelAllDisplayed = async (displayedItems: any[]) => {
+        if (displayedItems.length === 0) return;
+        const targetLabel = leavingSoonServerFilter === "all" ? "all servers" : servers.find(s => s.serverId === leavingSoonServerFilter)?.serverName || "this server";
+        if (!confirm(`Cancel removal for ALL ${displayedItems.length} media item(s) on ${targetLabel}?\n\nOriginal posters will be restored in Plex.`)) {
+            return;
+        }
+
+        setBulkActionLoading(true);
+        try {
+            const srvArg = leavingSoonServerFilter === "all" ? undefined : leavingSoonServerFilter;
+            const res = await clearAllLeavingSoonFlagsAction(srvArg);
+            if (res.success) {
+                setSelectedLeavingSoonKeys([]);
+                await loadLeavingSoonItems();
+                setClearFlagsMsg(res.message || `Cancelled all removal flags on ${targetLabel}.`);
+                setTimeout(() => setClearFlagsMsg(null), 4000);
+            }
+        } catch (e: any) {
+            console.error("Failed clearing flags:", e);
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
     // Helper: Select first N candidate items
     const handleSelectFirstNCandidates = (count: number) => {
         if (!pruneSimResults?.candidates) return;
@@ -2489,20 +2591,65 @@ export function PruneStudio() {
                             : leavingSoonItems.filter(it => it.serverId === leavingSoonServerFilter);
                         const totalStagedGb = displayedLeavingSoonItems.reduce((acc, item) => acc + (typeof item.fileSizeGb === "number" ? item.fileSizeGb : 0), 0);
 
+                        // Selected items tracking for current view and global
+                        const displayedCompoundKeys = displayedLeavingSoonItems.map(it => `${it.serverId || selectedServerId}:${it.ratingKey}`);
+                        const allDisplayedSelected = displayedLeavingSoonItems.length > 0 && displayedCompoundKeys.every(k => selectedLeavingSoonKeys.includes(k));
+                        const selectedLeavingSoonItemsList = leavingSoonItems.filter(it => selectedLeavingSoonKeys.includes(`${it.serverId || selectedServerId}:${it.ratingKey}`));
+                        const selectedCount = selectedLeavingSoonItemsList.length;
+                        const selectedSizeGb = selectedLeavingSoonItemsList.reduce((acc, it) => acc + (typeof it.fileSizeGb === "number" ? it.fileSizeGb : 0), 0);
+
                         return (
                             <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
                                 <CardHeader className="p-4 border-b border-slate-800/80 space-y-3">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                        <CardTitle className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
-                                            <Clock className="h-4 w-4 text-rose-400 shrink-0" />
-                                            <span>Active Staged Media Items ({displayedLeavingSoonItems.length}{leavingSoonServerFilter !== "all" ? ` of ${leavingSoonItems.length}` : ""})</span>
-                                            {totalStagedGb > 0 && (
-                                                <Badge className="bg-emerald-950/80 text-emerald-300 border-emerald-500/40 text-[10px] font-mono font-semibold">
-                                                    💾 {totalStagedGb >= 1000 ? `${(totalStagedGb / 1024).toFixed(2)} TB` : `${totalStagedGb.toFixed(1)} GB`} Recoverable
-                                                </Badge>
-                                            )}
-                                        </CardTitle>
-                                        <span className="text-xs text-slate-400">Scheduled for pruning after grace period</span>
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                                        <div className="space-y-1">
+                                            <CardTitle className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
+                                                <Clock className="h-4 w-4 text-rose-400 shrink-0" />
+                                                <span>Active Staged Media Items ({displayedLeavingSoonItems.length}{leavingSoonServerFilter !== "all" ? ` of ${leavingSoonItems.length}` : ""})</span>
+                                                {totalStagedGb > 0 && (
+                                                    <Badge className="bg-emerald-950/80 text-emerald-300 border-emerald-500/40 text-[10px] font-mono font-semibold">
+                                                        💾 {totalStagedGb >= 1000 ? `${(totalStagedGb / 1024).toFixed(2)} TB` : `${totalStagedGb.toFixed(1)} GB`} Recoverable
+                                                    </Badge>
+                                                )}
+                                            </CardTitle>
+                                            <p className="text-xs text-slate-400">Scheduled for pruning after grace period</p>
+                                        </div>
+
+                                        {displayedLeavingSoonItems.length > 0 && (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleSelectAllLeavingSoon(displayedLeavingSoonItems)}
+                                                    className="h-7 text-xs border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                                                >
+                                                    {allDisplayedSelected ? (
+                                                        <>
+                                                            <CheckSquare className="h-3.5 w-3.5 text-rose-400 mr-1.5" />
+                                                            <span>Deselect All</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Square className="h-3.5 w-3.5 text-slate-400 mr-1.5" />
+                                                            <span>Select All ({displayedLeavingSoonItems.length})</span>
+                                                        </>
+                                                    )}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={bulkActionLoading}
+                                                    onClick={() => handleCancelAllDisplayed(displayedLeavingSoonItems)}
+                                                    className="h-7 text-xs border-rose-500/30 hover:bg-rose-950/40 text-rose-300 hover:text-rose-100 cursor-pointer"
+                                                    title="Cancel removal and restore original posters for all displayed items"
+                                                >
+                                                    <RotateCcw className="h-3.5 w-3.5 mr-1 text-rose-400" />
+                                                    <span>Cancel All Removal ({displayedLeavingSoonItems.length})</span>
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Server Filter Pills */}
@@ -2548,6 +2695,52 @@ export function PruneStudio() {
                                     )}
                                 </CardHeader>
                                 <CardContent className="p-4 space-y-2.5">
+                                    {/* Bulk Selection Sticky Toolbar */}
+                                    {selectedCount > 0 && (
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-rose-950/30 border border-rose-500/40 rounded-xl shadow-lg">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Badge className="bg-rose-600 text-white font-bold text-xs px-2.5 py-0.5">
+                                                    {selectedCount} Selected
+                                                </Badge>
+                                                {selectedSizeGb > 0 && (
+                                                    <span className="text-xs font-semibold text-emerald-400 font-mono">
+                                                        💾 {selectedSizeGb >= 1000 ? `${(selectedSizeGb / 1024).toFixed(2)} TB` : `${selectedSizeGb.toFixed(1)} GB`} Recoverable
+                                                    </span>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={handleClearLeavingSoonSelection}
+                                                    className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer ml-1"
+                                                >
+                                                    Clear selection
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={bulkActionLoading}
+                                                    onClick={handleBulkCancelRemoval}
+                                                    className="h-7 text-xs font-semibold border-slate-700 hover:bg-slate-800 text-slate-200 hover:text-white gap-1.5 cursor-pointer"
+                                                >
+                                                    {bulkActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 text-rose-400" />}
+                                                    <span>Cancel Removal ({selectedCount})</span>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    disabled={bulkActionLoading}
+                                                    onClick={handleBulkDeleteNow}
+                                                    className="h-7 text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white gap-1.5 shadow cursor-pointer"
+                                                >
+                                                    {bulkActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-white" />}
+                                                    <span>Delete Permanently ({selectedCount})</span>
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {displayedLeavingSoonItems.length === 0 ? (
                                         <div className="text-center py-12 text-slate-500 space-y-3">
                                             <Shield className="h-10 w-10 mx-auto text-emerald-500/50" />
@@ -2594,48 +2787,69 @@ export function PruneStudio() {
                                             const sizeStr = item.fileSizeGb != null && item.fileSizeGb > 0
                                                 ? (item.fileSizeGb >= 1000 ? `${(item.fileSizeGb / 1024).toFixed(2)} TB` : `${item.fileSizeGb.toFixed(1)} GB`)
                                                 : null;
+                                            const itemCompoundKey = `${item.serverId || selectedServerId}:${item.ratingKey}`;
+                                            const isSelected = selectedLeavingSoonKeys.includes(itemCompoundKey);
 
                                             return (
                                                 <div
                                                     key={item.id || item.ratingKey}
-                                                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors"
+                                                    className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border transition-all ${
+                                                        isSelected
+                                                            ? "bg-rose-950/20 border-rose-500/50 shadow-sm"
+                                                            : "bg-slate-950/80 border-slate-800 hover:border-slate-700"
+                                                    }`}
                                                 >
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="font-bold text-white text-xs">{item.title}</span>
-                                                            <Badge className="bg-rose-950 text-rose-300 border-rose-500/40 text-[9px] font-mono shrink-0">
-                                                                {daysRemaining} DAYS LEFT
-                                                            </Badge>
-                                                            {sizeStr && (
-                                                                <Badge className="bg-emerald-950/70 text-emerald-300 border-emerald-500/30 text-[9px] font-mono font-bold shrink-0">
-                                                                    💾 {sizeStr}
-                                                                </Badge>
+                                                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSelectLeavingSoonItem(itemCompoundKey)}
+                                                            className="mt-0.5 sm:mt-0 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                                                            title={isSelected ? "Deselect item" : "Select item"}
+                                                        >
+                                                            {isSelected ? (
+                                                                <CheckSquare className="h-4 w-4 text-rose-500" />
+                                                            ) : (
+                                                                <Square className="h-4 w-4 text-slate-600 hover:text-slate-400" />
                                                             )}
-                                                            {itemServerName && (
-                                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 font-mono shrink-0">
-                                                                    {itemServerName}
+                                                        </button>
+                                                        <div className="space-y-1 min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-bold text-white text-xs truncate max-w-[280px] sm:max-w-md">{item.title}</span>
+                                                                <Badge className="bg-rose-950 text-rose-300 border-rose-500/40 text-[9px] font-mono shrink-0">
+                                                                    {daysRemaining} DAYS LEFT
                                                                 </Badge>
-                                                            )}
+                                                                {sizeStr && (
+                                                                    <Badge className="bg-emerald-950/70 text-emerald-300 border-emerald-500/30 text-[9px] font-mono font-bold shrink-0">
+                                                                        💾 {sizeStr}
+                                                                    </Badge>
+                                                                )}
+                                                                {itemServerName && (
+                                                                    <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 font-mono shrink-0">
+                                                                        {itemServerName}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[11px] text-slate-400">
+                                                                {sizeStr && (
+                                                                    <span className="text-emerald-400 font-semibold mr-1.5">
+                                                                        Saves {sizeStr} •
+                                                                    </span>
+                                                                )}
+                                                                Reason: {item.leavingReason || "Storage threshold optimization"}
+                                                            </p>
                                                         </div>
-                                                        <p className="text-[11px] text-slate-400">
-                                                            {sizeStr && (
-                                                                <span className="text-emerald-400 font-semibold mr-1.5">
-                                                                    Saves {sizeStr} •
-                                                                </span>
-                                                            )}
-                                                            Reason: {item.leavingReason || "Storage threshold optimization"}
-                                                        </p>
                                                     </div>
 
                                                     <Button
                                                         type="button"
                                                         size="sm"
                                                         variant="outline"
+                                                        disabled={bulkActionLoading}
                                                         onClick={async () => {
                                                             await unmarkItemLeavingSoonAction(item.ratingKey, item.serverId || selectedServerId);
                                                             loadLeavingSoonItems();
                                                         }}
-                                                        className="text-[11px] h-7 px-2.5 border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white shrink-0"
+                                                        className="text-[11px] h-7 px-2.5 border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white shrink-0 self-end sm:self-auto cursor-pointer"
                                                     >
                                                         Cancel Removal
                                                     </Button>
