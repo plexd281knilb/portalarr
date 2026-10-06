@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect, useTransition, useRef } from "react";
 import {
     Film,
     Tv,
@@ -170,7 +170,22 @@ export function AgregarrStudio() {
     const [collectionsFilter, setCollectionsFilter] = useState<"all" | "home" | "recommended" | "library">("all");
     const [collectionSearchQuery, setCollectionSearchQuery] = useState("");
     const [syncingCollId, setSyncingCollId] = useState<string | null>(null);
+    const [syncingCollIds, setSyncingCollIds] = useState<Record<string, boolean>>({});
     const [syncMessage, setSyncMessage] = useState<{ id: string; success: boolean; text: string } | null>(null);
+    const [floatingToast, setFloatingToast] = useState<{ id: string; type: "info" | "success" | "error"; text: string } | null>(null);
+    const floatingToastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    const showFloatingToast = (toast: { id?: string; type: "info" | "success" | "error"; text: string }, autoDismissMs = 5000) => {
+        if (floatingToastTimerRef.current) {
+            clearTimeout(floatingToastTimerRef.current);
+        }
+        setFloatingToast({ id: toast.id || Math.random().toString(), type: toast.type, text: toast.text });
+        if (autoDismissMs > 0) {
+            floatingToastTimerRef.current = setTimeout(() => {
+                setFloatingToast(null);
+            }, autoDismissMs);
+        }
+    };
     
     // Create Custom Collection Modal States
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -1078,20 +1093,49 @@ export function AgregarrStudio() {
     };
 
     const executeSyncCollection = async (collId: string) => {
+        const coll = collections.find(c => c.id === collId);
+        const collTitle = coll?.title || "Collection";
+        setSyncingCollIds(prev => ({ ...prev, [collId]: true }));
         setSyncingCollId(collId);
         setSyncMessage(null);
+        showFloatingToast({
+            id: collId,
+            type: "info",
+            text: `Syncing "${collTitle}" to Plex in background...`
+        });
         try {
             const res = await syncCollectionToPlexAction(collId);
             if (res.success) {
                 setSyncMessage({ id: collId, success: true, text: res.message || "Synced to Plex successfully!" });
+                showFloatingToast({
+                    id: collId,
+                    type: "success",
+                    text: `✓ "${collTitle}" synced to Plex (${res.itemCount ?? 0} items)!`
+                });
                 loadCollections();
             } else {
                 setSyncMessage({ id: collId, success: false, text: res.error || "Failed syncing collection." });
+                showFloatingToast({
+                    id: collId,
+                    type: "error",
+                    text: `⚠️ Sync notice for "${collTitle}": ${res.error || "Failed syncing collection."}`
+                });
             }
         } catch (e: any) {
             setSyncMessage({ id: collId, success: false, text: e.message || "Failed syncing collection." });
+            showFloatingToast({
+                id: collId,
+                type: "error",
+                text: `Failed syncing "${collTitle}": ${e.message}`
+            });
         } finally {
+            setSyncingCollIds(prev => {
+                const next = { ...prev };
+                delete next[collId];
+                return next;
+            });
             setSyncingCollId(null);
+            loadCollections();
         }
     };
 
@@ -1215,24 +1259,68 @@ export function AgregarrStudio() {
             });
 
             if (res.success && res.collection) {
-                const syncRes = await syncCollectionToPlexAction(res.collection.id);
+                const newColl = res.collection;
+                const collId = newColl.id;
+                const presetTitle = preset.title;
+
+                // 1. Immediately close modal & unblock UI so user can continue working without waiting!
+                setInspectModalOpen(false);
+                setInstallingPreset(false);
+                setInspectingPreset(null);
+                setInstallPresetMsg(null);
+
+                // 2. Refresh local collection list immediately so the new collection is visible
                 loadCollections();
-                if (syncRes.success) {
-                    setInstallPresetMsg({ success: true, text: `✓ Successfully installed and synced "${preset.title}" to Plex!` });
-                    setTimeout(() => {
-                        setInspectModalOpen(false);
-                        setInstallPresetMsg(null);
-                    }, 1200);
-                } else {
-                    setInstallPresetMsg({ success: false, text: syncRes.error || "Created collection, but sync to Plex returned an error." });
-                }
+
+                // 3. Track background syncing state
+                setSyncingCollIds(prev => ({ ...prev, [collId]: true }));
+
+                // 4. Show non-blocking toast
+                showFloatingToast({
+                    id: collId,
+                    type: "info",
+                    text: `✓ Saved "${presetTitle}"! Syncing to Plex in the background...`
+                });
+
+                // 5. Fire background sync asynchronously
+                syncCollectionToPlexAction(collId)
+                    .then((syncRes) => {
+                        if (syncRes.success) {
+                            showFloatingToast({
+                                id: collId,
+                                type: "success",
+                                text: `✓ "${presetTitle}" synced to Plex (${syncRes.itemCount ?? 0} items)!`
+                            });
+                        } else {
+                            showFloatingToast({
+                                id: collId,
+                                type: "error",
+                                text: `⚠️ Plex sync notice for "${presetTitle}": ${syncRes.error || "Plex returned an error."}`
+                            });
+                        }
+                    })
+                    .catch((err: any) => {
+                        showFloatingToast({
+                            id: collId,
+                            type: "error",
+                            text: `Failed syncing "${presetTitle}" to Plex: ${err.message}`
+                        });
+                    })
+                    .finally(() => {
+                        setSyncingCollIds(prev => {
+                            const next = { ...prev };
+                            delete next[collId];
+                            return next;
+                        });
+                        loadCollections();
+                    });
             } else {
                 setInstallPresetMsg({ success: false, text: res.error || "Failed creating collection from preset." });
+                setInstallingPreset(false);
             }
         } catch (e: any) {
             console.error("Failed installing preset:", e);
             setInstallPresetMsg({ success: false, text: e.message || "Failed installing preset." });
-        } finally {
             setInstallingPreset(false);
         }
     };
@@ -1245,9 +1333,10 @@ export function AgregarrStudio() {
             const maxOrder = collections.reduce((max, c) => Math.max(max, c.orderIndex || 0), 0);
             const nextOrder = maxOrder + 1;
             const sortPrefix = `!${String(nextOrder).padStart(2, '0')}_`;
+            const collTitle = newCollTitle.trim();
 
             const res = await saveMediaCollectionAction({
-                title: newCollTitle.trim(),
+                title: collTitle,
                 summary: newCollSummary.trim(),
                 type: isTvSection ? "show" : "movie",
                 category: "custom",
@@ -1275,17 +1364,61 @@ export function AgregarrStudio() {
             });
 
             if (res.success && res.collection) {
-                await syncCollectionToPlexAction(res.collection.id);
-                loadCollections();
+                const newColl = res.collection;
+                const collId = newColl.id;
+
                 setCreateModalOpen(false);
                 setNewCollTitle("");
                 setNewCollSummary("");
                 setNewCollSourceQuery("");
                 setNewCollPosterUrl("");
+                setCreatingCollection(false);
+
+                loadCollections();
+
+                setSyncingCollIds(prev => ({ ...prev, [collId]: true }));
+                showFloatingToast({
+                    id: collId,
+                    type: "info",
+                    text: `✓ Created "${collTitle}"! Syncing to Plex in the background...`
+                });
+
+                syncCollectionToPlexAction(collId)
+                    .then((syncRes) => {
+                        if (syncRes.success) {
+                            showFloatingToast({
+                                id: collId,
+                                type: "success",
+                                text: `✓ "${collTitle}" synced to Plex (${syncRes.itemCount ?? 0} items)!`
+                            });
+                        } else {
+                            showFloatingToast({
+                                id: collId,
+                                type: "error",
+                                text: `⚠️ Plex sync notice for "${collTitle}": ${syncRes.error || "Plex returned an error."}`
+                            });
+                        }
+                    })
+                    .catch((err: any) => {
+                        showFloatingToast({
+                            id: collId,
+                            type: "error",
+                            text: `Failed syncing "${collTitle}" to Plex: ${err.message}`
+                        });
+                    })
+                    .finally(() => {
+                        setSyncingCollIds(prev => {
+                            const next = { ...prev };
+                            delete next[collId];
+                            return next;
+                        });
+                        loadCollections();
+                    });
+            } else {
+                setCreatingCollection(false);
             }
         } catch (e) {
             console.error("Failed creating collection:", e);
-        } finally {
             setCreatingCollection(false);
         }
     };
@@ -2590,6 +2723,22 @@ export function AgregarrStudio() {
                 );
             })()}
 
+            {/* Background Syncing Status Banner */}
+            {Object.keys(syncingCollIds).length > 0 && (
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-950/40 border border-amber-500/40 rounded-2xl text-amber-300 text-xs shadow-md backdrop-blur-md">
+                    <div className="flex items-center gap-2.5">
+                        <Loader2 className="h-4 w-4 animate-spin text-amber-400 shrink-0" />
+                        <div>
+                            <span className="font-bold text-white">Syncing {Object.keys(syncingCollIds).length} collection{Object.keys(syncingCollIds).length > 1 ? "s" : ""} to Plex in the background...</span>
+                            <p className="text-[11px] text-amber-400/80">You can continue browsing, configuring, and installing other presets freely without waiting.</p>
+                        </div>
+                    </div>
+                    <Badge variant="outline" className="border-amber-500/50 bg-amber-950/80 text-amber-300 text-[10px] font-mono px-2 py-0.5 animate-pulse shrink-0">
+                        BACKGROUND SYNC ACTIVE
+                    </Badge>
+                </div>
+            )}
+
             {/* Agregarr Top Navigation Sub-Tabs */}
             <div className="flex items-center gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md backdrop-blur-md">
                 <button
@@ -2919,7 +3068,7 @@ export function AgregarrStudio() {
                                 </div>
                             ) : (
                                 filteredCollections.map((coll, idx) => {
-                                    const isSyncing = syncingCollId === coll.id;
+                                    const isSyncing = Boolean(syncingCollIds[coll.id] || syncingCollId === coll.id);
                                     const isHomeActive = coll.promotedToHome ?? true;
                                     const isSharedActive = coll.promotedToSharedHome ?? true;
                                     const isRecsActive = coll.promotedToRecommended ?? true;
@@ -3324,23 +3473,63 @@ export function AgregarrStudio() {
                     {/* Presets Card Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 gap-3.5">
                         {filteredPresets.map(preset => {
+                            const installedColl = collections.find(c => 
+                                c.title.toLowerCase().trim() === preset.title.toLowerCase().trim() ||
+                                (c.sourceQuery && c.sourceQuery === preset.sourceQuery && c.sourceType === preset.sourceType)
+                            );
+                            const isInstalled = Boolean(installedColl);
+                            const isPresetSyncing = Boolean(installedColl && (syncingCollIds[installedColl.id] || syncingCollId === installedColl.id));
+
                             return (
                                 <div
                                     key={preset.id}
                                     onClick={() => handleInspectPreset(preset)}
-                                    className="p-4 bg-slate-900/90 hover:bg-slate-800/90 rounded-2xl border border-slate-800 hover:border-amber-500/50 transition-all cursor-pointer space-y-3 group shadow-xl flex flex-col justify-between"
+                                    className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 group shadow-xl flex flex-col justify-between ${
+                                        isPresetSyncing
+                                            ? "bg-slate-900/90 border-amber-500/60 ring-1 ring-amber-500/40"
+                                            : isInstalled
+                                            ? "bg-slate-900/90 border-emerald-500/40 hover:border-emerald-500/70"
+                                            : "bg-slate-900/90 hover:bg-slate-800/90 border-slate-800 hover:border-amber-500/50"
+                                    }`}
                                 >
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                                    <Trophy className="h-4 w-4" />
+                                                <div className={`p-2 rounded-xl border ${
+                                                    isPresetSyncing
+                                                        ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                                                        : isInstalled
+                                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                                        : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                                }`}>
+                                                    {isPresetSyncing ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                                                    ) : isInstalled ? (
+                                                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                                    ) : (
+                                                        <Trophy className="h-4 w-4" />
+                                                    )}
                                                 </div>
-                                                <span className="font-bold text-white text-xs group-hover:text-amber-300 transition-colors">
+                                                <span className={`font-bold text-xs transition-colors ${
+                                                    isPresetSyncing
+                                                        ? "text-amber-300"
+                                                        : isInstalled
+                                                        ? "text-emerald-300 group-hover:text-emerald-200"
+                                                        : "text-white group-hover:text-amber-300"
+                                                }`}>
                                                     {preset.title}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-1">
+                                                {isPresetSyncing ? (
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-500/50 bg-amber-950/60 text-amber-300 font-bold gap-1 animate-pulse">
+                                                        <Loader2 className="h-2.5 w-2.5 animate-spin" /> SYNCING
+                                                    </Badge>
+                                                ) : isInstalled ? (
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/50 bg-emerald-950/60 text-emerald-300 font-bold gap-1">
+                                                        <Check className="h-2.5 w-2.5" /> INSTALLED
+                                                    </Badge>
+                                                ) : null}
                                                 <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-slate-700 font-mono ${
                                                     preset.mediaType === "show" ? "text-sky-300 border-sky-800/60 bg-sky-950/40" :
                                                     preset.mediaType === "movie" ? "text-amber-300 border-amber-800/60 bg-amber-950/40" :
@@ -3369,9 +3558,19 @@ export function AgregarrStudio() {
                                                 </span>
                                             )}
                                         </div>
-                                        <span className="text-amber-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
-                                            Inspect &amp; Install →
-                                        </span>
+                                        {isPresetSyncing ? (
+                                            <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                                                <Loader2 className="h-3 w-3 animate-spin" /> Syncing in Background...
+                                            </span>
+                                        ) : isInstalled ? (
+                                            <span className="text-emerald-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                                                Installed ({installedColl?.itemCount || 0}) &rarr;
+                                            </span>
+                                        ) : (
+                                            <span className="text-amber-400 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                                                Inspect &amp; Install &rarr;
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -4602,7 +4801,7 @@ export function AgregarrStudio() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                disabled={!inspectingCollection || syncingCollId === inspectingCollection?.id}
+                                disabled={!inspectingCollection || Boolean(syncingCollIds[inspectingCollection?.id] || syncingCollId === inspectingCollection?.id)}
                                 onClick={() => inspectingCollection && handleSyncCollection(inspectingCollection.id)}
                                 className="border-slate-700 text-slate-200 text-xs h-8 gap-1"
                             >
@@ -6204,6 +6403,31 @@ export function AgregarrStudio() {
                                 Save All Changes
                             </Button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FLOATING BACKGROUND SYNC NOTIFICATION TOAST */}
+            {floatingToast && (
+                <div className="fixed bottom-6 left-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300 max-w-md">
+                    <div className={`flex items-center gap-3 p-3.5 sm:px-4 sm:py-3 rounded-2xl shadow-2xl backdrop-blur-xl border ${
+                        floatingToast.type === "success"
+                            ? "bg-slate-950/95 border-emerald-500/60 text-emerald-200 shadow-emerald-950/40"
+                            : floatingToast.type === "error"
+                            ? "bg-slate-950/95 border-rose-500/60 text-rose-200 shadow-rose-950/40"
+                            : "bg-slate-950/95 border-amber-500/60 text-amber-200 shadow-amber-950/40"
+                    }`}>
+                        {floatingToast.type === "success" && <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />}
+                        {floatingToast.type === "error" && <XCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                        {floatingToast.type === "info" && <Loader2 className="h-4 w-4 animate-spin text-amber-400 shrink-0" />}
+                        <span className="text-xs font-bold leading-snug">{floatingToast.text}</span>
+                        <button
+                            type="button"
+                            onClick={() => setFloatingToast(null)}
+                            className="ml-auto p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </button>
                     </div>
                 </div>
             )}

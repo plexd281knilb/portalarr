@@ -1421,6 +1421,13 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
     collectionRatingKey?: string;
 }> {
     try {
+        if (isPlexMaintenanceWindow()) {
+            return {
+                success: false,
+                error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Plex sync is paused during container maintenance."
+            };
+        }
+
         await ensureSchemaColumns();
         const collection = await prisma.mediaCollection.findUnique({
             where: { id: collectionId }

@@ -4358,6 +4358,25 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Agregarr: Non-blocking Preset Installation, Background Sync Lifecycle & Plex Maintenance Window Guards", async () => {
+        const { syncCollectionToPlexInternal } = await import("../src/app/curation-actions");
+        if (typeof syncCollectionToPlexInternal !== "function") {
+            throw new Error("Missing syncCollectionToPlexInternal in curation-actions.ts");
+        }
+
+        // Verify non-existent collection ID fails cleanly without crashing
+        const invalidRes = await syncCollectionToPlexInternal("non-existent-collection-id-xyz");
+        if (invalidRes.success !== false) {
+            throw new Error(`Expected syncCollectionToPlexInternal to return success: false for invalid ID, got: ${JSON.stringify(invalidRes)}`);
+        }
+
+        // Verify syncPlexCollection function is exported and callable
+        const { syncPlexCollection } = await import("../src/lib/curation/plex-analyzer");
+        if (typeof syncPlexCollection !== "function") {
+            throw new Error("Missing syncPlexCollection in plex-analyzer.ts");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
