@@ -632,7 +632,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
         }[badgeVariant];
 
         return (
-            <div className={`p-4 rounded-xl transition-all space-y-3.5 ${isExplicitlyDisabled ? 'bg-background/20 border border-border/30 opacity-75' : 'bg-background/40 border border-border/40 hover:border-border/70'}`}>
+            <div className={`p-4 rounded-xl transition-all space-y-3.5 ${isExplicitlyDisabled ? 'bg-background/20 border border-dashed border-border/40' : 'bg-background/40 border border-border/40 hover:border-border/70'}`}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         {icon}
@@ -781,12 +781,12 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
 
     return (
         <div className="space-y-6">
-            <Card className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md shadow-sm ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-border/50"}`}>
+            <Card className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md shadow-sm ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-rose-500/30 shadow-rose-950/20"}`}>
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Compass className="h-5 w-5 text-primary" />
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-rose-400">
+                                <Compass className="h-5 w-5 text-rose-400" />
                                 Native Media Requests & Seerr Engine
                                 {hasUnsavedChanges && (
                                     <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
@@ -798,7 +798,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                                 Configure instance routing, quality profiles, root paths, Full vs Trial accounts, and Dual 4K+1080p ingestion rules.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 font-bold px-2.5 py-1">
+                        <Badge variant="outline" className="bg-rose-500/10 text-rose-300 border-rose-500/30 font-bold px-2.5 py-1">
                             Seerr Engine v3.6
                         </Badge>
                     </div>
@@ -1191,7 +1191,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                             <div className="space-y-1.5 p-3.5 rounded-xl bg-background/50 border border-border/40">
                                 <div className="flex items-center justify-between">
                                     <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                        <Link className="h-3.5 w-3.5 text-primary" /> Discord Webhook URL
+                                        <Link className="h-3.5 w-3.5 text-rose-400" /> Discord Webhook URL
                                     </Label>
                                     <span className="text-[10px] text-muted-foreground">Server Settings &rarr; Integrations &rarr; Webhooks</span>
                                 </div>
@@ -1386,7 +1386,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                                         router.push("/settings?tab=emails");
                                     }
                                 }}
-                                className="h-7 text-[11px] gap-1.5 border-primary/30 text-primary hover:bg-primary/10 self-start sm:self-auto cursor-pointer"
+                                className="h-7 text-[11px] gap-1.5 border-rose-500/30 text-rose-400 hover:bg-rose-500/10 self-start sm:self-auto cursor-pointer"
                             >
                                 <Mail className="h-3 w-3" /> Customize Email Templates
                             </Button>

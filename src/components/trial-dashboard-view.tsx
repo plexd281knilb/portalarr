@@ -138,7 +138,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="space-y-0.5">
                             <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
-                                <Compass className="h-5 w-5 text-primary" />
+                                <Compass className="h-5 w-5 text-rose-400" />
                                 Built-In Media Requests
                             </CardTitle>
                             <CardDescription className="text-xs">

@@ -47,6 +47,7 @@ const nextConfig: NextConfig = {
   // ... top half of your config stays the same ...
   
   experimental: {
+    cpus: 4,
     serverActions: {
       allowedOrigins: allowedOrigins,
     },
