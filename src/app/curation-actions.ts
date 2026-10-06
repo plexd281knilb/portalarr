@@ -64,6 +64,8 @@ import {
     getTmdbCollection, 
     getTmdbStudioMovies, 
     getTmdbNetworkShows, 
+    getTmdbNetworkOriginalMovies,
+    getTmdbFranchiseMedia,
     getTmdbGenreMedia,
     getTmdbKeywordMedia,
     searchTmdbMovie, 
@@ -91,6 +93,7 @@ import {
     getMdblistItems 
 } from "@/lib/curation/mdblist";
 import { getBuiltinImdbTopList } from "@/lib/curation/imdb-top250-data";
+import { getBuiltinOscarBestPictureList } from "@/lib/curation/oscar-best-picture-data";
 import { 
     COLLECTION_PRESETS, 
     CollectionPreset,
@@ -1659,23 +1662,36 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                         ).map(it => it.ratingKey));
                     }
                 }
+            } else if (collection.sourceQuery?.startsWith("franchise:")) {
+                const franchiseKey = collection.sourceQuery.replace("franchise:", "").trim();
+                const franchiseMedia = await getTmdbFranchiseMedia(franchiseKey, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3
+                });
+                const index = buildCandidateIndex(franchiseMedia);
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    matchLibraryItemToCandidates(it, index)
+                ).map(it => it.ratingKey));
             } else if (collection.sourceQuery?.startsWith("company:")) {
-                const compId = collection.sourceQuery.replace("company:", "");
-                if (tmdbKey && !isTvSection) {
-                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
-                    if (tmdbRes.ok) {
-                        const data = await tmdbRes.json();
-                        const index = buildCandidateIndex(data.results || []);
-                        matchingRatingKeys.push(...libraryItems.filter(it => 
-                            matchLibraryItemToCandidates(it, index)
-                        ).map(it => it.ratingKey));
-                    }
+                const compId = parseInt(collection.sourceQuery.replace("company:", ""), 10);
+                if (compId && !isTvSection) {
+                    const studioMovies = await getTmdbStudioMovies(compId, 20, 3);
+                    const index = buildCandidateIndex(studioMovies);
+                    matchingRatingKeys.push(...libraryItems.filter(it => 
+                        matchLibraryItemToCandidates(it, index)
+                    ).map(it => it.ratingKey));
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
                 if (!isMovieSection) {
-                    const shows = await getTmdbNetworkShows(netId);
+                    const shows = await getTmdbNetworkShows(netId, 20, 3);
                     const index = buildCandidateIndex(shows);
+                    matchingRatingKeys.push(...libraryItems.filter(it => 
+                        matchLibraryItemToCandidates(it, index)
+                    ).map(it => it.ratingKey));
+                } else {
+                    const movies = await getTmdbNetworkOriginalMovies(netId, 20);
+                    const index = buildCandidateIndex(movies);
                     matchingRatingKeys.push(...libraryItems.filter(it => 
                         matchLibraryItemToCandidates(it, index)
                     ).map(it => it.ratingKey));
@@ -1839,6 +1855,39 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
 
                 if (builtinMatches.length > 0) {
                     matchingRatingKeys.push(...builtinMatches);
+                    matched = true;
+                }
+            }
+
+            // Built-in Official Academy Award: Best Picture Winners Registry Fallback
+            const isOscar = collection.title.toLowerCase().includes("oscar") || 
+                            collection.sourceQuery?.toLowerCase().includes("oscar");
+            if (!matched && isOscar) {
+                const oscarList = getBuiltinOscarBestPictureList();
+                const builtinTmdbIds = new Set(oscarList.map(b => String(b.tmdbId)));
+                const builtinImdbIds = new Set(oscarList.map(b => b.imdbId?.toLowerCase()).filter(Boolean));
+                const builtinTitles = new Set(oscarList.map(b => b.title.toLowerCase().trim()));
+
+                const oscarMatches = libraryItems.filter(it => {
+                    if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+                        return false;
+                    }
+                    const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
+                    const mImdb = it.guids?.imdb && builtinImdbIds.has(String(it.guids.imdb).toLowerCase());
+                    if (mTmdb || mImdb) return true;
+                    if (it.title && builtinTitles.has(it.title.toLowerCase().trim())) {
+                        const matchEntry = oscarList.find(b => b.title.toLowerCase().trim() === it.title.toLowerCase().trim());
+                        if (matchEntry?.year && it.year) {
+                            return Math.abs(matchEntry.year - it.year) <= 1;
+                        }
+                        return true;
+                    }
+                    return false;
+                }).map(it => it.ratingKey);
+
+                if (oscarMatches.length > 0) {
+                    matchingRatingKeys.push(...oscarMatches);
+                    matched = true;
                 }
             }
 
@@ -1877,12 +1926,16 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
                                 movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
-                            } else if (collection.sourceQuery?.startsWith("tag:")) {
-                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
+                                const targetTag = collection.sourceQuery.includes(":") 
+                                    ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() 
+                                    : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
                                 if (tagId) {
                                     movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                } else {
+                                    movies = [];
                                 }
                             }
                             const tmdbIds = new Set(movies.map((m: any) => String(m.tmdbId)).filter(Boolean));
@@ -1910,12 +1963,16 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
                                 series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
-                            } else if (collection.sourceQuery?.startsWith("tag:")) {
-                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
+                                const targetTag = collection.sourceQuery.includes(":") 
+                                    ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() 
+                                    : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
                                 if (tagId) {
                                     series = series.filter((s: any) => s.tags?.includes(tagId));
+                                } else {
+                                    series = [];
                                 }
                             }
                             const tvdbIds = new Set(series.map((s: any) => String(s.tvdbId)).filter(Boolean));
@@ -2152,24 +2209,36 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                     }
                 }
+            } else if (sourceQuery.startsWith("franchise:")) {
+                const franchiseKey = sourceQuery.replace("franchise:", "").trim();
+                executionMethod = `TMDb Franchise API: Querying franchise universe "${franchiseKey}".`;
+                const franchiseMedia = await getTmdbFranchiseMedia(franchiseKey, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3
+                });
+                const index = buildCandidateIndex(franchiseMedia);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else if (sourceQuery.startsWith("company:")) {
-                const compId = sourceQuery.replace("company:", "");
+                const compId = parseInt(sourceQuery.replace("company:", ""), 10);
                 executionMethod = `TMDb Studio API: Querying company ID #${compId} filmography.`;
-                if (tmdbKey && !isTvSection) {
-                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
-                    if (tmdbRes.ok) {
-                        const data = await tmdbRes.json();
-                        const index = buildCandidateIndex(data.results || []);
-                        matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
-                    }
+                if (compId && !isTvSection) {
+                    const studioMovies = await getTmdbStudioMovies(compId, 20, 3);
+                    const index = buildCandidateIndex(studioMovies);
+                    matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                 }
             } else if (sourceQuery.startsWith("network:")) {
                 const netId = parseInt(sourceQuery.replace("network:", ""), 10) || 213;
                 const netName = netId === 1112 ? "Crunchyroll" : netId === 213 ? "Netflix" : netId === 49 ? "HBO" : netId === 2552 ? "Apple TV+" : netId === 2739 ? "Disney+" : `#${netId}`;
-                executionMethod = `TMDb TV Network API: Querying ${netName} shows.`;
+                executionMethod = isMovieSection 
+                    ? `TMDb Streaming Original Movies API: Querying ${netName} original films.`
+                    : `TMDb TV Network API: Querying ${netName} shows.`;
                 if (!isMovieSection) {
-                    const shows = await getTmdbNetworkShows(netId);
+                    const shows = await getTmdbNetworkShows(netId, 20, 3);
                     const index = buildCandidateIndex(shows);
+                    matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
+                } else {
+                    const movies = await getTmdbNetworkOriginalMovies(netId, 20);
+                    const index = buildCandidateIndex(movies);
                     matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                 }
             } else if (sourceQuery.startsWith("provider:")) {
@@ -2264,8 +2333,11 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     }
                     const index = buildCandidateIndex(builtinList);
                     matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
-                } else if (sourceQuery === "top-oscar-best-picture") {
-                    executionMethod += " (MDBList key not configured; configure in settings to fetch official Oscar list).";
+                } else if (sourceQuery === "top-oscar-best-picture" || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("oscar"))) {
+                    executionMethod = `Official Built-in Academy Award Best Picture Winners Registry: Matching verified Oscar winners against library items.`;
+                    const oscarList = getBuiltinOscarBestPictureList();
+                    const index = buildCandidateIndex(oscarList);
+                    matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                 } else if (sourceQuery?.includes("popular") || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("popular"))) {
                     executionMethod = isTvSection
                         ? `Popular Media Fallback (TMDb): Resolving popular TV shows against library.`
@@ -2316,11 +2388,15 @@ export async function generateCollectionCandidateItemsPreviewAction(
                             let movies = moviesRes.data;
                             if (sourceQuery === "monitored_missing") {
                                 movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
-                            } else if (sourceQuery.startsWith("tag:")) {
-                                const targetTag = sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (sourceQuery.startsWith("tag:") || sourceQuery === "tag") {
+                                const targetTag = sourceQuery.includes(":") ? sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
-                                if (tagId) movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                if (tagId) {
+                                    movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                } else {
+                                    movies = [];
+                                }
                             }
                             const index = buildCandidateIndex(movies);
                             matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
@@ -2341,11 +2417,15 @@ export async function generateCollectionCandidateItemsPreviewAction(
                             let series = seriesRes.data;
                             if (sourceQuery === "monitored_missing") {
                                 series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
-                            } else if (sourceQuery.startsWith("tag:")) {
-                                const targetTag = sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (sourceQuery.startsWith("tag:") || sourceQuery === "tag") {
+                                const targetTag = sourceQuery.includes(":") ? sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
-                                if (tagId) series = series.filter((s: any) => s.tags?.includes(tagId));
+                                if (tagId) {
+                                    series = series.filter((s: any) => s.tags?.includes(tagId));
+                                } else {
+                                    series = [];
+                                }
                             }
                             const index = buildCandidateIndex(series.map((s: any) => ({ ...s, id: s.tvdbId })));
                             matchedItems = libraryItems.filter(it => {
@@ -9882,27 +9962,23 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                             releaseDate: p.release_date
                         }));
                 }
+            } else if (collection.sourceQuery?.startsWith("franchise:")) {
+                const franchiseKey = collection.sourceQuery.replace("franchise:", "").trim();
+                const franchiseMedia = await getTmdbFranchiseMedia(franchiseKey, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3
+                });
+                candidateItems = franchiseMedia;
             } else if (collection.sourceQuery?.startsWith("company:")) {
-                const compId = collection.sourceQuery.replace("company:", "");
-                if (!isTvSection) {
-                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
-                    if (tmdbRes.ok) {
-                        const data = await tmdbRes.json();
-                        candidateItems = (data.results || []).map((p: any) => ({
-                            id: p.id,
-                            title: p.title,
-                            overview: p.overview,
-                            posterPath: p.poster_path,
-                            backdropPath: p.backdrop_path,
-                            mediaType: "movie" as const,
-                            releaseDate: p.release_date
-                        }));
-                    }
+                const compId = parseInt(collection.sourceQuery.replace("company:", ""), 10);
+                if (compId && !isTvSection) {
+                    const studioMovies = await getTmdbStudioMovies(compId, 20, 3);
+                    candidateItems = studioMovies;
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
                 if (!isMovieSection) {
-                    const shows = await getTmdbNetworkShows(netId);
+                    const shows = await getTmdbNetworkShows(netId, 20, 3);
                     candidateItems = shows.map(s => ({
                         id: s.id,
                         title: s.title,
@@ -9912,6 +9988,9 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         mediaType: "tv" as const,
                         releaseDate: s.releaseDate
                     }));
+                } else {
+                    const movies = await getTmdbNetworkOriginalMovies(netId, 20);
+                    candidateItems = movies;
                 }
             } else if (collection.sourceQuery?.startsWith("provider:")) {
                 const parts = collection.sourceQuery.split(":");
@@ -10014,11 +10093,15 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
                                 movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
-                            } else if (collection.sourceQuery?.startsWith("tag:")) {
-                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
+                                const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
-                                if (tagId) movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                if (tagId) {
+                                    movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                } else {
+                                    movies = [];
+                                }
                             }
                             candidateItems.push(...movies.map((m: any) => ({
                                 id: m.tmdbId,
@@ -10047,11 +10130,15 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
                                 series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
-                            } else if (collection.sourceQuery?.startsWith("tag:")) {
-                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
+                                const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
-                                if (tagId) series = series.filter((s: any) => s.tags?.includes(tagId));
+                                if (tagId) {
+                                    series = series.filter((s: any) => s.tags?.includes(tagId));
+                                } else {
+                                    series = [];
+                                }
                             }
                             candidateItems.push(...series.map((s: any) => ({
                                 id: s.tvdbId,
@@ -10104,6 +10191,19 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     id: b.tmdbId,
                     title: b.title,
                     mediaType: (b.mediaType === "show" ? "tv" : "movie") as "movie" | "tv",
+                    releaseDate: `${b.year}-01-01`,
+                    imdbId: b.imdbId
+                }));
+            }
+
+            const isOscar = collection.title?.toLowerCase().includes("oscar") || 
+                            collection.sourceQuery?.toLowerCase().includes("oscar");
+            if (candidateItems.length === 0 && isOscar) {
+                const oscarList = getBuiltinOscarBestPictureList();
+                candidateItems = oscarList.map(b => ({
+                    id: b.tmdbId,
+                    title: b.title,
+                    mediaType: "movie" as const,
                     releaseDate: `${b.year}-01-01`,
                     imdbId: b.imdbId
                 }));
@@ -11058,38 +11158,59 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                         releaseDate: p.release_date
                     }));
                 }
+            } else if (collection.sourceQuery?.startsWith("franchise:")) {
+                const franchiseKey = collection.sourceQuery.replace("franchise:", "").trim();
+                const isTv = collection.type === "show" || collection.type === "tv";
+                const isMovie = collection.type === "movie";
+                candidateItems = await getTmdbFranchiseMedia(franchiseKey, {
+                    mediaType: isTv ? "tv" : isMovie ? "movie" : "both",
+                    maxPages: 3
+                });
             } else if (collection.sourceQuery?.startsWith("company:")) {
-                const compId = collection.sourceQuery.replace("company:", "");
-                const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
-                if (tmdbRes.ok) {
-                    const data = await tmdbRes.json();
-                    candidateItems = (data.results || []).map((p: any) => ({
-                        id: p.id,
-                        title: p.title,
-                        overview: p.overview,
-                        posterPath: p.poster_path,
-                        backdropPath: p.backdrop_path,
-                        mediaType: "movie" as const,
-                        releaseDate: p.release_date
-                    }));
+                const compId = parseInt(collection.sourceQuery.replace("company:", ""), 10);
+                if (compId) {
+                    candidateItems = await getTmdbStudioMovies(compId, 20, 3);
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
-                const shows = await getTmdbNetworkShows(netId);
-                candidateItems = shows.map(s => ({
-                    id: s.id,
-                    title: s.title,
-                    overview: s.overview,
-                    posterPath: s.posterPath,
-                    backdropPath: s.backdropPath,
-                    mediaType: "tv" as const,
-                    releaseDate: s.releaseDate
-                }));
+                const isMovie = collection.type === "movie";
+                if (!isMovie) {
+                    const shows = await getTmdbNetworkShows(netId, 20, 3);
+                    candidateItems = shows.map(s => ({
+                        id: s.id,
+                        title: s.title,
+                        overview: s.overview,
+                        posterPath: s.posterPath,
+                        backdropPath: s.backdropPath,
+                        mediaType: "tv" as const,
+                        releaseDate: s.releaseDate
+                    }));
+                } else {
+                    candidateItems = await getTmdbNetworkOriginalMovies(netId, 20);
+                }
             } else if (collection.sourceQuery?.startsWith("provider:")) {
                 const parts = collection.sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
                 candidateItems = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+            } else if (collection.sourceQuery?.startsWith("genre:")) {
+                const genreId = parseInt(collection.sourceQuery.replace("genre:", "").trim(), 10) || 28;
+                const isTv = collection.type === "show" || collection.type === "tv";
+                const isMovie = collection.type === "movie";
+                candidateItems = await getTmdbGenreMedia(genreId, {
+                    mediaType: isTv ? "tv" : isMovie ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 200
+                });
+            } else if (collection.sourceQuery?.startsWith("keyword:")) {
+                const kw = collection.sourceQuery.replace("keyword:", "").trim();
+                const isTv = collection.type === "show" || collection.type === "tv";
+                const isMovie = collection.type === "movie";
+                candidateItems = await getTmdbKeywordMedia(kw, {
+                    mediaType: isTv ? "tv" : isMovie ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 100
+                });
             } else if (collection.sourceQuery === "in_theatres") {
                 const inTheatres = await getTmdbNowPlayingMovies();
                 candidateItems = inTheatres.map(m => ({
@@ -11163,11 +11284,15 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
                                 movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
-                            } else if (collection.sourceQuery?.startsWith("tag:")) {
-                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
+                                const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
-                                if (tagId) movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                if (tagId) {
+                                    movies = movies.filter((m: any) => m.tags?.includes(tagId));
+                                } else {
+                                    movies = [];
+                                }
                             }
                             candidateItems.push(...movies.map((m: any) => ({
                                 id: m.tmdbId,
@@ -11196,11 +11321,15 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
                                 series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
-                            } else if (collection.sourceQuery?.startsWith("tag:")) {
-                                const targetTag = collection.sourceQuery.replace("tag:", "").toLowerCase().trim();
+                            } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
+                                const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
-                                if (tagId) series = series.filter((s: any) => s.tags?.includes(tagId));
+                                if (tagId) {
+                                    series = series.filter((s: any) => s.tags?.includes(tagId));
+                                } else {
+                                    series = [];
+                                }
                             }
                             candidateItems.push(...series.map((s: any) => ({
                                 id: s.tvdbId,
@@ -11269,6 +11398,19 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                         title: b.title,
                         year: b.year,
                         releaseDate: b.year ? `${b.year}-01-01` : undefined
+                    }));
+                }
+
+                const isOscar = collection.title?.toLowerCase().includes("oscar") || 
+                                collection.sourceQuery?.toLowerCase().includes("oscar");
+                if (isOscar) {
+                    const oscarList = getBuiltinOscarBestPictureList();
+                    items = oscarList.map(b => ({
+                        tmdbId: b.tmdbId,
+                        imdbId: b.imdbId,
+                        title: b.title,
+                        year: b.year,
+                        releaseDate: `${b.year}-01-01`
                     }));
                 }
 

@@ -30,6 +30,8 @@ import { parseAmazonBounceEmail } from "../src/lib/kindle-email-scanner";
 import fs from "fs";
 import path from "path";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS, matchesCloudflareBypass, matchesCloudflareSuperUser, matchesCloudflareAdmin } from "../src/lib/edge-policy-paths";
+import { getBuiltinOscarBestPictureList } from "../src/lib/curation/oscar-best-picture-data";
+import { COLLECTION_PRESETS } from "../src/lib/curation/presets";
 
 
 async function runTestSuite() {
@@ -4762,6 +4764,75 @@ async function runTestSuite() {
         // October 6 must be IN season for Halloween (Oct 1 - Nov 5)
         if (!isDateInSeason(10, 6, 10, 1, 11, 5)) {
             throw new Error("October 6 evaluated as out-of-season for Halloween");
+        }
+    });
+
+    // 76. Agregarr: Curation Presets Audit, Built-in Oscar Best Picture Registry & Franchise Resolution
+    await assertTest("Agregarr: Curation Presets Audit & Oscar Fallback", async () => {
+        // 1. Built-in Oscar Best Picture Registry integrity
+        const oscarList = getBuiltinOscarBestPictureList();
+        if (!Array.isArray(oscarList) || oscarList.length < 90) {
+            throw new Error(`Expected at least 90 Oscar Best Picture winners, got ${oscarList?.length}`);
+        }
+        const oppenheimer = oscarList.find(o => o.title === "Oppenheimer");
+        if (!oppenheimer || oppenheimer.year !== 2023 || oppenheimer.tmdbId !== 872585 || oppenheimer.imdbId !== "tt15398776") {
+            throw new Error("Oppenheimer entry corrupted in Oscar Best Picture registry");
+        }
+        const wings = oscarList.find(o => o.title === "Wings");
+        if (!wings || wings.year !== 1927 || wings.rank !== 1) {
+            throw new Error("Wings (1927) rank 1 entry corrupted in Oscar Best Picture registry");
+        }
+
+        // 2. All 49 Presets audit verification
+        if (COLLECTION_PRESETS.length < 49) {
+            throw new Error(`Expected at least 49 collection presets, found ${COLLECTION_PRESETS.length}`);
+        }
+        const seenIds = new Set<string>();
+        for (const p of COLLECTION_PRESETS) {
+            if (seenIds.has(p.id)) throw new Error(`Duplicate preset ID: ${p.id}`);
+            seenIds.add(p.id);
+            if (!p.title || !p.icon || !p.sourceType || !p.category) {
+                throw new Error(`Preset ${p.id} missing mandatory metadata fields`);
+            }
+            if (p.isSeasonal) {
+                if (!p.scheduleStartMonth || !p.scheduleEndMonth || !p.scheduleStartDay || !p.scheduleEndDay) {
+                    throw new Error(`Seasonal preset ${p.id} has invalid schedule range`);
+                }
+            }
+        }
+
+        // 3. Verify specific presets that were fixed
+        const mcu = COLLECTION_PRESETS.find(p => p.id === "marvel-cinematic-universe");
+        if (!mcu || mcu.sourceQuery !== "franchise:mcu") {
+            throw new Error(`Marvel MCU preset must use sourceQuery "franchise:mcu", got "${mcu?.sourceQuery}"`);
+        }
+
+        const dceu = COLLECTION_PRESETS.find(p => p.id === "dc-extended-universe");
+        if (!dceu || dceu.sourceQuery !== "franchise:dceu") {
+            throw new Error(`DC Universe preset must use sourceQuery "franchise:dceu", got "${dceu?.sourceQuery}"`);
+        }
+
+        const radarrTag = COLLECTION_PRESETS.find(p => p.id === "radarr-tag-collection");
+        if (!radarrTag || radarrTag.sourceQuery !== "tag:portalarr") {
+            throw new Error(`Radarr tag preset must use "tag:portalarr", got "${radarrTag?.sourceQuery}"`);
+        }
+
+        const sonarrTag = COLLECTION_PRESETS.find(p => p.id === "sonarr-tag-collection");
+        if (!sonarrTag || sonarrTag.sourceQuery !== "tag:portalarr") {
+            throw new Error(`Sonarr tag preset must use "tag:portalarr", got "${sonarrTag?.sourceQuery}"`);
+        }
+
+        // 4. Candidate matching against Oscar Registry
+        const { buildCandidateIndex, matchLibraryItemToCandidates } = await import("../src/lib/curation/plex-analyzer");
+        const oscarIndex = buildCandidateIndex(oscarList);
+        const parasiteItem = {
+            ratingKey: "991",
+            title: "Parasite",
+            year: 2019,
+            guids: { tmdb: "496243" }
+        };
+        if (!matchLibraryItemToCandidates(parasiteItem, oscarIndex)) {
+            throw new Error("Parasite failed to match Oscar Best Picture candidate index");
         }
     });
 

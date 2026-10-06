@@ -139,7 +139,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         description: "All Marvel Studios MCU movies and Disney+ series in chronological timeline order.",
         icon: "Zap",
         sourceType: "tmdb",
-        sourceQuery: "collection:86311", // Marvel Collection
+        sourceQuery: "franchise:mcu", // Full Marvel Studios MCU Filmography & Disney+ Series
         mediaType: "both",
         defaultSort: "release",
         defaultHomeOrder: 7,
@@ -590,7 +590,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         description: "Movies grouped by custom tag configured in Radarr.",
         icon: "Tag",
         sourceType: "radarr",
-        sourceQuery: "tag",
+        sourceQuery: "tag:portalarr",
         mediaType: "movie",
         defaultSort: "release",
         defaultHomeOrder: 20,
@@ -604,7 +604,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         description: "TV series grouped by custom tag configured in Sonarr.",
         icon: "Tag",
         sourceType: "sonarr",
-        sourceQuery: "tag",
+        sourceQuery: "tag:portalarr",
         mediaType: "show",
         defaultSort: "release",
         defaultHomeOrder: 21,

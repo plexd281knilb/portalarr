@@ -288,36 +288,191 @@ export async function getTmdbCollection(collectionId: number): Promise<TmdbColle
 }
 
 /**
- * Discover Media by Studio / Production Company (e.g. Pixar = 3, Disney = 2, Marvel Studios = 420, HBO = 3268, A24 = 41077)
+ * Discover Media by Studio / Production Company (e.g. Pixar = 3, Disney = 2, Marvel Studios = 420, Studio Ghibli = 10342, A24 = 41077)
  */
-export async function getTmdbStudioMovies(companyId: number, minVotes = 50): Promise<TmdbMediaItem[]> {
+export async function getTmdbStudioMovies(companyId: number, minVotes = 20, maxPages = 3): Promise<TmdbMediaItem[]> {
     try {
-        const data = await tmdbFetch("/discover/movie", {
-            with_companies: companyId,
-            sort_by: "popularity.desc",
-            "vote_count.gte": minVotes
-        });
-        return filterAllowedMedia((data?.results || []).map(mapTmdbMovie));
+        const pages = Array.from({ length: Math.max(1, Math.min(maxPages, 5)) }, (_, i) => i + 1);
+        const pageResults = await Promise.all(
+            pages.map(page => 
+                tmdbFetch("/discover/movie", {
+                    with_companies: companyId,
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": minVotes,
+                    page
+                }).catch(() => null)
+            )
+        );
+
+        const allMovies: any[] = [];
+        const seenIds = new Set<number>();
+        for (const data of pageResults) {
+            if (data?.results && Array.isArray(data.results)) {
+                for (const item of data.results) {
+                    if (item.id && !seenIds.has(item.id)) {
+                        seenIds.add(item.id);
+                        allMovies.push(item);
+                    }
+                }
+            }
+        }
+        return filterAllowedMedia(allMovies.map(mapTmdbMovie));
     } catch {
         return [];
     }
 }
 
 /**
- * Discover TV Shows by Network (e.g. HBO = 49, Netflix = 213, Apple TV+ = 2552, Disney+ = 2739)
+ * Discover TV Shows by Network (e.g. HBO = 49, Netflix = 213, Apple TV+ = 2552, Disney+ = 2739, Crunchyroll = 1112)
  */
-export async function getTmdbNetworkShows(networkId: number, minVotes = 20): Promise<TmdbMediaItem[]> {
+export async function getTmdbNetworkShows(networkId: number, minVotes = 20, maxPages = 3): Promise<TmdbMediaItem[]> {
     try {
-        const data = await tmdbFetch("/discover/tv", {
-            with_networks: networkId,
-            sort_by: "popularity.desc",
-            "vote_count.gte": minVotes
-        });
-        return filterAllowedMedia((data?.results || []).map(mapTmdbTv));
+        const pages = Array.from({ length: Math.max(1, Math.min(maxPages, 5)) }, (_, i) => i + 1);
+        const pageResults = await Promise.all(
+            pages.map(page => 
+                tmdbFetch("/discover/tv", {
+                    with_networks: networkId,
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": minVotes,
+                    page
+                }).catch(() => null)
+            )
+        );
+
+        const allShows: any[] = [];
+        const seenIds = new Set<number>();
+        for (const data of pageResults) {
+            if (data?.results && Array.isArray(data.results)) {
+                for (const item of data.results) {
+                    if (item.id && !seenIds.has(item.id)) {
+                        seenIds.add(item.id);
+                        allShows.push(item);
+                    }
+                }
+            }
+        }
+        return filterAllowedMedia(allShows.map(mapTmdbTv));
     } catch {
         return [];
     }
 }
+
+/**
+ * Discover Original Movies for a streaming platform / network when targeted to a Movie library section
+ */
+export async function getTmdbNetworkOriginalMovies(networkId: number, minVotes = 20): Promise<TmdbMediaItem[]> {
+    // 213 = Netflix (provider 8), 2739 = Disney+ (provider 337), 2552 = Apple TV+ (provider 350), 49 = HBO (provider 1899), 1112 = Crunchyroll (provider 283)
+    let provId = 8;
+    if (networkId === 2739) provId = 337;
+    else if (networkId === 2552) provId = 350;
+    else if (networkId === 49) provId = 1899;
+    else if (networkId === 1112) provId = 283;
+    return getTmdbStreamingProviderMedia(provId, { mediaType: "movie", maxPages: 3, minVotes });
+}
+
+/**
+ * Discover Media for Major Franchises (e.g. MCU, DCEU, Star Wars, Wizarding World, Middle-earth)
+ */
+export async function getTmdbFranchiseMedia(
+    franchiseKey: string,
+    options: {
+        mediaType?: "movie" | "tv" | "both";
+        maxPages?: number;
+        minVotes?: number;
+    } = {}
+): Promise<TmdbMediaItem[]> {
+    const key = franchiseKey.toLowerCase().trim();
+    const mediaType = options.mediaType || "both";
+    const maxPages = options.maxPages || 3;
+    const minVotes = options.minVotes ?? 50;
+
+    let companyIds = "";
+    let keywordIds = "";
+
+    if (key === "mcu" || key === "marvel") {
+        companyIds = "420"; // Marvel Studios
+        keywordIds = "180547"; // Marvel Cinematic Universe
+    } else if (key === "dceu" || key === "dc") {
+        companyIds = "128064|429|9993"; // DC Films, DC Entertainment, DC Comics
+        keywordIds = "849|229266"; // DC Comics, DCEU
+    } else if (key === "starwars" || key === "star_wars" || key === "star-wars") {
+        companyIds = "1"; // Lucasfilm
+        keywordIds = "207883|190011"; // Star Wars
+    } else if (key === "wizarding_world" || key === "harry_potter") {
+        keywordIds = "616"; // Witchcraft / Harry Potter universe
+    } else if (key === "middle_earth" || key === "lord_of_the_rings") {
+        keywordIds = "603|156487"; // Middle-earth
+    } else {
+        // Fallback: search by company or keyword matching key
+        companyIds = key;
+    }
+
+    const results: TmdbMediaItem[] = [];
+    const seen = new Set<string>();
+
+    const fetchMovies = async () => {
+        for (let p = 1; p <= maxPages; p++) {
+            const params: any = {
+                page: p,
+                sort_by: "primary_release_date.desc",
+                "vote_count.gte": minVotes
+            };
+            if (companyIds) params.with_companies = companyIds;
+            else if (keywordIds) params.with_keywords = keywordIds;
+
+            try {
+                const data = await tmdbFetch("/discover/movie", params);
+                if (data?.results && Array.isArray(data.results)) {
+                    for (const m of data.results) {
+                        const mapped = mapTmdbMovie(m);
+                        const k = `movie_${mapped.id}`;
+                        if (!seen.has(k)) {
+                            seen.add(k);
+                            results.push(mapped);
+                        }
+                    }
+                }
+            } catch {}
+        }
+    };
+
+    const fetchTv = async () => {
+        for (let p = 1; p <= maxPages; p++) {
+            const params: any = {
+                page: p,
+                sort_by: "first_air_date.desc",
+                "vote_count.gte": minVotes
+            };
+            if (companyIds) params.with_companies = companyIds;
+            else if (keywordIds) params.with_keywords = keywordIds;
+
+            try {
+                const data = await tmdbFetch("/discover/tv", params);
+                if (data?.results && Array.isArray(data.results)) {
+                    for (const s of data.results) {
+                        const mapped = mapTmdbTv(s);
+                        const k = `tv_${mapped.id}`;
+                        if (!seen.has(k)) {
+                            seen.add(k);
+                            results.push(mapped);
+                        }
+                    }
+                }
+            } catch {}
+        }
+    };
+
+    if (mediaType === "movie") {
+        await fetchMovies();
+    } else if (mediaType === "tv") {
+        await fetchTv();
+    } else {
+        await Promise.all([fetchMovies(), fetchTv()]);
+    }
+
+    return filterAllowedMedia(results);
+}
+
 
 /**
  * Discover Media by Genre (e.g. Action = 28, Horror = 27, Romance = 10749, Family = 10751)
