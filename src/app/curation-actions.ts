@@ -37,7 +37,11 @@ import {
     PruneCandidateItem,
     buildCrossServerPlaybackIndex,
     CrossServerActivityMap,
-    generateCrossServerMediaKeys
+    generateCrossServerMediaKeys,
+    isPlexItemPlaceholderOrStub,
+    CandidateItemLike,
+    buildCandidateIndex,
+    matchLibraryItemToCandidates
 } from "@/lib/curation/plex-analyzer";
 import { 
     backupAndApplyOverlay, 
@@ -60,6 +64,8 @@ import {
     getTmdbCollection, 
     getTmdbStudioMovies, 
     getTmdbNetworkShows, 
+    getTmdbGenreMedia,
+    getTmdbKeywordMedia,
     searchTmdbMovie, 
     searchTmdbTv,
     getTmdbStreamingProviderMedia,
@@ -139,6 +145,7 @@ async function verifyAdmin() {
     return user;
 }
 
+
 /**
  * Checks if a Plex media item should be excluded based on configured label/tag exclusions.
  * Supports exact matches, hyphen/underscore normalization, and standard placeholder/leaving-soon aliases.
@@ -160,7 +167,7 @@ function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null, 
     const excludesPlaceholders = !allowPlaceholders && rawTokens.some(t => 
         t.includes("trailer") || t.includes("placeholder") || t.includes("coming")
     );
-    if (excludesPlaceholders && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+    if (excludesPlaceholders && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer" || isPlexItemPlaceholderOrStub(it))) {
         return true;
     }
 
@@ -1600,7 +1607,7 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
         const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
             if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
-            if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+            if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer" || isPlexItemPlaceholderOrStub(it))) {
                 return false;
             }
             if (isPlexItemExcludedByLabels(it, collection.excludedLabels, isPlaceholdersCollection)) {
@@ -1614,10 +1621,15 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
 
         if (collection.sourceType === "plex_query") {
             const query = collection.sourceQuery || "";
+            const decadeMatch = query.match(/year>=(\d{4})&year<=(\d{4})/);
             if (query.includes("hdr:DV")) {
                 matchingRatingKeys.push(...libraryItems.filter(it => it.detectedBadges.hdr === "DV").map(it => it.ratingKey));
             } else if (query.includes("audio:ATMOS")) {
                 matchingRatingKeys.push(...libraryItems.filter(it => it.detectedBadges.audio === "ATMOS").map(it => it.ratingKey));
+            } else if (decadeMatch) {
+                const minY = parseInt(decadeMatch[1], 10);
+                const maxY = parseInt(decadeMatch[2], 10);
+                matchingRatingKeys.push(...libraryItems.filter(it => it.year && it.year >= minY && it.year <= maxY).map(it => it.ratingKey));
             } else if (query.includes("1980") && query.includes("1989")) {
                 matchingRatingKeys.push(...libraryItems.filter(it => it.year && it.year >= 1980 && it.year <= 1989).map(it => it.ratingKey));
             } else if (query.includes("1990") && query.includes("1999")) {
@@ -1641,11 +1653,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                             if (isMovieSection && p.media_type === "tv") return false;
                             return true;
                         });
-                        const tmdbIds = new Set(parts.map((p: any) => String(p.id)));
-                        const titles = new Set(parts.map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean));
+                        const index = buildCandidateIndex(parts);
                         matchingRatingKeys.push(...libraryItems.filter(it => 
-                            (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                            (it.title && titles.has(it.title.toLowerCase().trim()))
+                            matchLibraryItemToCandidates(it, index)
                         ).map(it => it.ratingKey));
                     }
                 }
@@ -1655,11 +1665,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                     const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
-                        const tmdbIds = new Set((data.results || []).map((p: any) => String(p.id)));
-                        const titles = new Set((data.results || []).map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean));
+                        const index = buildCandidateIndex(data.results || []);
                         matchingRatingKeys.push(...libraryItems.filter(it => 
-                            (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                            (it.title && titles.has(it.title.toLowerCase().trim()))
+                            matchLibraryItemToCandidates(it, index)
                         ).map(it => it.ratingKey));
                     }
                 }
@@ -1667,11 +1675,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
                 if (!isMovieSection) {
                     const shows = await getTmdbNetworkShows(netId);
-                    const tmdbIds = new Set(shows.map(s => String(s.id)));
-                    const titles = new Set(shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean));
+                    const index = buildCandidateIndex(shows);
                     matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                        matchLibraryItemToCandidates(it, index)
                     ).map(it => it.ratingKey));
                 }
             } else if (collection.sourceQuery?.startsWith("provider:")) {
@@ -1683,14 +1689,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                     mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
                     maxPages: 3
                 });
-                const tmdbIds = new Set(providerMedia.map(m => String(m.id)));
-                const imdbIds = new Set(providerMedia.map(m => m.imdbId).filter(Boolean));
-                const titles = new Set(providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
+                const index = buildCandidateIndex(providerMedia);
                 const provMatches = libraryItems.filter(it => {
-                    const isMatch = (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                                    (it.title && titles.has(it.title.toLowerCase().trim()));
-                    if (!isMatch) return false;
+                    if (!matchLibraryItemToCandidates(it, index)) return false;
                     if (isKids && !isStrictKidsMedia(it)) return false;
                     return true;
                 }).map(it => it.ratingKey);
@@ -1698,23 +1699,15 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
             } else if (collection.sourceQuery === "digital_releases") {
                 if (isTvSection) {
                     const tvShows = await getTmdbPopularTv(1);
-                    const tmdbIds = new Set(tvShows.map(u => String(u.id)));
-                    const imdbIds = new Set(tvShows.map(u => u.imdbId).filter(Boolean));
-                    const titles = new Set(tvShows.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                    const index = buildCandidateIndex(tvShows);
                     matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                        matchLibraryItemToCandidates(it, index)
                     ).map(it => it.ratingKey));
                 } else {
                     const upcoming = await getTmdbUpcomingMovies();
-                    const tmdbIds = new Set(upcoming.map(u => String(u.id)));
-                    const imdbIds = new Set(upcoming.map(u => u.imdbId).filter(Boolean));
-                    const titles = new Set(upcoming.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                    const index = buildCandidateIndex(upcoming);
                     matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                        matchLibraryItemToCandidates(it, index)
                     ).map(it => it.ratingKey));
                 }
             } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
@@ -1725,24 +1718,38 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                     isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
                 ]);
                 const popular = [...p1, ...p2, ...p3];
-                const tmdbIds = new Set(popular.map(u => String(u.id)));
-                const imdbIds = new Set(popular.map(u => u.imdbId).filter(Boolean));
-                const titles = new Set(popular.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                const index = buildCandidateIndex(popular);
                 matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                    matchLibraryItemToCandidates(it, index)
+                ).map(it => it.ratingKey));
+            } else if (collection.sourceQuery?.startsWith("genre:")) {
+                const genreId = parseInt(collection.sourceQuery.replace("genre:", "").trim(), 10) || 28;
+                const genreMedia = await getTmdbGenreMedia(genreId, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 200
+                });
+                const index = buildCandidateIndex(genreMedia);
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    matchLibraryItemToCandidates(it, index)
+                ).map(it => it.ratingKey));
+            } else if (collection.sourceQuery?.startsWith("keyword:")) {
+                const kw = collection.sourceQuery.replace("keyword:", "").trim();
+                const kwMedia = await getTmdbKeywordMedia(kw, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 100
+                });
+                const index = buildCandidateIndex(kwMedia);
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    matchLibraryItemToCandidates(it, index)
                 ).map(it => it.ratingKey));
             } else {
                 // Trending / Popular
                 const trending = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
-                const tmdbIds = new Set(trending.map(t => String(t.id)));
-                const imdbIds = new Set(trending.map(t => t.imdbId).filter(Boolean));
-                const titles = new Set(trending.map(t => t.title?.toLowerCase().trim()).filter(Boolean));
+                const index = buildCandidateIndex(trending);
                 matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                    matchLibraryItemToCandidates(it, index)
                 ).map(it => it.ratingKey));
             }
         } else if (collection.sourceType === "trakt") {
@@ -1750,25 +1757,17 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 const trending = isTvSection 
                     ? await getTraktTrendingShows(40)
                     : await getTraktTrendingMovies(40);
-                const tmdbIds = new Set(trending.map((t: any) => String(t.tmdbId)).filter(Boolean));
-                const imdbIds = new Set(trending.map((t: any) => String(t.imdbId)).filter(Boolean));
-                const titles = new Set(trending.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
+                const index = buildCandidateIndex(trending);
                 matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                    matchLibraryItemToCandidates(it, index)
                 ).map(it => it.ratingKey));
             } else if (collection.sourceQuery === "anticipated") {
                 const anticipated = isTvSection
                     ? await getTraktAnticipatedShows(40)
                     : await getTraktAnticipatedMovies(40);
-                const tmdbIds = new Set(anticipated.map((t: any) => String(t.tmdbId)).filter(Boolean));
-                const imdbIds = new Set(anticipated.map((t: any) => String(t.imdbId)).filter(Boolean));
-                const titles = new Set(anticipated.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
+                const index = buildCandidateIndex(anticipated);
                 matchingRatingKeys.push(...libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                    matchLibraryItemToCandidates(it, index)
                 ).map(it => it.ratingKey));
             } else if (collection.sourceQuery) {
                 const listData = await getTraktUserList(collection.sourceQuery);
@@ -1778,13 +1777,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                         if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
                         return true;
                     });
-                    const tmdbIds = new Set(scopedListItems.map((t: any) => String(t.tmdbId)).filter(Boolean));
-                    const imdbIds = new Set(scopedListItems.map((t: any) => String(t.imdbId)).filter(Boolean));
-                    const titles = new Set(scopedListItems.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
+                    const index = buildCandidateIndex(scopedListItems);
                     matchingRatingKeys.push(...libraryItems.filter(it => 
-                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
-                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                        matchLibraryItemToCandidates(it, index)
                     ).map(it => it.ratingKey));
                 }
             }
@@ -1798,13 +1793,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                         if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
                         return true;
                     });
-                    const tmdbIds = new Set(scopedItems.map((t: any) => String(t.tmdbId)).filter(Boolean));
-                    const imdbIds = new Set(scopedItems.map((t: any) => String(t.imdbId).toLowerCase()).filter(Boolean));
-                    const titles = new Set(scopedItems.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean));
+                    const index = buildCandidateIndex(scopedItems);
                     const res = libraryItems.filter(it => 
-                        (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                        (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
-                        (it.title && titles.has(it.title.toLowerCase().trim()))
+                        matchLibraryItemToCandidates(it, index)
                     ).map(it => it.ratingKey);
                     if (res.length > 0) {
                         matchingRatingKeys.push(...res);
@@ -2096,7 +2087,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
         const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
             if (isMovieSection && (it.type === "show" || it.type === "episode")) return false;
-            if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+            if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer" || isPlexItemPlaceholderOrStub(it))) {
                 return false;
             }
             if (isPlexItemExcludedByLabels(it, collectionConfig.excludedLabels, isPlaceholdersCollection)) {
@@ -2112,12 +2103,18 @@ export async function generateCollectionCandidateItemsPreviewAction(
         const sourceQuery = collectionConfig.sourceQuery || "";
 
         if (sourceType === "plex_query") {
+            const decadeMatch = sourceQuery.match(/year>=(\d{4})&year<=(\d{4})/);
             if (sourceQuery.includes("hdr:DV")) {
                 matchedItems = libraryItems.filter(it => it.detectedBadges.hdr === "DV");
                 executionMethod = "Plex Stream Telemetry: Filtering for Dolby Vision (DV) video streams.";
             } else if (sourceQuery.includes("audio:ATMOS")) {
                 matchedItems = libraryItems.filter(it => it.detectedBadges.audio === "ATMOS");
                 executionMethod = "Plex Audio Telemetry: Filtering for Dolby Atmos immersive audio tracks.";
+            } else if (decadeMatch) {
+                const minY = parseInt(decadeMatch[1], 10);
+                const maxY = parseInt(decadeMatch[2], 10);
+                matchedItems = libraryItems.filter(it => it.year && it.year >= minY && it.year <= maxY);
+                executionMethod = `Plex Metadata Filter: Released between ${minY} and ${maxY}.`;
             } else if (sourceQuery.includes("1980") && sourceQuery.includes("1989")) {
                 matchedItems = libraryItems.filter(it => it.year && it.year >= 1980 && it.year <= 1989);
                 executionMethod = "Plex Metadata Filter: Released between 1980 and 1989.";
@@ -2151,12 +2148,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                             if (isMovieSection && p.media_type === "tv") return false;
                             return true;
                         });
-                        const titles = parts.map((p: any) => p.title?.toLowerCase().trim()).filter(Boolean);
-                        const tmdbIds = parts.map((p: any) => String(p.id));
-                        matchedItems = libraryItems.filter(it => 
-                            (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                            (it.title && titles.includes(it.title.toLowerCase().trim()))
-                        );
+                        const index = buildCandidateIndex(parts);
+                        matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                     }
                 }
             } else if (sourceQuery.startsWith("company:")) {
@@ -2166,13 +2159,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     const tmdbRes = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&with_companies=${compId}&sort_by=primary_release_date.desc&page=1`);
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
-                        const results: any[] = data.results || [];
-                        const tmdbIds = results.map((r: any) => String(r.id));
-                        const titles = results.map((r: any) => r.title?.toLowerCase().trim()).filter(Boolean);
-                        matchedItems = libraryItems.filter(it => 
-                            (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                            (it.title && titles.includes(it.title.toLowerCase().trim()))
-                        );
+                        const index = buildCandidateIndex(data.results || []);
+                        matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                     }
                 }
             } else if (sourceQuery.startsWith("network:")) {
@@ -2181,12 +2169,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 executionMethod = `TMDb TV Network API: Querying ${netName} shows.`;
                 if (!isMovieSection) {
                     const shows = await getTmdbNetworkShows(netId);
-                    const tmdbIds = shows.map(s => String(s.id));
-                    const titles = shows.map(s => s.title?.toLowerCase().trim()).filter(Boolean);
-                    matchedItems = libraryItems.filter(it => 
-                        (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                        (it.title && titles.includes(it.title.toLowerCase().trim()))
-                    );
+                    const index = buildCandidateIndex(shows);
+                    matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                 }
             } else if (sourceQuery.startsWith("provider:")) {
                 const parts = sourceQuery.split(":");
@@ -2198,17 +2182,32 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     isKids, 
                     mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both" 
                 });
-                const tmdbIds = providerMedia.map(m => String(m.id));
-                const imdbIds = providerMedia.map(m => m.imdbId).filter(Boolean);
-                const titles = providerMedia.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
+                const index = buildCandidateIndex(providerMedia);
                 matchedItems = libraryItems.filter(it => {
-                    const isMatch = (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                                    (it.title && titles.includes(it.title.toLowerCase().trim()));
-                    if (!isMatch) return false;
+                    if (!matchLibraryItemToCandidates(it, index)) return false;
                     if (isKids && !isStrictKidsMedia(it)) return false;
                     return true;
                 });
+            } else if (sourceQuery.startsWith("genre:")) {
+                const genreId = parseInt(sourceQuery.replace("genre:", "").trim(), 10) || 28;
+                executionMethod = `TMDb Genre Discover API: Querying blockbuster & popular genre #${genreId} titles. Matches against Plex library metadata.`;
+                const genreMedia = await getTmdbGenreMedia(genreId, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 200
+                });
+                const index = buildCandidateIndex(genreMedia);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
+            } else if (sourceQuery.startsWith("keyword:")) {
+                const kw = sourceQuery.replace("keyword:", "").trim();
+                executionMethod = `TMDb Keyword Discover API: Querying keyword "${kw}" titles. Matches against Plex library metadata.`;
+                const kwMedia = await getTmdbKeywordMedia(kw, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 100
+                });
+                const index = buildCandidateIndex(kwMedia);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else if (sourceQuery === "digital_releases") {
                 executionMethod = isTvSection 
                     ? `TMDb Popular TV API: Querying active television shows.`
@@ -2216,25 +2215,13 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const upcoming = isTvSection 
                     ? await getTmdbPopularTv(1)
                     : await getTmdbUpcomingMovies();
-                const tmdbIds = upcoming.map(m => String(m.id));
-                const imdbIds = upcoming.map(m => m.imdbId).filter(Boolean);
-                const titles = upcoming.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                const index = buildCandidateIndex(upcoming);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else if (sourceQuery === "in_theatres") {
                 executionMethod = `TMDb Theatrical API: Querying current theatrical and now-playing releases.`;
                 const inTheatres = await getTmdbNowPlayingMovies();
-                const tmdbIds = inTheatres.map(m => String(m.id));
-                const imdbIds = inTheatres.map(m => m.imdbId).filter(Boolean);
-                const titles = inTheatres.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                const index = buildCandidateIndex(inTheatres);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else if (sourceQuery === "popular" || sourceQuery === "popular_movies" || sourceQuery === "popular_tv") {
                 const isTv = isTvSection || sourceQuery === "popular_tv";
                 executionMethod = isTv 
@@ -2246,25 +2233,13 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
                 ]);
                 const popular = [...p1, ...p2, ...p3];
-                const tmdbIds = popular.map(m => String(m.id));
-                const imdbIds = popular.map(m => m.imdbId).filter(Boolean);
-                const titles = popular.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                const index = buildCandidateIndex(popular);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else {
                 executionMethod = `TMDb Trending (${isTvSection ? "TV" : isMovieSection ? "Movies" : "All"}): ${sourceQuery}`;
                 const trending = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
-                const tmdbIds = trending.map(t => String(t.id));
-                const imdbIds = trending.map(t => t.imdbId).filter(Boolean);
-                const titles = trending.map(t => t.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                const index = buildCandidateIndex(trending);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             }
         } else if (sourceType === "mdblist") {
             executionMethod = `MDBList API: Resolving curated chart "${sourceQuery}". Matches against Plex IMDb/TMDb metadata.`;
@@ -2275,14 +2250,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
                     return true;
                 });
-                const imdbIds = scopedItems.map((t: any) => String(t.imdbId).toLowerCase()).filter(Boolean);
-                const tmdbIds = scopedItems.map((t: any) => String(t.tmdbId)).filter(Boolean);
-                const titles = scopedItems.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb).toLowerCase())) ||
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                const index = buildCandidateIndex(scopedItems);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else {
                 const isTop150 = sourceQuery === "top-imdb-150" || sourceQuery === "top-imdb-150-tv" || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("top 150"));
                 const isTop250 = sourceQuery === "top-imdb-250" || sourceQuery === "top-imdb-tv" || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("top 250"));
@@ -2293,16 +2262,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     if (isTop150) {
                         builtinList = builtinList.filter(b => b.rank <= 150);
                     }
-                    const builtinTmdbIds = new Set(builtinList.map(b => String(b.tmdbId)));
-                    const builtinImdbIds = new Set(builtinList.map(b => b.imdbId.toLowerCase()));
-                    const builtinTitles = new Set(builtinList.map(b => b.title.toLowerCase().trim()));
-
-                    matchedItems = libraryItems.filter(it => {
-                        const mTmdb = it.guids?.tmdb && builtinTmdbIds.has(String(it.guids.tmdb));
-                        const mImdb = it.guids?.imdb && builtinImdbIds.has(String(it.guids.imdb).toLowerCase());
-                        const mTitle = it.title && builtinTitles.has(it.title.toLowerCase().trim());
-                        return mTmdb || mImdb || mTitle;
-                    });
+                    const index = buildCandidateIndex(builtinList);
+                    matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                 } else if (sourceQuery === "top-oscar-best-picture") {
                     executionMethod += " (MDBList key not configured; configure in settings to fetch official Oscar list).";
                 } else if (sourceQuery?.includes("popular") || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("popular"))) {
@@ -2314,15 +2275,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         isTvSection ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
                         isTvSection ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
                     ]);
-                    const popList = [...p1, ...p2, ...p3];
-                    const tmdbIds = popList.map(m => String(m.id));
-                    const imdbIds = popList.map(m => m.imdbId).filter(Boolean);
-                    const titles = popList.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
-                    matchedItems = libraryItems.filter(it => 
-                        (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                        (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                        (it.title && titles.includes(it.title.toLowerCase().trim()))
-                    );
+                    const index = buildCandidateIndex([...p1, ...p2, ...p3]);
+                    matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                 }
             }
         } else if (sourceType === "trakt") {
@@ -2331,26 +2285,14 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const trending = isTvSection 
                     ? await getTraktTrendingShows(50)
                     : await getTraktTrendingMovies(50);
-                const imdbIds = trending.map((t: any) => t.imdbId).filter(Boolean);
-                const tmdbIds = trending.map((t: any) => String(t.tmdbId)).filter(Boolean);
-                const titles = trending.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                const index = buildCandidateIndex(trending);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else if (sourceQuery === "anticipated") {
                 const anticipated = isTvSection
                     ? await getTraktAnticipatedShows(50)
                     : await getTraktAnticipatedMovies(50);
-                const imdbIds = anticipated.map((t: any) => t.imdbId).filter(Boolean);
-                const tmdbIds = anticipated.map((t: any) => String(t.tmdbId)).filter(Boolean);
-                const titles = anticipated.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
-                matchedItems = libraryItems.filter(it => 
-                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                    (it.title && titles.includes(it.title.toLowerCase().trim()))
-                );
+                const index = buildCandidateIndex(anticipated);
+                matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
             } else {
                 const listData = await getTraktUserList(sourceQuery);
                 if (listData?.items) {
@@ -2359,14 +2301,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         if (isMovieSection && (t.mediaType === "show" || (t as any).mediaType === "tv")) return false;
                         return true;
                     });
-                    const imdbIds = scoped.map((t: any) => t.imdbId).filter(Boolean);
-                    const tmdbIds = scoped.map((t: any) => String(t.tmdbId)).filter(Boolean);
-                    const titles = scoped.map((t: any) => t.title?.toLowerCase().trim()).filter(Boolean);
-                    matchedItems = libraryItems.filter(it => 
-                        (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
-                        (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
-                        (it.title && titles.includes(it.title.toLowerCase().trim()))
-                    );
+                    const index = buildCandidateIndex(scoped);
+                    matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                 }
             }
         } else if (sourceType === "radarr") {
@@ -2386,14 +2322,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
                                 if (tagId) movies = movies.filter((m: any) => m.tags?.includes(tagId));
                             }
-                            const tmdbIds = new Set(movies.map((m: any) => String(m.tmdbId)).filter(Boolean));
-                            const imdbIds = new Set(movies.map((m: any) => String(m.imdbId).toLowerCase()).filter(Boolean));
-                            const titles = new Set(movies.map((m: any) => m.title?.toLowerCase().trim()).filter(Boolean));
-                            matchedItems = libraryItems.filter(it => 
-                                (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
-                                (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
-                                (it.title && titles.has(it.title.toLowerCase().trim()))
-                            );
+                            const index = buildCandidateIndex(movies);
+                            matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
                         }
                     }
                 }
@@ -2417,14 +2347,11 @@ export async function generateCollectionCandidateItemsPreviewAction(
                                 const tagId = tagsRes.success ? tagsRes.data?.find((t: any) => t.label.toLowerCase() === targetTag)?.id : null;
                                 if (tagId) series = series.filter((s: any) => s.tags?.includes(tagId));
                             }
-                            const tvdbIds = new Set(series.map((s: any) => String(s.tvdbId)).filter(Boolean));
-                            const imdbIds = new Set(series.map((s: any) => String(s.imdbId).toLowerCase()).filter(Boolean));
-                            const titles = new Set(series.map((s: any) => s.title?.toLowerCase().trim()).filter(Boolean));
-                            matchedItems = libraryItems.filter(it => 
-                                (it.guids?.tvdb && tvdbIds.has(String(it.guids.tvdb))) ||
-                                (it.guids?.imdb && imdbIds.has(String(it.guids.imdb).toLowerCase())) ||
-                                (it.title && titles.has(it.title.toLowerCase().trim()))
-                            );
+                            const index = buildCandidateIndex(series.map((s: any) => ({ ...s, id: s.tvdbId })));
+                            matchedItems = libraryItems.filter(it => {
+                                if (it.guids?.tvdb && index.tmdbIds.has(String(it.guids.tvdb))) return true;
+                                return matchLibraryItemToCandidates(it, index);
+                            });
                         }
                     }
                 }
@@ -9247,7 +9174,10 @@ export async function getTrendingAndPlaceholderMediaAction(
                 match = libraryItems.find(it => it.guids?.imdb === item.imdbId);
             } else if (item.title) {
                 const clean = item.title.toLowerCase().trim();
-                if (libraryTitles.has(clean)) {
+                const itemYear = item.releaseDate ? parseInt(String(item.releaseDate).slice(0, 4), 10) : ((item as any).year || undefined);
+                if (itemYear) {
+                    match = libraryItems.find(it => it.title && it.title.toLowerCase().trim() === clean && it.year && Math.abs(it.year - itemYear) <= 1);
+                } else if (libraryTitles.has(clean)) {
                     match = libraryTitles.get(clean);
                 }
             }
@@ -9917,6 +9847,14 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
         const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
         const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
         const libraryTitles = new Set(libraryItems.map(it => it.title?.toLowerCase().trim()).filter(Boolean));
+        const libraryTitleYearsMap = new Map<string, number[]>();
+        for (const it of libraryItems) {
+            if (it.title) {
+                const nt = it.title.toLowerCase().trim();
+                if (!libraryTitleYearsMap.has(nt)) libraryTitleYearsMap.set(nt, []);
+                if (it.year) libraryTitleYearsMap.get(nt)!.push(it.year);
+            }
+        }
 
         // 2. Fetch candidates from Collection Source Query with strict section type isolation
         let candidateItems: any[] = [];
@@ -10008,6 +9946,20 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
                 ]);
                 candidateItems = [...p1, ...p2, ...p3];
+            } else if (collection.sourceQuery?.startsWith("genre:")) {
+                const genreId = parseInt(collection.sourceQuery.replace("genre:", "").trim(), 10) || 28;
+                candidateItems = await getTmdbGenreMedia(genreId, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 200
+                });
+            } else if (collection.sourceQuery?.startsWith("keyword:")) {
+                const kw = collection.sourceQuery.replace("keyword:", "").trim();
+                candidateItems = await getTmdbKeywordMedia(kw, {
+                    mediaType: isTvSection ? "tv" : isMovieSection ? "movie" : "both",
+                    maxPages: 3,
+                    minVotes: 100
+                });
             } else {
                 candidateItems = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
             }
@@ -10185,10 +10137,22 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
         // 3. Filter candidate items to only those MISSING from the library
         const missingCandidates = candidateItems.filter(item => {
             const tmdbStr = String(item.id);
-            const inLib = libraryTmdbIds.has(tmdbStr) || 
-                          (item.imdbId && libraryImdbIds.has(item.imdbId)) ||
-                          (item.title && libraryTitles.has(item.title.toLowerCase().trim()));
-            return !inLib;
+            if (libraryTmdbIds.has(tmdbStr)) return false;
+            if (item.imdbId && libraryImdbIds.has(item.imdbId.toLowerCase().trim())) return false;
+            if (item.title) {
+                const nt = item.title.toLowerCase().trim();
+                const matchedYears = libraryTitleYearsMap.get(nt);
+                if (matchedYears && matchedYears.length > 0) {
+                    const itemYear = item.releaseDate ? parseInt(String(item.releaseDate).slice(0, 4), 10) : ((item as any).year || undefined);
+                    if (itemYear) {
+                        const hasYearMatch = matchedYears.some(ly => Math.abs(ly - itemYear) <= 1);
+                        if (hasYearMatch) return false;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            return true;
         });
 
         // Limit count if maxItems is set
@@ -11398,7 +11362,10 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 match = libraryItems.find(it => it.guids?.imdb === item.imdbId);
             } else if (item.title) {
                 const clean = item.title.toLowerCase().trim();
-                if (libraryTitles.has(clean)) {
+                const candYear = item.releaseDate ? parseInt(String(item.releaseDate).slice(0, 4), 10) : ((item as any).year || undefined);
+                if (candYear) {
+                    match = libraryItems.find(it => it.title && it.title.toLowerCase().trim() === clean && it.year && Math.abs(it.year - candYear) <= 1);
+                } else if (libraryTitles.has(clean)) {
                     match = libraryTitles.get(clean);
                 }
             }

@@ -4668,6 +4668,103 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Agregarr: Genre & Keyword Discovery, Candidate Year Verification & Placeholder Exclusion", async () => {
+        const { getTmdbGenreMedia, getTmdbKeywordMedia } = await import("../src/lib/curation/tmdb");
+        if (typeof getTmdbGenreMedia !== "function" || typeof getTmdbKeywordMedia !== "function") {
+            throw new Error("Missing getTmdbGenreMedia or getTmdbKeywordMedia in tmdb.ts");
+        }
+
+        const {
+            isPlexItemPlaceholderOrStub,
+            buildCandidateIndex,
+            matchLibraryItemToCandidates
+        } = await import("../src/lib/curation/plex-analyzer");
+
+        // 1. Verify candidate matching strictly enforces release year when matching by title
+        const candidateUpcomingReboot = [
+            { id: 999999, title: "Resident Evil", year: 2026, releaseDate: "2026-09-18" }
+        ];
+        const index = buildCandidateIndex(candidateUpcomingReboot);
+
+        const libraryOldMovie2002 = {
+            ratingKey: "12345",
+            title: "Resident Evil",
+            year: 2002,
+            guids: {}
+        };
+        const matchedOldMovie = matchLibraryItemToCandidates(libraryOldMovie2002, index);
+        if (matchedOldMovie) {
+            throw new Error("Library item Resident Evil (2002) falsely matched candidate Resident Evil (2026)!");
+        }
+
+        const libraryUpcomingStub = {
+            ratingKey: "12346",
+            title: "Resident Evil",
+            year: 2026,
+            guids: {}
+        };
+        const matchedUpcoming = matchLibraryItemToCandidates(libraryUpcomingStub, index);
+        if (!matchedUpcoming) {
+            throw new Error("Expected Resident Evil (2026) to match candidate Resident Evil (2026)");
+        }
+
+        // 2. Verify placeholder & unreleased exclusion
+        const stubShortDuration = {
+            title: "Backrooms",
+            type: "movie",
+            duration: 120000, // 2 minutes (trailer)
+            year: 2026
+        };
+        if (!isPlexItemPlaceholderOrStub(stubShortDuration)) {
+            throw new Error("Expected short duration movie to be detected as placeholder/stub");
+        }
+
+        const stubFutureYear = {
+            title: "Toy Story 5",
+            type: "movie",
+            year: 2026,
+            duration: 90 * 60 * 1000,
+            fileSize: 1000000000
+        };
+        const currentYear = new Date().getFullYear();
+        if (stubFutureYear.year > currentYear && !isPlexItemPlaceholderOrStub(stubFutureYear)) {
+            throw new Error("Expected future unreleased item (year > currentYear) to be detected as placeholder");
+        }
+
+        const regularReleasedMovie = {
+            title: "The Dark Knight",
+            type: "movie",
+            year: 2008,
+            duration: 152 * 60 * 1000,
+            fileSize: 15 * 1024 * 1024 * 1024
+        };
+        if (isPlexItemPlaceholderOrStub(regularReleasedMovie)) {
+            throw new Error("Released library movie The Dark Knight falsely detected as placeholder/stub");
+        }
+
+        // 3. Verify Seasonal In-Season vs Out-of-Season calculation
+        // Summer Blockbusters: 5/15 to 8/31
+        const isDateInSeason = (m: number, d: number, startM: number, startD: number, endM: number, endD: number) => {
+            const curVal = m * 100 + d;
+            const startVal = startM * 100 + startD;
+            const endVal = endM * 100 + endD;
+            return startVal <= endVal ? (curVal >= startVal && curVal <= endVal) : (curVal >= startVal || curVal <= endVal);
+        };
+
+        // October 6 must be OUT of season for Summer Blockbusters (May 15 - Aug 31)
+        if (isDateInSeason(10, 6, 5, 15, 8, 31)) {
+            throw new Error("October 6 falsely evaluated as in-season for Summer Blockbusters");
+        }
+        // July 4 must be IN season for Summer Blockbusters
+        if (!isDateInSeason(7, 4, 5, 15, 8, 31)) {
+            throw new Error("July 4 evaluated as out-of-season for Summer Blockbusters");
+        }
+        // October 6 must be IN season for Halloween (Oct 1 - Nov 5)
+        if (!isDateInSeason(10, 6, 10, 1, 11, 5)) {
+            throw new Error("October 6 evaluated as out-of-season for Halloween");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

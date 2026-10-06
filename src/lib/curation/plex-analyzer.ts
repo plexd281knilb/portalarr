@@ -4138,3 +4138,114 @@ export async function addCollectionToPlexItem(
     }
     return false;
 }
+
+/**
+ * Detects whether a Plex library item is a trailer stub, placeholder file, unreleased future entry,
+ * or sample video that should be strictly excluded from standard released movie and show collections.
+ */
+export function isPlexItemPlaceholderOrStub(it: any): boolean {
+    if (it.isPlaceholder) return true;
+    if (it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer") return true;
+    if (it.labels && Array.isArray(it.labels)) {
+        if (it.labels.some((l: string) => /\b(trailer|placeholder|coming[ _-]?soon|stub)\b/i.test(l))) {
+            return true;
+        }
+    }
+    if (it.title && typeof it.title === "string") {
+        const t = it.title.toLowerCase();
+        if (t.includes("[trailer]") || t.includes("(trailer)") || t.includes("[placeholder]") || t.includes("(placeholder)") || t.includes("trailer (placeholder)") || t.includes("[stub]") || t.includes("(stub)")) {
+            return true;
+        }
+    }
+    if (it.filePath && typeof it.filePath === "string") {
+        const fp = it.filePath.toLowerCase();
+        if (fp.includes(".portalarr-missing") || fp.includes("edition-trailer") || fp.includes("edition-placeholder") || fp.endsWith(".disc") || fp.endsWith(".strm") || /\b(trailer|placeholder|stub)\b/i.test(fp)) {
+            return true;
+        }
+    }
+    // Duration under 15 minutes for a feature film movie indicates a trailer stub
+    if (it.type === "movie" && it.duration && it.duration > 0 && it.duration < 15 * 60 * 1000) {
+        return true;
+    }
+    // File size under 25MB for a feature film movie indicates a placeholder/stub
+    if (it.type === "movie" && it.fileSize && it.fileSize > 0 && it.fileSize < 25 * 1024 * 1024) {
+        return true;
+    }
+    // Future unreleased stubs / placeholder items (year > current year)
+    const currentYear = new Date().getFullYear();
+    if (it.year && it.year > currentYear) {
+        return true;
+    }
+    return false;
+}
+
+export interface CandidateItemLike {
+    id?: string | number;
+    tmdbId?: string | number;
+    imdbId?: string;
+    title?: string;
+    name?: string;
+    year?: number;
+    releaseDate?: string;
+    release_date?: string;
+    first_air_date?: string;
+    firstAired?: string;
+}
+
+export function buildCandidateIndex(candidates: CandidateItemLike[]): {
+    tmdbIds: Set<string>;
+    imdbIds: Set<string>;
+    titleYearsMap: Map<string, number[]>;
+} {
+    const tmdbIds = new Set<string>();
+    const imdbIds = new Set<string>();
+    const titleYearsMap = new Map<string, number[]>();
+
+    for (const c of candidates) {
+        const tmdb = c.tmdbId ?? c.id;
+        if (tmdb) tmdbIds.add(String(tmdb));
+        if (c.imdbId) imdbIds.add(String(c.imdbId).toLowerCase().trim());
+
+        const rawTitle = c.title || c.name;
+        if (rawTitle && typeof rawTitle === "string") {
+            const normTitle = rawTitle.toLowerCase().trim();
+            let y = c.year;
+            if (!y) {
+                const dateStr = c.releaseDate || c.release_date || c.first_air_date || c.firstAired;
+                if (dateStr && typeof dateStr === "string") {
+                    const match = dateStr.match(/^(\d{4})/);
+                    if (match) y = parseInt(match[1], 10);
+                }
+            }
+            if (!titleYearsMap.has(normTitle)) {
+                titleYearsMap.set(normTitle, []);
+            }
+            if (y && !isNaN(y)) {
+                titleYearsMap.get(normTitle)!.push(y);
+            }
+        }
+    }
+
+    return { tmdbIds, imdbIds, titleYearsMap };
+}
+
+export function matchLibraryItemToCandidates(
+    it: any,
+    index: { tmdbIds: Set<string>; imdbIds: Set<string>; titleYearsMap: Map<string, number[]> }
+): boolean {
+    if (it.guids?.tmdb && index.tmdbIds.has(String(it.guids.tmdb))) return true;
+    if (it.guids?.imdb && index.imdbIds.has(String(it.guids.imdb).toLowerCase().trim())) return true;
+
+    if (it.title && typeof it.title === "string") {
+        const normTitle = it.title.toLowerCase().trim();
+        const candidateYears = index.titleYearsMap.get(normTitle);
+        if (candidateYears) {
+            // If neither item nor candidate has a year recorded, allow title match
+            if (!it.year || candidateYears.length === 0) return true;
+            // Strict year matching: candidate year must be within +/- 1 year to avoid matching reboots/remakes/upcoming
+            return candidateYears.some(cy => Math.abs(it.year - cy) <= 1);
+        }
+    }
+    return false;
+}
+
