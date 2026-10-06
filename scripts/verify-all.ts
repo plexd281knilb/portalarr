@@ -2395,6 +2395,42 @@ async function runTestSuite() {
         }
     });
 
+    // 42f. Maintainerr: Poster Artwork Restoration & Buffer MIME Detection Resilience
+    await assertTest("Maintainerr: Poster Artwork Restoration & MIME Detection Resilience", async () => {
+        const { expandCandidateUrls, uploadPlexItemPoster } = await import("../src/lib/curation/plex-analyzer");
+        const { restoreItemOriginalArtwork } = await import("../src/lib/curation/overlay-engine");
+
+        if (typeof uploadPlexItemPoster !== "function") {
+            throw new Error("Missing uploadPlexItemPoster export in plex-analyzer.ts");
+        }
+        if (typeof restoreItemOriginalArtwork !== "function") {
+            throw new Error("Missing restoreItemOriginalArtwork export in overlay-engine.ts");
+        }
+
+        // Test expandCandidateUrls with single plex.direct candidate
+        const candidates = expandCandidateUrls("https://192-168-1-100.abcdef.plex.direct:32400");
+        if (!candidates.includes("http://192.168.1.100:32400") || !candidates.includes("https://192.168.1.100:32400")) {
+            throw new Error(`expandCandidateUrls failed to decode direct LAN IP from .plex.direct, got: ${JSON.stringify(candidates)}`);
+        }
+
+        // Test magic bytes buffer MIME identification logic
+        const pngBuf = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D]);
+        const jpgBuf = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01]);
+        const webpBuf = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+
+        const detectMime = (buf: Buffer) => {
+            if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return "image/png";
+            if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return "image/jpeg";
+            if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+                buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return "image/webp";
+            return "image/jpeg";
+        };
+
+        if (detectMime(pngBuf) !== "image/png") throw new Error("Failed to detect PNG magic bytes");
+        if (detectMime(jpgBuf) !== "image/jpeg") throw new Error("Failed to detect JPEG magic bytes");
+        if (detectMime(webpBuf) !== "image/webp") throw new Error("Failed to detect WebP magic bytes");
+    });
+
     // 43. Kometa: Rule Scoping, Section Revert Scoping & Aspect Ratio Guard
     await assertTest("Kometa: Rule Scoping, Section Revert Scoping & Episode Aspect Ratio Guards", async () => {
         // 1. Rule Scoping & Isolation

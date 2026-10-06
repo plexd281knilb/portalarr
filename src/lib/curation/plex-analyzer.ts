@@ -2646,13 +2646,32 @@ export async function uploadPlexItemPoster(
 ): Promise<boolean> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
 
+    // Automatically detect image format from magic bytes if possible to prevent PMS 400 rejection
+    let detectedMime = mimeType;
+    if (imageBuffer && imageBuffer.length >= 12) {
+        if (imageBuffer[0] === 0x89 && imageBuffer[1] === 0x50 && imageBuffer[2] === 0x4E && imageBuffer[3] === 0x47) {
+            detectedMime = "image/png";
+        } else if (imageBuffer[0] === 0xFF && imageBuffer[1] === 0xD8 && imageBuffer[2] === 0xFF) {
+            detectedMime = "image/jpeg";
+        } else if (
+            imageBuffer[0] === 0x52 && imageBuffer[1] === 0x49 && imageBuffer[2] === 0x46 && imageBuffer[3] === 0x46 &&
+            imageBuffer[8] === 0x57 && imageBuffer[9] === 0x45 && imageBuffer[10] === 0x42 && imageBuffer[11] === 0x50
+        ) {
+            detectedMime = "image/webp";
+        } else if (imageBuffer[0] === 0x47 && imageBuffer[1] === 0x49 && imageBuffer[2] === 0x46 && imageBuffer[3] === 0x38) {
+            detectedMime = "image/gif";
+        }
+    }
+
+    let lastErrorDetail = "";
+
     for (const cleanBase of urlsToTry) {
         const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?X-Plex-Token=${encodeURIComponent(token)}`;
         try {
             const res = await fetch(url, {
                 method: "POST",
                 headers: {
-                    "Content-Type": mimeType,
+                    "Content-Type": detectedMime,
                     "X-Plex-Token": token,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
@@ -2668,13 +2687,17 @@ export async function uploadPlexItemPoster(
                     signal: AbortSignal.timeout(3000)
                 }).catch(() => {});
                 return true;
+            } else {
+                const text = await res.text().catch(() => "");
+                lastErrorDetail = `${cleanBase}: HTTP ${res.status} ${res.statusText}${text ? ` - ${text.slice(0, 80).replace(/\s+/g, " ")}` : ""}`;
             }
         } catch (e: any) {
-            // Try next candidate
+            const msg = e?.name === "AbortError" || e?.name === "TimeoutError" ? "timeout after 20s" : (e?.message || String(e));
+            lastErrorDetail = `${cleanBase}: ${msg}`;
         }
     }
 
-    logger.addLog("WARN", "PLEX", `Failed to upload poster buffer to item ${ratingKey}`);
+    logger.addLog("WARN", "PLEX", `Failed to upload poster buffer to item ${ratingKey}${lastErrorDetail ? ` (${lastErrorDetail})` : ""}`);
     return false;
 }
 
@@ -2688,6 +2711,7 @@ export async function uploadPlexItemPosterFromUrl(
     imageUrl: string
 ): Promise<boolean> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    let lastErrorDetail = "";
 
     for (const cleanBase of urlsToTry) {
         const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?url=${encodeURIComponent(imageUrl)}&X-Plex-Token=${encodeURIComponent(token)}`;
@@ -2697,7 +2721,8 @@ export async function uploadPlexItemPosterFromUrl(
                 headers: {
                     "X-Plex-Token": token,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-                }
+                },
+                signal: AbortSignal.timeout(20000)
             });
 
             if (res.ok) {
@@ -2708,12 +2733,17 @@ export async function uploadPlexItemPosterFromUrl(
                     signal: AbortSignal.timeout(3000)
                 }).catch(() => {});
                 return true;
+            } else {
+                const text = await res.text().catch(() => "");
+                lastErrorDetail = `${cleanBase}: HTTP ${res.status} ${res.statusText}${text ? ` - ${text.slice(0, 80).replace(/\s+/g, " ")}` : ""}`;
             }
-        } catch (e) {
-            // Try next candidate
+        } catch (e: any) {
+            const msg = e?.name === "AbortError" || e?.name === "TimeoutError" ? "timeout after 20s" : (e?.message || String(e));
+            lastErrorDetail = `${cleanBase}: ${msg}`;
         }
     }
 
+    logger.addLog("WARN", "PLEX", `Failed to upload poster from URL to item ${ratingKey}${lastErrorDetail ? ` (${lastErrorDetail})` : ""}`);
     return false;
 }
 

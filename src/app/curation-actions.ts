@@ -5206,7 +5206,8 @@ export async function unmarkItemLeavingSoonAction(ratingKey: string, serverId: s
         // Revert poster art if backed up
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (resolved?.serverUrl) {
-            await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey, resolved.serverName).catch(() => {});
+            const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
+            await restoreItemOriginalArtwork(urlsToTry, resolved.token, resolved.serverId, ratingKey, resolved.serverName).catch(() => {});
         }
 
         // Sync Leaving Soon collection & home hub
@@ -5254,8 +5255,9 @@ export async function bulkUnmarkItemsLeavingSoonAction(items: { ratingKey: strin
             try {
                 const resolved = await resolveWorkingPlexServerConnection(srvId);
                 if (resolved?.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
                     for (const rKey of rKeys) {
-                        await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, rKey, resolved.serverName).catch(() => {});
+                        await restoreItemOriginalArtwork(urlsToTry, resolved.token, resolved.serverId, rKey, resolved.serverName).catch(() => {});
                     }
                 }
             } catch (err) {}
@@ -5593,7 +5595,8 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
                                 });
 
                                 // Restore original poster artwork
-                                await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, sId, rec.ratingKey);
+                                const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
+                                await restoreItemOriginalArtwork(urlsToTry, resolved.token, sId, rec.ratingKey, resolved.serverName);
 
                                 unflaggedItems.push({
                                     ratingKey: rec.ratingKey,
@@ -6111,8 +6114,9 @@ export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
             try {
                 const resolved = await resolveWorkingPlexServerConnection(srvId);
                 if (resolved?.serverUrl) {
+                    const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
                     for (const rKey of rKeys) {
-                        await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, rKey, resolved.serverName).catch(() => {});
+                        await restoreItemOriginalArtwork(urlsToTry, resolved.token, resolved.serverId, rKey, resolved.serverName).catch(() => {});
                     }
                 }
             } catch (err) {}
@@ -6723,7 +6727,8 @@ export async function restoreSingleItemPosterAction(serverId: string, ratingKey:
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { success: false, error: `Plex server "${serverId}" unreachable or token not configured.` };
 
-        const res = await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, ratingKey, resolved.serverName);
+        const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
+        const res = await restoreItemOriginalArtwork(urlsToTry, resolved.token, resolved.serverId, ratingKey, resolved.serverName);
         return {
             success: res.success,
             message: res.success ? `Restored original pristine poster on Plex server "${resolved.serverName}"!` : (res.message || "Artwork not found in backup vault.")

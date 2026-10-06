@@ -89,6 +89,11 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
 13. **Unraid Daily 5:00 AM – 5:30 AM Plex Container Maintenance Blackout**:
     - **Blackout Protocol (`isPlexMaintenanceWindow`)**: Unraid executes scheduled database integrity checks and restarts Plex containers daily from 5:00 AM to 5:30 AM. No background runner, automated scheduled task, or direct PMS polling (`getPlexActiveSessions`, `getPlexServerLibrarySections`, `runOverlayIncrementalSyncInternal`, `runOverlayRecheckSyncInternal`, `runAgregarrSyncInternal`, `runMaintainerrSyncInternal`, `runParentalTagsSyncInternal`, `syncPlexFriendsInternal`, `syncMediaRequestsQueueAndAvailabilityInternal`, `getPlexLibraryGuidIndex`) is permitted to hit Plex Media Server during 5:00:00 AM – 5:29:59 AM.
     - All schedules due at or during 5:00 AM automatically defer to 5:30:00 AM once the container restart concludes. Maintainerr's recommended default is `daily_6am`.
+14. **Direct Poster Buffer Uploads & MIME Magic Byte Requirements**:
+    - PMS `/library/metadata/{ratingKey}/posters` rejects binary uploads with `400 Bad Request` if the `Content-Type` header disagrees with the binary image structure.
+    - Always determine the image format from magic bytes (`image/png` for `89 50 4E 47`, `image/jpeg` for `FF D8 FF`, `image/webp` for `RIFF...WEBP`) rather than defaulting strictly to `image/jpeg`.
+    - Always lock the uploaded poster (`PUT /library/metadata/{ratingKey}?thumb.locked=1`) to prevent PMS scheduled maintenance from overwriting custom or restored artwork.
+    - Use multi-candidate URL failover (`expandCandidateUrls`) to ensure direct LAN IP fallback (`http://192.168.1.X:32400`) if `.plex.direct` endpoints time out or encounter DNS rebind blocks.
 
 
 
