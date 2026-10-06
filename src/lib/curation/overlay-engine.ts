@@ -2495,12 +2495,34 @@ export async function restoreItemOriginalArtwork(
         return { success: false, message: `No backup found for this item on Plex server "${targetServerName}".` };
     }
 
+    // Ensure all candidate URLs for this server are included if only a single URL was provided
+    let candidateList = Array.isArray(serverUrlOrCandidates) ? [...serverUrlOrCandidates] : [serverUrlOrCandidates];
+    if (candidateList.length <= 1 && serverId) {
+        try {
+            const resolved = await resolveWorkingPlexServerConnection(serverId);
+            if (resolved?.allCandidateUrls?.length) {
+                candidateList = Array.from(new Set([...candidateList, resolved.serverUrl, ...(resolved.allCandidateUrls || [])]));
+            }
+        } catch {}
+    }
+
+    let originalBuf: Buffer | null = null;
     if (fs.existsSync(backup.backupFilePath)) {
-        const originalBuf = fs.readFileSync(backup.backupFilePath);
-        const restored = await uploadPlexItemPoster(serverUrlOrCandidates, token, ratingKey, originalBuf);
+        originalBuf = fs.readFileSync(backup.backupFilePath);
+    } else if (backup.originalArtUrl) {
+        // Fallback: If local file was deleted or in another volume mount, fetch from originalArtUrl if available
+        originalBuf = await fetchPlexPosterBuffer(candidateList, token, backup.originalArtUrl);
+    }
+
+    if (originalBuf) {
+        const restored = await uploadPlexItemPoster(candidateList, token, ratingKey, originalBuf);
 
         if (restored) {
-            try { fs.unlinkSync(backup.backupFilePath); } catch (e) {}
+            try {
+                if (fs.existsSync(backup.backupFilePath)) {
+                    fs.unlinkSync(backup.backupFilePath);
+                }
+            } catch (e) {}
             await prisma.mediaArtBackup.delete({ where: { id: backup.id } });
 
             logger.addLog("SUCCESS", "CURATION", `Restored pristine original poster for RatingKey: ${ratingKey} on Plex server "${targetServerName}".`);
