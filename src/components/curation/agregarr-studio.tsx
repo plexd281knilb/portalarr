@@ -3116,12 +3116,31 @@ export function AgregarrStudio() {
                                                         <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400 shrink-0 capitalize">
                                                             {coll.category || coll.sourceType || "Curated"}
                                                         </Badge>
-                                                        {coll.isSeasonal && (
-                                                            <Badge className="text-[9px] px-1.5 py-0 bg-amber-950 text-amber-300 border-amber-500/40 gap-1 shrink-0">
-                                                                <Calendar className="h-2.5 w-2.5" />
-                                                                <span>Seasonal ({coll.scheduleStartMonth || 10}/{coll.scheduleStartDay || 1} - {coll.scheduleEndMonth || 11}/{coll.scheduleEndDay || 5})</span>
-                                                            </Badge>
-                                                        )}
+                                                        {coll.isSeasonal && (() => {
+                                                            const now = new Date();
+                                                            const curVal = (now.getMonth() + 1) * 100 + now.getDate();
+                                                            const startM = coll.scheduleStartMonth || 10;
+                                                            const startD = coll.scheduleStartDay || 1;
+                                                            const endM = coll.scheduleEndMonth || 11;
+                                                            const endD = coll.scheduleEndDay || 5;
+                                                            const startVal = startM * 100 + startD;
+                                                            const endVal = endM * 100 + endD;
+                                                            const inSeason = startVal <= endVal 
+                                                                ? (curVal >= startVal && curVal <= endVal)
+                                                                : (curVal >= startVal || curVal <= endVal);
+                                                            return inSeason ? (
+                                                                <Badge className="text-[9px] px-1.5 py-0 bg-emerald-950/80 text-emerald-300 border-emerald-500/40 gap-1 shrink-0 font-medium">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                                    <Calendar className="h-2.5 w-2.5 text-emerald-400" />
+                                                                    <span>Active In-Season ({startM}/{startD} - {endM}/{endD})</span>
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-slate-900/60 text-slate-400 border-slate-700/60 gap-1 shrink-0 font-normal">
+                                                                    <Calendar className="h-2.5 w-2.5 text-slate-500" />
+                                                                    <span>Out of Season ({startM}/{startD} - {endM}/{endD})</span>
+                                                                </Badge>
+                                                            );
+                                                        })()}
                                                         {coll.activeDays && coll.activeDays !== "all" && (
                                                             <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-900/60 bg-amber-950/40 text-amber-300 gap-1 font-mono shrink-0">
                                                                 <CalendarClock className="h-2.5 w-2.5" />
@@ -3552,11 +3571,29 @@ export function AgregarrStudio() {
                                             <span className="font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-slate-400">
                                                 {preset.sourceType.toUpperCase()}
                                             </span>
-                                            {preset.isSeasonal && (
-                                                <span className="text-amber-400 flex items-center gap-0.5">
-                                                    <Calendar className="h-2.5 w-2.5" /> Seasonal
-                                                </span>
-                                            )}
+                                            {preset.isSeasonal && (() => {
+                                                const now = new Date();
+                                                const curVal = (now.getMonth() + 1) * 100 + now.getDate();
+                                                const startM = preset.scheduleStartMonth || 10;
+                                                const startD = preset.scheduleStartDay || 1;
+                                                const endM = preset.scheduleEndMonth || 11;
+                                                const endD = preset.scheduleEndDay || 5;
+                                                const startVal = startM * 100 + startD;
+                                                const endVal = endM * 100 + endD;
+                                                const inSeason = startVal <= endVal 
+                                                    ? (curVal >= startVal && curVal <= endVal)
+                                                    : (curVal >= startVal || curVal <= endVal);
+                                                return inSeason ? (
+                                                    <span className="text-emerald-400 font-medium flex items-center gap-1">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                        <Calendar className="h-2.5 w-2.5" /> In-Season
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 flex items-center gap-0.5">
+                                                        <Calendar className="h-2.5 w-2.5 text-slate-500" /> Seasonal ({startM}/{startD} - {endM}/{endD})
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         {isPresetSyncing ? (
                                             <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">

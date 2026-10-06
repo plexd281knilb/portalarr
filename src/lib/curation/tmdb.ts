@@ -320,6 +320,219 @@ export async function getTmdbNetworkShows(networkId: number, minVotes = 20): Pro
 }
 
 /**
+ * Discover Media by Genre (e.g. Action = 28, Horror = 27, Romance = 10749, Family = 10751)
+ */
+export async function getTmdbGenreMedia(
+    genreId: number,
+    options: {
+        mediaType?: "movie" | "tv" | "both";
+        maxPages?: number;
+        minVotes?: number;
+    } = {}
+): Promise<TmdbMediaItem[]> {
+    const mediaType = options.mediaType || "movie";
+    const maxPages = options.maxPages || 2;
+    const minVotes = options.minVotes ?? 200;
+
+    const results: TmdbMediaItem[] = [];
+    const seenIds = new Set<string>();
+
+    const fetchMovieGenre = async (gid: number) => {
+        try {
+            const pagesToFetch = Array.from({ length: Math.min(maxPages, 3) }, (_, i) => i + 1);
+            const pagePromises = pagesToFetch.map(p =>
+                tmdbFetch("/discover/movie", {
+                    with_genres: gid,
+                    sort_by: "vote_count.desc",
+                    "vote_count.gte": minVotes,
+                    page: p
+                })
+            );
+            // Also fetch 1 page sorted by popularity with high vote count for recent major hits
+            pagePromises.push(
+                tmdbFetch("/discover/movie", {
+                    with_genres: gid,
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": minVotes,
+                    page: 1
+                })
+            );
+            const responses = await Promise.all(pagePromises);
+            for (const res of responses) {
+                for (const r of (res?.results || [])) {
+                    const key = `m-${r.id}`;
+                    if (!seenIds.has(key)) {
+                        seenIds.add(key);
+                        results.push(mapTmdbMovie(r));
+                    }
+                }
+            }
+        } catch {}
+    };
+
+    const fetchTvGenre = async (gid: number) => {
+        try {
+            let tvGid = gid;
+            if (gid === 28) tvGid = 10759; // Action -> Action & Adventure
+            else if (gid === 878) tvGid = 10765; // Sci-Fi -> Sci-Fi & Fantasy
+            else if (gid === 14) tvGid = 10765; // Fantasy -> Sci-Fi & Fantasy
+
+            const pagesToFetch = Array.from({ length: Math.min(maxPages, 3) }, (_, i) => i + 1);
+            const pagePromises = pagesToFetch.map(p =>
+                tmdbFetch("/discover/tv", {
+                    with_genres: tvGid,
+                    sort_by: "vote_count.desc",
+                    "vote_count.gte": Math.min(minVotes, 50),
+                    page: p
+                })
+            );
+            pagePromises.push(
+                tmdbFetch("/discover/tv", {
+                    with_genres: tvGid,
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": Math.min(minVotes, 50),
+                    page: 1
+                })
+            );
+            const responses = await Promise.all(pagePromises);
+            for (const res of responses) {
+                for (const r of (res?.results || [])) {
+                    const key = `tv-${r.id}`;
+                    if (!seenIds.has(key)) {
+                        seenIds.add(key);
+                        results.push(mapTmdbTv(r));
+                    }
+                }
+            }
+        } catch {}
+    };
+
+    if (mediaType === "movie" || mediaType === "both") {
+        let movieGid = genreId;
+        if (genreId === 10759) movieGid = 28;
+        else if (genreId === 10765) movieGid = 878;
+        await fetchMovieGenre(movieGid);
+    }
+    if (mediaType === "tv" || mediaType === "both") {
+        await fetchTvGenre(genreId);
+    }
+
+    return filterAllowedMedia(results);
+}
+
+/**
+ * Discover Media by Keyword (e.g. "christmas", "halloween", "superhero", "zombie", or numeric keyword ID)
+ */
+export async function getTmdbKeywordMedia(
+    keyword: string | number,
+    options: {
+        mediaType?: "movie" | "tv" | "both";
+        maxPages?: number;
+        minVotes?: number;
+    } = {}
+): Promise<TmdbMediaItem[]> {
+    const mediaType = options.mediaType || "movie";
+    const maxPages = options.maxPages || 2;
+    const minVotes = options.minVotes ?? 100;
+
+    let keywordId: number | null = null;
+    if (typeof keyword === "number") {
+        keywordId = keyword;
+    } else if (/^\d+$/.test(keyword.trim())) {
+        keywordId = parseInt(keyword.trim(), 10);
+    } else {
+        const cleanQuery = keyword.trim().toLowerCase();
+        if (cleanQuery === "christmas") keywordId = 207317;
+        else if (cleanQuery === "halloween") keywordId = 3335;
+        else if (cleanQuery === "superhero") keywordId = 9715;
+        else if (cleanQuery === "zombie") keywordId = 12377;
+        else {
+            try {
+                const searchRes = await tmdbFetch("/search/keyword", { query: cleanQuery });
+                if (searchRes?.results && searchRes.results.length > 0) {
+                    keywordId = searchRes.results[0].id;
+                }
+            } catch {}
+        }
+    }
+
+    if (!keywordId) return [];
+
+    const results: TmdbMediaItem[] = [];
+    const seenIds = new Set<string>();
+
+    if (mediaType === "movie" || mediaType === "both") {
+        try {
+            const pagePromises = [
+                tmdbFetch("/discover/movie", {
+                    with_keywords: keywordId,
+                    sort_by: "vote_count.desc",
+                    "vote_count.gte": minVotes,
+                    page: 1
+                }),
+                tmdbFetch("/discover/movie", {
+                    with_keywords: keywordId,
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": minVotes,
+                    page: 1
+                })
+            ];
+            if (maxPages > 1) {
+                pagePromises.push(
+                    tmdbFetch("/discover/movie", {
+                        with_keywords: keywordId,
+                        sort_by: "vote_count.desc",
+                        "vote_count.gte": minVotes,
+                        page: 2
+                    })
+                );
+            }
+            const responses = await Promise.all(pagePromises);
+            for (const res of responses) {
+                for (const r of (res?.results || [])) {
+                    const key = `m-${r.id}`;
+                    if (!seenIds.has(key)) {
+                        seenIds.add(key);
+                        results.push(mapTmdbMovie(r));
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    if (mediaType === "tv" || mediaType === "both") {
+        try {
+            const pagePromises = [
+                tmdbFetch("/discover/tv", {
+                    with_keywords: keywordId,
+                    sort_by: "vote_count.desc",
+                    "vote_count.gte": Math.min(minVotes, 30),
+                    page: 1
+                }),
+                tmdbFetch("/discover/tv", {
+                    with_keywords: keywordId,
+                    sort_by: "popularity.desc",
+                    "vote_count.gte": Math.min(minVotes, 30),
+                    page: 1
+                })
+            ];
+            const responses = await Promise.all(pagePromises);
+            for (const res of responses) {
+                for (const r of (res?.results || [])) {
+                    const key = `tv-${r.id}`;
+                    if (!seenIds.has(key)) {
+                        seenIds.add(key);
+                        results.push(mapTmdbTv(r));
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    return filterAllowedMedia(results);
+}
+
+/**
  * Get detailed movie information including external IDs and release date timeline
  */
 export async function getTmdbMovieDetails(tmdbId: number): Promise<TmdbMediaItem | null> {
