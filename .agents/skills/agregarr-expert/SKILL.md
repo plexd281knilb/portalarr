@@ -118,4 +118,13 @@ Agregarr manages metadata labels on items:
 9. **Custom Collection Media Type Isolation & Server ID Resilience**:
    - Custom collections created via `handleCreateCustomCollection` must dynamically inherit `type: isTvSection ? "show" : "movie"` from the active library section so TV collection queries match series models instead of movie models.
    - Server Actions (`getMediaCollectionsAction`, `deleteAllPlexCollectionsAction`, `syncSeasonalAndScheduledCollectionsInternal`) must resolve candidate server identifiers (`[serverId, resolved?.serverId, "main"]`) to ensure collections created under legacy `"main"` or discovered PMS machine identifiers are consistently retrieved and wiped without leaving orphaned records.
+10. **Popular Media Native TMDb Resolution & MDBList Fallback**:
+    - Cause: "Popular Movies" originally configured with `sourceType: "mdblist"` and `sourceQuery: "official/movies/popular"` returned 0 results whenever the user had not configured an external MDBList API key (or when MDBList rate limits/fails).
+    - Rule: Popular movies & TV blueprints natively use `sourceType: "tmdb"` with `sourceQuery: "popular"` to query `getTmdbPopularMovies` / `getTmdbPopularTv` across multiple pages in parallel with zero external dependencies. For backward compatibility with existing databases, all MDBList resolution routines (`previewCollectionMatchingAction`, `syncCollectionToPlexAction`, `getCollectionMediaPreviewAction`, `runAgregarrSyncInternal`) automatically fall back to native TMDb popular media if MDBList returns empty.
+11. **Anime & Crunchyroll Presets & Dedicated Studio Filter Chip**:
+    - Agregarr equips dedicated anime presets: "Crunchyroll Trending Anime" (`sourceType: "tmdb"`, `sourceQuery: "provider:283"`, `mediaType: "both"`), "Crunchyroll Anime Series" (`sourceType: "tmdb"`, `sourceQuery: "network:1112"`), and the "🍙 Anime & Crunchyroll" category filter chip in Agregarr Studio (`agregarr-studio.tsx`).
+12. **Dual Placeholder Labeling Convention (`Coming Soon-placeholder` vs `trailer-placeholder`)**:
+    - Items monitored in Radarr/Sonarr receive the Plex label `Coming Soon-placeholder` with `edition: Trailer` and `DOWNLOADING SOON` or `COMING SOON MONITORED` banners.
+    - General collection placeholders (e.g. Netflix Trending, Disney+, awards, studio charts) receive `trailer-placeholder` with `edition: Trailer` and `NOT REQUESTED YET` banners.
+    - Filtered Smart Hubs filter out both `label!=Coming Soon-placeholder&label!=trailer-placeholder&editionTitle!=Trailer` to keep standard "Recently Added" rows clean while enabling dedicated "Coming Soon" hubs.
 

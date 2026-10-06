@@ -4330,6 +4330,34 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Agregarr: Popular Movies & TV Blueprints, TMDb & MDBList Fallback, and Crunchyroll Presets", async () => {
+        const { COLLECTION_PRESETS } = await import("../src/lib/curation/presets");
+        const popMovie = COLLECTION_PRESETS.find(p => p.id === "popular-movies");
+        if (!popMovie || popMovie.sourceType !== "tmdb" || popMovie.sourceQuery !== "popular") {
+            throw new Error(`Expected popular-movies preset to use sourceType='tmdb' and sourceQuery='popular', got: ${JSON.stringify(popMovie)}`);
+        }
+
+        const popTv = COLLECTION_PRESETS.find(p => p.id === "popular-tv-shows");
+        if (!popTv || popTv.sourceType !== "tmdb" || popTv.sourceQuery !== "popular") {
+            throw new Error(`Expected popular-tv-shows preset to use sourceType='tmdb' and sourceQuery='popular', got: ${JSON.stringify(popTv)}`);
+        }
+
+        const crTrending = COLLECTION_PRESETS.find(p => p.id === "crunchyroll-trending");
+        if (!crTrending || crTrending.sourceType !== "tmdb" || crTrending.sourceQuery !== "provider:283") {
+            throw new Error(`Expected crunchyroll-trending preset to use sourceType='tmdb' and sourceQuery='provider:283', got: ${JSON.stringify(crTrending)}`);
+        }
+
+        const crOriginals = COLLECTION_PRESETS.find(p => p.id === "crunchyroll-originals");
+        if (!crOriginals || crOriginals.sourceType !== "tmdb" || crOriginals.sourceQuery !== "network:1112") {
+            throw new Error(`Expected crunchyroll-originals preset to use sourceType='tmdb' and sourceQuery='network:1112', got: ${JSON.stringify(crOriginals)}`);
+        }
+
+        const { getCrunchyrollTrending, getTmdbPopularMovies } = await import("../src/lib/curation/tmdb");
+        if (typeof getCrunchyrollTrending !== "function" || typeof getTmdbPopularMovies !== "function") {
+            throw new Error("Missing getCrunchyrollTrending or getTmdbPopularMovies in tmdb.ts");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

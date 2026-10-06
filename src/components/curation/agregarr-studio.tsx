@@ -2063,6 +2063,7 @@ export function AgregarrStudio() {
         { id: "filtered_hub", label: "🧹 Filtered Smart Hubs" },
         { id: "awards", label: "🏆 Awards & Charts" },
         { id: "dynamic", label: "🔥 Trending & Discovery" },
+        { id: "anime", label: "🍙 Anime & Crunchyroll" },
         { id: "studio", label: "🏰 Networks & Studios" },
         { id: "franchise", label: "🎬 Franchises & Sagas" },
         { id: "decade", label: "⏳ Decades & Eras" },
@@ -2071,7 +2072,14 @@ export function AgregarrStudio() {
     ];
 
     const filteredPresets = COLLECTION_PRESETS.filter(preset => {
-        if (presetsCategoryFilter !== "all" && preset.category !== presetsCategoryFilter) return false;
+        if (presetsCategoryFilter !== "all") {
+            if (presetsCategoryFilter === "anime") {
+                const isAnime = preset.id.includes("anime") || preset.id.includes("crunchyroll") || preset.id.includes("ghibli") || preset.id.includes("mal");
+                if (!isAnime) return false;
+            } else if (preset.category !== presetsCategoryFilter) {
+                return false;
+            }
+        }
 
         let effectiveMediaTypeFilter = presetsMediaTypeFilter;
         if (effectiveMediaTypeFilter === "auto") {

@@ -65,6 +65,7 @@ import {
     getTmdbStreamingProviderMedia,
     getDisneyTrending,
     getNetflixTrending,
+    getCrunchyrollTrending,
     getTmdbVideos,
     TmdbMediaItem,
     TmdbVideoItem
@@ -1706,6 +1707,22 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                         (it.title && titles.has(it.title.toLowerCase().trim()))
                     ).map(it => it.ratingKey));
                 }
+            } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
+                const isTv = isTvSection || collection.sourceQuery === "popular_tv";
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                const popular = [...p1, ...p2, ...p3];
+                const tmdbIds = new Set(popular.map(u => String(u.id)));
+                const imdbIds = new Set(popular.map(u => u.imdbId).filter(Boolean));
+                const titles = new Set(popular.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                ).map(it => it.ratingKey));
             } else {
                 // Trending / Popular
                 const trending = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
@@ -1821,6 +1838,32 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
 
                 if (builtinMatches.length > 0) {
                     matchingRatingKeys.push(...builtinMatches);
+                }
+            }
+
+            const isPopular = collection.title?.toLowerCase().includes("popular") || collection.sourceQuery?.includes("popular");
+            if (!matched && isPopular) {
+                const isTv = isTvSection || collection.title?.toLowerCase().includes("tv") || collection.sourceQuery?.includes("tv");
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                const popList = [...p1, ...p2, ...p3];
+                const tmdbIds = new Set(popList.map(m => String(m.id)));
+                const imdbIds = new Set(popList.map(m => m.imdbId).filter(Boolean));
+                const titles = new Set(popList.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
+                const popMatches = libraryItems.filter(it => {
+                    if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+                        return false;
+                    }
+                    return (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                           (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                           (it.title && titles.has(it.title.toLowerCase().trim()));
+                }).map(it => it.ratingKey);
+                if (popMatches.length > 0) {
+                    matchingRatingKeys.push(...popMatches);
+                    matched = true;
                 }
             }
         } else if (collection.sourceType === "radarr") {
@@ -2124,7 +2167,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 }
             } else if (sourceQuery.startsWith("network:")) {
                 const netId = parseInt(sourceQuery.replace("network:", ""), 10) || 213;
-                executionMethod = `TMDb TV Network API: Querying network ID #${netId} shows.`;
+                const netName = netId === 1112 ? "Crunchyroll" : netId === 213 ? "Netflix" : netId === 49 ? "HBO" : netId === 2552 ? "Apple TV+" : netId === 2739 ? "Disney+" : `#${netId}`;
+                executionMethod = `TMDb TV Network API: Querying ${netName} shows.`;
                 if (!isMovieSection) {
                     const shows = await getTmdbNetworkShows(netId);
                     const tmdbIds = shows.map(s => String(s.id));
@@ -2138,7 +2182,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const parts = sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
-                const provName = provId === 337 ? "Disney+" : provId === 8 ? "Netflix" : `Provider #${provId}`;
+                const provName = provId === 337 ? "Disney+" : provId === 8 ? "Netflix" : provId === 283 ? "Crunchyroll" : `Provider #${provId}`;
                 executionMethod = `TMDb Streaming Provider API: Querying ${provName} ${isKids ? "(Kids & Family)" : "Trending Top Charts"}. Matches against Plex library metadata.`;
                 const providerMedia = await getTmdbStreamingProviderMedia(provId, { 
                     isKids, 
@@ -2176,6 +2220,25 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const tmdbIds = inTheatres.map(m => String(m.id));
                 const imdbIds = inTheatres.map(m => m.imdbId).filter(Boolean);
                 const titles = inTheatres.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
+                );
+            } else if (sourceQuery === "popular" || sourceQuery === "popular_movies" || sourceQuery === "popular_tv") {
+                const isTv = isTvSection || sourceQuery === "popular_tv";
+                executionMethod = isTv 
+                    ? `TMDb Popular TV API: Querying top popular television shows.`
+                    : `TMDb Popular Movies API: Querying top popular movies.`;
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                const popular = [...p1, ...p2, ...p3];
+                const tmdbIds = popular.map(m => String(m.id));
+                const imdbIds = popular.map(m => m.imdbId).filter(Boolean);
+                const titles = popular.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
                     (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
                     (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
@@ -2232,6 +2295,24 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     });
                 } else if (sourceQuery === "top-oscar-best-picture") {
                     executionMethod += " (MDBList key not configured; configure in settings to fetch official Oscar list).";
+                } else if (sourceQuery?.includes("popular") || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("popular"))) {
+                    executionMethod = isTvSection
+                        ? `Popular Media Fallback (TMDb): Resolving popular TV shows against library.`
+                        : `Popular Media Fallback (TMDb): Resolving popular movies against library.`;
+                    const [p1, p2, p3] = await Promise.all([
+                        isTvSection ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                        isTvSection ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                        isTvSection ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                    ]);
+                    const popList = [...p1, ...p2, ...p3];
+                    const tmdbIds = popList.map(m => String(m.id));
+                    const imdbIds = popList.map(m => m.imdbId).filter(Boolean);
+                    const titles = popList.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
+                    matchedItems = libraryItems.filter(it => 
+                        (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                        (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                        (it.title && titles.includes(it.title.toLowerCase().trim()))
+                    );
                 }
             }
         } else if (sourceType === "trakt") {
@@ -8860,7 +8941,7 @@ export async function getArrMonitoredIndex(options?: {
 export async function getTrendingAndPlaceholderMediaAction(
     serverId?: string,
     sectionKey?: string,
-    category: "all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical" = "all"
+    category: "all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "crunchyroll" | "digital" | "theatrical" = "all"
 ) {
     try {
 
@@ -8905,6 +8986,8 @@ export async function getTrendingAndPlaceholderMediaAction(
                 trendingItems = await getNetflixTrending(false, 1, "tv");
             } else if (category === "netflix_kids") {
                 trendingItems = await getNetflixTrending(true, 1, "tv");
+            } else if (category === "crunchyroll") {
+                trendingItems = await getCrunchyrollTrending(1, "tv");
             } else if (category === "digital" || category === "theatrical") {
                 trendingItems = await getTmdbPopularTv(1);
             } else {
@@ -8920,6 +9003,8 @@ export async function getTrendingAndPlaceholderMediaAction(
                 trendingItems = await getNetflixTrending(false, 1, "movie");
             } else if (category === "netflix_kids") {
                 trendingItems = await getNetflixTrending(true, 1, "movie");
+            } else if (category === "crunchyroll") {
+                trendingItems = await getCrunchyrollTrending(1, "movie");
             } else if (category === "digital") {
                 const upcoming = await getTmdbUpcomingMovies();
                 trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
@@ -8938,6 +9023,8 @@ export async function getTrendingAndPlaceholderMediaAction(
                 trendingItems = await getNetflixTrending(false);
             } else if (category === "netflix_kids") {
                 trendingItems = await getNetflixTrending(true);
+            } else if (category === "crunchyroll") {
+                trendingItems = await getCrunchyrollTrending(1, "both");
             } else if (category === "digital") {
                 const upcoming = await getTmdbUpcomingMovies();
                 trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
@@ -9752,6 +9839,14 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     releaseDate: m.releaseDate,
                     inTheaters: true
                 }));
+            } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
+                const isTv = isTvSection || collection.sourceQuery === "popular_tv";
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                candidateItems = [...p1, ...p2, ...p3];
             } else {
                 candidateItems = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
             }
@@ -9898,6 +9993,23 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     mediaType: (b.mediaType === "show" ? "tv" : "movie") as "movie" | "tv",
                     releaseDate: `${b.year}-01-01`,
                     imdbId: b.imdbId
+                }));
+            }
+
+            const isPopular = collection.title?.toLowerCase().includes("popular") || collection.sourceQuery?.includes("popular");
+            if (candidateItems.length === 0 && isPopular) {
+                const isTv = isTvSection || collection.title?.toLowerCase().includes("tv") || collection.sourceQuery?.includes("tv");
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                candidateItems = [...p1, ...p2, ...p3].map(m => ({
+                    id: m.id,
+                    title: m.title,
+                    mediaType: (isTv ? "tv" : "movie") as "movie" | "tv",
+                    releaseDate: m.releaseDate,
+                    imdbId: m.imdbId
                 }));
             }
         }
@@ -10866,6 +10978,22 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 }));
             } else if (collection.sourceQuery === "digital_releases") {
                 candidateItems = await getTmdbUpcomingMovies();
+            } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
+                const isTv = collection.type === "show" || collection.type === "tv" || collection.sourceQuery === "popular_tv";
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                candidateItems = [...p1, ...p2, ...p3].map(m => ({
+                    id: m.id,
+                    title: m.title,
+                    overview: m.overview,
+                    posterPath: m.posterPath,
+                    backdropPath: m.backdropPath,
+                    mediaType: (isTv ? "tv" : "movie") as "movie" | "tv",
+                    releaseDate: m.releaseDate
+                }));
             } else {
                 candidateItems = await getTmdbTrending("all", "week");
             }
@@ -11016,6 +11144,25 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                         title: b.title,
                         year: b.year,
                         releaseDate: b.year ? `${b.year}-01-01` : undefined
+                    }));
+                }
+
+                const isPopular = collection.title?.toLowerCase().includes("popular") || collection.sourceQuery?.includes("popular");
+                if (isPopular) {
+                    const [p1, p2, p3] = await Promise.all([
+                        isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                        isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                        isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                    ]);
+                    items = [...p1, ...p2, ...p3].map(p => ({
+                        tmdbId: p.id,
+                        imdbId: p.imdbId,
+                        title: p.title,
+                        overview: p.overview,
+                        posterPath: p.posterPath,
+                        backdropPath: p.backdropPath,
+                        year: p.releaseDate ? parseInt(p.releaseDate.slice(0, 4), 10) : undefined,
+                        releaseDate: p.releaseDate
                     }));
                 }
             }
