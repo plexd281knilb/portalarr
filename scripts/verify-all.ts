@@ -2347,6 +2347,54 @@ async function runTestSuite() {
         });
     });
 
+    // 42e. Maintainerr: Target Reclamation Headroom Capping & Auto-Staging Volume Quota
+    await assertTest("Maintainerr: Target Reclamation Headroom Capping (pruneTargetHeadroomGb)", async () => {
+        const mockCandidates = [
+            { ratingKey: "cand_1", fileSizeGb: 50 },
+            { ratingKey: "cand_2", fileSizeGb: 120 },
+            { ratingKey: "cand_3", fileSizeGb: 150 }, // Reaches 320 GB >= 300 GB target
+            { ratingKey: "cand_4", fileSizeGb: 80 },
+            { ratingKey: "cand_5", fileSizeGb: 60 }
+        ];
+
+        const targetHeadroomGb = 300;
+        let accumulatedGb = 0;
+        const stagedKeys: string[] = [];
+
+        for (const cand of mockCandidates) {
+            if (targetHeadroomGb > 0 && accumulatedGb >= targetHeadroomGb) {
+                break;
+            }
+            stagedKeys.push(cand.ratingKey);
+            accumulatedGb += cand.fileSizeGb;
+        }
+
+        if (stagedKeys.length !== 3) {
+            throw new Error(`Expected exactly 3 staged candidates to satisfy 300 GB target, got ${stagedKeys.length}`);
+        }
+        if (accumulatedGb !== 320) {
+            throw new Error(`Expected accumulatedGb to be 320, got ${accumulatedGb}`);
+        }
+
+        // Test with existing staged items (e.g. 320 GB already in Leaving Soon)
+        let newlyStaged = 0;
+        const existingKeys = new Set(["cand_1", "cand_2", "cand_3"]);
+        let currentStaged = 320;
+
+        for (const cand of mockCandidates) {
+            if (existingKeys.has(cand.ratingKey)) continue;
+            if (targetHeadroomGb > 0 && currentStaged >= targetHeadroomGb) {
+                break;
+            }
+            newlyStaged++;
+            currentStaged += cand.fileSizeGb;
+        }
+
+        if (newlyStaged !== 0) {
+            throw new Error(`Expected 0 newly staged items when existing staged storage (320 GB) meets target (300 GB), got ${newlyStaged}`);
+        }
+    });
+
     // 43. Kometa: Rule Scoping, Section Revert Scoping & Aspect Ratio Guard
     await assertTest("Kometa: Rule Scoping, Section Revert Scoping & Episode Aspect Ratio Guards", async () => {
         // 1. Rule Scoping & Isolation

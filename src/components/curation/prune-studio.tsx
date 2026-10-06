@@ -597,6 +597,9 @@ export function PruneStudio() {
     };
 
     const executeRunPruneSync = async (scope: "all" | "selected" = "all") => {
+        if (hasUnsavedChanges) {
+            await handleSaveAllDirty();
+        }
         setRunningPruneSync(true);
         setPruneSyncResult(null);
         try {
