@@ -106,5 +106,9 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
      - **Bulk Cancel Removal (`bulkUnmarkItemsLeavingSoonAction`)**: Unstages selected items from SQLite in batch (`isLeavingSoon: false`), restores backed-up original poster artwork in Plex, and syncs the Leaving Soon collection hub once per affected server.
      - **Bulk Permanent Delete (`executePruneAction(..., { forceLiveDelete: true })`)**: Immediately deletes selected files from disk, removes them from Plex, and unmonitors them in Servarr without waiting for the grace period.
      - **Cancel All Removal (`clearAllLeavingSoonFlagsAction`)**: 1-click header action allowing administrators to unstage and restore original artwork across an entire server or the entire multi-server cluster with confirmation safeguards.
+13. **Target Reclamation Headroom Quota Capping (`pruneTargetHeadroomGb`) & Seamless Auto-Save**:
+   - **Universal Quota Enforcement**: Regardless of whether evaluation is triggered by schedule, capacity threshold, or manual admin action, `syncLeavingSoonCollectionHubInternal` strictly respects `Settings.pruneTargetHeadroomGb` (e.g. 300 GB). It calculates currently staged storage on the target server and only auto-stages candidate items until `accumulatedGb >= targetHeadroomGb`, preventing massive over-staging beyond the configured headroom buffer.
+   - **Intelligent Headroom Satisfaction**: If existing staged items in Leaving Soon already satisfy or exceed the target headroom, additional candidates are suppressed with informative logging (`Target reclamation headroom of X GB already satisfied by Y staged items. No additional items needed.`).
+   - **Seamless Sync Auto-Save**: In `prune-studio.tsx`, triggering prune evaluation (`executeRunPruneSync`) automatically flushes and saves any dirty settings (thresholds, target headroom, selected Glances disk, schedules) to SQLite via `handleSaveAllDirty()` before the sync action executes.
 
 

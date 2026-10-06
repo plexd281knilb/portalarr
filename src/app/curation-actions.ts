@@ -3117,7 +3117,7 @@ export async function syncLeavingSoonCollectionHubInternal(
         const glancesResult = await getGlancesDisksInternal().catch(() => null);
         const disks = glancesResult?.disks || [];
         const selectedDiskId = (settings as any)?.selectedGlancesDiskId;
-        const matchedDisk = disks.find(d => selectedDiskId ? d.id === selectedDiskId : false)
+        const matchedDisk = disks.find(d => selectedDiskId ? (d.id === selectedDiskId || d.mntPoint === selectedDiskId) : false)
             || disks.find(d => {
                 const pt = (d.mntPoint || "").toLowerCase();
                 return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank") || pt.includes("disk") || pt.includes("array");
@@ -3204,56 +3204,66 @@ export async function syncLeavingSoonCollectionHubInternal(
                 totalEvaluatedCount = candidateRes.evaluatedCount || 0;
 
                 if (candidateRes.candidates && candidateRes.candidates.length > 0) {
-                    let accumulatedGb = 0;
+                    // Check items currently staged in Leaving Soon for this server
+                    const existingStaged = await prisma.mediaContentAdvisory.findMany({
+                        where: { serverId: targetServerId, isLeavingSoon: true },
+                        select: { ratingKey: true, fileSizeGb: true }
+                    });
+                    const existingStagedKeys = new Set(existingStaged.map(it => it.ratingKey));
+                    let accumulatedGb = existingStaged.reduce((acc, it) => acc + (it.fileSizeGb || 0), 0);
+
                     const daysNotice = settings?.pruneDaysNotice ?? 14;
                     const effectiveDate = new Date(Date.now() + daysNotice * 86400000);
 
                     for (const cand of candidateRes.candidates) {
-                        // In capacity mode with a matched disk, stop when target headroom is reached
-                        if (triggerMode === "capacity" && capacityWarningTriggered && matchedDisk && accumulatedGb >= targetHeadroomGb) {
+                        // If already staged in Leaving Soon, its storage is already accounted for in accumulatedGb
+                        if (existingStagedKeys.has(cand.ratingKey)) {
+                            continue;
+                        }
+
+                        // Stop auto-staging once target reclamation headroom (GB) is satisfied
+                        if (targetHeadroomGb > 0 && accumulatedGb >= targetHeadroomGb) {
                             break;
                         }
 
-                        const existing = await prisma.mediaContentAdvisory.findUnique({
-                            where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } }
+                        const candSize = cand.fileSizeGb || 0;
+                        const formattedTitle = cand.parentTitle ? `${cand.parentTitle} (Season ${cand.seasonNumber})` : (cand.title || "Media Item");
+                        const laneInfo = cand.laneLabel ? `[${cand.laneLabel}] ` : "";
+                        const leavingReason = capacityWarningTriggered && matchedDisk
+                            ? `Storage Capacity Warning: Disk at ${diskUsagePercent}% used • ${laneInfo}${cand.reason}${targetHeadroomGb > 0 ? ` (Target: ${targetHeadroomGb} GB headroom)` : ""}`
+                            : `Maintainerr Retention Policy: ${laneInfo}${cand.reason}${targetHeadroomGb > 0 ? ` (Target: ${targetHeadroomGb} GB headroom)` : ""}`;
+
+                        await prisma.mediaContentAdvisory.upsert({
+                            where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } },
+                            update: {
+                                title: formattedTitle,
+                                isLeavingSoon: true,
+                                leavingSoonDate: effectiveDate,
+                                leavingReason,
+                                fileSizeGb: cand.fileSizeGb || null
+                            },
+                            create: {
+                                ratingKey: cand.ratingKey,
+                                serverId: targetServerId,
+                                title: formattedTitle,
+                                isLeavingSoon: true,
+                                leavingSoonDate: effectiveDate,
+                                leavingReason,
+                                fileSizeGb: cand.fileSizeGb || null
+                            }
                         });
-
-                        if (!existing || !existing.isLeavingSoon) {
-                            const formattedTitle = cand.parentTitle ? `${cand.parentTitle} (Season ${cand.seasonNumber})` : (cand.title || "Media Item");
-                            const laneInfo = cand.laneLabel ? `[${cand.laneLabel}] ` : "";
-                            const leavingReason = capacityWarningTriggered && matchedDisk
-                                ? `Storage Capacity Warning: Disk at ${diskUsagePercent}% used • ${laneInfo}${cand.reason} (Auto-staging towards ${targetHeadroomGb} GB headroom)`
-                                : `Maintainerr Retention Policy: ${laneInfo}${cand.reason}`;
-
-                            await prisma.mediaContentAdvisory.upsert({
-                                where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } },
-                                update: {
-                                    title: formattedTitle,
-                                    isLeavingSoon: true,
-                                    leavingSoonDate: effectiveDate,
-                                    leavingReason,
-                                    fileSizeGb: cand.fileSizeGb || null
-                                },
-                                create: {
-                                    ratingKey: cand.ratingKey,
-                                    serverId: targetServerId,
-                                    title: formattedTitle,
-                                    isLeavingSoon: true,
-                                    leavingSoonDate: effectiveDate,
-                                    leavingReason,
-                                    fileSizeGb: cand.fileSizeGb || null
-                                }
-                            });
-                            newlyStagedCount++;
-                        }
-                        accumulatedGb += (cand.fileSizeGb || 0);
+                        newlyStagedCount++;
+                        accumulatedGb += candSize;
                     }
 
                     if (newlyStagedCount > 0) {
                         const modeLabel = capacityWarningTriggered && matchedDisk
                             ? `Storage capacity warning reached (${diskUsagePercent}% used)`
                             : `Rule-based retention policy`;
-                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] ${modeLabel}. Auto-staged ${newlyStagedCount} items (${accumulatedGb.toFixed(1)} GB) to Leaving Soon.`);
+                        const headroomNote = targetHeadroomGb > 0 ? ` towards ${targetHeadroomGb} GB headroom` : "";
+                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] ${modeLabel}. Auto-staged ${newlyStagedCount} items (${accumulatedGb.toFixed(1)} GB total staged${headroomNote}) to Leaving Soon.`);
+                    } else if (existingStaged.length > 0 && targetHeadroomGb > 0 && accumulatedGb >= targetHeadroomGb) {
+                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] Target reclamation headroom of ${targetHeadroomGb} GB already satisfied by ${existingStaged.length} staged items (${accumulatedGb.toFixed(1)} GB). No additional items needed.`);
                     }
                 }
             } catch (autoStageErr: any) {
