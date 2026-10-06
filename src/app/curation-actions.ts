@@ -5211,6 +5211,56 @@ export async function unmarkItemLeavingSoonAction(ratingKey: string, serverId: s
     }
 }
 
+export async function bulkUnmarkItemsLeavingSoonAction(items: { ratingKey: string; serverId: string }[]) {
+    try {
+        await verifyAdmin();
+        if (!items || items.length === 0) {
+            return { success: true, count: 0, message: "No items provided." };
+        }
+
+        const byServer = new Map<string, string[]>();
+        for (const it of items) {
+            const list = byServer.get(it.serverId) || [];
+            list.push(it.ratingKey);
+            byServer.set(it.serverId, list);
+        }
+
+        let totalUnmarked = 0;
+        for (const [srvId, rKeys] of byServer.entries()) {
+            await prisma.mediaContentAdvisory.updateMany({
+                where: {
+                    serverId: srvId,
+                    ratingKey: { in: rKeys }
+                },
+                data: {
+                    isLeavingSoon: false,
+                    leavingSoonDate: null,
+                    leavingReason: null
+                }
+            });
+            totalUnmarked += rKeys.length;
+
+            // Revert poster art if backed up
+            try {
+                const resolved = await resolveWorkingPlexServerConnection(srvId);
+                if (resolved?.serverUrl) {
+                    for (const rKey of rKeys) {
+                        await restoreItemOriginalArtwork(resolved.serverUrl, resolved.token, resolved.serverId, rKey, resolved.serverName).catch(() => {});
+                    }
+                }
+            } catch (err) {}
+
+            // Sync Leaving Soon collection & home hub once per server
+            await syncLeavingSoonCollectionHubInternal(srvId).catch(() => {});
+        }
+
+        logger.addLog("INFO", "CURATION", `Bulk unmarked ${totalUnmarked} items from Leaving Soon.`);
+        return { success: true, count: totalUnmarked, message: `Successfully cancelled removal for ${totalUnmarked} item(s) and restored poster artwork.` };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
 export async function getUserContentPreferencesAction(targetUserId?: string) {
     const currentUser = await getCurrentUser();
     if (!currentUser) throw new Error("Unauthorized");
@@ -6056,6 +6106,7 @@ export async function clearAllLeavingSoonFlagsAction(serverId?: string) {
                     }
                 }
             } catch (err) {}
+            await syncLeavingSoonCollectionHubInternal(srvId).catch(() => {});
         }
 
         await prisma.mediaContentAdvisory.updateMany({

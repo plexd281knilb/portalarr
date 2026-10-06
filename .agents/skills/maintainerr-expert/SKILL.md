@@ -98,5 +98,13 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
      - `Run Global Prune Evaluation (All Servers)`: Calls `runMaintainerrSyncAction()` without target server or section arguments, running a cluster-wide sweep across all enabled libraries on all registered Plex instances.
      - `Evaluate Library #{selectedSectionKey}`: Calls `runMaintainerrSyncAction(selectedServerId, selectedSectionKey)` to evaluate strictly the single selected library section on the currently active server.
    - Staged media retrieval (`loadLeavingSoonItems`) retrieves items cluster-wide by default, allowing the Active Staged Media Items card to render interactive server filter pills (`All Servers (X)`, `KidsPlexServer (Y)`, `Main Server (Z)`) with per-server counts and reactive total recoverable space calculation.
+12. **Bulk Staged Removal & Multi-Select Operations**:
+   - The **Active Staged Media Items** card in `prune-studio.tsx` equips administrators with granular and mass lifecycle actions:
+     - **Multi-Select Checkboxes**: Every staged row has an interactive toggle checkbox (`Square` / `CheckSquare`) keyed by `${serverId}:${ratingKey}` to prevent cross-server collision.
+     - **Select All / Deselect All**: Master toggle button in the card header dynamically selects or deselects all currently displayed or filtered media items.
+     - **Bulk Action Toolbar**: Automatically appears when one or more items are selected, displaying the selected count and aggregate recoverable space (e.g. `12 Selected • 💾 48.2 GB Recoverable`).
+     - **Bulk Cancel Removal (`bulkUnmarkItemsLeavingSoonAction`)**: Unstages selected items from SQLite in batch (`isLeavingSoon: false`), restores backed-up original poster artwork in Plex, and syncs the Leaving Soon collection hub once per affected server.
+     - **Bulk Permanent Delete (`executePruneAction(..., { forceLiveDelete: true })`)**: Immediately deletes selected files from disk, removes them from Plex, and unmonitors them in Servarr without waiting for the grace period.
+     - **Cancel All Removal (`clearAllLeavingSoonFlagsAction`)**: 1-click header action allowing administrators to unstage and restore original artwork across an entire server or the entire multi-server cluster with confirmation safeguards.
 
 

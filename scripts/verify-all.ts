@@ -2263,6 +2263,90 @@ async function runTestSuite() {
         });
     });
 
+    // 42d. Maintainerr: Bulk Unmark Staged Media Items & Batch DB Flag Revocation
+    await assertTest("Maintainerr: Bulk Unmark Staged Media Items & Batch DB Revocation", async () => {
+        const testItems = [
+            { ratingKey: "test_bulk_prune_1", serverId: "srv1", title: "Bulk Prune 1", fileSizeGb: 2.5 },
+            { ratingKey: "test_bulk_prune_2", serverId: "srv1", title: "Bulk Prune 2", fileSizeGb: 3.5 },
+            { ratingKey: "test_bulk_prune_3", serverId: "srv2", title: "Bulk Prune 3", fileSizeGb: 4.0 },
+            { ratingKey: "test_bulk_prune_keep", serverId: "srv1", title: "Bulk Prune Keep", fileSizeGb: 1.0 }
+        ];
+
+        // 1. Seed items
+        for (const it of testItems) {
+            await prisma.mediaContentAdvisory.upsert({
+                where: { ratingKey_serverId: { ratingKey: it.ratingKey, serverId: it.serverId } },
+                update: {
+                    title: it.title,
+                    isLeavingSoon: true,
+                    leavingSoonDate: new Date(Date.now() + 14 * 86400000),
+                    leavingReason: "Maintainerr Retention Policy: [Lane 2: Never Watched]",
+                    fileSizeGb: it.fileSizeGb
+                },
+                create: {
+                    ratingKey: it.ratingKey,
+                    serverId: it.serverId,
+                    title: it.title,
+                    isLeavingSoon: true,
+                    leavingSoonDate: new Date(Date.now() + 14 * 86400000),
+                    leavingReason: "Maintainerr Retention Policy: [Lane 2: Never Watched]",
+                    fileSizeGb: it.fileSizeGb
+                }
+            });
+        }
+
+        // 2. Perform batch unmark on selected 3 items
+        const selectedToUnmark = [
+            { ratingKey: "test_bulk_prune_1", serverId: "srv1" },
+            { ratingKey: "test_bulk_prune_2", serverId: "srv1" },
+            { ratingKey: "test_bulk_prune_3", serverId: "srv2" }
+        ];
+
+        const byServer = new Map<string, string[]>();
+        for (const it of selectedToUnmark) {
+            const list = byServer.get(it.serverId) || [];
+            list.push(it.ratingKey);
+            byServer.set(it.serverId, list);
+        }
+
+        for (const [srvId, rKeys] of byServer.entries()) {
+            await prisma.mediaContentAdvisory.updateMany({
+                where: {
+                    serverId: srvId,
+                    ratingKey: { in: rKeys }
+                },
+                data: {
+                    isLeavingSoon: false,
+                    leavingSoonDate: null,
+                    leavingReason: null
+                }
+            });
+        }
+
+        // 3. Verify unmarked items are no longer staged
+        const remainingStaged = await prisma.mediaContentAdvisory.findMany({
+            where: {
+                ratingKey: { in: testItems.map(it => it.ratingKey) },
+                isLeavingSoon: true
+            }
+        });
+
+        if (remainingStaged.length !== 1 || remainingStaged[0].ratingKey !== "test_bulk_prune_keep") {
+            throw new Error(`Expected exactly 1 remaining staged item (test_bulk_prune_keep), got ${remainingStaged.length}`);
+        }
+
+        // 4. Verify bulkUnmarkItemsLeavingSoonAction export exists in curation-actions.ts
+        const curationActions = await import("../src/app/curation-actions");
+        if (typeof curationActions.bulkUnmarkItemsLeavingSoonAction !== "function") {
+            throw new Error("Missing bulkUnmarkItemsLeavingSoonAction in curation-actions.ts");
+        }
+
+        // 5. Cleanup
+        await prisma.mediaContentAdvisory.deleteMany({
+            where: { ratingKey: { in: testItems.map(it => it.ratingKey) } }
+        });
+    });
+
     // 43. Kometa: Rule Scoping, Section Revert Scoping & Aspect Ratio Guard
     await assertTest("Kometa: Rule Scoping, Section Revert Scoping & Episode Aspect Ratio Guards", async () => {
         // 1. Rule Scoping & Isolation
