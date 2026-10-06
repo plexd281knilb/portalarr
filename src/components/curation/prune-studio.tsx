@@ -584,28 +584,31 @@ export function PruneStudio() {
         }
     };
 
-    // Run prune evaluation job now
-    const handleRunPruneSync = async () => {
-        if (selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
-            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Prune Sync", () => executeRunPruneSync());
+    // Run prune evaluation job now (scope: "all" evaluates all servers & sections, "selected" evaluates selected library)
+    const handleRunPruneSync = async (scope: "all" | "selected" = "all") => {
+        if (scope === "selected" && selectedServerId && selectedSectionKey && !isSectionEnabled(selectedServerId, selectedSectionKey)) {
+            executeWithLibraryGuard(selectedServerId, selectedSectionKey, "Prune Sync", () => executeRunPruneSync("selected"));
             return;
         }
-        await executeRunPruneSync();
+        await executeRunPruneSync(scope);
     };
 
-    const executeRunPruneSync = async () => {
+    const executeRunPruneSync = async (scope: "all" | "selected" = "all") => {
         setRunningPruneSync(true);
         setPruneSyncResult(null);
         try {
-            const res = await runMaintainerrSyncAction(selectedServerId, selectedSectionKey);
+            const targetSrv = scope === "selected" ? selectedServerId : undefined;
+            const targetSec = scope === "selected" ? selectedSectionKey : undefined;
+            const res = await runMaintainerrSyncAction(targetSrv, targetSec);
             if (res.success) {
+                const scopeLabel = scope === "all" ? "across all servers & libraries" : `library #${selectedSectionKey}`;
                 setPruneSyncResult({
                     success: true,
-                    text: `Maintainerr Prune Sync Completed: ${res.totalEvaluated ?? 0} items evaluated across enabled libraries.`,
+                    text: `Maintainerr Prune Sync Completed: ${res.totalEvaluated ?? 0} items evaluated ${scopeLabel}.`,
                     details: res.details
                 });
                 setCurationLastRunAt(new Date().toISOString());
-                loadLeavingSoonItems();
+                await loadLeavingSoonItems();
             } else {
                 setPruneSyncResult({
                     success: false,
@@ -625,7 +628,6 @@ export function PruneStudio() {
     // Server / Section Switch
     const handleSelectServer = async (srvId: string) => {
         setSelectedServerId(srvId);
-        loadLeavingSoonItems(srvId);
         const srv = servers.find(s => s.serverId === srvId);
         let srvSections = srv?.sections || [];
 
@@ -659,6 +661,7 @@ export function PruneStudio() {
 
     // Leaving Soon Hub States
     const [leavingSoonItems, setLeavingSoonItems] = useState<any[]>([]);
+    const [leavingSoonServerFilter, setLeavingSoonServerFilter] = useState<string>("all");
     const [leavingSoonLoading, setLeavingSoonLoading] = useState(false);
     const [syncingLeavingSoonHub, setSyncingLeavingSoonHub] = useState(false);
     const [leavingSoonHubMsg, setLeavingSoonHubMsg] = useState<{ success: boolean; text: string } | null>(null);
@@ -1507,10 +1510,10 @@ export function PruneStudio() {
         }
     };
 
-    const loadLeavingSoonItems = async (srvId = selectedServerId) => {
+    const loadLeavingSoonItems = async (srvId?: string) => {
         setLeavingSoonLoading(true);
         try {
-            const res = await getLeavingSoonItemsAction(srvId || undefined);
+            const res = await getLeavingSoonItemsAction(srvId);
             if (res.success && res.items) {
                 setLeavingSoonItems(res.items);
             }
@@ -1961,7 +1964,7 @@ export function PruneStudio() {
                                         type="button"
                                         size="sm"
                                         disabled={runningPruneSync}
-                                        onClick={handleRunPruneSync}
+                                        onClick={() => handleRunPruneSync("selected")}
                                         className="h-9 px-3.5 text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-md shadow-rose-950/40 cursor-pointer shrink-0 transition-all hover:ring-2 hover:ring-rose-400/40 active:scale-95"
                                     >
                                         {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Zap className="h-3.5 w-3.5 mr-1.5 text-white" />}
@@ -2131,15 +2134,29 @@ export function PruneStudio() {
                                             <Clock3 className="h-3.5 w-3.5 text-rose-400 shrink-0" />
                                             <span>Last run: <strong className="text-slate-200">{formatLastRunDisplay(curationLastRunAt)}</strong></span>
                                         </div>
-                                        <Button 
-                                            size="sm"
-                                            onClick={handleRunPruneSync}
-                                            disabled={runningPruneSync}
-                                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
-                                        >
-                                            {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                                            <span>Run Prune Evaluation Now</span>
-                                        </Button>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <Button 
+                                                size="sm"
+                                                onClick={() => handleRunPruneSync("all")}
+                                                disabled={runningPruneSync}
+                                                className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3 gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer shrink-0"
+                                            >
+                                                {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                                                <span>Run Global Prune Evaluation (All Servers)</span>
+                                            </Button>
+                                            {selectedSectionKey && (
+                                                <Button 
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleRunPruneSync("selected")}
+                                                    disabled={runningPruneSync}
+                                                    className="border-slate-700 hover:bg-slate-800 text-slate-300 text-xs h-8 px-2.5 gap-1.5 cursor-pointer shrink-0"
+                                                >
+                                                    <Play className="h-3 w-3 text-rose-400" />
+                                                    <span>Evaluate Selected Library (#{selectedSectionKey})</span>
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2467,14 +2484,18 @@ export function PruneStudio() {
 
                     {/* Active Items Card */}
                     {(() => {
-                        const totalStagedGb = leavingSoonItems.reduce((acc, item) => acc + (typeof item.fileSizeGb === "number" ? item.fileSizeGb : 0), 0);
+                        const displayedLeavingSoonItems = leavingSoonServerFilter === "all"
+                            ? leavingSoonItems
+                            : leavingSoonItems.filter(it => it.serverId === leavingSoonServerFilter);
+                        const totalStagedGb = displayedLeavingSoonItems.reduce((acc, item) => acc + (typeof item.fileSizeGb === "number" ? item.fileSizeGb : 0), 0);
+
                         return (
                             <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                                <CardHeader className="p-4 border-b border-slate-800/80">
+                                <CardHeader className="p-4 border-b border-slate-800/80 space-y-3">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                         <CardTitle className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
                                             <Clock className="h-4 w-4 text-rose-400 shrink-0" />
-                                            <span>Active Staged Media Items ({leavingSoonItems.length})</span>
+                                            <span>Active Staged Media Items ({displayedLeavingSoonItems.length}{leavingSoonServerFilter !== "all" ? ` of ${leavingSoonItems.length}` : ""})</span>
                                             {totalStagedGb > 0 && (
                                                 <Badge className="bg-emerald-950/80 text-emerald-300 border-emerald-500/40 text-[10px] font-mono font-semibold">
                                                     💾 {totalStagedGb >= 1000 ? `${(totalStagedGb / 1024).toFixed(2)} TB` : `${totalStagedGb.toFixed(1)} GB`} Recoverable
@@ -2483,16 +2504,62 @@ export function PruneStudio() {
                                         </CardTitle>
                                         <span className="text-xs text-slate-400">Scheduled for pruning after grace period</span>
                                     </div>
+
+                                    {/* Server Filter Pills */}
+                                    {leavingSoonItems.length > 0 && servers.length > 1 && (
+                                        <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800/60">
+                                            <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+                                                <HardDrive className="h-3 w-3 text-rose-400" />
+                                                Filter Server:
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setLeavingSoonServerFilter("all")}
+                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                                    leavingSoonServerFilter === "all"
+                                                        ? "bg-rose-600 text-white shadow-sm ring-1 ring-rose-400/50"
+                                                        : "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700"
+                                                }`}
+                                            >
+                                                All Servers ({leavingSoonItems.length})
+                                            </button>
+                                            {servers.map(s => {
+                                                const count = leavingSoonItems.filter(it => it.serverId === s.serverId).length;
+                                                const isSelected = leavingSoonServerFilter === s.serverId;
+                                                return (
+                                                    <button
+                                                        key={s.serverId}
+                                                        type="button"
+                                                        onClick={() => setLeavingSoonServerFilter(s.serverId)}
+                                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                            isSelected
+                                                                ? "bg-rose-600 text-white shadow-sm ring-1 ring-rose-400/50"
+                                                                : "bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700"
+                                                        }`}
+                                                    >
+                                                        <span>{s.serverName || "Plex Server"}</span>
+                                                        <Badge variant="outline" className={`text-[9px] px-1 py-0 font-mono ${isSelected ? "border-rose-300 text-white bg-rose-700/60" : "border-slate-700 text-slate-400"}`}>
+                                                            {count}
+                                                        </Badge>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </CardHeader>
                                 <CardContent className="p-4 space-y-2.5">
-                                    {leavingSoonItems.length === 0 ? (
+                                    {displayedLeavingSoonItems.length === 0 ? (
                                         <div className="text-center py-12 text-slate-500 space-y-3">
                                             <Shield className="h-10 w-10 mx-auto text-emerald-500/50" />
                                             <div className="space-y-1">
-                                                <p className="text-xs font-semibold text-slate-300">All Plex libraries healthy — No media currently marked for removal.</p>
+                                                <p className="text-xs font-semibold text-slate-300">
+                                                    {leavingSoonServerFilter !== "all"
+                                                        ? `No media currently marked for removal on ${servers.find(s => s.serverId === leavingSoonServerFilter)?.serverName || "this server"}.`
+                                                        : "All Plex libraries healthy — No media currently marked for removal."}
+                                                </p>
                                                 <p className="text-[11px] text-slate-400 max-w-lg mx-auto">
                                                     {pruneTriggerMode === "always"
-                                                        ? "Evaluation policy is set to Rule-Based Retention. Click 'Evaluate Libraries Now' to scan active libraries against aging rules, or test custom criteria in the Prune Sandbox."
+                                                        ? "Evaluation policy is set to Rule-Based Retention. Click 'Evaluate All Libraries Now' to scan active libraries against aging rules, or test custom criteria in the Prune Sandbox."
                                                         : `Evaluation policy is set to Capacity-Triggered. Media will stage automatically when array hits ${pruneWarningThresholdPercent}% capacity.`}
                                                 </p>
                                             </div>
@@ -2501,11 +2568,11 @@ export function PruneStudio() {
                                                     type="button"
                                                     size="sm"
                                                     disabled={runningPruneSync}
-                                                    onClick={handleRunPruneSync}
+                                                    onClick={() => handleRunPruneSync("all")}
                                                     className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
                                                 >
                                                     {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Zap className="h-3.5 w-3.5 mr-1 text-white" />}
-                                                    <span>Evaluate Libraries Now</span>
+                                                    <span>Evaluate All Libraries Now</span>
                                                 </Button>
                                                 <Button
                                                     type="button"
@@ -2520,7 +2587,7 @@ export function PruneStudio() {
                                             </div>
                                         </div>
                                     ) : (
-                                        leavingSoonItems.map(item => {
+                                        displayedLeavingSoonItems.map(item => {
                                             const leaveDate = item.leavingSoonDate ? new Date(item.leavingSoonDate) : null;
                                             const daysRemaining = leaveDate ? Math.max(0, Math.ceil((leaveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
                                             const itemServerName = servers.find(s => s.serverId === item.serverId)?.serverName || item.serverId;
