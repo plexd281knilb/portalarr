@@ -89,5 +89,9 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
      2. `"capacity"` (Capacity-Triggered): Candidate evaluation runs only when the selected Glances storage array reaches or exceeds the Warning threshold (e.g. ≥ 85% used). If Glances disk monitoring reports 0 disks or is unconfigured, it gracefully falls back to rule-based evaluation to prevent silent suppression.
    - Manual admin actions (`runMaintainerrSyncAction` or `forceEvaluate: true`) always evaluate candidate media regardless of disk headroom.
    - `syncLeavingSoonCollectionHubInternal` returns `evaluatedCount` and `newlyStagedCount`, enabling `runMaintainerrSyncInternal` to aggregate and report accurate `totalEvaluated` counts in execution logs and telemetry.
+10. **File Size Tracking & Recoverable Storage Telemetry**:
+   - `MediaContentAdvisory.fileSizeGb` persists the exact media file size (in gigabytes) for each item staged to Leaving Soon across auto-staging (`syncLeavingSoonCollectionHubInternal`), manual flagging (`markItemLeavingSoonAction`), and sandbox staging (`executePruneAction`).
+   - Staged item retrieval (`getLeavingSoonItemsAction`) automatically enriches and backfills legacy or missing sizes on the fly via `getPlexSingleItemMetadata(serverUrl, token, ratingKey)` in parallel batches of 10 and commits them to SQLite.
+   - Active Staged Media Items card in `prune-studio.tsx` calculates cumulative recoverable storage (`💾 X.X GB / TB Recoverable`), provides individual item file size badges (`💾 X.X GB`), explicit space savings annotations (`Saves X.X GB • Reason: ...`), and server badges (`KidsPlexServer`, `Main Server`) for immediate server isolation.
 
 

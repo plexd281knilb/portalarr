@@ -731,6 +731,7 @@ model MediaContentAdvisory {
   isLeavingSoon         Boolean   @default(false)
   leavingSoonDate       DateTime?
   leavingReason         String?
+  fileSizeGb            Float?
   customTags            String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
