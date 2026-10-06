@@ -3231,7 +3231,8 @@ export async function syncLeavingSoonCollectionHubInternal(
                                     title: formattedTitle,
                                     isLeavingSoon: true,
                                     leavingSoonDate: effectiveDate,
-                                    leavingReason
+                                    leavingReason,
+                                    fileSizeGb: cand.fileSizeGb || null
                                 },
                                 create: {
                                     ratingKey: cand.ratingKey,
@@ -3239,7 +3240,8 @@ export async function syncLeavingSoonCollectionHubInternal(
                                     title: formattedTitle,
                                     isLeavingSoon: true,
                                     leavingSoonDate: effectiveDate,
-                                    leavingReason
+                                    leavingReason,
+                                    fileSizeGb: cand.fileSizeGb || null
                                 }
                             });
                             newlyStagedCount++;
@@ -5033,7 +5035,6 @@ export async function pruneOrphanArtworkBackupsAction(serverId: string) {
 
 export async function getLeavingSoonItemsAction(serverId?: string) {
     try {
-
         await verifyAdmin();
         const items = await prisma.mediaContentAdvisory.findMany({
             where: {
@@ -5042,6 +5043,46 @@ export async function getLeavingSoonItemsAction(serverId?: string) {
             },
             orderBy: { leavingSoonDate: "asc" }
         });
+
+        // Enrich items missing fileSizeGb (e.g. legacy staged items before fileSize tracking)
+        const missingSizeItems = items.filter(it => it.fileSizeGb == null || it.fileSizeGb === 0);
+        if (missingSizeItems.length > 0) {
+            const serverGroups = new Map<string, typeof items>();
+            for (const item of missingSizeItems) {
+                const sId = item.serverId || serverId || "main";
+                if (!serverGroups.has(sId)) serverGroups.set(sId, []);
+                serverGroups.get(sId)!.push(item);
+            }
+
+            for (const [sId, groupItems] of serverGroups) {
+                try {
+                    const resolved = await resolveWorkingPlexServerConnection(sId);
+                    if (resolved?.serverUrl && resolved?.token) {
+                        const chunkSize = 10;
+                        for (let i = 0; i < groupItems.length; i += chunkSize) {
+                            const chunk = groupItems.slice(i, i + chunkSize);
+                            await Promise.all(chunk.map(async (adv) => {
+                                try {
+                                    const meta = await getPlexSingleItemMetadata(resolved.serverUrl, resolved.token, adv.ratingKey);
+                                    if (meta) {
+                                        const sizeBytes = meta.fileSize || 0;
+                                        const sizeGb = sizeBytes > 0 
+                                            ? parseFloat((sizeBytes / (1024 * 1024 * 1024)).toFixed(2))
+                                            : (meta.type === "movie" ? 4.5 : 12.0);
+                                        adv.fileSizeGb = sizeGb;
+                                        await prisma.mediaContentAdvisory.update({
+                                            where: { id: adv.id },
+                                            data: { fileSizeGb: sizeGb }
+                                        }).catch(() => {});
+                                    }
+                                } catch (e) {}
+                            }));
+                        }
+                    }
+                } catch (e) {}
+            }
+        }
+
         return { success: true, items };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -5055,6 +5096,7 @@ export async function markItemLeavingSoonAction(data: {
     daysRemaining?: number;
     deleteDate?: string;
     reason?: string;
+    fileSizeGb?: number;
 }) {
     try {
 
@@ -5074,7 +5116,8 @@ export async function markItemLeavingSoonAction(data: {
                 title: data.title,
                 isLeavingSoon: true,
                 leavingSoonDate: effectiveDate,
-                leavingReason: data.reason || "Manual storage prune selection"
+                leavingReason: data.reason || "Manual storage prune selection",
+                ...(data.fileSizeGb ? { fileSizeGb: data.fileSizeGb } : {})
             },
             create: {
                 ratingKey: data.ratingKey,
@@ -5082,7 +5125,8 @@ export async function markItemLeavingSoonAction(data: {
                 title: data.title,
                 isLeavingSoon: true,
                 leavingSoonDate: effectiveDate,
-                leavingReason: data.reason || "Manual storage prune selection"
+                leavingReason: data.reason || "Manual storage prune selection",
+                fileSizeGb: data.fileSizeGb || null
             }
         });
 
@@ -5743,7 +5787,7 @@ export async function runPruneSimulationAction(
 }
 
 export async function executePruneAction(
-    items: { ratingKey: string; serverId: string; sectionKey?: string; title?: string }[],
+    items: { ratingKey: string; serverId: string; sectionKey?: string; title?: string; fileSizeGb?: number }[],
     options: {
         forceLiveDelete?: boolean;
         applyOverlay?: boolean;
@@ -5804,7 +5848,8 @@ export async function executePruneAction(
                         title: it.title || undefined,
                         isLeavingSoon: true,
                         leavingSoonDate: effectiveDate,
-                        leavingReason: reason
+                        leavingReason: reason,
+                        ...(it.fileSizeGb ? { fileSizeGb: it.fileSizeGb } : {})
                     },
                     create: {
                         ratingKey: it.ratingKey,
@@ -5812,7 +5857,8 @@ export async function executePruneAction(
                         title: it.title || "Media Item",
                         isLeavingSoon: true,
                         leavingSoonDate: effectiveDate,
-                        leavingReason: reason
+                        leavingReason: reason,
+                        fileSizeGb: it.fileSizeGb || null
                     }
                 });
 

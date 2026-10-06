@@ -1657,7 +1657,8 @@ export function PruneStudio() {
                 ratingKey: c.ratingKey,
                 serverId: c.serverId || selectedServerId,
                 sectionKey: c.sectionKey,
-                title: c.title
+                title: c.title,
+                fileSizeGb: c.fileSizeGb || null
             }));
 
         const isMasterEnabled = settings.enableAutoPruneDeletion ?? false;
@@ -2465,91 +2466,120 @@ export function PruneStudio() {
                     )}
 
                     {/* Active Items Card */}
-                    <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                        <CardHeader className="p-4 border-b border-slate-800/80">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-rose-400" />
-                                    <span>Active Staged Media Items ({leavingSoonItems.length})</span>
-                                </CardTitle>
-                                <span className="text-xs text-slate-400">Scheduled for pruning after grace period</span>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-4 space-y-2.5">
-                            {leavingSoonItems.length === 0 ? (
-                                <div className="text-center py-12 text-slate-500 space-y-3">
-                                    <Shield className="h-10 w-10 mx-auto text-emerald-500/50" />
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-semibold text-slate-300">All Plex libraries healthy — No media currently marked for removal.</p>
-                                        <p className="text-[11px] text-slate-400 max-w-lg mx-auto">
-                                            {pruneTriggerMode === "always"
-                                                ? "Evaluation policy is set to Rule-Based Retention. Click 'Evaluate Libraries Now' to scan active libraries against aging rules, or test custom criteria in the Prune Sandbox."
-                                                : `Evaluation policy is set to Capacity-Triggered. Media will stage automatically when array hits ${pruneWarningThresholdPercent}% capacity.`}
-                                        </p>
+                    {(() => {
+                        const totalStagedGb = leavingSoonItems.reduce((acc, item) => acc + (typeof item.fileSizeGb === "number" ? item.fileSizeGb : 0), 0);
+                        return (
+                            <Card className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                                <CardHeader className="p-4 border-b border-slate-800/80">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <CardTitle className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
+                                            <Clock className="h-4 w-4 text-rose-400 shrink-0" />
+                                            <span>Active Staged Media Items ({leavingSoonItems.length})</span>
+                                            {totalStagedGb > 0 && (
+                                                <Badge className="bg-emerald-950/80 text-emerald-300 border-emerald-500/40 text-[10px] font-mono font-semibold">
+                                                    💾 {totalStagedGb >= 1000 ? `${(totalStagedGb / 1024).toFixed(2)} TB` : `${totalStagedGb.toFixed(1)} GB`} Recoverable
+                                                </Badge>
+                                            )}
+                                        </CardTitle>
+                                        <span className="text-xs text-slate-400">Scheduled for pruning after grace period</span>
                                     </div>
-                                    <div className="flex items-center justify-center gap-2 pt-2">
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            disabled={runningPruneSync}
-                                            onClick={handleRunPruneSync}
-                                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
-                                        >
-                                            {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Zap className="h-3.5 w-3.5 mr-1 text-white" />}
-                                            <span>Evaluate Libraries Now</span>
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => setSubTab("simulation")}
-                                            className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
-                                        >
-                                            <Play className="h-3.5 w-3.5 text-rose-400" />
-                                            <span>Open Prune Sandbox</span>
-                                        </Button>
-                                    </div>
-                                </div>
-                            ) : (
-                                leavingSoonItems.map(item => {
-                                    const leaveDate = item.leavingSoonDate ? new Date(item.leavingSoonDate) : null;
-                                    const daysRemaining = leaveDate ? Math.max(0, Math.ceil((leaveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
-
-                                    return (
-                                        <div
-                                            key={item.id || item.ratingKey}
-                                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors"
-                                        >
-                                            <div className="space-y-0.5">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-white text-xs">{item.title}</span>
-                                                    <Badge className="bg-rose-950 text-rose-300 border-rose-500/40 text-[9px] font-mono">
-                                                        {daysRemaining} DAYS LEFT
-                                                    </Badge>
-                                                </div>
-                                                <p className="text-[11px] text-slate-400">
-                                                    Reason: {item.leavingReason || "Storage threshold optimization"}
+                                </CardHeader>
+                                <CardContent className="p-4 space-y-2.5">
+                                    {leavingSoonItems.length === 0 ? (
+                                        <div className="text-center py-12 text-slate-500 space-y-3">
+                                            <Shield className="h-10 w-10 mx-auto text-emerald-500/50" />
+                                            <div className="space-y-1">
+                                                <p className="text-xs font-semibold text-slate-300">All Plex libraries healthy — No media currently marked for removal.</p>
+                                                <p className="text-[11px] text-slate-400 max-w-lg mx-auto">
+                                                    {pruneTriggerMode === "always"
+                                                        ? "Evaluation policy is set to Rule-Based Retention. Click 'Evaluate Libraries Now' to scan active libraries against aging rules, or test custom criteria in the Prune Sandbox."
+                                                        : `Evaluation policy is set to Capacity-Triggered. Media will stage automatically when array hits ${pruneWarningThresholdPercent}% capacity.`}
                                                 </p>
                                             </div>
-
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={async () => {
-                                                    await unmarkItemLeavingSoonAction(item.ratingKey, item.serverId || selectedServerId);
-                                                    loadLeavingSoonItems();
-                                                }}
-                                                className="text-[11px] h-7 px-2.5 border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white"
-                                            >
-                                                Cancel Removal
-                                            </Button>
+                                            <div className="flex items-center justify-center gap-2 pt-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    disabled={runningPruneSync}
+                                                    onClick={handleRunPruneSync}
+                                                    className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
+                                                >
+                                                    {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Zap className="h-3.5 w-3.5 mr-1 text-white" />}
+                                                    <span>Evaluate Libraries Now</span>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setSubTab("simulation")}
+                                                    className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                                >
+                                                    <Play className="h-3.5 w-3.5 text-rose-400" />
+                                                    <span>Open Prune Sandbox</span>
+                                                </Button>
+                                            </div>
                                         </div>
-                                    );
-                                })
-                            )}
-                        </CardContent>
-                    </Card>
+                                    ) : (
+                                        leavingSoonItems.map(item => {
+                                            const leaveDate = item.leavingSoonDate ? new Date(item.leavingSoonDate) : null;
+                                            const daysRemaining = leaveDate ? Math.max(0, Math.ceil((leaveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
+                                            const itemServerName = servers.find(s => s.serverId === item.serverId)?.serverName || item.serverId;
+                                            const sizeStr = item.fileSizeGb != null && item.fileSizeGb > 0
+                                                ? (item.fileSizeGb >= 1000 ? `${(item.fileSizeGb / 1024).toFixed(2)} TB` : `${item.fileSizeGb.toFixed(1)} GB`)
+                                                : null;
+
+                                            return (
+                                                <div
+                                                    key={item.id || item.ratingKey}
+                                                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors"
+                                                >
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="font-bold text-white text-xs">{item.title}</span>
+                                                            <Badge className="bg-rose-950 text-rose-300 border-rose-500/40 text-[9px] font-mono shrink-0">
+                                                                {daysRemaining} DAYS LEFT
+                                                            </Badge>
+                                                            {sizeStr && (
+                                                                <Badge className="bg-emerald-950/70 text-emerald-300 border-emerald-500/30 text-[9px] font-mono font-bold shrink-0">
+                                                                    💾 {sizeStr}
+                                                                </Badge>
+                                                            )}
+                                                            {itemServerName && (
+                                                                <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 font-mono shrink-0">
+                                                                    {itemServerName}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-400">
+                                                            {sizeStr && (
+                                                                <span className="text-emerald-400 font-semibold mr-1.5">
+                                                                    Saves {sizeStr} •
+                                                                </span>
+                                                            )}
+                                                            Reason: {item.leavingReason || "Storage threshold optimization"}
+                                                        </p>
+                                                    </div>
+
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={async () => {
+                                                            await unmarkItemLeavingSoonAction(item.ratingKey, item.serverId || selectedServerId);
+                                                            loadLeavingSoonItems();
+                                                        }}
+                                                        className="text-[11px] h-7 px-2.5 border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white shrink-0"
+                                                    >
+                                                        Cancel Removal
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </CardContent>
+                            </Card>
+                        );
+                    })()}
 
                     {/* Leaving Soon Banner & Poster Live Simulator */}
                     <Card className={`bg-slate-900/90 shadow-xl overflow-hidden backdrop-blur-md transition-all duration-300 ${

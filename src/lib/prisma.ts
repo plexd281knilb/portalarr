@@ -1532,6 +1532,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "isLeavingSoon" BOOLEAN NOT NULL DEFAULT 0,
                     "leavingSoonDate" DATETIME,
                     "leavingReason" TEXT,
+                    "fileSizeGb" REAL,
                     "customTags" TEXT,
                     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -1541,6 +1542,12 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$executeRawUnsafe(`
                 CREATE UNIQUE INDEX IF NOT EXISTS "MediaContentAdvisory_ratingKey_serverId_key" ON "MediaContentAdvisory"("ratingKey", "serverId");
             `);
+
+            const advisoryTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaContentAdvisory");`);
+            const existingAdvisoryCols = advisoryTableInfo.map((c: any) => c.name);
+            if (!existingAdvisoryCols.includes("fileSizeGb")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "MediaContentAdvisory" ADD COLUMN "fileSizeGb" REAL;`);
+            }
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to create Curation tables:", e.message || e);
         }

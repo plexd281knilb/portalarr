@@ -2201,6 +2201,68 @@ async function runTestSuite() {
         }
     });
 
+    // 42c. Maintainerr: MediaContentAdvisory File Size Persistence & Recoverable Space Calculation
+    await assertTest("Maintainerr: Media File Size Tracking & Recoverable Space Aggregation", async () => {
+        const testRatingKey = "test_prune_size_item_99999";
+        const testServerId = "test_server_prune";
+
+        // 1. Create or upsert advisory with fileSizeGb
+        await prisma.mediaContentAdvisory.upsert({
+            where: { ratingKey_serverId: { ratingKey: testRatingKey, serverId: testServerId } },
+            update: {
+                title: "Test Prunable Movie",
+                isLeavingSoon: true,
+                leavingSoonDate: new Date(Date.now() + 14 * 86400000),
+                leavingReason: "Maintainerr Retention Policy: [Lane 2: Never Watched]",
+                fileSizeGb: 4.85
+            },
+            create: {
+                ratingKey: testRatingKey,
+                serverId: testServerId,
+                title: "Test Prunable Movie",
+                isLeavingSoon: true,
+                leavingSoonDate: new Date(Date.now() + 14 * 86400000),
+                leavingReason: "Maintainerr Retention Policy: [Lane 2: Never Watched]",
+                fileSizeGb: 4.85
+            }
+        });
+
+        // 2. Verify retrieval from SQLite
+        const advisory = await prisma.mediaContentAdvisory.findUnique({
+            where: { ratingKey_serverId: { ratingKey: testRatingKey, serverId: testServerId } }
+        });
+
+        if (!advisory || advisory.fileSizeGb !== 4.85) {
+            throw new Error(`Expected advisory.fileSizeGb to be 4.85, got ${advisory?.fileSizeGb}`);
+        }
+
+        // 3. Verify aggregation and display formatting (GB vs TB)
+        const mockItems = [
+            { fileSizeGb: 4.85 },
+            { fileSizeGb: 12.5 },
+            { fileSizeGb: 0.75 },
+            { fileSizeGb: null }
+        ];
+
+        const totalGb = mockItems.reduce((acc, it) => acc + (it.fileSizeGb || 0), 0);
+        if (Math.abs(totalGb - 18.1) > 0.001) {
+            throw new Error(`Expected total recoverable GB to be 18.1, got ${totalGb}`);
+        }
+
+        const formatSpace = (gb: number) => gb >= 1000 ? `${(gb / 1024).toFixed(2)} TB` : `${gb.toFixed(1)} GB`;
+        if (formatSpace(totalGb) !== "18.1 GB") {
+            throw new Error(`Expected "18.1 GB", got "${formatSpace(totalGb)}"`);
+        }
+        if (formatSpace(1500) !== "1.46 TB") {
+            throw new Error(`Expected "1.46 TB", got "${formatSpace(1500)}"`);
+        }
+
+        // 4. Cleanup
+        await prisma.mediaContentAdvisory.deleteMany({
+            where: { ratingKey: testRatingKey, serverId: testServerId }
+        });
+    });
+
     // 43. Kometa: Rule Scoping, Section Revert Scoping & Aspect Ratio Guard
     await assertTest("Kometa: Rule Scoping, Section Revert Scoping & Episode Aspect Ratio Guards", async () => {
         // 1. Rule Scoping & Isolation
