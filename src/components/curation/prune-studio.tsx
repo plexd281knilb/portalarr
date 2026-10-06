@@ -39,7 +39,8 @@ import {
     Sparkles,
     Eye,
     Tag,
-    Plus
+    Plus,
+    Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -247,6 +248,7 @@ export function PruneStudio() {
     const [pruneSyncResult, setPruneSyncResult] = useState<{ success: boolean; text: string; details?: string[] } | null>(null);
 
     // Global Prune & Storage Free Space Threshold States
+    const [pruneTriggerMode, setPruneTriggerMode] = useState<"always" | "capacity">("always");
     const [leavingSoonDiskThreshold, setLeavingSoonDiskThreshold] = useState<number>(15);
     const [pruneWarningThresholdPercent, setPruneWarningThresholdPercent] = useState<number>(85);
     const [pruneDangerThresholdPercent, setPruneDangerThresholdPercent] = useState<number>(95);
@@ -268,6 +270,7 @@ export function PruneStudio() {
         setThresholdsSavedMsg(false);
         try {
             const res = await saveCurationSettingsAction({
+                pruneTriggerMode,
                 leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
                 pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
                 pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
@@ -283,6 +286,7 @@ export function PruneStudio() {
             if (res.success) {
                 setSettings((prev: any) => ({
                     ...prev,
+                    pruneTriggerMode,
                     leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
                     pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
                     pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
@@ -297,6 +301,7 @@ export function PruneStudio() {
                 }));
                 setBaselineSettings(prev => prev ? {
                     ...prev,
+                    pruneTriggerMode,
                     leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
                     pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
                     pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
@@ -474,6 +479,7 @@ export function PruneStudio() {
         setPruneDryRun(baselineSettings.pruneDryRun);
         setEnableAutoPruneDeletion(baselineSettings.enableAutoPruneDeletion);
 
+        setPruneTriggerMode(baselineSettings.pruneTriggerMode || "always");
         setLeavingSoonDiskThreshold(baselineSettings.leavingSoonDiskThreshold);
         setPruneWarningThresholdPercent(baselineSettings.pruneWarningThresholdPercent);
         setPruneDangerThresholdPercent(baselineSettings.pruneDangerThresholdPercent);
@@ -513,6 +519,7 @@ export function PruneStudio() {
                 payload.enableAutoPruneDeletion = enableAutoPruneDeletion;
             }
             if (isThresholdsDirty) {
+                payload.pruneTriggerMode = pruneTriggerMode;
                 payload.leavingSoonDiskThreshold = Number(leavingSoonDiskThreshold);
                 payload.pruneWarningThresholdPercent = Number(pruneWarningThresholdPercent);
                 payload.pruneDangerThresholdPercent = Number(pruneDangerThresholdPercent);
@@ -544,6 +551,7 @@ export function PruneStudio() {
                 curationSyncSchedule,
                 pruneDryRun,
                 enableAutoPruneDeletion,
+                pruneTriggerMode,
                 leavingSoonDiskThreshold: Number(leavingSoonDiskThreshold),
                 pruneWarningThresholdPercent: Number(pruneWarningThresholdPercent),
                 pruneDangerThresholdPercent: Number(pruneDangerThresholdPercent),
@@ -759,6 +767,7 @@ export function PruneStudio() {
         curationSyncSchedule: string;
         pruneDryRun: boolean;
         enableAutoPruneDeletion: boolean;
+        pruneTriggerMode: "always" | "capacity";
         leavingSoonDiskThreshold: number;
         pruneWarningThresholdPercent: number;
         pruneDangerThresholdPercent: number;
@@ -791,6 +800,7 @@ export function PruneStudio() {
 
     const isThresholdsDirty = Boolean(
         baselineSettings && (
+            pruneTriggerMode !== (baselineSettings.pruneTriggerMode || "always") ||
             Number(leavingSoonDiskThreshold) !== baselineSettings.leavingSoonDiskThreshold ||
             Number(pruneWarningThresholdPercent) !== baselineSettings.pruneWarningThresholdPercent ||
             Number(pruneDangerThresholdPercent) !== baselineSettings.pruneDangerThresholdPercent ||
@@ -1299,6 +1309,9 @@ export function PruneStudio() {
                     if (settingsRes.enabledServersForPruning) {
                         setEnabledServersForPruning(settingsRes.enabledServersForPruning);
                     }
+                    if (settingsRes.pruneTriggerMode) {
+                        setPruneTriggerMode(settingsRes.pruneTriggerMode as "always" | "capacity");
+                    }
                     if (settingsRes.leavingSoonDiskThreshold !== undefined) setLeavingSoonDiskThreshold(settingsRes.leavingSoonDiskThreshold);
                     if (settingsRes.pruneWarningThresholdPercent !== undefined) setPruneWarningThresholdPercent(settingsRes.pruneWarningThresholdPercent);
                     if (settingsRes.pruneDangerThresholdPercent !== undefined) setPruneDangerThresholdPercent(settingsRes.pruneDangerThresholdPercent);
@@ -1412,6 +1425,7 @@ export function PruneStudio() {
                         curationSyncSchedule: settingsRes.pruneSyncSchedule || settingsRes.curationSyncSchedule || "daily_6am",
                         pruneDryRun: settingsRes.pruneDryRun ?? true,
                         enableAutoPruneDeletion: settingsRes.enableAutoPruneDeletion ?? false,
+                        pruneTriggerMode: (settingsRes.pruneTriggerMode as "always" | "capacity") || "always",
                         leavingSoonDiskThreshold: settingsRes.leavingSoonDiskThreshold ?? 15,
                         pruneWarningThresholdPercent: settingsRes.pruneWarningThresholdPercent ?? 85,
                         pruneDangerThresholdPercent: settingsRes.pruneDangerThresholdPercent ?? 95,
@@ -2027,7 +2041,10 @@ export function PruneStudio() {
                                                 <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
                                                 <span className="font-bold text-slate-100 text-sm">⚠️ Stage 1: Leaving Soon Staging</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${pruneTriggerMode === "always" ? "border-emerald-500/40 text-emerald-300 bg-emerald-950/30" : "border-amber-500/40 text-amber-300 bg-amber-950/30"}`}>
+                                                    {pruneTriggerMode === "always" ? "📋 Rule-Based" : `📊 Disk ≥${pruneWarningThresholdPercent}%`}
+                                                </Badge>
                                                 <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${curationSyncPruning ? 'border-rose-500/40 text-rose-300 bg-rose-950/30' : 'border-slate-700 text-slate-500 bg-slate-900/40'}`}>
                                                     {curationSyncPruning ? formatScheduleLabel(curationSyncSchedule) : 'Disabled'}
                                                 </Badge>
@@ -2460,10 +2477,38 @@ export function PruneStudio() {
                         </CardHeader>
                         <CardContent className="p-4 space-y-2.5">
                             {leavingSoonItems.length === 0 ? (
-                                <div className="text-center py-12 text-slate-500 space-y-2">
+                                <div className="text-center py-12 text-slate-500 space-y-3">
                                     <Shield className="h-10 w-10 mx-auto text-emerald-500/50" />
-                                    <p className="text-xs font-semibold text-slate-300">All Plex libraries healthy — No media currently marked for removal.</p>
-                                    <p className="text-[11px] text-slate-500">Run the Prune Sandbox simulator to identify unwatched or low-rated candidates.</p>
+                                    <div className="space-y-1">
+                                        <p className="text-xs font-semibold text-slate-300">All Plex libraries healthy — No media currently marked for removal.</p>
+                                        <p className="text-[11px] text-slate-400 max-w-lg mx-auto">
+                                            {pruneTriggerMode === "always"
+                                                ? "Evaluation policy is set to Rule-Based Retention. Click 'Evaluate Libraries Now' to scan active libraries against aging rules, or test custom criteria in the Prune Sandbox."
+                                                : `Evaluation policy is set to Capacity-Triggered. Media will stage automatically when array hits ${pruneWarningThresholdPercent}% capacity.`}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center justify-center gap-2 pt-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={runningPruneSync}
+                                            onClick={handleRunPruneSync}
+                                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
+                                        >
+                                            {runningPruneSync ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Zap className="h-3.5 w-3.5 mr-1 text-white" />}
+                                            <span>Evaluate Libraries Now</span>
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => setSubTab("simulation")}
+                                            className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3 gap-1.5 cursor-pointer"
+                                        >
+                                            <Play className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>Open Prune Sandbox</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : (
                                 leavingSoonItems.map(item => {
@@ -3642,6 +3687,63 @@ export function PruneStudio() {
                             </p>
 
                             <div className="space-y-3.5 text-xs">
+                                {/* Evaluation Trigger Policy */}
+                                <div className="space-y-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs text-slate-200 font-bold flex items-center gap-1.5">
+                                            <Zap className="h-3.5 w-3.5 text-rose-400" />
+                                            <span>Evaluation Trigger Policy:</span>
+                                        </Label>
+                                        <Badge variant="outline" className={`text-[10px] font-semibold px-2 py-0.5 ${pruneTriggerMode === "always" ? "border-emerald-500/40 text-emerald-300 bg-emerald-950/30" : "border-amber-500/40 text-amber-300 bg-amber-950/30"}`}>
+                                            {pruneTriggerMode === "always" ? "Rule-Based Retention" : "Capacity-Triggered"}
+                                        </Badge>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPruneTriggerMode("always")}
+                                            className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                                pruneTriggerMode === "always"
+                                                    ? "bg-rose-950/40 border-rose-500/80 text-white shadow-sm ring-1 ring-rose-500/30"
+                                                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-1.5 font-bold text-xs text-slate-100">
+                                                <span>📋 Rule-Based Retention</span>
+                                                <span className="text-[10px] text-emerald-400 font-medium">(Standard)</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                                                Evaluates media against aging &amp; watch criteria on every run, staging candidates into Leaving Soon regardless of disk space.
+                                            </p>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setPruneTriggerMode("capacity")}
+                                            className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                                pruneTriggerMode === "capacity"
+                                                    ? "bg-rose-950/40 border-rose-500/80 text-white shadow-sm ring-1 ring-rose-500/30"
+                                                    : "bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-1.5 font-bold text-xs text-slate-100">
+                                                <span>📊 Capacity-Triggered Only</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                                                Only evaluates and stages media when the selected Glances storage array reaches the Warning threshold (≥ {pruneWarningThresholdPercent}% used).
+                                            </p>
+                                        </button>
+                                    </div>
+                                    {glancesDisks.length === 0 && (
+                                        <div className="p-2 bg-amber-950/30 border border-amber-800/40 rounded-lg text-[10px] text-amber-300 flex items-start gap-1.5">
+                                            <Info className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                            <span>
+                                                Glances disk telemetry is reporting 0 disks. Rule-Based Retention functions autonomously. Capacity-Triggered mode will automatically fall back to rule evaluation when storage stats are unavailable.
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
                                 {/* Warning / Staging Threshold (% Used) */}
                                 <div className="space-y-1.5 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
                                     <div className="flex items-center justify-between">

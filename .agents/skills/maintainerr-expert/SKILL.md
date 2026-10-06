@@ -82,5 +82,12 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
    - Concurrency lock `(global as any).__PORTALARR_PRUNE_RUNNING` prevents background evaluations from colliding with manual admin triggers.
    - In `runMaintainerrSyncInternal`, `catch (e: any)` updates `pruneLastRunAt: new Date()` and `pruneLastRunStatus` with error telemetry to prevent 60-second crash loops and surface errors in the UI.
    - **Unraid Plex Container Maintenance Blackout (5:00 AM – 5:30 AM)**: Unraid runs database integrity checks and restarts Plex containers daily from 5:00 AM to 5:30 AM. Maintainerr's recommended schedule is `daily_6am` (6:00 AM). The universal helper `isPlexMaintenanceWindow(now)` strictly blocks all scheduled and manual Maintainerr pruning runs during 5:00:00 AM – 5:29:59 AM. Existing legacy schedules set to `daily_5am` automatically defer to 5:30:00 AM after maintenance concludes.
+9. **Rule-Based Retention vs. Capacity-Triggered Pruning (`pruneTriggerMode`)**:
+   - In standard Maintainerr, media lifecycle rules (such as unwatched media older than 90 days) run on schedule to stage items into 'Leaving Soon' with grace periods, independent of disk pressure.
+   - Portalarr supports two evaluation trigger modes configured via `Settings.pruneTriggerMode`:
+     1. `"always"` (Rule-Based Retention, standard default): Every scheduled run (`runMaintainerrSyncInternal`) and manual trigger (`runMaintainerrSyncAction`) evaluates enabled libraries against aging and watch rules, staging expiring media into the Leaving Soon Plex collection with dynamic countdown overlays.
+     2. `"capacity"` (Capacity-Triggered): Candidate evaluation runs only when the selected Glances storage array reaches or exceeds the Warning threshold (e.g. ≥ 85% used). If Glances disk monitoring reports 0 disks or is unconfigured, it gracefully falls back to rule-based evaluation to prevent silent suppression.
+   - Manual admin actions (`runMaintainerrSyncAction` or `forceEvaluate: true`) always evaluate candidate media regardless of disk headroom.
+   - `syncLeavingSoonCollectionHubInternal` returns `evaluatedCount` and `newlyStagedCount`, enabling `runMaintainerrSyncInternal` to aggregate and report accurate `totalEvaluated` counts in execution logs and telemetry.
 
 

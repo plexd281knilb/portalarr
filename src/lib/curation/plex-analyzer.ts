@@ -2009,6 +2009,9 @@ export async function syncPlexCollection(
         if (keysToAdd.length > 0) {
             const machineId = await getPlexServerMachineIdentifier(urlsToTry, token);
             const chunkSize = 50;
+            const buildItemUri = (k: string) => machineId
+                ? `server://${machineId}/com.plexapp.plugins.library/library/metadata/${k}`
+                : `library:///item/%2Flibrary%2Fmetadata%2F${k}`;
 
             for (let i = 0; i < keysToAdd.length; i += chunkSize) {
                 const chunk = keysToAdd.slice(i, i + chunkSize);
@@ -2016,14 +2019,12 @@ export async function syncPlexCollection(
 
                 for (const cleanBase of urlsToTry) {
                     if (chunkAdded) break;
+                    let endpointResponded = false;
                     try {
-                        const ratingKeysParam = chunk.join(",");
-                        const uriParam = machineId
-                            ? `server://${machineId}/com.plexapp.plugins.library/library/metadata/${ratingKeysParam}`
-                            : `library:///item/%2Flibrary%2Fmetadata%2F${ratingKeysParam}`;
-                        const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?uri=${encodeURIComponent(uriParam)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                        // 1. Try standard Plex multi-URI query parameter format
+                        const multiUriQuery = chunk.map(k => `uri=${encodeURIComponent(buildItemUri(k))}`).join("&");
+                        const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?${multiUriQuery}&X-Plex-Token=${encodeURIComponent(token)}`;
 
-                        // Try PUT first
                         const putRes = await fetch(addUrl, {
                             method: "PUT",
                             headers: {
@@ -2033,6 +2034,7 @@ export async function syncPlexCollection(
                             },
                             signal: AbortSignal.timeout(5000)
                         });
+                        endpointResponded = true;
 
                         if (putRes.ok) {
                             addedCount += chunk.length;
@@ -2056,74 +2058,106 @@ export async function syncPlexCollection(
                             chunkAdded = true;
                             break;
                         }
+
+                        // Fallback: try comma-delimited single uri param
+                        const singleCommaUri = encodeURIComponent(machineId
+                            ? `server://${machineId}/com.plexapp.plugins.library/library/metadata/${chunk.join(",")}`
+                            : `library:///item/%2Flibrary%2Fmetadata%2F${chunk.join(",")}`);
+                        const singleAddUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?uri=${singleCommaUri}&X-Plex-Token=${encodeURIComponent(token)}`;
+
+                        const singlePutRes = await fetch(singleAddUrl, {
+                            method: "PUT",
+                            headers: {
+                                Accept: "application/json",
+                                "X-Plex-Token": token,
+                                "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                            },
+                            signal: AbortSignal.timeout(4000)
+                        }).catch(() => null);
+
+                        if (singlePutRes && singlePutRes.ok) {
+                            addedCount += chunk.length;
+                            chunkAdded = true;
+                            break;
+                        }
                     } catch {}
+                    // If endpoint responded with an HTTP status, don't stall trying alternate candidate URLs for the exact same PMS instance
+                    if (endpointResponded && !chunkAdded) {
+                        break;
+                    }
                 }
 
-                // If bulk addition failed, fall back to individual addition or metadata merge preserving all collections
+                // If bulk addition failed, fall back to concurrent individual item addition
                 if (!chunkAdded) {
-                    for (const rKey of chunk) {
-                        let singleAdded = false;
-                        for (const cleanBase of urlsToTry) {
-                            if (singleAdded) break;
-                            try {
-                                const singleUri = machineId
-                                    ? `server://${machineId}/com.plexapp.plugins.library/library/metadata/${rKey}`
-                                    : `library:///item/%2Flibrary%2Fmetadata%2F${rKey}`;
-                                const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?uri=${encodeURIComponent(singleUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
-                                const sRes = await fetch(addUrl, {
-                                    method: "PUT",
-                                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
-                                    signal: AbortSignal.timeout(4000)
-                                });
-                                if (sRes.ok) {
-                                    addedCount++;
-                                    singleAdded = true;
-                                    continue;
-                                }
-                            } catch {}
-
-                            // Direct item metadata tagging fallback with multi-collection merge preservation
-                            try {
-                                const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
-                                const mRes = await fetch(metaUrl, {
-                                    headers: { Accept: "application/json", "X-Plex-Token": token },
-                                    signal: AbortSignal.timeout(4000)
-                                });
-                                if (mRes.ok) {
-                                    const mData = await mRes.json();
-                                    const metaItem = mData.MediaContainer?.Metadata?.[0] || mData.MediaContainer?.Directory?.[0];
-                                    const existingColls: string[] = [];
-                                    if (Array.isArray(metaItem?.Collection)) {
-                                        for (const c of metaItem.Collection) {
-                                            const name = typeof c === "string" ? c : c?.tag;
-                                            if (name) existingColls.push(name);
-                                        }
-                                    }
-                                    if (!existingColls.some(c => c.toLowerCase() === collectionTitle.toLowerCase())) {
-                                        existingColls.push(collectionTitle);
-                                    }
-                                    const params = new URLSearchParams();
-                                    params.set("type", String(typeParam));
-                                    params.set("id", String(rKey));
-                                    existingColls.forEach((c, idx) => {
-                                        params.set(`collection[${idx}].tag.tag`, c);
-                                    });
-                                    params.set("collection.locked", "1");
-                                    params.set("X-Plex-Token", token);
-
-                                    const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?${params.toString()}`;
-                                    const putRes = await fetch(putUrl, {
+                    const workingBase = urlsToTry[0];
+                    const batchSize = 8;
+                    for (let j = 0; j < chunk.length; j += batchSize) {
+                        const subBatch = chunk.slice(j, j + batchSize);
+                        await Promise.all(subBatch.map(async (rKey) => {
+                            let singleAdded = false;
+                            for (const cleanBase of [workingBase, ...urlsToTry.filter(u => u !== workingBase)]) {
+                                if (singleAdded) break;
+                                try {
+                                    const singleUri = buildItemUri(rKey);
+                                    const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey)}/items?uri=${encodeURIComponent(singleUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                                    const sRes = await fetch(addUrl, {
                                         method: "PUT",
                                         headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
-                                        signal: AbortSignal.timeout(4000)
+                                        signal: AbortSignal.timeout(3000)
                                     });
-                                    if (putRes.ok) {
+                                    if (sRes.ok) {
                                         addedCount++;
                                         singleAdded = true;
+                                        break;
                                     }
-                                }
-                            } catch {}
-                        }
+                                } catch {}
+
+                                // Direct item metadata tagging fallback with multi-collection merge preservation
+                                try {
+                                    const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?X-Plex-Token=${encodeURIComponent(token)}`;
+                                    const mRes = await fetch(metaUrl, {
+                                        headers: { Accept: "application/json", "X-Plex-Token": token },
+                                        signal: AbortSignal.timeout(3000)
+                                    });
+                                    if (mRes.ok) {
+                                        const mData = await mRes.json();
+                                        const metaItem = mData.MediaContainer?.Metadata?.[0] || mData.MediaContainer?.Directory?.[0];
+                                        const existingColls: string[] = [];
+                                        if (Array.isArray(metaItem?.Collection)) {
+                                            for (const c of metaItem.Collection) {
+                                                const name = typeof c === "string" ? c : c?.tag;
+                                                if (name) existingColls.push(name);
+                                            }
+                                        }
+                                        if (!existingColls.some(c => c.toLowerCase() === collectionTitle.toLowerCase())) {
+                                            existingColls.push(collectionTitle);
+                                        }
+                                        const params = new URLSearchParams();
+                                        params.set("type", String(typeParam));
+                                        params.set("id", String(rKey));
+                                        existingColls.forEach((c, idx) => {
+                                            params.set(`collection[${idx}].tag.tag`, c);
+                                        });
+                                        params.set("collection.locked", "1");
+                                        params.set("X-Plex-Token", token);
+
+                                        const putUrl = `${cleanBase}/library/metadata/${encodeURIComponent(rKey)}?${params.toString()}`;
+                                        const putRes = await fetch(putUrl, {
+                                            method: "PUT",
+                                            headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                                            signal: AbortSignal.timeout(3000)
+                                        });
+                                        if (putRes.ok) {
+                                            addedCount++;
+                                            singleAdded = true;
+                                            break;
+                                        }
+                                    }
+                                } catch {}
+                                // If reached on this cleanBase, don't retry on other URLs
+                                break;
+                            }
+                        }));
                     }
                 }
             }

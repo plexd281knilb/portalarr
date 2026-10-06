@@ -614,6 +614,13 @@ export async function getNetflixTrending(isKids = false, page = 1, mediaType: "m
     return await getTmdbStreamingProviderMedia(8, { isKids, mediaType, page, minVotes: 10 });
 }
 
+/**
+ * Get Crunchyroll Trending Anime (Simulcasts, Series, and Movies)
+ */
+export async function getCrunchyrollTrending(page = 1, mediaType: "movie" | "tv" | "both" = "both"): Promise<TmdbMediaItem[]> {
+    return await getTmdbStreamingProviderMedia(283, { isKids: false, mediaType, page, minVotes: 5 });
+}
+
 
 /**
  * Get YouTube trailer and teaser videos for a movie or TV show

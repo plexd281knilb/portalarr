@@ -44,18 +44,33 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultPosterUrl: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80"
     },
     {
-        id: "mdblist-popular-movies",
+        id: "popular-movies",
         title: "Popular Movies",
         type: "smart",
         category: "awards",
-        description: "The most popular trending movies right now across streaming and theaters via MDBList.",
+        description: "The most popular trending movies right now across theaters and streaming via TMDb.",
         icon: "Flame",
-        sourceType: "mdblist",
-        sourceQuery: "official/movies/popular",
+        sourceType: "tmdb",
+        sourceQuery: "popular",
         mediaType: "movie",
         defaultSort: "rating",
         defaultHomeOrder: 3,
         defaultSortPrefix: "!03_Popular",
+        defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
+    },
+    {
+        id: "popular-tv-shows",
+        title: "Popular TV Shows",
+        type: "smart",
+        category: "awards",
+        description: "The most popular trending television series right now across streaming and broadcast via TMDb.",
+        icon: "Tv",
+        sourceType: "tmdb",
+        sourceQuery: "popular",
+        mediaType: "show",
+        defaultSort: "rating",
+        defaultHomeOrder: 4,
+        defaultSortPrefix: "!04_PopularTV",
         defaultExcludedLabels: "trailer-placeholder, trailers, coming_soon, leaving-soon"
     },
     {
@@ -299,6 +314,35 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         defaultSort: "release",
         defaultHomeOrder: 19,
         defaultSortPrefix: "!19_DisneyKids"
+    },
+    {
+        id: "crunchyroll-trending",
+        title: "Crunchyroll Trending Anime",
+        type: "dynamic",
+        category: "dynamic",
+        description: "The hottest anime series, simulcasts, and movies trending on Crunchyroll right now.",
+        icon: "Flame",
+        sourceType: "tmdb",
+        sourceQuery: "provider:283",
+        mediaType: "both",
+        defaultSort: "rating",
+        defaultHomeOrder: 20,
+        defaultSortPrefix: "!20_Crunchyroll",
+        defaultPosterUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80"
+    },
+    {
+        id: "crunchyroll-originals",
+        title: "Crunchyroll Anime Series",
+        type: "curated",
+        category: "studio",
+        description: "Official Crunchyroll broadcast anime and original productions.",
+        icon: "Tv",
+        sourceType: "tmdb",
+        sourceQuery: "network:1112",
+        mediaType: "show",
+        defaultSort: "rating",
+        defaultHomeOrder: 21,
+        defaultSortPrefix: "!21_Crunchyroll"
     },
 
     // 📼 DECADES

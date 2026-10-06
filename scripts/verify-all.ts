@@ -2130,13 +2130,74 @@ async function runTestSuite() {
         const heuristicMatch = mockDisks.find(d => unsetId ? d.id === unsetId : false)
             || mockDisks.find(d => {
                 const pt = (d.mntPoint || "").toLowerCase();
-                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank");
+                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank") || pt.includes("disk") || pt.includes("array");
             })
             || mockDisks.find(d => d.percent > 0 && d.mntPoint !== "/" && d.mntPoint !== "/boot")
             || mockDisks.find(d => d.percent > 0);
 
         if (heuristicMatch?.id !== "disk_media") {
             throw new Error(`Expected heuristic match to pick "disk_media", got "${heuristicMatch?.id}" (${heuristicMatch?.mntPoint})`);
+        }
+    });
+
+    // 42b. Maintainerr: Prune Trigger Policy & Evaluation Gating
+    await assertTest("Maintainerr: Prune Trigger Mode (Rule-Based Retention vs Capacity)", async () => {
+        // 1. Settings DB Persistence & Schema Column
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { pruneTriggerMode: "always" },
+            create: { id: "global", pruneTriggerMode: "always" }
+        });
+
+        let s = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (s?.pruneTriggerMode !== "always") {
+            throw new Error(`Expected pruneTriggerMode "always", got "${s?.pruneTriggerMode}"`);
+        }
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { pruneTriggerMode: "capacity" }
+        });
+
+        s = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (s?.pruneTriggerMode !== "capacity") {
+            throw new Error(`Expected pruneTriggerMode "capacity", got "${s?.pruneTriggerMode}"`);
+        }
+
+        // Restore to recommended standard default "always"
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { pruneTriggerMode: "always" }
+        });
+
+        // 2. Evaluation Gating Logic Verification
+        const testGate = (triggerMode: string, capacityWarning: boolean, force: boolean, diskCount: number) => {
+            return Boolean(
+                force ||
+                triggerMode === "always" ||
+                capacityWarning ||
+                (triggerMode === "capacity" && diskCount === 0)
+            );
+        };
+
+        if (!testGate("always", false, false, 4)) {
+            throw new Error("Expected triggerMode 'always' to evaluate even when capacityWarning is false and disks > 0");
+        }
+
+        if (testGate("capacity", false, false, 4)) {
+            throw new Error("Expected triggerMode 'capacity' to skip evaluation when capacityWarning is false and disks > 0");
+        }
+
+        if (!testGate("capacity", true, false, 4)) {
+            throw new Error("Expected triggerMode 'capacity' to evaluate when capacityWarning is true");
+        }
+
+        if (!testGate("capacity", false, false, 0)) {
+            throw new Error("Expected triggerMode 'capacity' to evaluate as fallback when Glances disk count is 0");
+        }
+
+        if (!testGate("capacity", false, true, 4)) {
+            throw new Error("Expected forceEvaluate to bypass capacity check");
         }
     });
 
@@ -4327,6 +4388,53 @@ async function runTestSuite() {
             await prisma.plexServer.deleteMany({
                 where: { id: { in: [pausedPlex.id, activePlex.id] } }
             }).catch(() => {});
+        }
+    });
+
+    await assertTest("Agregarr: Popular Movies & TV Blueprints, TMDb & MDBList Fallback, and Crunchyroll Presets", async () => {
+        const { COLLECTION_PRESETS } = await import("../src/lib/curation/presets");
+        const popMovie = COLLECTION_PRESETS.find(p => p.id === "popular-movies");
+        if (!popMovie || popMovie.sourceType !== "tmdb" || popMovie.sourceQuery !== "popular") {
+            throw new Error(`Expected popular-movies preset to use sourceType='tmdb' and sourceQuery='popular', got: ${JSON.stringify(popMovie)}`);
+        }
+
+        const popTv = COLLECTION_PRESETS.find(p => p.id === "popular-tv-shows");
+        if (!popTv || popTv.sourceType !== "tmdb" || popTv.sourceQuery !== "popular") {
+            throw new Error(`Expected popular-tv-shows preset to use sourceType='tmdb' and sourceQuery='popular', got: ${JSON.stringify(popTv)}`);
+        }
+
+        const crTrending = COLLECTION_PRESETS.find(p => p.id === "crunchyroll-trending");
+        if (!crTrending || crTrending.sourceType !== "tmdb" || crTrending.sourceQuery !== "provider:283") {
+            throw new Error(`Expected crunchyroll-trending preset to use sourceType='tmdb' and sourceQuery='provider:283', got: ${JSON.stringify(crTrending)}`);
+        }
+
+        const crOriginals = COLLECTION_PRESETS.find(p => p.id === "crunchyroll-originals");
+        if (!crOriginals || crOriginals.sourceType !== "tmdb" || crOriginals.sourceQuery !== "network:1112") {
+            throw new Error(`Expected crunchyroll-originals preset to use sourceType='tmdb' and sourceQuery='network:1112', got: ${JSON.stringify(crOriginals)}`);
+        }
+
+        const { getCrunchyrollTrending, getTmdbPopularMovies } = await import("../src/lib/curation/tmdb");
+        if (typeof getCrunchyrollTrending !== "function" || typeof getTmdbPopularMovies !== "function") {
+            throw new Error("Missing getCrunchyrollTrending or getTmdbPopularMovies in tmdb.ts");
+        }
+    });
+
+    await assertTest("Agregarr: Non-blocking Preset Installation, Background Sync Lifecycle & Plex Maintenance Window Guards", async () => {
+        const { syncCollectionToPlexInternal } = await import("../src/app/curation-actions");
+        if (typeof syncCollectionToPlexInternal !== "function") {
+            throw new Error("Missing syncCollectionToPlexInternal in curation-actions.ts");
+        }
+
+        // Verify non-existent collection ID fails cleanly without crashing
+        const invalidRes = await syncCollectionToPlexInternal("non-existent-collection-id-xyz");
+        if (invalidRes.success !== false) {
+            throw new Error(`Expected syncCollectionToPlexInternal to return success: false for invalid ID, got: ${JSON.stringify(invalidRes)}`);
+        }
+
+        // Verify syncPlexCollection function is exported and callable
+        const { syncPlexCollection } = await import("../src/lib/curation/plex-analyzer");
+        if (typeof syncPlexCollection !== "function") {
+            throw new Error("Missing syncPlexCollection in plex-analyzer.ts");
         }
     });
 

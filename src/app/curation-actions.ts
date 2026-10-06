@@ -65,6 +65,7 @@ import {
     getTmdbStreamingProviderMedia,
     getDisneyTrending,
     getNetflixTrending,
+    getCrunchyrollTrending,
     getTmdbVideos,
     TmdbMediaItem,
     TmdbVideoItem
@@ -380,6 +381,7 @@ export async function getCurationSettingsAction() {
         mdblistApiKey: settings?.mdblistApiKey || "",
         autoOverlaySync: settings?.autoOverlaySync ?? true,
         autoCollectionSync: settings?.autoCollectionSync ?? true,
+        pruneTriggerMode: (settings as any)?.pruneTriggerMode || "always",
         leavingSoonDiskThreshold: settings?.leavingSoonDiskThreshold ?? 15,
         pruneWarningThresholdPercent: (settings as any)?.pruneWarningThresholdPercent ?? 85,
         pruneDangerThresholdPercent: (settings as any)?.pruneDangerThresholdPercent ?? 95,
@@ -720,6 +722,7 @@ export async function saveCurationSettingsAction(data: {
     mdblistApiKey?: string;
     autoOverlaySync?: boolean;
     autoCollectionSync?: boolean;
+    pruneTriggerMode?: "always" | "capacity";
     leavingSoonDiskThreshold?: number;
     pruneWarningThresholdPercent?: number;
     pruneDangerThresholdPercent?: number;
@@ -809,6 +812,7 @@ export async function saveCurationSettingsAction(data: {
         if (data.mdblistApiKey !== undefined) updatePayload.mdblistApiKey = data.mdblistApiKey;
         if (data.autoOverlaySync !== undefined) updatePayload.autoOverlaySync = data.autoOverlaySync;
         if (data.autoCollectionSync !== undefined) updatePayload.autoCollectionSync = data.autoCollectionSync;
+        if (data.pruneTriggerMode !== undefined) updatePayload.pruneTriggerMode = data.pruneTriggerMode;
         if (data.leavingSoonDiskThreshold !== undefined) updatePayload.leavingSoonDiskThreshold = data.leavingSoonDiskThreshold;
         if (data.pruneWarningThresholdPercent !== undefined) updatePayload.pruneWarningThresholdPercent = data.pruneWarningThresholdPercent;
         if (data.pruneDangerThresholdPercent !== undefined) updatePayload.pruneDangerThresholdPercent = data.pruneDangerThresholdPercent;
@@ -1420,6 +1424,13 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
     collectionRatingKey?: string;
 }> {
     try {
+        if (isPlexMaintenanceWindow()) {
+            return {
+                success: false,
+                error: "Plex maintenance window is active (5:00 AM – 5:30 AM). Plex sync is paused during container maintenance."
+            };
+        }
+
         await ensureSchemaColumns();
         const collection = await prisma.mediaCollection.findUnique({
             where: { id: collectionId }
@@ -1706,6 +1717,22 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                         (it.title && titles.has(it.title.toLowerCase().trim()))
                     ).map(it => it.ratingKey));
                 }
+            } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
+                const isTv = isTvSection || collection.sourceQuery === "popular_tv";
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                const popular = [...p1, ...p2, ...p3];
+                const tmdbIds = new Set(popular.map(u => String(u.id)));
+                const imdbIds = new Set(popular.map(u => u.imdbId).filter(Boolean));
+                const titles = new Set(popular.map(u => u.title?.toLowerCase().trim()).filter(Boolean));
+                matchingRatingKeys.push(...libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                    (it.title && titles.has(it.title.toLowerCase().trim()))
+                ).map(it => it.ratingKey));
             } else {
                 // Trending / Popular
                 const trending = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
@@ -1821,6 +1848,32 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
 
                 if (builtinMatches.length > 0) {
                     matchingRatingKeys.push(...builtinMatches);
+                }
+            }
+
+            const isPopular = collection.title?.toLowerCase().includes("popular") || collection.sourceQuery?.includes("popular");
+            if (!matched && isPopular) {
+                const isTv = isTvSection || collection.title?.toLowerCase().includes("tv") || collection.sourceQuery?.includes("tv");
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                const popList = [...p1, ...p2, ...p3];
+                const tmdbIds = new Set(popList.map(m => String(m.id)));
+                const imdbIds = new Set(popList.map(m => m.imdbId).filter(Boolean));
+                const titles = new Set(popList.map(m => m.title?.toLowerCase().trim()).filter(Boolean));
+                const popMatches = libraryItems.filter(it => {
+                    if (!isPlaceholdersCollection && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer")) {
+                        return false;
+                    }
+                    return (it.guids?.tmdb && tmdbIds.has(String(it.guids.tmdb))) ||
+                           (it.guids?.imdb && imdbIds.has(String(it.guids.imdb))) ||
+                           (it.title && titles.has(it.title.toLowerCase().trim()));
+                }).map(it => it.ratingKey);
+                if (popMatches.length > 0) {
+                    matchingRatingKeys.push(...popMatches);
+                    matched = true;
                 }
             }
         } else if (collection.sourceType === "radarr") {
@@ -2124,7 +2177,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 }
             } else if (sourceQuery.startsWith("network:")) {
                 const netId = parseInt(sourceQuery.replace("network:", ""), 10) || 213;
-                executionMethod = `TMDb TV Network API: Querying network ID #${netId} shows.`;
+                const netName = netId === 1112 ? "Crunchyroll" : netId === 213 ? "Netflix" : netId === 49 ? "HBO" : netId === 2552 ? "Apple TV+" : netId === 2739 ? "Disney+" : `#${netId}`;
+                executionMethod = `TMDb TV Network API: Querying ${netName} shows.`;
                 if (!isMovieSection) {
                     const shows = await getTmdbNetworkShows(netId);
                     const tmdbIds = shows.map(s => String(s.id));
@@ -2138,7 +2192,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const parts = sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
-                const provName = provId === 337 ? "Disney+" : provId === 8 ? "Netflix" : `Provider #${provId}`;
+                const provName = provId === 337 ? "Disney+" : provId === 8 ? "Netflix" : provId === 283 ? "Crunchyroll" : `Provider #${provId}`;
                 executionMethod = `TMDb Streaming Provider API: Querying ${provName} ${isKids ? "(Kids & Family)" : "Trending Top Charts"}. Matches against Plex library metadata.`;
                 const providerMedia = await getTmdbStreamingProviderMedia(provId, { 
                     isKids, 
@@ -2176,6 +2230,25 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const tmdbIds = inTheatres.map(m => String(m.id));
                 const imdbIds = inTheatres.map(m => m.imdbId).filter(Boolean);
                 const titles = inTheatres.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
+                matchedItems = libraryItems.filter(it => 
+                    (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                    (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                    (it.title && titles.includes(it.title.toLowerCase().trim()))
+                );
+            } else if (sourceQuery === "popular" || sourceQuery === "popular_movies" || sourceQuery === "popular_tv") {
+                const isTv = isTvSection || sourceQuery === "popular_tv";
+                executionMethod = isTv 
+                    ? `TMDb Popular TV API: Querying top popular television shows.`
+                    : `TMDb Popular Movies API: Querying top popular movies.`;
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                const popular = [...p1, ...p2, ...p3];
+                const tmdbIds = popular.map(m => String(m.id));
+                const imdbIds = popular.map(m => m.imdbId).filter(Boolean);
+                const titles = popular.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
                 matchedItems = libraryItems.filter(it => 
                     (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
                     (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
@@ -2232,6 +2305,24 @@ export async function generateCollectionCandidateItemsPreviewAction(
                     });
                 } else if (sourceQuery === "top-oscar-best-picture") {
                     executionMethod += " (MDBList key not configured; configure in settings to fetch official Oscar list).";
+                } else if (sourceQuery?.includes("popular") || (collectionConfig.title && collectionConfig.title.toLowerCase().includes("popular"))) {
+                    executionMethod = isTvSection
+                        ? `Popular Media Fallback (TMDb): Resolving popular TV shows against library.`
+                        : `Popular Media Fallback (TMDb): Resolving popular movies against library.`;
+                    const [p1, p2, p3] = await Promise.all([
+                        isTvSection ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                        isTvSection ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                        isTvSection ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                    ]);
+                    const popList = [...p1, ...p2, ...p3];
+                    const tmdbIds = popList.map(m => String(m.id));
+                    const imdbIds = popList.map(m => m.imdbId).filter(Boolean);
+                    const titles = popList.map(m => m.title?.toLowerCase().trim()).filter(Boolean);
+                    matchedItems = libraryItems.filter(it => 
+                        (it.guids?.tmdb && tmdbIds.includes(String(it.guids.tmdb))) ||
+                        (it.guids?.imdb && imdbIds.includes(String(it.guids.imdb))) ||
+                        (it.title && titles.includes(it.title.toLowerCase().trim()))
+                    );
                 }
             }
         } else if (sourceType === "trakt") {
@@ -2996,6 +3087,7 @@ export async function syncLeavingSoonCollectionHubInternal(
         skipWatchRecheck?: boolean;
         skipExpiredPrune?: boolean;
         crossServerActivityMap?: any;
+        forceEvaluate?: boolean;
     } = {}
 ) {
     try {
@@ -3014,11 +3106,12 @@ export async function syncLeavingSoonCollectionHubInternal(
             });
         }
 
-        // 1. Automated Two-Tier Storage Headroom Capacity Evaluation
+        // 1. Storage Headroom & Inactivity Retention Policy Evaluation
         const warningThreshold = (settings as any)?.pruneWarningThresholdPercent ?? 85;
         const dangerThreshold = (settings as any)?.pruneDangerThresholdPercent ?? 95;
         const targetHeadroomGb = (settings as any)?.pruneTargetHeadroomGb ?? 100;
         const legacyThreshold = settings?.leavingSoonDiskThreshold ?? 15; // percent free
+        const triggerMode = (settings as any)?.pruneTriggerMode || "always"; // "always" (Rule-Based Retention) vs "capacity" (Storage Capacity Warning)
 
         // Check Glances disk capacity metrics with intelligent mount heuristic
         const glancesResult = await getGlancesDisksInternal().catch(() => null);
@@ -3027,7 +3120,7 @@ export async function syncLeavingSoonCollectionHubInternal(
         const matchedDisk = disks.find(d => selectedDiskId ? d.id === selectedDiskId : false)
             || disks.find(d => {
                 const pt = (d.mntPoint || "").toLowerCase();
-                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank");
+                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank") || pt.includes("disk") || pt.includes("array");
             })
             || disks.find(d => d.percent > 0 && d.mntPoint !== "/" && d.mntPoint !== "/boot")
             || disks.find(d => d.percent > 0);
@@ -3046,8 +3139,23 @@ export async function syncLeavingSoonCollectionHubInternal(
             }
         }
 
-        // Auto-stage prune candidates if storage warning threshold is breached
-        if (capacityWarningTriggered && serverUrl && token) {
+        // Determine if candidate evaluation and auto-staging should run:
+        // 1. Explicit admin manual trigger from UI (options.forceEvaluate) -> ALWAYS run
+        // 2. triggerMode is "always" (Rule-Based Retention / Maintainerr default) -> ALWAYS run
+        // 3. triggerMode is "capacity" and disk warning threshold reached -> run
+        // 4. triggerMode is "capacity" but Glances has NO disk metrics -> fallback to run (so pruning is not permanently dead)
+        const shouldEvaluateCandidates = Boolean(
+            options.forceEvaluate ||
+            triggerMode === "always" ||
+            capacityWarningTriggered ||
+            (triggerMode === "capacity" && disks.length === 0)
+        );
+
+        let totalEvaluatedCount = 0;
+        let newlyStagedCount = 0;
+
+        // Auto-stage prune candidates if rule-based retention is active, forced, or storage warning triggered
+        if (shouldEvaluateCandidates && serverUrl && token) {
             try {
                 let crossServerActivityMap = options.crossServerActivityMap;
                 if (!crossServerActivityMap) {
@@ -3077,26 +3185,34 @@ export async function syncLeavingSoonCollectionHubInternal(
                     ? srvSections.filter(s => String(s.key) === String(sectionKey))
                     : srvSections;
 
+                const candidateLimit = (settings as any)?.pruneOldestLimit && (settings as any).pruneOldestLimit > 0
+                    ? Number((settings as any).pruneOldestLimit)
+                    : 50;
+
                 const candidateRes = await evaluatePruneCandidatesForServer(serverUrl, token, targetServerId, resolved.serverName, {
                     minAgeDays: settings?.pruneMinAgeDays ?? 90,
                     unwatchedMinAgeDays: (settings as any)?.pruneUnwatchedMinAgeDays ?? settings?.pruneMinAgeDays ?? 90,
                     watchedMinAgeDays: (settings as any)?.pruneWatchedMinAgeDays ?? 180,
                     unwatchedOnly: settings?.pruneUnwatchedOnly ?? false,
-                    maxCandidates: 100,
+                    maxCandidates: candidateLimit,
                     sortBy: (settings?.pruneSortStrategy as any) || "combined_oldest",
                     evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true,
                     crossServerActivityMap,
                     sectionKeys: eligibleSections.map(s => String(s.key))
                 });
 
+                totalEvaluatedCount = candidateRes.evaluatedCount || 0;
+
                 if (candidateRes.candidates && candidateRes.candidates.length > 0) {
                     let accumulatedGb = 0;
-                    let stagedCount = 0;
                     const daysNotice = settings?.pruneDaysNotice ?? 14;
                     const effectiveDate = new Date(Date.now() + daysNotice * 86400000);
 
                     for (const cand of candidateRes.candidates) {
-                        if (accumulatedGb >= targetHeadroomGb) break;
+                        // In capacity mode with a matched disk, stop when target headroom is reached
+                        if (triggerMode === "capacity" && capacityWarningTriggered && matchedDisk && accumulatedGb >= targetHeadroomGb) {
+                            break;
+                        }
 
                         const existing = await prisma.mediaContentAdvisory.findUnique({
                             where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } }
@@ -3105,7 +3221,9 @@ export async function syncLeavingSoonCollectionHubInternal(
                         if (!existing || !existing.isLeavingSoon) {
                             const formattedTitle = cand.parentTitle ? `${cand.parentTitle} (Season ${cand.seasonNumber})` : (cand.title || "Media Item");
                             const laneInfo = cand.laneLabel ? `[${cand.laneLabel}] ` : "";
-                            const leavingReason = `Storage Capacity Warning: Disk at ${diskUsagePercent}% used • ${laneInfo}${cand.reason} (Auto-staging towards ${targetHeadroomGb} GB headroom)`;
+                            const leavingReason = capacityWarningTriggered && matchedDisk
+                                ? `Storage Capacity Warning: Disk at ${diskUsagePercent}% used • ${laneInfo}${cand.reason} (Auto-staging towards ${targetHeadroomGb} GB headroom)`
+                                : `Maintainerr Retention Policy: ${laneInfo}${cand.reason}`;
 
                             await prisma.mediaContentAdvisory.upsert({
                                 where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } },
@@ -3124,13 +3242,16 @@ export async function syncLeavingSoonCollectionHubInternal(
                                     leavingReason
                                 }
                             });
-                            stagedCount++;
+                            newlyStagedCount++;
                         }
                         accumulatedGb += (cand.fileSizeGb || 0);
                     }
 
-                    if (stagedCount > 0) {
-                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] Storage capacity warning reached (${diskUsagePercent}% used). Auto-staged ${stagedCount} items (${accumulatedGb.toFixed(1)} GB) to Leaving Soon.`);
+                    if (newlyStagedCount > 0) {
+                        const modeLabel = capacityWarningTriggered && matchedDisk
+                            ? `Storage capacity warning reached (${diskUsagePercent}% used)`
+                            : `Rule-based retention policy`;
+                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] ${modeLabel}. Auto-staged ${newlyStagedCount} items (${accumulatedGb.toFixed(1)} GB) to Leaving Soon.`);
                     }
                 }
             } catch (autoStageErr: any) {
@@ -3333,6 +3454,8 @@ export async function syncLeavingSoonCollectionHubInternal(
         return {
             success: true,
             leavingCount: leavingSoonItems.length,
+            evaluatedCount: totalEvaluatedCount,
+            newlyStagedCount,
             promotedToHome: shouldPromote,
             promotedToRecommended: shouldPromoteRec,
             message: `Leaving Soon collection synced: ${leavingSoonItems.length} items (${shouldPromote ? "Promoted to Home & Recommended" : "Hidden from Home"}).`
@@ -7487,7 +7610,11 @@ export async function runAgregarrSyncAction(targetServerId?: string, targetSecti
 /**
  * Internal worker for Maintainerr / Prune Leaving Soon Sync.
  */
-export async function runMaintainerrSyncInternal(targetServerId?: string, targetSectionKey?: string): Promise<{
+export async function runMaintainerrSyncInternal(
+    targetServerId?: string,
+    targetSectionKey?: string,
+    forceEvaluate = false
+): Promise<{
     success: boolean;
     leavingCount: number;
     totalEvaluated?: number;
@@ -7581,12 +7708,15 @@ export async function runMaintainerrSyncInternal(targetServerId?: string, target
                 try {
                     const res = await syncLeavingSoonCollectionHubInternal(srv.serverId, sKey, {
                         skipWatchRecheck: true,
-                        skipExpiredPrune: true
+                        skipExpiredPrune: true,
+                        forceEvaluate
                     });
                     if (res && (res as any).leavingCount !== undefined) {
                         leavingCount += (res as any).leavingCount || 0;
                         totalEvaluated += (res as any).evaluatedCount || (res as any).totalEvaluated || 0;
-                        details.push(`Prune scan "${sec.title}" (${srv.serverName}): ${(res as any).leavingCount || 0} leaving soon.`);
+                        const stagedNote = (res as any).newlyStagedCount ? ` (${(res as any).newlyStagedCount} newly staged)` : "";
+                        const evalNote = (res as any).evaluatedCount !== undefined ? `${(res as any).evaluatedCount} evaluated, ` : "";
+                        details.push(`Prune scan "${sec.title}" (${srv.serverName}): ${evalNote}${(res as any).leavingCount || 0} leaving soon${stagedNote}.`);
                     }
                 } catch (secErr: any) {
                     details.push(`Error scanning prune rules in "${sec.title}": ${secErr.message}`);
@@ -7638,7 +7768,7 @@ export async function runMaintainerrSyncAction(targetServerId?: string, targetSe
 }> {
     try {
         await verifyAdmin();
-        return await runMaintainerrSyncInternal(targetServerId, targetSectionKey);
+        return await runMaintainerrSyncInternal(targetServerId, targetSectionKey, true);
     } catch (e: any) {
         return { success: false, leavingCount: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
     }
@@ -8860,7 +8990,7 @@ export async function getArrMonitoredIndex(options?: {
 export async function getTrendingAndPlaceholderMediaAction(
     serverId?: string,
     sectionKey?: string,
-    category: "all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "digital" | "theatrical" = "all"
+    category: "all" | "disney" | "disney_kids" | "netflix" | "netflix_kids" | "crunchyroll" | "digital" | "theatrical" = "all"
 ) {
     try {
 
@@ -8905,6 +9035,8 @@ export async function getTrendingAndPlaceholderMediaAction(
                 trendingItems = await getNetflixTrending(false, 1, "tv");
             } else if (category === "netflix_kids") {
                 trendingItems = await getNetflixTrending(true, 1, "tv");
+            } else if (category === "crunchyroll") {
+                trendingItems = await getCrunchyrollTrending(1, "tv");
             } else if (category === "digital" || category === "theatrical") {
                 trendingItems = await getTmdbPopularTv(1);
             } else {
@@ -8920,6 +9052,8 @@ export async function getTrendingAndPlaceholderMediaAction(
                 trendingItems = await getNetflixTrending(false, 1, "movie");
             } else if (category === "netflix_kids") {
                 trendingItems = await getNetflixTrending(true, 1, "movie");
+            } else if (category === "crunchyroll") {
+                trendingItems = await getCrunchyrollTrending(1, "movie");
             } else if (category === "digital") {
                 const upcoming = await getTmdbUpcomingMovies();
                 trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
@@ -8938,6 +9072,8 @@ export async function getTrendingAndPlaceholderMediaAction(
                 trendingItems = await getNetflixTrending(false);
             } else if (category === "netflix_kids") {
                 trendingItems = await getNetflixTrending(true);
+            } else if (category === "crunchyroll") {
+                trendingItems = await getCrunchyrollTrending(1, "both");
             } else if (category === "digital") {
                 const upcoming = await getTmdbUpcomingMovies();
                 trendingItems = upcoming.filter(it => Boolean(it.digitalReleaseDate));
@@ -9752,6 +9888,14 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     releaseDate: m.releaseDate,
                     inTheaters: true
                 }));
+            } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
+                const isTv = isTvSection || collection.sourceQuery === "popular_tv";
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                candidateItems = [...p1, ...p2, ...p3];
             } else {
                 candidateItems = await getTmdbTrending(isTvSection ? "tv" : isMovieSection ? "movie" : "all", "week");
             }
@@ -9898,6 +10042,23 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                     mediaType: (b.mediaType === "show" ? "tv" : "movie") as "movie" | "tv",
                     releaseDate: `${b.year}-01-01`,
                     imdbId: b.imdbId
+                }));
+            }
+
+            const isPopular = collection.title?.toLowerCase().includes("popular") || collection.sourceQuery?.includes("popular");
+            if (candidateItems.length === 0 && isPopular) {
+                const isTv = isTvSection || collection.title?.toLowerCase().includes("tv") || collection.sourceQuery?.includes("tv");
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                candidateItems = [...p1, ...p2, ...p3].map(m => ({
+                    id: m.id,
+                    title: m.title,
+                    mediaType: (isTv ? "tv" : "movie") as "movie" | "tv",
+                    releaseDate: m.releaseDate,
+                    imdbId: m.imdbId
                 }));
             }
         }
@@ -10866,6 +11027,22 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 }));
             } else if (collection.sourceQuery === "digital_releases") {
                 candidateItems = await getTmdbUpcomingMovies();
+            } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
+                const isTv = collection.type === "show" || collection.type === "tv" || collection.sourceQuery === "popular_tv";
+                const [p1, p2, p3] = await Promise.all([
+                    isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                ]);
+                candidateItems = [...p1, ...p2, ...p3].map(m => ({
+                    id: m.id,
+                    title: m.title,
+                    overview: m.overview,
+                    posterPath: m.posterPath,
+                    backdropPath: m.backdropPath,
+                    mediaType: (isTv ? "tv" : "movie") as "movie" | "tv",
+                    releaseDate: m.releaseDate
+                }));
             } else {
                 candidateItems = await getTmdbTrending("all", "week");
             }
@@ -11016,6 +11193,25 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                         title: b.title,
                         year: b.year,
                         releaseDate: b.year ? `${b.year}-01-01` : undefined
+                    }));
+                }
+
+                const isPopular = collection.title?.toLowerCase().includes("popular") || collection.sourceQuery?.includes("popular");
+                if (isPopular) {
+                    const [p1, p2, p3] = await Promise.all([
+                        isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
+                        isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
+                        isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                    ]);
+                    items = [...p1, ...p2, ...p3].map(p => ({
+                        tmdbId: p.id,
+                        imdbId: p.imdbId,
+                        title: p.title,
+                        overview: p.overview,
+                        posterPath: p.posterPath,
+                        backdropPath: p.backdropPath,
+                        year: p.releaseDate ? parseInt(p.releaseDate.slice(0, 4), 10) : undefined,
+                        releaseDate: p.releaseDate
                     }));
                 }
             }

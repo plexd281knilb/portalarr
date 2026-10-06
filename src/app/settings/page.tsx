@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, Suspense, useRef } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
@@ -105,7 +105,6 @@ function SettingsPageContent() {
     }, [activeTabParam, router, pathname]);
 
     const [loading, setLoading] = useState(true);
-    const [isPending, startTransition] = useTransition();
     
     // Data States
     const [users, setUsers] = useState<any[]>([]);
@@ -998,11 +997,9 @@ function SettingsPageContent() {
         }
         setActiveTab(value);
         localStorage.setItem("settings-active-tab", value);
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString());
-            params.set("tab", value);
-            router.push(`${pathname}?${params.toString()}`);
-        });
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("tab", value);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
     const handleSaveAllDirty = async () => {
@@ -1136,11 +1133,9 @@ function SettingsPageContent() {
             if (pendingNavigation.type === "tab") {
                 setActiveTab(pendingNavigation.target);
                 localStorage.setItem("settings-active-tab", pendingNavigation.target);
-                startTransition(() => {
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set("tab", pendingNavigation.target);
-                    router.push(`${pathname}?${params.toString()}`);
-                });
+                const params = new URLSearchParams(searchParams.toString());
+                params.set("tab", pendingNavigation.target);
+                router.replace(`${pathname}?${params.toString()}`, { scroll: false });
             } else if (pendingNavigation.type === "url") {
                 router.push(pendingNavigation.target);
             }
@@ -1156,11 +1151,9 @@ function SettingsPageContent() {
                 if (pendingNavigation.type === "tab") {
                     setActiveTab(pendingNavigation.target);
                     localStorage.setItem("settings-active-tab", pendingNavigation.target);
-                    startTransition(() => {
-                        const params = new URLSearchParams(searchParams.toString());
-                        params.set("tab", pendingNavigation.target);
-                        router.push(`${pathname}?${params.toString()}`);
-                    });
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("tab", pendingNavigation.target);
+                    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
                 } else if (pendingNavigation.type === "url") {
                     router.push(pendingNavigation.target);
                 }
@@ -1221,7 +1214,7 @@ function SettingsPageContent() {
     }
 
     return (
-        <div className={`space-y-6 p-3 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 transition-opacity duration-200 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
+        <div className="space-y-6 p-3 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0">
             <div>
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">System Settings</h2>
                 <p className="text-xs sm:text-sm text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>
@@ -1229,8 +1222,8 @@ function SettingsPageContent() {
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
                 <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
-                    <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(255,255,255,0.2)] hover:bg-muted/80 min-w-0">
-                        <Sliders className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-orange-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(249,115,22,0.25)] hover:bg-muted/80 data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Sliders className="h-4 w-4 text-orange-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">General & Setup</span>
                         {isGeneralTabDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
@@ -1239,12 +1232,12 @@ function SettingsPageContent() {
                             </span>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
+                    <TabsTrigger value="access" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Access Control</span>
                     </TabsTrigger>
-                    <TabsTrigger value="requests" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-primary/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
-                        <Compass className="h-4 w-4 text-primary shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="requests" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-rose-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] hover:bg-muted/80 data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Compass className="h-4 w-4 text-rose-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Media Requests</span>
                         {isSeerrDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
@@ -1253,15 +1246,15 @@ function SettingsPageContent() {
                             </span>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="emails" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80 min-w-0">
+                    <TabsTrigger value="emails" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80 data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/10 data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Mail className="h-4 w-4 text-amber-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Broadcast & Emails</span>
                     </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80 min-w-0">
+                    <TabsTrigger value="monitoring" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/10 data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Monitoring & Apps</span>
                     </TabsTrigger>
-                    <TabsTrigger value="beta" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80 min-w-0">
+                    <TabsTrigger value="beta" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80 data-[state=active]:text-purple-400 data-[state=active]:bg-purple-500/10 data-[state=active]:border-purple-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Beta & Announcements</span>
                         {isBetaTabDirty && (
@@ -1271,17 +1264,11 @@ function SettingsPageContent() {
                             </span>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="logs" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 min-w-0">
+                    <TabsTrigger value="logs" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Live System Logs</span>
                     </TabsTrigger>
                 </TabsList>
-                
-                {isPending && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                        <Loader2 className="h-3 w-3 animate-spin" /> Switching tabs...
-                    </div>
-                )}
 
                 {/* --- TAB 1: GENERAL SETUP --- */}
                 <TabsContent value="general" className="space-y-6">
