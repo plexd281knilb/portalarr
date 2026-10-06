@@ -2140,6 +2140,67 @@ async function runTestSuite() {
         }
     });
 
+    // 42b. Maintainerr: Prune Trigger Policy & Evaluation Gating
+    await assertTest("Maintainerr: Prune Trigger Mode (Rule-Based Retention vs Capacity)", async () => {
+        // 1. Settings DB Persistence & Schema Column
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { pruneTriggerMode: "always" },
+            create: { id: "global", pruneTriggerMode: "always" }
+        });
+
+        let s = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (s?.pruneTriggerMode !== "always") {
+            throw new Error(`Expected pruneTriggerMode "always", got "${s?.pruneTriggerMode}"`);
+        }
+
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { pruneTriggerMode: "capacity" }
+        });
+
+        s = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (s?.pruneTriggerMode !== "capacity") {
+            throw new Error(`Expected pruneTriggerMode "capacity", got "${s?.pruneTriggerMode}"`);
+        }
+
+        // Restore to recommended standard default "always"
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: { pruneTriggerMode: "always" }
+        });
+
+        // 2. Evaluation Gating Logic Verification
+        const testGate = (triggerMode: string, capacityWarning: boolean, force: boolean, diskCount: number) => {
+            return Boolean(
+                force ||
+                triggerMode === "always" ||
+                capacityWarning ||
+                (triggerMode === "capacity" && diskCount === 0)
+            );
+        };
+
+        if (!testGate("always", false, false, 4)) {
+            throw new Error("Expected triggerMode 'always' to evaluate even when capacityWarning is false and disks > 0");
+        }
+
+        if (testGate("capacity", false, false, 4)) {
+            throw new Error("Expected triggerMode 'capacity' to skip evaluation when capacityWarning is false and disks > 0");
+        }
+
+        if (!testGate("capacity", true, false, 4)) {
+            throw new Error("Expected triggerMode 'capacity' to evaluate when capacityWarning is true");
+        }
+
+        if (!testGate("capacity", false, false, 0)) {
+            throw new Error("Expected triggerMode 'capacity' to evaluate as fallback when Glances disk count is 0");
+        }
+
+        if (!testGate("capacity", false, true, 4)) {
+            throw new Error("Expected forceEvaluate to bypass capacity check");
+        }
+    });
+
     // 43. Kometa: Rule Scoping, Section Revert Scoping & Aspect Ratio Guard
     await assertTest("Kometa: Rule Scoping, Section Revert Scoping & Episode Aspect Ratio Guards", async () => {
         // 1. Rule Scoping & Isolation

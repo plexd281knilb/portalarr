@@ -381,6 +381,7 @@ export async function getCurationSettingsAction() {
         mdblistApiKey: settings?.mdblistApiKey || "",
         autoOverlaySync: settings?.autoOverlaySync ?? true,
         autoCollectionSync: settings?.autoCollectionSync ?? true,
+        pruneTriggerMode: (settings as any)?.pruneTriggerMode || "always",
         leavingSoonDiskThreshold: settings?.leavingSoonDiskThreshold ?? 15,
         pruneWarningThresholdPercent: (settings as any)?.pruneWarningThresholdPercent ?? 85,
         pruneDangerThresholdPercent: (settings as any)?.pruneDangerThresholdPercent ?? 95,
@@ -721,6 +722,7 @@ export async function saveCurationSettingsAction(data: {
     mdblistApiKey?: string;
     autoOverlaySync?: boolean;
     autoCollectionSync?: boolean;
+    pruneTriggerMode?: "always" | "capacity";
     leavingSoonDiskThreshold?: number;
     pruneWarningThresholdPercent?: number;
     pruneDangerThresholdPercent?: number;
@@ -810,6 +812,7 @@ export async function saveCurationSettingsAction(data: {
         if (data.mdblistApiKey !== undefined) updatePayload.mdblistApiKey = data.mdblistApiKey;
         if (data.autoOverlaySync !== undefined) updatePayload.autoOverlaySync = data.autoOverlaySync;
         if (data.autoCollectionSync !== undefined) updatePayload.autoCollectionSync = data.autoCollectionSync;
+        if (data.pruneTriggerMode !== undefined) updatePayload.pruneTriggerMode = data.pruneTriggerMode;
         if (data.leavingSoonDiskThreshold !== undefined) updatePayload.leavingSoonDiskThreshold = data.leavingSoonDiskThreshold;
         if (data.pruneWarningThresholdPercent !== undefined) updatePayload.pruneWarningThresholdPercent = data.pruneWarningThresholdPercent;
         if (data.pruneDangerThresholdPercent !== undefined) updatePayload.pruneDangerThresholdPercent = data.pruneDangerThresholdPercent;
@@ -3084,6 +3087,7 @@ export async function syncLeavingSoonCollectionHubInternal(
         skipWatchRecheck?: boolean;
         skipExpiredPrune?: boolean;
         crossServerActivityMap?: any;
+        forceEvaluate?: boolean;
     } = {}
 ) {
     try {
@@ -3102,11 +3106,12 @@ export async function syncLeavingSoonCollectionHubInternal(
             });
         }
 
-        // 1. Automated Two-Tier Storage Headroom Capacity Evaluation
+        // 1. Storage Headroom & Inactivity Retention Policy Evaluation
         const warningThreshold = (settings as any)?.pruneWarningThresholdPercent ?? 85;
         const dangerThreshold = (settings as any)?.pruneDangerThresholdPercent ?? 95;
         const targetHeadroomGb = (settings as any)?.pruneTargetHeadroomGb ?? 100;
         const legacyThreshold = settings?.leavingSoonDiskThreshold ?? 15; // percent free
+        const triggerMode = (settings as any)?.pruneTriggerMode || "always"; // "always" (Rule-Based Retention) vs "capacity" (Storage Capacity Warning)
 
         // Check Glances disk capacity metrics with intelligent mount heuristic
         const glancesResult = await getGlancesDisksInternal().catch(() => null);
@@ -3134,8 +3139,23 @@ export async function syncLeavingSoonCollectionHubInternal(
             }
         }
 
-        // Auto-stage prune candidates if storage warning threshold is breached
-        if (capacityWarningTriggered && serverUrl && token) {
+        // Determine if candidate evaluation and auto-staging should run:
+        // 1. Explicit admin manual trigger from UI (options.forceEvaluate) -> ALWAYS run
+        // 2. triggerMode is "always" (Rule-Based Retention / Maintainerr default) -> ALWAYS run
+        // 3. triggerMode is "capacity" and disk warning threshold reached -> run
+        // 4. triggerMode is "capacity" but Glances has NO disk metrics -> fallback to run (so pruning is not permanently dead)
+        const shouldEvaluateCandidates = Boolean(
+            options.forceEvaluate ||
+            triggerMode === "always" ||
+            capacityWarningTriggered ||
+            (triggerMode === "capacity" && disks.length === 0)
+        );
+
+        let totalEvaluatedCount = 0;
+        let newlyStagedCount = 0;
+
+        // Auto-stage prune candidates if rule-based retention is active, forced, or storage warning triggered
+        if (shouldEvaluateCandidates && serverUrl && token) {
             try {
                 let crossServerActivityMap = options.crossServerActivityMap;
                 if (!crossServerActivityMap) {
@@ -3165,26 +3185,34 @@ export async function syncLeavingSoonCollectionHubInternal(
                     ? srvSections.filter(s => String(s.key) === String(sectionKey))
                     : srvSections;
 
+                const candidateLimit = (settings as any)?.pruneOldestLimit && (settings as any).pruneOldestLimit > 0
+                    ? Number((settings as any).pruneOldestLimit)
+                    : 50;
+
                 const candidateRes = await evaluatePruneCandidatesForServer(serverUrl, token, targetServerId, resolved.serverName, {
                     minAgeDays: settings?.pruneMinAgeDays ?? 90,
                     unwatchedMinAgeDays: (settings as any)?.pruneUnwatchedMinAgeDays ?? settings?.pruneMinAgeDays ?? 90,
                     watchedMinAgeDays: (settings as any)?.pruneWatchedMinAgeDays ?? 180,
                     unwatchedOnly: settings?.pruneUnwatchedOnly ?? false,
-                    maxCandidates: 100,
+                    maxCandidates: candidateLimit,
                     sortBy: (settings?.pruneSortStrategy as any) || "combined_oldest",
                     evaluateSeasons: (settings as any)?.pruneEvaluateSeasons ?? true,
                     crossServerActivityMap,
                     sectionKeys: eligibleSections.map(s => String(s.key))
                 });
 
+                totalEvaluatedCount = candidateRes.evaluatedCount || 0;
+
                 if (candidateRes.candidates && candidateRes.candidates.length > 0) {
                     let accumulatedGb = 0;
-                    let stagedCount = 0;
                     const daysNotice = settings?.pruneDaysNotice ?? 14;
                     const effectiveDate = new Date(Date.now() + daysNotice * 86400000);
 
                     for (const cand of candidateRes.candidates) {
-                        if (accumulatedGb >= targetHeadroomGb) break;
+                        // In capacity mode with a matched disk, stop when target headroom is reached
+                        if (triggerMode === "capacity" && capacityWarningTriggered && matchedDisk && accumulatedGb >= targetHeadroomGb) {
+                            break;
+                        }
 
                         const existing = await prisma.mediaContentAdvisory.findUnique({
                             where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } }
@@ -3193,7 +3221,9 @@ export async function syncLeavingSoonCollectionHubInternal(
                         if (!existing || !existing.isLeavingSoon) {
                             const formattedTitle = cand.parentTitle ? `${cand.parentTitle} (Season ${cand.seasonNumber})` : (cand.title || "Media Item");
                             const laneInfo = cand.laneLabel ? `[${cand.laneLabel}] ` : "";
-                            const leavingReason = `Storage Capacity Warning: Disk at ${diskUsagePercent}% used • ${laneInfo}${cand.reason} (Auto-staging towards ${targetHeadroomGb} GB headroom)`;
+                            const leavingReason = capacityWarningTriggered && matchedDisk
+                                ? `Storage Capacity Warning: Disk at ${diskUsagePercent}% used • ${laneInfo}${cand.reason} (Auto-staging towards ${targetHeadroomGb} GB headroom)`
+                                : `Maintainerr Retention Policy: ${laneInfo}${cand.reason}`;
 
                             await prisma.mediaContentAdvisory.upsert({
                                 where: { ratingKey_serverId: { ratingKey: cand.ratingKey, serverId: targetServerId } },
@@ -3212,13 +3242,16 @@ export async function syncLeavingSoonCollectionHubInternal(
                                     leavingReason
                                 }
                             });
-                            stagedCount++;
+                            newlyStagedCount++;
                         }
                         accumulatedGb += (cand.fileSizeGb || 0);
                     }
 
-                    if (stagedCount > 0) {
-                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] Storage capacity warning reached (${diskUsagePercent}% used). Auto-staged ${stagedCount} items (${accumulatedGb.toFixed(1)} GB) to Leaving Soon.`);
+                    if (newlyStagedCount > 0) {
+                        const modeLabel = capacityWarningTriggered && matchedDisk
+                            ? `Storage capacity warning reached (${diskUsagePercent}% used)`
+                            : `Rule-based retention policy`;
+                        logger.addLog("INFO", "CURATION", `[${resolved.serverName}] ${modeLabel}. Auto-staged ${newlyStagedCount} items (${accumulatedGb.toFixed(1)} GB) to Leaving Soon.`);
                     }
                 }
             } catch (autoStageErr: any) {
@@ -3421,6 +3454,8 @@ export async function syncLeavingSoonCollectionHubInternal(
         return {
             success: true,
             leavingCount: leavingSoonItems.length,
+            evaluatedCount: totalEvaluatedCount,
+            newlyStagedCount,
             promotedToHome: shouldPromote,
             promotedToRecommended: shouldPromoteRec,
             message: `Leaving Soon collection synced: ${leavingSoonItems.length} items (${shouldPromote ? "Promoted to Home & Recommended" : "Hidden from Home"}).`
@@ -7575,7 +7610,11 @@ export async function runAgregarrSyncAction(targetServerId?: string, targetSecti
 /**
  * Internal worker for Maintainerr / Prune Leaving Soon Sync.
  */
-export async function runMaintainerrSyncInternal(targetServerId?: string, targetSectionKey?: string): Promise<{
+export async function runMaintainerrSyncInternal(
+    targetServerId?: string,
+    targetSectionKey?: string,
+    forceEvaluate = false
+): Promise<{
     success: boolean;
     leavingCount: number;
     totalEvaluated?: number;
@@ -7669,12 +7708,15 @@ export async function runMaintainerrSyncInternal(targetServerId?: string, target
                 try {
                     const res = await syncLeavingSoonCollectionHubInternal(srv.serverId, sKey, {
                         skipWatchRecheck: true,
-                        skipExpiredPrune: true
+                        skipExpiredPrune: true,
+                        forceEvaluate
                     });
                     if (res && (res as any).leavingCount !== undefined) {
                         leavingCount += (res as any).leavingCount || 0;
                         totalEvaluated += (res as any).evaluatedCount || (res as any).totalEvaluated || 0;
-                        details.push(`Prune scan "${sec.title}" (${srv.serverName}): ${(res as any).leavingCount || 0} leaving soon.`);
+                        const stagedNote = (res as any).newlyStagedCount ? ` (${(res as any).newlyStagedCount} newly staged)` : "";
+                        const evalNote = (res as any).evaluatedCount !== undefined ? `${(res as any).evaluatedCount} evaluated, ` : "";
+                        details.push(`Prune scan "${sec.title}" (${srv.serverName}): ${evalNote}${(res as any).leavingCount || 0} leaving soon${stagedNote}.`);
                     }
                 } catch (secErr: any) {
                     details.push(`Error scanning prune rules in "${sec.title}": ${secErr.message}`);
@@ -7726,7 +7768,7 @@ export async function runMaintainerrSyncAction(targetServerId?: string, targetSe
 }> {
     try {
         await verifyAdmin();
-        return await runMaintainerrSyncInternal(targetServerId, targetSectionKey);
+        return await runMaintainerrSyncInternal(targetServerId, targetSectionKey, true);
     } catch (e: any) {
         return { success: false, leavingCount: 0, totalEvaluated: 0, timestamp: new Date().toISOString(), details: [e.message], error: e.message };
     }

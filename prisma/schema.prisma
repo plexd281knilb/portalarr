@@ -151,6 +151,7 @@ model Settings {
   seerrAutoDual1080pFor4k      Boolean   @default(true) // Auto-add to 1080p Arr when added to 4K Arr
   autoOverlaySync             Boolean   @default(true)
   autoCollectionSync          Boolean   @default(true)
+  pruneTriggerMode            String?   @default("always") // "always" (Rule-Based Retention) or "capacity" (Storage Capacity Warning)
   leavingSoonDiskThreshold    Int?      @default(15) // % free space threshold to flag leaving soon
   pruneWarningThresholdPercent Int?      @default(85) // % disk used threshold to begin staging leaving soon
   pruneDangerThresholdPercent  Int?      @default(95) // % disk used threshold to trigger active reclamation
