@@ -2130,7 +2130,7 @@ async function runTestSuite() {
         const heuristicMatch = mockDisks.find(d => unsetId ? d.id === unsetId : false)
             || mockDisks.find(d => {
                 const pt = (d.mntPoint || "").toLowerCase();
-                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank");
+                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank") || pt.includes("disk") || pt.includes("array");
             })
             || mockDisks.find(d => d.percent > 0 && d.mntPoint !== "/" && d.mntPoint !== "/boot")
             || mockDisks.find(d => d.percent > 0);

@@ -3120,7 +3120,7 @@ export async function syncLeavingSoonCollectionHubInternal(
         const matchedDisk = disks.find(d => selectedDiskId ? d.id === selectedDiskId : false)
             || disks.find(d => {
                 const pt = (d.mntPoint || "").toLowerCase();
-                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank");
+                return pt.includes("media") || pt.includes("data") || pt.includes("mnt/user") || pt.includes("storage") || pt.includes("pool") || pt.includes("tank") || pt.includes("disk") || pt.includes("array");
             })
             || disks.find(d => d.percent > 0 && d.mntPoint !== "/" && d.mntPoint !== "/boot")
             || disks.find(d => d.percent > 0);
