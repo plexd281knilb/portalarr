@@ -93,5 +93,10 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
    - `MediaContentAdvisory.fileSizeGb` persists the exact media file size (in gigabytes) for each item staged to Leaving Soon across auto-staging (`syncLeavingSoonCollectionHubInternal`), manual flagging (`markItemLeavingSoonAction`), and sandbox staging (`executePruneAction`).
    - Staged item retrieval (`getLeavingSoonItemsAction`) automatically enriches and backfills legacy or missing sizes on the fly via `getPlexSingleItemMetadata(serverUrl, token, ratingKey)` in parallel batches of 10 and commits them to SQLite.
    - Active Staged Media Items card in `prune-studio.tsx` calculates cumulative recoverable storage (`💾 X.X GB / TB Recoverable`), provides individual item file size badges (`💾 X.X GB`), explicit space savings annotations (`Saves X.X GB • Reason: ...`), and server badges (`KidsPlexServer`, `Main Server`) for immediate server isolation.
+11. **Global vs. Single-Library Evaluation & Multi-Server Filter Pills**:
+   - `prune-studio.tsx` provides clear separation between global and scoped evaluations:
+     - `Run Global Prune Evaluation (All Servers)`: Calls `runMaintainerrSyncAction()` without target server or section arguments, running a cluster-wide sweep across all enabled libraries on all registered Plex instances.
+     - `Evaluate Library #{selectedSectionKey}`: Calls `runMaintainerrSyncAction(selectedServerId, selectedSectionKey)` to evaluate strictly the single selected library section on the currently active server.
+   - Staged media retrieval (`loadLeavingSoonItems`) retrieves items cluster-wide by default, allowing the Active Staged Media Items card to render interactive server filter pills (`All Servers (X)`, `KidsPlexServer (Y)`, `Main Server (Z)`) with per-server counts and reactive total recoverable space calculation.
 
 
