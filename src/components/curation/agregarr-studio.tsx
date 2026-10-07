@@ -269,6 +269,11 @@ export function AgregarrStudio() {
     const [savingPlacement, setSavingPlacement] = useState(false);
     const [placementSavedMsg, setPlacementSavedMsg] = useState<string | null>(null);
 
+    // Inline Quick Position Editor States
+    const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
+    const [tempPositionValue, setTempPositionValue] = useState<string>("");
+    const [savingPositionCollId, setSavingPositionCollId] = useState<string | null>(null);
+
     // Quick Excluded Labels Modal States (Direct from Collection Card)
     const [quickLabelsModalOpen, setQuickLabelsModalOpen] = useState(false);
     const [quickLabelsCollection, setQuickLabelsCollection] = useState<any | null>(null);
@@ -866,7 +871,7 @@ export function AgregarrStudio() {
         setCollections(reordered);
     };
 
-    const handleSaveCollectionOrder = async () => {
+    const handleSaveCollectionOrder = async (customList?: any[] | React.MouseEvent) => {
         if (!selectedServerId || !selectedSectionKey) {
             setOrderSavedMsg("⚠️ Please select a Plex server and library section first.");
             setTimeout(() => setOrderSavedMsg(null), 4000);
@@ -875,11 +880,12 @@ export function AgregarrStudio() {
         setSavingOrder(true);
         setOrderSavedMsg(null);
         try {
-            const orderedPayload = collections.map((c, i) => ({
+            const listToSave = Array.isArray(customList) ? customList : collections;
+            const orderedPayload = listToSave.map((c, i) => ({
                 id: c.id,
                 ratingKey: c.ratingKey,
-                orderIndex: i + 1,
-                sortPrefix: `!${String(i + 1).padStart(2, '0')}_`,
+                orderIndex: c.orderIndex || (i + 1),
+                sortPrefix: c.sortPrefix || `!${String(c.orderIndex || (i + 1)).padStart(2, '0')}_`,
                 promotedToHome: c.promotedToHome ?? true,
                 promotedToRecommended: c.promotedToRecommended ?? true,
                 promotedToSharedHome: c.promotedToSharedHome ?? true,
@@ -898,6 +904,92 @@ export function AgregarrStudio() {
             setOrderSavedMsg(`⚠️ ${e.message || "Failed saving order."}`);
         } finally {
             setSavingOrder(false);
+        }
+    };
+
+    // Fast inline position updater for collection cards (e.g. jump directly from #1 to #20)
+    const handleQuickChangePosition = async (collectionId: string, targetPos: number) => {
+        setEditingPositionId(null);
+        setTempPositionValue("");
+
+        if (isNaN(targetPos) || targetPos < 1 || targetPos > 99) {
+            return;
+        }
+
+        const currIndex = collections.findIndex(c => c.id === collectionId);
+        if (currIndex === -1) return;
+
+        const currColl = collections[currIndex];
+        const currentPos = (currColl.orderIndex && currColl.orderIndex > 0) ? currColl.orderIndex : (currIndex + 1);
+
+        if (targetPos === currentPos) return;
+
+        setSavingPositionCollId(collectionId);
+
+        try {
+            const copy = [...collections];
+            const [movedItem] = copy.splice(currIndex, 1);
+
+            let reordered: any[];
+
+            if (targetPos <= copy.length + 1) {
+                const targetIndex = Math.max(0, Math.min(copy.length, targetPos - 1));
+                copy.splice(targetIndex, 0, movedItem);
+
+                reordered = copy.map((c, i) => ({
+                    ...c,
+                    orderIndex: i + 1,
+                    sortPrefix: `!${String(i + 1).padStart(2, '0')}_`
+                }));
+            } else {
+                // Target rank is beyond current count (e.g. #20 when only 6 items exist)
+                copy.push(movedItem);
+                reordered = copy.map((c, i) => {
+                    if (c.id === collectionId) {
+                        return {
+                            ...c,
+                            orderIndex: targetPos,
+                            sortPrefix: `!${String(targetPos).padStart(2, '0')}_`
+                        };
+                    }
+                    return {
+                        ...c,
+                        orderIndex: i + 1,
+                        sortPrefix: `!${String(i + 1).padStart(2, '0')}_`
+                    };
+                });
+            }
+
+            setCollections(reordered);
+
+            // Automatically sync updated ordering to Plex & SQLite
+            if (selectedServerId && selectedSectionKey) {
+                const orderedPayload = reordered.map((c, i) => ({
+                    id: c.id,
+                    ratingKey: c.ratingKey,
+                    orderIndex: c.orderIndex || (i + 1),
+                    sortPrefix: c.sortPrefix || `!${String(c.orderIndex || (i + 1)).padStart(2, '0')}_`,
+                    promotedToHome: c.promotedToHome ?? true,
+                    promotedToRecommended: c.promotedToRecommended ?? true,
+                    promotedToSharedHome: c.promotedToSharedHome ?? true,
+                    collectionMode: c.collectionMode || "default"
+                }));
+
+                const res = await reorderPlexCollectionsAction(selectedServerId, selectedSectionKey, orderedPayload);
+                if (res.success) {
+                    setOrderSavedMsg(`✓ Position updated: "${currColl.title}" is now #${targetPos} (synced to Plex)!`);
+                    setTimeout(() => setOrderSavedMsg(null), 4000);
+                } else {
+                    setOrderSavedMsg(`⚠️ ${res.error || "Failed saving order to Plex."}`);
+                    setTimeout(() => setOrderSavedMsg(null), 4000);
+                }
+            }
+        } catch (err: any) {
+            console.error("Failed updating collection position:", err);
+            setOrderSavedMsg(`⚠️ ${err.message || "Failed updating position."}`);
+            setTimeout(() => setOrderSavedMsg(null), 4000);
+        } finally {
+            setSavingPositionCollId(null);
         }
     };
 
@@ -3060,7 +3152,7 @@ export function AgregarrStudio() {
                                 type="button"
                                 size="sm"
                                 disabled={savingOrder}
-                                onClick={handleSaveCollectionOrder}
+                                onClick={() => handleSaveCollectionOrder()}
                                 className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
                             >
                                 {savingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -3288,10 +3380,86 @@ export function AgregarrStudio() {
                                                     </button>
                                                 </div>
 
-                                                {/* Position Ranking Pill */}
-                                                <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-mono font-bold px-2 py-0.5 shrink-0">
-                                                    #{coll.orderIndex || idx + 1}
-                                                </Badge>
+                                                {/* Position Ranking Pill / Inline Quick Position Editor */}
+                                                {savingPositionCollId === coll.id ? (
+                                                    <div className="flex items-center gap-1 bg-amber-950/60 border border-amber-500/50 rounded-md px-2 py-0.5 text-xs font-mono font-bold text-amber-300 shrink-0">
+                                                        <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
+                                                        <span>#{coll.orderIndex || idx + 1}</span>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className={`flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-mono font-bold transition-all shrink-0 border ${
+                                                            editingPositionId === coll.id
+                                                                ? "bg-slate-900 border-amber-400 ring-1 ring-amber-400/50 shadow-sm"
+                                                                : "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300"
+                                                        }`}
+                                                        title="Click to change Home & Recommended position (1-99). Press Enter to apply."
+                                                    >
+                                                        <span className="text-amber-400 font-black text-xs select-none">#</span>
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            max={99}
+                                                            value={editingPositionId === coll.id ? tempPositionValue : (coll.orderIndex || idx + 1)}
+                                                            onFocus={(e) => {
+                                                                setEditingPositionId(coll.id);
+                                                                setTempPositionValue(String(coll.orderIndex || idx + 1));
+                                                                e.target.select();
+                                                            }}
+                                                            onChange={(e) => {
+                                                                setTempPositionValue(e.target.value);
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") {
+                                                                    e.preventDefault();
+                                                                    handleQuickChangePosition(coll.id, parseInt(tempPositionValue, 10));
+                                                                    (e.target as HTMLInputElement).blur();
+                                                                } else if (e.key === "Escape") {
+                                                                    e.preventDefault();
+                                                                    setEditingPositionId(null);
+                                                                    setTempPositionValue("");
+                                                                    (e.target as HTMLInputElement).blur();
+                                                                }
+                                                            }}
+                                                            onBlur={() => {
+                                                                if (editingPositionId === coll.id && tempPositionValue !== "" && parseInt(tempPositionValue, 10) !== (coll.orderIndex || idx + 1)) {
+                                                                    handleQuickChangePosition(coll.id, parseInt(tempPositionValue, 10));
+                                                                } else {
+                                                                    setEditingPositionId(null);
+                                                                    setTempPositionValue("");
+                                                                }
+                                                            }}
+                                                            className="w-7 h-5 bg-transparent text-center font-mono font-bold text-xs text-amber-300 focus:text-white outline-none p-0 cursor-text selection:bg-amber-500 selection:text-slate-950 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        />
+                                                        {editingPositionId === coll.id && tempPositionValue !== "" && parseInt(tempPositionValue, 10) !== (coll.orderIndex || idx + 1) && (
+                                                            <div className="flex items-center gap-0.5 ml-0.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onMouseDown={(e) => {
+                                                                        e.preventDefault();
+                                                                        handleQuickChangePosition(coll.id, parseInt(tempPositionValue, 10));
+                                                                    }}
+                                                                    className="p-0.5 rounded hover:bg-emerald-950 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                                                    title="Apply new position"
+                                                                >
+                                                                    <Check className="h-3 w-3" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onMouseDown={(e) => {
+                                                                        e.preventDefault();
+                                                                        setEditingPositionId(null);
+                                                                        setTempPositionValue("");
+                                                                    }}
+                                                                    className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                                                                    title="Cancel"
+                                                                >
+                                                                    <X className="h-3 w-3" />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
 
                                                 {/* Collection Details */}
                                                 <div className="space-y-1 min-w-0 flex-1">

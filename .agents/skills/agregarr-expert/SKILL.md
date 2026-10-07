@@ -89,6 +89,12 @@ The Collections & Hubs studio provides interactive per-collection configuration 
 - **Edit Modal (`Edit Collection: {title}`)**: Configures Plex client screen targets (Owner Home, Shared Home, Recommended), inline library display mode (`default`, `hide`, `hideItems`, `showItems`), home screen numerical ranking (#1 - #99) and sort prefix, day-of-week active scheduling, daily time windows, seasonal date ranges, excluded Plex labels, and trailer placeholder generation.
 - **Reset to Defaults (`RotateCcw`)**: Locates the underlying preset from `COLLECTION_PRESETS` (via exact title, preset ID, `sourceType`/`sourceQuery`, or normalized alphanumeric match) and restores all configuration fields to their preset baseline settings (or default studio settings for custom collections). Changes are applied and written to Plex on clicking **"Save & Sync to Plex"**.
 
+### 7. Inline Quick Position Editor on Collection Cards
+Active collection cards feature an interactive position badge (`#<rank>`) allowing administrators to instantly reprioritize collection hubs:
+- **Direct Rank Input**: Clicking the `#<rank>` badge replaces static display with an inline number input auto-selecting current position.
+- **Instant Repositioning**: Enter any target position (e.g. `20` from `#1`) and press `Enter`, click the `Check` (✓) icon, or blur the input.
+- **Automatic Array Reindexing & Plex Sync**: Automatically splices and shifts intervening collections, recalculates 2-digit zero-padded sort prefixes (`!01_`, `!20_`), updates local state, and fires `reorderPlexCollectionsAction` to synchronize Plex Home Screen hub ordering and SQLite database records immediately with user feedback toast.
+
 ---
 
 ## Common Gotchas & Troubleshooting
