@@ -39,6 +39,7 @@ import {
     CrossServerActivityMap,
     generateCrossServerMediaKeys,
     isPlexItemPlaceholderOrStub,
+    isPlexItemExcludedByLabels,
     CandidateItemLike,
     buildCandidateIndex,
     matchLibraryItemToCandidates
@@ -146,90 +147,6 @@ async function verifyAdmin() {
         throw new Error("Unauthorized: Admin permissions required.");
     }
     return user;
-}
-
-
-/**
- * Checks if a Plex media item should be excluded based on configured label/tag exclusions.
- * Supports exact matches, hyphen/underscore normalization, and standard placeholder/leaving-soon aliases.
- */
-function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null, allowPlaceholders: boolean = false): boolean {
-    if (!excludedLabelsStr || !excludedLabelsStr.trim()) return false;
-    let rawTokens = excludedLabelsStr.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-    if (allowPlaceholders) {
-        rawTokens = rawTokens.filter(t => !t.includes("trailer") && !t.includes("placeholder") && !t.includes("coming"));
-    }
-    if (rawTokens.length === 0) return false;
-
-    // Strip optional "exclude " prefix if present (e.g. "exclude nudity severe" -> "nudity severe")
-    rawTokens = rawTokens.map(t => t.replace(/^exclude\s+/i, "").trim());
-
-    const norm = (s: string) => s.toLowerCase().replace(/[-_\s:]+/g, "");
-    const normalizedTokens = new Set(rawTokens.map(norm));
-
-    const excludesPlaceholders = !allowPlaceholders && rawTokens.some(t => 
-        t.includes("trailer") || t.includes("placeholder") || t.includes("coming")
-    );
-    if (excludesPlaceholders && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer" || isPlexItemPlaceholderOrStub(it))) {
-        return true;
-    }
-
-    const excludesLeavingSoon = rawTokens.some(t => t.includes("leaving"));
-    if (excludesLeavingSoon && it.isLeavingSoon) {
-        return true;
-    }
-
-    // Check advisory levels directly on item if available in memory
-    const checkAdvisorySeverity = (cat: string, targetSev: string) => {
-        const itemSev = (
-            it.advisory?.[cat] || 
-            it.parentalAdvisory?.[cat] || 
-            it[`${cat}Level`] || 
-            ""
-        ).toString().toLowerCase();
-        if (!itemSev || itemSev === "none") return false;
-        if (targetSev === "severe") return itemSev === "severe";
-        if (targetSev === "moderate") return itemSev === "severe" || itemSev === "moderate";
-        if (targetSev === "mild") return itemSev === "severe" || itemSev === "moderate" || itemSev === "mild";
-        return itemSev.includes(targetSev);
-    };
-
-    for (const token of rawTokens) {
-        const tNorm = norm(token);
-        for (const cat of ["nudity", "violence", "profanity", "alcohol", "frightening"]) {
-            if (tNorm.includes(cat)) {
-                if (tNorm.includes("severe") && checkAdvisorySeverity(cat, "severe")) return true;
-                if (tNorm.includes("moderate") && checkAdvisorySeverity(cat, "moderate")) return true;
-                if (tNorm.includes("mild") && checkAdvisorySeverity(cat, "mild")) return true;
-            }
-        }
-    }
-
-    const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
-    const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
-
-    for (const l of itLabels) {
-        const normL = norm(l);
-        if (rawTokens.includes(l) || normalizedTokens.has(normL)) return true;
-        if (excludesPlaceholders && (normL.includes("trailer") || normL.includes("placeholder") || normL.includes("coming"))) return true;
-        if (excludesLeavingSoon && normL.includes("leaving")) return true;
-
-        for (const token of rawTokens) {
-            const tNorm = norm(token);
-            if (normL.includes(tNorm) || tNorm.includes(normL)) return true;
-        }
-    }
-
-    for (const c of itCollections) {
-        const normC = norm(c);
-        if (rawTokens.includes(c) || normalizedTokens.has(normC)) return true;
-        for (const token of rawTokens) {
-            const tNorm = norm(token);
-            if (normC.includes(tNorm) || tNorm.includes(normC)) return true;
-        }
-    }
-
-    return false;
 }
 
 /**
@@ -10302,6 +10219,30 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 const inSonarr = arrItem?.appType === "sonarr" || collection.sourceType === "sonarr";
                 const isMonitored = Boolean(arrItem?.monitored) || collection.sourceType === "radarr" || collection.sourceType === "sonarr";
                 const isMonitoredPlaceholder = isMonitored && (collection.sourceType === "radarr" || collection.sourceType === "sonarr" || collection.category === "Coming Soon");
+
+                // Check if this collection strictly excludes Coming Soon items (e.g. Trending collections)
+                const excludesComingSoonFromColl = Boolean(
+                    collection.excludedLabels && (
+                        collection.excludedLabels.toLowerCase().includes("coming soon") ||
+                        collection.excludedLabels.toLowerCase().includes("coming_soon")
+                    )
+                );
+                if (excludesComingSoonFromColl && isMonitored) {
+                    // Trending collections auto-create placeholders but exclude coming soon movies
+                    continue;
+                }
+
+                // Check if this collection strictly excludes generic collection trailers (e.g. Coming Soon collections)
+                const excludesTrailersFromColl = Boolean(
+                    collection.excludedLabels && (
+                        collection.excludedLabels.toLowerCase().includes("trailer-placeholder") ||
+                        collection.excludedLabels.toLowerCase().includes("trailers")
+                    )
+                );
+                if (excludesTrailersFromColl && !isMonitoredPlaceholder) {
+                    // Coming soon presets ignore trailers for the trending
+                    continue;
+                }
 
                 const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
                 const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : (arrItem?.digitalRelease ? new Date(arrItem.digitalRelease) : null);

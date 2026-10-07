@@ -1195,8 +1195,24 @@ export function AgregarrStudio() {
         setInspectRecommended(true);
         setInspectMode(preset.defaultCollectionMode || "default");
         setInspectMaxItems(preset.defaultMaxItems || 0);
-        setInspectExcludedLabels(preset.defaultExcludedLabels || "trailer-placeholder, trailers, coming_soon, leaving-soon");
-        setInspectIncludePlaceholders(Boolean(preset.defaultIncludePlaceholders));
+
+        const isComingSoon = preset.category === "arr" || preset.sourceType === "radarr" || preset.sourceType === "sonarr" || preset.id?.includes("coming-soon") || preset.sourceQuery === "monitored_missing";
+        const isTrending = preset.id?.includes("trending") || preset.title?.toLowerCase().includes("trending") || preset.sourceQuery === "trending" || preset.sourceQuery?.startsWith("provider:");
+
+        const effectiveIncludePlaceholders = preset.defaultIncludePlaceholders !== undefined
+            ? Boolean(preset.defaultIncludePlaceholders)
+            : Boolean(isTrending || isComingSoon);
+
+        const effectiveExcludedLabels = preset.defaultExcludedLabels !== undefined
+            ? preset.defaultExcludedLabels
+            : (isComingSoon
+                ? "trailer-placeholder, trailers, leaving-soon"
+                : (isTrending || effectiveIncludePlaceholders
+                    ? "Coming Soon-placeholder, coming_soon, leaving-soon"
+                    : "trailer-placeholder, trailers, coming_soon, leaving-soon"));
+
+        setInspectExcludedLabels(effectiveExcludedLabels);
+        setInspectIncludePlaceholders(effectiveIncludePlaceholders);
         setInspectModalOpen(true);
         setPreviewLoading(true);
         setPreviewData(null);
@@ -1207,8 +1223,10 @@ export function AgregarrStudio() {
                 mediaType: preset.mediaType,
                 title: preset.title,
                 type: preset.type,
+                category: preset.category,
                 maxItems: preset.defaultMaxItems || 0,
-                excludedLabels: preset.defaultExcludedLabels || "trailer-placeholder, trailers, coming_soon, leaving-soon"
+                excludedLabels: effectiveExcludedLabels,
+                includePlaceholders: effectiveIncludePlaceholders
             });
             if (res.success) {
                 setPreviewData(res as any);

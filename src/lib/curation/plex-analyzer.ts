@@ -4179,6 +4179,141 @@ export function isPlexItemPlaceholderOrStub(it: any): boolean {
     return false;
 }
 
+/**
+ * Checks if a Plex media item should be excluded based on configured label/tag exclusions.
+ * Supports exact matches, hyphen/underscore normalization, and standard placeholder/leaving-soon aliases.
+ * When allowPlaceholders is true, intelligently distinguishes between:
+ * - Coming Soon placeholders ("Coming Soon-placeholder", "coming_soon" from Radarr/Sonarr monitored items)
+ * - Trending / general collection trailer placeholders ("trailer-placeholder", "trailers")
+ * allowing Trending collections to auto-include their own trailers while strictly excluding Coming Soon items,
+ * and allowing Coming Soon collections to include their own stubs while strictly ignoring Trending trailers.
+ */
+export function isPlexItemExcludedByLabels(it: any, excludedLabelsStr?: string | null, allowPlaceholders: boolean = false): boolean {
+    if (!excludedLabelsStr || !excludedLabelsStr.trim()) return false;
+    let rawTokens = excludedLabelsStr.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    // Strip optional "exclude " prefix if present (e.g. "exclude nudity severe" -> "nudity severe")
+    rawTokens = rawTokens.map(t => t.replace(/^exclude\s+/i, "").trim()).filter(Boolean);
+    if (rawTokens.length === 0) return false;
+
+    const norm = (s: string) => s.toLowerCase().replace(/[-_\s:]+/g, "");
+    const normalizedTokens = new Set(rawTokens.map(norm));
+
+    // Check specific exclusions for placeholder subtypes
+    const hasComingSoonExclusion = rawTokens.some(t => {
+        const nt = norm(t);
+        return nt.includes("comingsoon") || nt.includes("coming_soon") || nt === "coming";
+    });
+    const hasTrailerExclusion = rawTokens.some(t => {
+        const nt = norm(t);
+        return nt.includes("trailerplaceholder") || nt === "trailers" || nt === "trailer" || nt.includes("trailersplaceholder");
+    });
+
+    // Detect if item is a Coming Soon placeholder vs a general Trending / collection trailer placeholder
+    const itLabels = (it.labels || []).map((l: string) => l.toLowerCase());
+    const isItemComingSoon = Boolean(
+        itLabels.some((l: string) => {
+            const nl = norm(l);
+            return nl.includes("comingsoon") || nl.includes("coming_soon");
+        }) ||
+        it.advisory?.leavingReason?.toLowerCase()?.includes("coming soon") ||
+        it.leavingReason?.toLowerCase()?.includes("coming soon") ||
+        it.customTags?.includes("Coming Soon-placeholder") ||
+        it.customTags?.includes("radarr_monitored")
+    );
+
+    const isItemTrendingTrailer = Boolean(
+        itLabels.some((l: string) => {
+            const nl = norm(l);
+            return nl.includes("trailerplaceholder") || nl === "trailers" || nl === "trailer";
+        }) ||
+        it.customTags?.includes("trailer-placeholder") ||
+        it.customTags?.includes("collection") ||
+        ((it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer" || isPlexItemPlaceholderOrStub(it)) && !isItemComingSoon)
+    );
+
+    if (allowPlaceholders) {
+        // 1. Trending collection case: includes placeholders, but excludes Coming Soon movies
+        if (hasComingSoonExclusion && isItemComingSoon) {
+            return true;
+        }
+        // 2. Coming Soon collection case: includes placeholders, but ignores Trending trailers
+        if (hasTrailerExclusion && isItemTrendingTrailer) {
+            return true;
+        }
+    } else {
+        // Standard collection case (no placeholders allowed): blanket exclude all placeholders/stubs if requested
+        const excludesPlaceholders = rawTokens.some(t => 
+            t.includes("trailer") || t.includes("placeholder") || t.includes("coming")
+        );
+        if (excludesPlaceholders && (it.isPlaceholder || it.editionTitle?.toLowerCase() === "trailer" || it.detectedBadges?.edition?.toLowerCase() === "trailer" || isPlexItemPlaceholderOrStub(it))) {
+            return true;
+        }
+    }
+
+    const excludesLeavingSoon = rawTokens.some(t => t.includes("leaving"));
+    if (excludesLeavingSoon && (it.isLeavingSoon || itLabels.some((l: string) => l.includes("leaving")))) {
+        return true;
+    }
+
+    // Check advisory levels directly on item if available in memory
+    const checkAdvisorySeverity = (cat: string, targetSev: string) => {
+        const itemSev = (
+            it.advisory?.[cat] || 
+            it.parentalAdvisory?.[cat] || 
+            it[`${cat}Level`] || 
+            ""
+        ).toString().toLowerCase();
+        if (!itemSev || itemSev === "none") return false;
+        if (targetSev === "severe") return itemSev === "severe";
+        if (targetSev === "moderate") return itemSev === "severe" || itemSev === "moderate";
+        if (targetSev === "mild") return itemSev === "severe" || itemSev === "moderate" || itemSev === "mild";
+        return itemSev.includes(targetSev);
+    };
+
+    for (const token of rawTokens) {
+        const tNorm = norm(token);
+        for (const cat of ["nudity", "violence", "profanity", "alcohol", "frightening"]) {
+            if (tNorm.includes(cat)) {
+                if (tNorm.includes("severe") && checkAdvisorySeverity(cat, "severe")) return true;
+                if (tNorm.includes("moderate") && checkAdvisorySeverity(cat, "moderate")) return true;
+                if (tNorm.includes("mild") && checkAdvisorySeverity(cat, "mild")) return true;
+            }
+        }
+    }
+
+    const itCollections = (it.collections || []).map((c: string) => c.toLowerCase());
+
+    for (const l of itLabels) {
+        const normL = norm(l);
+
+        // If allowPlaceholders is enabled, don't let item's own valid placeholder label trigger accidental generic exclusion
+        if (allowPlaceholders) {
+            if (!hasTrailerExclusion && (normL.includes("trailerplaceholder") || normL === "trailer" || normL === "trailers")) continue;
+            if (!hasComingSoonExclusion && (normL.includes("comingsoon") || normL.includes("coming_soon"))) continue;
+            if (normL === "placeholder" || normL === "stub") continue;
+        }
+
+        if (rawTokens.includes(l) || normalizedTokens.has(normL)) return true;
+        if (excludesLeavingSoon && normL.includes("leaving")) return true;
+
+        for (const token of rawTokens) {
+            const tNorm = norm(token);
+            if (normL.includes(tNorm) || tNorm.includes(normL)) return true;
+        }
+    }
+
+    for (const c of itCollections) {
+        const normC = norm(c);
+        if (rawTokens.includes(c) || normalizedTokens.has(normC)) return true;
+        for (const token of rawTokens) {
+            const tNorm = norm(token);
+            if (normC.includes(tNorm) || tNorm.includes(normC)) return true;
+        }
+    }
+
+    return false;
+}
+
 export interface CandidateItemLike {
     id?: string | number;
     tmdbId?: string | number;

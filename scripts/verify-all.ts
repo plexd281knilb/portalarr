@@ -4836,6 +4836,140 @@ async function runTestSuite() {
         }
     });
 
+    // 77. Agregarr: Trending Auto-Placeholders, Coming Soon Exclusion & Selective Trailer Filtering
+    await assertTest("Agregarr: Trending Auto-Placeholders, Coming Soon Exclusion & Selective Trailer Filtering", async () => {
+        const { COLLECTION_PRESETS } = await import("../src/lib/curation/presets");
+        const { isPlexItemExcludedByLabels } = await import("../src/lib/curation/plex-analyzer");
+
+        // 1. Verify Trending Presets have auto placeholders enabled and exclude coming soon movies
+        const trendingPresetIds = [
+            "trending-this-week",
+            "netflix-trending",
+            "netflix-kids-trending",
+            "disney-trending",
+            "disney-kids-trending",
+            "crunchyroll-trending"
+        ];
+
+        for (const pid of trendingPresetIds) {
+            const p = COLLECTION_PRESETS.find(x => x.id === pid);
+            if (!p) throw new Error(`Missing expected trending preset: ${pid}`);
+            if (p.defaultIncludePlaceholders !== true) {
+                throw new Error(`Preset "${pid}" must have defaultIncludePlaceholders: true`);
+            }
+            if (!p.defaultExcludedLabels || !p.defaultExcludedLabels.includes("Coming Soon-placeholder")) {
+                throw new Error(`Preset "${pid}" must exclude "Coming Soon-placeholder"`);
+            }
+            if (!p.defaultExcludedLabels.includes("coming_soon")) {
+                throw new Error(`Preset "${pid}" must exclude "coming_soon"`);
+            }
+            if (p.defaultExcludedLabels.includes("trailer-placeholder")) {
+                throw new Error(`Preset "${pid}" must NOT exclude "trailer-placeholder" (needs to include its own placeholders)`);
+            }
+        }
+
+        // 2. Verify Coming Soon Presets have placeholders enabled and ignore trending trailers
+        const comingSoonPresetIds = ["radarr-coming-soon", "sonarr-coming-soon"];
+        for (const pid of comingSoonPresetIds) {
+            const p = COLLECTION_PRESETS.find(x => x.id === pid);
+            if (!p) throw new Error(`Missing expected coming soon preset: ${pid}`);
+            if (p.defaultIncludePlaceholders !== true) {
+                throw new Error(`Preset "${pid}" must have defaultIncludePlaceholders: true`);
+            }
+            if (!p.defaultExcludedLabels || !p.defaultExcludedLabels.includes("trailer-placeholder")) {
+                throw new Error(`Preset "${pid}" must exclude "trailer-placeholder"`);
+            }
+            if (p.defaultExcludedLabels.includes("Coming Soon-placeholder")) {
+                throw new Error(`Preset "${pid}" must NOT exclude "Coming Soon-placeholder" (needs to include its own monitored stubs)`);
+            }
+        }
+
+        // 3. Test isPlexItemExcludedByLabels selective filtering in Trending collection
+        const trendingExcludedLabels = "Coming Soon-placeholder, coming_soon, leaving-soon";
+        const trendingTrailerStub = {
+            ratingKey: "trailer_101",
+            title: "Stranger Things Season 5",
+            isPlaceholder: true,
+            editionTitle: "Trailer",
+            labels: ["trailer-placeholder"]
+        };
+        const comingSoonStub = {
+            ratingKey: "monitored_202",
+            title: "Avatar: Fire and Ash",
+            isPlaceholder: true,
+            editionTitle: "Trailer",
+            labels: ["Coming Soon-placeholder"]
+        };
+        const comingSoonAltStub = {
+            ratingKey: "monitored_203",
+            title: "Dune Messiah",
+            isPlaceholder: true,
+            labels: ["coming_soon"]
+        };
+        const releasedMovie = {
+            ratingKey: "real_303",
+            title: "Oppenheimer",
+            labels: []
+        };
+        const leavingSoonMovie = {
+            ratingKey: "leaving_404",
+            title: "Old Movie",
+            isLeavingSoon: true,
+            labels: ["leaving-soon"]
+        };
+
+        // In Trending (allowPlaceholders = true):
+        // Trending trailers must be allowed (NOT excluded)
+        if (isPlexItemExcludedByLabels(trendingTrailerStub, trendingExcludedLabels, true)) {
+            throw new Error("Trending collection incorrectly excluded its own trailer-placeholder stub!");
+        }
+        // Coming soon movies must be EXCLUDED
+        if (!isPlexItemExcludedByLabels(comingSoonStub, trendingExcludedLabels, true)) {
+            throw new Error("Trending collection failed to exclude Coming Soon-placeholder movie!");
+        }
+        if (!isPlexItemExcludedByLabels(comingSoonAltStub, trendingExcludedLabels, true)) {
+            throw new Error("Trending collection failed to exclude coming_soon movie!");
+        }
+        // Leaving soon must be EXCLUDED
+        if (!isPlexItemExcludedByLabels(leavingSoonMovie, trendingExcludedLabels, true)) {
+            throw new Error("Trending collection failed to exclude leaving-soon movie!");
+        }
+        // Normal movie must be allowed
+        if (isPlexItemExcludedByLabels(releasedMovie, trendingExcludedLabels, true)) {
+            throw new Error("Trending collection incorrectly excluded a standard library movie!");
+        }
+
+        // 4. Test isPlexItemExcludedByLabels selective filtering in Coming Soon collection
+        const comingSoonExcludedLabels = "trailer-placeholder, trailers, leaving-soon";
+
+        // In Coming Soon (allowPlaceholders = true):
+        // Trending trailers must be EXCLUDED / IGNORED
+        if (!isPlexItemExcludedByLabels(trendingTrailerStub, comingSoonExcludedLabels, true)) {
+            throw new Error("Coming Soon collection failed to ignore trending trailer-placeholder!");
+        }
+        // Monitored coming soon stub must be allowed (NOT excluded)
+        if (isPlexItemExcludedByLabels(comingSoonStub, comingSoonExcludedLabels, true)) {
+            throw new Error("Coming Soon collection incorrectly excluded its own Coming Soon-placeholder stub!");
+        }
+        // Leaving soon must be EXCLUDED
+        if (!isPlexItemExcludedByLabels(leavingSoonMovie, comingSoonExcludedLabels, true)) {
+            throw new Error("Coming Soon collection failed to exclude leaving-soon movie!");
+        }
+        // Normal movie must be allowed
+        if (isPlexItemExcludedByLabels(releasedMovie, comingSoonExcludedLabels, true)) {
+            throw new Error("Coming Soon collection incorrectly excluded standard library movie!");
+        }
+
+        // 5. In standard collections (allowPlaceholders = false), ALL placeholders are excluded
+        const standardExcludedLabels = "trailer-placeholder, trailers, coming_soon, leaving-soon";
+        if (!isPlexItemExcludedByLabels(trendingTrailerStub, standardExcludedLabels, false)) {
+            throw new Error("Standard collection failed to blanket exclude trailer placeholder!");
+        }
+        if (!isPlexItemExcludedByLabels(comingSoonStub, standardExcludedLabels, false)) {
+            throw new Error("Standard collection failed to blanket exclude coming soon stub!");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
