@@ -1380,7 +1380,14 @@ export async function saveMediaCollectionAction(data: {
     }
 }
 
-export async function syncCollectionToPlexInternal(collectionId: string): Promise<{
+export async function syncCollectionToPlexInternal(
+    collectionId: string,
+    options?: {
+        skipHubReorder?: boolean;
+        cachedExistingCollections?: any[];
+        resolvedConnection?: any;
+    }
+): Promise<{
     success: boolean;
     message?: string;
     error?: string;
@@ -1404,16 +1411,16 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
         if (!collection) return { success: false, error: "Collection record not found." };
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const resolved = await resolveWorkingPlexServerConnection(collection.serverId || undefined);
+        const resolved = options?.resolvedConnection || await resolveWorkingPlexServerConnection(collection.serverId || undefined);
         if (!resolved || !resolved.serverUrl) {
             logger.addLog("WARN", "PLEX", `Could not resolve connection for Plex server "${collection.serverId}". Check server URL and token.`);
             return { success: false, error: "Plex server unreachable or token not configured." };
         }
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
-        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+        const urlsToTry = [serverUrl];
 
-        logger.addLog("INFO", "PLEX", `Syncing collection/hub "${collection.title}" (section: ${collection.sectionKey}, server: "${resolved.serverName}"). Trying endpoints: ${urlsToTry.join(", ")}`);
+        logger.addLog("INFO", "PLEX", `Syncing collection/hub "${collection.title}" (section: ${collection.sectionKey}, server: "${resolved.serverName}") via "${serverUrl}"`);
 
         // 1. If this is a Smart Hub collection, deploy/update via deployFilteredSmartHubInternal
         if (collection.sourceType === "plex_smart" || collection.category === "Plex Smart") {
@@ -1480,7 +1487,7 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                              (collection.sourceType === "plex_query" && !collection.sourceQuery?.includes("hdr:") && !collection.sourceQuery?.includes("audio:") && !collection.sourceQuery?.includes("1980") && !collection.sourceQuery?.includes("1990") && !collection.sourceQuery?.includes("tag:"));
 
         if (isNativePlex) {
-            const existingCollections = await getPlexLibraryCollections(urlsToTry, token, collection.sectionKey || "");
+            const existingCollections = options?.cachedExistingCollections ?? await getPlexLibraryCollections(urlsToTry, token, collection.sectionKey || "");
             const found = existingCollections.find(c => 
                 (collection.ratingKey && c.ratingKey === collection.ratingKey) || 
                 c.title.trim().toLowerCase() === collection.title.trim().toLowerCase()
@@ -1515,7 +1522,7 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                     }
                 });
 
-                if (collection.serverId && collection.sectionKey) {
+                if (!options?.skipHubReorder && collection.serverId && collection.sectionKey) {
                     try {
                         const sectionColls = await prisma.mediaCollection.findMany({
                             where: {
@@ -2057,7 +2064,7 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
         });
 
         // 6. Selective hub reorder to guarantee Plex Home Screen respects established priority order
-        if (collection.serverId && collection.sectionKey) {
+        if (!options?.skipHubReorder && collection.serverId && collection.sectionKey) {
             try {
                 const sectionColls = await prisma.mediaCollection.findMany({
                     where: {
@@ -2919,7 +2926,22 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
         if (!resolved || !resolved.serverUrl) return { success: false, error: "Plex server unreachable or token not configured." };
         const serverUrl = resolved.serverUrl;
         const token = resolved.token;
-        const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
+        const urlsToTry = [serverUrl];
+
+        const sectionCollectionsCache = new Map<string, any[]>();
+        const affectedSections = new Set<string>();
+
+        const getCachedCollectionsForSection = async (sKey: string) => {
+            if (!sectionCollectionsCache.has(sKey)) {
+                try {
+                    const discovered = await getPlexLibraryCollections(urlsToTry, token, sKey);
+                    sectionCollectionsCache.set(sKey, discovered);
+                } catch {
+                    sectionCollectionsCache.set(sKey, []);
+                }
+            }
+            return sectionCollectionsCache.get(sKey) || [];
+        };
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const enabledServersForCollections: string[] = settings?.enabledServersForCollections
@@ -3050,7 +3072,13 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                         ).catch(() => {});
                     } else if (!coll.ratingKey) {
                         // Auto-sync collection if not yet created on Plex
-                        await syncCollectionToPlexInternal(coll.id).catch(() => {});
+                        if (coll.sectionKey) affectedSections.add(String(coll.sectionKey));
+                        const cachedColls = coll.sectionKey ? await getCachedCollectionsForSection(String(coll.sectionKey)) : [];
+                        await syncCollectionToPlexInternal(coll.id, {
+                            skipHubReorder: true,
+                            cachedExistingCollections: cachedColls,
+                            resolvedConnection: resolved
+                        }).catch(() => {});
                     }
 
                     results.push({ title: coll.title, active: true, action: `Promoted to Plex Home & Recommended (Schedule Active)${placeholderNotes}` });
@@ -3064,6 +3092,7 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                     });
 
                     if (coll.ratingKey && coll.sectionKey) {
+                        affectedSections.add(String(coll.sectionKey));
                         await updatePlexCollectionPromotionAndOrder(
                             urlsToTry,
                             token,
@@ -3095,8 +3124,15 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
 
                 if (!coll.ratingKey || coll.sourceType !== "plex_native") {
                     // Auto-sync dynamic collection to Plex to refresh contents & ordering
-                    await syncCollectionToPlexInternal(coll.id).catch(() => {});
+                    if (coll.sectionKey) affectedSections.add(String(coll.sectionKey));
+                    const cachedColls = coll.sectionKey ? await getCachedCollectionsForSection(String(coll.sectionKey)) : [];
+                    await syncCollectionToPlexInternal(coll.id, {
+                        skipHubReorder: true,
+                        cachedExistingCollections: cachedColls,
+                        resolvedConnection: resolved
+                    }).catch(() => {});
                 } else if (coll.ratingKey && coll.sectionKey) {
+                    affectedSections.add(String(coll.sectionKey));
                     const cleanBaseTitle = (coll.title || coll.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
                     const prefix = coll.sortPrefix || `!${String(coll.orderIndex || 0).padStart(2, '0')}_`;
                     const sortTitle = `${prefix}${cleanBaseTitle}`;
@@ -3120,6 +3156,37 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                     active: true,
                     action: `Collection Synced & Active${placeholderNotes}`
                 });
+            }
+        }
+
+        // Run hub reordering ONCE per affected section at the end of the batch
+        for (const secKey of affectedSections) {
+            try {
+                const sectionColls = await prisma.mediaCollection.findMany({
+                    where: {
+                        serverId: { in: serverIdCandidates },
+                        sectionKey: secKey,
+                        isIgnored: false,
+                    },
+                    orderBy: [
+                        { orderIndex: "asc" },
+                        { createdAt: "asc" }
+                    ]
+                });
+                const desiredHubKeys = sectionColls.map(c => c.ratingKey || c.id).filter(Boolean);
+                if (desiredHubKeys.length > 0) {
+                    let libraryType: "show" | "movie" = "movie";
+                    try {
+                        const sections = await getPlexServerSections(token, serverId || resolved.serverId || "", serverUrl);
+                        const sec = sections.find(s => String(s.key) === secKey);
+                        if (sec?.type === "show" || sec?.type === "tv") {
+                            libraryType = "show";
+                        }
+                    } catch {}
+                    await reorderPlexHubsSelective(urlsToTry, token, secKey, desiredHubKeys, libraryType);
+                }
+            } catch (secReorderErr: any) {
+                console.warn("[CURATION-SYNC] Error in batch hub reorder for section", secKey, secReorderErr.message);
             }
         }
 
@@ -3603,7 +3670,7 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
             try {
                 const resolved = await resolveWorkingPlexServerConnection(serverId || undefined);
                 if (resolved && resolved.serverUrl && resolved.token) {
-                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                    const urlsToTry = [resolved.serverUrl];
                     const targetKey = (collRatingKey && collRatingKey !== collectionId) ? collRatingKey : (collTitle || collectionId);
                     await deletePlexCollection(urlsToTry, resolved.token, targetKey, sectionKey || undefined);
                 }

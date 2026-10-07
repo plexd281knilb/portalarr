@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { SystemLogEntry, LogCategory } from "@/lib/logger";
+import { copyToClipboard } from "@/lib/utils";
 
 interface LogCategoryMeta {
     id: string;
@@ -81,6 +82,7 @@ export default function SystemLogsViewer() {
     const [levelFilter, setLevelFilter] = useState<string>("ALL");
     const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
     const [copied, setCopied] = useState(false);
+    const [copiedLogId, setCopiedLogId] = useState<string | null>(null);
     const [dumping, setDumping] = useState(false);
     const [runningPlexDiag, setRunningPlexDiag] = useState(false);
     const [lastPolledTime, setLastPolledTime] = useState<string>("");
@@ -201,13 +203,26 @@ export default function SystemLogsViewer() {
         fetchLogs(false);
     };
 
-    const handleCopy = () => {
-        const text = filteredLogs
-            .map(l => `[${l.timestamp}] [${l.category}] [${l.level}] ${l.message} ${l.details || ""}`)
+    const handleCopy = async () => {
+        const logsToCopy = filteredLogs.length > 0 ? filteredLogs : logs;
+        if (logsToCopy.length === 0) return;
+        const text = logsToCopy
+            .map(l => `[${l.timestamp}] [${l.category}] [${l.level}] ${l.message}${l.details ? ` | ${l.details}` : ""}`)
             .join("\n");
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        const ok = await copyToClipboard(text);
+        if (ok) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    const handleCopySingle = async (log: SystemLogEntry) => {
+        const line = `[${log.timestamp}] [${log.category}] [${log.level}] ${log.message}${log.details ? ` | ${log.details}` : ""}`;
+        const ok = await copyToClipboard(line);
+        if (ok) {
+            setCopiedLogId(log.id);
+            setTimeout(() => setCopiedLogId(null), 1500);
+        }
     };
 
     const handleDownload = () => {
@@ -413,10 +428,11 @@ export default function SystemLogsViewer() {
                             variant="outline" 
                             size="sm" 
                             onClick={handleCopy}
-                            className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+                            className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 cursor-pointer"
+                            title="Copy displayed activity logs to clipboard"
                         >
                             {copied ? <Check className="h-3.5 w-3.5 text-emerald-400 mr-1.5" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                            {copied ? "Copied" : "Copy"}
+                            {copied ? "Copied!" : `Copy (${filteredLogs.length || logs.length})`}
                         </Button>
 
                         <Button 
@@ -557,7 +573,7 @@ export default function SystemLogsViewer() {
                         </div>
                     ) : (
                         filteredLogs.map(log => (
-                            <div key={log.id} className="pt-2 first:pt-0 flex flex-wrap items-start justify-between gap-2 hover:bg-slate-900/40 p-2 rounded-lg transition-colors">
+                            <div key={log.id} className="group pt-2 first:pt-0 flex flex-wrap items-start justify-between gap-2 hover:bg-slate-900/60 p-2 rounded-lg transition-colors relative">
                                 <div className="flex items-start gap-2.5 flex-1 min-w-0">
                                     <span className="text-slate-500 text-[11px] select-none whitespace-nowrap pt-0.5" title={new Date(log.timestamp).toLocaleString()}>
                                         {formatLogTimestamp(log.timestamp)}
@@ -567,6 +583,16 @@ export default function SystemLogsViewer() {
                                     <span className="text-slate-200 break-words flex-1 font-sans text-xs pt-0.5">
                                         {log.message}
                                     </span>
+                                </div>
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopySingle(log)}
+                                        className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
+                                        title="Copy this log entry"
+                                    >
+                                        {copiedLogId === log.id ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                    </button>
                                 </div>
                                 {log.details && (
                                     <div className="w-full pl-6 md:pl-16 text-[11px] text-slate-300 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800/90 mt-1 font-mono whitespace-pre-wrap break-all shadow-inner">

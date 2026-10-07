@@ -5152,6 +5152,26 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Agregarr & System: Fast Direct Plex Sync, Batch Hub Reorder & Universal Clipboard", async () => {
+        const { copyToClipboard } = await import("../src/lib/utils");
+        if (typeof copyToClipboard !== "function") {
+            throw new Error("Missing copyToClipboard export in utils.ts");
+        }
+        const emptyResult = await copyToClipboard("");
+        if (emptyResult !== false) {
+            throw new Error(`Expected copyToClipboard("") to return false, got ${emptyResult}`);
+        }
+
+        const { syncCollectionToPlexInternal } = await import("../src/app/curation-actions");
+        const res = await syncCollectionToPlexInternal("non-existent-collection-id-999", {
+            skipHubReorder: true,
+            cachedExistingCollections: []
+        });
+        if (res.success !== false) {
+            throw new Error(`Expected failure for non-existent collection, got: ${JSON.stringify(res)}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

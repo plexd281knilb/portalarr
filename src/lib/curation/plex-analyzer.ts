@@ -2543,11 +2543,12 @@ export async function reorderPlexHubsSelective(
                 for (const cleanBase of urlsToTry) {
                     if (!cleanBase) continue;
                     try {
-                        await fetch(`${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?metadataItemId=${encodeURIComponent(ratingKey)}&X-Plex-Token=${encodeURIComponent(token)}`, {
+                        const res = await fetch(`${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?metadataItemId=${encodeURIComponent(ratingKey)}&X-Plex-Token=${encodeURIComponent(token)}`, {
                             method: "POST",
                             headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
-                            signal: AbortSignal.timeout(4000)
+                            signal: AbortSignal.timeout(3000)
                         });
+                        if (res.ok) break;
                     } catch {}
                 }
             }
