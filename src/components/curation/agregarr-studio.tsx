@@ -936,9 +936,11 @@ export function AgregarrStudio() {
         setPlacementHome(coll.promotedToHome ?? true);
         setPlacementShared(coll.promotedToSharedHome ?? true);
         setPlacementRecommended(coll.promotedToRecommended ?? true);
-        setPlacementMode(coll.collectionMode || "default");
-        setPlacementOrderIndex(coll.orderIndex ?? 1);
-        setPlacementSortPrefix(coll.sortPrefix || `!${String(coll.orderIndex || 1).padStart(2, '0')}_`);
+        const effOrder = (coll.orderIndex && coll.orderIndex > 0)
+            ? coll.orderIndex
+            : (collections.findIndex(c => c.id === coll.id) + 1 || 1);
+        setPlacementOrderIndex(effOrder);
+        setPlacementSortPrefix(coll.sortPrefix || `!${String(effOrder).padStart(2, '0')}_`);
         setPlacementActiveDays(coll.activeDays || "all");
         setPlacementActiveTimeRange(coll.activeTimeRange || "all_day");
         setPlacementIsSeasonal(coll.isSeasonal ?? false);
@@ -1190,26 +1192,36 @@ export function AgregarrStudio() {
     // Inspect Preset Blueprint & Matcher
     const handleInspectPreset = async (preset: CollectionPreset) => {
         setInspectingPreset(preset);
-        setInspectHome(true);
-        setInspectShared(true);
-        setInspectRecommended(true);
-        setInspectMode(preset.defaultCollectionMode || "default");
-        setInspectMaxItems(preset.defaultMaxItems || 0);
+
+        const installedColl = collections.find(c => 
+            c.title.toLowerCase().trim() === preset.title.toLowerCase().trim() ||
+            (c.sourceQuery && c.sourceQuery === preset.sourceQuery && c.sourceType === preset.sourceType)
+        );
+
+        setInspectHome(installedColl ? (installedColl.promotedToHome ?? true) : true);
+        setInspectShared(installedColl ? (installedColl.promotedToSharedHome ?? true) : true);
+        setInspectRecommended(installedColl ? (installedColl.promotedToRecommended ?? true) : true);
+        setInspectMode(installedColl ? (installedColl.collectionMode || "default") : (preset.defaultCollectionMode || "default"));
+        setInspectMaxItems(installedColl ? (installedColl.maxItems ?? preset.defaultMaxItems ?? 0) : (preset.defaultMaxItems || 0));
 
         const isComingSoon = preset.category === "arr" || preset.sourceType === "radarr" || preset.sourceType === "sonarr" || preset.id?.includes("coming-soon") || preset.sourceQuery === "monitored_missing";
         const isTrending = preset.id?.includes("trending") || preset.title?.toLowerCase().includes("trending") || preset.sourceQuery === "trending" || preset.sourceQuery?.startsWith("provider:");
 
-        const effectiveIncludePlaceholders = preset.defaultIncludePlaceholders !== undefined
-            ? Boolean(preset.defaultIncludePlaceholders)
-            : Boolean(isTrending || isComingSoon);
+        const effectiveIncludePlaceholders = installedColl
+            ? Boolean(installedColl.includePlaceholders)
+            : (preset.defaultIncludePlaceholders !== undefined
+                ? Boolean(preset.defaultIncludePlaceholders)
+                : Boolean(isTrending || isComingSoon));
 
-        const effectiveExcludedLabels = preset.defaultExcludedLabels !== undefined
-            ? preset.defaultExcludedLabels
-            : (isComingSoon
-                ? "trailer-placeholder, trailers, leaving-soon"
-                : (isTrending || effectiveIncludePlaceholders
-                    ? "Coming Soon-placeholder, coming_soon, leaving-soon"
-                    : "trailer-placeholder, trailers, coming_soon, leaving-soon"));
+        const effectiveExcludedLabels = installedColl && installedColl.excludedLabels !== undefined && installedColl.excludedLabels !== null
+            ? installedColl.excludedLabels
+            : (preset.defaultExcludedLabels !== undefined
+                ? preset.defaultExcludedLabels
+                : (isComingSoon
+                    ? "trailer-placeholder, trailers, leaving-soon"
+                    : (isTrending || effectiveIncludePlaceholders
+                        ? "Coming Soon-placeholder, coming_soon, leaving-soon"
+                        : "trailer-placeholder, trailers, coming_soon, leaving-soon")));
 
         setInspectExcludedLabels(effectiveExcludedLabels);
         setInspectIncludePlaceholders(effectiveIncludePlaceholders);
@@ -1243,11 +1255,28 @@ export function AgregarrStudio() {
         setInstallingPreset(true);
         setInstallPresetMsg(null);
         try {
-            const maxOrder = collections.reduce((max, c) => Math.max(max, c.orderIndex || 0), 0);
-            const nextOrder = maxOrder + 1;
-            const sortPrefix = `!${String(nextOrder).padStart(2, '0')}_`;
+            const installedColl = collections.find(c => 
+                c.title.toLowerCase().trim() === preset.title.toLowerCase().trim() ||
+                (c.sourceQuery && c.sourceQuery === preset.sourceQuery && c.sourceType === preset.sourceType)
+            );
+
+            let targetOrderIndex: number;
+            let targetSortPrefix: string;
+
+            if (installedColl) {
+                // Strictly preserve established priority rank and sort prefix!
+                targetOrderIndex = (installedColl.orderIndex && installedColl.orderIndex > 0)
+                    ? installedColl.orderIndex
+                    : (collections.findIndex(c => c.id === installedColl.id) + 1 || 1);
+                targetSortPrefix = installedColl.sortPrefix || `!${String(targetOrderIndex).padStart(2, '0')}_`;
+            } else {
+                const maxOrder = collections.reduce((max, c) => Math.max(max, c.orderIndex || 0), 0);
+                targetOrderIndex = maxOrder + 1;
+                targetSortPrefix = `!${String(targetOrderIndex).padStart(2, '0')}_`;
+            }
 
             const res = await saveMediaCollectionAction({
+                id: installedColl?.id,
                 title: preset.title,
                 summary: preset.description,
                 type: preset.mediaType === "show" ? "show" : "movie",
@@ -1257,8 +1286,8 @@ export function AgregarrStudio() {
                 sourceType: preset.sourceType,
                 sourceQuery: preset.sourceQuery,
                 posterUrl: preset.defaultPosterUrl,
-                orderIndex: nextOrder,
-                sortPrefix,
+                orderIndex: targetOrderIndex,
+                sortPrefix: targetSortPrefix,
                 promotedToHome: inspectHome,
                 promotedToRecommended: inspectRecommended,
                 promotedToSharedHome: inspectShared,
@@ -1348,12 +1377,27 @@ export function AgregarrStudio() {
         if (!newCollTitle.trim()) return;
         setCreatingCollection(true);
         try {
-            const maxOrder = collections.reduce((max, c) => Math.max(max, c.orderIndex || 0), 0);
-            const nextOrder = maxOrder + 1;
-            const sortPrefix = `!${String(nextOrder).padStart(2, '0')}_`;
             const collTitle = newCollTitle.trim();
+            const existingColl = collections.find(c => 
+                c.title.toLowerCase().trim() === collTitle.toLowerCase()
+            );
+
+            let targetOrderIndex: number;
+            let targetSortPrefix: string;
+
+            if (existingColl) {
+                targetOrderIndex = (existingColl.orderIndex && existingColl.orderIndex > 0)
+                    ? existingColl.orderIndex
+                    : (collections.findIndex(c => c.id === existingColl.id) + 1 || 1);
+                targetSortPrefix = existingColl.sortPrefix || `!${String(targetOrderIndex).padStart(2, '0')}_`;
+            } else {
+                const maxOrder = collections.reduce((max, c) => Math.max(max, c.orderIndex || 0), 0);
+                targetOrderIndex = maxOrder + 1;
+                targetSortPrefix = `!${String(targetOrderIndex).padStart(2, '0')}_`;
+            }
 
             const res = await saveMediaCollectionAction({
+                id: existingColl?.id,
                 title: collTitle,
                 summary: newCollSummary.trim(),
                 type: isTvSection ? "show" : "movie",
@@ -1363,8 +1407,8 @@ export function AgregarrStudio() {
                 sourceType: newCollSourceType,
                 sourceQuery: newCollSourceQuery.trim(),
                 posterUrl: newCollPosterUrl.trim() || undefined,
-                orderIndex: nextOrder,
-                sortPrefix,
+                orderIndex: targetOrderIndex,
+                sortPrefix: targetSortPrefix,
                 promotedToHome: newCollPromotedHome,
                 promotedToRecommended: newCollPromotedRecommended,
                 promotedToSharedHome: newCollPromotedShared,
@@ -4998,9 +5042,26 @@ export function AgregarrStudio() {
                                 <Trophy className="h-5 w-5 text-amber-400" />
                                 <span>{inspectingPreset?.title}</span>
                             </DialogTitle>
-                            <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs">
-                                {inspectingPreset?.category?.toUpperCase()}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                                {(() => {
+                                    const inst = inspectingPreset ? collections.find(c => 
+                                        c.title.toLowerCase().trim() === inspectingPreset.title.toLowerCase().trim() ||
+                                        (c.sourceQuery && c.sourceQuery === inspectingPreset.sourceQuery && c.sourceType === inspectingPreset.sourceType)
+                                    ) : null;
+                                    if (inst) {
+                                        return (
+                                            <Badge variant="outline" className="border-emerald-500/40 text-emerald-300 bg-emerald-950/40 text-xs font-mono">
+                                                ✓ INSTALLED (#{inst.orderIndex || 1})
+                                            </Badge>
+                                        );
+                                    }
+                                    return (
+                                        <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs">
+                                            {inspectingPreset?.category?.toUpperCase()}
+                                        </Badge>
+                                    );
+                                })()}
+                            </div>
                         </div>
                         <DialogDescription className="text-xs text-slate-400">
                             {inspectingPreset?.description}
@@ -5218,17 +5279,26 @@ export function AgregarrStudio() {
                                 onClick={() => inspectingPreset && handleInstallPreset(inspectingPreset)}
                                 className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
                             >
-                                {installingPreset ? (
-                                    <>
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" />
-                                        <span>Installing &amp; Syncing to Plex...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Trophy className="h-3.5 w-3.5" />
-                                        <span>Install &amp; Sync Collection to Plex</span>
-                                    </>
-                                )}
+                                {(() => {
+                                    const isInst = inspectingPreset && collections.some(c => 
+                                        c.title.toLowerCase().trim() === inspectingPreset.title.toLowerCase().trim() ||
+                                        (c.sourceQuery && c.sourceQuery === inspectingPreset.sourceQuery && c.sourceType === inspectingPreset.sourceType)
+                                    );
+                                    if (installingPreset) {
+                                        return (
+                                            <>
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" />
+                                                <span>{isInst ? "Updating & Syncing to Plex..." : "Installing & Syncing to Plex..."}</span>
+                                            </>
+                                        );
+                                    }
+                                    return (
+                                        <>
+                                            <Trophy className="h-3.5 w-3.5" />
+                                            <span>{isInst ? "Update & Sync Collection to Plex" : "Install & Sync Collection to Plex"}</span>
+                                        </>
+                                    );
+                                })()}
                             </Button>
                         </div>
                     </DialogFooter>
