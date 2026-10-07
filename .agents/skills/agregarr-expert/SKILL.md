@@ -84,6 +84,11 @@ Agregarr manages metadata labels on items:
 - **Clear All Labels**: Sends `label[0].tag.tag-=`.
 - **Query by Label**: `GET /library/sections/{libraryKey}/all?label={labelName}`.
 
+### 6. Collection Edit Modal & Reset to Preset Defaults
+The Collections & Hubs studio provides interactive per-collection configuration via the **Edit** action button:
+- **Edit Modal (`Edit Collection: {title}`)**: Configures Plex client screen targets (Owner Home, Shared Home, Recommended), inline library display mode (`default`, `hide`, `hideItems`, `showItems`), home screen numerical ranking (#1 - #99) and sort prefix, day-of-week active scheduling, daily time windows, seasonal date ranges, excluded Plex labels, and trailer placeholder generation.
+- **Reset to Defaults (`RotateCcw`)**: Locates the underlying preset from `COLLECTION_PRESETS` (via exact title, preset ID, `sourceType`/`sourceQuery`, or normalized alphanumeric match) and restores all configuration fields to their preset baseline settings (or default studio settings for custom collections). Changes are applied and written to Plex on clicking **"Save & Sync to Plex"**.
+
 ---
 
 ## Common Gotchas & Troubleshooting

@@ -930,12 +930,51 @@ export function AgregarrStudio() {
         }
     };
 
-    // Open Comprehensive Placement Modal
+    // Helper to find matching preset from COLLECTION_PRESETS for a collection
+    const findMatchingPreset = (coll: any): CollectionPreset | undefined => {
+        if (!coll) return undefined;
+        const collTitle = (coll.title || "").toLowerCase().trim();
+        if (!collTitle) return undefined;
+
+        // 1. Exact title match
+        let found = COLLECTION_PRESETS.find(p => p.title.toLowerCase().trim() === collTitle);
+        if (found) return found;
+
+        // 2. Direct ID match
+        found = COLLECTION_PRESETS.find(p => p.id === coll.id);
+        if (found) return found;
+
+        // 3. Source query + source type match (if both exist)
+        if (coll.sourceQuery && coll.sourceType) {
+            found = COLLECTION_PRESETS.find(p =>
+                p.sourceType === coll.sourceType &&
+                p.sourceQuery?.toLowerCase().trim() === coll.sourceQuery?.toLowerCase().trim()
+            );
+            if (found) return found;
+        }
+
+        // 4. Normalized title match (strip non-alphanumeric chars)
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const normColl = norm(collTitle);
+        if (normColl) {
+            found = COLLECTION_PRESETS.find(p => norm(p.title) === normColl);
+            if (found) return found;
+
+            // Also check if normalized preset ID matches
+            found = COLLECTION_PRESETS.find(p => norm(p.id) === normColl);
+            if (found) return found;
+        }
+
+        return undefined;
+    };
+
+    // Open Comprehensive Edit / Placement Modal
     const handleOpenPlacementModal = (coll: any) => {
         setEditingCollection(coll);
         setPlacementHome(coll.promotedToHome ?? true);
         setPlacementShared(coll.promotedToSharedHome ?? true);
         setPlacementRecommended(coll.promotedToRecommended ?? true);
+        setPlacementMode(coll.collectionMode || "default");
         const effOrder = (coll.orderIndex && coll.orderIndex > 0)
             ? coll.orderIndex
             : (collections.findIndex(c => c.id === coll.id) + 1 || 1);
@@ -954,6 +993,91 @@ export function AgregarrStudio() {
         setPlacementIncludePlaceholders(Boolean(coll.includePlaceholders));
         setPlacementSavedMsg(null);
         setPlacementModalOpen(true);
+    };
+
+    // Revert settings in Edit Collection modal to preset defaults
+    const handleResetToDefaults = () => {
+        if (!editingCollection) return;
+        const matchedPreset = findMatchingPreset(editingCollection);
+
+        if (matchedPreset) {
+            const isComingSoon = matchedPreset.category === "arr" ||
+                matchedPreset.sourceType === "radarr" ||
+                matchedPreset.sourceType === "sonarr" ||
+                matchedPreset.id?.includes("coming-soon") ||
+                matchedPreset.sourceQuery === "monitored_missing";
+            const isTrending = matchedPreset.id?.includes("trending") ||
+                matchedPreset.title?.toLowerCase().includes("trending") ||
+                matchedPreset.sourceQuery === "trending" ||
+                matchedPreset.sourceQuery?.startsWith("provider:");
+
+            const defaultIncludePlaceholders = matchedPreset.defaultIncludePlaceholders !== undefined
+                ? Boolean(matchedPreset.defaultIncludePlaceholders)
+                : Boolean(isTrending || isComingSoon);
+
+            const defaultExcludedLabels = matchedPreset.defaultExcludedLabels !== undefined
+                ? matchedPreset.defaultExcludedLabels
+                : (isComingSoon
+                    ? "trailer-placeholder, trailers, leaving-soon"
+                    : (isTrending || defaultIncludePlaceholders
+                        ? "Coming Soon-placeholder, coming_soon, leaving-soon"
+                        : "trailer-placeholder, trailers, coming_soon, leaving-soon"));
+
+            const effOrder = matchedPreset.defaultHomeOrder ||
+                (editingCollection.orderIndex && editingCollection.orderIndex > 0
+                    ? editingCollection.orderIndex
+                    : (collections.findIndex(c => c.id === editingCollection.id) + 1 || 1));
+            const effPrefix = matchedPreset.defaultSortPrefix ||
+                (matchedPreset.defaultHomeOrder
+                    ? `!${String(matchedPreset.defaultHomeOrder).padStart(2, '0')}_`
+                    : (editingCollection.sortPrefix || `!${String(effOrder).padStart(2, '0')}_`));
+
+            setPlacementHome(true);
+            setPlacementShared(true);
+            setPlacementRecommended(true);
+            setPlacementMode(matchedPreset.defaultCollectionMode || "default");
+            setPlacementOrderIndex(effOrder);
+            setPlacementSortPrefix(effPrefix);
+            setPlacementActiveDays(matchedPreset.defaultActiveDays || "all");
+            setPlacementActiveTimeRange(matchedPreset.defaultActiveTimeRange || "all_day");
+            setPlacementIsSeasonal(Boolean(matchedPreset.isSeasonal));
+            setPlacementStartMonth(matchedPreset.scheduleStartMonth || 10);
+            setPlacementStartDay(matchedPreset.scheduleStartDay || 1);
+            setPlacementEndMonth(matchedPreset.scheduleEndMonth || 11);
+            setPlacementEndDay(matchedPreset.scheduleEndDay || 5);
+            setPlacementSeasonalAction(matchedPreset.seasonalAction || "promote_hide");
+            setPlacementMaxItems(matchedPreset.defaultMaxItems || 0);
+            setPlacementExcludedLabels(defaultExcludedLabels);
+            setPlacementIncludePlaceholders(defaultIncludePlaceholders);
+
+            setPlacementSavedMsg(`✓ Reverted settings to "${matchedPreset.title}" preset defaults. Click "Save & Sync to Plex" to apply.`);
+        } else {
+            // Standard defaults for custom collections
+            const effOrder = (editingCollection.orderIndex && editingCollection.orderIndex > 0)
+                ? editingCollection.orderIndex
+                : (collections.findIndex(c => c.id === editingCollection.id) + 1 || 1);
+            const effPrefix = editingCollection.sortPrefix || `!${String(effOrder).padStart(2, '0')}_`;
+
+            setPlacementHome(true);
+            setPlacementShared(true);
+            setPlacementRecommended(true);
+            setPlacementMode("default");
+            setPlacementOrderIndex(effOrder);
+            setPlacementSortPrefix(effPrefix);
+            setPlacementActiveDays("all");
+            setPlacementActiveTimeRange("all_day");
+            setPlacementIsSeasonal(false);
+            setPlacementStartMonth(10);
+            setPlacementStartDay(1);
+            setPlacementEndMonth(11);
+            setPlacementEndDay(5);
+            setPlacementSeasonalAction("promote_hide");
+            setPlacementMaxItems(0);
+            setPlacementExcludedLabels("trailer-placeholder, trailers, coming_soon, leaving-soon");
+            setPlacementIncludePlaceholders(false);
+
+            setPlacementSavedMsg("✓ Reverted settings to default values. Click \"Save & Sync to Plex\" to apply.");
+        }
     };
 
     // Save Placement Modal Settings
@@ -984,17 +1108,17 @@ export function AgregarrStudio() {
             });
 
             if (res.success) {
-                setPlacementSavedMsg("✓ Placement & Visibility updated and synced to Plex!");
+                setPlacementSavedMsg("✓ Collection settings updated and synced to Plex!");
                 setTimeout(() => {
                     setPlacementModalOpen(false);
                     loadCollections();
                 }, 1000);
             } else {
-                setPlacementSavedMsg(`⚠️ ${res.error || "Failed saving placement."}`);
+                setPlacementSavedMsg(`⚠️ ${res.error || "Failed saving collection settings."}`);
             }
         } catch (err: any) {
-            console.error("Failed saving placement:", err);
-            setPlacementSavedMsg(`⚠️ ${err.message || "Failed saving placement."}`);
+            console.error("Failed saving collection settings:", err);
+            setPlacementSavedMsg(`⚠️ ${err.message || "Failed saving collection settings."}`);
         } finally {
             setSavingPlacement(false);
         }
@@ -3394,17 +3518,17 @@ export function AgregarrStudio() {
                                                     <span>Exclude Labels</span>
                                                 </Button>
 
-                                                {/* Placement Details & Actions */}
+                                                {/* Edit Collection Settings & Placement */}
                                                 <Button
                                                     type="button"
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={() => handleOpenPlacementModal(coll)}
-                                                    className="text-[11px] h-8 px-2.5 gap-1 border-slate-700 hover:bg-slate-800 text-amber-300 hover:text-amber-200"
-                                                    title="Configure full placement, day schedule, and time rules"
+                                                    className="text-[11px] h-8 px-2.5 gap-1 border-slate-700 hover:bg-slate-800 text-amber-300 hover:text-amber-200 cursor-pointer"
+                                                    title={`Edit collection settings, placement, schedules, and filters for "${coll.title}"`}
                                                 >
-                                                    <Settings2 className="h-3.5 w-3.5 text-amber-400" />
-                                                    <span>Placement</span>
+                                                    <Edit2 className="h-3.5 w-3.5 text-amber-400" />
+                                                    <span>Edit</span>
                                                 </Button>
 
                                                 <Badge variant="outline" className="text-[10px] font-mono border-slate-800 text-slate-400 h-8 px-2 flex items-center">
@@ -5313,15 +5437,22 @@ export function AgregarrStudio() {
                     <DialogHeader className="pb-3 border-b border-slate-800 shrink-0">
                         <div className="flex items-center justify-between">
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Settings2 className="h-5 w-5 text-amber-400" />
-                                <span>Plex Placement &amp; Visibility: {editingCollection?.title}</span>
+                                <Edit2 className="h-5 w-5 text-amber-400" />
+                                <span>Edit Collection: {editingCollection?.title}</span>
                             </DialogTitle>
-                            <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs">
-                                Rank #{placementOrderIndex}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                                {findMatchingPreset(editingCollection) && (
+                                    <Badge variant="outline" className="border-sky-500/40 text-sky-300 bg-sky-950/40 text-[10px] hidden sm:inline-flex">
+                                        Preset: {findMatchingPreset(editingCollection)?.title}
+                                    </Badge>
+                                )}
+                                <Badge variant="outline" className="border-amber-500/40 text-amber-300 bg-amber-950/40 text-xs">
+                                    Rank #{placementOrderIndex}
+                                </Badge>
+                            </div>
                         </div>
                         <DialogDescription className="text-xs text-slate-400">
-                            Configure where and when this collection appears across your Plex Media Server clients.
+                            Configure collection settings, Plex screen visibility, home ordering, day/time schedules, and label filters.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -5691,20 +5822,33 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setPlacementModalOpen(false)}>
-                            Cancel
-                        </Button>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                         <Button
                             type="button"
+                            variant="outline"
                             size="sm"
-                            disabled={savingPlacement}
-                            onClick={handleSavePlacement}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                            onClick={handleResetToDefaults}
+                            className="border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-amber-300 text-xs gap-1.5 cursor-pointer order-2 sm:order-1"
+                            title={findMatchingPreset(editingCollection) ? `Reset all fields to "${findMatchingPreset(editingCollection)?.title}" preset defaults` : "Reset all fields to default settings"}
                         >
-                            {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                            <span>Save &amp; Sync Placement to Plex</span>
+                            <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+                            <span>Reset to Defaults</span>
                         </Button>
+                        <div className="flex items-center justify-end gap-2 order-1 sm:order-2">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setPlacementModalOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={savingPlacement}
+                                onClick={handleSavePlacement}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                            >
+                                {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                <span>Save &amp; Sync to Plex</span>
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
