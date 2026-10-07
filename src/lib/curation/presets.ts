@@ -256,6 +256,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "provider:8", // Netflix Watch Provider
         mediaType: "both",
         defaultSort: "rating",
+        defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 15,
         defaultSortPrefix: "!15_Netflix"
     },
@@ -270,6 +272,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "provider:8:kids", // Netflix Kids
         mediaType: "both",
         defaultSort: "rating",
+        defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 16,
         defaultSortPrefix: "!16_NetflixKids"
     },
@@ -298,6 +302,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "provider:337", // Disney+ Watch Provider
         mediaType: "both",
         defaultSort: "release",
+        defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 18,
         defaultSortPrefix: "!18_Disney"
     },
@@ -312,6 +318,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "provider:337:kids", // Disney+ Kids
         mediaType: "both",
         defaultSort: "release",
+        defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 19,
         defaultSortPrefix: "!19_DisneyKids"
     },
@@ -326,6 +334,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "provider:283",
         mediaType: "both",
         defaultSort: "rating",
+        defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 20,
         defaultSortPrefix: "!20_Crunchyroll",
         defaultPosterUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80"
@@ -533,6 +543,8 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         sourceQuery: "trending",
         mediaType: "both",
         defaultSort: "rating",
+        defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 1,
         defaultSortPrefix: "!01_Trending"
     },
@@ -564,6 +576,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         mediaType: "movie",
         defaultSort: "release",
         defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "trailer-placeholder, trailers, leaving-soon",
         defaultHomeOrder: 2,
         defaultSortPrefix: "!02_ComingSoon"
     },
@@ -579,6 +592,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         mediaType: "show",
         defaultSort: "release",
         defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "trailer-placeholder, trailers, leaving-soon",
         defaultHomeOrder: 2,
         defaultSortPrefix: "!02_ComingSoon"
     },
@@ -624,6 +638,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         mediaType: "movie",
         defaultSort: "release",
         defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 3,
         defaultSortPrefix: "!03_Anticipated"
     },
@@ -639,6 +654,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         mediaType: "show",
         defaultSort: "release",
         defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 3,
         defaultSortPrefix: "!03_Anticipated"
     },
@@ -654,6 +670,7 @@ export const COLLECTION_PRESETS: CollectionPreset[] = [
         mediaType: "movie",
         defaultSort: "release",
         defaultIncludePlaceholders: true,
+        defaultExcludedLabels: "Coming Soon-placeholder, coming_soon, leaving-soon",
         defaultHomeOrder: 3,
         defaultSortPrefix: "!03_Theatres"
     },
